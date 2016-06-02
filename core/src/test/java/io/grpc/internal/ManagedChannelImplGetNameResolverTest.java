@@ -58,34 +58,38 @@ public class ManagedChannelImplGetNameResolverTest {
 
   @Test
   public void validTargetWithInvalidDnsName() throws Exception {
-    testValidTarget("[valid]", new URI("defaultscheme", null, "/[valid]", null));
+    testValidTarget("[valid]", "defaultscheme:///%5Bvalid%5D",
+        new URI("defaultscheme", "", "/[valid]", null));
   }
 
   @Test
   public void validAuthorityTarget() throws Exception {
-    testValidTarget("foo.googleapis.com:8080",
-        new URI("defaultscheme", null, "/foo.googleapis.com:8080", null));
+    testValidTarget("foo.googleapis.com:8080", "defaultscheme:///foo.googleapis.com:8080",
+        new URI("defaultscheme", "", "/foo.googleapis.com:8080", null));
   }
 
   @Test
   public void validUriTarget() throws Exception {
-    testValidTarget("scheme:///foo.googleapis.com:8080",
-        new URI("scheme", null, "/foo.googleapis.com:8080", null));
+    testValidTarget("scheme:///foo.googleapis.com:8080", "scheme:///foo.googleapis.com:8080",
+        new URI("scheme", "", "/foo.googleapis.com:8080", null));
   }
 
   @Test
   public void validIpv4AuthorityTarget() throws Exception {
-    testValidTarget("127.0.0.1:1234", new URI("defaultscheme", null, "/127.0.0.1:1234", null));
+    testValidTarget("127.0.0.1:1234", "defaultscheme:///127.0.0.1:1234",
+        new URI("defaultscheme", "", "/127.0.0.1:1234", null));
   }
 
   @Test
   public void validIpv4UriTarget() throws Exception {
-    testValidTarget("dns:///127.0.0.1:1234", new URI("dns", null, "/127.0.0.1:1234", null));
+    testValidTarget("dns:///127.0.0.1:1234", "dns:///127.0.0.1:1234",
+        new URI("dns", "", "/127.0.0.1:1234", null));
   }
 
   @Test
   public void validIpv6AuthorityTarget() throws Exception {
-    testValidTarget("[::1]:1234", new URI("defaultscheme", null, "/[::1]:1234", null));
+    testValidTarget("[::1]:1234", "defaultscheme:///%5B::1%5D:1234",
+        new URI("defaultscheme", "", "/[::1]:1234", null));
   }
 
   @Test
@@ -95,7 +99,14 @@ public class ManagedChannelImplGetNameResolverTest {
 
   @Test
   public void validIpv6UriTarget() throws Exception {
-    testValidTarget("dns:///%5B::1%5D:1234", new URI("dns", null, "/[::1]:1234", null));
+    testValidTarget("dns:///%5B::1%5D:1234", "dns:///%5B::1%5D:1234",
+        new URI("dns", "", "/[::1]:1234", null));
+  }
+
+  @Test
+  public void validTargetStartingWithSlash() throws Exception {
+    testValidTarget("/target", "defaultscheme:////target",
+        new URI("defaultscheme", "", "//target", null));
   }
 
   @Test
@@ -120,12 +131,13 @@ public class ManagedChannelImplGetNameResolverTest {
     }
   }
 
-  private void testValidTarget(String target, URI expectedUri) {
+  private void testValidTarget(String target, String expectedUriString, URI expectedUri) {
     Factory nameResolverFactory = new FakeNameResolverFactory(expectedUri.getScheme());
     FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl.getNameResolver(
         target, nameResolverFactory, NAME_RESOLVER_PARAMS);
     assertNotNull(nameResolver);
     assertEquals(expectedUri, nameResolver.uri);
+    assertEquals(expectedUriString, nameResolver.uri.toString());
   }
 
   private void testInvalidTarget(String target) {

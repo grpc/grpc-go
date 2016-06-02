@@ -229,7 +229,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       // It doesn't look like a URI target. Maybe it's an authority string. Try with the default
       // scheme from the factory.
       try {
-        targetUri = new URI(nameResolverFactory.getDefaultScheme(), null, "/" + target, null);
+        targetUri = new URI(nameResolverFactory.getDefaultScheme(), "", "/" + target, null);
       } catch (URISyntaxException e) {
         // Should not be possible.
         throw new IllegalArgumentException(e);

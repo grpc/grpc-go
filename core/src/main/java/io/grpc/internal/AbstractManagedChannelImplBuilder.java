@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -49,6 +50,7 @@ import io.grpc.SimpleLoadBalancerFactory;
 
 import java.net.SocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -98,8 +100,23 @@ public abstract class AbstractManagedChannelImplBuilder
     this.directServerAddress = null;
   }
 
+  /**
+   * Returns a target string for the SocketAddress. It is only used as a placeholder, because
+   * DirectAddressNameResolverFactory will not actually try to use it. However, it must be a valid
+   * URI.
+   */
+  @VisibleForTesting
+  static String makeTargetStringForDirectAddress(SocketAddress address) {
+    try {
+      return new URI(DIRECT_ADDRESS_SCHEME, "", "/" + address, null).toString();
+    } catch (URISyntaxException e) {
+      // It should not happen.
+      throw new RuntimeException(e);
+    }
+  }
+
   protected AbstractManagedChannelImplBuilder(SocketAddress directServerAddress, String authority) {
-    this.target = DIRECT_ADDRESS_SCHEME + ":///" + directServerAddress;
+    this.target = makeTargetStringForDirectAddress(directServerAddress);
     this.directServerAddress = directServerAddress;
     this.nameResolverFactory = new DirectAddressNameResolverFactory(directServerAddress, authority);
   }
