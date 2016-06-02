@@ -154,6 +154,17 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   public final S withChannel(Channel newChannel) {
     return build(newChannel, callOptions);
   }
+  
+  /**
+   * Sets a custom option to be passed to client interceptors on the channel
+   * {@link io.grpc.ClientInterceptor} via the CallOptions parameter.
+   * @param key the option being set
+   * @param value the value for the key
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
+  public final <T> S withOption(CallOptions.Key<T> key, T value) {
+    return build(channel, callOptions.withOption(key, value));
+  }
 
   /**
    * Returns a new stub that has the given interceptors attached to the underlying channel.

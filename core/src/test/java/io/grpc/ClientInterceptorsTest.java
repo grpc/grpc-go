@@ -39,6 +39,7 @@ import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -423,6 +424,22 @@ public class ClientInterceptorsTest {
     when(channel.authority()).thenReturn("auth");
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     assertEquals("auth", intercepted.authority());
+  }
+
+  @Test
+  public void customOptionAccessible() {
+    CallOptions.Key<String> customOption = CallOptions.Key.of("custom", null);
+    CallOptions callOptions = CallOptions.DEFAULT.withOption(customOption, "value");
+    ArgumentCaptor<CallOptions> passedOptions = ArgumentCaptor.forClass(CallOptions.class);
+    ClientInterceptor interceptor = spy(new NoopInterceptor());
+    
+    Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
+    
+    assertSame(call, intercepted.newCall(method, callOptions));
+    verify(channel).newCall(same(method), same(callOptions));
+    
+    verify(interceptor).interceptCall(same(method), passedOptions.capture(), isA(Channel.class));
+    assertSame("value", passedOptions.getValue().getOption(customOption));
   }
 
   private static class NoopInterceptor implements ClientInterceptor {

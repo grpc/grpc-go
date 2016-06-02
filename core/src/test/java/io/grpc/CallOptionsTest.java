@@ -63,6 +63,8 @@ public class CallOptionsTest {
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
       .withAffinity(sampleAffinity);
+  private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
+  private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
 
   @Test
   public void defaultsAreAllNull() {
@@ -128,7 +130,8 @@ public class CallOptionsTest {
   @Test
   public void toStringMatches_noDeadline_default() {
     String expected = "CallOptions{deadline=null, authority=authority, affinity={sample=blah}, "
-        + "executor=class io.grpc.internal.SerializingExecutor, compressorName=null}";
+        + "executor=class io.grpc.internal.SerializingExecutor, compressorName=null, "
+        + "customOptions=[]}";
     String actual = allSet
         .withDeadline(null)
         .withExecutor(new SerializingExecutor(directExecutor()))
@@ -140,7 +143,7 @@ public class CallOptionsTest {
   @Test
   public void toStringMatches_noDeadline() {
     assertThat("CallOptions{deadline=null, authority=null, "
-        + "affinity={}, executor=null, compressorName=null}")
+        + "affinity={}, executor=null, compressorName=null, customOptions=[]}")
             .isEqualTo(CallOptions.DEFAULT.toString());
   }
 
@@ -165,6 +168,31 @@ public class CallOptionsTest {
     assertAbout(deadline()).that(opts.getDeadline()).isWithin(50, MILLISECONDS).of(reference);
   }
 
+  @Test
+  public void withCustomOptionDefault() {
+    CallOptions opts = CallOptions.DEFAULT;
+    assertThat(opts.getOption(option1)).isEqualTo("default");
+  }
+  
+  @Test
+  public void withCustomOption() {
+    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1");
+    assertThat(opts.getOption(option1)).isEqualTo("v1");
+  }
+  
+  @Test
+  public void withCustomOptionLastOneWins() {
+    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1").withOption(option1, "v2");
+    assertThat(opts.getOption(option1)).isEqualTo("v2");
+  }
+  
+  @Test
+  public void withMultipleCustomOption() {
+    CallOptions opts = CallOptions.DEFAULT.withOption(option1, "v1").withOption(option2, "v2");
+    assertThat(opts.getOption(option1)).isEqualTo("v1");
+    assertThat(opts.getOption(option2)).isEqualTo("v2");
+  }
+  
   // TODO(carl-mastrangelo): consider making a CallOptionsSubject for Truth.
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadline(), o2.getDeadline())
