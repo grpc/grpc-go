@@ -1,4 +1,4 @@
-package main
+package reflection
 
 import (
 	"bytes"
@@ -17,21 +17,25 @@ import (
 )
 
 type serverReflectionServer struct {
+	s *grpc.Server
 	// TODO mu is not used. Add lock() and unlock().
 	mu                sync.Mutex
 	typeToNameMap     map[reflect.Type]string
 	nameToTypeMap     map[string]reflect.Type
 	typeToFileDescMap map[reflect.Type]*dpb.FileDescriptorProto
+	// TODO remove this, replace with s.ftdmap
 	filenameToDescMap map[string]*dpb.FileDescriptorProto
 }
 
-func newServerReflectionServer() *serverReflectionServer {
-	return &serverReflectionServer{
+// InstallOnServer installs server reflection service on the given grpc server.
+func InstallOnServer(s *grpc.Server) {
+	rpb.RegisterServerReflectionServer(s, &serverReflectionServer{
+		s:                 s,
 		typeToNameMap:     make(map[reflect.Type]string),
 		nameToTypeMap:     make(map[string]reflect.Type),
 		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
 		filenameToDescMap: make(map[string]*dpb.FileDescriptorProto),
-	}
+	})
 }
 
 type protoMessage interface {

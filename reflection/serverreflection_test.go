@@ -1,4 +1,4 @@
-package main
+package reflection
 
 import (
 	"reflect"
@@ -6,11 +6,18 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 )
 
 var (
-	s = newServerReflectionServer()
+	s = &serverReflectionServer{
+		// s:                 s,
+		typeToNameMap:     make(map[reflect.Type]string),
+		nameToTypeMap:     make(map[string]reflect.Type),
+		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
+		filenameToDescMap: make(map[string]*dpb.FileDescriptorProto),
+	}
 )
 
 // TODO TestFileDescForType(t *testing.T)
