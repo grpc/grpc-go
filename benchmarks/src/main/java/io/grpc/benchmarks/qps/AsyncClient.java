@@ -54,6 +54,7 @@ import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
 
 import io.grpc.Channel;
+import io.grpc.Context;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
@@ -198,10 +199,15 @@ public class AsyncClient {
         histogram.recordValue((now - lastCall) / 1000);
         lastCall = now;
 
-        if (endTime > now) {
-          stub.unaryCall(request, this);
-        } else {
-          future.done();
+        Context prevCtx = Context.ROOT.attach();
+        try {
+          if (endTime > now) {
+            stub.unaryCall(request, this);
+          } else {
+            future.done();
+          }
+        } finally {
+          Context.current().detach(prevCtx);
         }
       }
     });
