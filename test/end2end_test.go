@@ -130,6 +130,9 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
+		if _, exists := md[":authority"]; !exists {
+			return nil, grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+		}
 		if err := grpc.SendHeader(ctx, md); err != nil {
 			return nil, fmt.Errorf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
@@ -166,6 +169,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
+
 	return &testpb.SimpleResponse{
 		Payload: payload,
 	}, nil
@@ -173,8 +177,11 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromContext(stream.Context()); ok {
-		// For testing purpose, returns an error if there is attached metadata.
-		if len(md) > 0 {
+		if _, exists := md[":authority"]; !exists {
+			return grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+		}
+		// For testing purpose, returns an error if there is attached metadata except for authority.
+		if len(md) > 1 {
 			return grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
 	}
@@ -1686,7 +1693,8 @@ func testCompressOK(t *testing.T, e env) {
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+	ctx := metadata.NewContext(context.Background(), metadata.Pairs("something", "something"))
+	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC

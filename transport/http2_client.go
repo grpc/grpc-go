@@ -347,6 +347,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if md, ok := metadata.FromContext(ctx); ok {
 		hasMD = true
 		for k, v := range md {
+			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
+			if isReservedHeader(k) {
+				continue
+			}
 			for _, entry := range v {
 				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 			}
