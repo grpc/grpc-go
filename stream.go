@@ -103,12 +103,16 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	var (
 		t   transport.ClientTransport
 		err error
+		put func()
 	)
-	t, err = cc.dopts.picker.Pick(ctx)
+	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
+	gopts := BalancerGetOptions{
+		BlockingWait: false,
+	}
+	t, put, err = cc.getTransport(ctx, gopts)
 	if err != nil {
 		return nil, toRPCErr(err)
 	}
-	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
@@ -119,6 +123,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	cs := &clientStream{
 		desc:    desc,
+		put:     put,
 		codec:   cc.dopts.codec,
 		cp:      cc.dopts.cp,
 		dc:      cc.dopts.dc,
@@ -174,6 +179,7 @@ type clientStream struct {
 	tracing bool // set to EnableTracing when the clientStream is created.
 
 	mu     sync.Mutex
+	put    func()
 	closed bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
@@ -311,6 +317,10 @@ func (cs *clientStream) finish(err error) {
 	}
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	if cs.put != nil {
+		cs.put()
+		cs.put = nil
+	}
 	if cs.trInfo.tr != nil {
 		if err == nil || err == io.EOF {
 			cs.trInfo.tr.LazyPrintf("RPC: [OK]")

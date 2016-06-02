@@ -162,7 +162,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			return nil, fmt.Errorf("Unknown server name %q", serverName)
 		}
 	}
-
 	// Simulate some service delay.
 	time.Sleep(time.Second)
 
@@ -339,15 +338,16 @@ func TestReconnectTimeout(t *testing.T) {
 			ResponseSize: proto.Int32(respSize),
 			Payload:      payload,
 		}
-		if _, err := tc.UnaryCall(context.Background(), req); err == nil {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.UnaryCall(ctx, req); err == nil {
 			t.Errorf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
 			return
 		}
 	}()
 	// Block until reconnect times out.
 	<-waitC
-	if err := conn.Close(); err != grpc.ErrClientConnClosing {
-		t.Fatalf("%v.Close() = %v, want %v", conn, err, grpc.ErrClientConnClosing)
+	if err := conn.Close(); err != nil {
+		t.Fatalf("%v.Close() = %v, want <nil>", conn, err)
 	}
 }
 
@@ -441,14 +441,17 @@ type test struct {
 func (te *test) tearDown() {
 	if te.cancel != nil {
 		te.cancel()
+		te.cancel = nil
 	}
-	te.srv.Stop()
 	if te.cc != nil {
 		te.cc.Close()
+		te.cc = nil
 	}
 	if te.restoreLogs != nil {
 		te.restoreLogs()
+		te.restoreLogs = nil
 	}
+	te.srv.Stop()
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -590,6 +593,7 @@ func TestTimeoutOnDeadServer(t *testing.T) {
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te := newTest(t, e)
+	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
@@ -601,37 +605,17 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Idle); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Idle, err)
-	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Connecting); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Connecting, err)
-	}
-	if state, err := cc.State(); err != nil || state != grpc.Ready {
-		t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Ready)
-	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != context.DeadlineExceeded {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, %v", grpc.Ready, err, context.DeadlineExceeded)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	te.srv.Stop()
 	// Set -1 as the timeout to make sure if transportMonitor gets error
 	// notification in time the failure path of the 1st invoke of
 	// ClientConn.wait hits the deadline exceeded error.
-	ctx, _ = context.WithTimeout(context.Background(), -1)
+	ctx, _ := context.WithTimeout(context.Background(), -1)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("TestService/EmptyCall(%v, _) = _, error %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Ready, err)
-	}
-	if state, err := cc.State(); err != nil || (state != grpc.Connecting && state != grpc.TransientFailure) {
-		t.Fatalf("cc.State() = %s, %v, want %s or %s, <nil>", state, err, grpc.Connecting, grpc.TransientFailure)
-	}
-	cc.Close()
 	awaitNewConnLogOutput()
 }
 
@@ -789,23 +773,6 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-
-	// Wait until cc is connected.
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Idle); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Idle, err)
-	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Connecting); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Connecting, err)
-	}
-	if state, err := cc.State(); err != nil || state != grpc.Ready {
-		t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Ready)
-	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err == nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, <nil>, want _, %v", grpc.Ready, context.DeadlineExceeded)
-	}
 	tc := testpb.NewTestServiceClient(cc)
 	var header metadata.MD
 	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Header(&header))
@@ -817,15 +784,6 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	}
 
 	te.srv.Stop()
-	cc.Close()
-
-	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
-	if _, err := cc.WaitForStateChange(ctx, grpc.Ready); err != nil {
-		t.Fatalf("cc.WaitForStateChange(_, %s) = _, %v, want _, <nil>", grpc.Ready, err)
-	}
-	if state, err := cc.State(); err != nil || state != grpc.Shutdown {
-		t.Fatalf("cc.State() = %s, %v, want %s, <nil>", state, err, grpc.Shutdown)
-	}
 }
 
 func TestFailedEmptyUnary(t *testing.T) {
@@ -1007,7 +965,6 @@ func testRetry(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-
 	var wg sync.WaitGroup
 
 	numRPC := 1000
@@ -1073,9 +1030,8 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 	for i := -1; i <= 10; i++ {
 		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
-		reply, err := tc.UnaryCall(ctx, req)
-		if grpc.Code(err) != codes.DeadlineExceeded {
-			t.Fatalf(`TestService/UnaryCallv(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.DeadlineExceeded)
+		if _, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %d", err, codes.DeadlineExceeded)
 		}
 	}
 }
@@ -1111,12 +1067,9 @@ func testCancel(t *testing.T, e env) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
-	reply, err := tc.UnaryCall(ctx, req)
-	if grpc.Code(err) != codes.Canceled {
-		t.Fatalf(`TestService/UnaryCall(_, _) = %v, %v; want <nil>, error code: %d`, reply, err, codes.Canceled)
+	if r, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.Canceled {
+		t.Fatalf("TestService/UnaryCall(_, _) = %v, %v; want _, error code: %d", r, err, codes.Canceled)
 	}
-	cc.Close()
-
 	awaitNewConnLogOutput()
 }
 
