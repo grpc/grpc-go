@@ -144,4 +144,19 @@ final class GrpcHttp2Headers extends AbstractHttp2Headers {
       throw new UnsupportedOperationException();
     }
   }
+
+  @Override
+  public String toString() {
+    StringBuilder builder = new StringBuilder(getClass().getSimpleName()).append('[');
+    String separator = "";
+    for (Entry<CharSequence, CharSequence> e : this) {
+      CharSequence name = e.getKey();
+      CharSequence value = e.getValue();
+      builder.append(separator);
+      builder.append(name).append(": ").append(value);
+      separator = ", ";
+    }
+    builder.append(']');
+    return builder.toString();
+  }
 }
