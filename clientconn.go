@@ -64,7 +64,7 @@ var (
 	errCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
 	// errClientConnTimeout indicates that the connection could not be
 	// established or re-established within the specified timeout.
-	errClientConnTimeout = errors.New("grpc: timed out trying to connect")
+	errClientConnTimeout = Errorf(codes.DeadlineExceeded, "grpc: timed out trying to connect")
 	// errNetworkIP indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
