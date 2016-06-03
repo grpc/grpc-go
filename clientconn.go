@@ -142,7 +142,7 @@ func WithBackoffConfig(b BackoffConfig) DialOption {
 // withBackoff sets the backoff strategy used for retries after a
 // failed connection attempt.
 //
-// This can be exported if arbitrary backoff strategies are allowed by GRPC.
+// This can be exported if arbitrary backoff strategies are allowed by gRPC.
 func withBackoff(bs backoffStrategy) DialOption {
 	return func(o *dialOptions) {
 		o.bs = bs
