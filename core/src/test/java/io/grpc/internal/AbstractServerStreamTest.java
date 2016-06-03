@@ -95,6 +95,16 @@ public class AbstractServerStreamTest {
     verify(streamListener, times(0)).messageRead(any(InputStream.class));
   }
 
+  /**
+   * Test for issue https://github.com/grpc/grpc-java/issues/615
+   */
+  @Test
+  public void completeWithoutClose() {
+    stream.transportState().setListener(new ServerStreamListenerBase());
+    // Test that it doesn't throw an exception
+    stream.transportState().complete();
+  }
+
   @Test
   public void setListener_setOnlyOnce() {
 
