@@ -117,7 +117,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
 	var authInfo credentials.AuthInfo
-	for _, auth := range opts.Authenticators {
+	if opts.Authenticator != nil {
 		scheme = "https"
 		// TODO(zhaoq): Now the first TransportAuthenticator is used if there are
 		// multiple ones provided. Revisit this if it is not appropriate. Probably
@@ -126,8 +126,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		if timeout > 0 {
 			timeout -= time.Since(startT)
 		}
-		conn, authInfo, connErr = auth.ClientHandshake(addr, conn, timeout)
-		break
+		conn, authInfo, connErr = opts.Authenticator.ClientHandshake(addr, conn, timeout)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)

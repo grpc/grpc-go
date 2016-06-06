@@ -172,7 +172,7 @@ func WithInsecure() DialOption {
 // connection level security credentials (e.g., TLS/SSL).
 func WithTransportCredentials(auth credentials.TransportAuthenticator) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Authenticators = append(o.copts.Authenticators, auth)
+		o.copts.Authenticator = auth
 	}
 }
 
@@ -369,11 +369,11 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
 	}
 	if !ac.dopts.insecure {
-		if len(ac.dopts.copts.Authenticators) == 0 {
+		if ac.dopts.copts.Authenticator == nil {
 			return errNoTransportSecurity
 		}
 	} else {
-		if len(ac.dopts.copts.Authenticators) > 0 {
+		if ac.dopts.copts.Authenticator != nil {
 			return errCredentialsMisuse
 		}
 		for _, cd := range ac.dopts.copts.Credentials {
