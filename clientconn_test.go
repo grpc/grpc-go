@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/oauth"
 )
 
 const tlsDir = "testdata/"
@@ -67,13 +68,17 @@ func TestTLSDialTimeout(t *testing.T) {
 }
 
 func TestCredentialsMisuse(t *testing.T) {
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	auth, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
+		t.Fatalf("Failed to create authenticator %v", err)
 	}
 	// Two conflicting credential configurations
-	if _, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock(), WithInsecure()); err != errCredentialsMisuse {
+	if _, err := Dial("Non-Existent.Server:80", WithTransportCredentials(auth), WithTimeout(time.Millisecond), WithBlock(), WithInsecure()); err != errCredentialsMisuse {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errCredentialsMisuse)
+	}
+	creds, err := oauth.NewJWTAccessFromKey(nil)
+	if err != nil {
+		t.Fatalf("Failed to create credentials %v", err)
 	}
 	// security info on insecure connection
 	if _, err := Dial("Non-Existent.Server:80", WithPerRPCCredentials(creds), WithTimeout(time.Millisecond), WithBlock(), WithInsecure()); err != errCredentialsMisuse {

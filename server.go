@@ -95,7 +95,7 @@ type Server struct {
 }
 
 type options struct {
-	creds                credentials.Credentials
+	auth                 credentials.TransportAuthenticator
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
@@ -138,9 +138,9 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 }
 
 // Creds returns a ServerOption that sets credentials for server connections.
-func Creds(c credentials.Credentials) ServerOption {
+func Creds(c credentials.TransportAuthenticator) ServerOption {
 	return func(o *options) {
-		o.creds = c
+		o.auth = c
 	}
 }
 
@@ -249,11 +249,10 @@ var (
 )
 
 func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	creds, ok := s.opts.creds.(credentials.TransportAuthenticator)
-	if !ok {
+	if s.opts.auth == nil {
 		return rawConn, nil, nil
 	}
-	return creds.ServerHandshake(rawConn)
+	return s.opts.auth.ServerHandshake(rawConn)
 }
 
 // Serve accepts incoming connections on the listener lis, creating a new

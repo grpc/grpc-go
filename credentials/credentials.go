@@ -100,7 +100,6 @@ type TransportAuthenticator interface {
 	ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error)
 	// Info provides the ProtocolInfo of this TransportAuthenticator.
 	Info() ProtocolInfo
-	Credentials
 }
 
 // TLSInfo contains the auth information for a TLS authenticated connection.
@@ -109,6 +108,7 @@ type TLSInfo struct {
 	State tls.ConnectionState
 }
 
+// AuthType returns the type of TLSInfo as a string.
 func (t TLSInfo) AuthType() string {
 	return "tls"
 }

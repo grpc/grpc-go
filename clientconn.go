@@ -170,9 +170,9 @@ func WithInsecure() DialOption {
 
 // WithTransportCredentials returns a DialOption which configures a
 // connection level security credentials (e.g., TLS/SSL).
-func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOption {
+func WithTransportCredentials(auth credentials.TransportAuthenticator) DialOption {
 	return func(o *dialOptions) {
-		o.copts.AuthOptions = append(o.copts.AuthOptions, creds)
+		o.copts.Authenticators = append(o.copts.Authenticators, auth)
 	}
 }
 
@@ -180,7 +180,7 @@ func WithTransportCredentials(creds credentials.TransportAuthenticator) DialOpti
 // credentials which will place auth state on each outbound RPC.
 func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	return func(o *dialOptions) {
-		o.copts.AuthOptions = append(o.copts.AuthOptions, creds)
+		o.copts.Credentials = append(o.copts.Credentials, creds)
 	}
 }
 
@@ -369,17 +369,14 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
 	}
 	if !ac.dopts.insecure {
-		var ok bool
-		for _, cd := range ac.dopts.copts.AuthOptions {
-			if _, ok = cd.(credentials.TransportAuthenticator); ok {
-				break
-			}
-		}
-		if !ok {
+		if len(ac.dopts.copts.Authenticators) == 0 {
 			return errNoTransportSecurity
 		}
 	} else {
-		for _, cd := range ac.dopts.copts.AuthOptions {
+		if len(ac.dopts.copts.Authenticators) > 0 {
+			return errCredentialsMisuse
+		}
+		for _, cd := range ac.dopts.copts.Credentials {
 			if cd.RequireTransportSecurity() {
 				return errCredentialsMisuse
 			}
