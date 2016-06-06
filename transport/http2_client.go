@@ -119,10 +119,6 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	var authInfo credentials.AuthInfo
 	if opts.Authenticator != nil {
 		scheme = "https"
-		// TODO(zhaoq): Now the first TransportAuthenticator is used if there are
-		// multiple ones provided. Revisit this if it is not appropriate. Probably
-		// place the ClientTransport construction into a separate function to make
-		// things clear.
 		if timeout > 0 {
 			timeout -= time.Since(startT)
 		}
