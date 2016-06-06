@@ -71,6 +71,7 @@ var (
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
 	errConnClosing = errors.New("grpc: the connection is closing")
+	errNoAddr      = errors.New("grpc: there is no address available to dial")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -230,18 +231,18 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if err := cc.balancer.Start(target); err != nil {
 		return nil, err
 	}
-	ch := cc.balancer.Notify()
 	var (
 		ok    bool
 		addrs []Address
 	)
+	ch := cc.balancer.Notify()
 	if ch == nil {
 		// There is no name resolver installed.
 		addrs = append(addrs, Address{Addr: target})
 	} else {
 		addrs, ok = <-ch
 		if !ok || len(addrs) == 0 {
-			return nil, fmt.Errorf("grpc: there is no address available to dial")
+			return nil, errNoAddr
 		}
 	}
 	waitC := make(chan error)
