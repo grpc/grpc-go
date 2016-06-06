@@ -296,61 +296,6 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 
 const tlsDir = "testdata/"
 
-func TestReconnectTimeout(t *testing.T) {
-	defer leakCheck(t)()
-	restore := declareLogNoise(t,
-		"transport: http2Client.notifyError got notified that the client transport was broken",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport",
-		"grpc: Conn.transportMonitor exits due to: grpc: timed out trying to connect",
-	)
-	defer restore()
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen: %v", err)
-	}
-	_, port, err := net.SplitHostPort(lis.Addr().String())
-	if err != nil {
-		t.Fatalf("Failed to parse listener address: %v", err)
-	}
-	addr := "localhost:" + port
-	conn, err := grpc.Dial(addr, grpc.WithTimeout(5*time.Second), grpc.WithBlock(), grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Failed to dial to the server %q: %v", addr, err)
-	}
-	// Close unaccepted connection (i.e., conn).
-	lis.Close()
-	tc := testpb.NewTestServiceClient(conn)
-	waitC := make(chan struct{})
-	go func() {
-		defer close(waitC)
-		const argSize = 271828
-		const respSize = 314159
-
-		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-
-		req := &testpb.SimpleRequest{
-			ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-			ResponseSize: proto.Int32(respSize),
-			Payload:      payload,
-		}
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.UnaryCall(ctx, req); err == nil {
-			t.Errorf("TestService/UnaryCall(_, _) = _, <nil>, want _, non-nil")
-			return
-		}
-	}()
-	// Block until reconnect times out.
-	<-waitC
-	if err := conn.Close(); err != nil {
-		t.Fatalf("%v.Close() = %v, want <nil>", conn, err)
-	}
-}
-
 func unixDialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("unix", addr, timeout)
 }

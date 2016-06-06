@@ -53,6 +53,9 @@ var (
 	// ErrClientConnClosing indicates that the operation is illegal because
 	// the ClientConn is closing.
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
+	// ErrClientConnTimeout indicates that the ClientConn cannot establish the
+	// underlying connections within the specified timeout.
+	ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
 	// errNoTransportSecurity indicates that there is no transport security
 	// being set for ClientConn. Users should either set one or explicitly
@@ -62,15 +65,13 @@ var (
 	// (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.
 	errCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
-	// errClientConnTimeout indicates that the connection could not be
-	// established or re-established within the specified timeout.
-	errClientConnTimeout = errors.New("grpc: timed out trying to connect")
 	// errNetworkIP indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
 	errConnClosing = errors.New("grpc: the connection is closing")
+	errNoAddr      = errors.New("grpc: there is no address available to dial")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -85,6 +86,7 @@ type dialOptions struct {
 	balancer Balancer
 	block    bool
 	insecure bool
+	timeout  time.Duration
 	copts    transport.ConnectOptions
 }
 
@@ -182,10 +184,11 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	}
 }
 
-// WithTimeout returns a DialOption that configures a timeout for dialing a client connection.
+// WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn
+// initially. This is valid if and only if WithBlock() is present.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Timeout = d
+		o.timeout = d
 	}
 }
 
@@ -228,26 +231,47 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if err := cc.balancer.Start(target); err != nil {
 		return nil, err
 	}
+	var (
+		ok    bool
+		addrs []Address
+	)
 	ch := cc.balancer.Notify()
 	if ch == nil {
 		// There is no name resolver installed.
-		addr := Address{Addr: target}
-		if err := cc.newAddrConn(addr, false); err != nil {
-			return nil, err
-		}
+		addrs = append(addrs, Address{Addr: target})
 	} else {
-		addrs, ok := <-ch
+		addrs, ok = <-ch
 		if !ok || len(addrs) == 0 {
-			return nil, fmt.Errorf("grpc: there is no address available to dial")
+			return nil, errNoAddr
 		}
+	}
+	waitC := make(chan error)
+	go func() {
 		for _, a := range addrs {
 			if err := cc.newAddrConn(a, false); err != nil {
-				return nil, err
+				waitC <- err
+				return
 			}
 		}
+		close(waitC)
+	}()
+	var timeoutCh <-chan time.Time
+	if cc.dopts.timeout > 0 {
+		timeoutCh = time.After(cc.dopts.timeout)
+	}
+	select {
+	case err := <-waitC:
+		if err != nil {
+			cc.Close()
+			return nil, err
+		}
+	case <-timeoutCh:
+		cc.Close()
+		return nil, ErrClientConnTimeout
+	}
+	if ok {
 		go cc.lbWatcher()
 	}
-
 	colonPos := strings.LastIndex(target, ":")
 	if colonPos == -1 {
 		colonPos = len(target)
@@ -517,7 +541,6 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
 	var retries int
-	start := time.Now()
 	for {
 		ac.mu.Lock()
 		ac.printf("connecting")
@@ -537,29 +560,13 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		if closeTransport && t != nil {
 			t.Close()
 		}
-		// Adjust timeout for the current try.
-		copts := ac.dopts.copts
-		if copts.Timeout < 0 {
-			ac.tearDown(errClientConnTimeout)
-			return errClientConnTimeout
-		}
-		if copts.Timeout > 0 {
-			copts.Timeout -= time.Since(start)
-			if copts.Timeout <= 0 {
-				ac.tearDown(errClientConnTimeout)
-				return errClientConnTimeout
-			}
-		}
 		sleepTime := ac.dopts.bs.backoff(retries)
-		timeout := sleepTime
-		if timeout < minConnectTimeout {
-			timeout = minConnectTimeout
-		}
-		if copts.Timeout == 0 || copts.Timeout > timeout {
-			copts.Timeout = timeout
+		ac.dopts.copts.Timeout = sleepTime
+		if sleepTime < minConnectTimeout {
+			ac.dopts.copts.Timeout = minConnectTimeout
 		}
 		connectTime := time.Now()
-		newTransport, err := transport.NewClientTransport(ac.addr.Addr, &copts)
+		newTransport, err := transport.NewClientTransport(ac.addr.Addr, &ac.dopts.copts)
 		if err != nil {
 			ac.mu.Lock()
 			if ac.state == Shutdown {
@@ -578,14 +585,6 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			sleepTime -= time.Since(connectTime)
 			if sleepTime < 0 {
 				sleepTime = 0
-			}
-			// Fail early before falling into sleep.
-			if ac.dopts.copts.Timeout > 0 && ac.dopts.copts.Timeout < sleepTime+time.Since(start) {
-				ac.mu.Lock()
-				ac.errorf("connection timeout")
-				ac.mu.Unlock()
-				ac.tearDown(errClientConnTimeout)
-				return errClientConnTimeout
 			}
 			closeTransport = false
 			select {
