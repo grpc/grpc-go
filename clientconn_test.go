@@ -47,8 +47,8 @@ func TestDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != errClientConnTimeout {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, errClientConnTimeout)
+	if err != ErrClientConnTimeout {
+		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
 	}
 }
 
@@ -61,8 +61,8 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != errClientConnTimeout {
-		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, errClientConnTimeout)
+	if err != ErrClientConnTimeout {
+		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
 	}
 }
 

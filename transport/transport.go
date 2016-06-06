@@ -338,8 +338,7 @@ type ConnectOptions struct {
 	Dialer func(string, time.Duration) (net.Conn, error)
 	// AuthOptions stores the credentials required to setup a client connection and/or issue RPCs.
 	AuthOptions []credentials.Credentials
-	// Timeout specifies the timeout for dialing a client connection.
-	Timeout time.Duration
+	Timeout     time.Duration
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions
