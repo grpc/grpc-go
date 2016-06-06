@@ -183,9 +183,8 @@ func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
 	}
 }
 
-// WithTimeout returns a DialOption that configures a timeout for creating a ClientConn
-// and dialing the corresponding network connections when calling Dial(...). This is
-// valid if and only if WithBlock() is present.
+// WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn
+// initially. This is valid if and only if WithBlock() is present.
 func WithTimeout(d time.Duration) DialOption {
 	return func(o *dialOptions) {
 		o.timeout = d
