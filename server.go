@@ -73,6 +73,7 @@ type ServiceDesc struct {
 	HandlerType interface{}
 	Methods     []MethodDesc
 	Streams     []StreamDesc
+	Metadata    interface{}
 }
 
 // service consists of the information of the server serving this service and
