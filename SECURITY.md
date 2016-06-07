@@ -32,7 +32,9 @@ Support for OpenSSL is only provided for the Netty transport via [netty-tcnative
 
 As of version `1.1.33.Fork14`, netty-tcnative provides two options for usage: statically or dynamically linked. For simplification of initial setup,
 we recommend that users first look at `netty-tcnative-boringssl-static`, which is statically linked against BoringSSL and Apache APR. Using this artifact requires no extra installation and guarantees that ALPN and the ciphers required for
-HTTP/2 are available.
+HTTP/2 are available. In addition, starting with `1.1.33.Fork16` binaries for
+all supported platforms can be included at compile time and the correct binary
+for the platform can be selected at runtime.
 
 Production systems, however, may require an easy upgrade path for OpenSSL security patches. In this case, relying on the statically linked artifact also implies waiting for the Netty team
 to release the new artifact to Maven Central, which can take some time. A better solution in this case is to use the dynamically linked `netty-tcnative` artifact, which allows the site administrator
@@ -60,21 +62,9 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>1.1.33.Fork14</version>
-      <classifier>${os.detected.classifier}</classifier>
+      <version>1.1.33.Fork17</version>
     </dependency>
   </dependencies>
-
-  <build>
-    <extensions>
-      <!-- Use os-maven-plugin to initialize the "os.detected" properties -->
-      <extension>
-        <groupId>kr.motd.maven</groupId>
-        <artifactId>os-maven-plugin</artifactId>
-        <version>1.4.0.Final</version>
-      </extension>
-    </extensions>
-  </build>
 </project>
 ```
 
@@ -87,16 +77,10 @@ buildscript {
   repositories {
     mavenCentral()
   }
-  dependencies {
-    classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
-  }
 }
 
-// Use the osdetector-gradle-plugin
-apply plugin: "com.google.osdetector"
-
 dependencies {
-    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork14:' + osdetector.classifier
+    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork17'
 }
 ```
 
