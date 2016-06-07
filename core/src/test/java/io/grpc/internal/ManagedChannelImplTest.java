@@ -200,14 +200,16 @@ public class ManagedChannelImplTest {
     when(mockTransportFactory.newClientTransport(
             any(SocketAddress.class), any(String.class), any(String.class)))
         .thenReturn(mockTransport);
-    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers), same(CallOptions.DEFAULT)))
+        .thenReturn(mockStream);
     call.start(mockCallListener, headers);
     verify(mockTransportFactory, timeout(1000))
         .newClientTransport(same(socketAddress), eq(authority), eq(userAgent));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     transportListener.transportReady();
-    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
     verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
     verify(mockStream).setCompressor(isA(Compressor.class));
     // Depends on how quick the real transport is created, ClientCallImpl may start on mockStream
@@ -221,9 +223,11 @@ public class ManagedChannelImplTest {
     ClientCall<String, Integer> call2 = channel.newCall(method, CallOptions.DEFAULT);
     ClientStream mockStream2 = mock(ClientStream.class);
     Metadata headers2 = new Metadata();
-    when(mockTransport.newStream(same(method), same(headers2))).thenReturn(mockStream2);
+    when(mockTransport.newStream(same(method), same(headers2), same(CallOptions.DEFAULT)))
+        .thenReturn(mockStream2);
     call2.start(mockCallListener2, headers2);
-    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers2));
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers2),
+        same(CallOptions.DEFAULT));
     verify(mockStream2, timeout(1000)).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener2 = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
@@ -278,14 +282,16 @@ public class ManagedChannelImplTest {
     when(mockTransportFactory.newClientTransport(
             any(SocketAddress.class), any(String.class), any(String.class)))
         .thenReturn(mockTransport);
-    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers), same(CallOptions.DEFAULT)))
+        .thenReturn(mockStream);
     call.start(mockCallListener, headers);
     verify(mockTransportFactory, timeout(1000))
         .newClientTransport(same(socketAddress), eq(authority), any(String.class));
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
     transportListener.transportReady();
-    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
     verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
     verify(mockStream).setCompressor(isA(Compressor.class));
     // Depends on how quick the real transport is created, ClientCallImpl may start on mockStream
@@ -342,7 +348,8 @@ public class ManagedChannelImplTest {
     // Create transport and call
     ClientStream mockStream = mock(ClientStream.class);
     Metadata headers = new Metadata();
-    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers), same(CallOptions.DEFAULT)))
+        .thenReturn(mockStream);
     call.start(mockCallListener, headers);
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     ManagedClientTransport.Listener transportListener = transportListenerCaptor.getValue();
@@ -444,18 +451,19 @@ public class ManagedChannelImplTest {
   public void callOptionsExecutor() {
     Metadata headers = new Metadata();
     ClientStream mockStream = mock(ClientStream.class);
-    when(mockTransport.newStream(same(method), same(headers))).thenReturn(mockStream);
+    when(mockTransport.newStream(same(method), same(headers), any(CallOptions.class)))
+        .thenReturn(mockStream);
     FakeClock fakeExecutor = new FakeClock();
     ManagedChannel channel = createChannel(
         new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    CallOptions options = CallOptions.DEFAULT.withExecutor(fakeExecutor.scheduledExecutorService);
 
-    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT.withExecutor(
-        fakeExecutor.scheduledExecutorService));
+    ClientCall<String, Integer> call = channel.newCall(method, options);
     call.start(mockCallListener, headers);
 
     verify(mockTransport, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportReady();
-    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(mockTransport, timeout(1000)).newStream(same(method), same(headers), same(options));
     verify(mockStream, timeout(1000)).start(streamListenerCaptor.capture());
     ClientStreamListener streamListener = streamListenerCaptor.getValue();
     Metadata trailers = new Metadata();
@@ -608,7 +616,8 @@ public class ManagedChannelImplTest {
           .newClientTransport(same(goodAddress), any(String.class), any(String.class));
     verify(goodTransport, timeout(1000)).start(goodTransportListenerCaptor.capture());
     goodTransportListenerCaptor.getValue().transportReady();
-    verify(goodTransport, timeout(1000)).newStream(same(method), same(headers));
+    verify(goodTransport, timeout(1000)).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
     // The bad transport was never used.
     verify(badTransport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
   }
@@ -707,7 +716,8 @@ public class ManagedChannelImplTest {
         .newClientTransport(same(addr1), any(String.class), any(String.class));
     verify(transport1, timeout(1000)).start(transportListenerCaptor.capture());
     transportListenerCaptor.getValue().transportReady();
-    verify(transport1, timeout(1000)).newStream(same(method), same(headers));
+    verify(transport1, timeout(1000)).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
     transportListenerCaptor.getValue().transportShutdown(Status.UNAVAILABLE);
 
     // Second call still use the first address, since it was successfully connected.
@@ -717,7 +727,8 @@ public class ManagedChannelImplTest {
     verify(mockTransportFactory, times(2))
         .newClientTransport(same(addr1), any(String.class), any(String.class));
     transportListenerCaptor.getValue().transportReady();
-    verify(transport2, timeout(1000)).newStream(same(method), same(headers));
+    verify(transport2, timeout(1000)).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
   }
 
   @Test

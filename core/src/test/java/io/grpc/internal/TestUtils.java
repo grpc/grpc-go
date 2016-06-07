@@ -36,6 +36,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
@@ -84,8 +85,8 @@ final class TestUtils {
       @Override
       public ManagedClientTransport answer(InvocationOnMock invocation) throws Throwable {
         final ManagedClientTransport mockTransport = mock(ManagedClientTransport.class);
-        when(mockTransport.newStream(any(MethodDescriptor.class), any(Metadata.class)))
-            .thenReturn(mock(ClientStream.class));
+        when(mockTransport.newStream(any(MethodDescriptor.class), any(Metadata.class),
+            any(CallOptions.class))).thenReturn(mock(ClientStream.class));
         // Save the listener
         doAnswer(new Answer<Void>() {
           @Override

@@ -34,6 +34,7 @@ package io.grpc.inprocess;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
@@ -126,7 +127,7 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
 
   @Override
   public synchronized ClientStream newStream(
-      final MethodDescriptor<?, ?> method, final Metadata headers) {
+      final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
     if (shutdownStatus != null) {
       final Status capturedStatus = shutdownStatus;
       return new NoopClientStream() {
@@ -138,6 +139,12 @@ class InProcessTransport implements ServerTransport, ManagedClientTransport {
     }
 
     return new InProcessStream(method, headers).clientStream;
+  }
+
+  @Override
+  public synchronized ClientStream newStream(
+      final MethodDescriptor<?, ?> method, final Metadata headers) {
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @Override

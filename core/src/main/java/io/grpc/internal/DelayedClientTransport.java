@@ -36,6 +36,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -85,23 +86,29 @@ class DelayedClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions
+      callOptions) {
     Supplier<ClientTransport> supplier = transportSupplier;
     if (supplier == null) {
       synchronized (lock) {
         // Check again, since it may have changed while waiting for lock
         supplier = transportSupplier;
         if (supplier == null && !shutdown) {
-          PendingStream pendingStream = new PendingStream(method, headers);
+          PendingStream pendingStream = new PendingStream(method, headers, callOptions);
           pendingStreams.add(pendingStream);
           return pendingStream;
         }
       }
     }
     if (supplier != null) {
-      return supplier.get().newStream(method, headers);
+      return supplier.get().newStream(method, headers, callOptions);
     }
     return new FailingClientStream(Status.UNAVAILABLE.withDescription("transport shutdown"));
+  }
+
+  @Override
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @Override
@@ -133,7 +140,7 @@ class DelayedClientTransport implements ManagedClientTransport {
   /**
    * Prevents creating any new streams until {@link #setTransport} is called. Buffered streams are
    * not failed, so if {@link #shutdown} is called when {@link #setTransport} has not been called,
-   * you still need to call {@link setTransport} to make this transport terminated.
+   * you still need to call {@link #setTransport} to make this transport terminated.
    */
   @Override
   public void shutdown() {
@@ -257,14 +264,17 @@ class DelayedClientTransport implements ManagedClientTransport {
   private class PendingStream extends DelayedStream {
     private final MethodDescriptor<?, ?> method;
     private final Metadata headers;
+    private final CallOptions callOptions;
 
-    private PendingStream(MethodDescriptor<?, ?> method, Metadata headers) {
+    private PendingStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions
+        callOptions) {
       this.method = method;
       this.headers = headers;
+      this.callOptions = callOptions;
     }
 
     private void createRealStream(ClientTransport transport) {
-      setStream(transport.newStream(method, headers));
+      setStream(transport.newStream(method, headers, callOptions));
     }
 
     @Override

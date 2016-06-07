@@ -36,6 +36,7 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Ticker;
 
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -112,7 +113,8 @@ class NettyClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions
+      callOptions) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     return new NettyClientStream(method, headers, channel, handler, maxMessageSize, authority,
@@ -122,6 +124,11 @@ class NettyClientTransport implements ManagedClientTransport {
         return NettyClientTransport.this.statusFromFailedFuture(f);
       }
     };
+  }
+
+  @Override
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @Override

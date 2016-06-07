@@ -39,6 +39,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -246,11 +247,18 @@ class OkHttpClientTransport implements ManagedClientTransport {
   }
 
   @Override
-  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata headers) {
+  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
+      headers, CallOptions callOptions) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
         outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent);
+  }
+
+  @Override
+  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
+      headers) {
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @GuardedBy("lock")

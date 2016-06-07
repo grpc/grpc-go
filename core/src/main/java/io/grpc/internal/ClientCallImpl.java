@@ -205,7 +205,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
           parentContext.getDeadline(), headers);
       ClientTransport transport = clientTransportProvider.get(callOptions);
-      stream = transport.newStream(method, headers);
+      stream = transport.newStream(method, headers, callOptions);
     } else {
       stream = new FailingClientStream(DEADLINE_EXCEEDED);
     }

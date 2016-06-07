@@ -42,6 +42,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -135,7 +136,8 @@ public class ClientCallImplTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     when(provider.get(any(CallOptions.class))).thenReturn(transport);
-    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class))).thenReturn(stream);
+    when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
+        any(CallOptions.class))).thenReturn(stream);
   }
 
   @After
@@ -156,7 +158,7 @@ public class ClientCallImplTest {
     call.start(callListener, new Metadata());
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(transport).newStream(eq(method), metadataCaptor.capture());
+    verify(transport).newStream(eq(method), metadataCaptor.capture(), same(CallOptions.DEFAULT));
     Metadata actual = metadataCaptor.getValue();
 
     Set<String> acceptedEncodings =
@@ -176,6 +178,23 @@ public class ClientCallImplTest {
 
     call.start(callListener, new Metadata());
     verify(stream).setAuthority("overridden-authority");
+  }
+
+  @Test
+  public void callOptionsPropagatedToTransport() {
+    final CallOptions callOptions = CallOptions.DEFAULT.withAuthority("dummy_value");
+    final ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        MoreExecutors.directExecutor(),
+        callOptions,
+        provider,
+        deadlineCancellationExecutor)
+        .setDecompressorRegistry(decompressorRegistry);
+    final Metadata metadata = new Metadata();
+
+    call.start(callListener, metadata);
+
+    verify(transport).newStream(same(method), same(metadata), same(callOptions));
   }
 
   @Test

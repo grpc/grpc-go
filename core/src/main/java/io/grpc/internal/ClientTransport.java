@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
@@ -56,9 +57,13 @@ public interface ClientTransport {
    *
    * @param method the descriptor of the remote method to be called for this stream.
    * @param headers to send at the beginning of the call
+   * @param callOptions runtime options of the call
    * @return the newly created stream.
    */
   // TODO(nmittler): Consider also throwing for stopping.
+  ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions);
+
+  // TODO(zdapeng): Remove tow-argument version in favor of three-argument overload.
   ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers);
 
   /**

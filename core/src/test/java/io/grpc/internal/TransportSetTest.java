@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Stopwatch;
 
+import io.grpc.CallOptions;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
@@ -450,7 +451,8 @@ public class TransportSetTest {
     verify(transportInfo.transport, times(0)).newStream(
         any(MethodDescriptor.class), any(Metadata.class));
     assertEquals(1, fakeExecutor.runDueTasks());
-    verify(transportInfo.transport).newStream(same(method), same(headers));
+    verify(transportInfo.transport).newStream(same(method), same(headers),
+        same(CallOptions.DEFAULT));
     verify(transportInfo.transport).shutdown();
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
     verify(mockTransportSetCallback, never()).onTerminated();
