@@ -294,44 +294,61 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 			return err
 		}
 
-		var response *rpb.FileDescriptorResponse
+		out := &rpb.ServerReflectionResponse{
+			ValidHost:       in.Host,
+			OriginalRequest: in,
+		}
 		switch req := in.MessageRequest.(type) {
 		case *rpb.ServerReflectionRequest_FileByFilename:
 			b, err := s.fileDescWireFormatByFilename(req.FileByFilename)
 			if err != nil {
-				// TODO grpc error or send message back
-				return err
+				out.MessageResponse = &rpb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &rpb.ErrorResponse{
+						ErrorCode:    int32(codes.NotFound),
+						ErrorMessage: err.Error(),
+					},
+				}
+			} else {
+				out.MessageResponse = &rpb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}},
+				}
 			}
-			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_FileContainingSymbol:
 			b, err := s.fileDescWireFormatContainingSymbol(req.FileContainingSymbol)
 			if err != nil {
-				// TODO grpc error or send message back
-				return err
+				out.MessageResponse = &rpb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &rpb.ErrorResponse{
+						ErrorCode:    int32(codes.NotFound),
+						ErrorMessage: err.Error(),
+					},
+				}
+			} else {
+				out.MessageResponse = &rpb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}},
+				}
 			}
-			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_FileContainingExtension:
 			typeName := req.FileContainingExtension.ContainingType
 			extNum := req.FileContainingExtension.ExtensionNumber
 			b, err := s.fileDescWireFormatContainingExtension(typeName, extNum)
 			if err != nil {
-				// TODO grpc error or send message back
-				return err
+				out.MessageResponse = &rpb.ServerReflectionResponse_ErrorResponse{
+					ErrorResponse: &rpb.ErrorResponse{
+						ErrorCode:    int32(codes.NotFound),
+						ErrorMessage: err.Error(),
+					},
+				}
+			} else {
+				out.MessageResponse = &rpb.ServerReflectionResponse_FileDescriptorResponse{
+					FileDescriptorResponse: &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}},
+				}
 			}
-			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_AllExtensionNumbersOfType:
 		case *rpb.ServerReflectionRequest_ListServices:
 		default:
 			return grpc.Errorf(codes.InvalidArgument, "invalid MessageRequest: %v", in.MessageRequest)
 		}
 
-		out := &rpb.ServerReflectionResponse{
-			ValidHost:       in.Host,
-			OriginalRequest: in,
-			MessageResponse: &rpb.ServerReflectionResponse_FileDescriptorResponse{
-				FileDescriptorResponse: response,
-			},
-		}
 		if err := stream.Send(out); err != nil {
 			return err
 		}
