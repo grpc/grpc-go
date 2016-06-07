@@ -387,3 +387,25 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		t.Errorf("Header+Trailer Map mismatch.\n got: %#v\nwant: %#v", rw.HeaderMap, wantHeader)
 	}
 }
+
+func TestIsGrpcContentType(t *testing.T) {
+	tests := []struct {
+		h    string
+		want bool
+	}{
+		{"application/grpc", true},
+		{"application/grpc+", true},
+		{"application/grpc+blah", true},
+		{"application/grpc;", true},
+		{"application/grpc;blah", true},
+		{"application/grpcd", false},
+		{"application/grpd", false},
+		{"application/grp", false},
+	}
+	for _, tt := range tests {
+		got := isGrpcContentType(tt.h)
+		if got != tt.want {
+			t.Errorf("isGrpcContentType(%q) = %v; want %v", tt.h, got, tt.want)
+		}
+	}
+}

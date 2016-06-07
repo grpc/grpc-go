@@ -55,6 +55,19 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
+func isGrpcContentType(t string) bool {
+	e := "application/grpc"
+	if !strings.HasPrefix(t, e) {
+		return false
+	}
+	// Support variations on the content-type
+	// (e.g. "application/grpc+blah", "application/grpc;blah").
+	if len(t) > len(e) && t[len(e)] != '+' && t[len(e)] != ';' {
+		return false
+	}
+	return true
+}
+
 // NewServerHandlerTransport returns a ServerTransport handling gRPC
 // from inside an http.Handler. It requires that the http Server
 // supports HTTP/2.
@@ -65,7 +78,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 	if r.Method != "POST" {
 		return nil, errors.New("invalid gRPC request method")
 	}
-	if !strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
+	if !isGrpcContentType(r.Header.Get("Content-Type")) {
 		return nil, errors.New("invalid gRPC request content-type")
 	}
 	if _, ok := w.(http.Flusher); !ok {
@@ -97,7 +110,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 	}
 	for k, vv := range r.Header {
 		k = strings.ToLower(k)
-		if isReservedHeader(k) && !isWhitelistedPseudoHeader(k){
+		if isReservedHeader(k) && !isWhitelistedPseudoHeader(k) {
 			continue
 		}
 		for _, v := range vv {
