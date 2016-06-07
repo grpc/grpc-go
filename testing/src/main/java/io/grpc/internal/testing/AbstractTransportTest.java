@@ -40,6 +40,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
@@ -226,6 +227,7 @@ public abstract class AbstractTransportTest {
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     inOrder.verify(mockClientTransportListener).transportTerminated();
     verify(mockClientTransportListener, never()).transportReady();
+    verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
   @Test
@@ -238,6 +240,7 @@ public abstract class AbstractTransportTest {
     inOrder.verify(mockClientTransportListener).transportShutdown(statusCaptor.capture());
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     inOrder.verify(mockClientTransportListener).transportTerminated();
+    verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
   @Test
@@ -256,6 +259,7 @@ public abstract class AbstractTransportTest {
     server.shutdown();
     assertTrue(serverListener.waitForShutdown(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     server = null;
+    verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
   @Test
@@ -277,6 +281,7 @@ public abstract class AbstractTransportTest {
 
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
     clientStream.start(mockClientStreamListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
@@ -307,11 +312,13 @@ public abstract class AbstractTransportTest {
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
 
     verify(mockClientTransportListener, never()).transportTerminated();
+    verify(mockClientTransportListener, never()).transportInUse(false);
     assertFalse(serverTransportListener.isTerminated());
 
     clientStream.cancel(Status.CANCELLED);
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
     assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
   }
 
@@ -325,6 +332,7 @@ public abstract class AbstractTransportTest {
 
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
     clientStream.start(mockClientStreamListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
@@ -336,6 +344,7 @@ public abstract class AbstractTransportTest {
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
     assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(serverTransportListener.isTerminated());
 
@@ -354,6 +363,7 @@ public abstract class AbstractTransportTest {
 
     ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
     clientStream.start(mockClientStreamListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStream serverStream = serverStreamCreation.stream;
@@ -364,6 +374,7 @@ public abstract class AbstractTransportTest {
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
     assertTrue(serverTransportListener.waitForTermination(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     assertTrue(serverTransportListener.isTerminated());
 
@@ -387,6 +398,7 @@ public abstract class AbstractTransportTest {
       assumeTrue(false);
     }
     verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyInt());
+    verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
   @Test
@@ -470,7 +482,54 @@ public abstract class AbstractTransportTest {
     stream.start(mockClientStreamListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
+    verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
+  }
+
+  @Test
+  public void transportInUse_normalClose() throws Exception {
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata());
+    stream1.start(mockClientStreamListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    StreamCreation serverStreamCreation1
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
+    stream2.start(mockClientStreamListener);
+    StreamCreation serverStreamCreation2
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    stream1.halfClose();
+    serverStreamCreation1.stream.close(Status.OK, new Metadata());
+    stream2.halfClose();
+    verify(mockClientTransportListener, never()).transportInUse(false);
+    serverStreamCreation2.stream.close(Status.OK, new Metadata());
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
+    // Verify that the callback has been called only once for true and false respectively
+    verify(mockClientTransportListener).transportInUse(true);
+    verify(mockClientTransportListener).transportInUse(false);
+  }
+
+  @Test
+  public void transportInUse_clientCancel() throws Exception {
+    server.start(serverListener);
+    client.start(mockClientTransportListener);
+    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata());
+    stream1.start(mockClientStreamListener);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
+    stream2.start(mockClientStreamListener);
+
+    stream1.cancel(Status.CANCELLED);
+    verify(mockClientTransportListener, never()).transportInUse(false);
+    stream2.cancel(Status.CANCELLED);
+    verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(false);
+    // Verify that the callback has been called only once for true and false respectively
+    verify(mockClientTransportListener).transportInUse(true);
+    verify(mockClientTransportListener).transportInUse(false);
   }
 
   @Test

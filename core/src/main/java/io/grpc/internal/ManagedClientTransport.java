@@ -106,5 +106,11 @@ public interface ManagedClientTransport extends ClientTransport, WithLogId {
      * called at most once.
      */
     void transportReady();
+
+    /**
+     * Called whenever the transport's in-use state has changed. A transport is in-use when it has
+     * at least one stream.
+     */
+    void transportInUse(boolean inUse);
   }
 }

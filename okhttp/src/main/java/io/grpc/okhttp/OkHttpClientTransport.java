@@ -158,6 +158,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private Http2Ping ping;
   @GuardedBy("lock")
   private boolean stopped;
+  @GuardedBy("lock")
+  private boolean inUse;
   private SSLSocketFactory sslSocketFactory;
   private Socket socket;
   @GuardedBy("lock")
@@ -269,6 +271,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
       } else if (streams.size() >= maxConcurrentStreams) {
         pendingStreams.add(clientStream);
+        setInUse();
       } else {
         startStream(clientStream);
       }
@@ -279,6 +282,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private void startStream(OkHttpClientStream stream) {
     Preconditions.checkState(stream.id() == null, "StreamId already assigned");
     streams.put(nextStreamId, stream);
+    setInUse();
     stream.start(nextStreamId);
     stream.allocated();
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
@@ -317,6 +321,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   @GuardedBy("lock")
   void removePendingStream(OkHttpClientStream pendingStream) {
     pendingStreams.remove(pendingStream);
+    maybeClearInUse();
   }
 
   @Override
@@ -476,6 +481,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         stream.transportReportStatus(reason, true, new Metadata());
       }
       pendingStreams.clear();
+      maybeClearInUse();
 
       stopIfNecessary();
     }
@@ -552,6 +558,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         stream.transportReportStatus(status, true, new Metadata());
       }
       pendingStreams.clear();
+      maybeClearInUse();
 
       stopIfNecessary();
     }
@@ -584,6 +591,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         }
         if (!startPendingStreams()) {
           stopIfNecessary();
+          maybeClearInUse();
         }
       }
     }
@@ -617,6 +625,24 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     // We will close the underlying socket in the writing thread to break out the reader
     // thread, which will close the frameReader and notify the listener.
     frameWriter.close();
+  }
+
+  @GuardedBy("lock")
+  private void maybeClearInUse() {
+    if (inUse) {
+      if (pendingStreams.isEmpty() && streams.isEmpty()) {
+        inUse = false;
+        listener.transportInUse(false);
+      }
+    }
+  }
+
+  @GuardedBy("lock")
+  private void setInUse() {
+    if (!inUse) {
+      inUse = true;
+      listener.transportInUse(true);
+    }
   }
 
   private Throwable getPingFailure() {

@@ -39,6 +39,7 @@ final class ClientTransportLifecycleManager {
   private final ManagedClientTransport.Listener listener;
   private boolean transportReady;
   private boolean transportShutdown;
+  private boolean transportInUse;
   /** null iff !transportShutdown. */
   private Status shutdownStatus;
   /** null iff !transportShutdown. */
@@ -65,6 +66,14 @@ final class ClientTransportLifecycleManager {
     shutdownStatus = s;
     shutdownThrowable = s.asException();
     listener.transportShutdown(s);
+  }
+
+  public void notifyInUse(boolean inUse) {
+    if (inUse == transportInUse) {
+      return;
+    }
+    transportInUse = inUse;
+    listener.transportInUse(inUse);
   }
 
   public void notifyTerminated(Status s) {

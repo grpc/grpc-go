@@ -521,6 +521,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           }
 
           @Override public void transportReady() {}
+
+          @Override public void transportInUse(boolean inUse) {}
         });
       boolean savedShutdown;
       synchronized (lock) {

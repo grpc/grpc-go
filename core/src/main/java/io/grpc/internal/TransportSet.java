@@ -332,6 +332,9 @@ final class TransportSet implements WithLogId {
     public void transportReady() {}
 
     @Override
+    public void transportInUse(boolean inUse) {}
+
+    @Override
     public void transportShutdown(Status status) {}
 
     @Override

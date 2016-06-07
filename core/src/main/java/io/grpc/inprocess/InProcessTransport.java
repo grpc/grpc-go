@@ -247,8 +247,11 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
     private void streamClosed() {
       synchronized (InProcessTransport.this) {
         boolean justRemovedAnElement = streams.remove(this);
-        if (shutdown && streams.isEmpty() && justRemovedAnElement) {
-          notifyTerminated();
+        if (streams.isEmpty() && justRemovedAnElement) {
+          clientTransportListener.transportInUse(false);
+          if (shutdown) {
+            notifyTerminated();
+          }
         }
       }
     }
@@ -548,6 +551,9 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
               serverStream, method.getFullMethodName(), headers);
           clientStream.setListener(serverStreamListener);
           streams.add(InProcessTransport.InProcessStream.this);
+          if (streams.size() == 1) {
+            clientTransportListener.transportInUse(true);
+          }
         }
       }
 

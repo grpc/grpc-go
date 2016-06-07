@@ -177,6 +177,18 @@ class NettyClientHandler extends AbstractNettyHandler {
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
         goingAway(statusFromGoAway(errorCode, ByteBufUtil.getBytes(debugData)));
       }
+
+      @Override
+      public void onStreamAdded(Http2Stream stream) {
+        NettyClientHandler.this.lifecycleManager.notifyInUse(true);
+      }
+
+      @Override
+      public void onStreamRemoved(Http2Stream stream) {
+        if (connection().numActiveStreams() == 0) {
+          NettyClientHandler.this.lifecycleManager.notifyInUse(false);
+        }
+      }
     });
   }
 

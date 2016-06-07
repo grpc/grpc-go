@@ -124,6 +124,9 @@ class DelayedClientTransport implements ManagedClientTransport {
           }
           PendingStream pendingStream = new PendingStream(method, headers, callOptions);
           pendingStreams.add(pendingStream);
+          if (pendingStreams.size() == 1) {
+            listener.transportInUse(true);
+          }
           return pendingStream;
         }
       }
@@ -257,6 +260,15 @@ class DelayedClientTransport implements ManagedClientTransport {
               for (final PendingStream stream : savedPendingStreams) {
                 stream.createRealStream(supplier.get());
               }
+              // TODO(zhangkun83): some transports (e.g., netty) may have a short delay between
+              // stream.start() and transportInUse(true). If netty's transportInUse(true) is called
+              // after the delayed transport's transportInUse(false), the channel may have a brief
+              // period where all transports are not in-use, and may go to IDLE mode unexpectedly if
+              // the IDLE timeout is shorter (e.g., 0) than that brief period. Maybe we should
+              // have a minimum IDLE timeout?
+              synchronized (lock) {
+                listener.transportInUse(false);
+              }
             }
         });
       }
@@ -375,10 +387,13 @@ class DelayedClientTransport implements ManagedClientTransport {
       super.cancel(reason);
       synchronized (lock) {
         if (pendingStreams != null) {
-          pendingStreams.remove(this);
-          if (shutdown && pendingStreams.isEmpty()) {
-            pendingStreams = null;
-            listener.transportTerminated();
+          boolean justRemovedAnElement = pendingStreams.remove(this);
+          if (pendingStreams.isEmpty() && justRemovedAnElement) {
+            listener.transportInUse(false);
+            if (shutdown) {
+              pendingStreams = null;
+              listener.transportTerminated();
+            }
           }
         }
       }

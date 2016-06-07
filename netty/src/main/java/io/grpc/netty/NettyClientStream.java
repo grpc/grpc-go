@@ -116,6 +116,11 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
         !method.getType().clientSendsOneMessage()).addListener(failureListener);
   }
 
+  @Override
+  public void transportReportStatus(Status newStatus, boolean stopDelivery, Metadata trailers) {
+    super.transportReportStatus(newStatus, stopDelivery, trailers);
+  }
+
   /**
    * Intended to be overriden by NettyClientTransport, which has more information about failures.
    * May only be called from event loop.
