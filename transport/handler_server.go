@@ -55,19 +55,6 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-func isGrpcContentType(t string) bool {
-	e := "application/grpc"
-	if !strings.HasPrefix(t, e) {
-		return false
-	}
-	// Support variations on the content-type
-	// (e.g. "application/grpc+blah", "application/grpc;blah").
-	if len(t) > len(e) && t[len(e)] != '+' && t[len(e)] != ';' {
-		return false
-	}
-	return true
-}
-
 // NewServerHandlerTransport returns a ServerTransport handling gRPC
 // from inside an http.Handler. It requires that the http Server
 // supports HTTP/2.
