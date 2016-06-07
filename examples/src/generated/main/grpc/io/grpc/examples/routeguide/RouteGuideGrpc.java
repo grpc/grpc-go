@@ -30,7 +30,7 @@ public class RouteGuideGrpc {
   public static final String SERVICE_NAME = "routeguide.RouteGuide";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.Feature> METHOD_GET_FEATURE =
       io.grpc.MethodDescriptor.create(
@@ -39,7 +39,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "GetFeature"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Rectangle,
       io.grpc.examples.routeguide.Feature> METHOD_LIST_FEATURES =
       io.grpc.MethodDescriptor.create(
@@ -48,7 +48,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "ListFeatures"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Rectangle.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Feature.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.Point,
       io.grpc.examples.routeguide.RouteSummary> METHOD_RECORD_ROUTE =
       io.grpc.MethodDescriptor.create(
@@ -57,7 +57,7 @@ public class RouteGuideGrpc {
               "routeguide.RouteGuide", "RecordRoute"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.Point.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.examples.routeguide.RouteSummary.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.examples.routeguide.RouteNote,
       io.grpc.examples.routeguide.RouteNote> METHOD_ROUTE_CHAT =
       io.grpc.MethodDescriptor.create(
@@ -141,7 +141,7 @@ public class RouteGuideGrpc {
         io.grpc.stub.StreamObserver<io.grpc.examples.routeguide.RouteNote> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
 
     @java.lang.Override

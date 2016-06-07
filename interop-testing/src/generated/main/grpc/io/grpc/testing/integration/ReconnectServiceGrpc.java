@@ -30,7 +30,7 @@ public class ReconnectServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.ReconnectService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_START =
       io.grpc.MethodDescriptor.create(
@@ -39,7 +39,7 @@ public class ReconnectServiceGrpc {
               "grpc.testing.ReconnectService", "Start"),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP =
       io.grpc.MethodDescriptor.create(
@@ -90,7 +90,7 @@ public class ReconnectServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.BindableService {
 
     @java.lang.Override

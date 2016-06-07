@@ -332,7 +332,7 @@ static void PrintMethodFields(
           *vars,
           "private static final int ARG_IN_$method_field_name$ = $arg_in_id$;\n"
           "private static final int ARG_OUT_$method_field_name$ = $arg_out_id$;\n"
-          "@$ExperimentalApi$\n"
+          "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
@@ -352,7 +352,7 @@ static void PrintMethodFields(
       }
       p->Print(
           *vars,
-          "@$ExperimentalApi$\n"
+          "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
           "    $MethodDescriptor$.create(\n"
@@ -501,7 +501,7 @@ static void PrintStub(
   if (abstract) {
     p->Print(
         *vars,
-        "@$ExperimentalApi$\n"
+        "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1469\")\n"
         "public static abstract class $abstract_name$ implements $service_name$, "
         "$BindableService$ {\n");
   } else if (interface) {

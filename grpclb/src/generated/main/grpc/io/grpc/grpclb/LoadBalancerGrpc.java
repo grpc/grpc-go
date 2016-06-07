@@ -27,7 +27,7 @@ public class LoadBalancerGrpc {
   public static final String SERVICE_NAME = "grpc.lb.v1.LoadBalancer";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
       io.grpc.grpclb.LoadBalanceResponse> METHOD_BALANCE_LOAD =
       io.grpc.MethodDescriptor.create(
@@ -73,7 +73,7 @@ public class LoadBalancerGrpc {
         io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceResponse> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.BindableService {
 
     @java.lang.Override

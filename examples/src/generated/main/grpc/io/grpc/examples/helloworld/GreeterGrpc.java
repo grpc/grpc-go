@@ -30,7 +30,7 @@ public class GreeterGrpc {
   public static final String SERVICE_NAME = "helloworld.Greeter";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.examples.helloworld.HelloRequest,
       io.grpc.examples.helloworld.HelloReply> METHOD_SAY_HELLO =
       io.grpc.MethodDescriptor.create(
@@ -79,7 +79,7 @@ public class GreeterGrpc {
         io.grpc.stub.StreamObserver<io.grpc.examples.helloworld.HelloReply> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
 
     @java.lang.Override

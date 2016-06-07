@@ -27,7 +27,7 @@ public class HealthGrpc {
   public static final String SERVICE_NAME = "grpc.health.v1.Health";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
       io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK =
       io.grpc.MethodDescriptor.create(
@@ -70,7 +70,7 @@ public class HealthGrpc {
         io.grpc.stub.StreamObserver<io.grpc.health.v1.HealthCheckResponse> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractHealth implements Health, io.grpc.BindableService {
 
     @java.lang.Override

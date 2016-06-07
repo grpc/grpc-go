@@ -27,7 +27,7 @@ public class WorkerServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.WorkerService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ServerArgs,
       io.grpc.benchmarks.proto.Control.ServerStatus> METHOD_RUN_SERVER =
       io.grpc.MethodDescriptor.create(
@@ -36,7 +36,7 @@ public class WorkerServiceGrpc {
               "grpc.testing.WorkerService", "RunServer"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ServerArgs.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ServerStatus.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ClientArgs,
       io.grpc.benchmarks.proto.Control.ClientStatus> METHOD_RUN_CLIENT =
       io.grpc.MethodDescriptor.create(
@@ -45,7 +45,7 @@ public class WorkerServiceGrpc {
               "grpc.testing.WorkerService", "RunClient"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ClientArgs.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.ClientStatus.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.CoreRequest,
       io.grpc.benchmarks.proto.Control.CoreResponse> METHOD_CORE_COUNT =
       io.grpc.MethodDescriptor.create(
@@ -54,7 +54,7 @@ public class WorkerServiceGrpc {
               "grpc.testing.WorkerService", "CoreCount"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.CoreRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Control.CoreResponse.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.Void,
       io.grpc.benchmarks.proto.Control.Void> METHOD_QUIT_WORKER =
       io.grpc.MethodDescriptor.create(
@@ -134,7 +134,7 @@ public class WorkerServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
 
     @java.lang.Override

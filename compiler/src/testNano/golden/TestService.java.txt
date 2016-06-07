@@ -34,7 +34,7 @@ public class TestServiceGrpc {
   // Static method descriptors that strictly reflect the proto.
   private static final int ARG_IN_METHOD_UNARY_CALL = 0;
   private static final int ARG_OUT_METHOD_UNARY_CALL = 1;
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.SimpleRequest,
       io.grpc.testing.integration.nano.Test.SimpleResponse> METHOD_UNARY_CALL =
       io.grpc.MethodDescriptor.create(
@@ -48,7 +48,7 @@ public class TestServiceGrpc {
           );
   private static final int ARG_IN_METHOD_STREAMING_OUTPUT_CALL = 2;
   private static final int ARG_OUT_METHOD_STREAMING_OUTPUT_CALL = 3;
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
       io.grpc.MethodDescriptor.create(
@@ -62,7 +62,7 @@ public class TestServiceGrpc {
           );
   private static final int ARG_IN_METHOD_STREAMING_INPUT_CALL = 4;
   private static final int ARG_OUT_METHOD_STREAMING_INPUT_CALL = 5;
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingInputCallResponse> METHOD_STREAMING_INPUT_CALL =
       io.grpc.MethodDescriptor.create(
@@ -76,7 +76,7 @@ public class TestServiceGrpc {
           );
   private static final int ARG_IN_METHOD_FULL_BIDI_CALL = 6;
   private static final int ARG_OUT_METHOD_FULL_BIDI_CALL = 7;
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_FULL_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
@@ -90,7 +90,7 @@ public class TestServiceGrpc {
           );
   private static final int ARG_IN_METHOD_HALF_BIDI_CALL = 8;
   private static final int ARG_OUT_METHOD_HALF_BIDI_CALL = 9;
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest,
       io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> METHOD_HALF_BIDI_CALL =
       io.grpc.MethodDescriptor.create(
@@ -233,7 +233,7 @@ public class TestServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
 
     @java.lang.Override

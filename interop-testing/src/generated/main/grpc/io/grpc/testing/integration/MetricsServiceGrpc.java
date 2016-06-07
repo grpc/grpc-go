@@ -27,7 +27,7 @@ public class MetricsServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.MetricsService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_ALL_GAUGES =
       io.grpc.MethodDescriptor.create(
@@ -36,7 +36,7 @@ public class MetricsServiceGrpc {
               "grpc.testing.MetricsService", "GetAllGauges"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.EmptyMessage.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()));
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_GAUGE =
       io.grpc.MethodDescriptor.create(
@@ -91,7 +91,7 @@ public class MetricsServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Metrics.GaugeResponse> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractMetricsService implements MetricsService, io.grpc.BindableService {
 
     @java.lang.Override

@@ -31,7 +31,7 @@ public class UnimplementedServiceGrpc {
   public static final String SERVICE_NAME = "grpc.testing.UnimplementedService";
 
   // Static method descriptors that strictly reflect the proto.
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL =
       io.grpc.MethodDescriptor.create(
@@ -81,7 +81,7 @@ public class UnimplementedServiceGrpc {
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
   }
 
-  @io.grpc.ExperimentalApi
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
   public static abstract class AbstractUnimplementedService implements UnimplementedService, io.grpc.BindableService {
 
     @java.lang.Override
