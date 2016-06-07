@@ -54,9 +54,9 @@ var (
 	alpnProtoStr = []string{"h2"}
 )
 
-// Credentials defines the common interface all supported credentials must
+// PerRPCCredentials defines the common interface all supported per RPC credentials must
 // implement.
-type Credentials interface {
+type PerRPCCredentials interface {
 	// GetRequestMetadata gets the current request metadata, refreshing
 	// tokens if required. This should be called by the transport layer on
 	// each request, and the data should be populated in headers or other

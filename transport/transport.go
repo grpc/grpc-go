@@ -336,8 +336,8 @@ type ConnectOptions struct {
 	UserAgent string
 	// Dialer specifies how to dial a network address.
 	Dialer func(string, time.Duration) (net.Conn, error)
-	// Credentials stores the credentials required to issue RPCs.
-	Credentials []credentials.Credentials
+	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
+	PerRPCCredentials []credentials.PerRPCCredentials
 	// Authenticator stores the Authenticator required to setup a client connection.
 	Authenticator credentials.TransportAuthenticator
 	// Timeout specifies the timeout for dialing a ClientTransport.

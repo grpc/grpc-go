@@ -178,9 +178,9 @@ func WithTransportCredentials(auth credentials.TransportAuthenticator) DialOptio
 
 // WithPerRPCCredentials returns a DialOption which sets
 // credentials which will place auth state on each outbound RPC.
-func WithPerRPCCredentials(creds credentials.Credentials) DialOption {
+func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Credentials = append(o.copts.Credentials, creds)
+		o.copts.PerRPCCredentials = append(o.copts.PerRPCCredentials, creds)
 	}
 }
 
@@ -376,7 +376,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		if ac.dopts.copts.Authenticator != nil {
 			return errCredentialsMisuse
 		}
-		for _, cd := range ac.dopts.copts.Credentials {
+		for _, cd := range ac.dopts.copts.PerRPCCredentials {
 			if cd.RequireTransportSecurity() {
 				return errCredentialsMisuse
 			}
