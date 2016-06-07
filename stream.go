@@ -79,7 +79,7 @@ type Stream interface {
 	RecvMsg(m interface{}) error
 }
 
-// ClientStream defines the interface a client stream has to satify.
+// ClientStream defines the interface a client stream has to satisfy.
 type ClientStream interface {
 	// Header returns the header metadata received from the server if there
 	// is any. It blocks if the metadata is not ready to read.
