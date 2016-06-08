@@ -245,7 +245,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 			return nil, errNoAddr
 		}
 	}
-	waitC := make(chan error)
+	waitC := make(chan error, 1)
 	go func() {
 		for _, a := range addrs {
 			if err := cc.newAddrConn(a, false); err != nil {
