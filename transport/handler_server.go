@@ -65,7 +65,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 	if r.Method != "POST" {
 		return nil, errors.New("invalid gRPC request method")
 	}
-	if !isGrpcContentType(r.Header.Get("Content-Type")) {
+	if !validContentType(r.Header.Get("Content-Type")) {
 		return nil, errors.New("invalid gRPC request content-type")
 	}
 	if _, ok := w.(http.Flusher); !ok {

@@ -86,7 +86,7 @@ func TestTimeoutDecode(t *testing.T) {
 	}
 }
 
-func TestIsGrpcContentType(t *testing.T) {
+func TestValidContentType(t *testing.T) {
 	tests := []struct {
 		h    string
 		want bool
@@ -101,9 +101,9 @@ func TestIsGrpcContentType(t *testing.T) {
 		{"application/grp", false},
 	}
 	for _, tt := range tests {
-		got := isGrpcContentType(tt.h)
+		got := validContentType(tt.h)
 		if got != tt.want {
-			t.Errorf("isGrpcContentType(%q) = %v; want %v", tt.h, got, tt.want)
+			t.Errorf("validContentType(%q) = %v; want %v", tt.h, got, tt.want)
 		}
 	}
 }
