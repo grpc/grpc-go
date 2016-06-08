@@ -338,8 +338,8 @@ type ConnectOptions struct {
 	Dialer func(string, time.Duration) (net.Conn, error)
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
-	// Authenticator stores the Authenticator required to setup a client connection.
-	Authenticator credentials.TransportAuthenticator
+	// TransportCredentials stores the Authenticator required to setup a client connection.
+	TransportCredentials credentials.TransportCredentials
 	// Timeout specifies the timeout for dialing a ClientTransport.
 	Timeout time.Duration
 }

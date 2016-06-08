@@ -117,12 +117,12 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
 	var authInfo credentials.AuthInfo
-	if opts.Authenticator != nil {
+	if opts.TransportCredentials != nil {
 		scheme = "https"
 		if timeout > 0 {
 			timeout -= time.Since(startT)
 		}
-		conn, authInfo, connErr = opts.Authenticator.ClientHandshake(addr, conn, timeout)
+		conn, authInfo, connErr = opts.TransportCredentials.ClientHandshake(addr, conn, timeout)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
