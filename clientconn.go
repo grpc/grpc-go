@@ -61,10 +61,13 @@ var (
 	// being set for ClientConn. Users should either set one or explicitly
 	// call WithInsecure DialOption to disable security.
 	errNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
-	// errCredentialsMisuse indicates that users want to transmit security information
-	// (e.g., oauth2 token) which requires secure connection on an insecure
+	// errTransportCredentialsMissing indicates that users want to transmit security
+	// information (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.
-	errCredentialsMisuse = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportAuthenticator() to set)")
+	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
+	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
+	// and grpc.WithInsecure() are both called for a connection.
+	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
 	// errNetworkIP indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
@@ -374,11 +377,11 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		}
 	} else {
 		if ac.dopts.copts.TransportCredentials != nil {
-			return errCredentialsMisuse
+			return errCredentialsConflict
 		}
 		for _, cd := range ac.dopts.copts.PerRPCCredentials {
 			if cd.RequireTransportSecurity() {
-				return errCredentialsMisuse
+				return errTransportCredentialsMissing
 			}
 		}
 	}
