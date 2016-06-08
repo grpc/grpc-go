@@ -85,3 +85,25 @@ func TestTimeoutDecode(t *testing.T) {
 		}
 	}
 }
+
+func TestValidContentType(t *testing.T) {
+	tests := []struct {
+		h    string
+		want bool
+	}{
+		{"application/grpc", true},
+		{"application/grpc+", true},
+		{"application/grpc+blah", true},
+		{"application/grpc;", true},
+		{"application/grpc;blah", true},
+		{"application/grpcd", false},
+		{"application/grpd", false},
+		{"application/grp", false},
+	}
+	for _, tt := range tests {
+		got := validContentType(tt.h)
+		if got != tt.want {
+			t.Errorf("validContentType(%q) = %v; want %v", tt.h, got, tt.want)
+		}
+	}
+}
