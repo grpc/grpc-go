@@ -21,8 +21,8 @@ proto:
 		exit 1; \
 	fi
 	go get -u -v github.com/golang/protobuf/protoc-gen-go
-	for file in $$(git ls-files '*.proto'); do \
-		protoc -I $$(dirname $$file) --go_out=plugins=grpc:$$(dirname $$file) $$file; \
+	for dir in $$(git ls-files '*.proto' | xargs -n1 dirname | uniq); do \
+		protoc -I $$dir --go_out=plugins=grpc:$$dir $$dir/*.proto; \
 	done
 
 test: testdeps
