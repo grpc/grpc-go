@@ -373,6 +373,12 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 				}
 			}
 		case *rpb.ServerReflectionRequest_ListServices:
+			out.MessageResponse = &rpb.ServerReflectionResponse_ErrorResponse{
+				ErrorResponse: &rpb.ErrorResponse{
+					ErrorCode:    int32(codes.Unimplemented),
+					ErrorMessage: "list_services not implemented",
+				},
+			}
 		default:
 			return grpc.Errorf(codes.InvalidArgument, "invalid MessageRequest: %v", in.MessageRequest)
 		}
