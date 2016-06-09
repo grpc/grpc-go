@@ -1,6 +1,6 @@
 # Authentication
 
-As outlined in <a href="https://github.com/grpc/grpc/blob/master/doc/grpc-auth-support.md">gRPC Authentication Support</a>, gRPC supports a number of different mechanisms for asserting identity between an client and server. This document provides code samples demonstrating how to provide SSL/TLS encryption support and identity assertions in Java, as well as passing OAuth2 tokens to services that support it.
+gRPC supports a number of different mechanisms for asserting identity between an client and server. This document provides code samples demonstrating how to provide SSL/TLS encryption support and identity assertions in Java, as well as passing OAuth2 tokens to services that support it.
 
 # Transport Security (TLS)
 
@@ -252,8 +252,37 @@ server.start();
 
 If the issuing certificate authority is not known to the client then a properly
 configured SslContext or SSLSocketFactory should be provided to the
-NettyChannelBuilder or OkHttpChannelBuilder, respectively. [Mutual
-authentication][] can be configured similarly.
+NettyChannelBuilder or OkHttpChannelBuilder, respectively.
+
+## Mutual TLS
+
+[Mutual authentication][] (or "client-side authentication") configuration is similar to the server by providing truststores, a client certificate and private key to the client channel.  The server must also be configured to request a certificate from clients, as well as truststores for which client certificates it should allow.
+
+```java
+Server server = NettyServerBuilder.forPort(8443)
+    .sslContext(GrpcSslContexts.forServer(certChainFile, privateKeyFile)
+        .trustManager(clientCertChainFile)
+        .clientAuth(ClientAuth.OPTIONAL)
+        .build());
+```
+
+Negotiated client certificates are available in the SSLSession, which is found in the SSL_SESSION_KEY attribute of <a href="https://github.com/grpc/grpc-java/blob/master/core/src/main/java/io/grpc/ServerCall.java">ServerCall</a>.  A server interceptor can provide details in the current Context.
+
+```java
+public final static Context.Key<SSLSession> SSL_SESSION_CONTEXT = Context.key("SSLSession");
+
+@Override
+public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
+    ServerCall<RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+    SSLSession sslSession = call.attributes().get(ServerCall.SSL_SESSION_KEY);
+    if (sslSession == null) {
+        return next.startCall(method, call, headers)
+    }
+    return Contexts.interceptCall(
+        Context.current().withValue(SSL_SESSION_CONTEXT, clientContext),
+        method, call, headers, next);
+}
+```
 
 [Mutual authentication]: http://en.wikipedia.org/wiki/Transport_Layer_Security#Client-authenticated_TLS_handshake
 
