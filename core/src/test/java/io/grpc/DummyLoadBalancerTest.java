@@ -55,13 +55,14 @@ import org.mockito.MockitoAnnotations;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.List;
 
-/** Unit test for {@link SimpleLoadBalancerFactory}. */
+/** Unit test for {@link DummyLoadBalancerFactory}. */
 @RunWith(JUnit4.class)
-public class SimpleLoadBalancerTest {
+public class DummyLoadBalancerTest {
   private LoadBalancer<Transport> loadBalancer;
 
-  private ArrayList<ResolvedServerInfo> servers;
+  private List<List<ResolvedServerInfo>> servers;
   private EquivalentAddressGroup addressGroup;
 
   @Mock private TransportManager<Transport> mockTransportManager;
@@ -73,13 +74,14 @@ public class SimpleLoadBalancerTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    loadBalancer = SimpleLoadBalancerFactory.getInstance().newLoadBalancer(
+    loadBalancer = DummyLoadBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
-    servers = new ArrayList<ResolvedServerInfo>();
+    servers = new ArrayList<List<ResolvedServerInfo>>();
+    servers.add(new ArrayList<ResolvedServerInfo>());
     ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
     for (int i = 0; i < 3; i++) {
       SocketAddress addr = new FakeSocketAddress("server" + i);
-      servers.add(new ResolvedServerInfo(addr, Attributes.EMPTY));
+      servers.get(0).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
       addresses.add(addr);
     }
     addressGroup = new EquivalentAddressGroup(addresses);

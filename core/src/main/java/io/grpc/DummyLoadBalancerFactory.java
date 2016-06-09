@@ -42,30 +42,30 @@ import java.util.List;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A {@link LoadBalancer} that provides simple round-robin and pick-first routing mechanism over the
- * addresses from the {@link NameResolver}.
+ * A {@link LoadBalancer} that provides no load balancing mechanism over the
+ * addresses from the {@link NameResolver}.  The channel's default behavior
+ * (currently pick-first) is used for all addresses found.
  */
-// TODO(zhangkun83): Only pick-first is implemented. We need to implement round-robin.
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
+public final class DummyLoadBalancerFactory extends LoadBalancer.Factory {
 
-  private static final SimpleLoadBalancerFactory instance = new SimpleLoadBalancerFactory();
+  private static final DummyLoadBalancerFactory instance = new DummyLoadBalancerFactory();
 
-  private SimpleLoadBalancerFactory() {
+  private DummyLoadBalancerFactory() {
   }
 
-  public static SimpleLoadBalancerFactory getInstance() {
+  public static DummyLoadBalancerFactory getInstance() {
     return instance;
   }
 
   @Override
   public <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm) {
-    return new SimpleLoadBalancer<T>(tm);
+    return new DummyLoadBalancer<T>(tm);
   }
 
-  private static class SimpleLoadBalancer<T> extends LoadBalancer<T> {
+  private static class DummyLoadBalancer<T> extends LoadBalancer<T> {
     private static final Status SHUTDOWN_STATUS =
-        Status.UNAVAILABLE.augmentDescription("SimpleLoadBalancer has shut down");
+        Status.UNAVAILABLE.augmentDescription("DummyLoadBalancer has shut down");
 
     private final Object lock = new Object();
 
@@ -80,7 +80,7 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
     private final TransportManager<T> tm;
 
-    private SimpleLoadBalancer(TransportManager<T> tm) {
+    private DummyLoadBalancer(TransportManager<T> tm) {
       this.tm = tm;
     }
 
@@ -107,17 +107,18 @@ public final class SimpleLoadBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public void handleResolvedAddresses(
-        List<ResolvedServerInfo> updatedServers, Attributes config) {
+        List<? extends List<ResolvedServerInfo>> updatedServers, Attributes config) {
       InterimTransport<T> savedInterimTransport;
       final EquivalentAddressGroup newAddresses;
       synchronized (lock) {
         if (closed) {
           return;
         }
-        ArrayList<SocketAddress> newAddressList =
-            new ArrayList<SocketAddress>(updatedServers.size());
-        for (ResolvedServerInfo server : updatedServers) {
-          newAddressList.add(server.getAddress());
+        ArrayList<SocketAddress> newAddressList = new ArrayList<SocketAddress>();
+        for (List<ResolvedServerInfo> servers : updatedServers) {
+          for (ResolvedServerInfo server : servers) {
+            newAddressList.add(server.getAddress());
+          }
         }
         newAddresses = new EquivalentAddressGroup(newAddressList);
         if (newAddresses.equals(addresses)) {

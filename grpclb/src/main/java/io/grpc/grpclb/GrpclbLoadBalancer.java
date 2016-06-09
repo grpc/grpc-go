@@ -150,14 +150,16 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
 
   @Override
   public void handleResolvedAddresses(
-      List<ResolvedServerInfo> updatedServers, Attributes config) {
+      List<? extends List<ResolvedServerInfo>> updatedServers, Attributes config) {
     synchronized (lock) {
       if (closed) {
         return;
       }
       ArrayList<SocketAddress> addrs = new ArrayList<SocketAddress>(updatedServers.size());
-      for (ResolvedServerInfo serverInfo : updatedServers) {
-        addrs.add(serverInfo.getAddress());
+      for (List<ResolvedServerInfo> serverInfos : updatedServers) {
+        for (ResolvedServerInfo serverInfo : serverInfos) {
+          addrs.add(serverInfo.getAddress());
+        }
       }
       EquivalentAddressGroup newLbAddresses = new EquivalentAddressGroup(addrs);
       if (!newLbAddresses.equals(lbAddresses)) {

@@ -175,8 +175,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
     this.nameResolver.start(new NameResolver.Listener() {
       @Override
-      public void onUpdate(List<ResolvedServerInfo> servers, Attributes config) {
-        if (servers.isEmpty()) {
+      public void onUpdate(List<? extends List<ResolvedServerInfo>> servers, Attributes config) {
+        if (serversAreEmpty(servers)) {
           onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
         } else {
           try {
@@ -199,6 +199,16 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     if (log.isLoggable(Level.INFO)) {
       log.log(Level.INFO, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
     }
+  }
+
+  private static boolean serversAreEmpty(List<? extends List<ResolvedServerInfo>> servers) {
+    for (List<ResolvedServerInfo> serverInfos : servers) {
+      if (!serverInfos.isEmpty()) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   @VisibleForTesting

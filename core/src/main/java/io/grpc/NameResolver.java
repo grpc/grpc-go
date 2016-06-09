@@ -120,10 +120,12 @@ public abstract class NameResolver {
      *
      * <p>Implementations will not modify the given {@code servers}.
      *
-     * @param servers the resolved server addresses. An empty list will trigger {@link #onError}
+     * @param servers the resolved server addresses.  Sublists should be considered to be
+     *                an {@link EquivalentAddressGroup}. An empty list or all sublists being empty
+     *                will trigger {@link #onError}
      * @param config extra configuration data from naming system
      */
-    void onUpdate(List<ResolvedServerInfo> servers, Attributes config);
+    void onUpdate(List<? extends List<ResolvedServerInfo>> servers, Attributes config);
 
     /**
      * Handles an error from the resolver.

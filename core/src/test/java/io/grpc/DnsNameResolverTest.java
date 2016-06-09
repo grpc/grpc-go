@@ -40,6 +40,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.collect.Iterables;
+
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -102,7 +104,7 @@ public class DnsNameResolverTest {
   @Mock
   private NameResolver.Listener mockListener;
   @Captor
-  private ArgumentCaptor<List<ResolvedServerInfo>> resultCaptor;
+  private ArgumentCaptor<List<List<ResolvedServerInfo>>> resultCaptor;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
 
@@ -149,14 +151,14 @@ public class DnsNameResolverTest {
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer1, 81, resultCaptor.getValue());
+    assertAnswerMatches(answer1, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
     assertEquals(0, fakeClock.numPendingTasks());
 
     resolver.refresh();
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener, times(2)).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer2, 81, resultCaptor.getValue());
+    assertAnswerMatches(answer2, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
     assertEquals(0, fakeClock.numPendingTasks());
 
     resolver.shutdown();
@@ -201,7 +203,7 @@ public class DnsNameResolverTest {
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer, 81, resultCaptor.getValue());
+    assertAnswerMatches(answer, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
 
     verifyNoMoreInteractions(mockListener);
   }
@@ -229,7 +231,7 @@ public class DnsNameResolverTest {
     assertEquals(0, fakeClock.numPendingTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer, 81, resultCaptor.getValue());
+    assertAnswerMatches(answer, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
 
     verifyNoMoreInteractions(mockListener);
   }

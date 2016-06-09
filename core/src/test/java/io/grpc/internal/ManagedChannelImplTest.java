@@ -62,6 +62,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
+import io.grpc.DummyLoadBalancerFactory;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
@@ -69,7 +70,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
-import io.grpc.SimpleLoadBalancerFactory;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.TransportManager;
@@ -120,7 +120,7 @@ public class ManagedChannelImplTest {
   private final SocketAddress socketAddress = new SocketAddress() {};
   private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
   private SpyingLoadBalancerFactory loadBalancerFactory =
-      new SpyingLoadBalancerFactory(SimpleLoadBalancerFactory.getInstance());
+      new SpyingLoadBalancerFactory(DummyLoadBalancerFactory.getInstance());
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
@@ -494,7 +494,7 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  public void nameResolverReturnsEmptyList() {
+  public void nameResolverReturnsEmptySubLists() {
     String errorDescription = "NameResolver returned an empty list";
 
     // Name resolution is started as soon as channel is created
@@ -527,7 +527,7 @@ public class ManagedChannelImplTest {
     assertEquals(1, loadBalancerFactory.balancers.size());
     LoadBalancer<?> loadBalancer = loadBalancerFactory.balancers.get(0);
     doThrow(ex).when(loadBalancer).handleResolvedAddresses(
-        Matchers.<List<ResolvedServerInfo>>anyObject(), any(Attributes.class));
+        Matchers.<List<List<ResolvedServerInfo>>>anyObject(), any(Attributes.class));
 
     // NameResolver returns addresses.
     nameResolverFactory.allResolved();
@@ -806,7 +806,7 @@ public class ManagedChannelImplTest {
       }
 
       void resolved() {
-        listener.onUpdate(servers, Attributes.EMPTY);
+        listener.onUpdate(Collections.singletonList(servers), Attributes.EMPTY);
       }
 
       @Override public void shutdown() {

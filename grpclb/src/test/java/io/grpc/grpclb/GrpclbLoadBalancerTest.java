@@ -430,7 +430,8 @@ public class GrpclbLoadBalancerTest {
     lbAddressGroup = buildAddressGroup(lbServerInfo);
     Transport lbTransport = new Transport();
     when(mockTransportManager.getTransport(eq(lbAddressGroup))).thenReturn(lbTransport);
-    loadBalancer.handleResolvedAddresses(Collections.singletonList(lbServerInfo), Attributes.EMPTY);
+    loadBalancer.handleResolvedAddresses(
+        Collections.singletonList(Collections.singletonList(lbServerInfo)), Attributes.EMPTY);
     verify(mockTransportManager).getTransport(eq(lbAddressGroup));
     return lbTransport;
   }
