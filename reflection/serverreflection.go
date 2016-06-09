@@ -255,6 +255,22 @@ func (s *serverReflectionServer) fileDescWireFormatContainingSymbol(name string)
 	return nil, fmt.Errorf("unknown symbol: %v", name)
 }
 
+func (s *serverReflectionServer) fileDescWireFormatContainingExtension(typeName string, extNum int32) ([]byte, error) {
+	st, err := s.typeForName(typeName)
+	if err != nil {
+		return nil, err
+	}
+	fd, err := s.fileDescContainingExtension(st, extNum)
+	if err != nil {
+		return nil, err
+	}
+	b, err := proto.Marshal(fd)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]int32, error) {
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
 	if !ok {
@@ -295,6 +311,14 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 			}
 			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_FileContainingExtension:
+			typeName := req.FileContainingExtension.ContainingType
+			extNum := req.FileContainingExtension.ExtensionNumber
+			b, err := s.fileDescWireFormatContainingExtension(typeName, extNum)
+			if err != nil {
+				// TODO grpc error or send message back
+				return err
+			}
+			response = &rpb.FileDescriptorResponse{FileDescriptorProto: [][]byte{b}}
 		case *rpb.ServerReflectionRequest_AllExtensionNumbersOfType:
 		case *rpb.ServerReflectionRequest_ListServices:
 		default:
