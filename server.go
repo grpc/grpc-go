@@ -245,6 +245,31 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+// Metadata returns the metadata for a given symbol name.
+// The name can be a service name or a method name in the form of
+// <package>.<service>[.<method>].
+func (s *Server) Metadata(name string) interface{} {
+	// Check if the name is a service name.
+	if srv, ok := s.m[name]; ok {
+		return srv.meta
+	}
+	// Check if the name is a method name.
+	pos := strings.LastIndex(name, ".")
+	if pos == -1 {
+		// Invalid method name.
+		return nil
+	}
+	if srv, ok := s.m[name[:pos]]; ok {
+		if _, ok := srv.md[name[pos+1:]]; ok {
+			return srv.meta
+		}
+		if _, ok := srv.sd[name[pos+1:]]; ok {
+			return srv.meta
+		}
+	}
+	return nil
+}
+
 var (
 	// ErrServerStopped indicates that the operation is now illegal because of
 	// the server being stopped.

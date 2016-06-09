@@ -35,8 +35,36 @@ package grpc
 
 import (
 	"net"
+	"reflect"
 	"strings"
 	"testing"
+)
+
+type emptyServiceServer interface{}
+
+type testServer struct{}
+
+var (
+	testSd = ServiceDesc{
+		ServiceName: "grpc.testing.EmptyService",
+		HandlerType: (*emptyServiceServer)(nil),
+		Methods: []MethodDesc{
+			{
+				MethodName: "EmptyCall",
+				Handler:    nil,
+			},
+		},
+		Streams: []StreamDesc{
+			{
+				StreamName:    "EmptyStream",
+				Handler:       nil,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+		},
+		Metadata: testFd,
+	}
+	testFd = []byte{0, 1, 2, 3}
 )
 
 func TestStopBeforeServe(t *testing.T) {
@@ -57,5 +85,49 @@ func TestStopBeforeServe(t *testing.T) {
 	err = lis.Close()
 	if got, want := ErrorDesc(err), "use of closed network connection"; !strings.Contains(got, want) {
 		t.Errorf("Close() error = %q, want %q", got, want)
+	}
+}
+
+func TestFileDesc(t *testing.T) {
+	server := NewServer()
+	server.RegisterService(&testSd, &testServer{})
+
+	for _, test := range []struct {
+		name string
+		want []byte
+	}{
+		{"grpc.testing.EmptyService", testFd},
+		{"grpc.testing.EmptyService.EmptyCall", testFd},
+		{"grpc.testing.EmptyService.EmptyStream", testFd},
+	} {
+		meta := server.Metadata(test.name)
+		var (
+			fd []byte
+			ok bool
+		)
+		if fd, ok = meta.([]byte); !ok {
+			t.Errorf("FileDesc(%q)=%v, want %v", test.name, meta, test.want)
+		}
+		if !reflect.DeepEqual(fd, test.want) {
+			t.Errorf("FileDesc(%q)=%v, want %v", test.name, fd, test.want)
+		}
+	}
+}
+
+func TestFileDescNotFound(t *testing.T) {
+	server := NewServer()
+	server.RegisterService(&testSd, &testServer{})
+
+	for _, test := range []string{
+		"EmptyCall",
+		"grpc.EmptyService",
+		"grpc.EmptyService.EmptyCall",
+		"grpc.testing.EmptyService.EmptyCallWrong",
+		"grpc.testing.EmptyService.EmptyStreamWrong",
+	} {
+		meta := server.Metadata(test)
+		if meta != nil {
+			t.Errorf("FileDesc(%q)=%v, want <nil>", test, meta)
+		}
 	}
 }
