@@ -54,8 +54,8 @@ var (
 	alpnProtoStr = []string{"h2"}
 )
 
-// PerRPCCredentials defines the common interface all supported per RPC credentials must
-// implement.
+// PerRPCCredentials defines the common interface for the credentials which need to
+// attach security information to every RPC (e.g., oauth2).
 type PerRPCCredentials interface {
 	// GetRequestMetadata gets the current request metadata, refreshing
 	// tokens if required. This should be called by the transport layer on
