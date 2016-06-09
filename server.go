@@ -82,6 +82,7 @@ type service struct {
 	server interface{} // the server for service methods
 	md     map[string]*MethodDesc
 	sd     map[string]*StreamDesc
+	meta   interface{}
 }
 
 // Server is a gRPC server to serve RPC requests.
@@ -231,6 +232,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 		server: ss,
 		md:     make(map[string]*MethodDesc),
 		sd:     make(map[string]*StreamDesc),
+		meta:   sd.Metadata,
 	}
 	for i := range sd.Methods {
 		d := &sd.Methods[i]
