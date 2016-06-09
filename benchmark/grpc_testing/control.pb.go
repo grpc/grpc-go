@@ -65,7 +65,9 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type ClientType int32
 
@@ -894,6 +896,8 @@ func init() {
 	proto.RegisterEnum("grpc.testing.ServerType", ServerType_name, ServerType_value)
 	proto.RegisterEnum("grpc.testing.RpcType", RpcType_name, RpcType_value)
 }
+
+func init() { proto.RegisterFile("control.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 1162 bytes of a gzipped FileDescriptorProto

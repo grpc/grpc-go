@@ -200,6 +200,8 @@ func init() {
 	proto.RegisterType((*PayloadConfig)(nil), "grpc.testing.PayloadConfig")
 }
 
+func init() { proto.RegisterFile("payloads.proto", fileDescriptor2) }
+
 var fileDescriptor2 = []byte{
 	// 250 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0x48, 0xac, 0xcc,
