@@ -82,6 +82,8 @@ func init() {
 	proto.RegisterType((*ClientStats)(nil), "grpc.testing.ClientStats")
 }
 
+func init() { proto.RegisterFile("stats.proto", fileDescriptor4) }
+
 var fileDescriptor4 = []byte{
 	// 342 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x92, 0x4f, 0x4f, 0xe3, 0x30,
