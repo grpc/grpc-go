@@ -33,7 +33,11 @@ package io.grpc.netty;
 
 import io.grpc.Metadata;
 import io.grpc.Metadata.AsciiMarshaller;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.UnpooledByteBufAllocator;
+import io.netty.handler.codec.http2.DefaultHttp2HeadersEncoder;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2HeadersEncoder;
 import io.netty.util.AsciiString;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -68,11 +72,13 @@ public class HeadersBenchmark {
     }
   };
 
-  private Metadata metadata = new Metadata();
-  private AsciiString scheme = new AsciiString("https");
-  private AsciiString defaultPath = new AsciiString("/Service.MethodMethodMethod");
-  private AsciiString authority = new AsciiString("authority.googleapis.bogus");
-  private AsciiString userAgent = new AsciiString("grpc-java-netty");
+  private final Metadata metadata = new Metadata();
+  private final AsciiString scheme = new AsciiString("https");
+  private final AsciiString defaultPath = new AsciiString("/Service.MethodMethodMethod");
+  private final AsciiString authority = new AsciiString("authority.googleapis.bogus");
+  private final AsciiString userAgent = new AsciiString("grpc-java-netty");
+  private final Http2HeadersEncoder headersEncoder = new DefaultHttp2HeadersEncoder();
+  private final ByteBuf scratchBuffer = UnpooledByteBufAllocator.DEFAULT.buffer(4096);
 
   @Setup
   public void setUp() throws Exception {
@@ -93,5 +99,19 @@ public class HeadersBenchmark {
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public Http2Headers convertServerHeaders() {
     return Utils.convertServerHeaders(metadata);
+  }
+
+  /**
+   * This will encode the random metadata fields, and repeatedly lookup the default other headers.
+   */
+  @Benchmark
+  @BenchmarkMode(Mode.SampleTime)
+  @OutputTimeUnit(TimeUnit.NANOSECONDS)
+  public ByteBuf encodeClientHeaders() throws Exception {
+    scratchBuffer.clear();
+    Http2Headers headers =
+        Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
+    headersEncoder.encodeHeaders(headers, scratchBuffer);
+    return scratchBuffer;
   }
 }
