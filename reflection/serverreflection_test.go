@@ -1,12 +1,16 @@
 package reflection
 
 import (
+	"net"
 	"reflect"
 	"sort"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 )
 
@@ -138,4 +142,141 @@ func TestFileDescWireFormatByFilename(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(b, wanted) {
 		t.Fatalf("fileDescWireFormatByFilename(%q) = %v, %v, want %v, <nil>", fd.GetName(), b, err, wanted)
 	}
+}
+
+// Do end2end tests.
+var (
+	port = ":35764"
+)
+
+type server struct{}
+
+func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
+	return &pb.SearchResponse{}, nil
+}
+
+func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) error {
+	return nil
+}
+
+func TestEnd2end(t *testing.T) {
+	// Start server.
+	lis, err := net.Listen("tcp", port)
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterSearchServiceServer(s, &server{})
+	// Install reflection service on s.
+	InstallOnServer(s)
+	go s.Serve(lis)
+
+	// Create client.
+	conn, err := grpc.Dial("localhost"+port, grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("cannot connect to server: %v", err)
+	}
+	defer conn.Close()
+
+	c := rpb.NewServerReflectionClient(conn)
+	stream, err := c.ServerReflectionInfo(context.Background())
+
+	testFileByFilename(t, stream)
+	testFileContainingSymbol(t, stream)
+	testFileContainingExtension(t, stream)
+	testAllExtensionNumbersOfType(t, stream)
+	testListServices(t, stream)
+
+	s.Stop()
+}
+
+func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+			FileByFilename: "blah",
+		},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+
+	t.Logf("response: %v", r)
+	// TODO check response
+}
+
+func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
+			FileContainingSymbol: "grpc.testing.SearchResponse",
+		},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+
+	t.Logf("response: %v", r)
+	// TODO check response
+}
+
+func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_FileContainingExtension{
+			FileContainingExtension: &rpb.ExtensionRequest{
+				ContainingType:  "grpc.testing.ToBeExtened",
+				ExtensionNumber: 17,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+
+	t.Logf("response: %v", r)
+	// TODO check response
+}
+
+func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_AllExtensionNumbersOfType{
+			AllExtensionNumbersOfType: "grpc.testing.ToBeExtened",
+		},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+
+	t.Logf("response: %v", r)
+	// TODO check response
+}
+
+func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rpb.ServerReflectionRequest{
+		MessageRequest: &rpb.ServerReflectionRequest_ListServices{},
+	}); err != nil {
+		t.Fatalf("failed to send request: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+
+	t.Logf("response: %v", r)
+	// TODO check response
 }
