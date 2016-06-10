@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.grpclb;
+package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -39,7 +39,7 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 
-import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.Iterator;
 import java.util.List;
 
@@ -50,10 +50,8 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * Manages a list of server addresses to round-robin on.
  */
-// TODO(zhangkun83): possibly move it to io.grpc.internal, as it can also be used by the round-robin
-// LoadBalancer.
 @ThreadSafe
-class RoundRobinServerList<T> {
+public class RoundRobinServerList<T> {
   private final TransportManager<T> tm;
   private final List<EquivalentAddressGroup> list;
   private final Iterator<EquivalentAddressGroup> cyclingIter;
@@ -67,7 +65,12 @@ class RoundRobinServerList<T> {
       tm.createFailingTransport(Status.UNAVAILABLE.withDescription("Throttled by LB"));
   }
 
-  T getTransportForNextServer() {
+  /**
+   * Returns the next transport in the list of servers.
+   *
+   * @return the next transport
+   */
+  public T getTransportForNextServer() {
     EquivalentAddressGroup currentServer;
     synchronized (cyclingIter) {
       // TODO(zhangkun83): receive transportShutdown and transportReady events, then skip addresses
@@ -81,32 +84,41 @@ class RoundRobinServerList<T> {
   }
 
   @VisibleForTesting
-  List<EquivalentAddressGroup> getList() {
+  public List<EquivalentAddressGroup> getList() {
     return list;
   }
 
-  int size() {
+  public int size() {
     return list.size();
   }
 
   @NotThreadSafe
-  static class Builder<T> {
+  public static class Builder<T> {
     private final ImmutableList.Builder<EquivalentAddressGroup> listBuilder =
         ImmutableList.builder();
     private final TransportManager<T> tm;
 
-    Builder(TransportManager<T> tm) {
+    public Builder(TransportManager<T> tm) {
       this.tm = tm;
     }
 
     /**
      * Adds a server to the list, or {@code null} for a drop entry.
      */
-    void add(@Nullable InetSocketAddress addr) {
-      listBuilder.add(new EquivalentAddressGroup(addr));
+    public void add(@Nullable SocketAddress address) {
+      listBuilder.add(new EquivalentAddressGroup(address));
     }
 
-    RoundRobinServerList<T> build() {
+    /**
+     * Adds a list of servers to the list grouped into a single {@link EquivalentAddressGroup}.
+     *
+     * @param addresses the addresses to add
+     */
+    public void addList(List<SocketAddress> addresses) {
+      listBuilder.add(new EquivalentAddressGroup(addresses));
+    }
+
+    public RoundRobinServerList<T> build() {
       return new RoundRobinServerList<T>(tm, listBuilder.build());
     }
   }

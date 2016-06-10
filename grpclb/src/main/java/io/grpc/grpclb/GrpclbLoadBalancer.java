@@ -45,6 +45,7 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.RoundRobinServerList;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.stub.StreamObserver;
 

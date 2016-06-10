@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.util;
 
 import static org.junit.Assert.assertSame;
 import static org.mockito.Matchers.any;
@@ -42,6 +42,13 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
 
+import io.grpc.Attributes;
+import io.grpc.DummyLoadBalancerFactory;
+import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer;
+import io.grpc.ResolvedServerInfo;
+import io.grpc.Status;
+import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
 
 import org.junit.Before;
@@ -50,7 +57,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.net.SocketAddress;
@@ -59,14 +68,16 @@ import java.util.List;
 
 /** Unit test for {@link DummyLoadBalancerFactory}. */
 @RunWith(JUnit4.class)
-public class DummyLoadBalancerTest {
+public class RoundRobinLoadBalancerTest {
   private LoadBalancer<Transport> loadBalancer;
 
   private List<List<ResolvedServerInfo>> servers;
-  private EquivalentAddressGroup addressGroup;
+  private List<EquivalentAddressGroup> addressGroupList;
 
   @Mock private TransportManager<Transport> mockTransportManager;
-  @Mock private Transport mockTransport;
+  @Mock private Transport mockTransport0;
+  @Mock private Transport mockTransport1;
+  @Mock private Transport mockTransport2;
   @Mock private InterimTransport<Transport> mockInterimTransport;
   @Mock private Transport mockInterimTransportAsTransport;
   @Captor private ArgumentCaptor<Supplier<Transport>> transportSupplierCaptor;
@@ -74,18 +85,26 @@ public class DummyLoadBalancerTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    loadBalancer = DummyLoadBalancerFactory.getInstance().newLoadBalancer(
+    loadBalancer = RoundRobinLoadBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
+    addressGroupList = new ArrayList<EquivalentAddressGroup>();
     servers = new ArrayList<List<ResolvedServerInfo>>();
-    servers.add(new ArrayList<ResolvedServerInfo>());
-    ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
     for (int i = 0; i < 3; i++) {
-      SocketAddress addr = new FakeSocketAddress("server" + i);
-      servers.get(0).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
-      addresses.add(addr);
+      servers.add(new ArrayList<ResolvedServerInfo>());
+      ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
+      for (int j = 0; j < 3; j++) {
+        SocketAddress addr = new FakeSocketAddress("servergroup" + i + "server" + j);
+        servers.get(i).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
+        addresses.add(addr);
+      }
+      addressGroupList.add(new EquivalentAddressGroup(addresses));
     }
-    addressGroup = new EquivalentAddressGroup(addresses);
-    when(mockTransportManager.getTransport(eq(addressGroup))).thenReturn(mockTransport);
+    when(mockTransportManager.getTransport(eq(addressGroupList.get(0))))
+        .thenReturn(mockTransport0);
+    when(mockTransportManager.getTransport(eq(addressGroupList.get(1))))
+        .thenReturn(mockTransport1);
+    when(mockTransportManager.getTransport(eq(addressGroupList.get(2))))
+        .thenReturn(mockTransport2);
     when(mockTransportManager.createInterimTransport()).thenReturn(mockInterimTransport);
     when(mockInterimTransport.transport()).thenReturn(mockInterimTransportAsTransport);
   }
@@ -102,11 +121,12 @@ public class DummyLoadBalancerTest {
 
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
     verify(mockInterimTransport).closeWithRealTransports(transportSupplierCaptor.capture());
-    for (int i = 0; i < 2; i++) {
-      assertSame(mockTransport, transportSupplierCaptor.getValue().get());
-    }
-    verify(mockTransportManager, times(2)).getTransport(eq(addressGroup));
-    verifyNoMoreInteractions(mockTransportManager);
+    assertSame(mockTransport0, transportSupplierCaptor.getValue().get());
+    assertSame(mockTransport1, transportSupplierCaptor.getValue().get());
+    InOrder inOrder = Mockito.inOrder(mockTransportManager);
+    inOrder.verify(mockTransportManager).getTransport(eq(addressGroupList.get(0)));
+    inOrder.verify(mockTransportManager).getTransport(eq(addressGroupList.get(1)));
+    inOrder.verifyNoMoreInteractions();
     verifyNoMoreInteractions(mockInterimTransport);
   }
 
@@ -149,10 +169,16 @@ public class DummyLoadBalancerTest {
   @Test
   public void pickAfterResolved() throws Exception {
     loadBalancer.handleResolvedAddresses(servers, Attributes.EMPTY);
-    Transport t = loadBalancer.pickTransport(null);
-    assertSame(mockTransport, t);
-    verify(mockTransportManager).getTransport(addressGroup);
-    verifyNoMoreInteractions(mockTransportManager);
+    InOrder inOrder = Mockito.inOrder(mockTransportManager);
+    for (int i = 0; i < 100; i++) {
+      assertSame(mockTransport0, loadBalancer.pickTransport(null));
+      inOrder.verify(mockTransportManager).getTransport(eq(addressGroupList.get(0)));
+      assertSame(mockTransport1, loadBalancer.pickTransport(null));
+      inOrder.verify(mockTransportManager).getTransport(eq(addressGroupList.get(1)));
+      assertSame(mockTransport2, loadBalancer.pickTransport(null));
+      inOrder.verify(mockTransportManager).getTransport(eq(addressGroupList.get(2)));
+    }
+    inOrder.verifyNoMoreInteractions();
   }
 
   private static class FakeSocketAddress extends SocketAddress {
