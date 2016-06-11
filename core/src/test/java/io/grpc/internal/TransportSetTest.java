@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
@@ -97,6 +98,8 @@ public class TransportSetTest {
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
   private final Metadata headers = new Metadata();
+  private final CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withWaitForReady();
+  private final CallOptions failFastCallOptions = CallOptions.DEFAULT;
 
   private TransportSet transportSet;
   private EquivalentAddressGroup addressGroup;
@@ -132,7 +135,7 @@ public class TransportSetTest {
     int onAllAddressesFailed = 0;
 
     // First attempt
-    transportSet.obtainActiveTransport().newStream(method, new Metadata());
+    transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
     verify(mockTransportFactory, times(++transportsCreated))
         .newClientTransport(addr, authority, userAgent);
 
@@ -144,7 +147,6 @@ public class TransportSetTest {
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
 
     // Second attempt
-    transportSet.obtainActiveTransport().newStream(method, new Metadata());
     // Transport creation doesn't happen until time is due
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsCreated))
@@ -160,7 +162,6 @@ public class TransportSetTest {
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
 
     // Third attempt
-    transportSet.obtainActiveTransport().newStream(method, new Metadata());
     // Transport creation doesn't happen until time is due
     fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsCreated))
@@ -178,7 +179,7 @@ public class TransportSetTest {
     verify(mockTransportSetCallback, times(onAllAddressesFailed)).onAllAddressesFailed();
 
     // Back-off is reset, and the next attempt will happen immediately
-    transportSet.obtainActiveTransport().newStream(method, new Metadata());
+    transportSet.obtainActiveTransport();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsCreated))
         .newClientTransport(addr, authority, userAgent);
@@ -207,9 +208,9 @@ public class TransportSetTest {
     // First attempt
     DelayedClientTransport delayedTransport1 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
-    delayedTransport1.newStream(method, new Metadata());
     verify(mockTransportFactory, times(++transportsAddr1))
         .newClientTransport(addr1, authority, userAgent);
+    delayedTransport1.newStream(method, new Metadata(), waitForReadyCallOptions);
     // Let this one fail without success
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertNull(delayedTransport1.getTransportSupplier());
@@ -219,14 +220,14 @@ public class TransportSetTest {
     DelayedClientTransport delayedTransport2 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
     assertSame(delayedTransport1, delayedTransport2);
-    delayedTransport2.newStream(method, new Metadata());
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
         .newClientTransport(addr2, authority, userAgent);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    // All addresses have failed. Delayed transport will see an error.
-    assertTrue(delayedTransport2.getTransportSupplier().get() instanceof FailingClientTransport);
+    // All addresses have failed. Delayed transport will be in back-off interval.
+    assertNull(delayedTransport2.getTransportSupplier());
+    assertTrue(delayedTransport2.isInBackoffPeriod());
     verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
     // Backoff reset and first back-off interval begins
     verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
@@ -235,8 +236,7 @@ public class TransportSetTest {
     // Third attempt is the first address, thus controlled by the first back-off interval.
     DelayedClientTransport delayedTransport3 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
-    assertNotSame(delayedTransport2, delayedTransport3);
-    delayedTransport3.newStream(method, new Metadata());
+    assertSame(delayedTransport2, delayedTransport3);
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, authority, userAgent);
@@ -252,14 +252,14 @@ public class TransportSetTest {
     DelayedClientTransport delayedTransport4 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
     assertSame(delayedTransport3, delayedTransport4);
-    delayedTransport4.newStream(method, new Metadata());
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
         .newClientTransport(addr2, authority, userAgent);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    // All addresses have failed again. Delayed transport will see an error
-    assertTrue(delayedTransport4.getTransportSupplier().get() instanceof FailingClientTransport);
+    // All addresses have failed again. Delayed transport will be in back-off interval.
+    assertNull(delayedTransport4.getTransportSupplier());
+    assertTrue(delayedTransport4.isInBackoffPeriod());
     verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
     // Second back-off interval begins
     verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
@@ -268,8 +268,7 @@ public class TransportSetTest {
     // Fifth attempt for the first address, thus controlled by the second back-off interval.
     DelayedClientTransport delayedTransport5 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
-    assertNotSame(delayedTransport4, delayedTransport5);
-    delayedTransport5.newStream(method, new Metadata());
+    assertSame(delayedTransport4, delayedTransport5);
     fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, authority, userAgent);
@@ -291,7 +290,7 @@ public class TransportSetTest {
     DelayedClientTransport delayedTransport6 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
     assertNotSame(delayedTransport5, delayedTransport6);
-    delayedTransport6.newStream(method, new Metadata());
+    delayedTransport6.newStream(method, headers, waitForReadyCallOptions);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr1))
         .newClientTransport(addr1, authority, userAgent);
@@ -304,14 +303,14 @@ public class TransportSetTest {
     DelayedClientTransport delayedTransport7 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
     assertSame(delayedTransport6, delayedTransport7);
-    delayedTransport7.newStream(method, new Metadata());
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
         .newClientTransport(addr2, authority, userAgent);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
-    // All addresses have failed. Delayed transport will see an error.
-    assertTrue(delayedTransport7.getTransportSupplier().get() instanceof FailingClientTransport);
+    // All addresses have failed. Delayed transport will be in back-off interval.
+    assertNull(delayedTransport7.getTransportSupplier());
+    assertTrue(delayedTransport7.isInBackoffPeriod());
     verify(mockTransportSetCallback, times(++onAllAddressesFailed)).onAllAddressesFailed();
     // Back-off reset and first back-off interval begins
     verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
@@ -320,8 +319,7 @@ public class TransportSetTest {
     // Third attempt is the first address, thus controlled by the first back-off interval.
     DelayedClientTransport delayedTransport8 =
         (DelayedClientTransport) transportSet.obtainActiveTransport();
-    assertNotSame(delayedTransport7, delayedTransport8);
-    delayedTransport8.newStream(method, new Metadata());
+    assertSame(delayedTransport7, delayedTransport8);
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, authority, userAgent);
@@ -334,6 +332,80 @@ public class TransportSetTest {
     verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffMillis();
     verifyNoMoreInteractions(mockTransportSetCallback);
+    fakeExecutor.runDueTasks(); // Drain new 'real' stream creation; not important to this test.
+  }
+
+  @Test
+  public void verifyFailFastAndNonFailFastBehaviors() {
+    int pendingStreamsCount = 0;
+    int failFastPendingStreamsCount = 0;
+
+    final SocketAddress addr1 = mock(SocketAddress.class);
+    final SocketAddress addr2 = mock(SocketAddress.class);
+    createTransportSet(addr1, addr2);
+
+    final DelayedClientTransport delayedTransport =
+        (DelayedClientTransport) transportSet.obtainActiveTransport();
+    // Now transport is in CONNECTING.
+    assertFalse(delayedTransport.isInBackoffPeriod());
+
+    // Create a new fail fast stream.
+    delayedTransport.newStream(method, headers, failFastCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+    failFastPendingStreamsCount++;
+    // Create a new non fail fast stream.
+    delayedTransport.newStream(method, headers, waitForReadyCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+
+    // Let this 1st address fail without success.
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    // Now transport is still in CONNECTING.
+    assertFalse(delayedTransport.isInBackoffPeriod());
+    // Verify pending streams still in queue.
+    assertEquals(pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+
+    // Create a new fail fast stream.
+    delayedTransport.newStream(method, headers, failFastCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+    failFastPendingStreamsCount++;
+    // Create a new non fail fast stream
+    delayedTransport.newStream(method, headers, waitForReadyCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+
+    // Let this 2nd address fail without success.
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    // Now transport is still in TRANSIENT_FAILURE.
+    assertTrue(delayedTransport.isInBackoffPeriod());
+    // Fail fast pending streams should be cleared
+    assertEquals(pendingStreamsCount - failFastPendingStreamsCount,
+        delayedTransport.getPendingStreamsCount());
+    pendingStreamsCount -= failFastPendingStreamsCount;
+    failFastPendingStreamsCount = 0;
+
+    // Create a new fail fast stream.
+    delayedTransport.newStream(method, headers, failFastCallOptions);
+    // Verify it is not queued.
+    assertEquals(pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+    // Create a new non fail fast stream
+    delayedTransport.newStream(method, headers, waitForReadyCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+
+    fakeClock.forwardMillis(10);
+    // Now back-off is over
+    assertFalse(delayedTransport.isInBackoffPeriod());
+
+    // Create a new fail fast stream.
+    delayedTransport.newStream(method, headers, failFastCallOptions);
+    // Verify it is queued.
+    assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
+    failFastPendingStreamsCount++;
+    assertEquals(1, failFastPendingStreamsCount);
+
     fakeExecutor.runDueTasks(); // Drain new 'real' stream creation; not important to this test.
   }
 
@@ -371,7 +443,7 @@ public class TransportSetTest {
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
 
     // Request immediately, but will wait for back-off before reconnecting
-    transportSet.obtainActiveTransport().newStream(method, new Metadata());
+    transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
     verify(mockTransportFactory, times(transportsCreated))
         .newClientTransport(addr, authority, userAgent);
     fakeClock.forwardMillis(100);
@@ -428,7 +500,7 @@ public class TransportSetTest {
     pick = transportSet.obtainActiveTransport();
     assertTrue(pick instanceof DelayedClientTransport);
     // Start a stream, which will be pending in the delayed transport
-    ClientStream pendingStream = pick.newStream(method, headers);
+    ClientStream pendingStream = pick.newStream(method, headers, waitForReadyCallOptions);
     pendingStream.start(mockStreamListener);
 
     // Shut down TransportSet before the transport is created. Further call to
@@ -452,7 +524,7 @@ public class TransportSetTest {
         any(MethodDescriptor.class), any(Metadata.class));
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(transportInfo.transport).newStream(same(method), same(headers),
-        same(CallOptions.DEFAULT));
+        same(waitForReadyCallOptions));
     verify(transportInfo.transport).shutdown();
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
     verify(mockTransportSetCallback, never()).onTerminated();

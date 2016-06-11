@@ -279,9 +279,8 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t4 = tm.getTransport(addressGroup);
     assertNotNull(t4);
     // If backoff's DelayedTransport is still active, this is necessary. Otherwise it would be racy.
-    t4.newStream(method, new Metadata());
+    t4.newStream(method, new Metadata(), CallOptions.DEFAULT.withWaitForReady());
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
-
         .newClientTransport(addr1, authority, userAgent);
     // Back-off policy was reset and consulted.
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();

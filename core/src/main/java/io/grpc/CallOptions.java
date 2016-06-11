@@ -73,6 +73,11 @@ public final class CallOptions {
   private Object[][] customOptions = new Object[0][2];
 
   /**
+   * Opposite to fail fast.
+   */
+  private boolean waitForReady;
+
+  /**
    * Override the HTTP/2 authority the channel claims to be connecting to. <em>This is not
    * generally safe.</em> Overriding allows advanced users to re-use a single Channel for multiple
    * services, even if those services are hosted on different domain names. That assumes the
@@ -179,6 +184,29 @@ public final class CallOptions {
   public CallOptions withAffinity(Attributes affinity) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.affinity = Preconditions.checkNotNull(affinity);
+    return newOptions;
+  }
+
+  /**
+   * Enables 'wait for ready' feature for the call.
+   * <a href="https://github.com/grpc/grpc/blob/master/doc/fail_fast.md">'Fail fast'</a>
+   * is the default option for gRPC calls and 'wait for ready' is the opposite to it.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1915")
+  public CallOptions withWaitForReady() {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.waitForReady = true;
+    return newOptions;
+  }
+
+  /**
+   * Disables 'wait for ready' feature for the call.
+   * This method should be rarely used because the default is without 'wait for ready'.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1915")
+  public CallOptions withoutWaitForReady() {
+    CallOptions newOptions = new CallOptions(this);
+    newOptions.waitForReady = false;
     return newOptions;
   }
 
@@ -311,6 +339,16 @@ public final class CallOptions {
   }
 
   /**
+   * Returns whether 'wait for ready' option is enabled for the call.
+   * <a href="https://github.com/grpc/grpc/blob/master/doc/fail_fast.md">'Fail fast'</a>
+   * is the default option for gRPC calls and 'wait for ready' is the opposite to it.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1915")
+  public boolean isWaitForReady() {
+    return waitForReady;
+  }
+
+  /**
    * Copy constructor.
    */
   private CallOptions(CallOptions other) {
@@ -333,6 +371,7 @@ public final class CallOptions {
     toStringHelper.add("executor", executor != null ? executor.getClass() : null);
     toStringHelper.add("compressorName", compressorName);
     toStringHelper.add("customOptions", Arrays.toString(customOptions));
+    toStringHelper.add("waitForReady", isWaitForReady());
 
     return toStringHelper.toString();
   }

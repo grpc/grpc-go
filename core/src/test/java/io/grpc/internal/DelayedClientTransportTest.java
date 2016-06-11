@@ -35,6 +35,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,7 @@ import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.StatusException;
 import io.grpc.StringMarshaller;
 
 import org.junit.After;
@@ -278,5 +280,29 @@ public class DelayedClientTransportTest {
     stream.start(streamListener);
     verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.UNAVAILABLE, statusCaptor.getValue().getCode());
+  }
+
+  @Test public void startBackOff_ClearsFailFastPendingStreams() {
+    final Status cause = Status.UNKNOWN;
+    final CallOptions failFastCallOptions = CallOptions.DEFAULT;
+    final CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withWaitForReady();
+    final ClientStream ffStream = delayedTransport.newStream(method, headers, failFastCallOptions);
+    delayedTransport.newStream(method, headers, waitForReadyCallOptions);
+    delayedTransport.newStream(method, headers, failFastCallOptions);
+    assertEquals(3, delayedTransport.getPendingStreamsCount());
+
+    delayedTransport.startBackoff(cause);
+    assertTrue(delayedTransport.isInBackoffPeriod());
+    assertEquals(1, delayedTransport.getPendingStreamsCount());
+
+    ffStream.start(streamListener);
+    // Fail fast stream not failed yet.
+    verify(streamListener, never()).closed(any(Status.class), any(Metadata.class));
+
+    fakeExecutor.runDueTasks();
+    // Now fail fast stream failed.
+    verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
+    assertEquals(Status.UNAVAILABLE.getCode(), statusCaptor.getValue().getCode());
+    assertEquals(cause, ((StatusException) statusCaptor.getValue().getCause()).getStatus());
   }
 }
