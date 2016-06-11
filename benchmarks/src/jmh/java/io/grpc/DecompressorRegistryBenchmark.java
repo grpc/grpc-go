@@ -31,7 +31,7 @@
 
 package io.grpc;
 
-import io.grpc.internal.GrpcUtil;
+import static io.grpc.DecompressorRegistry.ACCEPT_ENCODING_JOINER;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -87,7 +87,7 @@ public class DecompressorRegistryBenchmark {
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public String dynamicAcceptEncoding() {
     if (!reg.getAdvertisedMessageEncodings().isEmpty()) {
-      return GrpcUtil.ACCEPT_ENCODING_JOINER.join(reg.getAdvertisedMessageEncodings());
+      return ACCEPT_ENCODING_JOINER.join(reg.getAdvertisedMessageEncodings());
     }
     return "";
   }

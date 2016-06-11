@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
@@ -58,7 +57,6 @@ import io.grpc.Status;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Set;
 
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   private final ServerStream stream;
@@ -139,9 +137,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
     stream.setCompressor(compressor);
 
     headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
-    Set<String> acceptEncodings = decompressorRegistry.getAdvertisedMessageEncodings();
-    if (!acceptEncodings.isEmpty()) {
-      headers.put(MESSAGE_ACCEPT_ENCODING_KEY, ACCEPT_ENCODING_JOINER.join(acceptEncodings));
+    String advertisedEncodings = decompressorRegistry.getRawAdvertisedMessageEncodings();
+    if (!advertisedEncodings.isEmpty()) {
+      headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
 
     // Don't check if sendMessage has been called, since it requires that sendHeaders was already

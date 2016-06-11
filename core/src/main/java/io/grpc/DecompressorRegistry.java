@@ -33,7 +33,8 @@ package io.grpc;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_JOINER;
+
+import com.google.common.base.Joiner;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -51,6 +52,8 @@ import javax.annotation.concurrent.ThreadSafe;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
 @ThreadSafe
 public final class DecompressorRegistry {
+  static final Joiner ACCEPT_ENCODING_JOINER = Joiner.on(',');
+
   public static DecompressorRegistry emptyInstance() {
     return new DecompressorRegistry();
   }

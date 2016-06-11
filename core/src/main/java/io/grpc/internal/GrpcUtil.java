@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
@@ -142,8 +141,6 @@ public final class GrpcUtil {
   public static final int DEFAULT_MAX_HEADER_LIST_SIZE = 8192;
 
   public static final Splitter ACCEPT_ENCODING_SPLITER = Splitter.on(',').trimResults();
-
-  public static final Joiner ACCEPT_ENCODING_JOINER = Joiner.on(',');
 
   private static final String IMPLEMENTATION_VERION = getImplementationVersion();
 
