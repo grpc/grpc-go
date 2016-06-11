@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -42,7 +42,10 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.collect.Iterables;
 
-import io.grpc.internal.FakeClock;
+import io.grpc.Attributes;
+import io.grpc.NameResolver;
+import io.grpc.ResolvedServerInfo;
+import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
 import org.junit.After;
@@ -72,7 +75,7 @@ public class DnsNameResolverTest {
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, DEFAULT_PORT).build();
 
-  private final DnsNameResolverFactory factory = DnsNameResolverFactory.getInstance();
+  private final DnsNameResolverProvider provider = new DnsNameResolverProvider();
   private final FakeClock fakeClock = new FakeClock();
   private final FakeClock fakeExecutor = new FakeClock();
   private final Resource<ScheduledExecutorService> fakeTimerServiceResource =
@@ -262,7 +265,7 @@ public class DnsNameResolverTest {
 
   private void testInvalidUri(URI uri) {
     try {
-      factory.newNameResolver(uri, NAME_RESOLVER_PARAMS);
+      provider.newNameResolver(uri, NAME_RESOLVER_PARAMS);
       fail("Should have failed");
     } catch (IllegalArgumentException e) {
       // expected
@@ -270,7 +273,7 @@ public class DnsNameResolverTest {
   }
 
   private void testValidUri(URI uri, String exportedAuthority, int expectedPort) {
-    DnsNameResolver resolver = (DnsNameResolver) factory.newNameResolver(uri, NAME_RESOLVER_PARAMS);
+    DnsNameResolver resolver = provider.newNameResolver(uri, NAME_RESOLVER_PARAMS);
     assertNotNull(resolver);
     assertEquals(expectedPort, resolver.getPort());
     assertEquals(exportedAuthority, resolver.getServiceAuthority());

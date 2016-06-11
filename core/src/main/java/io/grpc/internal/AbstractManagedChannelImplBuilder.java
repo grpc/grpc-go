@@ -45,7 +45,7 @@ import io.grpc.DummyLoadBalancerFactory;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
-import io.grpc.NameResolverRegistry;
+import io.grpc.NameResolverProvider;
 import io.grpc.ResolvedServerInfo;
 
 import java.net.SocketAddress;
@@ -211,7 +211,7 @@ public abstract class AbstractManagedChannelImplBuilder
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
         new ExponentialBackoffPolicy.Provider(),
-        firstNonNull(nameResolverFactory, NameResolverRegistry.getDefaultRegistry()),
+        firstNonNull(nameResolverFactory, NameResolverProvider.asFactory()),
         getNameResolverParams(),
         firstNonNull(loadBalancerFactory, DummyLoadBalancerFactory.getInstance()),
         transportFactory,

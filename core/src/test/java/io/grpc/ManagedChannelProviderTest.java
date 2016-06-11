@@ -38,13 +38,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.IOException;
-import java.net.URL;
-import java.util.Enumeration;
-
 /** Unit tests for {@link ManagedChannelProvider}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelProviderTest {
+  private final String serviceFile = "META-INF/services/io.grpc.ManagedChannelProvider";
+
   @Test(expected = ManagedChannelProvider.ProviderNotFoundException.class)
   public void noProvider() {
     ManagedChannelProvider.provider();
@@ -52,42 +50,16 @@ public class ManagedChannelProviderTest {
 
   @Test
   public void multipleProvider() {
-    ClassLoader cl = new ServicesClassLoader(getClass().getClassLoader(),
+    ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
         "io/grpc/ManagedChannelProviderTest-multipleProvider.txt");
     assertSame(Available7Provider.class, ManagedChannelProvider.load(cl).getClass());
   }
 
   @Test
   public void unavailableProvider() {
-    ClassLoader cl = new ServicesClassLoader(getClass().getClassLoader(),
+    ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
         "io/grpc/ManagedChannelProviderTest-unavailableProvider.txt");
     assertNull(ManagedChannelProvider.load(cl));
-  }
-
-  private static class ServicesClassLoader extends ClassLoader {
-    private final String serviceFile = "META-INF/services/io.grpc.ManagedChannelProvider";
-    private final String resourceName;
-
-    public ServicesClassLoader(ClassLoader parent, String resourceName) {
-      super(parent);
-      this.resourceName = resourceName;
-    }
-
-    @Override
-    protected URL findResource(String name) {
-      if (serviceFile.equals(name)) {
-        return getParent().getResource(resourceName);
-      }
-      return super.findResource(name);
-    }
-
-    @Override
-    protected Enumeration<URL> findResources(String name) throws IOException {
-      if (serviceFile.equals(name)) {
-        return getParent().getResources(resourceName);
-      }
-      return super.findResources(name);
-    }
   }
 
   private static class BaseProvider extends ManagedChannelProvider {

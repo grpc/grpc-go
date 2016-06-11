@@ -29,16 +29,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
+package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.internal.GrpcUtil;
+import io.grpc.Attributes;
+import io.grpc.NameResolverProvider;
 
 import java.net.URI;
 
 /**
- * A factory for {@link DnsNameResolver}.
+ * A provider for {@link DnsNameResolver}.
  *
  * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
  * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
@@ -52,14 +53,12 @@ import java.net.URI;
  *   <li>{@code "dns:///foo.googleapis.com"} (without port)</li>
  * </ul>
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1769")
-public final class DnsNameResolverFactory extends NameResolver.Factory {
+public final class DnsNameResolverProvider extends NameResolverProvider {
 
   private static final String SCHEME = "dns";
-  private static final DnsNameResolverFactory instance = new DnsNameResolverFactory();
 
   @Override
-  public NameResolver newNameResolver(URI targetUri, Attributes params) {
+  public DnsNameResolver newNameResolver(URI targetUri, Attributes params) {
     if (SCHEME.equals(targetUri.getScheme())) {
       String targetPath = Preconditions.checkNotNull(targetUri.getPath(), "targetPath");
       Preconditions.checkArgument(targetPath.startsWith("/"),
@@ -77,10 +76,13 @@ public final class DnsNameResolverFactory extends NameResolver.Factory {
     return SCHEME;
   }
 
-  private DnsNameResolverFactory() {
+  @Override
+  protected boolean isAvailable() {
+    return true;
   }
 
-  public static DnsNameResolverFactory getInstance() {
-    return instance;
+  @Override
+  protected int priority() {
+    return 5;
   }
 }
