@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	// dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
@@ -16,12 +16,7 @@ import (
 )
 
 var (
-	s = &serverReflectionServer{
-		// s:                 s,
-		typeToNameMap:     make(map[reflect.Type]string),
-		nameToTypeMap:     make(map[string]reflect.Type),
-		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
-	}
+	s = &serverReflectionServer{}
 	// fileDescriptorX of each test proto file.
 	fdTest      []byte
 	fdProto2    []byte

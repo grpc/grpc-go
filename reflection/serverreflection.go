@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"reflect"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -18,20 +17,13 @@ import (
 
 type serverReflectionServer struct {
 	s *grpc.Server
-	// TODO mu is not used. Add lock() and unlock().
-	mu                sync.Mutex
-	typeToNameMap     map[reflect.Type]string
-	nameToTypeMap     map[string]reflect.Type
-	typeToFileDescMap map[reflect.Type]*dpb.FileDescriptorProto
+	// TODO add cache if necessary
 }
 
 // InstallOnServer installs server reflection service on the given grpc server.
 func InstallOnServer(s *grpc.Server) {
 	rpb.RegisterServerReflectionServer(s, &serverReflectionServer{
-		s:                 s,
-		typeToNameMap:     make(map[reflect.Type]string),
-		nameToTypeMap:     make(map[string]reflect.Type),
-		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
+		s: s,
 	})
 }
 
@@ -48,18 +40,11 @@ func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDesc
 	}
 	enc, idxs := m.Descriptor()
 
-	// Check type to fileDesc cache.
-	if fd, ok := s.typeToFileDescMap[st]; ok {
-		return fd, idxs, nil
-	}
-
 	// Cache missed, try to decode.
 	fd, err := s.decodeFileDesc(enc)
 	if err != nil {
 		return nil, nil, err
 	}
-	// Add to cache.
-	s.typeToFileDescMap[st] = fd
 	return fd, idxs, nil
 }
 
@@ -91,29 +76,11 @@ func decompress(b []byte) []byte {
 }
 
 func (s *serverReflectionServer) typeForName(name string) (reflect.Type, error) {
-	// Check cache first.
-	if st, ok := s.nameToTypeMap[name]; ok {
-		return st, nil
-	}
-
 	pt := proto.MessageType(name)
 	if pt == nil {
 		return nil, fmt.Errorf("unknown type: %q", name)
 	}
 	st := pt.Elem()
-
-	// Add to cache.
-	s.typeToNameMap[st] = name
-	s.nameToTypeMap[name] = st
-
-	// TODO is this necessary?
-	// In most cases, the returned type will be used to search
-	// for file descriptor.
-	// Add it to cache now.
-	fd, _, err := s.fileDescForType(st)
-	if err == nil {
-		s.typeToFileDescMap[st] = fd
-	}
 
 	return st, nil
 }
@@ -137,11 +104,6 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 	}
 
 	extT := reflect.TypeOf(extDesc.ExtensionType).Elem()
-	// TODO this doesn't work if extT is simple types, like int32
-	// Check cache.
-	if fd, ok := s.typeToFileDescMap[extT]; ok {
-		return fd, nil
-	}
 
 	fd, _, err := s.fileDescForType(extT)
 	if err != nil {
