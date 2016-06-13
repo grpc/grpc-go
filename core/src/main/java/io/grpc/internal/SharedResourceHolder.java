@@ -149,8 +149,9 @@ public final class SharedResourceHolder {
       if (destroyer == null) {
         destroyer = destroyerFactory.createScheduledExecutor();
       }
-      cached.destroyTask = destroyer.schedule(new Runnable() {
-        @Override public void run() {
+      cached.destroyTask = destroyer.schedule(new LogExceptionRunnable(new Runnable() {
+        @Override
+        public void run() {
           synchronized (SharedResourceHolder.this) {
             // Refcount may have gone up since the task was scheduled. Re-check it.
             if (cached.refcount == 0) {
@@ -163,7 +164,7 @@ public final class SharedResourceHolder {
             }
           }
         }
-      }, DESTROY_DELAY_SECONDS, TimeUnit.SECONDS);
+      }), DESTROY_DELAY_SECONDS, TimeUnit.SECONDS);
     }
     // Always returning null
     return null;

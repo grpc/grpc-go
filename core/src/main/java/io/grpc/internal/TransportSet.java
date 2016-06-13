@@ -259,7 +259,7 @@ final class TransportSet implements WithLogId {
       }
     };
     reconnectTask = scheduledExecutor.schedule(
-        endOfCurrentBackoff, delayMillis, TimeUnit.MILLISECONDS);
+        new LogExceptionRunnable(endOfCurrentBackoff), delayMillis, TimeUnit.MILLISECONDS);
   }
 
   /**

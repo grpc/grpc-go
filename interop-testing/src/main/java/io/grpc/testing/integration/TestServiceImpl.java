@@ -36,6 +36,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
 
 import io.grpc.Status;
+import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.PayloadType;
@@ -336,7 +337,8 @@ public class TestServiceImpl implements TestServiceGrpc.TestService {
         Chunk nextChunk = chunks.peek();
         if (nextChunk != null) {
           scheduled = true;
-          executor.schedule(dispatchTask, nextChunk.delayMicroseconds, TimeUnit.MICROSECONDS);
+          executor.schedule(new LogExceptionRunnable(dispatchTask),
+              nextChunk.delayMicroseconds, TimeUnit.MICROSECONDS);
           return;
         }
       }

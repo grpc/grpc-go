@@ -34,6 +34,8 @@ package io.grpc;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.internal.LogExceptionRunnable;
+
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -148,7 +150,8 @@ public final class Deadline implements Comparable<Deadline> {
   public ScheduledFuture<?> runOnExpiration(Runnable task, ScheduledExecutorService scheduler) {
     Preconditions.checkNotNull(task, "task");
     Preconditions.checkNotNull(scheduler, "scheduler");
-    return scheduler.schedule(task, deadlineNanos - ticker.read(), TimeUnit.NANOSECONDS);
+    return scheduler.schedule(new LogExceptionRunnable(task),
+        deadlineNanos - ticker.read(), TimeUnit.NANOSECONDS);
   }
 
   @Override

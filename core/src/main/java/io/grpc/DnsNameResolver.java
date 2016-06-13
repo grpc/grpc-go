@@ -34,6 +34,7 @@ package io.grpc;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -150,8 +151,9 @@ class DnsNameResolver extends NameResolver {
               }
               // Because timerService is the single-threaded GrpcUtil.TIMER_SERVICE in production,
               // we need to delegate the blocking work to the executor
-              resolutionTask = timerService.schedule(resolutionRunnableOnExecutor,
-                  1, TimeUnit.MINUTES);
+              resolutionTask =
+                  timerService.schedule(new LogExceptionRunnable(resolutionRunnableOnExecutor),
+                      1, TimeUnit.MINUTES);
             }
             savedListener.onError(Status.UNAVAILABLE.withCause(e));
             return;
