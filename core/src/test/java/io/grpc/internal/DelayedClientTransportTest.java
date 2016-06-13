@@ -49,7 +49,6 @@ import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.StatusException;
 import io.grpc.StringMarshaller;
 
 import org.junit.After;
@@ -283,10 +282,11 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void startBackOff_ClearsFailFastPendingStreams() {
-    final Status cause = Status.UNKNOWN;
+    final Status cause = Status.UNAVAILABLE.withDescription("some error when connecting");
     final CallOptions failFastCallOptions = CallOptions.DEFAULT;
     final CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withWaitForReady();
     final ClientStream ffStream = delayedTransport.newStream(method, headers, failFastCallOptions);
+    ffStream.start(streamListener);
     delayedTransport.newStream(method, headers, waitForReadyCallOptions);
     delayedTransport.newStream(method, headers, failFastCallOptions);
     assertEquals(3, delayedTransport.getPendingStreamsCount());
@@ -295,14 +295,28 @@ public class DelayedClientTransportTest {
     assertTrue(delayedTransport.isInBackoffPeriod());
     assertEquals(1, delayedTransport.getPendingStreamsCount());
 
-    ffStream.start(streamListener);
     // Fail fast stream not failed yet.
     verify(streamListener, never()).closed(any(Status.class), any(Metadata.class));
 
     fakeExecutor.runDueTasks();
     // Now fail fast stream failed.
+    verify(streamListener).closed(same(cause), any(Metadata.class));
+  }
+
+  @Test public void startBackOff_FailsFutureFailFastStreams() {
+    final Status cause = Status.UNAVAILABLE.withDescription("some error when connecting");
+    final CallOptions failFastCallOptions = CallOptions.DEFAULT;
+    final CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withWaitForReady();
+    delayedTransport.startBackoff(cause);
+    assertTrue(delayedTransport.isInBackoffPeriod());
+
+    final ClientStream ffStream = delayedTransport.newStream(method, headers, failFastCallOptions);
+    ffStream.start(streamListener);
+    assertEquals(0, delayedTransport.getPendingStreamsCount());
     verify(streamListener).closed(statusCaptor.capture(), any(Metadata.class));
-    assertEquals(Status.UNAVAILABLE.getCode(), statusCaptor.getValue().getCode());
-    assertEquals(cause, ((StatusException) statusCaptor.getValue().getCause()).getStatus());
+    assertEquals(cause, Status.fromThrowable(statusCaptor.getValue().getCause()));
+
+    delayedTransport.newStream(method, headers, waitForReadyCallOptions);
+    assertEquals(1, delayedTransport.getPendingStreamsCount());
   }
 }

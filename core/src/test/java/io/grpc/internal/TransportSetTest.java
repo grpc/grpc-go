@@ -350,7 +350,8 @@ public class TransportSetTest {
     assertFalse(delayedTransport.isInBackoffPeriod());
 
     // Create a new fail fast stream.
-    delayedTransport.newStream(method, headers, failFastCallOptions);
+    ClientStream ffStream = delayedTransport.newStream(method, headers, failFastCallOptions);
+    ffStream.start(mockStreamListener);
     // Verify it is queued.
     assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
     failFastPendingStreamsCount++;
@@ -377,7 +378,8 @@ public class TransportSetTest {
     assertEquals(++pendingStreamsCount, delayedTransport.getPendingStreamsCount());
 
     // Let this 2nd address fail without success.
-    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    Status failureStatus = Status.UNAVAILABLE.withDescription("some unique failure");
+    transports.poll().listener.transportShutdown(failureStatus);
     // Now transport is still in TRANSIENT_FAILURE.
     assertTrue(delayedTransport.isInBackoffPeriod());
     // Fail fast pending streams should be cleared
@@ -385,6 +387,8 @@ public class TransportSetTest {
         delayedTransport.getPendingStreamsCount());
     pendingStreamsCount -= failFastPendingStreamsCount;
     failFastPendingStreamsCount = 0;
+    fakeExecutor.runDueTasks();
+    verify(mockStreamListener).closed(same(failureStatus), any(Metadata.class));
 
     // Create a new fail fast stream.
     delayedTransport.newStream(method, headers, failFastCallOptions);

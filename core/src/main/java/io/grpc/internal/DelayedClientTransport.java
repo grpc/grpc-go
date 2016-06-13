@@ -79,14 +79,16 @@ class DelayedClientTransport implements ManagedClientTransport {
 
   /**
    * The delayed client transport will come into a back-off interval if it fails to establish a real
-   * transport for all addresses, namely the channel is in TRANSIENT_FAILURE.
+   * transport for all addresses, namely the channel is in TRANSIENT_FAILURE. When in a back-off
+   * interval, {@code backoffStatus != null}.
    *
    * <p>If the transport is in a back-off interval, then all fail fast streams (including the
    * pending as well as new ones) will fail immediately. New non-fail fast streams can be created as
    * {@link PendingStream} and will keep pending during this back-off period.
    */
   @GuardedBy("lock")
-  private boolean inBackoffPeriod;
+  @Nullable
+  private Status backoffStatus;
 
   DelayedClientTransport(Executor streamCreationExecutor) {
     this.streamCreationExecutor = streamCreationExecutor;
@@ -117,9 +119,8 @@ class DelayedClientTransport implements ManagedClientTransport {
         // Check again, since it may have changed while waiting for lock
         supplier = transportSupplier;
         if (supplier == null && !shutdown) {
-          if (inBackoffPeriod && !callOptions.isWaitForReady()) {
-            return new FailingClientStream(Status.UNAVAILABLE.withDescription(
-                "Terminated fail fast stream."));
+          if (backoffStatus != null && !callOptions.isWaitForReady()) {
+            return new FailingClientStream(backoffStatus);
           }
           PendingStream pendingStream = new PendingStream(method, headers, callOptions);
           pendingStreams.add(pendingStream);
@@ -288,7 +289,7 @@ class DelayedClientTransport implements ManagedClientTransport {
   @VisibleForTesting
   boolean isInBackoffPeriod() {
     synchronized (lock) {
-      return inBackoffPeriod;
+      return backoffStatus != null;
     }
   }
 
@@ -297,7 +298,7 @@ class DelayedClientTransport implements ManagedClientTransport {
    *
    * <p>Does jobs at the beginning of the back-off:
    *
-   * <p>sets {@link #inBackoffPeriod} flag to true;
+   * <p>sets {@link #backoffStatus};
    *
    * <p>sets all pending streams with a fail fast call option of the delayed transport as
    * {@link FailingClientStream}s, and removes them from the list of pending streams of the
@@ -307,8 +308,9 @@ class DelayedClientTransport implements ManagedClientTransport {
    */
   void startBackoff(final Status status) {
     synchronized (lock) {
-      Preconditions.checkState(!inBackoffPeriod);
-      inBackoffPeriod = true;
+      Preconditions.checkState(backoffStatus == null);
+      backoffStatus = Status.UNAVAILABLE.withDescription("Channel in TRANSIENT_FAILURE state")
+          .withCause(status.asRuntimeException());
       final ArrayList<PendingStream> failFastPendingStreams = new ArrayList<PendingStream>();
       if (pendingStreams != null && !pendingStreams.isEmpty()) {
         final Iterator<PendingStream> it = pendingStreams.iterator();
@@ -323,8 +325,7 @@ class DelayedClientTransport implements ManagedClientTransport {
           @Override
           public void run() {
             for (PendingStream stream : failFastPendingStreams) {
-              stream.setStream(new FailingClientStream(Status.UNAVAILABLE.withDescription(
-                  "Terminated fail fast stream.").withCause(status.asException())));
+              stream.setStream(new FailingClientStream(status));
             }
           }
         });
@@ -338,7 +339,7 @@ class DelayedClientTransport implements ManagedClientTransport {
    */
   void endBackoff() {
     synchronized (lock) {
-      inBackoffPeriod = false;
+      backoffStatus = null;
     }
   }
 
