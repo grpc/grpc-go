@@ -79,54 +79,6 @@ func TestTypeForNameNotFound(t *testing.T) {
 	}
 }
 
-func TestNameForType(t *testing.T) {
-	for _, test := range []struct {
-		st   reflect.Type
-		want string
-	}{
-		{reflect.TypeOf(pb.SearchResponse{}), "grpc.testing.SearchResponse"},
-		{reflect.TypeOf(pb.SearchResponse_Result{}), "grpc.testing.SearchResponse_Result"},
-	} {
-		r, err := s.nameForType(test.st)
-		t.Logf("nameForType(%q) = %q, %v", test.st, r, err)
-		if err != nil || r != test.want {
-			t.Fatalf("nameForType(%q) = %q, %v, want %q, <nil>", test.st, r, err, test.want)
-		}
-	}
-}
-
-func TestNameForPointer(t *testing.T) {
-	for _, test := range []struct {
-		pt   interface{}
-		want string
-	}{
-		{&pb.SearchResponse{}, "grpc.testing.SearchResponse"},
-		{&pb.SearchResponse_Result{}, "grpc.testing.SearchResponse_Result"},
-	} {
-		r, err := s.nameForPointer(test.pt)
-		t.Logf("nameForPointer(%T) = %q, %v", test.pt, r, err)
-		if err != nil || r != test.want {
-			t.Fatalf("nameForPointer(%T) = %q, %v, want %q, <nil>", test.pt, r, err, test.want)
-		}
-	}
-}
-
-func TestFilenameForType(t *testing.T) {
-	for _, test := range []struct {
-		st   reflect.Type
-		want string
-	}{
-		{reflect.TypeOf(pb.SearchResponse{}), "test.proto"},
-		{reflect.TypeOf(pb.SearchResponse_Result{}), "test.proto"},
-	} {
-		r, err := s.filenameForType(test.st)
-		t.Logf("filenameForType(%q) = %q, %v", test.st, r, err)
-		if err != nil || r != test.want {
-			t.Fatalf("filenameForType(%q) = %q, %v, want %q, <nil>", test.st, r, err, test.want)
-		}
-	}
-}
-
 // TODO TestFileDescContainingExtension
 
 // intArray is used to sort []int32

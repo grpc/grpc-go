@@ -118,53 +118,6 @@ func (s *serverReflectionServer) typeForName(name string) (reflect.Type, error) 
 	return st, nil
 }
 
-func (s *serverReflectionServer) nameForType(st reflect.Type) (string, error) {
-	// Check cache first.
-	if name, ok := s.typeToNameMap[st]; ok {
-		return name, nil
-	}
-
-	var name string
-	fd, idxs, err := s.fileDescForType(st)
-	if err != nil {
-		return "", err
-	}
-	mt := fd.MessageType[idxs[0]]
-	name = mt.GetName()
-	for i := 1; i < len(idxs); i++ {
-		mt = mt.NestedType[idxs[i]]
-		name += "_" + mt.GetName()
-	}
-	if fd.Package != nil {
-		name = *fd.Package + "." + name
-	}
-
-	// Add to cache.
-	s.typeToNameMap[st] = name
-	s.nameToTypeMap[name] = st
-
-	return name, nil
-}
-
-func (s *serverReflectionServer) nameForPointer(i interface{}) (string, error) {
-	return s.nameForType(reflect.TypeOf(i).Elem())
-}
-
-func (s *serverReflectionServer) filenameForType(st reflect.Type) (string, error) {
-	// Check cache first. The value of cache is descriptor, not filename.
-	if fd, ok := s.typeToFileDescMap[st]; ok {
-		return fd.GetName(), nil
-	}
-
-	fd, _, err := s.fileDescForType(st)
-	if err != nil {
-		return "", err
-	}
-	return fd.GetName(), nil
-}
-
-// TODO filenameForMethod and Service
-
 func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescriptorProto, error) {
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
 	if !ok {
@@ -210,12 +163,6 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 	return out, nil
 }
 
-// TODO filenameContainingExtension
-// fd := fileDescContainingExtension()
-// return fd.GetName()
-
-// fileDescWireFormatByFilename returns the file descriptor of file with the given name.
-// TODO exporte and add lock
 func (s *serverReflectionServer) fileDescWireFormatByFilename(name string) ([]byte, error) {
 	enc := proto.FileDescriptor(name)
 	if enc == nil {
