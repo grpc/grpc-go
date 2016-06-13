@@ -56,19 +56,24 @@ import java.util.concurrent.Executor;
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
+  private String sampleCompressor = "compressor";
   private Deadline.Ticker ticker = new DeadlineTest.FakeTicker();
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallCredentials sampleCreds = mock(CallCredentials.class);
+  private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
+  private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
       .withAffinity(sampleAffinity)
       .withCredentials(sampleCreds)
-      .withWaitForReady();
-  private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
-  private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
+      .withCompression(sampleCompressor)
+      .withWaitForReady()
+      .withExecutor(directExecutor())
+      .withOption(option1, "value1")
+      .withOption(option2, "value2");
 
   @Test
   public void defaultsAreAllNull() {
@@ -77,6 +82,7 @@ public class CallOptionsTest {
     assertThat(CallOptions.DEFAULT.getAffinity()).isEqualTo(Attributes.EMPTY);
     assertThat(CallOptions.DEFAULT.getExecutor()).isNull();
     assertThat(CallOptions.DEFAULT.getCredentials()).isNull();
+    assertThat(CallOptions.DEFAULT.getCompressor()).isNull();
     assertThat(CallOptions.DEFAULT.isWaitForReady()).isFalse();
   }
 
@@ -93,6 +99,10 @@ public class CallOptionsTest {
     assertThat(allSet.getDeadline()).isSameAs(sampleDeadline);
     assertThat(allSet.getAffinity()).isSameAs(sampleAffinity);
     assertThat(allSet.getCredentials()).isSameAs(sampleCreds);
+    assertThat(allSet.getCompressor()).isSameAs(sampleCompressor);
+    assertThat(allSet.getExecutor()).isSameAs(directExecutor());
+    assertThat(allSet.getOption(option1)).isSameAs("value1");
+    assertThat(allSet.getOption(option2)).isSameAs("value2");
     assertThat(allSet.isWaitForReady()).isTrue();
   }
 
@@ -150,8 +160,8 @@ public class CallOptionsTest {
   public void toStringMatches_noDeadline_default() {
     String expected = "CallOptions{deadline=null, authority=authority, callCredentials=null, "
         + "affinity={sample=blah}, "
-        + "executor=class io.grpc.internal.SerializingExecutor, compressorName=null, "
-        + "customOptions=[], waitForReady=false}";
+        + "executor=class io.grpc.internal.SerializingExecutor, compressorName=compressor, "
+        + "customOptions=[[option2, value2], [option1, value1]], waitForReady=true}";
     String actual = allSet
         .withDeadline(null)
         .withExecutor(new SerializingExecutor(directExecutor()))

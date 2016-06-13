@@ -359,6 +359,7 @@ public final class CallOptions {
     executor = other.executor;
     compressorName = other.compressorName;
     customOptions = other.customOptions;
+    waitForReady = other.waitForReady;
   }
 
   @Override
@@ -370,7 +371,7 @@ public final class CallOptions {
     toStringHelper.add("affinity", affinity);
     toStringHelper.add("executor", executor != null ? executor.getClass() : null);
     toStringHelper.add("compressorName", compressorName);
-    toStringHelper.add("customOptions", Arrays.toString(customOptions));
+    toStringHelper.add("customOptions", Arrays.deepToString(customOptions));
     toStringHelper.add("waitForReady", isWaitForReady());
 
     return toStringHelper.toString();
