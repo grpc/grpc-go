@@ -23,8 +23,6 @@ type serverReflectionServer struct {
 	typeToNameMap     map[reflect.Type]string
 	nameToTypeMap     map[string]reflect.Type
 	typeToFileDescMap map[reflect.Type]*dpb.FileDescriptorProto
-	// TODO remove this, replace with s.ftdmap
-	filenameToDescMap map[string]*dpb.FileDescriptorProto
 }
 
 // InstallOnServer installs server reflection service on the given grpc server.
@@ -34,7 +32,6 @@ func InstallOnServer(s *grpc.Server) {
 		typeToNameMap:     make(map[reflect.Type]string),
 		nameToTypeMap:     make(map[string]reflect.Type),
 		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
-		filenameToDescMap: make(map[string]*dpb.FileDescriptorProto),
 	})
 }
 
@@ -76,9 +73,6 @@ func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptor
 	if err := proto.Unmarshal(raw, fd); err != nil {
 		return nil, fmt.Errorf("bad descriptor: %v", err)
 	}
-	// If decodeFileDesc is called, it's the first time this file is seen.
-	// Add it to cache.
-	s.filenameToDescMap[fd.GetName()] = fd
 	return fd, nil
 }
 
@@ -223,9 +217,13 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 // fileDescWireFormatByFilename returns the file descriptor of file with the given name.
 // TODO exporte and add lock
 func (s *serverReflectionServer) fileDescWireFormatByFilename(name string) ([]byte, error) {
-	fd, ok := s.filenameToDescMap[name]
-	if !ok {
+	enc := proto.FileDescriptor(name)
+	if enc == nil {
 		return nil, fmt.Errorf("unknown file: %v", name)
+	}
+	fd, err := s.decodeFileDesc(enc)
+	if err != nil {
+		return nil, err
 	}
 	b, err := proto.Marshal(fd)
 	if err != nil {

@@ -20,7 +20,6 @@ var (
 		typeToNameMap:     make(map[reflect.Type]string),
 		nameToTypeMap:     make(map[string]reflect.Type),
 		typeToFileDescMap: make(map[reflect.Type]*dpb.FileDescriptorProto),
-		filenameToDescMap: make(map[string]*dpb.FileDescriptorProto),
 	}
 )
 
