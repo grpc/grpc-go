@@ -197,6 +197,8 @@ var _SearchService_serviceDesc = grpc.ServiceDesc{
 	},
 }
 
+func init() { proto.RegisterFile("test.proto", fileDescriptor2) }
+
 var fileDescriptor2 = []byte{
 	// 227 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2a, 0x49, 0x2d, 0x2e,

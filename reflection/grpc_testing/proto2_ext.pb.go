@@ -2,6 +2,20 @@
 // source: proto2_ext.proto
 // DO NOT EDIT!
 
+/*
+Package grpc_testing is a generated protocol buffer package.
+
+It is generated from these files:
+	proto2_ext.proto
+	proto2.proto
+	test.proto
+
+It has these top-level messages:
+	Extension
+	ToBeExtened
+	SearchResponse
+	SearchRequest
+*/
 package grpc_testing
 
 import proto "github.com/golang/protobuf/proto"
@@ -13,6 +27,12 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+
 type Extension struct {
 	Baz              *int32 `protobuf:"varint,1,opt,name=baz" json:"baz,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
@@ -21,7 +41,7 @@ type Extension struct {
 func (m *Extension) Reset()                    { *m = Extension{} }
 func (m *Extension) String() string            { return proto.CompactTextString(m) }
 func (*Extension) ProtoMessage()               {}
-func (*Extension) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
+func (*Extension) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 func (m *Extension) GetBaz() int32 {
 	if m != nil && m.Baz != nil {
@@ -52,7 +72,9 @@ func init() {
 	proto.RegisterExtension(E_Baz)
 }
 
-var fileDescriptor1 = []byte{
+func init() { proto.RegisterFile("proto2_ext.proto", fileDescriptor0) }
+
+var fileDescriptor0 = []byte{
 	// 130 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0x12, 0x28, 0x28, 0xca, 0x2f,
 	0xc9, 0x37, 0x8a, 0x4f, 0xad, 0x28, 0xd1, 0x03, 0x33, 0x85, 0x78, 0xd2, 0x8b, 0x0a, 0x92, 0xf5,

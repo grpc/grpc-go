@@ -2,20 +2,6 @@
 // source: proto2.proto
 // DO NOT EDIT!
 
-/*
-Package grpc_testing is a generated protocol buffer package.
-
-It is generated from these files:
-	proto2.proto
-	proto2_ext.proto
-	test.proto
-
-It has these top-level messages:
-	ToBeExtened
-	Extension
-	SearchResponse
-	SearchRequest
-*/
 package grpc_testing
 
 import proto "github.com/golang/protobuf/proto"
@@ -27,20 +13,16 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
-
 type ToBeExtened struct {
-	Foo              *int32                    `protobuf:"varint,1,req,name=foo" json:"foo,omitempty"`
-	XXX_extensions   map[int32]proto.Extension `json:"-"`
-	XXX_unrecognized []byte                    `json:"-"`
+	Foo                          *int32 `protobuf:"varint,1,req,name=foo" json:"foo,omitempty"`
+	proto.XXX_InternalExtensions `json:"-"`
+	XXX_unrecognized             []byte `json:"-"`
 }
 
 func (m *ToBeExtened) Reset()                    { *m = ToBeExtened{} }
 func (m *ToBeExtened) String() string            { return proto.CompactTextString(m) }
 func (*ToBeExtened) ProtoMessage()               {}
-func (*ToBeExtened) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (*ToBeExtened) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
 
 var extRange_ToBeExtened = []proto.ExtensionRange{
 	{10, 20},
@@ -48,12 +30,6 @@ var extRange_ToBeExtened = []proto.ExtensionRange{
 
 func (*ToBeExtened) ExtensionRangeArray() []proto.ExtensionRange {
 	return extRange_ToBeExtened
-}
-func (m *ToBeExtened) ExtensionMap() map[int32]proto.Extension {
-	if m.XXX_extensions == nil {
-		m.XXX_extensions = make(map[int32]proto.Extension)
-	}
-	return m.XXX_extensions
 }
 
 func (m *ToBeExtened) GetFoo() int32 {
@@ -67,7 +43,9 @@ func init() {
 	proto.RegisterType((*ToBeExtened)(nil), "grpc.testing.ToBeExtened")
 }
 
-var fileDescriptor0 = []byte{
+func init() { proto.RegisterFile("proto2.proto", fileDescriptor1) }
+
+var fileDescriptor1 = []byte{
 	// 85 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x29, 0x28, 0xca, 0x2f,
 	0xc9, 0x37, 0xd2, 0x03, 0x53, 0x42, 0x3c, 0xe9, 0x45, 0x05, 0xc9, 0x7a, 0x25, 0xa9, 0xc5, 0x25,
