@@ -66,7 +66,7 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.auth.ClientAuthInterceptor;
+import io.grpc.auth.MoreCallCredentials;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
@@ -802,8 +802,7 @@ public abstract class AbstractInteropTest {
         ServiceAccountCredentials.class.cast(GoogleCredentials.fromStream(credentialsStream));
     credentials = credentials.createScoped(Arrays.<String>asList(authScope));
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials,
-            Executors.newSingleThreadExecutor()));
+        .withCallCredentials(MoreCallCredentials.from(credentials));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)
@@ -835,8 +834,7 @@ public abstract class AbstractInteropTest {
   public void computeEngineCreds(String serviceAccount, String oauthScope) throws Exception {
     ComputeEngineCredentials credentials = new ComputeEngineCredentials();
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials,
-            Executors.newSingleThreadExecutor()));
+        .withCallCredentials(MoreCallCredentials.from(credentials));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)
@@ -878,8 +876,7 @@ public abstract class AbstractInteropTest {
         origCreds.getClientId(), origCreds.getClientEmail(), origCreds.getPrivateKey(),
         origCreds.getPrivateKeyId());
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials,
-            Executors.newSingleThreadExecutor()));
+        .withCallCredentials(MoreCallCredentials.from(credentials));
     SimpleResponse response = stub.unaryCall(request);
     assertEquals(origCreds.getClientEmail(), response.getUsername());
     assertEquals(314159, response.getPayload().getBody().size());
@@ -904,8 +901,7 @@ public abstract class AbstractInteropTest {
     };
 
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
-        .withInterceptors(new ClientAuthInterceptor(credentials,
-            Executors.newSingleThreadExecutor()));
+        .withCallCredentials(MoreCallCredentials.from(credentials));
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setFillUsername(true)
         .setFillOauthScope(true)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,38 +32,22 @@
 package io.grpc.auth;
 
 import com.google.auth.Credentials;
-import com.google.common.base.Preconditions;
 
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.MethodDescriptor;
-
-import java.util.concurrent.Executor;
+import io.grpc.CallCredentials;
+import io.grpc.ExperimentalApi;
 
 /**
- * Client interceptor that authenticates all calls by binding header data provided by a credential.
- * Typically this will populate the Authorization header but other headers may also be filled out.
- *
- * <p>Uses the new and simplified Google auth library:
- * https://github.com/google/google-auth-library-java
- *
- * @deprecated use {@link GoogleAuthLibraryCallCredentials} instead.
+ * A utility class that converts other types of credentials to {@link CallCredentials}.
  */
-@Deprecated
-public final class ClientAuthInterceptor implements ClientInterceptor {
-
-  private final Credentials credentials;
-
-  public ClientAuthInterceptor(
-      Credentials credentials, @SuppressWarnings("unused") Executor executor) {
-    this.credentials = Preconditions.checkNotNull(credentials);
+@ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
+public final class MoreCallCredentials {
+  /**
+   * Converts a Google Auth Library {@link Credentials} to {@link CallCredentials}.
+   */
+  public static CallCredentials from(Credentials creds) {
+    return new GoogleAuthLibraryCallCredentials(creds);
   }
 
-  @Override
-  public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-      final MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, final Channel next) {
-    return next.newCall(method, callOptions.withCredentials(MoreCallCredentials.from(credentials)));
+  private MoreCallCredentials() {
   }
 }
