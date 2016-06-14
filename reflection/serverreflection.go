@@ -280,10 +280,16 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 				}
 			}
 		case *rpb.ServerReflectionRequest_ListServices:
-			out.MessageResponse = &rpb.ServerReflectionResponse_ErrorResponse{
-				ErrorResponse: &rpb.ErrorResponse{
-					ErrorCode:    int32(codes.Unimplemented),
-					ErrorMessage: "list_services not implemented",
+			services := s.s.AllServiceNames()
+			serviceResponses := make([]*rpb.ServiceResponse, len(services))
+			for i, s := range services {
+				serviceResponses[i] = &rpb.ServiceResponse{
+					Name: s,
+				}
+			}
+			out.MessageResponse = &rpb.ServerReflectionResponse_ListServicesResponse{
+				ListServicesResponse: &rpb.ListServiceResponse{
+					Service: serviceResponses,
 				},
 			}
 		default:
