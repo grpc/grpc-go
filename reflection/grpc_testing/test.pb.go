@@ -66,7 +66,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion2
+const _ = grpc.SupportPackageIsVersion3
 
 // Client API for SearchService service
 
@@ -195,6 +195,7 @@ var _SearchService_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
+	Metadata: fileDescriptor2,
 }
 
 func init() { proto.RegisterFile("test.proto", fileDescriptor2) }
