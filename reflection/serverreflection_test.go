@@ -218,6 +218,8 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		symbol string
 		want   []byte
 	}{
+		{"grpc.testing.SearchService", fdTestByte},
+		{"grpc.testing.SearchService.Search", fdTestByte},
 		{"grpc.testing.SearchResponse", fdTestByte},
 		{"grpc.testing.ToBeExtened", fdProto2Byte},
 	} {
