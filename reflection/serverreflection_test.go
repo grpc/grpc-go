@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	// dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
@@ -18,12 +18,16 @@ import (
 var (
 	s = &serverReflectionServer{}
 	// fileDescriptorX of each test proto file.
-	fdTest      []byte
-	fdProto2    []byte
-	fdProto2Ext []byte
+	fdTest      *dpb.FileDescriptorProto
+	fdProto2    *dpb.FileDescriptorProto
+	fdProto2Ext *dpb.FileDescriptorProto
+	// fileDescriptorX marshelled.
+	fdTestByte      []byte
+	fdProto2Byte    []byte
+	fdProto2ExtByte []byte
 )
 
-func loadFileDesc(filename string) []byte {
+func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 	enc := proto.FileDescriptor(filename)
 	if enc == nil {
 		panic(fmt.Sprintf("failed to find fd for file: %v", filename))
@@ -36,16 +40,31 @@ func loadFileDesc(filename string) []byte {
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fd: %v", err))
 	}
-	return b
+	return fd, b
 }
 
 func init() {
-	fdTest = loadFileDesc("test.proto")
-	fdProto2 = loadFileDesc("proto2.proto")
-	fdProto2Ext = loadFileDesc("proto2_ext.proto")
+	fdTest, fdTestByte = loadFileDesc("test.proto")
+	fdProto2, fdProto2Byte = loadFileDesc("proto2.proto")
+	fdProto2Ext, fdProto2ExtByte = loadFileDesc("proto2_ext.proto")
 }
 
-// TODO TestFileDescForType(t *testing.T)
+func TestFileDescForType(t *testing.T) {
+	for _, test := range []struct {
+		st      reflect.Type
+		wantFd  *dpb.FileDescriptorProto
+		wantIdx []int
+	}{
+		{reflect.TypeOf(pb.SearchResponse_Result{}), fdTest, []int{0, 0}},
+		{reflect.TypeOf(pb.ToBeExtened{}), fdProto2, []int{0}},
+	} {
+		fd, idx, err := s.fileDescForType(test.st)
+		t.Logf("fileDescForType(%q) = %q, %v, %v", test.st, fd, idx, err)
+		if err != nil || !reflect.DeepEqual(fd, test.wantFd) || !reflect.DeepEqual(idx, test.wantIdx) {
+			t.Fatalf("fileDescForType(%q) = %q, %v, %v, want %q, %v, <nil>", test.st, fd, idx, err, test.wantFd, test.wantIdx)
+		}
+	}
+}
 
 func TestTypeForName(t *testing.T) {
 	for _, test := range []struct {
@@ -74,7 +93,21 @@ func TestTypeForNameNotFound(t *testing.T) {
 	}
 }
 
-// TODO TestFileDescContainingExtension
+func TestFileDescContainingExtension(t *testing.T) {
+	for _, test := range []struct {
+		st     reflect.Type
+		extNum int32
+		want   *dpb.FileDescriptorProto
+	}{
+		{reflect.TypeOf(pb.ToBeExtened{}), 17, fdProto2Ext},
+	} {
+		fd, err := s.fileDescContainingExtension(test.st, test.extNum)
+		t.Logf("fileDescContainingExtension(%q) = %q, %v", test.st, fd, err)
+		if err != nil || !reflect.DeepEqual(fd, test.want) {
+			t.Fatalf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
+		}
+	}
+}
 
 // intArray is used to sort []int32
 type intArray []int32
@@ -169,9 +202,9 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		filename string
 		want     []byte
 	}{
-		{"test.proto", fdTest},
-		{"proto2.proto", fdProto2},
-		{"proto2_ext.proto", fdProto2Ext},
+		{"test.proto", fdTestByte},
+		{"proto2.proto", fdProto2Byte},
+		{"proto2_ext.proto", fdProto2ExtByte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
@@ -203,8 +236,8 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		symbol string
 		want   []byte
 	}{
-		{"grpc.testing.SearchResponse", fdTest},
-		{"grpc.testing.ToBeExtened", fdProto2},
+		{"grpc.testing.SearchResponse", fdTestByte},
+		{"grpc.testing.ToBeExtened", fdProto2Byte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
@@ -237,7 +270,7 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 		extNum   int32
 		want     []byte
 	}{
-		{"grpc.testing.ToBeExtened", 17, fdProto2Ext},
+		{"grpc.testing.ToBeExtened", 17, fdProto2ExtByte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingExtension{
