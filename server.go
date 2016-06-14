@@ -270,6 +270,17 @@ func (s *Server) Metadata(name string) interface{} {
 	return nil
 }
 
+// AllServiceNames returns names of all the registered services.
+func (s *Server) AllServiceNames() []string {
+	ret := make([]string, len(s.m))
+	i := 0
+	for k := range s.m {
+		ret[i] = k
+		i++
+	}
+	return ret
+}
+
 var (
 	// ErrServerStopped indicates that the operation is now illegal because of
 	// the server being stopped.
