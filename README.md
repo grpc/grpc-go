@@ -22,21 +22,34 @@ Readme](SECURITY.md).
 Download
 --------
 
-Download [the JARs][]. Or for Maven, add to your `pom.xml`:
+Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 ```xml
 <dependency>
   <groupId>io.grpc</groupId>
-  <artifactId>grpc-all</artifactId>
+  <artifactId>grpc-netty</artifactId>
+  <version>0.14.0</version>
+</dependency>
+<dependency>
+  <groupId>io.grpc</groupId>
+  <artifactId>grpc-protobuf</artifactId>
+  <version>0.14.0</version>
+</dependency>
+<dependency>
+  <groupId>io.grpc</groupId>
+  <artifactId>grpc-stub</artifactId>
   <version>0.14.0</version>
 </dependency>
 ```
 
-Or for Gradle, add to your dependencies:
+Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-all:0.14.0'
+compile 'io.grpc:grpc-netty:0.14.0'
+compile 'io.grpc:grpc-protobuf:0.14.0'
+compile 'io.grpc:grpc-stub:0.14.0'
 ```
 
-For Android client, you only need to depend on the needed sub-projects, such as:
+For Android client, use `grpc-okhttp` instead of `grpc-netty` and
+`grpc-protobuf-nano` or `grpc-protobuf-lite` instead of `grpc-protobuf`:
 ```gradle
 compile 'io.grpc:grpc-okhttp:0.14.0'
 compile 'io.grpc:grpc-protobuf-nano:0.14.0'
