@@ -17,11 +17,11 @@ import (
 
 var (
 	s = &serverReflectionServer{}
-	// fileDescriptorX of each test proto file.
+	// fileDescriptor of each test proto file.
 	fdTest      *dpb.FileDescriptorProto
 	fdProto2    *dpb.FileDescriptorProto
 	fdProto2Ext *dpb.FileDescriptorProto
-	// fileDescriptorX marshelled.
+	// fileDescriptor marshelled.
 	fdTestByte      []byte
 	fdProto2Byte    []byte
 	fdProto2ExtByte []byte
@@ -205,10 +205,10 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("= %v, want %v", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Fatalf("FileByFilename\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("= %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Fatalf("FileByFilename = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
 		}
 	}
 }
@@ -240,10 +240,10 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("= %v, want %v", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Fatalf("FileContainingSymbol\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("= %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Fatalf("FileContainingSymbol = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
 		}
 	}
 }
@@ -276,10 +276,10 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("= %v, want %v", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Fatalf("FileContainingExtension\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("= %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Fatalf("FileContainingExtension = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
 		}
 	}
 }
@@ -311,10 +311,10 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 			sort.Sort(intArray(extNum))
 			if r.GetAllExtensionNumbersResponse().BaseTypeName != test.typeName ||
 				!reflect.DeepEqual(extNum, test.want) {
-				t.Fatalf("= %v, want {%q %v}", r.GetAllExtensionNumbersResponse(), test.typeName, test.want)
+				t.Fatalf("AllExtensionNumbersOfType\nreceived: %v,\nwant: {%q %v}", r.GetAllExtensionNumbersResponse(), test.typeName, test.want)
 			}
 		default:
-			t.Fatalf("= %v, want type <ServerReflectionResponse_AllExtensionNumbersResponse>", r.MessageResponse)
+			t.Fatalf("AllExtensionNumbersOfType = %v, want type <ServerReflectionResponse_AllExtensionNumbersResponse>", r.MessageResponse)
 		}
 	}
 }
@@ -350,10 +350,9 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 				m[e]--
 				continue
 			}
-			// TODO better error message
-			t.Fatalf("= %v, want service names: %v", services, want)
+			t.Fatalf("ListService\nreceived: %v,\nwant: %q", services, want)
 		}
 	default:
-		t.Fatalf("= %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
+		t.Fatalf("ListServices = %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
 	}
 }

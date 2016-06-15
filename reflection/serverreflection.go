@@ -1,3 +1,54 @@
+/*
+ *
+ * Copyright 2016, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+/*
+Package reflection implements server reflection service.
+
+The service implemented is defined in:
+https://github.com/grpc/grpc/blob/master/src/proto/grpc/reflection/v1alpha/reflection.proto.
+
+To install server reflection on a gRPC server:
+	import "google.golang.org/grpc/reflection"
+
+	s := grpc.NewServer()
+	pb.RegisterYourOwnServer(s, &server{})
+
+	// Install reflection service on gRPC server.
+	reflection.InstallOnServer(s)
+
+	s.Serve(lis)
+
+*/
 package reflection
 
 import (
@@ -20,27 +71,26 @@ type serverReflectionServer struct {
 	// TODO add cache if necessary
 }
 
-// InstallOnServer installs server reflection service on the given grpc server.
+// InstallOnServer installs server reflection service on the given gRPC server.
 func InstallOnServer(s *grpc.Server) {
 	rpb.RegisterServerReflectionServer(s, &serverReflectionServer{
 		s: s,
 	})
 }
 
+// protoMessage is the interface representing objects with function Descriptor().
 type protoMessage interface {
 	Descriptor() ([]byte, []int)
 }
 
+// fileDescForType gets the file descriptor and indexes for the given type.
 func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDescriptorProto, []int, error) {
-	// Indexes list is not stored in cache.
-	// So this step is needed to get idxs.
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(protoMessage)
 	if !ok {
 		return nil, nil, fmt.Errorf("failed to create message from type: %v", st)
 	}
 	enc, idxs := m.Descriptor()
 
-	// Cache missed, try to decode.
 	fd, err := s.decodeFileDesc(enc)
 	if err != nil {
 		return nil, nil, err
@@ -48,6 +98,8 @@ func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDesc
 	return fd, idxs, nil
 }
 
+// decodeFileDesc does decompression and unmarshalling on the given
+// file descriptor byte slice.
 func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptorProto, error) {
 	raw := decompress(enc)
 	if raw == nil {
@@ -61,6 +113,7 @@ func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptor
 	return fd, nil
 }
 
+// decompress does gzip decompression.
 func decompress(b []byte) []byte {
 	r, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
@@ -125,6 +178,10 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 	return out, nil
 }
 
+// Following are helper functions for reflection service handler.
+
+// fileDescWireFormatByFilename finds the file descriptor for given filename,
+// does marshalling on it and returns the marshalled result.
 func (s *serverReflectionServer) fileDescWireFormatByFilename(name string) ([]byte, error) {
 	enc := proto.FileDescriptor(name)
 	if enc == nil {
@@ -141,6 +198,9 @@ func (s *serverReflectionServer) fileDescWireFormatByFilename(name string) ([]by
 	return b, nil
 }
 
+// fileDescWireFormatContainingSymbol finds the file descriptor containing the given symbol,
+// does marshalling on it and returns the marshalled result.
+// The given symbol can be a type, a service or a method.
 func (s *serverReflectionServer) fileDescWireFormatContainingSymbol(name string) ([]byte, error) {
 	var (
 		fd *dpb.FileDescriptorProto
@@ -175,6 +235,8 @@ func (s *serverReflectionServer) fileDescWireFormatContainingSymbol(name string)
 	return nil, fmt.Errorf("unknown symbol: %v", name)
 }
 
+// fileDescWireFormatContainingExtension finds the file descriptor containing given extension,
+// does marshalling on it and returns the marshalled result.
 func (s *serverReflectionServer) fileDescWireFormatContainingExtension(typeName string, extNum int32) ([]byte, error) {
 	st, err := s.typeForName(typeName)
 	if err != nil {
@@ -191,6 +253,7 @@ func (s *serverReflectionServer) fileDescWireFormatContainingExtension(typeName 
 	return b, nil
 }
 
+// allExtensionNumbersForTypeName returns all extension numbers for the given type.
 func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]int32, error) {
 	st, err := s.typeForName(name)
 	if err != nil {
@@ -203,6 +266,8 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 	return extNums, nil
 }
 
+// ServerReflectionInfo is the reflection service handler.
+// It calls help function for the received request, and sends response back.
 func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
 	for {
 		in, err := stream.Recv()
