@@ -335,8 +335,25 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	// TODO check response
 	switch r.MessageResponse.(type) {
 	case *rpb.ServerReflectionResponse_ListServicesResponse:
-		t.Fatalf("should be error: not implemented")
+		services := r.GetListServicesResponse().Service
+		want := []string{"grpc.testing.SearchService", "grpc.reflection.v1alpha.ServerReflection"}
+		// Compare service names in response with want.
+		if len(services) != len(want) {
+			t.Fatalf("= %v, want service names: %v", services, want)
+		}
+		m := make(map[string]int)
+		for _, e := range services {
+			m[e.Name]++
+		}
+		for _, e := range want {
+			if m[e] > 0 {
+				m[e]--
+				continue
+			}
+			// TODO better error message
+			t.Fatalf("= %v, want service names: %v", services, want)
+		}
 	default:
-		// t.Fatalf("= %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
+		t.Fatalf("= %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
 	}
 }
