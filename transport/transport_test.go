@@ -331,21 +331,63 @@ func TestLargeMessage(t *testing.T) {
 			defer wg.Done()
 			s, err := ct.NewStream(context.Background(), callHdr)
 			if err != nil {
-				t.Errorf("failed to open stream: %v", err)
+				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 			}
 			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil {
-				t.Errorf("failed to send data: %v", err)
+				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
-			_, recvErr := io.ReadFull(s, p)
-			if recvErr != nil || !bytes.Equal(p, expectedResponseLarge) {
-				t.Errorf("Error: %v, want <nil>; Result len: %d, want len %d", recvErr, len(p), len(expectedResponseLarge))
+			if _, err := io.ReadFull(s, p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+				t.Errorf("io.ReadFull(_, %v) = _, %v, want %v, <nil>", err, p, expectedResponse)
 			}
-			_, recvErr = io.ReadFull(s, p)
-			if recvErr != io.EOF {
-				t.Errorf("Error: %v; want <EOF>", recvErr)
+			if _, err = io.ReadFull(s, p); err != io.EOF {
+				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
+	}
+	wg.Wait()
+	ct.Close()
+	server.stop()
+}
+
+func TestGracefulClose(t *testing.T) {
+	server, ct := setUp(t, 0, math.MaxUint32, normal)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	s, err := ct.NewStream(context.Background(), callHdr)
+	if err != nil {
+		t.Fatalf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
+	}
+	if err = ct.GracefulClose(); err != nil {
+		t.Fatalf("%v.GracefulClose() = %v, want <nil>", ct, err)
+	}
+	var wg sync.WaitGroup
+	// Expect the failure for all the follow-up streams because ct has been closed gracefully.
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := ct.NewStream(context.Background(), callHdr); err != ErrConnClosing {
+				t.Errorf("%v.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
+			}
+		}()
+	}
+	opts := Options{
+		Last:  true,
+		Delay: false,
+	}
+	// The stream which was created before graceful close can still proceed.
+	if err := ct.Write(s, expectedRequest, &opts); err != nil {
+		t.Fatalf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
+	}
+	p := make([]byte, len(expectedResponse))
+	if _, err := io.ReadFull(s, p); err != nil || !bytes.Equal(p, expectedResponse) {
+		t.Fatalf("io.ReadFull(_, %v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+	}
+	if _, err = io.ReadFull(s, p); err != io.EOF {
+		t.Fatalf("Failed to complete the stream %v; want <EOF>", err)
 	}
 	wg.Wait()
 	ct.Close()

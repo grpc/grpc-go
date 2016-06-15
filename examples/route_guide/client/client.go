@@ -164,7 +164,7 @@ func main() {
 		if *serverHostOverride != "" {
 			sn = *serverHostOverride
 		}
-		var creds credentials.TransportAuthenticator
+		var creds credentials.TransportCredentials
 		if *caFile != "" {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)

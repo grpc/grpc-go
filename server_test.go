@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,44 +31,31 @@
  *
  */
 
-// Package naming defines the naming API and related data structures for gRPC.
-// The interface is EXPERIMENTAL and may be suject to change.
-package naming
+package grpc
 
-// Operation defines the corresponding operations for a name resolution change.
-type Operation uint8
-
-const (
-	// Add indicates a new address is added.
-	Add Operation = iota
-	// Delete indicates an exisiting address is deleted.
-	Delete
+import (
+	"net"
+	"strings"
+	"testing"
 )
 
-// Update defines a name resolution update. Notice that it is not valid having both
-// empty string Addr and nil Metadata in an Update.
-type Update struct {
-	// Op indicates the operation of the update.
-	Op Operation
-	// Addr is the updated address. It is empty string if there is no address update.
-	Addr string
-	// Metadata is the updated metadata. It is nil if there is no metadata update.
-	// Metadata is not required for a custom naming implementation.
-	Metadata interface{}
-}
+func TestStopBeforeServe(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
 
-// Resolver creates a Watcher for a target to track its resolution changes.
-type Resolver interface {
-	// Resolve creates a Watcher for target.
-	Resolve(target string) (Watcher, error)
-}
+	server := NewServer()
+	server.Stop()
+	err = server.Serve(lis)
+	if err != ErrServerStopped {
+		t.Fatalf("server.Serve() error = %v, want %v", err, ErrServerStopped)
+	}
 
-// Watcher watches for the updates on the specified target.
-type Watcher interface {
-	// Next blocks until an update or error happens. It may return one or more
-	// updates. The first call should get the full set of the results. It should
-	// return an error if and only if Watcher cannot recover.
-	Next() ([]*Update, error)
-	// Close closes the Watcher.
-	Close()
+	// server.Serve is responsible for closing the listener, even if the
+	// server was already stopped.
+	err = lis.Close()
+	if got, want := ErrorDesc(err), "use of closed network connection"; !strings.Contains(got, want) {
+		t.Errorf("Close() error = %q, want %q", got, want)
+	}
 }

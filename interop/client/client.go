@@ -85,7 +85,7 @@ func main() {
 		if *tlsServerName != "" {
 			sn = *tlsServerName
 		}
-		var creds credentials.TransportAuthenticator
+		var creds credentials.TransportCredentials
 		if *testCA {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)

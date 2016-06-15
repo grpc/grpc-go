@@ -73,6 +73,7 @@ type ServiceDesc struct {
 	HandlerType interface{}
 	Methods     []MethodDesc
 	Streams     []StreamDesc
+	Metadata    interface{}
 }
 
 // service consists of the information of the server serving this service and
@@ -95,7 +96,7 @@ type Server struct {
 }
 
 type options struct {
-	creds                credentials.Credentials
+	creds                credentials.TransportCredentials
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
@@ -115,12 +116,14 @@ func CustomCodec(codec Codec) ServerOption {
 	}
 }
 
+// RPCCompressor returns a ServerOption that sets a compressor for outbound message.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
 	}
 }
 
+// RPCDecompressor returns a ServerOption that sets a decompressor for inbound message.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
@@ -136,7 +139,7 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 }
 
 // Creds returns a ServerOption that sets credentials for server connections.
-func Creds(c credentials.Credentials) ServerOption {
+func Creds(c credentials.TransportCredentials) ServerOption {
 	return func(o *options) {
 		o.creds = c
 	}
@@ -247,22 +250,23 @@ var (
 )
 
 func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	creds, ok := s.opts.creds.(credentials.TransportAuthenticator)
-	if !ok {
+	if s.opts.creds == nil {
 		return rawConn, nil, nil
 	}
-	return creds.ServerHandshake(rawConn)
+	return s.opts.creds.ServerHandshake(rawConn)
 }
 
 // Serve accepts incoming connections on the listener lis, creating a new
 // ServerTransport and service goroutine for each. The service goroutines
 // read gRPC requests and then call the registered handlers to reply to them.
-// Service returns when lis.Accept fails.
+// Service returns when lis.Accept fails. lis will be closed when
+// this method returns.
 func (s *Server) Serve(lis net.Listener) error {
 	s.mu.Lock()
 	s.printf("serving")
 	if s.lis == nil {
 		s.mu.Unlock()
+		lis.Close()
 		return ErrServerStopped
 	}
 	s.lis[lis] = true
@@ -460,6 +464,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}()
 	}
+	if s.opts.cp != nil {
+		// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
+		stream.SetSendCompress(s.opts.cp.Type())
+	}
 	p := &parser{r: stream}
 	for {
 		pf, req, err := p.recvMsg()
@@ -544,9 +552,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		opts := &transport.Options{
 			Last:  true,
 			Delay: false,
-		}
-		if s.opts.cp != nil {
-			stream.SetSendCompress(s.opts.cp.Type())
 		}
 		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 			switch err := err.(type) {

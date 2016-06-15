@@ -299,6 +299,8 @@ func init() {
 	proto.RegisterEnum("grpc.testing.CompressionType", CompressionType_name, CompressionType_value)
 }
 
+func init() { proto.RegisterFile("messages.proto", fileDescriptor1) }
+
 var fileDescriptor1 = []byte{
 	// 645 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xcc, 0x55, 0x4d, 0x6f, 0xd3, 0x40,
