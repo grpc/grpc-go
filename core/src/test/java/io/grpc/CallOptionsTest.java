@@ -161,7 +161,7 @@ public class CallOptionsTest {
     String expected = "CallOptions{deadline=null, authority=authority, callCredentials=null, "
         + "affinity={sample=blah}, "
         + "executor=class io.grpc.internal.SerializingExecutor, compressorName=compressor, "
-        + "customOptions=[[option2, value2], [option1, value1]], waitForReady=true}";
+        + "customOptions=[[option1, value1], [option2, value2]], waitForReady=true}";
     String actual = allSet
         .withDeadline(null)
         .withExecutor(new SerializingExecutor(directExecutor()))

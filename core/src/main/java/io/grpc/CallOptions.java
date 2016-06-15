@@ -69,7 +69,7 @@ public final class CallOptions {
 
   @Nullable
   private String compressorName;
-  
+
   private Object[][] customOptions = new Object[0][2];
 
   /**
@@ -260,7 +260,7 @@ public final class CallOptions {
     newOptions.executor = executor;
     return newOptions;
   }
-  
+
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   public static final class Key<T> {
     private final String name;
@@ -295,8 +295,8 @@ public final class CallOptions {
   }
 
   /**
-   * Set a custom option.  Any existing value for the key overridden.
-   * 
+   * Sets a custom option. Any existing value for the key is overwritten.
+   *
    * @param key The option key
    * @param value The option value.
    */
@@ -304,13 +304,27 @@ public final class CallOptions {
   public <T> CallOptions withOption(Key<T> key, T value) {
     Preconditions.checkNotNull(key);
     Preconditions.checkNotNull(value);
-      
+
     CallOptions newOptions = new CallOptions(this);
-    newOptions.customOptions = new Object[customOptions.length + 1][2];
-    newOptions.customOptions[0] = new Object[] { key, value};
-    if (customOptions.length > 0) {
-      System.arraycopy(customOptions, 0, newOptions.customOptions, 1, customOptions.length);
+    int existingIdx = -1;
+    for (int i = 0; i < customOptions.length; i++) {
+      if (key.equals(customOptions[i][0])) {
+        existingIdx = i;
+        break;
+      }
     }
+
+    newOptions.customOptions = new Object[customOptions.length + (existingIdx == -1 ? 1 : 0)][2];
+    System.arraycopy(customOptions, 0, newOptions.customOptions, 0, customOptions.length);
+
+    if (existingIdx == -1) {
+      // Add a new option
+      newOptions.customOptions[customOptions.length] = new Object[] {key, value};
+    } else {
+      // Replace an existing option
+      newOptions.customOptions[existingIdx][1] = value;
+    }
+
     return newOptions;
   }
 
