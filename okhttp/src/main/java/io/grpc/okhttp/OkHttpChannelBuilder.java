@@ -34,6 +34,7 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -87,9 +88,9 @@ public class OkHttpChannelBuilder extends
         @Override
         public ExecutorService create() {
           return Executors.newCachedThreadPool(new ThreadFactoryBuilder()
-                  .setDaemon(true)
-                  .setNameFormat("grpc-okhttp-%d")
-                  .build());
+              .setDaemon(true)
+              .setNameFormat("grpc-okhttp-%d")
+              .build());
         }
 
         @Override
@@ -165,8 +166,15 @@ public class OkHttpChannelBuilder extends
    * TLS versions.
    *
    * <p>By default {@link #DEFAULT_CONNECTION_SPEC} will be used.
+   *
+   * <p>This method is only used when building a secure connection. For plaintext
+   * connection, use {@link #usePlaintext} instead.
+   *
+   * @throws IllegalArgumentException
+   *         If {@code connectionSpec} is not with TLS
    */
   public final OkHttpChannelBuilder connectionSpec(ConnectionSpec connectionSpec) {
+    Preconditions.checkArgument(connectionSpec.isTls(), "plaintext ConnectionSpec is not accepted");
     this.connectionSpec = connectionSpec;
     return this;
   }
@@ -197,7 +205,7 @@ public class OkHttpChannelBuilder extends
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(transportExecutor,
-            createSocketFactory(), connectionSpec, maxMessageSize);
+        createSocketFactory(), connectionSpec, maxMessageSize);
   }
 
   @Override
@@ -217,11 +225,13 @@ public class OkHttpChannelBuilder extends
         .set(NameResolver.Factory.PARAMS_DEFAULT_PORT, defaultPort).build();
   }
 
-  private SSLSocketFactory createSocketFactory() {
+  @VisibleForTesting
+  @Nullable
+  SSLSocketFactory createSocketFactory() {
     switch (negotiationType) {
       case TLS:
         return sslSocketFactory == null
-                ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
+            ? (SSLSocketFactory) SSLSocketFactory.getDefault() : sslSocketFactory;
       case PLAINTEXT:
         return null;
       default:
@@ -236,6 +246,7 @@ public class OkHttpChannelBuilder extends
   static final class OkHttpTransportFactory implements ClientTransportFactory {
     private final Executor executor;
     private final boolean usingSharedExecutor;
+    @Nullable
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
@@ -243,9 +254,9 @@ public class OkHttpChannelBuilder extends
     private boolean closed;
 
     private OkHttpTransportFactory(Executor executor,
-                                   SSLSocketFactory socketFactory,
-                                   ConnectionSpec connectionSpec,
-                                   int maxMessageSize) {
+        @Nullable SSLSocketFactory socketFactory,
+        ConnectionSpec connectionSpec,
+        int maxMessageSize) {
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;

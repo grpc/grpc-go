@@ -31,6 +31,8 @@
 
 package io.grpc.okhttp;
 
+import com.google.common.base.Preconditions;
+
 import io.grpc.Metadata;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.CipherSuite;
@@ -64,7 +66,16 @@ class Utils {
     return TransportFrameUtil.toRawSerializedHeaders(headerValues);
   }
 
+  /**
+   * Converts an instance of {@link com.squareup.okhttp.ConnectionSpec} for a secure connection into
+   * that of {@link ConnectionSpec} in the current package.
+   *
+   * @throws IllegalArgumentException
+   *         If {@code spec} is not with TLS
+   */
   static ConnectionSpec convertSpec(com.squareup.okhttp.ConnectionSpec spec) {
+    Preconditions.checkArgument(spec.isTls(), "plaintext ConnectionSpec is not accepted");
+
     List<com.squareup.okhttp.TlsVersion> tlsVersionList = spec.tlsVersions();
     String[] tlsVersions = new String[tlsVersionList.size()];
     for (int i = 0; i < tlsVersions.length; i++) {
