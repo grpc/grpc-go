@@ -83,19 +83,20 @@ type protoMessage interface {
 	Descriptor() ([]byte, []int)
 }
 
-// fileDescForType gets the file descriptor and indexes for the given type.
-func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDescriptorProto, []int, error) {
+// fileDescForType gets the file descriptor for the given type.
+// The given type should be a proto message.
+func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDescriptorProto, error) {
 	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(protoMessage)
 	if !ok {
-		return nil, nil, fmt.Errorf("failed to create message from type: %v", st)
+		return nil, fmt.Errorf("failed to create message from type: %v", st)
 	}
-	enc, idxs := m.Descriptor()
+	enc, _ := m.Descriptor()
 
 	fd, err := s.decodeFileDesc(enc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return fd, idxs, nil
+	return fd, nil
 }
 
 // decodeFileDesc does decompression and unmarshalling on the given
@@ -158,7 +159,7 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 
 	extT := reflect.TypeOf(extDesc.ExtensionType).Elem()
 
-	fd, _, err := s.fileDescForType(extT)
+	fd, err := s.fileDescForType(extT)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func (s *serverReflectionServer) fileDescWireFormatContainingSymbol(name string)
 	)
 	// Check if it's a type name.
 	if st, err := s.typeForName(name); err == nil {
-		fd, _, err = s.fileDescForType(st)
+		fd, err = s.fileDescForType(st)
 		if err != nil {
 			return nil, err
 		}

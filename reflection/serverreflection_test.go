@@ -51,16 +51,15 @@ func init() {
 
 func TestFileDescForType(t *testing.T) {
 	for _, test := range []struct {
-		st      reflect.Type
-		wantFd  *dpb.FileDescriptorProto
-		wantIdx []int
+		st     reflect.Type
+		wantFd *dpb.FileDescriptorProto
 	}{
-		{reflect.TypeOf(pb.SearchResponse_Result{}), fdTest, []int{0, 0}},
-		{reflect.TypeOf(pb.ToBeExtened{}), fdProto2, []int{0}},
+		{reflect.TypeOf(pb.SearchResponse_Result{}), fdTest},
+		{reflect.TypeOf(pb.ToBeExtened{}), fdProto2},
 	} {
-		fd, idx, err := s.fileDescForType(test.st)
-		if err != nil || !reflect.DeepEqual(fd, test.wantFd) || !reflect.DeepEqual(idx, test.wantIdx) {
-			t.Fatalf("fileDescForType(%q) = %q, %v, %v, want %q, %v, <nil>", test.st, fd, idx, err, test.wantFd, test.wantIdx)
+		fd, err := s.fileDescForType(test.st)
+		if err != nil || !reflect.DeepEqual(fd, test.wantFd) {
+			t.Fatalf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
 		}
 	}
 }
