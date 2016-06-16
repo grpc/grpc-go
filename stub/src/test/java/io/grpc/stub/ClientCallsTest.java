@@ -31,9 +31,9 @@
 
 package io.grpc.stub;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.times;
@@ -62,7 +62,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -292,12 +295,11 @@ public class ClientCallsTest {
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
     final CountDownLatch latch = new CountDownLatch(1);
-    final int[] receivedMessages = new int[6];
+    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
     semaphore.acquire();
 
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
-          int index;
           @Override
           public void beforeStart(final ClientCallStreamObserver<Integer> requestStream) {
             requestStream.disableAutoInboundFlowControl();
@@ -305,7 +307,7 @@ public class ClientCallsTest {
 
           @Override
           public void onNext(Integer value) {
-            receivedMessages[index++] = value;
+            receivedMessages.add(value);
           }
 
           @Override
@@ -326,18 +328,17 @@ public class ClientCallsTest {
     semaphore.acquire();
     integerStreamObserver.request(3);
     integerStreamObserver.onCompleted();
-    latch.await(5, TimeUnit.SECONDS);
+    assertTrue(latch.await(5, TimeUnit.SECONDS));
     // Very that number of messages produced in each onReady handler call matches the number
     // requested by the client. Note that ClientCalls.asyncBidiStreamingCall will request(1)
-
-    assertArrayEquals(new int[]{0, 1, 1, 2, 2, 2}, receivedMessages);
+    assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
 
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
     final CountDownLatch latch = new CountDownLatch(1);
     final Semaphore semaphore = new Semaphore(1);
-    final int[] receivedMessages = new int[6];
+    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -362,10 +363,9 @@ public class ClientCallsTest {
                   }
                 }).start();
                 return new ServerCalls.NoopStreamObserver<Integer>() {
-                  int index;
                   @Override
                   public void onNext(Integer value) {
-                    receivedMessages[index++] = value;
+                    receivedMessages.add(value);
                   }
 
                   @Override
@@ -418,10 +418,10 @@ public class ClientCallsTest {
         };
 
     ClientCalls.asyncBidiStreamingCall(clientCall, responseObserver);
-    latch.await(5, TimeUnit.SECONDS);
+    assertTrue(latch.await(5, TimeUnit.SECONDS));
     // Very that number of messages produced in each onReady handler call matches the number
     // requested by the client.
-    assertArrayEquals(new int[]{0, 1, 1, 2, 2, 2}, receivedMessages);
+    assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
 
   @Test
