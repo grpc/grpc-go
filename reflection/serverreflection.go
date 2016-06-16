@@ -172,9 +172,12 @@ func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]
 		return nil, fmt.Errorf("failed to create message from type: %v", st)
 	}
 
-	var out []int32
-	for id := range proto.RegisteredExtensions(m) {
-		out = append(out, id)
+	exts := proto.RegisteredExtensions(m)
+	out := make([]int32, len(exts))
+	i := 0
+	for id := range exts {
+		out[i] = id
+		i++
 	}
 	return out, nil
 }

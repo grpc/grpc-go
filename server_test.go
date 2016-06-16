@@ -88,7 +88,7 @@ func TestStopBeforeServe(t *testing.T) {
 	}
 }
 
-func TestFileDesc(t *testing.T) {
+func TestMetadata(t *testing.T) {
 	server := NewServer()
 	server.RegisterService(&testSd, &testServer{})
 
@@ -106,15 +106,15 @@ func TestFileDesc(t *testing.T) {
 			ok bool
 		)
 		if fd, ok = meta.([]byte); !ok {
-			t.Errorf("FileDesc(%q)=%v, want %v", test.name, meta, test.want)
+			t.Errorf("Metadata(%q)=%v, want %v", test.name, meta, test.want)
 		}
 		if !reflect.DeepEqual(fd, test.want) {
-			t.Errorf("FileDesc(%q)=%v, want %v", test.name, fd, test.want)
+			t.Errorf("Metadata(%q)=%v, want %v", test.name, fd, test.want)
 		}
 	}
 }
 
-func TestFileDescNotFound(t *testing.T) {
+func TestMetadataNotFound(t *testing.T) {
 	server := NewServer()
 	server.RegisterService(&testSd, &testServer{})
 
@@ -127,7 +127,30 @@ func TestFileDescNotFound(t *testing.T) {
 	} {
 		meta := server.Metadata(test)
 		if meta != nil {
-			t.Errorf("FileDesc(%q)=%v, want <nil>", test, meta)
+			t.Errorf("Metadata(%q)=%v, want <nil>", test, meta)
 		}
+	}
+}
+
+func TestAllServiceNames(t *testing.T) {
+	server := NewServer()
+	server.RegisterService(&testSd, &testServer{})
+	server.RegisterService(&ServiceDesc{
+		ServiceName: "another.EmptyService",
+		HandlerType: (*emptyServiceServer)(nil),
+	}, &testServer{})
+	services := server.AllServiceNames()
+	want := []string{"grpc.testing.EmptyService", "another.EmptyService"}
+	// Compare string slices.
+	m := make(map[string]int)
+	for _, s := range services {
+		m[s]++
+	}
+	for _, s := range want {
+		if m[s] > 0 {
+			m[s]--
+			continue
+		}
+		t.Fatalf("AllServiceNames() = %q, want: %q", services, want)
 	}
 }
