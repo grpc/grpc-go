@@ -56,8 +56,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.InputStream;
-
 /**
  * Test for {@link AbstractClientStream}.  This class tries to test functionality in
  * AbstractClientStream, but not in any super classes.
@@ -85,7 +83,7 @@ public class AbstractClientStreamTest {
   @Test
   public void cancel_doNotAcceptOk() {
     for (Code code : Code.values()) {
-      ClientStreamListener listener = new BaseClientStreamListener();
+      ClientStreamListener listener = new NoopClientStreamListener();
       AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
       stream.start(listener);
       if (code != Code.OK) {
@@ -103,7 +101,7 @@ public class AbstractClientStreamTest {
 
   @Test
   public void cancel_failsOnNull() {
-    ClientStreamListener listener = new BaseClientStreamListener();
+    ClientStreamListener listener = new NoopClientStreamListener();
     AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
     stream.start(listener);
     thrown.expect(NullPointerException.class);
@@ -162,7 +160,7 @@ public class AbstractClientStreamTest {
 
   @Test
   public void inboundDataReceived_failsOnNullFrame() {
-    ClientStreamListener listener = new BaseClientStreamListener();
+    ClientStreamListener listener = new NoopClientStreamListener();
     AbstractClientStream<Integer> stream = new BaseAbstractClientStream<Integer>(allocator);
     stream.start(listener);
     thrown.expect(NullPointerException.class);
@@ -281,22 +279,5 @@ public class AbstractClientStreamTest {
 
     @Override
     protected void returnProcessedBytes(int processedBytes) {}
-  }
-
-  /**
-   * No-op base class for testing.
-   */
-  static class BaseClientStreamListener implements ClientStreamListener {
-    @Override
-    public void messageRead(InputStream message) {}
-
-    @Override
-    public void onReady() {}
-
-    @Override
-    public void headersRead(Metadata headers) {}
-
-    @Override
-    public void closed(Status status, Metadata trailers) {}
   }
 }

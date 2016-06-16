@@ -40,20 +40,23 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.internal.ManagedChannelImpl;
 import io.grpc.stub.ServerCalls.NoopStreamObserver;
 import io.grpc.stub.ServerCallsTest.IntegerMarshaller;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -83,12 +86,25 @@ public class ClientCallsTest {
       "some/method",
       new IntegerMarshaller(), new IntegerMarshaller());
 
+  private Server server;
+  private ManagedChannel channel;
+
   @Mock
   private ClientCall<Integer, String> call;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @After
+  public void tearDown() {
+    if (server != null) {
+      server.shutdownNow();
+    }
+    if (channel != null) {
+      channel.shutdownNow();
+    }
   }
 
   @Test
@@ -257,7 +273,7 @@ public class ClientCallsTest {
 
   @Test
   public void inprocessTransportInboundFlowControl() throws Exception {
-    final Semaphore semaphore = new Semaphore(1);
+    final Semaphore semaphore = new Semaphore(0);
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -288,13 +304,13 @@ public class ClientCallsTest {
             }))
         .build();
     long tag = System.nanoTime();
-    InProcessServerBuilder.forName("go-with-the-flow" + tag).addService(service).build().start();
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
+    server = InProcessServerBuilder.forName("go-with-the-flow" + tag).directExecutor()
+        .addService(service).build().start();
+    channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).directExecutor().build();
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
     final CountDownLatch latch = new CountDownLatch(1);
-    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
-    semaphore.acquire();
+    final List<Object> receivedMessages = new ArrayList<Object>(6);
 
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
@@ -310,6 +326,7 @@ public class ClientCallsTest {
 
           @Override
           public void onError(Throwable t) {
+            receivedMessages.add(t);
             latch.countDown();
           }
 
@@ -327,17 +344,17 @@ public class ClientCallsTest {
     integerStreamObserver.request(3);
     integerStreamObserver.onCompleted();
     assertTrue(latch.await(5, TimeUnit.SECONDS));
-    // Very that number of messages produced in each onReady handler call matches the number
+    // Verify that number of messages produced in each onReady handler call matches the number
     // requested by the client. Note that ClientCalls.asyncBidiStreamingCall will request(1)
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
 
-  @org.junit.Ignore
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
-    final CountDownLatch latch = new CountDownLatch(1);
-    final Semaphore semaphore = new Semaphore(1);
-    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
+    final Semaphore semaphore = new Semaphore(0);
+    final List<Object> receivedMessages = new ArrayList<Object>(6);
+    final SettableFuture<ServerCallStreamObserver<Integer>> observerFuture
+        = SettableFuture.create();
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -347,42 +364,34 @@ public class ClientCallsTest {
                 final ServerCallStreamObserver<Integer> serverCallObserver =
                     (ServerCallStreamObserver<Integer>) responseObserver;
                 serverCallObserver.disableAutoInboundFlowControl();
-                new Thread(new Runnable() {
-                  @Override
-                  public void run() {
-                    try {
-                      serverCallObserver.request(1);
-                      semaphore.acquire();
-                      serverCallObserver.request(2);
-                      semaphore.acquire();
-                      serverCallObserver.request(3);
-                    } catch (Throwable t) {
-                      throw new RuntimeException(t);
-                    }
-                  }
-                }).start();
-                return new ServerCalls.NoopStreamObserver<Integer>() {
+                observerFuture.set(serverCallObserver);
+                return new StreamObserver<Integer>() {
                   @Override
                   public void onNext(Integer value) {
                     receivedMessages.add(value);
                   }
 
                   @Override
+                  public void onError(Throwable t) {
+                    receivedMessages.add(t);
+                  }
+
+                  @Override
                   public void onCompleted() {
                     serverCallObserver.onCompleted();
-                    latch.countDown();
                   }
                 };
               }
             }))
         .build();
     long tag = System.nanoTime();
-    InProcessServerBuilder.forName("go-with-the-flow" + tag).addService(service).build().start();
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
+    server = InProcessServerBuilder.forName("go-with-the-flow" + tag).directExecutor()
+        .addService(service).build().start();
+    channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).directExecutor().build();
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
-    semaphore.acquire();
 
+    final SettableFuture<Void> future = SettableFuture.create();
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
           @Override
@@ -409,16 +418,24 @@ public class ClientCallsTest {
 
           @Override
           public void onError(Throwable t) {
+            future.setException(t);
           }
 
           @Override
           public void onCompleted() {
+            future.set(null);
           }
         };
 
     ClientCalls.asyncBidiStreamingCall(clientCall, responseObserver);
-    assertTrue(latch.await(5, TimeUnit.SECONDS));
-    // Very that number of messages produced in each onReady handler call matches the number
+    ServerCallStreamObserver<Integer> serverCallObserver = observerFuture.get(5, TimeUnit.SECONDS);
+    serverCallObserver.request(1);
+    assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
+    serverCallObserver.request(2);
+    assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
+    serverCallObserver.request(3);
+    future.get(5, TimeUnit.SECONDS);
+    // Verify that number of messages produced in each onReady handler call matches the number
     // requested by the client.
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }

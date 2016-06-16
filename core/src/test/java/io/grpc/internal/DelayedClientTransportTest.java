@@ -79,6 +79,7 @@ public class DelayedClientTransportTest {
   @Mock private ClientTransport.PingCallback pingCallback;
   @Mock private Executor mockExecutor;
   @Captor private ArgumentCaptor<Status> statusCaptor;
+  @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
 
   private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
@@ -141,7 +142,11 @@ public class DelayedClientTransportTest {
     assertFalse(delayedTransport.hasPendingStreams());
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers), same(callOptions));
-    verify(mockRealStream).start(same(streamListener));
+    verify(mockRealStream).start(listenerCaptor.capture());
+    verifyNoMoreInteractions(streamListener);
+    listenerCaptor.getValue().onReady();
+    verify(streamListener).onReady();
+    verifyNoMoreInteractions(streamListener);
   }
 
   @Test public void newStreamThenSetTransportThenShutdown() {

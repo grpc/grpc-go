@@ -47,6 +47,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.NoopClientStream;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -54,6 +55,8 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -71,6 +74,7 @@ public class DelayedStreamTest {
 
   @Mock private ClientStreamListener listener;
   @Mock private ClientStream realStream;
+  @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
   private DelayedStream stream = new DelayedStream();
 
   @Before
@@ -86,7 +90,7 @@ public class DelayedStreamTest {
     stream.setStream(realStream);
     InOrder inOrder = inOrder(realStream);
     inOrder.verify(realStream).setAuthority(authority);
-    inOrder.verify(realStream).start(listener);
+    inOrder.verify(realStream).start(any(ClientStreamListener.class));
   }
 
   @Test(expected = IllegalStateException.class)
@@ -128,10 +132,14 @@ public class DelayedStreamTest {
     verify(realStream).setMessageCompression(false);
 
     verify(realStream, times(2)).writeMessage(message);
-    verify(realStream).start(listener);
+    verify(realStream).start(listenerCaptor.capture());
 
     stream.writeMessage(message);
     verify(realStream, times(3)).writeMessage(message);
+
+    verifyNoMoreInteractions(listener);
+    listenerCaptor.getValue().onReady();
+    verify(listener).onReady();
   }
 
   @Test
@@ -205,7 +213,7 @@ public class DelayedStreamTest {
     stream.start(listener);
     stream.setStream(realStream);
     stream.cancel(Status.CANCELLED);
-    verify(realStream).start(same(listener));
+    verify(realStream).start(any(ClientStreamListener.class));
     verify(realStream).cancel(same(Status.CANCELLED));
   }
 
@@ -229,7 +237,7 @@ public class DelayedStreamTest {
   public void setStreamTwice() {
     stream.start(listener);
     stream.setStream(realStream);
-    verify(realStream).start(listener);
+    verify(realStream).start(any(ClientStreamListener.class));
     stream.setStream(mock(ClientStream.class));
     stream.flush();
     verify(realStream).flush();
@@ -258,4 +266,87 @@ public class DelayedStreamTest {
     stream.start(listener);
     verify(listener).closed(eq(Status.CANCELLED), any(Metadata.class));
   }
+
+  @Test
+  public void listener_onReadyDelayedUntilPassthrough() {
+    class IsReadyListener extends NoopClientStreamListener {
+      boolean onReadyCalled;
+
+      @Override
+      public void onReady() {
+        // If onReady was not delayed, then passthrough==false and isReady will return false.
+        assertTrue(stream.isReady());
+        onReadyCalled = true;
+      }
+    }
+
+    IsReadyListener isReadyListener = new IsReadyListener();
+    stream.start(isReadyListener);
+    stream.setStream(new NoopClientStream() {
+      @Override
+      public void start(ClientStreamListener listener) {
+        // This call to the listener should end up being delayed.
+        listener.onReady();
+      }
+
+      @Override
+      public boolean isReady() {
+        return true;
+      }
+    });
+    assertTrue(isReadyListener.onReadyCalled);
+  }
+
+  @Test
+  public void listener_allQueued() {
+    final Metadata headers = new Metadata();
+    final InputStream message1 = mock(InputStream.class);
+    final InputStream message2 = mock(InputStream.class);
+    final Metadata trailers = new Metadata();
+    final Status status = Status.UNKNOWN.withDescription("unique status");
+
+    final InOrder inOrder = inOrder(listener);
+    stream.start(listener);
+    stream.setStream(new NoopClientStream() {
+      @Override
+      public void start(ClientStreamListener passedListener) {
+        passedListener.onReady();
+        passedListener.headersRead(headers);
+        passedListener.messageRead(message1);
+        passedListener.onReady();
+        passedListener.messageRead(message2);
+        passedListener.closed(status, trailers);
+
+        verifyNoMoreInteractions(listener);
+      }
+    });
+    inOrder.verify(listener).onReady();
+    inOrder.verify(listener).headersRead(headers);
+    inOrder.verify(listener).messageRead(message1);
+    inOrder.verify(listener).onReady();
+    inOrder.verify(listener).messageRead(message2);
+    inOrder.verify(listener).closed(status, trailers);
+  }
+
+  @Test
+  public void listener_noQueued() {
+    final Metadata headers = new Metadata();
+    final InputStream message = mock(InputStream.class);
+    final Metadata trailers = new Metadata();
+    final Status status = Status.UNKNOWN.withDescription("unique status");
+
+    stream.start(listener);
+    stream.setStream(realStream);
+    verify(realStream).start(listenerCaptor.capture());
+    ClientStreamListener delayedListener = listenerCaptor.getValue();
+    delayedListener.onReady();
+    verify(listener).onReady();
+    delayedListener.headersRead(headers);
+    verify(listener).headersRead(headers);
+    delayedListener.messageRead(message);
+    verify(listener).messageRead(message);
+    delayedListener.closed(status, trailers);
+    verify(listener).closed(status, trailers);
+  }
+
 }

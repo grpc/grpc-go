@@ -69,6 +69,8 @@ class DelayedStream implements ClientStream {
   private Status error;
   @GuardedBy("this")
   private List<Runnable> pendingCalls = new ArrayList<Runnable>();
+  @GuardedBy("this")
+  private DelayedStreamListener delayedListener;
 
   /**
    * Transfers all pending and future requests and mutations to the given stream.
@@ -97,11 +99,13 @@ class DelayedStream implements ClientStream {
     assert realStream != null;
     assert !passThrough;
     List<Runnable> toRun = new ArrayList<Runnable>();
+    DelayedStreamListener delayedListener = null;
     while (true) {
       synchronized (this) {
         if (pendingCalls.isEmpty()) {
           pendingCalls = null;
           passThrough = true;
+          delayedListener = this.delayedListener;
           break;
         }
         // Since there were pendingCalls, we need to process them. To maintain ordering we can't set
@@ -117,6 +121,9 @@ class DelayedStream implements ClientStream {
         runnable.run();
       }
       toRun.clear();
+    }
+    if (delayedListener != null) {
+      delayedListener.drainPendingCallbacks();
     }
   }
 
@@ -150,26 +157,36 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
-  public void start(final ClientStreamListener listener) {
+  public void start(ClientStreamListener listener) {
     checkState(this.listener == null, "already started");
 
     Status savedError;
+    boolean savedPassThrough;
     synchronized (this) {
       this.listener = checkNotNull(listener, "listener");
       // If error != null, then cancel() has been called and was unable to close the listener
       savedError = error;
+      savedPassThrough = passThrough;
+      if (!savedPassThrough) {
+        listener = delayedListener = new DelayedStreamListener(listener);
+      }
     }
     if (savedError != null) {
       listener.closed(savedError, new Metadata());
       return;
     }
 
-    delayOrExecute(new Runnable() {
-      @Override
-      public void run() {
-        realStream.start(listener);
-      }
-    });
+    if (savedPassThrough) {
+      realStream.start(listener);
+    } else {
+      final ClientStreamListener finalListener = listener;
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.start(finalListener);
+        }
+      });
+    }
   }
 
   @Override
@@ -307,5 +324,100 @@ class DelayedStream implements ClientStream {
   @VisibleForTesting
   ClientStream getRealStream() {
     return realStream;
+  }
+
+  private static class DelayedStreamListener implements ClientStreamListener {
+    private final ClientStreamListener realListener;
+    private volatile boolean passThrough;
+    @GuardedBy("this")
+    private List<Runnable> pendingCallbacks = new ArrayList<Runnable>();
+
+    public DelayedStreamListener(ClientStreamListener listener) {
+      this.realListener = listener;
+    }
+
+    private void delayOrExecute(Runnable runnable) {
+      synchronized (this) {
+        if (!passThrough) {
+          pendingCallbacks.add(runnable);
+          return;
+        }
+      }
+      runnable.run();
+    }
+
+    @Override
+    public void messageRead(final InputStream message) {
+      if (passThrough) {
+        realListener.messageRead(message);
+      } else {
+        delayOrExecute(new Runnable() {
+          @Override
+          public void run() {
+            realListener.messageRead(message);
+          }
+        });
+      }
+    }
+
+    @Override
+    public void onReady() {
+      if (passThrough) {
+        realListener.onReady();
+      } else {
+        delayOrExecute(new Runnable() {
+          @Override
+          public void run() {
+            realListener.onReady();
+          }
+        });
+      }
+    }
+
+    @Override
+    public void headersRead(final Metadata headers) {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realListener.headersRead(headers);
+        }
+      });
+    }
+
+    @Override
+    public void closed(final Status status, final Metadata trailers) {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realListener.closed(status, trailers);
+        }
+      });
+    }
+
+    public void drainPendingCallbacks() {
+      assert !passThrough;
+      List<Runnable> toRun = new ArrayList<Runnable>();
+      while (true) {
+        synchronized (this) {
+          if (pendingCallbacks.isEmpty()) {
+            pendingCallbacks = null;
+            passThrough = true;
+            break;
+          }
+          // Since there were pendingCallbacks, we need to process them. To maintain ordering we
+          // can't set passThrough=true until we run all pendingCallbacks, but new Runnables may be
+          // added after we drop the lock. So we will have to re-check pendingCallbacks.
+          List<Runnable> tmp = toRun;
+          toRun = pendingCallbacks;
+          pendingCallbacks = tmp;
+        }
+        for (Runnable runnable : toRun) {
+          // Avoid calling listener while lock is held to prevent deadlocks.
+          // TODO(ejona): exception handling
+          runnable.run();
+        }
+        toRun.clear();
+      }
+    }
   }
 }
