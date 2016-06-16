@@ -58,6 +58,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
 import io.grpc.Context;
+import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
@@ -533,6 +534,68 @@ public class ClientCallImplTest {
     long callOptsNanos = TimeUnit.SECONDS.toNanos(1);
     long deltaNanos = TimeUnit.MILLISECONDS.toNanos(400);
     assertTimeoutBetween(timeout, callOptsNanos - deltaNanos, callOptsNanos);
+  }
+
+  @Test
+  public void expiredDeadlineCancelsStream_CallOptions() {
+    fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        provider,
+        deadlineCancellationExecutor);
+
+    call.start(callListener, new Metadata());
+
+    fakeClock.forwardMillis(1001);
+
+    verify(stream, times(1)).cancel(statusCaptor.capture());
+    assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void expiredDeadlineCancelsStream_Context() {
+    fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
+
+    Context.current()
+        .withDeadlineAfter(1000, TimeUnit.MILLISECONDS, deadlineCancellationExecutor)
+        .attach();
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT,
+        provider,
+        deadlineCancellationExecutor);
+
+    call.start(callListener, new Metadata());
+
+    fakeClock.forwardMillis(TimeUnit.SECONDS.toMillis(1001));
+
+    verify(stream, times(1)).cancel(statusCaptor.capture());
+    assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void streamCancelAbortsDeadlineTimer() {
+    fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
+
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        MoreExecutors.directExecutor(),
+        CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        provider,
+        deadlineCancellationExecutor);
+    call.start(callListener, new Metadata());
+    call.cancel("canceled", null);
+
+    // Run the deadline timer, which should have been cancelled by the previous call to cancel()
+    fakeClock.forwardMillis(1001);
+
+    verify(stream, times(1)).cancel(statusCaptor.capture());
+
+    assertEquals(Status.CANCELLED.getCode(), statusCaptor.getValue().getCode());
   }
 
   /**
