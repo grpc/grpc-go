@@ -334,6 +334,7 @@ public class ClientCallsTest {
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
 
+  @org.junit.Ignore
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
     final CountDownLatch latch = new CountDownLatch(1);
