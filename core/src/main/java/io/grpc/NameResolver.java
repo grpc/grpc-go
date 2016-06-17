@@ -52,7 +52,9 @@ public abstract class NameResolver {
   /**
    * Returns the authority, which is also the name of the service.
    *
-   * <p>An implementation must generate it locally and must keep it unchanged.
+   * <p>An implementation must generate it locally and <string>must</strong> keep it
+   * unchanged. {@code NameResolver}s created from the same factory with the same argument must
+   * return the same authority.
    */
   public abstract String getServiceAuthority();
 
@@ -74,7 +76,7 @@ public abstract class NameResolver {
    * <p>Can only be called after {@link #start} has been called.
    *
    * <p>This is only a hint. Implementation takes it as a signal but may not start resolution
-   * immediately.
+   * immediately. It should never throw.
    *
    * <p>The default implementation is no-op.
    */

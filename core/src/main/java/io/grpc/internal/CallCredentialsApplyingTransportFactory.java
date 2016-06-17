@@ -58,7 +58,7 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
   @Override
   public ConnectionClientTransport newClientTransport(
       SocketAddress serverAddress, String authority, @Nullable String userAgent) {
-    return new Transport(
+    return new CallCredentialsApplyingTransport(
         delegate.newClientTransport(serverAddress, authority, userAgent), authority);
   }
 
@@ -67,11 +67,11 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
     delegate.close();
   }
 
-  private class Transport extends ForwardingConnectionClientTransport {
+  private class CallCredentialsApplyingTransport extends ForwardingConnectionClientTransport {
     private final ConnectionClientTransport delegate;
     private final String authority;
 
-    Transport(ConnectionClientTransport delegate, String authority) {
+    CallCredentialsApplyingTransport(ConnectionClientTransport delegate, String authority) {
       this.delegate = checkNotNull(delegate, "delegate");
       this.authority = checkNotNull(authority, "authority");
     }

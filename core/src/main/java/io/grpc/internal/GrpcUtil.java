@@ -36,6 +36,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -418,6 +420,16 @@ public final class GrpcUtil {
           instance.shutdown();
         }
       };
+
+  /**
+   * The factory of default Stopwatches.
+   */
+  static final Supplier<Stopwatch> STOPWATCH_SUPPLIER = new Supplier<Stopwatch>() {
+      @Override
+      public Stopwatch get() {
+        return Stopwatch.createUnstarted();
+      }
+    };
 
   /**
    * Marshals a nanoseconds representation of the timeout to and from a string representation,

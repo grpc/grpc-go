@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -57,6 +58,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /**
@@ -67,6 +69,18 @@ import javax.annotation.Nullable;
 public abstract class AbstractManagedChannelImplBuilder
         <T extends AbstractManagedChannelImplBuilder<T>> extends ManagedChannelBuilder<T> {
   private static final String DIRECT_ADDRESS_SCHEME = "directaddress";
+
+  /**
+   * An idle timeout larger than this would disable idle mode.
+   */
+  @VisibleForTesting
+  static final long IDLE_MODE_MAX_TIMEOUT_DAYS = 30;
+
+  /**
+   * An idle timeout smaller than this would be capped to it.
+   */
+  @VisibleForTesting
+  static final long IDLE_MODE_MIN_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
   @Nullable
   private Executor executor;
@@ -94,6 +108,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Nullable
   private CompressorRegistry compressorRegistry;
+
+  private long idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target);
@@ -191,6 +207,24 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  @Override
+  public final T idleTimeout(long value, TimeUnit unit) {
+    checkArgument(value > 0, "idle timeout is %s, but must be positive", value);
+    // We convert to the largest unit to avoid overflow
+    if (unit.toDays(value) >= IDLE_MODE_MAX_TIMEOUT_DAYS) {
+      // This disables idle mode
+      this.idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
+    } else {
+      this.idleTimeoutMillis = Math.max(unit.toMillis(value), IDLE_MODE_MIN_TIMEOUT_MILLIS);
+    }
+    return thisT();
+  }
+
+  @VisibleForTesting
+  final long getIdleTimeoutMillis() {
+    return idleTimeoutMillis;
+  }
+
   /**
    * Verifies the authority is valid.  This method exists as an escape hatch for putting in an
    * authority that is valid, but would fail the default validation provided by this
@@ -217,6 +251,7 @@ public abstract class AbstractManagedChannelImplBuilder
         transportFactory,
         firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
+        GrpcUtil.TIMER_SERVICE, GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
         executor, userAgent, interceptors);
   }
 

@@ -31,7 +31,6 @@
 
 package io.grpc.internal;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -102,6 +101,24 @@ final class TransportSet implements WithLogId {
   private final Collection<ManagedClientTransport> transports =
       new ArrayList<ManagedClientTransport>();
 
+  private final InUseStateAggregator<ManagedClientTransport> inUseStateAggregator =
+      new InUseStateAggregator<ManagedClientTransport>() {
+        @Override
+        Object getLock() {
+          return lock;
+        }
+
+        @Override
+        void handleInUse() {
+          callback.onInUse(TransportSet.this);
+        }
+
+        @Override
+        void handleNotInUse() {
+          callback.onNotInUse(TransportSet.this);
+        }
+      };
+
   /**
    * The to-be active transport, which is not ready yet.
    */
@@ -133,16 +150,7 @@ final class TransportSet implements WithLogId {
   TransportSet(EquivalentAddressGroup addressGroup, String authority, String userAgent,
       LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Executor appExecutor, Callback callback) {
-    this(addressGroup, authority, userAgent, loadBalancer, backoffPolicyProvider, transportFactory,
-        scheduledExecutor, appExecutor, callback, Stopwatch.createUnstarted());
-  }
-
-  @VisibleForTesting
-  TransportSet(EquivalentAddressGroup addressGroup, String authority, String userAgent,
-      LoadBalancer<ClientTransport> loadBalancer, BackoffPolicy.Provider backoffPolicyProvider,
-      ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Executor appExecutor, Callback callback, Stopwatch connectingTimer) {
+      Supplier<Stopwatch> stopwatchSupplier, Executor appExecutor, Callback callback) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -150,9 +158,9 @@ final class TransportSet implements WithLogId {
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory = transportFactory;
     this.scheduledExecutor = scheduledExecutor;
+    this.connectingTimer = stopwatchSupplier.get();
     this.appExecutor = appExecutor;
     this.callback = callback;
-    this.connectingTimer = connectingTimer;
   }
 
   /**
@@ -225,7 +233,7 @@ final class TransportSet implements WithLogId {
           new Object[]{getLogId(), delayMillis});
     }
     delayedTransport.startBackoff(status);
-    Runnable endOfCurrentBackoff = new Runnable() {
+    class EndOfCurrentBackoff implements Runnable {
       @Override
       public void run() {
         try {
@@ -257,9 +265,10 @@ final class TransportSet implements WithLogId {
           log.log(Level.WARNING, "Exception handling end of backoff", t);
         }
       }
-    };
+    }
+
     reconnectTask = scheduledExecutor.schedule(
-        new LogExceptionRunnable(endOfCurrentBackoff), delayMillis, TimeUnit.MILLISECONDS);
+        new LogExceptionRunnable(new EndOfCurrentBackoff()), delayMillis, TimeUnit.MILLISECONDS);
   }
 
   /**
@@ -292,7 +301,7 @@ final class TransportSet implements WithLogId {
       savedPendingTransport.shutdown();
     }
     if (runCallback) {
-      callback.onTerminated();
+      callback.onTerminated(this);
     }
   }
 
@@ -332,7 +341,9 @@ final class TransportSet implements WithLogId {
     public void transportReady() {}
 
     @Override
-    public void transportInUse(boolean inUse) {}
+    public void transportInUse(boolean inUse) {
+      inUseStateAggregator.updateObjectInUse(transport, inUse);
+    }
 
     @Override
     public void transportShutdown(Status status) {}
@@ -340,6 +351,7 @@ final class TransportSet implements WithLogId {
     @Override
     public void transportTerminated() {
       boolean runCallback = false;
+      inUseStateAggregator.updateObjectInUse(transport, false);
       synchronized (lock) {
         transports.remove(transport);
         if (shutdown && transports.isEmpty()) {
@@ -351,7 +363,7 @@ final class TransportSet implements WithLogId {
         }
       }
       if (runCallback) {
-        callback.onTerminated();
+        callback.onTerminated(TransportSet.this);
       }
     }
   }
@@ -459,7 +471,7 @@ final class TransportSet implements WithLogId {
      * Called when the TransportSet is terminated, which means it's shut down and all transports
      * have been terminated.
      */
-    public void onTerminated() { }
+    public void onTerminated(TransportSet ts) { }
 
     /**
      * Called when all addresses have failed to connect.
@@ -470,5 +482,17 @@ final class TransportSet implements WithLogId {
      * Called when a once-live connection is shut down by server-side.
      */
     public void onConnectionClosedByServer(Status status) { }
+
+    /**
+     * Called when the TransportSet's in-use state has changed to true, which means at least one
+     * transport is in use. This method is called under a lock thus externally synchronized.
+     */
+    public void onInUse(TransportSet ts) { }
+
+    /**
+     * Called when the TransportSet's in-use state has changed to false, which means no transport is
+     * in use. This method is called under a lock thus externally synchronized.
+     */
+    public void onNotInUse(TransportSet ts) { }
   }
 }

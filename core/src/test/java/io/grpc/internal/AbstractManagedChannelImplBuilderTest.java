@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,6 +40,7 @@ import org.junit.runners.JUnit4;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link AbstractManagedChannelImplBuilder}. */
 @RunWith(JUnit4.class)
@@ -51,5 +53,49 @@ public class AbstractManagedChannelImplBuilderTest {
     URI uri = new URI(target);
     assertEquals("directaddress:////0:0:0:0:0:0:0:0%250:10005", target);
     assertEquals(target, uri.toString());
+  }
+
+  @Test
+  public void idleTimeout() {
+    class Builder extends AbstractManagedChannelImplBuilder<Builder> {
+      Builder() {
+        super("target");
+      }
+
+      @Override
+      protected ClientTransportFactory buildTransportFactory() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Builder usePlaintext(boolean value) {
+        return this;
+      }
+    }
+
+    Builder builder = new Builder();
+
+    assertEquals(ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, builder.getIdleTimeoutMillis());
+
+    builder.idleTimeout(Long.MAX_VALUE, TimeUnit.DAYS);
+    assertEquals(ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, builder.getIdleTimeoutMillis());
+
+    builder.idleTimeout(AbstractManagedChannelImplBuilder.IDLE_MODE_MAX_TIMEOUT_DAYS,
+        TimeUnit.DAYS);
+    assertEquals(ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, builder.getIdleTimeoutMillis());
+
+    try {
+      builder.idleTimeout(0, TimeUnit.SECONDS);
+      fail("Should throw");
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
+
+    builder.idleTimeout(1, TimeUnit.NANOSECONDS);
+    assertEquals(AbstractManagedChannelImplBuilder.IDLE_MODE_MIN_TIMEOUT_MILLIS,
+        builder.getIdleTimeoutMillis());
+
+    builder.idleTimeout(30, TimeUnit.SECONDS);
+    assertEquals(TimeUnit.SECONDS.toMillis(30), builder.getIdleTimeoutMillis());
   }
 }

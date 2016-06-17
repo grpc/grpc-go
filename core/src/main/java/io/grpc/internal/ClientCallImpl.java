@@ -162,12 +162,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       // Context is already cancelled so no need to create a real stream, just notify the observer
       // of cancellation via callback on the executor
       stream = NoopClientStream.INSTANCE;
-      callExecutor.execute(new ContextRunnable(context) {
+      class ClosedByContext extends ContextRunnable {
+        ClosedByContext() {
+          super(context);
+        }
+
         @Override
         public void runInContext() {
           observer.onClose(statusFromCancelled(context), new Metadata());
         }
-      });
+      }
+
+      callExecutor.execute(new ClosedByContext());
       return;
     }
     final String compressorName = callOptions.getCompressor();
@@ -176,7 +182,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       compressor = compressorRegistry.lookupCompressor(compressorName);
       if (compressor == null) {
         stream = NoopClientStream.INSTANCE;
-        callExecutor.execute(new ContextRunnable(context) {
+        class ClosedByNotFoundCompressor extends ContextRunnable {
+          ClosedByNotFoundCompressor() {
+            super(context);
+          }
+
           @Override
           public void runInContext() {
             observer.onClose(
@@ -184,7 +194,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
                     String.format("Unable to find compressor by name %s", compressorName)),
                 new Metadata());
           }
-        });
+        }
+
+        callExecutor.execute(new ClosedByNotFoundCompressor());
         return;
       }
     } else {
@@ -275,16 +287,19 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
   }
 
+  private class DeadlineTimer implements Runnable {
+    @Override
+    public void run() {
+      // DelayedStream.cancel() is safe to call from a thread that is different from where the
+      // stream is created.
+      stream.cancel(DEADLINE_EXCEEDED);
+    }
+  }
+
   private ScheduledFuture<?> startDeadlineTimer(Deadline deadline) {
-    return deadlineCancellationExecutor.schedule(new LogExceptionRunnable(
-        new Runnable() {
-          @Override
-          public void run() {
-            // DelayedStream.cancel() is safe to call from a thread that is different from where the
-            // stream is created.
-            stream.cancel(DEADLINE_EXCEEDED);
-          }
-        }), deadline.timeRemaining(TimeUnit.NANOSECONDS), TimeUnit.NANOSECONDS);
+    return deadlineCancellationExecutor.schedule(
+        new LogExceptionRunnable(new DeadlineTimer()), deadline.timeRemaining(TimeUnit.NANOSECONDS),
+        TimeUnit.NANOSECONDS);
   }
 
   @Nullable
@@ -404,14 +419,17 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
       stream.setDecompressor(decompressor);
 
-      callExecutor.execute(new ContextRunnable(context) {
+      class HeadersRead extends ContextRunnable {
+        HeadersRead() {
+          super(context);
+        }
+
         @Override
         public final void runInContext() {
           try {
             if (closed) {
               return;
             }
-
             observer.onHeaders(headers);
           } catch (Throwable t) {
             Status status =
@@ -420,19 +438,24 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
             close(status, new Metadata());
           }
         }
-      });
+      }
+
+      callExecutor.execute(new HeadersRead());
     }
 
     @Override
     public void messageRead(final InputStream message) {
-      callExecutor.execute(new ContextRunnable(context) {
+      class MessageRead extends ContextRunnable {
+        MessageRead() {
+          super(context);
+        }
+
         @Override
         public final void runInContext() {
           try {
             if (closed) {
               return;
             }
-
             try {
               observer.onMessage(method.parseResponse(message));
             } finally {
@@ -445,7 +468,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
             close(status, new Metadata());
           }
         }
-      });
+      }
+
+      callExecutor.execute(new MessageRead());
     }
 
     /**
@@ -476,7 +501,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       }
       final Status savedStatus = status;
       final Metadata savedTrailers = trailers;
-      callExecutor.execute(new ContextRunnable(context) {
+      class StreamClosed extends ContextRunnable {
+        StreamClosed() {
+          super(context);
+        }
+
         @Override
         public final void runInContext() {
           if (closed) {
@@ -485,12 +514,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
           }
           close(savedStatus, savedTrailers);
         }
-      });
+      }
+
+      callExecutor.execute(new StreamClosed());
     }
 
     @Override
     public void onReady() {
-      callExecutor.execute(new ContextRunnable(context) {
+      class StreamOnReady extends ContextRunnable {
+        StreamOnReady() {
+          super(context);
+        }
+
         @Override
         public final void runInContext() {
           try {
@@ -502,7 +537,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
             close(status, new Metadata());
           }
         }
-      });
+      }
+
+      callExecutor.execute(new StreamOnReady());
     }
   }
 }

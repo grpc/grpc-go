@@ -31,37 +31,60 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import java.util.HashSet;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A simple wrapper for a {@link Runnable} that logs any exception thrown by it, before
- * re-throwing it.
+ * Aggregates the in-use state of a set of objects.
  */
-public final class LogExceptionRunnable implements Runnable {
+abstract class InUseStateAggregator<T> {
 
-  private static final Logger log = Logger.getLogger(LogExceptionRunnable.class.getName());
+  @GuardedBy("getLock()")
+  private final HashSet<T> inUseObjects = new HashSet<T>();
 
-  private final Runnable task;
-
-  public LogExceptionRunnable(Runnable task) {
-    this.task = checkNotNull(task);
-  }
-
-  @Override
-  public void run() {
-    try {
-      task.run();
-    } catch (Throwable t) {
-      log.log(Level.SEVERE, "Exception while executing runnable " + task, t);
-      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+  /**
+   * Update the in-use state of an object. Initially no object is in use.
+   */
+  final void updateObjectInUse(T object, boolean inUse) {
+    synchronized (getLock()) {
+      int origSize = inUseObjects.size();
+      if (inUse) {
+        inUseObjects.add(object);
+        if (origSize == 0) {
+          handleInUse();
+        }
+      } else {
+        boolean removed = inUseObjects.remove(object);
+        if (removed && origSize == 1) {
+          handleNotInUse();
+        }
+      }
     }
   }
 
-  @Override
-  public String toString() {
-    return "LogExceptionRunnable(" + task + ")";
+  final boolean isInUse() {
+    synchronized (getLock()) {
+      return !inUseObjects.isEmpty();
+    }
   }
+
+  abstract Object getLock();
+
+  /**
+   * Called when the aggregated in-use state has changed to true, which means at least one object is
+   * in use.
+   *
+   * <p>This method is called under the lock returned by {@link #getLock}.
+   */
+  @GuardedBy("getLock()")
+  abstract void handleInUse();
+
+  /**
+   * Called when the aggregated in-use state has changed to false, which means no object is in use.
+   *
+   * <p>This method is called under the lock returned by {@link #getLock}.
+   */
+  @GuardedBy("getLock()")
+  abstract void handleNotInUse();
 }

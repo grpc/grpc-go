@@ -31,9 +31,12 @@
 
 package io.grpc.internal;
 
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import com.google.common.base.Ticker;
 import com.google.common.util.concurrent.AbstractFuture;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -57,7 +60,13 @@ public final class FakeClock {
   public final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
   final Ticker ticker = new Ticker() {
       @Override public long read() {
-        return TimeUnit.MILLISECONDS.toNanos(currentTimeNanos);
+        return currentTimeNanos;
+      }
+    };
+
+  final Supplier<Stopwatch> stopwatchSupplier = new Supplier<Stopwatch>() {
+      @Override public Stopwatch get() {
+        return Stopwatch.createUnstarted(ticker);
       }
     };
 
@@ -95,6 +104,11 @@ public final class FakeClock {
 
     void complete() {
       set(null);
+    }
+
+    @Override
+    public String toString() {
+      return "[due=" + dueTimeNanos + ", task=" + command + "]";
     }
   }
 
@@ -187,12 +201,33 @@ public final class FakeClock {
       if (task == null || task.dueTimeNanos > currentTimeNanos) {
         break;
       }
-      tasks.poll();
+      task = tasks.poll();
       task.command.run();
       task.complete();
       count++;
     }
     return count;
+  }
+
+  /**
+   * Return all due tasks.
+   */
+  public Collection<ScheduledTask> getDueTasks() {
+    ArrayList<ScheduledTask> result = new ArrayList<ScheduledTask>();
+    for (ScheduledTask task : tasks) {
+      if (task.dueTimeNanos > currentTimeNanos) {
+        break;
+      }
+      result.add(task);
+    }
+    return result;
+  }
+
+  /**
+   * Return all unrun tasks.
+   */
+  public Collection<ScheduledTask> getPendingTasks() {
+    return new ArrayList<ScheduledTask>(tasks);
   }
 
   /**

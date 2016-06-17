@@ -133,16 +133,20 @@ public class ManagedChannelImplTransportManagerTest {
     channel = new ManagedChannelImpl("fake://target", mockBackoffPolicyProvider,
         mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), executor, userAgent,
-        Collections.<ClientInterceptor>emptyList());
+        CompressorRegistry.getDefaultInstance(), GrpcUtil.TIMER_SERVICE,
+        GrpcUtil.STOPWATCH_SUPPLIER, ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE,
+        executor, userAgent, Collections.<ClientInterceptor>emptyList());
 
     ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
         = ArgumentCaptor.forClass(null);
+    // Force Channel to exit the initial idleness to get NameResolver and LoadBalancer created.
+    channel.exitIdleMode();
     verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
-    verify(mockNameResolver).start(any(NameResolver.Listener.class));
     verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), tmCaptor.capture());
     tm = tmCaptor.getValue();
     transports = TestUtils.captureTransports(mockTransportFactory);
+    // NameResolver is started in the executor
+    verify(mockNameResolver, timeout(1000)).start(any(NameResolver.Listener.class));
   }
 
   @After

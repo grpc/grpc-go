@@ -40,14 +40,13 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-
-import com.google.common.base.Stopwatch;
 
 import io.grpc.CallOptions;
 import io.grpc.EquivalentAddressGroup;
@@ -187,6 +186,8 @@ public class TransportSetTest {
     // Final checks for consultations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
+    verify(mockTransportSetCallback, atLeast(0)).onInUse(transportSet);
+    verify(mockTransportSetCallback, atLeast(0)).onNotInUse(transportSet);
     verifyNoMoreInteractions(mockTransportSetCallback);
     fakeExecutor.runDueTasks(); // Drain new 'real' stream creation; not important to this test.
   }
@@ -331,6 +332,8 @@ public class TransportSetTest {
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
     verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffMillis();
+    verify(mockTransportSetCallback, atLeast(0)).onInUse(transportSet);
+    verify(mockTransportSetCallback, atLeast(0)).onNotInUse(transportSet);
     verifyNoMoreInteractions(mockTransportSetCallback);
     fakeExecutor.runDueTasks(); // Drain new 'real' stream creation; not important to this test.
   }
@@ -531,10 +534,10 @@ public class TransportSetTest {
         same(waitForReadyCallOptions));
     verify(transportInfo.transport).shutdown();
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
-    verify(mockTransportSetCallback, never()).onTerminated();
+    verify(mockTransportSetCallback, never()).onTerminated(any(TransportSet.class));
     // Terminating the transport will let TransportSet to be terminated.
     transportInfo.listener.transportTerminated();
-    verify(mockTransportSetCallback).onTerminated();
+    verify(mockTransportSetCallback).onTerminated(transportSet);
 
     // No more transports will be created.
     fakeClock.forwardMillis(10000);
@@ -568,7 +571,7 @@ public class TransportSetTest {
     assertTrue(pick instanceof FailingClientTransport);
 
     // TransportSet terminated promptly.
-    verify(mockTransportSetCallback).onTerminated();
+    verify(mockTransportSetCallback).onTerminated(transportSet);
 
     // No more transports will be created.
     fakeClock.forwardMillis(10000);
@@ -610,11 +613,69 @@ public class TransportSetTest {
         transportSet.getLogId());
   }
 
+  @Test
+  public void inUseState() {
+    SocketAddress addr = mock(SocketAddress.class);
+    createTransportSet(addr);
+
+    // Invocation counters
+    int inUse = 0;
+    int notInUse = 0;
+
+    verify(mockTransportSetCallback, never()).onInUse(any(TransportSet.class));
+    transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
+    verify(mockTransportSetCallback, times(++inUse)).onInUse(transportSet);
+
+    MockClientTransportInfo t0 = transports.poll();
+
+    verify(mockTransportSetCallback, never()).onNotInUse(any(TransportSet.class));
+    t0.listener.transportReady();
+    // The race between delayed transport being terminated (thus not in-use) and
+    // the real transport become in-use, caused a brief period of TransportSet not in-use.
+    verify(mockTransportSetCallback, times(++notInUse)).onNotInUse(transportSet);
+    // Delayed transport calls newStream() on the real transport in the executor
+    fakeExecutor.runDueTasks();
+    verify(t0.transport).newStream(
+        same(method), any(Metadata.class), same(waitForReadyCallOptions));
+    verify(mockTransportSetCallback, times(inUse)).onInUse(transportSet);
+    t0.listener.transportInUse(true);
+    verify(mockTransportSetCallback, times(++inUse)).onInUse(transportSet);
+
+    t0.listener.transportInUse(false);
+    verify(mockTransportSetCallback, times(++notInUse)).onNotInUse(transportSet);
+
+    t0.listener.transportInUse(true);
+    verify(mockTransportSetCallback, times(++inUse)).onInUse(transportSet);
+
+    // Simulate that the server sends a go-away
+    t0.listener.transportShutdown(Status.UNAVAILABLE);
+
+    // Creates a new transport
+    transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
+    MockClientTransportInfo t1 = transports.poll();
+    t1.listener.transportReady();
+    // Delayed transport calls newStream() on the real transport in the executor
+    fakeExecutor.runDueTasks();
+    verify(t1.transport).newStream(
+        same(method), any(Metadata.class), same(waitForReadyCallOptions));
+    t1.listener.transportInUse(true);
+    // No turbulance from the race mentioned eariler, because t0 has been in-use
+    verify(mockTransportSetCallback, times(inUse)).onInUse(transportSet);
+    verify(mockTransportSetCallback, times(notInUse)).onNotInUse(transportSet);
+
+    // TransportSet is not in-use when both transports are not in-use.
+    t1.listener.transportInUse(false);
+    verify(mockTransportSetCallback, times(notInUse)).onNotInUse(transportSet);
+    t0.listener.transportInUse(false);
+    verify(mockTransportSetCallback, times(++notInUse)).onNotInUse(transportSet);
+    verify(mockTransportSetCallback, times(inUse)).onInUse(transportSet);
+  }
+
   private void createTransportSet(SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     transportSet = new TransportSet(addressGroup, authority, userAgent, mockLoadBalancer,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
-        fakeExecutor.scheduledExecutorService, mockTransportSetCallback,
-        Stopwatch.createUnstarted(fakeClock.ticker));
+        fakeClock.stopwatchSupplier, fakeExecutor.scheduledExecutorService,
+        mockTransportSetCallback);
   }
 }
