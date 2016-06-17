@@ -160,17 +160,6 @@ public abstract class ClientCall<ReqT, RespT> {
   public abstract void request(int numMessages);
 
   /**
-   * Equivalent as {@link #cancel(String, Throwable)} without passing any useful information.
-   *
-   * @deprecated Use or override {@link #cancel(String, Throwable)} instead. See
-   *             https://github.com/grpc/grpc-java/issues/1221
-   */
-  @Deprecated
-  public void cancel() {
-    cancel("Cancelled by ClientCall.cancel()", null);
-  }
-
-  /**
    * Prevent any further processing for this {@code ClientCall}. No further messages may be sent or
    * will be received. The server is informed of cancellations, but may not stop processing the
    * call. Cancellation is permitted if previously {@link #halfClose}d. Cancelling an already {@code

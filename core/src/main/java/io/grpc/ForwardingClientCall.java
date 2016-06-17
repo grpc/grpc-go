@@ -52,12 +52,6 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
     delegate().request(numMessages);
   }
 
-  @Deprecated
-  @Override
-  public void cancel() {
-    delegate().cancel();
-  }
-
   @Override
   public void cancel(@Nullable String message, @Nullable Throwable cause) {
     delegate().cancel(message, cause);
