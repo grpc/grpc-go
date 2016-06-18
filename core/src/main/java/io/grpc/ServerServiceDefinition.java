@@ -37,12 +37,18 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.collect.ImmutableMap;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Definition of a service to be exposed via a Server. */
 public final class ServerServiceDefinition {
+  /** Convenience that constructs a {@link ServiceDescriptor} simultaneously. */
+  public static Builder builder(String serviceName) {
+    return new Builder(serviceName);
+  }
 
   public static Builder builder(ServiceDescriptor serviceDescriptor) {
     return new Builder(serviceDescriptor);
@@ -82,13 +88,19 @@ public final class ServerServiceDefinition {
    * Builder for constructing Service instances.
    */
   public static final class Builder {
-
+    private final String serviceName;
     private final ServiceDescriptor serviceDescriptor;
     private final Map<String, ServerMethodDefinition<?, ?>> methods =
         new HashMap<String, ServerMethodDefinition<?, ?>>();
 
+    private Builder(String serviceName) {
+      this.serviceName = checkNotNull(serviceName, "serviceName");
+      this.serviceDescriptor = null;
+    }
+
     private Builder(ServiceDescriptor serviceDescriptor) {
-      this.serviceDescriptor = serviceDescriptor;
+      this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
+      this.serviceName = serviceDescriptor.getName();
     }
 
     /**
@@ -108,10 +120,9 @@ public final class ServerServiceDefinition {
     public <ReqT, RespT> Builder addMethod(ServerMethodDefinition<ReqT, RespT> def) {
       MethodDescriptor<ReqT, RespT> method = def.getMethodDescriptor();
       checkArgument(
-          serviceDescriptor.getName().equals(
-              MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
+          serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
           "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
-          serviceDescriptor.getName(), method.getFullMethodName());
+          serviceName, method.getFullMethodName());
       String name = method.getFullMethodName();
       checkState(!methods.containsKey(name), "Method by same name already registered: %s", name);
       methods.put(name, def);
@@ -122,6 +133,15 @@ public final class ServerServiceDefinition {
      * Construct new ServerServiceDefinition.
      */
     public ServerServiceDefinition build() {
+      ServiceDescriptor serviceDescriptor = this.serviceDescriptor;
+      if (serviceDescriptor == null) {
+        List<MethodDescriptor<?, ?>> methodDescriptors
+            = new ArrayList<MethodDescriptor<?, ?>>(methods.size());
+        for (ServerMethodDefinition<?, ?> serverMethod : methods.values()) {
+          methodDescriptors.add(serverMethod.getMethodDescriptor());
+        }
+        serviceDescriptor = new ServiceDescriptor(serviceName, methodDescriptors);
+      }
       Map<String, ServerMethodDefinition<?, ?>> tmpMethods =
           new HashMap<String, ServerMethodDefinition<?, ?>>(methods);
       for (MethodDescriptor<?, ?> descriptorMethod : serviceDescriptor.getMethods()) {
