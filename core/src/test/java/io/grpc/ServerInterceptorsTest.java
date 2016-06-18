@@ -45,7 +45,7 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall.Listener;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
+import io.grpc.ServerMethodDefinition;
 
 import org.junit.After;
 import org.junit.Before;

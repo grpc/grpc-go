@@ -31,37 +31,52 @@
 
 package io.grpc;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
-
 /**
- * Registry of services and their methods used by servers to dispatching incoming calls.
+ * Definition of a method exposed by a {@link Server}.
+ *
+ * @see ServerServiceDefinition
  */
-@ThreadSafe
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
-public abstract class HandlerRegistry {
+public final class ServerMethodDefinition<ReqT, RespT> {
+  private final MethodDescriptor<ReqT, RespT> method;
+  private final ServerCallHandler<ReqT, RespT> handler;
 
-  /**
-   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
-   *
-   * @param methodName to lookup {@link ServerMethodDefinition} for.
-   * @param authority the authority for the desired method (to do virtual hosting). If {@code null}
-   *        the first matching method will be returned.
-   * @return the resolved method or {@code null} if no method for that name exists.
-   */
-  @Nullable
-  public abstract ServerMethodDefinition<?, ?> lookupMethod(
-      String methodName, @Nullable String authority);
-
-  /**
-   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
-   *
-   * @param methodName to lookup {@link ServerMethodDefinition} for.
-   * @return the resolved method or {@code null} if no method for that name exists.
-   */
-  @Nullable
-  public final ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
-    return lookupMethod(methodName, null);
+  private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
+      ServerCallHandler<ReqT, RespT> handler) {
+    this.method = method;
+    this.handler = handler;
   }
 
+  /**
+   * Create a new instance.
+   *
+   * @param method the {@link MethodDescriptor} for this method.
+   * @param handler to dispatch calls to.
+   * @return a new instance.
+   */
+  public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> create(
+      MethodDescriptor<ReqT, RespT> method,
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+  }
+
+  /** The {@code MethodDescriptor} for this method. */
+  public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+    return method;
+  }
+
+  /** Handler for incoming calls. */
+  public ServerCallHandler<ReqT, RespT> getServerCallHandler() {
+    return handler;
+  }
+
+  /**
+   * Create a new method definition with a different call handler.
+   *
+   * @param handler to bind to a cloned instance of this.
+   * @return a cloned instance of this with the new handler bound.
+   */
+  public ServerMethodDefinition<ReqT, RespT> withServerCallHandler(
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+  }
 }

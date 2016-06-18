@@ -42,8 +42,8 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.concurrent.Executor;
 

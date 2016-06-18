@@ -33,8 +33,8 @@ package io.grpc.internal;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.HashMap;
 import javax.annotation.Nullable;

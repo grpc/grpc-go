@@ -47,7 +47,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 
 import java.io.IOException;

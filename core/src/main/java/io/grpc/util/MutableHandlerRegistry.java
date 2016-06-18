@@ -34,8 +34,8 @@ package io.grpc.util;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.MethodDescriptor;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;

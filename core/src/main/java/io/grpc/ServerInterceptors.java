@@ -33,8 +33,6 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
-
 import java.io.BufferedInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;

@@ -42,8 +42,8 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCallHandler;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 import io.grpc.ServiceDescriptor;
 
 import org.junit.After;
