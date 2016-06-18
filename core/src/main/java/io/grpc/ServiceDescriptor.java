@@ -35,22 +35,22 @@ import com.google.common.base.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 
 /**
  * Descriptor for a service.
  */
-public class ServiceDescriptor {
+public final class ServiceDescriptor {
 
   private final String name;
-  private final List<MethodDescriptor<?, ?>> methods;
+  private final Collection<MethodDescriptor<?, ?>> methods;
 
   public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
     this(name, Arrays.asList(methods));
   }
 
-  public ServiceDescriptor(String name, List<MethodDescriptor<?, ?>> methods) {
+  public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
     this.name = Preconditions.checkNotNull(name);
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
@@ -61,9 +61,10 @@ public class ServiceDescriptor {
   }
 
   /**
-   * A list of {@link MethodDescriptor} instances describing the methods exposed by the service.
+   * A collection of {@link MethodDescriptor} instances describing the methods exposed by the
+   * service.
    */
-  public List<MethodDescriptor<?, ?>> getMethods() {
+  public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
   }
 }
