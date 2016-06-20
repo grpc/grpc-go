@@ -58,7 +58,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 
-final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
+final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;
   private final Context.CancellableContext context;
@@ -194,6 +194,11 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<RespT> {
   @Override
   public Attributes attributes() {
     return stream.attributes();
+  }
+
+  @Override
+  public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+    return method;
   }
 
   /**

@@ -196,9 +196,14 @@ public class LoadBalancerGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_BALANCE_LOAD);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final LoadBalancer serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_BALANCE_LOAD,
           asyncBidiStreamingCall(

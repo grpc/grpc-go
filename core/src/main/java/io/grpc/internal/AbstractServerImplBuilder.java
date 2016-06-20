@@ -42,8 +42,8 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.ServerBuilder;
-import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.concurrent.Executor;
 
@@ -58,7 +58,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
         extends ServerBuilder<T> {
 
   private static final HandlerRegistry EMPTY_FALLBACK_REGISTRY = new HandlerRegistry() {
-      @Override public ServerMethodDefinition<?, ?> lookupMethod(String method, String authority) {
+
+      @Override
+      public ServerMethodDefinition<?, ?> lookupMethod(String methodName,
+          @Nullable String authority) {
         return null;
       }
     };

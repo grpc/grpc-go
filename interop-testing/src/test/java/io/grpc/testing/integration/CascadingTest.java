@@ -36,7 +36,6 @@ import static org.junit.Assert.fail;
 
 import io.grpc.Context;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -207,8 +206,7 @@ public class CascadingTest {
             new ServerInterceptor() {
               @Override
               public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-                  MethodDescriptor<ReqT, RespT> method,
-                  final ServerCall<RespT> call,
+                  final ServerCall<ReqT, RespT> call,
                   Metadata headers,
                   ServerCallHandler<ReqT, RespT> next) {
                 // Respond with the headers but nothing else.
@@ -264,8 +262,7 @@ public class CascadingTest {
             new ServerInterceptor() {
               @Override
               public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-                  MethodDescriptor<ReqT, RespT> method,
-                  final ServerCall<RespT> call,
+                  final ServerCall<ReqT, RespT> call,
                   Metadata headers,
                   ServerCallHandler<ReqT, RespT> next) {
                 // Respond with the headers but nothing else.

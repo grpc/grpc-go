@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,39 +31,39 @@
 
 package io.grpc;
 
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
+import com.google.common.base.Preconditions;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Registry of services and their methods used by servers to dispatching incoming calls.
+ * Descriptor for a service.
  */
-@ThreadSafe
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
-public abstract class HandlerRegistry {
+public class ServiceDescriptor {
 
-  /**
-   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
-   *
-   * @param methodName to lookup {@link ServerMethodDefinition} for.
-   * @param authority the authority for the desired method (to do virtual hosting). If {@code null}
-   *        the first matching method will be returned.
-   * @return the resolved method or {@code null} if no method for that name exists.
-   */
-  @Nullable
-  public abstract ServerMethodDefinition<?, ?> lookupMethod(
-      String methodName, @Nullable String authority);
+  private final String name;
+  private final List<MethodDescriptor<?, ?>> methods;
 
-  /**
-   * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.
-   *
-   * @param methodName to lookup {@link ServerMethodDefinition} for.
-   * @return the resolved method or {@code null} if no method for that name exists.
-   */
-  @Nullable
-  public final ServerMethodDefinition<?, ?> lookupMethod(String methodName) {
-    return lookupMethod(methodName, null);
+  public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
+    this(name, Arrays.asList(methods));
   }
 
+  public ServiceDescriptor(String name, List<MethodDescriptor<?, ?>> methods) {
+    this.name = Preconditions.checkNotNull(name);
+    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
+  }
+
+  /** Simple name of the service. It is not an absolute path. */
+  public String getName() {
+    return name;
+  }
+
+  /**
+   * A list of {@link MethodDescriptor} instances describing the methods exposed by the service.
+   */
+  public List<MethodDescriptor<?, ?>> getMethods() {
+    return methods;
+  }
 }

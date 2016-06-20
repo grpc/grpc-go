@@ -400,9 +400,18 @@ public class TestServiceGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_UNARY_CALL,
+        METHOD_STREAMING_OUTPUT_CALL,
+        METHOD_STREAMING_INPUT_CALL,
+        METHOD_FULL_BIDI_CALL,
+        METHOD_HALF_BIDI_CALL);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_UNARY_CALL,
           asyncUnaryCall(

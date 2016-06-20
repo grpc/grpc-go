@@ -278,14 +278,13 @@ public class CompressionTest {
   private class ServerCompressorInterceptor implements ServerInterceptor {
     @Override
     public <ReqT, RespT> io.grpc.ServerCall.Listener<ReqT> interceptCall(
-        MethodDescriptor<ReqT, RespT> method, ServerCall<RespT> call, Metadata headers,
-        ServerCallHandler<ReqT, RespT> next) {
+        ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
       if (serverEncoding) {
         call.setCompression("fzip");
       }
       call.setMessageCompression(enableServerMessageCompression);
       serverResponseHeaders = headers;
-      return next.startCall(method, call, headers);
+      return next.startCall(call, headers);
     }
   }
 

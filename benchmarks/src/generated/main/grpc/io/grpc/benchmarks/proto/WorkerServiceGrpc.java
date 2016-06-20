@@ -366,9 +366,17 @@ public class WorkerServiceGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_RUN_SERVER,
+        METHOD_RUN_CLIENT,
+        METHOD_CORE_COUNT,
+        METHOD_QUIT_WORKER);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final WorkerService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_RUN_SERVER,
           asyncBidiStreamingCall(

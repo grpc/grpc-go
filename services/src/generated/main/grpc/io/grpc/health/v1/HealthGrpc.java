@@ -216,9 +216,14 @@ public class HealthGrpc {
     }
   }
 
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
+        METHOD_CHECK);
+  }
+
   public static io.grpc.ServerServiceDefinition bindService(
       final Health serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
+    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(
           METHOD_CHECK,
           asyncUnaryCall(

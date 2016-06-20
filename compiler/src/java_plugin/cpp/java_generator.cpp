@@ -851,6 +851,31 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
   p->Print("}\n\n");
 }
 
+static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
+                                   map<string, string>* vars,
+                                   Printer* p,
+                                   bool generate_nano) {
+  (*vars)["service_name"] = service->name();
+  p->Print(
+      *vars,
+      "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
+  p->Indent();
+  p->Print(*vars,
+           "return new $ServiceDescriptor$(SERVICE_NAME");
+  p->Indent();
+  p->Indent();
+  for (int i = 0; i < service->method_count(); ++i) {
+    const MethodDescriptor* method = service->method(i);
+    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
+    p->Print(*vars, ",\n$method_field_name$");
+  }
+  p->Print(");\n");
+  p->Outdent();
+  p->Outdent();
+  p->Outdent();
+  p->Print("}\n\n");
+}
+
 static void PrintBindServiceMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
@@ -863,7 +888,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
   p->Indent();
   p->Print(*vars,
            "return "
-           "$ServerServiceDefinition$.builder(SERVICE_NAME)\n");
+           "$ServerServiceDefinition$.builder(getServiceDescriptor())\n");
   p->Indent();
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -994,6 +1019,7 @@ static void PrintService(const ServiceDescriptor* service,
   PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
   PrintMethodHandlerClass(service, vars, p, generate_nano);
+  PrintGetServiceDescriptorMethod(service, vars, p, generate_nano);
   PrintBindServiceMethod(service, vars, p, generate_nano);
   p->Outdent();
   p->Print("}\n");
@@ -1050,6 +1076,8 @@ void GenerateService(const ServiceDescriptor* service,
   vars["BindableService"] = "io.grpc.BindableService";
   vars["ServerServiceDefinition"] =
       "io.grpc.ServerServiceDefinition";
+  vars["ServiceDescriptor"] =
+      "io.grpc.ServiceDescriptor";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["ImmutableList"] = "com.google.common.collect.ImmutableList";
   vars["Collection"] = "java.util.Collection";

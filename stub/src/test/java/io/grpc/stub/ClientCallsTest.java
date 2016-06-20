@@ -46,6 +46,7 @@ import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -259,7 +260,8 @@ public class ClientCallsTest {
   @Test
   public void inprocessTransportInboundFlowControl() throws Exception {
     final Semaphore semaphore = new Semaphore(1);
-    ServerServiceDefinition service = ServerServiceDefinition.builder("some")
+    ServerServiceDefinition service = ServerServiceDefinition.builder(
+        new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               int iteration;
@@ -338,7 +340,8 @@ public class ClientCallsTest {
     final CountDownLatch latch = new CountDownLatch(1);
     final Semaphore semaphore = new Semaphore(1);
     final List<Integer> receivedMessages = new ArrayList<Integer>(6);
-    ServerServiceDefinition service = ServerServiceDefinition.builder("some")
+    ServerServiceDefinition service = ServerServiceDefinition.builder(
+        new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
             new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
               @Override
