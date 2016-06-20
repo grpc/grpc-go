@@ -128,10 +128,6 @@ func TestAllExtensionNumbersForType(t *testing.T) {
 
 // Do end2end tests.
 
-var (
-	port = ":35764"
-)
-
 type server struct{}
 
 func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
@@ -144,18 +140,18 @@ func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) 
 
 func TestEnd2end(t *testing.T) {
 	// Start server.
-	lis, err := net.Listen("tcp", port)
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
 	pb.RegisterSearchServiceServer(s, &server{})
-	// Install reflection service on s.
-	InstallOnServer(s)
+	// Register reflection service on s.
+	Register(s)
 	go s.Serve(lis)
 
 	// Create client.
-	conn, err := grpc.Dial("localhost"+port, grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
