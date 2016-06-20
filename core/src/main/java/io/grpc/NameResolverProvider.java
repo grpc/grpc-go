@@ -98,7 +98,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
   }
 
   private static ClassLoader getCorrectClassLoader() {
-    if (ManagedChannelProvider.isAndroid()) {
+    if (isAndroid()) {
       // When android:sharedUserId or android:process is used, Android will setup a dummy
       // ClassLoader for the thread context (http://stackoverflow.com/questions/13407006),
       // instead of letting users to manually set context class loader, we choose the
@@ -106,6 +106,16 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
       return NameResolverProvider.class.getClassLoader();
     }
     return Thread.currentThread().getContextClassLoader();
+  }
+
+  private static boolean isAndroid() {
+    try {
+      Class.forName("android.app.Application", /*initialize=*/ false, null);
+      return true;
+    } catch (Exception e) {
+      // If Application isn't loaded, it might as well not be Android.
+      return false;
+    }
   }
 
   /**
