@@ -66,7 +66,7 @@ public class ContextsTest {
   @SuppressWarnings("unchecked")
   private MethodDescriptor<Object, Object> method = mock(MethodDescriptor.class);
   @SuppressWarnings("unchecked")
-  private ServerCall<Object, Object> call = mock(ServerCall.class);
+  private ServerCall<Object> call = mock(ServerCall.class);
   private Metadata headers = new Metadata();
 
   @Test
@@ -101,11 +101,11 @@ public class ContextsTest {
         methodCalls.add(5);
       }
     };
-    ServerCall.Listener<Object> wrapped = interceptCall(uniqueContext, call, headers,
+    ServerCall.Listener<Object> wrapped = interceptCall(uniqueContext, method, call, headers,
         new ServerCallHandler<Object, Object>() {
           @Override
-          public ServerCall.Listener<Object> startCall(
-              ServerCall<Object, Object> call, Metadata headers) {
+          public ServerCall.Listener<Object> startCall(MethodDescriptor<Object, Object> method,
+              ServerCall<Object> call, Metadata headers) {
             assertSame(ContextsTest.this.method, method);
             assertSame(ContextsTest.this.call, call);
             assertSame(ContextsTest.this.headers, headers);
@@ -128,10 +128,10 @@ public class ContextsTest {
   public void interceptCall_restoresIfNextThrows() {
     Context origContext = Context.current();
     try {
-      interceptCall(uniqueContext, call, headers, new ServerCallHandler<Object, Object>() {
+      interceptCall(uniqueContext, method, call, headers, new ServerCallHandler<Object, Object>() {
         @Override
-        public ServerCall.Listener<Object> startCall(
-            ServerCall<Object, Object> call, Metadata headers) {
+        public ServerCall.Listener<Object> startCall(MethodDescriptor<Object, Object> method,
+            ServerCall<Object> call, Metadata headers) {
           throw new RuntimeException();
         }
       });
@@ -165,11 +165,11 @@ public class ContextsTest {
         throw new RuntimeException();
       }
     };
-    ServerCall.Listener<Object> wrapped = interceptCall(uniqueContext, call, headers,
+    ServerCall.Listener<Object> wrapped = interceptCall(uniqueContext, method, call, headers,
         new ServerCallHandler<Object, Object>() {
           @Override
-          public ServerCall.Listener<Object> startCall(
-              ServerCall<Object, Object> call, Metadata headers) {
+          public ServerCall.Listener<Object> startCall(MethodDescriptor<Object, Object> method,
+              ServerCall<Object> call, Metadata headers) {
             return listener;
           }
         });

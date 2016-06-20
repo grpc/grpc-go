@@ -40,7 +40,6 @@ import io.grpc.ServerBuilder;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.benchmarks.ByteBufOutputMarshaller;
 import io.grpc.benchmarks.Utils;
@@ -142,8 +141,7 @@ final class LoadServer {
     if (config.getServerType() == Control.ServerType.ASYNC_GENERIC_SERVER) {
       serverBuilder.addService(
           ServerServiceDefinition
-              .builder(new ServiceDescriptor(BenchmarkServiceGrpc.SERVICE_NAME,
-                  GENERIC_STREAMING_PING_PONG_METHOD))
+              .builder(BenchmarkServiceGrpc.SERVICE_NAME)
               .addMethod(GENERIC_STREAMING_PING_PONG_METHOD, new GenericServiceCallHandler())
               .build());
     } else {
@@ -232,10 +230,9 @@ final class LoadServer {
   }
 
   private class GenericServiceCallHandler implements ServerCallHandler<ByteBuf, ByteBuf> {
-
     @Override
-    public ServerCall.Listener<ByteBuf> startCall(
-        final ServerCall<ByteBuf, ByteBuf> call, Metadata headers) {
+    public ServerCall.Listener<ByteBuf> startCall(MethodDescriptor<ByteBuf, ByteBuf> method,
+        final ServerCall<ByteBuf> call, Metadata headers) {
       call.sendHeaders(new Metadata());
       call.request(1);
       return new ServerCall.Listener<ByteBuf>() {

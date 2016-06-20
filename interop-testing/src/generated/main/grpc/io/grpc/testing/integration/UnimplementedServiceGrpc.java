@@ -241,14 +241,9 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
-        METHOD_UNIMPLEMENTED_CALL);
-  }
-
   public static io.grpc.ServerServiceDefinition bindService(
       final UnimplementedService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
         .addMethod(
           METHOD_UNIMPLEMENTED_CALL,
           asyncUnaryCall(

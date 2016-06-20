@@ -282,15 +282,9 @@ public class ReconnectServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
-        METHOD_START,
-        METHOD_STOP);
-  }
-
   public static io.grpc.ServerServiceDefinition bindService(
       final ReconnectService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
         .addMethod(
           METHOD_START,
           asyncUnaryCall(

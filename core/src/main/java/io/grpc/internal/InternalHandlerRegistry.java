@@ -33,8 +33,8 @@ package io.grpc.internal;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
 
 import java.util.HashMap;
 import javax.annotation.Nullable;
@@ -57,7 +57,7 @@ final class InternalHandlerRegistry {
         new HashMap<String, ServerServiceDefinition>();
 
     Builder addService(ServerServiceDefinition service) {
-      services.put(service.getServiceDescriptor().getName(), service);
+      services.put(service.getName(), service);
       return this;
     }
 

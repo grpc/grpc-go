@@ -47,7 +47,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
+import io.grpc.ServerMethodDefinition;
 import io.grpc.Status;
 
 import java.io.IOException;
@@ -404,8 +404,8 @@ public final class ServerImpl extends io.grpc.Server {
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor(), headers, context, decompressorRegistry,
           compressorRegistry);
-      ServerCall.Listener<ReqT> listener =
-          methodDef.getServerCallHandler().startCall(call, headers);
+      ServerCall.Listener<ReqT> listener = methodDef.getServerCallHandler()
+          .startCall(methodDef.getMethodDescriptor(), call, headers);
       if (listener == null) {
         throw new NullPointerException(
             "startCall() returned a null listener for method " + fullMethodName);

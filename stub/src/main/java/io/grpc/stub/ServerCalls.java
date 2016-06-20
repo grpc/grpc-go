@@ -127,10 +127,11 @@ public class ServerCalls {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
       public ServerCall.Listener<ReqT> startCall(
-          final ServerCall<ReqT, RespT> call,
+          MethodDescriptor<ReqT, RespT> methodDescriptor,
+          final ServerCall<RespT> call,
           Metadata headers) {
-        final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
-            new ServerCallStreamObserverImpl<ReqT, RespT>(call);
+        final ServerCallStreamObserverImpl<RespT> responseObserver =
+            new ServerCallStreamObserverImpl<RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
         // sends more than 1 requests, ServerCall will catch it. Note that disabling auto
         // inbound flow control has no effect on unary calls.
@@ -189,10 +190,11 @@ public class ServerCalls {
     return new ServerCallHandler<ReqT, RespT>() {
       @Override
       public ServerCall.Listener<ReqT> startCall(
-          final ServerCall<ReqT, RespT> call,
+          MethodDescriptor<ReqT, RespT> methodDescriptor,
+          final ServerCall<RespT> call,
           Metadata headers) {
-        final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
-            new ServerCallStreamObserverImpl<ReqT, RespT>(call);
+        final ServerCallStreamObserverImpl<RespT> responseObserver =
+            new ServerCallStreamObserverImpl<RespT>(call);
         final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
         responseObserver.freeze();
         if (responseObserver.autoFlowControlEnabled) {
@@ -247,9 +249,9 @@ public class ServerCalls {
     StreamObserver<ReqT> invoke(StreamObserver<RespT> responseObserver);
   }
 
-  private static final class ServerCallStreamObserverImpl<ReqT, RespT>
+  private static final class ServerCallStreamObserverImpl<RespT>
       extends ServerCallStreamObserver<RespT> {
-    final ServerCall<ReqT, RespT> call;
+    final ServerCall<RespT> call;
     volatile boolean cancelled;
     private boolean frozen;
     private boolean autoFlowControlEnabled = true;
@@ -257,7 +259,7 @@ public class ServerCalls {
     private Runnable onReadyHandler;
     private Runnable onCancelHandler;
 
-    ServerCallStreamObserverImpl(ServerCall<ReqT, RespT> call) {
+    ServerCallStreamObserverImpl(ServerCall<RespT> call) {
       this.call = call;
     }
 

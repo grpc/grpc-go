@@ -464,19 +464,9 @@ public class TestServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
-        METHOD_EMPTY_CALL,
-        METHOD_UNARY_CALL,
-        METHOD_STREAMING_OUTPUT_CALL,
-        METHOD_STREAMING_INPUT_CALL,
-        METHOD_FULL_DUPLEX_CALL,
-        METHOD_HALF_DUPLEX_CALL);
-  }
-
   public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
         .addMethod(
           METHOD_EMPTY_CALL,
           asyncUnaryCall(

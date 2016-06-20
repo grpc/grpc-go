@@ -63,7 +63,6 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.util.MutableHandlerRegistry;
@@ -312,20 +311,19 @@ public class ServerImplTest {
   public void basicExchangeSuccessful() throws Exception {
     final Metadata.Key<String> metadataKey
         = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
-    final AtomicReference<ServerCall<String, Integer>> callReference
-        = new AtomicReference<ServerCall<String, Integer>>();
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
-    fallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
+    final AtomicReference<ServerCall<Integer>> callReference
+        = new AtomicReference<ServerCall<Integer>>();
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
-            method,
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
-                  ServerCall<String, Integer> call,
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
                   Metadata headers) {
-                assertEquals("Waiter/serve", call.getMethodDescriptor().getFullMethodName());
+                assertEquals("Waiter/serve", method.getFullMethodName());
                 assertNotNull(call);
                 assertNotNull(headers);
                 assertEquals("value", headers.get(metadataKey));
@@ -343,7 +341,7 @@ public class ServerImplTest {
     assertNotNull(streamListener);
 
     executeBarrier(executor).await();
-    ServerCall<String, Integer> call = callReference.get();
+    ServerCall<Integer> call = callReference.get();
     assertNotNull(call);
 
     String order = "Lots of pizza, please";
@@ -389,16 +387,15 @@ public class ServerImplTest {
   public void exceptionInStartCallPropagatesToStream() throws Exception {
     CyclicBarrier barrier = executeBarrier(executor);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
-    MethodDescriptor<String, Integer> method = MethodDescriptor
-        .create(MethodType.UNKNOWN, "Waiter/serve",
-            STRING_MARSHALLER, INTEGER_MARSHALLER);
-    fallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
-        .addMethod(method,
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
+        .addMethod(
+            MethodDescriptor.create(MethodType.UNKNOWN, "Waiter/serve",
+              STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
-                  ServerCall<String, Integer> call,
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
                   Metadata headers) {
                 throw status.asRuntimeException();
               }
@@ -500,16 +497,15 @@ public class ServerImplTest {
 
   @Test
   public void testCallContextIsBoundInListenerCallbacks() throws Exception {
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
-    fallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
         .addMethod(
-            method,
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
-                  ServerCall<String, Integer> call,
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
                   Metadata headers) {
                 // Check that the current context is a descendant of SERVER_CONTEXT
                 final Context initial = Context.current();
@@ -586,17 +582,17 @@ public class ServerImplTest {
       }
     };
 
-    final AtomicReference<ServerCall<String, Integer>> callReference
-        = new AtomicReference<ServerCall<String, Integer>>();
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
-    fallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
-        .addMethod(method,
+    final AtomicReference<ServerCall<Integer>> callReference
+        = new AtomicReference<ServerCall<Integer>>();
+    fallbackRegistry.addService(ServerServiceDefinition.builder("Waiter")
+        .addMethod(
+            MethodDescriptor.create(
+                MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER),
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
-                  ServerCall<String, Integer> call,
+                  MethodDescriptor<String, Integer> method,
+                  ServerCall<Integer> call,
                   Metadata headers) {
                 callReference.set(call);
                 return callListener;
@@ -659,7 +655,7 @@ public class ServerImplTest {
     MethodDescriptor<String, Integer> method1 = MethodDescriptor.create(
         MethodType.UNKNOWN, "Service1/Method1", STRING_MARSHALLER, INTEGER_MARSHALLER);
     registry = new InternalHandlerRegistry.Builder()
-        .addService(ServerServiceDefinition.builder(new ServiceDescriptor("Service1", method1))
+        .addService(ServerServiceDefinition.builder("Service1")
             .addMethod(method1, callHandler).build())
         .build();
     transportServer = new SimpleServer();
@@ -675,8 +671,8 @@ public class ServerImplTest {
     // registry.
     transportListener.streamCreated(stream, "Service1/Method2", new Metadata());
 
-    verify(callHandler, timeout(2000)).startCall(Matchers.<ServerCall<String, Integer>>anyObject(),
-        Matchers.<Metadata>anyObject());
+    verify(callHandler, timeout(2000)).startCall(same(method1),
+        Matchers.<ServerCall<Integer>>anyObject(), Matchers.<Metadata>anyObject());
     verify(fallbackRegistry, timeout(2000)).lookupMethod("Service1/Method2", null);
     verifyNoMoreInteractions(callHandler);
     verifyNoMoreInteractions(fallbackRegistry);

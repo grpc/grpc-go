@@ -31,8 +31,6 @@
 
 package io.grpc;
 
-import io.grpc.ServerServiceDefinition.ServerMethodDefinition;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 

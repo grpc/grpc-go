@@ -47,10 +47,12 @@ public interface ServerCallHandler<RequestT, ResponseT> {
    * Implementations must not throw an exception if they started processing that may use {@code
    * call} on another thread.
    *
+   * @param method descriptor for the call
    * @param call object for responding to the remote client.
    * @return listener for processing incoming request messages for {@code call}
    */
   ServerCall.Listener<RequestT> startCall(
-      ServerCall<RequestT, ResponseT> call,
+      MethodDescriptor<RequestT, ResponseT> method,
+      ServerCall<ResponseT> call,
       Metadata headers);
 }

@@ -34,6 +34,7 @@ package io.grpc.testing;
 import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -84,10 +85,12 @@ public class TestUtils {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
           final Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
-        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+        return next.startCall(method,
+            new SimpleForwardingServerCall<RespT>(call) {
               @Override
               public void sendHeaders(Metadata responseHeaders) {
                 responseHeaders.merge(requestHeaders, keySet);
@@ -114,11 +117,12 @@ public class TestUtils {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
           Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
         headersCapture.set(requestHeaders);
-        return next.startCall(call, requestHeaders);
+        return next.startCall(method, call, requestHeaders);
       }
     };
   }
@@ -128,15 +132,16 @@ public class TestUtils {
    * {@link ServerCall#attributes()}
    */
   public static ServerInterceptor recordServerCallInterceptor(
-      final AtomicReference<ServerCall<?, ?>> serverCallCapture) {
+      final AtomicReference<ServerCall<?>> serverCallCapture) {
     return new ServerInterceptor() {
       @Override
       public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
+          MethodDescriptor<ReqT, RespT> method,
+          ServerCall<RespT> call,
           Metadata requestHeaders,
           ServerCallHandler<ReqT, RespT> next) {
         serverCallCapture.set(call);
-        return next.startCall(call, requestHeaders);
+        return next.startCall(method, call, requestHeaders);
       }
     };
   }

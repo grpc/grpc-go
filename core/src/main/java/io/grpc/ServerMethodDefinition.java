@@ -31,40 +31,53 @@
 
 package io.grpc;
 
-import javax.annotation.concurrent.ThreadSafe;
-
 /**
- * Interface for intercepting incoming calls before that are dispatched by
- * {@link ServerCallHandler}.
+ * Definition of a method exposed by a {@link Server}.
  *
- * <p>Implementers use this mechanism to add cross-cutting behavior to server-side calls. Common
- * example of such behavior include:
- * <ul>
- * <li>Enforcing valid authentication credentials</li>
- * <li>Logging and monitoring call behavior</li>
- * <li>Delegating calls to other servers</li>
- * </ul>
+ * @see ServerServiceDefinition
  */
-@ThreadSafe
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1711")
-public interface ServerInterceptor {
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1774")
+public final class ServerMethodDefinition<ReqT, RespT> {
+  private final MethodDescriptor<ReqT, RespT> method;
+  private final ServerCallHandler<ReqT, RespT> handler;
+
+  private ServerMethodDefinition(MethodDescriptor<ReqT, RespT> method,
+      ServerCallHandler<ReqT, RespT> handler) {
+    this.method = method;
+    this.handler = handler;
+  }
+
   /**
-   * Intercept {@link ServerCall} dispatch by the {@code next} {@link ServerCallHandler}. General
-   * semantics of {@link ServerCallHandler#startCall} apply and the returned
-   * {@link io.grpc.ServerCall.Listener} must not be {@code null}.
+   * Create a new instance.
    *
-   * <p>If the implementation throws an exception, {@code call} will be closed with an error.
-   * Implementations must not throw an exception if they started processing that may use {@code
-   * call} on another thread.
-   *
-   * @param method descriptor for method
-   * @param call object to receive response messages
-   * @param next next processor in the interceptor chain
-   * @return listener for processing incoming messages for {@code call}, never {@code null}.
+   * @param method the {@link MethodDescriptor} for this method.
+   * @param handler to dispatch calls to.
+   * @return a new instance.
    */
-  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+  public static <ReqT, RespT> ServerMethodDefinition<ReqT, RespT> create(
       MethodDescriptor<ReqT, RespT> method,
-      ServerCall<RespT> call,
-      Metadata headers,
-      ServerCallHandler<ReqT, RespT> next);
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+  }
+
+  /** The {@code MethodDescriptor} for this method. */
+  public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+    return method;
+  }
+
+  /** Handler for incoming calls. */
+  public ServerCallHandler<ReqT, RespT> getServerCallHandler() {
+    return handler;
+  }
+
+  /**
+   * Create a new method definition with a different call handler.
+   *
+   * @param handler to bind to a cloned instance of this.
+   * @return a cloned instance of this with the new handler bound.
+   */
+  public ServerMethodDefinition<ReqT, RespT> withServerCallHandler(
+      ServerCallHandler<ReqT, RespT> handler) {
+    return new ServerMethodDefinition<ReqT, RespT>(method, handler);
+  }
 }

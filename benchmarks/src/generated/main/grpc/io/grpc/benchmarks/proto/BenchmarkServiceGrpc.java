@@ -263,15 +263,9 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
-    return new io.grpc.ServiceDescriptor(SERVICE_NAME,
-        METHOD_UNARY_CALL,
-        METHOD_STREAMING_CALL);
-  }
-
   public static io.grpc.ServerServiceDefinition bindService(
       final BenchmarkService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+    return io.grpc.ServerServiceDefinition.builder(SERVICE_NAME)
         .addMethod(
           METHOD_UNARY_CALL,
           asyncUnaryCall(

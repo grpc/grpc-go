@@ -41,7 +41,6 @@ import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.benchmarks.ByteBufOutputMarshaller;
 import io.grpc.netty.NegotiationType;
@@ -259,15 +258,13 @@ public abstract class AbstractBenchmark {
 
     // Server implementation of unary & streaming methods
     serverBuilder.addService(
-        ServerServiceDefinition.builder(
-            new ServiceDescriptor("benchmark",
-                unaryMethod,
-                pingPongMethod,
-                flowControlledStreaming))
-            .addMethod(unaryMethod, new ServerCallHandler<ByteBuf, ByteBuf>() {
+        ServerServiceDefinition.builder("benchmark")
+            .addMethod(unaryMethod,
+                new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(
-                      final ServerCall<ByteBuf, ByteBuf> call,
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
                       Metadata headers) {
                     call.sendHeaders(new Metadata());
                     call.request(1);
@@ -295,10 +292,12 @@ public abstract class AbstractBenchmark {
                     };
                   }
                 })
-            .addMethod(pingPongMethod, new ServerCallHandler<ByteBuf, ByteBuf>() {
+            .addMethod(pingPongMethod,
+                new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(
-                      final ServerCall<ByteBuf, ByteBuf> call,
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
                       Metadata headers) {
                     call.sendHeaders(new Metadata());
                     call.request(1);
@@ -328,10 +327,12 @@ public abstract class AbstractBenchmark {
                     };
                   }
                 })
-            .addMethod(flowControlledStreaming, new ServerCallHandler<ByteBuf, ByteBuf>() {
+            .addMethod(flowControlledStreaming,
+                new ServerCallHandler<ByteBuf, ByteBuf>() {
                   @Override
                   public ServerCall.Listener<ByteBuf> startCall(
-                      final ServerCall<ByteBuf, ByteBuf> call,
+                      MethodDescriptor<ByteBuf, ByteBuf> method,
+                      final ServerCall<ByteBuf> call,
                       Metadata headers) {
                     call.sendHeaders(new Metadata());
                     call.request(1);

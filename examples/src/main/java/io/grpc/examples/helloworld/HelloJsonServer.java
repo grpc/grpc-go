@@ -113,10 +113,10 @@ public class HelloJsonServer {
   }
 
   private ServerServiceDefinition bindService(final Greeter serviceImpl) {
-    return io.grpc.ServerServiceDefinition
-        .builder(GreeterGrpc.getServiceDescriptor())
-        .addMethod(HelloJsonClient.HelloJsonStub.METHOD_SAY_HELLO,
-            asyncUnaryCall(
+    return io.grpc.ServerServiceDefinition.builder(GreeterGrpc.SERVICE_NAME)
+        .addMethod(
+          HelloJsonClient.HelloJsonStub.METHOD_SAY_HELLO,
+          asyncUnaryCall(
               new UnaryMethod<HelloRequest, HelloReply>() {
                 @Override
                 public void invoke(
