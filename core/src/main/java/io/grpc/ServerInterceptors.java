@@ -98,7 +98,6 @@ public class ServerInterceptors {
     return intercept(serviceDef, Arrays.asList(interceptors));
   }
 
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public static ServerServiceDefinition intercept(BindableService bindableService,
       ServerInterceptor... interceptors) {
     return intercept(bindableService.bindService(), Arrays.asList(interceptors));

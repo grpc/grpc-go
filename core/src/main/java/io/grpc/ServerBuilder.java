@@ -83,7 +83,6 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    *
    * @param bindableService BindableService object
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public abstract T addService(BindableService bindableService);
 
   /**
