@@ -70,7 +70,6 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   @Override
   public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs,
       Executor appExecutor, final MetadataApplier applier) {
-    Metadata cachedSaved;
     String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");
     final URI uri;
     try {

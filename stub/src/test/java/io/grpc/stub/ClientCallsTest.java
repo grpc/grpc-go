@@ -166,29 +166,27 @@ public class ClientCallsTest {
   public void disablingInboundAutoFlowControlSuppressesRequestsForMoreMessages()
       throws Exception {
     ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
-    CallStreamObserver<Integer> requestObserver =
-        (CallStreamObserver<Integer>)
-            ClientCalls.asyncBidiStreamingCall(call, new ClientResponseObserver<Integer, String>() {
-              @Override
-              public void beforeStart(ClientCallStreamObserver<Integer> requestStream) {
-                requestStream.disableAutoInboundFlowControl();
-              }
+    ClientCalls.asyncBidiStreamingCall(call, new ClientResponseObserver<Integer, String>() {
+      @Override
+      public void beforeStart(ClientCallStreamObserver<Integer> requestStream) {
+        requestStream.disableAutoInboundFlowControl();
+      }
 
-              @Override
-              public void onNext(String value) {
+      @Override
+      public void onNext(String value) {
 
-              }
+      }
 
-              @Override
-              public void onError(Throwable t) {
+      @Override
+      public void onError(Throwable t) {
 
-              }
+      }
 
-              @Override
-              public void onCompleted() {
+      @Override
+      public void onCompleted() {
 
-              }
-            });
+      }
+    });
     verify(call).start(listenerCaptor.capture(), any(Metadata.class));
     listenerCaptor.getValue().onMessage("message");
     verify(call, times(1)).request(1);

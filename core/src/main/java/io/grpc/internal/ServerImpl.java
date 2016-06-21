@@ -201,7 +201,7 @@ public final class ServerImpl extends io.grpc.Server {
     }
     // Short-circuiting not strictly necessary, but prevents transports from needing to handle
     // multiple shutdownNow invocations, between here and the serverShutdown callback.
-    if (serverShutdownCallbackInvoked) {
+    if (savedServerShutdownCallbackInvoked) {
       // Have to call shutdownNow, because serverShutdown callback only called shutdown, not
       // shutdownNow
       for (ServerTransport transport : transportsCopy) {

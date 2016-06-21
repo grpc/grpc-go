@@ -38,7 +38,6 @@ import static org.junit.Assert.assertNull;
 import com.squareup.okhttp.ConnectionSpec;
 
 import io.grpc.NameResolver;
-import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.GrpcUtil;
 
 import org.junit.Rule;
@@ -66,7 +65,7 @@ public class OkHttpChannelBuilderTest {
       }
     };
 
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
+    builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
   }
@@ -77,7 +76,7 @@ public class OkHttpChannelBuilderTest {
     thrown.expectMessage("Invalid authority:");
     OkHttpChannelBuilder builder = new OkHttpChannelBuilder("good", 1234);
 
-    ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
+    builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
   }
