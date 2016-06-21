@@ -50,6 +50,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
 
 /**
  * Wraps {@link Credentials} as a {@link CallCredentials}.
@@ -84,17 +85,20 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
           try {
             // Credentials is expected to manage caching internally if the metadata is fetched over
             // the network.
+            //
             // TODO(zhangkun83): we don't know whether there is valid cache data. If there is, we
             // would waste a context switch by always scheduling in executor. However, we have to
             // do so because we can't risk blocking the network thread. This can be resolved after
             // https://github.com/google/google-auth-library-java/issues/3 is resolved.
+            //
+            // Some implementations may return null here.
             Map<String, List<String>> metadata = creds.getRequestMetadata(uri);
             // Re-use the headers if getRequestMetadata() returns the same map. It may return a
             // different map based on the provided URI, i.e., for JWT. However, today it does not
             // cache JWT and so we won't bother tring to save its return value based on the URI.
             Metadata headers;
             synchronized (GoogleAuthLibraryCallCredentials.this) {
-              if (lastMetadata != metadata) {
+              if (lastMetadata == null || lastMetadata != metadata) {
                 lastMetadata = metadata;
                 lastHeaders = toHeaders(metadata);
               }
@@ -146,7 +150,7 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
     }
   }
 
-  private static Metadata toHeaders(Map<String, List<String>> metadata) {
+  private static Metadata toHeaders(@Nullable Map<String, List<String>> metadata) {
     Metadata headers = new Metadata();
     if (metadata != null) {
       for (String key : metadata.keySet()) {

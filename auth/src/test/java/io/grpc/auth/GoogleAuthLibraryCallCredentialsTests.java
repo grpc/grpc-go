@@ -37,6 +37,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +72,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 /**
@@ -191,6 +193,35 @@ public class GoogleAuthLibraryCallCredentialsTests {
     Status status = statusCaptor.getValue();
     assertEquals(Status.Code.UNAUTHENTICATED, status.getCode());
     assertEquals(exception, status.getCause());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void credentialsReturnNullMetadata() throws Exception {
+    ListMultimap<String, String> values = LinkedListMultimap.create();
+    values.put("Authorization", "token1");
+    when(credentials.getRequestMetadata(eq(expectedUri)))
+        .thenReturn(null, Multimaps.<String, String>asMap(values), null);
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    for (int i = 0; i < 3; i++) {
+      callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    }
+
+    assertEquals(3, runPendingRunnables());
+    verify(credentials, times(3)).getRequestMetadata(eq(expectedUri));
+
+    verify(applier, times(3)).apply(headersCaptor.capture());
+    List<Metadata> headerList = headersCaptor.getAllValues();
+    assertEquals(3, headerList.size());
+
+    assertEquals(0, headerList.get(0).headerCount());
+
+    Iterable<String> authorization = headerList.get(1).getAll(AUTHORIZATION);
+    assertArrayEquals(new String[]{"token1"}, Iterables.toArray(authorization, String.class));
+
+    assertEquals(0, headerList.get(2).headerCount());
   }
 
   @Test

@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import io.grpc.CallCredentials.MetadataApplier;
@@ -73,6 +74,7 @@ final class MetadataApplierImpl implements MetadataApplier {
   @Override
   public void apply(Metadata headers) {
     checkState(!finalized, "apply() or fail() already called");
+    checkNotNull(headers, "headers");
     origHeaders.merge(headers);
     finalizeWith(transport.newStream(method, origHeaders, callOptions));
   }
