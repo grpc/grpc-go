@@ -63,14 +63,49 @@ import javax.annotation.Nullable;
  * {@link Status#CANCELLED CANCELLED}. Otherwise, {@link Listener#onClose Listener.onClose()} is
  * called with whatever status the RPC was finished. We ensure that at most one is called.
  *
- * <p>Example: A simple Unary (1 request, 1 response) RPC would look like this:
+ * <h3>Usage examples</h3>
+ * <h4>Simple Unary (1 request, 1 response) RPC</h4>
  * <pre>
- *   call = channel.newCall(method, callOptions);
+ *   call = channel.newCall(unaryMethod, callOptions);
  *   call.start(listener, headers);
  *   call.sendMessage(message);
  *   call.halfClose();
  *   call.request(1);
  *   // wait for listener.onMessage()
+ * </pre>
+ *
+ * <h4>Flow-control in Streaming RPC</h4>
+ *
+ * <p>The following snippet demonstrates a bi-directional streaming case, where the client sends
+ * requests produced by a fictional <code>makeNextRequest()</code> in a flow-control-compliant
+ * manner, and notifies gRPC library to receive additional response after one is consumed by
+ * a fictional <code>processResponse()</code>.
+ *
+ * <p><pre>
+ *   call = channel.newCall(bidiStreamingMethod, callOptions);
+ *   listener = new ClientCall.Listener&lt;FooResponse&gt;() {
+ *     &#64;Override
+ *     public void onMessage(FooResponse response) {
+ *       processResponse(response);
+ *       // Notify gRPC to receive one additional response.
+ *       call.request(1);
+ *     }
+ *
+ *     &#64;Override
+ *     public void onReady() {
+ *       while (call.isReady()) {
+ *         FooRequest nextRequest = makeNextRequest();
+ *         if (nextRequest == null) {  // No more requests to send
+ *           call.halfClose();
+ *           return;
+ *         }
+ *         call.sendMessage(makeNextRequest());
+ *       }
+ *     }
+ *   }
+ *   call.start(listener, headers);
+ *   // Notify gRPC to receive one response. Without this line, onMessage() would never be called.
+ *   call.request(1);
  * </pre>
  *
  * @param <ReqT> type of message sent one or more times to the server.
