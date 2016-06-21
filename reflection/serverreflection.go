@@ -185,11 +185,7 @@ func (s *serverReflectionServer) fileDescEncodingByFilename(name string) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	b, err := proto.Marshal(fd)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	return proto.Marshal(fd)
 }
 
 // fileDescEncodingContainingSymbol finds the file descriptor containing the given symbol,
@@ -210,8 +206,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		meta := s.s.ServiceMetadata(name, "")
 		// Check if it's a method name.
 		if meta == nil {
-			pos := strings.LastIndex(name, ".")
-			if pos != -1 {
+			if pos := strings.LastIndex(name, "."); pos != -1 {
 				meta = s.s.ServiceMetadata(name[:pos], name[pos+1:])
 			}
 		}
@@ -225,15 +220,10 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		}
 	}
 
-	// Marshal to wire format.
-	if fd != nil {
-		b, err := proto.Marshal(fd)
-		if err != nil {
-			return nil, err
-		}
-		return b, nil
+	if fd == nil {
+		return nil, fmt.Errorf("unknown symbol: %v", name)
 	}
-	return nil, fmt.Errorf("unknown symbol: %v", name)
+	return proto.Marshal(fd)
 }
 
 // fileDescEncodingContainingExtension finds the file descriptor containing given extension,
@@ -247,11 +237,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName st
 	if err != nil {
 		return nil, err
 	}
-	b, err := proto.Marshal(fd)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	return proto.Marshal(fd)
 }
 
 // allExtensionNumbersForTypeName returns all extension numbers for the given type.
@@ -268,7 +254,6 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 }
 
 // ServerReflectionInfo is the reflection service handler.
-// It calls help function for the received request, and sends response back.
 func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
 	for {
 		in, err := stream.Recv()
