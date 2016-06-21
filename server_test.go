@@ -88,46 +88,50 @@ func TestStopBeforeServe(t *testing.T) {
 	}
 }
 
-func TestMetadata(t *testing.T) {
+func TestServiceMetadata(t *testing.T) {
 	server := NewServer()
 	server.RegisterService(&testSd, &testServer{})
 
 	for _, test := range []struct {
-		name string
-		want []byte
+		service string
+		method  string
+		want    []byte
 	}{
-		{"grpc.testing.EmptyService", testFd},
-		{"grpc.testing.EmptyService.EmptyCall", testFd},
-		{"grpc.testing.EmptyService.EmptyStream", testFd},
+		{"grpc.testing.EmptyService", "", testFd},
+		{"grpc.testing.EmptyService", "EmptyCall", testFd},
+		{"grpc.testing.EmptyService", "EmptyStream", testFd},
 	} {
-		meta := server.Metadata(test.name)
+		meta := server.ServiceMetadata(test.service, test.method)
 		var (
 			fd []byte
 			ok bool
 		)
 		if fd, ok = meta.([]byte); !ok {
-			t.Errorf("Metadata(%q)=%v, want %v", test.name, meta, test.want)
+			t.Errorf("ServiceMetadata(%q, %q) = %v, want %v", test.service, test.method, meta, test.want)
 		}
 		if !reflect.DeepEqual(fd, test.want) {
-			t.Errorf("Metadata(%q)=%v, want %v", test.name, fd, test.want)
+			t.Errorf("ServiceMetadata(%q, %q) = %v, want %v", test.service, test.method, fd, test.want)
 		}
 	}
 }
 
-func TestMetadataNotFound(t *testing.T) {
+func TestServiceMetadataNotFound(t *testing.T) {
 	server := NewServer()
 	server.RegisterService(&testSd, &testServer{})
 
-	for _, test := range []string{
-		"EmptyCall",
-		"grpc.EmptyService",
-		"grpc.EmptyService.EmptyCall",
-		"grpc.testing.EmptyService.EmptyCallWrong",
-		"grpc.testing.EmptyService.EmptyStreamWrong",
+	for _, test := range []struct {
+		service string
+		method  string
+	}{
+		{"", "EmptyCall"},
+		{"grpc.EmptyService", ""},
+		{"grpc.EmptyService", "EmptyCall"},
+		{"grpc.testing.EmptyService", "EmptyCallWrong"},
+		{"grpc.testing.EmptyService", "EmptyStreamWrong"},
 	} {
-		meta := server.Metadata(test)
+		meta := server.ServiceMetadata(test.service, test.method)
 		if meta != nil {
-			t.Errorf("Metadata(%q)=%v, want <nil>", test, meta)
+			t.Errorf("ServiceMetadata(%q, %q) = %v, want <nil>", test.service, test.method, meta)
 		}
 	}
 }

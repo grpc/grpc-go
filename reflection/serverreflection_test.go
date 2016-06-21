@@ -138,7 +138,7 @@ func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) 
 	return nil
 }
 
-func TestEnd2end(t *testing.T) {
+func TestReflectionEnd2end(t *testing.T) {
 	// Start server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

@@ -58,6 +58,7 @@ import (
 	"io"
 	"io/ioutil"
 	"reflect"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -205,8 +206,15 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 			return nil, err
 		}
 	} else {
-		// Check if it's a service name or method name.
-		meta := s.s.Metadata(name)
+		// Check if it's a service name.
+		meta := s.s.ServiceMetadata(name, "")
+		// Check if it's a method name.
+		if meta == nil {
+			pos := strings.LastIndex(name, ".")
+			if pos != -1 {
+				meta = s.s.ServiceMetadata(name[:pos], name[pos+1:])
+			}
+		}
 		if meta != nil {
 			if enc, ok := meta.([]byte); ok {
 				fd, err = s.decodeFileDesc(enc)

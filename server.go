@@ -245,38 +245,32 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// Metadata returns the metadata for a given symbol name.
-// The name can be a service name or a method name in the form of
-// <package>.<service>[.<method>].
-func (s *Server) Metadata(name string) interface{} {
-	// Check if the name is a service name.
-	if srv, ok := s.m[name]; ok {
-		return srv.meta
-	}
-	// Check if the name is a method name.
-	pos := strings.LastIndex(name, ".")
-	if pos == -1 {
-		// Invalid method name.
-		return nil
-	}
-	if srv, ok := s.m[name[:pos]]; ok {
-		if _, ok := srv.md[name[pos+1:]]; ok {
+// ServiceMetadata returns the metadata for a service or method.
+// service should be the full service name with package, in the form of <package>.<service>.
+// method should be the method name only.
+// If only service is important, method should be an empty string.
+func (s *Server) ServiceMetadata(service, method string) interface{} {
+	// Check if service is registered.
+	if srv, ok := s.m[service]; ok {
+		if method == "" {
 			return srv.meta
 		}
-		if _, ok := srv.sd[name[pos+1:]]; ok {
+		// Check if method is part of service.
+		if _, ok := srv.md[method]; ok {
+			return srv.meta
+		}
+		if _, ok := srv.sd[method]; ok {
 			return srv.meta
 		}
 	}
 	return nil
 }
 
-// AllServiceNames returns names of all the registered services.
+// AllServiceNames returns all the registered service names.
 func (s *Server) AllServiceNames() []string {
-	ret := make([]string, len(s.m))
-	i := 0
+	ret := make([]string, 0, len(s.m))
 	for k := range s.m {
-		ret[i] = k
-		i++
+		ret = append(ret, k)
 	}
 	return ret
 }
