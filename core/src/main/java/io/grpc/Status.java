@@ -462,6 +462,7 @@ public final class Status {
 
   /**
    * Create a derived instance of {@link Status} with the given cause.
+   * However, the cause is not transmitted from server to client.
    */
   public Status withCause(Throwable cause) {
     if (Objects.equal(this.cause, cause)) {
@@ -513,6 +514,7 @@ public final class Status {
 
   /**
    * The underlying cause of an error.
+   * Note that the cause is not transmitted from server to client.
    */
   @Nullable
   public Throwable getCause() {
