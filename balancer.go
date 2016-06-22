@@ -348,7 +348,6 @@ func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Ad
 				ch = rr.waitCh
 			}
 			rr.mu.Unlock()
-			continue
 		}
 	}
 }
