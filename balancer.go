@@ -194,9 +194,9 @@ func (rr *roundRobin) watchAddrUpdates() error {
 		}
 	}
 	// Make a copy of rr.addrs and write it onto rr.addrCh so that gRPC internals gets notified.
-	open := make([]Address, 0, len(rr.addrs))
-	for _, v := range rr.addrs {
-		open = append(open, v.addr)
+	open := make([]Address, len(rr.addrs))
+	for i, v := range rr.addrs {
+		open[i] = v.addr
 	}
 	if rr.done {
 		return ErrClientConnClosing
