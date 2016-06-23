@@ -38,7 +38,6 @@ import java.util.concurrent.TimeoutException;
 /**
  * Utility methods for working with {@link Context}s in GRPC.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1705")
 public class Contexts {
 
   private Contexts() {
