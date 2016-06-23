@@ -245,32 +245,29 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// ServiceMetadata returns the metadata for a service or method.
-// service should be the full service name with package, in the form of <package>.<service>.
-// method should be the method name only.
-// If only service is important, method should be an empty string.
-func (s *Server) ServiceMetadata(service, method string) interface{} {
-	// Check if service is registered.
-	if srv, ok := s.m[service]; ok {
-		if method == "" {
-			return srv.meta
-		}
-		// Check if method is part of service.
-		if _, ok := srv.md[method]; ok {
-			return srv.meta
-		}
-		if _, ok := srv.sd[method]; ok {
-			return srv.meta
-		}
-	}
-	return nil
+// ServiceInfo contains method names and metadata for a service.
+type ServiceInfo struct {
+	Methods  []string
+	Metadata interface{}
 }
 
-// AllServiceNames returns all the registered service names.
-func (s *Server) AllServiceNames() []string {
-	ret := make([]string, 0, len(s.m))
-	for k := range s.m {
-		ret = append(ret, k)
+// GetServiceInfo returns a map from service name to ServiceInfo.
+// Service name includes the package name, in the form of <package>.<service>.
+func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
+	ret := make(map[string]*ServiceInfo)
+	for n, srv := range s.m {
+		methods := make([]string, 0, len(srv.md)+len(srv.sd))
+		for m := range srv.md {
+			methods = append(methods, m)
+		}
+		for m := range srv.sd {
+			methods = append(methods, m)
+		}
+
+		ret[n] = &ServiceInfo{
+			Methods:  methods,
+			Metadata: srv.meta,
+		}
 	}
 	return ret
 }

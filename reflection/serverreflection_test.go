@@ -92,7 +92,7 @@ func TestFileDescForType(t *testing.T) {
 	} {
 		fd, err := s.fileDescForType(test.st)
 		if err != nil || !reflect.DeepEqual(fd, test.wantFd) {
-			t.Fatalf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
+			t.Errorf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
 		}
 	}
 }
@@ -106,7 +106,7 @@ func TestTypeForName(t *testing.T) {
 	} {
 		r, err := s.typeForName(test.name)
 		if err != nil || r != test.want {
-			t.Fatalf("typeForName(%q) = %q, %v, want %q, <nil>", test.name, r, err, test.want)
+			t.Errorf("typeForName(%q) = %q, %v, want %q, <nil>", test.name, r, err, test.want)
 		}
 	}
 }
@@ -117,7 +117,7 @@ func TestTypeForNameNotFound(t *testing.T) {
 	} {
 		_, err := s.typeForName(test)
 		if err == nil {
-			t.Fatalf("typeForName(%q) = _, %v, want _, <non-nil>", test, err)
+			t.Errorf("typeForName(%q) = _, %v, want _, <non-nil>", test, err)
 		}
 	}
 }
@@ -132,7 +132,7 @@ func TestFileDescContainingExtension(t *testing.T) {
 	} {
 		fd, err := s.fileDescContainingExtension(test.st, test.extNum)
 		if err != nil || !reflect.DeepEqual(fd, test.want) {
-			t.Fatalf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
+			t.Errorf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestAllExtensionNumbersForType(t *testing.T) {
 		r, err := s.allExtensionNumbersForType(test.st)
 		sort.Sort(intArray(r))
 		if err != nil || !reflect.DeepEqual(r, test.want) {
-			t.Fatalf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
+			t.Errorf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
 		}
 	}
 }
@@ -194,9 +194,13 @@ func TestReflectionEnd2end(t *testing.T) {
 	stream, err := c.ServerReflectionInfo(context.Background())
 
 	testFileByFilename(t, stream)
+	testFileByFilenameError(t, stream)
 	testFileContainingSymbol(t, stream)
+	testFileContainingSymbolError(t, stream)
 	testFileContainingExtension(t, stream)
+	testFileContainingExtensionError(t, stream)
 	testAllExtensionNumbersOfType(t, stream)
+	testAllExtensionNumbersOfTypeError(t, stream)
 	testListServices(t, stream)
 
 	s.Stop()
@@ -227,10 +231,37 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("FileByFilename\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", test.filename, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("FileByFilename = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Errorf("FileByFilename(%v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", test.filename, r.MessageResponse)
+		}
+	}
+}
+
+func testFileByFilenameError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	for _, test := range []string{
+		"test.poto",
+		"proo2.proto",
+		"proto2_et.proto",
+	} {
+		if err := stream.Send(&rpb.ServerReflectionRequest{
+			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+				FileByFilename: test,
+			},
+		}); err != nil {
+			t.Fatalf("failed to send request: %v", err)
+		}
+		r, err := stream.Recv()
+		if err != nil {
+			// io.EOF is not ok.
+			t.Fatalf("failed to recv response: %v", err)
+		}
+
+		switch r.MessageResponse.(type) {
+		case *rpb.ServerReflectionResponse_ErrorResponse:
+		default:
+			t.Errorf("FileByFilename(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
@@ -261,10 +292,38 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("FileContainingSymbol\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Errorf("FileContainingSymbol(%v)\nreceived: %q,\nwant: %q", test.symbol, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("FileContainingSymbol = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Errorf("FileContainingSymbol(%v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", test.symbol, r.MessageResponse)
+		}
+	}
+}
+
+func testFileContainingSymbolError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	for _, test := range []string{
+		"grpc.testing.SerchService",
+		"grpc.testing.SearchService.SearchE",
+		"grpc.tesing.SearchResponse",
+		"gpc.testing.ToBeExtened",
+	} {
+		if err := stream.Send(&rpb.ServerReflectionRequest{
+			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
+				FileContainingSymbol: test,
+			},
+		}); err != nil {
+			t.Fatalf("failed to send request: %v", err)
+		}
+		r, err := stream.Recv()
+		if err != nil {
+			// io.EOF is not ok.
+			t.Fatalf("failed to recv response: %v", err)
+		}
+
+		switch r.MessageResponse.(type) {
+		case *rpb.ServerReflectionResponse_ErrorResponse:
+		default:
+			t.Errorf("FileContainingSymbol(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
@@ -296,10 +355,42 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 		switch r.MessageResponse.(type) {
 		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
-				t.Fatalf("FileContainingExtension\nreceived: %q,\nwant: %q", r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
+				t.Errorf("FileContainingExtension(%v, %v)\nreceived: %q,\nwant: %q", test.typeName, test.extNum, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
 		default:
-			t.Fatalf("FileContainingExtension = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", r.MessageResponse)
+			t.Errorf("FileContainingExtension(%v, %v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", test.typeName, test.extNum, r.MessageResponse)
+		}
+	}
+}
+
+func testFileContainingExtensionError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	for _, test := range []struct {
+		typeName string
+		extNum   int32
+	}{
+		{"grpc.testing.ToBExtened", 17},
+		{"grpc.testing.ToBeExtened", 15},
+	} {
+		if err := stream.Send(&rpb.ServerReflectionRequest{
+			MessageRequest: &rpb.ServerReflectionRequest_FileContainingExtension{
+				FileContainingExtension: &rpb.ExtensionRequest{
+					ContainingType:  test.typeName,
+					ExtensionNumber: test.extNum,
+				},
+			},
+		}); err != nil {
+			t.Fatalf("failed to send request: %v", err)
+		}
+		r, err := stream.Recv()
+		if err != nil {
+			// io.EOF is not ok.
+			t.Fatalf("failed to recv response: %v", err)
+		}
+
+		switch r.MessageResponse.(type) {
+		case *rpb.ServerReflectionResponse_ErrorResponse:
+		default:
+			t.Errorf("FileContainingExtension(%v, %v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", test.typeName, test.extNum, r.MessageResponse)
 		}
 	}
 }
@@ -330,10 +421,35 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 			sort.Sort(intArray(extNum))
 			if r.GetAllExtensionNumbersResponse().BaseTypeName != test.typeName ||
 				!reflect.DeepEqual(extNum, test.want) {
-				t.Fatalf("AllExtensionNumbersOfType\nreceived: %v,\nwant: {%q %v}", r.GetAllExtensionNumbersResponse(), test.typeName, test.want)
+				t.Errorf("AllExtensionNumbersOfType(%v)\nreceived: %v,\nwant: {%q %v}", r.GetAllExtensionNumbersResponse(), test.typeName, test.typeName, test.want)
 			}
 		default:
-			t.Fatalf("AllExtensionNumbersOfType = %v, want type <ServerReflectionResponse_AllExtensionNumbersResponse>", r.MessageResponse)
+			t.Errorf("AllExtensionNumbersOfType(%v) = %v, want type <ServerReflectionResponse_AllExtensionNumbersResponse>", test.typeName, r.MessageResponse)
+		}
+	}
+}
+
+func testAllExtensionNumbersOfTypeError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+	for _, test := range []string{
+		"grpc.testing.ToBeExtenedE",
+	} {
+		if err := stream.Send(&rpb.ServerReflectionRequest{
+			MessageRequest: &rpb.ServerReflectionRequest_AllExtensionNumbersOfType{
+				AllExtensionNumbersOfType: test,
+			},
+		}); err != nil {
+			t.Fatalf("failed to send request: %v", err)
+		}
+		r, err := stream.Recv()
+		if err != nil {
+			// io.EOF is not ok.
+			t.Fatalf("failed to recv response: %v", err)
+		}
+
+		switch r.MessageResponse.(type) {
+		case *rpb.ServerReflectionResponse_ErrorResponse:
+		default:
+			t.Errorf("AllExtensionNumbersOfType(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
@@ -356,7 +472,7 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 		want := []string{"grpc.testing.SearchService", "grpc.reflection.v1alpha.ServerReflection"}
 		// Compare service names in response with want.
 		if len(services) != len(want) {
-			t.Fatalf("= %v, want service names: %v", services, want)
+			t.Errorf("= %v, want service names: %v", services, want)
 		}
 		m := make(map[string]int)
 		for _, e := range services {
@@ -367,9 +483,9 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 				m[e]--
 				continue
 			}
-			t.Fatalf("ListService\nreceived: %v,\nwant: %q", services, want)
+			t.Errorf("ListService\nreceived: %v,\nwant: %q", services, want)
 		}
 	default:
-		t.Fatalf("ListServices = %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
+		t.Errorf("ListServices = %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
 	}
 }

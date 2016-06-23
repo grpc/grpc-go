@@ -69,7 +69,8 @@ import (
 
 type serverReflectionServer struct {
 	s *grpc.Server
-	// TODO add cache if necessary
+	// TODO add more cache if necessary
+	serviceInfo map[string]*grpc.ServiceInfo // cache for s.GetServiceInfo()
 }
 
 // Register registers the server reflection service on the given gRPC server.
@@ -188,6 +189,46 @@ func (s *serverReflectionServer) fileDescEncodingByFilename(name string) ([]byte
 	return proto.Marshal(fd)
 }
 
+// serviceMetadataForSymbol finds the metadata for name in s.serviceInfo.
+// name should be a service name or a method name.
+func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interface{}, error) {
+	if s.serviceInfo == nil {
+		s.serviceInfo = s.s.GetServiceInfo()
+	}
+
+	// Check if it's a service name.
+	if info, ok := s.serviceInfo[name]; ok {
+		return info.Metadata, nil
+	}
+
+	// Check if it's a method name.
+	pos := strings.LastIndex(name, ".")
+	// Not a valid method name.
+	if pos == -1 {
+		return nil, fmt.Errorf("unknown symbol: %v", name)
+	}
+
+	info, ok := s.serviceInfo[name[:pos]]
+	// Substring before last "." is not a service name.
+	if !ok {
+		return nil, fmt.Errorf("unknown symbol: %v", name)
+	}
+
+	// Search for method in info.
+	var found bool
+	for _, m := range info.Methods {
+		if m == name[pos+1:] {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("unknown symbol: %v", name)
+	}
+
+	return info.Metadata, nil
+}
+
 // fileDescEncodingContainingSymbol finds the file descriptor containing the given symbol,
 // does marshalling on it and returns the marshalled result.
 // The given symbol can be a type, a service or a method.
@@ -201,28 +242,26 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		// Check if it's a service name.
-		meta := s.s.ServiceMetadata(name, "")
-		// Check if it's a method name.
-		if meta == nil {
-			if pos := strings.LastIndex(name, "."); pos != -1 {
-				meta = s.s.ServiceMetadata(name[:pos], name[pos+1:])
-			}
+	} else { // Check if it's a service name or a method name.
+		meta, err := s.serviceMetadataForSymbol(name)
+
+		// Metadata not found.
+		if err != nil {
+			return nil, err
 		}
-		if meta != nil {
-			if enc, ok := meta.([]byte); ok {
-				fd, err = s.decodeFileDesc(enc)
-				if err != nil {
-					return nil, err
-				}
-			}
+
+		// Metadata not valid.
+		enc, ok := meta.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid file descriptor for symbol: %v")
+		}
+
+		fd, err = s.decodeFileDesc(enc)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if fd == nil {
-		return nil, fmt.Errorf("unknown symbol: %v", name)
-	}
 	return proto.Marshal(fd)
 }
 
@@ -331,12 +370,14 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 				}
 			}
 		case *rpb.ServerReflectionRequest_ListServices:
-			services := s.s.AllServiceNames()
-			serviceResponses := make([]*rpb.ServiceResponse, len(services))
-			for i, s := range services {
-				serviceResponses[i] = &rpb.ServiceResponse{
-					Name: s,
-				}
+			if s.serviceInfo == nil {
+				s.serviceInfo = s.s.GetServiceInfo()
+			}
+			serviceResponses := make([]*rpb.ServiceResponse, 0, len(s.serviceInfo))
+			for n := range s.serviceInfo {
+				serviceResponses = append(serviceResponses, &rpb.ServiceResponse{
+					Name: n,
+				})
 			}
 			out.MessageResponse = &rpb.ServerReflectionResponse_ListServicesResponse{
 				ListServicesResponse: &rpb.ListServiceResponse{

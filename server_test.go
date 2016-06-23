@@ -44,29 +44,6 @@ type emptyServiceServer interface{}
 
 type testServer struct{}
 
-var (
-	testSd = ServiceDesc{
-		ServiceName: "grpc.testing.EmptyService",
-		HandlerType: (*emptyServiceServer)(nil),
-		Methods: []MethodDesc{
-			{
-				MethodName: "EmptyCall",
-				Handler:    nil,
-			},
-		},
-		Streams: []StreamDesc{
-			{
-				StreamName:    "EmptyStream",
-				Handler:       nil,
-				ServerStreams: true,
-				ClientStreams: true,
-			},
-		},
-		Metadata: testFd,
-	}
-	testFd = []byte{0, 1, 2, 3}
-)
-
 func TestStopBeforeServe(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -88,73 +65,42 @@ func TestStopBeforeServe(t *testing.T) {
 	}
 }
 
-func TestServiceMetadata(t *testing.T) {
-	server := NewServer()
-	server.RegisterService(&testSd, &testServer{})
-
-	for _, test := range []struct {
-		service string
-		method  string
-		want    []byte
-	}{
-		{"grpc.testing.EmptyService", "", testFd},
-		{"grpc.testing.EmptyService", "EmptyCall", testFd},
-		{"grpc.testing.EmptyService", "EmptyStream", testFd},
-	} {
-		meta := server.ServiceMetadata(test.service, test.method)
-		var (
-			fd []byte
-			ok bool
-		)
-		if fd, ok = meta.([]byte); !ok {
-			t.Errorf("ServiceMetadata(%q, %q) = %v, want %v", test.service, test.method, meta, test.want)
-		}
-		if !reflect.DeepEqual(fd, test.want) {
-			t.Errorf("ServiceMetadata(%q, %q) = %v, want %v", test.service, test.method, fd, test.want)
-		}
-	}
-}
-
-func TestServiceMetadataNotFound(t *testing.T) {
-	server := NewServer()
-	server.RegisterService(&testSd, &testServer{})
-
-	for _, test := range []struct {
-		service string
-		method  string
-	}{
-		{"", "EmptyCall"},
-		{"grpc.EmptyService", ""},
-		{"grpc.EmptyService", "EmptyCall"},
-		{"grpc.testing.EmptyService", "EmptyCallWrong"},
-		{"grpc.testing.EmptyService", "EmptyStreamWrong"},
-	} {
-		meta := server.ServiceMetadata(test.service, test.method)
-		if meta != nil {
-			t.Errorf("ServiceMetadata(%q, %q) = %v, want <nil>", test.service, test.method, meta)
-		}
-	}
-}
-
-func TestAllServiceNames(t *testing.T) {
-	server := NewServer()
-	server.RegisterService(&testSd, &testServer{})
-	server.RegisterService(&ServiceDesc{
-		ServiceName: "another.EmptyService",
+func TestGetServiceInfo(t *testing.T) {
+	testSd := ServiceDesc{
+		ServiceName: "grpc.testing.EmptyService",
 		HandlerType: (*emptyServiceServer)(nil),
-	}, &testServer{})
-	services := server.AllServiceNames()
-	want := []string{"grpc.testing.EmptyService", "another.EmptyService"}
-	// Compare string slices.
-	m := make(map[string]int)
-	for _, s := range services {
-		m[s]++
+		Methods: []MethodDesc{
+			{
+				MethodName: "EmptyCall",
+				Handler:    nil,
+			},
+		},
+		Streams: []StreamDesc{
+			{
+				StreamName:    "EmptyStream",
+				Handler:       nil,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+		},
+		Metadata: []int{0, 2, 1, 3},
 	}
-	for _, s := range want {
-		if m[s] > 0 {
-			m[s]--
-			continue
-		}
-		t.Fatalf("AllServiceNames() = %q, want: %q", services, want)
+
+	server := NewServer()
+	server.RegisterService(&testSd, &testServer{})
+
+	info := server.GetServiceInfo()
+	want := map[string]*ServiceInfo{
+		"grpc.testing.EmptyService": &ServiceInfo{
+			Methods: []string{
+				"EmptyCall",
+				"EmptyStream",
+			},
+			Metadata: []int{0, 2, 1, 3},
+		},
+	}
+
+	if !reflect.DeepEqual(info, want) {
+		t.Errorf("GetServiceInfo() = %q, want %q", info, want)
 	}
 }
