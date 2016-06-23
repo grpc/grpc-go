@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.examples.helloworld;
+package io.grpc.examples.advanced;
 
 import static io.grpc.stub.ClientCalls.blockingUnaryCall;
 
@@ -39,6 +39,10 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
 import io.grpc.StatusRuntimeException;
+import io.grpc.examples.helloworld.GreeterGrpc;
+import io.grpc.examples.helloworld.HelloReply;
+import io.grpc.examples.helloworld.HelloRequest;
+import io.grpc.examples.helloworld.HelloWorldClient;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.AbstractStub;
 
