@@ -35,9 +35,10 @@ package io.grpc.stub;
  * Receives notifications from an observable stream of messages.
  *
  * <p>It is used by both the client stubs and service implementations for sending or receiving
- * stream messages. For outgoing messages, a {@code StreamObserver} is provided by the GRPC library
- * to the application. For incoming messages, the application implements the {@code StreamObserver}
- * and passes it to the GRPC library for receiving.
+ * stream messages. It is used for all {@link io.grpc.MethodDescriptor.MethodType}, including
+ * {@code UNARY} calls.  For outgoing messages, a {@code StreamObserver} is provided by the GRPC
+ * library to the application. For incoming messages, the application implements the
+ * {@code StreamObserver} and passes it to the GRPC library for receiving.
  *
  * <p>Implementations are expected to be
  * <a href="http://www.ibm.com/developerworks/library/j-jtp09263/">thread-compatible</a>.
@@ -52,6 +53,10 @@ public interface StreamObserver<V>  {
    *
    * <p>Can be called many times but is never called after {@link #onError(Throwable)} or {@link
    * #onCompleted()} are called.
+   *
+   * <p>Unary calls must invoke onNext at most once.  Clients may invoke onNext at most once for
+   * server streaming calls, but may receive many onNext callbacks.  Servers may invoke onNext at
+   * most once for client streaming calls, but may receive many onNext callbacks.
    *
    * <p>If an exception is thrown by an implementation the caller is expected to terminate the
    * stream by calling {@link #onError(Throwable)} with the caught exception prior to
