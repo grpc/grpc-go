@@ -414,8 +414,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
             observer.onHeaders(headers);
           } catch (Throwable t) {
-            stream.cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read headers"));
-            return;
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to read headers");
+            stream.cancel(status);
+            close(status, new Metadata());
           }
         }
       });
@@ -437,11 +439,26 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
               message.close();
             }
           } catch (Throwable t) {
-            stream.cancel(Status.CANCELLED.withCause(t).withDescription("Failed to read message."));
-            return;
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
+            stream.cancel(status);
+            close(status, new Metadata());
           }
         }
       });
+    }
+
+    /**
+     * Must be called from application thread.
+     */
+    private void close(Status status, Metadata trailers) {
+      closed = true;
+      cancelListenersShouldBeRemoved = true;
+      try {
+        observer.onClose(status, trailers);
+      } finally {
+        removeContextListenerAndCancelDeadlineFuture();
+      }
     }
 
     @Override
@@ -462,13 +479,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public final void runInContext() {
-          try {
-            closed = true;
-            cancelListenersShouldBeRemoved = true;
-            observer.onClose(savedStatus, savedTrailers);
-          } finally {
-            removeContextListenerAndCancelDeadlineFuture();
+          if (closed) {
+            // We intentionally don't keep the status or metadata from the server.
+            return;
           }
+          close(savedStatus, savedTrailers);
         }
       });
     }
@@ -478,7 +493,14 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public final void runInContext() {
-          observer.onReady();
+          try {
+            observer.onReady();
+          } catch (Throwable t) {
+            Status status =
+                Status.CANCELLED.withCause(t).withDescription("Failed to call onReady.");
+            stream.cancel(status);
+            close(status, new Metadata());
+          }
         }
       });
     }
