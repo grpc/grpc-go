@@ -140,7 +140,7 @@ public class Contexts {
    * Returns the {@link Status} of a cancelled context or {@code null} if the context
    * is not cancelled.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1705")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1975")
   public static Status statusFromCancelled(Context context) {
     Preconditions.checkNotNull(context, "context must not be null");
     if (!context.isCancelled()) {
