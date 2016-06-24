@@ -48,7 +48,6 @@ import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
-import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -876,15 +875,12 @@ public abstract class AbstractInteropTest {
         .setFillUsername(true)
         .build();
 
-    ServiceAccountCredentials origCreds = (ServiceAccountCredentials)
+    ServiceAccountCredentials credentials = (ServiceAccountCredentials)
         GoogleCredentials.fromStream(serviceAccountJson);
-    ServiceAccountJwtAccessCredentials credentials = new ServiceAccountJwtAccessCredentials(
-        origCreds.getClientId(), origCreds.getClientEmail(), origCreds.getPrivateKey(),
-        origCreds.getPrivateKeyId());
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub
         .withCallCredentials(MoreCallCredentials.from(credentials));
     SimpleResponse response = stub.unaryCall(request);
-    assertEquals(origCreds.getClientEmail(), response.getUsername());
+    assertEquals(credentials.getClientEmail(), response.getUsername());
     assertEquals(314159, response.getPayload().getBody().size());
   }
 

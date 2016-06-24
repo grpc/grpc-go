@@ -45,17 +45,27 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusException;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.PrivateKey;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
  * Wraps {@link Credentials} as a {@link CallCredentials}.
  */
 final class GoogleAuthLibraryCallCredentials implements CallCredentials {
+  private static final Logger log
+      = Logger.getLogger(GoogleAuthLibraryCallCredentials.class.getName());
+  private static final JwtHelper jwtHelper
+      = createJwtHelperOrNull(GoogleAuthLibraryCallCredentials.class.getClassLoader());
 
   @VisibleForTesting
   final Credentials creds;
@@ -64,7 +74,16 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   private Map<String, List<String>> lastMetadata;
 
   public GoogleAuthLibraryCallCredentials(Credentials creds) {
-    this.creds = checkNotNull(creds, "creds");
+    this(creds, jwtHelper);
+  }
+
+  @VisibleForTesting
+  GoogleAuthLibraryCallCredentials(Credentials creds, JwtHelper jwtHelper) {
+    checkNotNull(creds, "creds");
+    if (jwtHelper != null) {
+      creds = jwtHelper.tryServiceAccountToJwt(creds);
+    }
+    this.creds = creds;
   }
 
   @Override
@@ -167,5 +186,75 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
       }
     }
     return headers;
+  }
+
+  @VisibleForTesting
+  @Nullable
+  static JwtHelper createJwtHelperOrNull(ClassLoader loader) {
+    Class<?> rawServiceAccountClass;
+    try {
+      // Specify loader so it can be overriden in tests
+      rawServiceAccountClass
+          = Class.forName("com.google.auth.oauth2.ServiceAccountCredentials", false, loader);
+    } catch (ClassNotFoundException ex) {
+      return null;
+    }
+    try {
+      return new JwtHelper(rawServiceAccountClass, loader);
+    } catch (ReflectiveOperationException ex) {
+      // Failure is a bug in this class, but we still choose to gracefully recover
+      log.log(Level.WARNING, "Failed to create JWT helper. This is unexpected", ex);
+      return null;
+    }
+  }
+
+  @VisibleForTesting
+  static class JwtHelper {
+    private final Class<? extends Credentials> serviceAccountClass;
+    private final Constructor<? extends Credentials> jwtConstructor;
+    private final Method getScopes;
+    private final Method getClientId;
+    private final Method getClientEmail;
+    private final Method getPrivateKey;
+    private final Method getPrivateKeyId;
+
+    public JwtHelper(Class<?> rawServiceAccountClass, ClassLoader loader)
+        throws ReflectiveOperationException {
+      serviceAccountClass = rawServiceAccountClass.asSubclass(Credentials.class);
+      getScopes = serviceAccountClass.getMethod("getScopes");
+      getClientId = serviceAccountClass.getMethod("getClientId");
+      getClientEmail = serviceAccountClass.getMethod("getClientEmail");
+      getPrivateKey = serviceAccountClass.getMethod("getPrivateKey");
+      getPrivateKeyId = serviceAccountClass.getMethod("getPrivateKeyId");
+      Class<? extends Credentials> jwtClass = Class.forName(
+          "com.google.auth.oauth2.ServiceAccountJwtAccessCredentials", false, loader)
+          .asSubclass(Credentials.class);
+      jwtConstructor
+          = jwtClass.getConstructor(String.class, String.class, PrivateKey.class, String.class);
+    }
+
+    public Credentials tryServiceAccountToJwt(Credentials creds) {
+      if (!serviceAccountClass.isInstance(creds)) {
+        return creds;
+      }
+      try {
+        creds = serviceAccountClass.cast(creds);
+        Collection<?> scopes = (Collection<?>) getScopes.invoke(creds);
+        if (scopes.size() != 0) {
+          // Leave as-is, since the scopes may limit access within the service.
+          return creds;
+        }
+        return jwtConstructor.newInstance(
+            getClientId.invoke(creds),
+            getClientEmail.invoke(creds),
+            getPrivateKey.invoke(creds),
+            getPrivateKeyId.invoke(creds));
+      } catch (ReflectiveOperationException ex) {
+        // Failure is a bug in this class, but we still choose to gracefully recover
+        log.log(Level.WARNING,
+            "Failed converting service account credential to JWT. This is unexpected", ex);
+        return creds;
+      }
+    }
   }
 }

@@ -34,6 +34,8 @@ package io.grpc.auth;
 import static com.google.common.base.Charsets.US_ASCII;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -44,6 +46,7 @@ import static org.mockito.Mockito.when;
 import com.google.auth.Credentials;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.OAuth2Credentials;
+import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
@@ -70,7 +73,10 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -267,6 +273,75 @@ public class GoogleAuthLibraryCallCredentialsTests {
         executor, applier);
     assertEquals(1, runPendingRunnables());
     verify(credentials).getRequestMetadata(eq(new URI("https://example.com:123/a.service")));
+  }
+
+  @Test
+  public void serviceAccountToJwt() throws Exception {
+    KeyPair pair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    ServiceAccountCredentials credentials = new ServiceAccountCredentials(
+        null, "email@example.com", pair.getPrivate(), null, null) {
+      @Override
+      public AccessToken refreshAccessToken() {
+        throw new AssertionError();
+      }
+    };
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    assertEquals(1, runPendingRunnables());
+
+    verify(applier).apply(headersCaptor.capture());
+    Metadata headers = headersCaptor.getValue();
+    String[] authorization = Iterables.toArray(headers.getAll(AUTHORIZATION), String.class);
+    assertEquals(1, authorization.length);
+    assertTrue(authorization[0], authorization[0].startsWith("Bearer "));
+    // JWT is reasonably long. Normal tokens aren't.
+    assertTrue(authorization[0], authorization[0].length() > 300);
+  }
+
+  @Test
+  public void serviceAccountWithScopeNotToJwt() throws Exception {
+    final AccessToken token = new AccessToken("allyourbase", new Date(Long.MAX_VALUE));
+    KeyPair pair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+    ServiceAccountCredentials credentials = new ServiceAccountCredentials(
+        null, "email@example.com", pair.getPrivate(), null, Arrays.asList("somescope")) {
+      @Override
+      public AccessToken refreshAccessToken() {
+        return token;
+      }
+    };
+
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials);
+    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    assertEquals(1, runPendingRunnables());
+
+    verify(applier).apply(headersCaptor.capture());
+    Metadata headers = headersCaptor.getValue();
+    Iterable<String> authorization = headers.getAll(AUTHORIZATION);
+    assertArrayEquals(new String[]{"Bearer allyourbase"},
+        Iterables.toArray(authorization, String.class));
+  }
+
+  @Test
+  public void oauthClassesNotInClassPath() throws Exception {
+    ListMultimap<String, String> values = LinkedListMultimap.create();
+    values.put("Authorization", "token1");
+    when(credentials.getRequestMetadata(eq(expectedUri))).thenReturn(Multimaps.asMap(values));
+
+    assertNull(GoogleAuthLibraryCallCredentials.createJwtHelperOrNull(null));
+    GoogleAuthLibraryCallCredentials callCredentials =
+        new GoogleAuthLibraryCallCredentials(credentials, null);
+    callCredentials.applyRequestMetadata(method, attrs, executor, applier);
+    assertEquals(1, runPendingRunnables());
+
+    verify(credentials).getRequestMetadata(eq(expectedUri));
+    verify(applier).apply(headersCaptor.capture());
+    Metadata headers = headersCaptor.getValue();
+    Iterable<String> authorization = headers.getAll(AUTHORIZATION);
+    assertArrayEquals(new String[]{"token1"},
+        Iterables.toArray(authorization, String.class));
   }
 
   private int runPendingRunnables() {
