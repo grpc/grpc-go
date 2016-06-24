@@ -57,7 +57,7 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context, uri ...string) (ma
 		return nil, err
 	}
 	return map[string]string{
-		"authorization": token.TokenType + " " + token.AccessToken,
+		"authorization": token.Type() + " " + token.AccessToken,
 	}, nil
 }
 
