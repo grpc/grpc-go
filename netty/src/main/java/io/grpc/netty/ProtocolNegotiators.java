@@ -32,7 +32,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSIONS;
+import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSION;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -152,7 +152,7 @@ public final class ProtocolNegotiators {
       if (evt instanceof SslHandshakeCompletionEvent) {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
-          if (HTTP2_VERSIONS.contains(sslHandler(ctx.pipeline()).applicationProtocol())) {
+          if (HTTP2_VERSION.equals(sslHandler(ctx.pipeline()).applicationProtocol())) {
             // Successfully negotiated the protocol. Replace this handler with
             // the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
@@ -500,7 +500,7 @@ public final class ProtocolNegotiators {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
           SslHandler handler = ctx.pipeline().get(SslHandler.class);
-          if (HTTP2_VERSIONS.contains(handler.applicationProtocol())) {
+          if (HTTP2_VERSION.equals(handler.applicationProtocol())) {
             // Successfully negotiated the protocol.
             logSslEngineDetails(Level.FINER, ctx, "TLS negotiation succeeded.", null);
             writeBufferedAndRemove(ctx);

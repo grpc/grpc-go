@@ -31,7 +31,8 @@
 
 package io.grpc.netty;
 
-import com.google.common.collect.ImmutableSet;
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Collections.singletonList;
 
 import io.grpc.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
@@ -39,13 +40,13 @@ import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
+import io.netty.handler.ssl.ApplicationProtocolNegotiator;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import java.io.File;
-import java.util.Set;
 
 /**
  * Utility for configuring SslContext for gRPC.
@@ -54,7 +55,8 @@ import java.util.Set;
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
 
-  static final Set<String> HTTP2_VERSIONS = ImmutableSet.of("h2");
+  // The "h2" string identifies HTTP/2 when used over TLS
+  static final String HTTP2_VERSION = "h2";
 
   /*
    * These configs use ACCEPT due to limited support in OpenSSL.  Actual protocol enforcement is
@@ -64,19 +66,19 @@ public class GrpcSslContexts {
       Protocol.ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      HTTP2_VERSIONS);
+      singletonList(HTTP2_VERSION));
 
   private static ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
       Protocol.NPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      HTTP2_VERSIONS);
+      singletonList(HTTP2_VERSION));
 
   private static ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
       Protocol.NPN_AND_ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      HTTP2_VERSIONS);
+      singletonList(HTTP2_VERSION));
 
   /**
    * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
@@ -163,6 +165,16 @@ public class GrpcSslContexts {
       }
       default:
         throw new IllegalArgumentException("Unsupported provider: " + provider);
+    }
+  }
+
+  static void ensureAlpnAndH2Enabled(ApplicationProtocolNegotiator alpnNegotiator) {
+    checkArgument(alpnNegotiator != null, "ALPN must be configured");
+    checkArgument(alpnNegotiator.protocols() != null && !alpnNegotiator.protocols().isEmpty(),
+        "ALPN must be enabled and list HTTP/2 as a supported protocol.");
+    if (!alpnNegotiator.protocols().contains(HTTP2_VERSION)) {
+      throw new IllegalArgumentException("This ALPN config does not support HTTP/2. Expected '"
+          + HTTP2_VERSION + "', but got " + alpnNegotiator.protocols() + '.');
     }
   }
 }

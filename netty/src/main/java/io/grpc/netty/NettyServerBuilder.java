@@ -159,8 +159,11 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * have been configured with {@link GrpcSslContexts}, but options could have been overridden.
    */
   public NettyServerBuilder sslContext(SslContext sslContext) {
-    checkArgument(sslContext == null || sslContext.isServer(),
-        "Client SSL context can not be used for server");
+    if (sslContext != null) {
+      checkArgument(sslContext.isServer(),
+          "Client SSL context can not be used for server");
+      GrpcSslContexts.ensureAlpnAndH2Enabled(sslContext.applicationProtocolNegotiator());
+    }
     this.sslContext = sslContext;
     return this;
   }
