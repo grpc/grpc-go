@@ -24,7 +24,9 @@ before_install:
   - echo "failOnWarnings=true" >> $HOME/.gradle/gradle.properties
 
 install:
-  - ./gradlew assemble generateTestProto
+  - ./gradlew assemble generateTestProto install
+  - pushd examples && ./gradlew build && popd
+  - pushd examples && mvn verify && popd
 
 before_script:
   - test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)

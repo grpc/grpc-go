@@ -77,6 +77,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    # Change version to next minor (and keep -SNAPSHOT)
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
      build.gradle android-interop-testing/app/build.gradle \
+     examples/build.gradle examples/pom.xml \
      examples/android/app/build.gradle
    $ ./gradlew build
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
@@ -96,6 +97,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    # Change version to remove -SNAPSHOT
    $ sed -i 's/-SNAPSHOT\(.*CURRENT_GRPC_VERSION\)/\1/' \
      build.gradle android-interop-testing/app/build.gradle \
+     examples/build.gradle examples/pom.xml \
      examples/android/app/build.gradle
    $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$PATCH"
@@ -108,6 +110,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    # Change version to next patch and add -SNAPSHOT
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT'\1/' \
      build.gradle android-interop-testing/app/build.gradle \
+     examples/build.gradle examples/pom.xml \
      examples/android/app/build.gradle
    $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT"

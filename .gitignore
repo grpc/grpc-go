@@ -4,6 +4,9 @@ gradle.properties
 .gradle
 local.properties
 
+# Maven (examples)
+target
+
 # IntelliJ IDEA
 .idea
 *.iml

@@ -25,5 +25,5 @@ $ ./gradlew install -PskipCodegen=true
 **3. Install the app**
 ```sh
 $ cd examples/android
-$ ../../gradlew installDebug
+$ ./gradlew installDebug
 ```

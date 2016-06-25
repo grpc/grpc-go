@@ -1,87 +1,111 @@
-// Don't consider this build file part of the example! It is much more complex
-// than yours needs to be. For your own build file, please follow ../README.md
-// instead. For a starting point you can make a build.gradle file with:
-//
-//   apply plugin: 'java'
-//   repositories {
-//     mavenCentral()
-//   }
-//
-// Then copy the snippets from README.md.
+apply plugin: 'java'
+apply plugin: 'com.google.protobuf'
 
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    // ASSUMES GRADLE 2.12 OR HIGHER. Use plugin version 0.7.5 with earlier
+    // gradle versions
+    classpath 'com.google.protobuf:protobuf-gradle-plugin:0.7.7'
+  }
+}
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+}
+
+// IMPORTANT: You probably want the non-SNAPSHOT version of gRPC. Make sure you
+// are looking at a tagged version of the example and not "master"!
+
+// Feel free to delete the comment at the next line. It is just for safely
+// updating the version in our release process.
+def grpcVersion = '1.0.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+
+dependencies {
+  compile "io.grpc:grpc-netty:${grpcVersion}"
+  compile "io.grpc:grpc-protobuf:${grpcVersion}"
+  compile "io.grpc:grpc-stub:${grpcVersion}"
+}
+
+protobuf {
+  protoc {
+    // The version of protoc must match protobuf-java. If you don't depend on
+    // protobuf-java directly, you will be transitively depending on the
+    // protobuf-java version that grpc depends on.
+    artifact = 'com.google.protobuf:protoc:3.0.0-beta-3'
+  }
+  plugins {
+    grpc {
+      artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+    }
+  }
+  generateProtoTasks {
+    all()*.plugins {
+      grpc {}
+    }
+  }
+}
+
+// Inform IntelliJ projects about the generated code.
+apply plugin: 'idea'
+
+idea {
+  module {
+    // Not using generatedSourceDirs because of
+    // https://discuss.gradle.org/t/support-for-intellij-2016/15294/8
+    sourceDirs += file("${projectDir}/build/generated/source/proto/main/java");
+    sourceDirs += file("${projectDir}/build/generated/source/proto/main/grpc");
+  }
+}
+
+// Provide convenience executables for trying out the examples.
 apply plugin: 'application'
-
-description = "grpc Examples"
 
 startScripts.enabled = false
 
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath libraries.protobuf_plugin
-    }
-}
-
-dependencies {
-    compile project(':grpc-core'),
-            project(':grpc-netty'),
-            project(':grpc-protobuf'),
-            project(':grpc-stub'),
-            libraries.protobuf_util
-}
-
-configureProtoCompilation()
-
 task routeGuideServer(type: CreateStartScripts) {
-    mainClassName = "io.grpc.examples.routeguide.RouteGuideServer"
-    applicationName = "route-guide-server"
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+  mainClassName = 'io.grpc.examples.routeguide.RouteGuideServer'
+  applicationName = 'route-guide-server'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task routeGuideClient(type: CreateStartScripts) {
-    mainClassName = "io.grpc.examples.routeguide.RouteGuideClient"
-    applicationName = "route-guide-client"
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+  mainClassName = 'io.grpc.examples.routeguide.RouteGuideClient'
+  applicationName = 'route-guide-client'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task helloWorldServer(type: CreateStartScripts) {
-    mainClassName = "io.grpc.examples.helloworld.HelloWorldServer"
-    applicationName = "hello-world-server"
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+  mainClassName = 'io.grpc.examples.helloworld.HelloWorldServer'
+  applicationName = 'hello-world-server'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task helloWorldClient(type: CreateStartScripts) {
-    mainClassName = "io.grpc.examples.helloworld.HelloWorldClient"
-    applicationName = "hello-world-client"
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+  mainClassName = 'io.grpc.examples.helloworld.HelloWorldClient'
+  applicationName = 'hello-world-client'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task compressingHelloWorldClient(type: CreateStartScripts) {
-    mainClassName = "io.grpc.examples.experimental.CompressingHelloWorldClient"
-    applicationName = "compressing-hello-world-client"
-    outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + project.configurations.runtime
+  mainClassName = 'io.grpc.examples.experimental.CompressingHelloWorldClient'
+  applicationName = 'compressing-hello-world-client'
+  outputDir = new File(project.buildDir, 'tmp')
+  classpath = jar.outputs.files + project.configurations.runtime
 }
 
-applicationDistribution.into("bin") {
-    from(routeGuideServer)
-    from(routeGuideClient)
-    from(helloWorldServer)
-    from(helloWorldClient)
-    from(compressingHelloWorldClient)
-    fileMode = 0755
-}
-
-// Let intellij projects refer to generated code
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-    }
+applicationDistribution.into('bin') {
+  from(routeGuideServer)
+  from(routeGuideClient)
+  from(helloWorldServer)
+  from(helloWorldClient)
+  from(compressingHelloWorldClient)
+  fileMode = 0755
 }

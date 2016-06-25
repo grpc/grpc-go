@@ -1,10 +1,14 @@
 grpc Examples
 ==============================================
 
+The examples require grpc-java to already be built. You are strongly encouraged
+to check out a git release tag, since there will already be a build of grpc
+available. Otherwise you must follow [COMPILING](../COMPILING.md).
+
 To build the examples, run in this directory:
 
 ```
-$ ../gradlew installDist -PskipCodegen=true
+$ ./gradlew installDist
 ```
 
 This creates the scripts `hello-world-server`, `hello-world-client`,
@@ -29,3 +33,14 @@ That's it!
 Please refer to gRPC Java's [README](../README.md) and
 [tutorial](http://www.grpc.io/docs/tutorials/basic/java.html) for more
 information.
+
+## Maven
+
+If you prefer to use Maven:
+```
+$ mvn verify
+$ # Run the server
+$ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldServer
+$ # In another terminal run the client
+$ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldClient
+```
