@@ -107,7 +107,7 @@ func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
 }
 
 func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
-	conn, ok := s.ServerTransport().(*http2Server)
+	conn, ok := s.ServerTransport().(*http2Transport)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
@@ -427,7 +427,7 @@ func TestMaxStreams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-	cc, ok := ct.(*http2Client)
+	cc, ok := ct.(*http2Transport)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Client", ct)
 	}
@@ -491,7 +491,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo",
 	}
-	var sc *http2Server
+	var sc *http2Transport
 	// Wait until the server transport is setup.
 	for {
 		server.mu.Lock()
@@ -502,7 +502,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		}
 		for k := range server.conns {
 			var ok bool
-			sc, ok = k.(*http2Server)
+			sc, ok = k.(*http2Transport)
 			if !ok {
 				t.Fatalf("Failed to convert %v to *http2Server", k)
 			}
@@ -510,7 +510,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		server.mu.Unlock()
 		break
 	}
-	cc, ok := ct.(*http2Client)
+	cc, ok := ct.(*http2Transport)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Client", ct)
 	}
@@ -554,7 +554,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo",
 	}
-	var sc *http2Server
+	var sc *http2Transport
 	// Wait until the server transport is setup.
 	for {
 		server.mu.Lock()
@@ -565,7 +565,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		}
 		for k := range server.conns {
 			var ok bool
-			sc, ok = k.(*http2Server)
+			sc, ok = k.(*http2Transport)
 			if !ok {
 				t.Fatalf("Failed to convert %v to *http2Server", k)
 			}
@@ -573,7 +573,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		server.mu.Unlock()
 		break
 	}
-	cc, ok := ct.(*http2Client)
+	cc, ok := ct.(*http2Transport)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Client", ct)
 	}
@@ -654,7 +654,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo",
 	}
-	conn, ok := ct.(*http2Client)
+	conn, ok := ct.(*http2Transport)
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Client", ct)
 	}
