@@ -427,6 +427,7 @@ func (t *http2Transport) reader(handle func(*Stream)) {
 			if se, ok := err.(http2.StreamError); ok {
 				t.mu.Lock()
 				s := t.activeStreams[se.StreamID]
+				ours := t.nextID % 2
 				t.mu.Unlock()
 				if s != nil {
 					if s.st == nil {
@@ -436,7 +437,7 @@ func (t *http2Transport) reader(handle func(*Stream)) {
 						t.closeStream(s, se.Code)
 					}
 				}
-				if se.StreamID%2 != t.nextID%2 {
+				if se.StreamID%2 != ours {
 					t.controlBuf.put(&resetStream{se.StreamID, se.Code})
 				}
 				continue
@@ -478,7 +479,7 @@ func (t *http2Transport) HandleStreams(handle func(*Stream)) {
 
 // operateHeaders takes action on the decoded headers.
 func (t *http2Transport) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) {
-	if id := frame.Header().StreamID; id%2 == t.nextID%2 { // Response
+	if id := frame.Header().StreamID; (id%2 != 0) == t.isClient { // Response
 		s, ok := t.getStream(frame)
 		if !ok {
 			return
