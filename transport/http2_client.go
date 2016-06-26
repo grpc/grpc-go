@@ -33,6 +33,7 @@
 
 package transport
 
+/*
 import (
 	"bytes"
 	"io"
@@ -944,3 +945,4 @@ func (t *http2Client) notifyError(err error) {
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 }
+*/

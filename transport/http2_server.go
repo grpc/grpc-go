@@ -33,11 +33,12 @@
 
 package transport
 
+/*
 import (
 	"bytes"
 	"errors"
 	"io"
-	"math"
+	//"math"
 	"net"
 	"strconv"
 	"sync"
@@ -741,3 +742,4 @@ func (t *http2Server) closeStream(s *Stream) {
 func (t *http2Server) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
 }
+*/
