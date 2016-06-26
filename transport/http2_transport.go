@@ -137,6 +137,11 @@ func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ 
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
+	var nextID uint32 = 2
+	if isClient {
+		// The client initiated stream id is odd starting from 1.
+		nextID = 1
+	}
 	t := &http2Transport{
 		isClient: isClient,
 
@@ -154,17 +159,13 @@ func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ 
 		writableChan:    make(chan int, 1),
 		shutdownChan:    make(chan struct{}),
 		activeStreams:   make(map[uint32]*Stream),
+		errorChan:       make(chan struct{}),
 		streamSendQuota: defaultWindowSize,
-
-		// client-specific
-
-		creds:     opts.PerRPCCredentials,
-		target:    opts.PeerAddr,
-		scheme:    opts.Scheme,
-		userAgent: ua,
-		// The client initiated stream id is odd starting from 1.
-		nextID:    1,
-		errorChan: make(chan struct{}),
+		nextID:          nextID,
+		userAgent:       ua,
+		creds:           opts.PerRPCCredentials,
+		target:          opts.PeerAddr,
+		scheme:          opts.Scheme,
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -228,10 +229,6 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 	})
 }
 
-func (t *http2Transport) client() bool {
-	return t.isClient
-}
-
 func (t *http2Transport) getStream(f http2.Frame) (*Stream, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -289,13 +286,13 @@ func (t *http2Transport) handleData(f *http2.DataFrame) {
 			return
 		}
 		if err := s.fc.onData(uint32(size)); err != nil {
-			if t.client() {
+			if s.st == nil {
 				s.state = streamDone
 				s.statusCode = codes.Internal
 				s.statusDesc = err.Error()
 			}
 			s.mu.Unlock()
-			if t.client() {
+			if s.st == nil {
 				s.write(recvMsg{err: io.EOF})
 			} else {
 				t.closeStream(s, 0)
@@ -315,22 +312,16 @@ func (t *http2Transport) handleData(f *http2.DataFrame) {
 	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
-		if t.client() {
+		if s.state != streamDone {
 			if s.state == streamWriteDone {
 				s.state = streamDone
 			} else {
 				s.state = streamReadDone
 			}
+		}
+		if s.st == nil {
 			s.statusCode = codes.Internal
 			s.statusDesc = "server closed the stream without sending trailers"
-		} else {
-			if s.state != streamDone {
-				if s.state == streamWriteDone {
-					s.state = streamDone
-				} else {
-					s.state = streamReadDone
-				}
-			}
 		}
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})
@@ -422,14 +413,14 @@ func (t *http2Transport) reader(handle func(*Stream)) {
 				s := t.activeStreams[se.StreamID]
 				t.mu.Unlock()
 				if s != nil {
-					if t.client() {
+					if s.st == nil {
 						// use error detail to provide better err message
 						handleMalformedHTTP2(s, StreamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.errorDetail()))
 					} else {
 						t.closeStream(s, se.Code)
 					}
 				}
-				if !t.client() {
+				if se.StreamID%2 != t.nextID%2 {
 					t.controlBuf.put(&resetStream{se.StreamID, se.Code})
 				}
 				continue
@@ -440,15 +431,6 @@ func (t *http2Transport) reader(handle func(*Stream)) {
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			if !t.client() {
-				id := frame.Header().StreamID
-				if id%2 != 1 || id <= t.maxStreamID {
-					// illegal gRPC stream id.
-					t.notifyError(ConnectionErrorf("received an illegal stream id: %v", id))
-					break
-				}
-				t.maxStreamID = id
-			}
 			t.operateHeaders(frame, handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
@@ -480,7 +462,7 @@ func (t *http2Transport) HandleStreams(handle func(*Stream)) {
 
 // operateHeaders takes action on the decoded headers.
 func (t *http2Transport) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) {
-	if t.client() {
+	if id := frame.Header().StreamID; id%2 == t.nextID%2 { // Response
 		s, ok := t.getStream(frame)
 		if !ok {
 			return
@@ -522,7 +504,12 @@ func (t *http2Transport) operateHeaders(frame *http2.MetaHeadersFrame, handle fu
 		s.mu.Unlock()
 
 		s.write(recvMsg{err: io.EOF})
-	} else {
+	} else { // New request
+		if id < t.maxStreamID {
+			t.notifyError(ConnectionErrorf("received an illegal stream id: %v", id))
+			return
+		}
+		t.maxStreamID = id
 		buf := newRecvBuffer()
 		s := &Stream{
 			id:  frame.Header().StreamID,
@@ -591,7 +578,11 @@ func (t *http2Transport) operateHeaders(frame *http2.MetaHeadersFrame, handle fu
 		s.windowHandler = func(n int) {
 			t.updateWindow(s, uint32(n))
 		}
-		handle(s)
+		if handle != nil {
+			handle(s)
+		} else {
+			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+		}
 	}
 }
 
@@ -1081,7 +1072,7 @@ func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
 			}
 		}
 		var endStream bool
-		if t.isClient && opts.Last && r.Len() == 0 {
+		if s.st == nil && opts.Last && r.Len() == 0 {
 			endStream = true
 		}
 		// Indicate there is a writer who is about to write a data frame.
@@ -1172,22 +1163,14 @@ func (t *http2Transport) Close() (err error) {
 		}
 	}
 	t.state = closing
-	if t.isClient {
-		t.mu.Unlock()
-		close(t.shutdownChan)
-		err = t.conn.Close()
-		t.mu.Lock()
-	}
 	streams := t.activeStreams
 	t.activeStreams = nil
 	t.mu.Unlock()
-	if !t.isClient {
-		close(t.shutdownChan)
-		err = t.conn.Close()
-	}
+	close(t.shutdownChan)
+	err = t.conn.Close()
 	// Notify/cancel all active streams.
 	for _, s := range streams {
-		if t.isClient {
+		if s.st == nil {
 			s.mu.Lock()
 			if !s.headerDone {
 				close(s.headerChan)
@@ -1205,13 +1188,30 @@ func (t *http2Transport) Close() (err error) {
 // closeStream clears the footprint of a stream when the stream is not needed
 // any more.
 func (t *http2Transport) closeStream(s *Stream, errCode http2.ErrCode) {
-	if t.client() {
-		s.mu.Lock()
-		if s.state == streamDone {
-			s.mu.Unlock()
-			return
+	ours := s.st == nil
+	if !ours {
+		t.mu.Lock()
+		delete(t.activeStreams, s.id)
+		t.mu.Unlock()
+		// In case stream sending and receiving are invoked in separate
+		// goroutines (e.g., bi-directional streaming), cancel needs to be
+		// called to interrupt the potential blocking on other goroutines.
+		s.cancel()
+	}
+	s.mu.Lock()
+	if !ours {
+		if q := s.fc.resetPendingData(); q > 0 {
+			if w := t.fc.onRead(q); w > 0 {
+				t.controlBuf.put(&windowUpdate{0, w})
+			}
 		}
-		s.state = streamDone
+	}
+	if s.state == streamDone {
+		s.mu.Unlock()
+		return
+	}
+	s.state = streamDone
+	if ours {
 		if !s.headerDone {
 			close(s.headerChan)
 			s.headerDone = true
@@ -1222,28 +1222,10 @@ func (t *http2Transport) closeStream(s *Stream, errCode http2.ErrCode) {
 			grpclog.Println("transport: http2Transport.handleRSTStream found no mapped gRPC status for the received http2 error ", errCode)
 			s.statusCode = codes.Unknown
 		}
-		s.mu.Unlock()
+	}
+	s.mu.Unlock()
+	if ours {
 		s.write(recvMsg{err: io.EOF})
-	} else {
-		t.mu.Lock()
-		delete(t.activeStreams, s.id)
-		t.mu.Unlock()
-		// In case stream sending and receiving are invoked in separate
-		// goroutines (e.g., bi-directional streaming), cancel needs to be
-		// called to interrupt the potential blocking on other goroutines.
-		s.cancel()
-		s.mu.Lock()
-		if q := s.fc.resetPendingData(); q > 0 {
-			if w := t.fc.onRead(q); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
-		}
-		if s.state == streamDone {
-			s.mu.Unlock()
-			return
-		}
-		s.state = streamDone
-		s.mu.Unlock()
 	}
 }
 
@@ -1256,7 +1238,7 @@ func (t *http2Transport) Error() <-chan struct{} {
 }
 
 func (t *http2Transport) notifyError(err error) {
-	if t.client() {
+	if t.isClient {
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		// make sure t.errorChan is closed only once.
@@ -1272,23 +1254,19 @@ func (t *http2Transport) notifyError(err error) {
 }
 
 func (t *http2Transport) GracefulClose() error {
-	if t.client() {
-		t.mu.Lock()
-		if t.state == closing {
-			t.mu.Unlock()
-			return nil
-		}
-		if t.state == draining {
-			t.mu.Unlock()
-			return nil
-		}
-		t.state = draining
-		active := len(t.activeStreams)
+	t.mu.Lock()
+	if t.state == closing {
 		t.mu.Unlock()
-		if active == 0 {
-			return t.Close()
-		}
-	} else {
+		return nil
+	}
+	if t.state == draining {
+		t.mu.Unlock()
+		return nil
+	}
+	t.state = draining
+	active := len(t.activeStreams)
+	t.mu.Unlock()
+	if active == 0 {
 		return t.Close()
 	}
 	return nil
