@@ -25,7 +25,8 @@ import (
 var ErrIllegalHeaderWrite = StreamErrorf(codes.Unknown, "the stream is done or WriteHeader was already called")
 
 type http2Transport struct {
-	isClient bool // TODO(dennwc): remove
+	// TODO(dennwc): compatibility; mostly determines how errors are handled
+	isClient bool
 
 	conn     net.Conn             // underlying communication channel
 	authInfo credentials.AuthInfo // auth info about the connection
@@ -44,7 +45,7 @@ type http2Transport struct {
 	hEnc         *hpack.Encoder // HPACK encoder
 
 	// The max number of concurrent streams.
-	maxStreamsMe   uint32
+	maxStreams     uint32
 	maxStreamsPeer uint32
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
@@ -67,7 +68,7 @@ type http2Transport struct {
 
 	// streamsQuota limits the max number of concurrent streams.
 	streamsQuota *quotaPool
-	target       string // server name/addr
+	target       string // peer name/addr
 	userAgent    string
 	nextID       uint32 // the next stream ID to be used
 	// errorChan is closed to notify the I/O error to the caller.
@@ -78,17 +79,27 @@ type http2Transport struct {
 }
 
 type TransportOptions struct {
+	// MaxStreams limits the number of incoming streams.
 	MaxStreams uint32
-	PeerAddr   string
-	Scheme     string
-	AuthInfo   credentials.AuthInfo
+	// Address of the remote peer. If empty, conn.RemoteAddr is used.
+	PeerAddr string
+	// Scheme for the transport. Defaults to http.
+	Scheme string
+	// AuthInfo associated with transport.
+	AuthInfo credentials.AuthInfo
 	// UserAgent is the application user agent.
 	UserAgent string
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
-	HandleStreams     func(*Stream)
+	// HandleStreams is used to handle incoming streams.
+	HandleStreams func(*Stream)
 }
 
+// newHTTP2Transport constructs a transport based on HTTP2. ConnectionError is
+// returned if something goes wrong.
+//
+// Setting HandleStreams on options acts as a call to HandleStreams with the same
+// parameter on transport.
 func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ *http2Transport, err error) {
 	if isClient {
 		// Send connection preface to server.
@@ -142,6 +153,14 @@ func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ 
 		// The client initiated stream id is odd starting from 1.
 		nextID = 1
 	}
+	target := opts.PeerAddr
+	if target == "" {
+		target = conn.RemoteAddr().String()
+	}
+	scheme := opts.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
 	t := &http2Transport{
 		isClient: isClient,
 
@@ -150,7 +169,7 @@ func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ 
 		framer:          framer,
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
-		maxStreamsMe:    maxStreams,
+		maxStreams:      maxStreams,
 		maxStreamsPeer:  math.MaxInt32,
 		controlBuf:      newRecvBuffer(),
 		fc:              &inFlow{limit: initialConnWindowSize},
@@ -164,8 +183,8 @@ func newHTTP2Transport(conn net.Conn, isClient bool, opts *TransportOptions) (_ 
 		nextID:          nextID,
 		userAgent:       ua,
 		creds:           opts.PerRPCCredentials,
-		target:          opts.PeerAddr,
-		scheme:          opts.Scheme,
+		target:          target,
+		scheme:          scheme,
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -378,15 +397,11 @@ func handleMalformedHTTP2(s *Stream, err error) {
 }
 
 // reader runs as a separate goroutine in charge of reading data from network
-// connection.
+// connection. It receives incoming streams using the given handler.
 //
 // TODO(zhaoq): currently one reader per transport. Investigate whether this is
 // optimal.
 // TODO(zhaoq): Check the validity of the incoming frame sequence.
-//
-// TODO(dennwc): comments
-// HandleStreams receives incoming streams using the given handler. This is
-// typically run in a separate goroutine.
 func (t *http2Transport) reader(handle func(*Stream)) {
 	// Check the validity of server preface.
 	frame, err := t.framer.readFrame()
@@ -567,7 +582,7 @@ func (t *http2Transport) operateHeaders(frame *http2.MetaHeadersFrame, handle fu
 			t.mu.Unlock()
 			return
 		}
-		if uint32(len(t.activeStreams)) >= t.maxStreamsMe {
+		if uint32(len(t.activeStreams)) >= t.maxStreams {
 			t.mu.Unlock()
 			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
 			return
@@ -1009,19 +1024,16 @@ func (t *http2Transport) WriteStatus(s *Stream, statusCode codes.Code, statusDes
 		t.notifyError(err)
 		return err
 	}
-	t.closeStream(s, http2.ErrCodeStreamClosed) // TODO(dennwc): proper code
+	t.closeStream(s, 0)
 	t.writableChan <- 0
 	return nil
 }
 
-// Write formats the data into HTTP2 data frame(s) and sends it out. The caller
+// Write formats the data into HTTP2 data frame(s) and sends it out. Non-nil error
+// is returns if it fails (e.g., framing error, transport error). The caller
 // should proceed only if Write returns nil.
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
-//
-// TODO(dennwc)
-// Write converts the data into HTTP2 data frame and sends it out. Non-nil error
-// is returns if it fails (e.g., framing error, transport error).
 func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
 	// TODO(zhaoq): Support multi-writers for a single stream.
 	response := s.st != nil
@@ -1141,14 +1153,11 @@ func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
 	return nil
 }
 
-// TODO(dennwc): comments
-// Close starts shutting down the http2Server transport.
-// TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
-// could cause some resource issue. Revisit this later.
-//
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
 // accessed any more.
+// TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
+// could cause some resource issue. Revisit this later.
 func (t *http2Transport) Close() (err error) {
 	t.mu.Lock()
 	if t.state == reachable {
