@@ -3,6 +3,14 @@ package transport
 import (
 	"bytes"
 	"errors"
+	"io"
+	"math"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -11,13 +19,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"io"
-	"math"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
