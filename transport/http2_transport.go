@@ -22,7 +22,7 @@ import (
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
 // the stream's state.
-var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHeader was already called")
+var ErrIllegalHeaderWrite = StreamErrorf(codes.Unknown, "the stream is done or WriteHeader was already called")
 
 type http2Transport struct {
 	isClient bool // TODO(dennwc): remove
@@ -1032,150 +1032,21 @@ func (t *http2Transport) WriteStatus(s *Stream, statusCode codes.Code, statusDes
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
-	if t.client() {
-		r := bytes.NewBuffer(data)
-		for {
-			var p []byte
-			if r.Len() > 0 {
-				size := http2MaxFrameLen
-				s.sendQuotaPool.add(0)
-				// Wait until the stream has some quota to send the data.
-				sq, err := wait(s.ctx, t.shutdownChan, s.sendQuotaPool.acquire())
-				if err != nil {
-					return err
-				}
-				t.sendQuotaPool.add(0)
-				// Wait until the transport has some quota to send the data.
-				tq, err := wait(s.ctx, t.shutdownChan, t.sendQuotaPool.acquire())
-				if err != nil {
-					if _, ok := err.(StreamError); ok {
-						t.sendQuotaPool.cancel()
-					}
-					return err
-				}
-				if sq < size {
-					size = sq
-				}
-				if tq < size {
-					size = tq
-				}
-				p = r.Next(size)
-				ps := len(p)
-				if ps < sq {
-					// Overbooked stream quota. Return it back.
-					s.sendQuotaPool.add(sq - ps)
-				}
-				if ps < tq {
-					// Overbooked transport quota. Return it back.
-					t.sendQuotaPool.add(tq - ps)
-				}
-			}
-			var (
-				endStream  bool
-				forceFlush bool
-			)
-			if opts.Last && r.Len() == 0 {
-				endStream = true
-			}
-			// Indicate there is a writer who is about to write a data frame.
-			t.framer.adjustNumWriters(1)
-			// Got some quota. Try to acquire writing privilege on the transport.
-			if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
-				if _, ok := err.(StreamError); ok {
-					// Return the connection quota back.
-					t.sendQuotaPool.add(len(p))
-				}
-				if t.framer.adjustNumWriters(-1) == 0 {
-					// This writer is the last one in this batch and has the
-					// responsibility to flush the buffered frames. It queues
-					// a flush request to controlBuf instead of flushing directly
-					// in order to avoid the race with other writing or flushing.
-					t.controlBuf.put(&flushIO{})
-				}
-				return err
-			}
-			select {
-			case <-s.ctx.Done():
-				t.sendQuotaPool.add(len(p))
-				if t.framer.adjustNumWriters(-1) == 0 {
-					t.controlBuf.put(&flushIO{})
-				}
-				t.writableChan <- 0
-				return ContextErr(s.ctx.Err())
-			default:
-			}
-			if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 {
-				// Do a force flush iff this is last frame for the entire gRPC message
-				// and the caller is the only writer at this moment.
-				forceFlush = true
-			}
-			// If WriteData fails, all the pending streams will be handled
-			// by http2Client.Close(). No explicit CloseStream() needs to be
-			// invoked.
-			if err := t.framer.writeData(forceFlush, s.id, endStream, p); err != nil {
-				t.notifyError(err)
-				return ConnectionErrorf("transport: %v", err)
-			}
-			if t.framer.adjustNumWriters(-1) == 0 {
-				t.framer.flushWrite()
-			}
-			t.writableChan <- 0
-			if r.Len() == 0 {
-				break
-			}
+	// TODO(zhaoq): Support multi-writers for a single stream.
+	response := s.st != nil
+	if response { // Response stream - must send status code.
+		// Write headers if not already done that.
+		if err := t.WriteHeader(s, nil); err != nil && err != ErrIllegalHeaderWrite {
+			return err
 		}
-		if !opts.Last {
-			return nil
+	}
+	r := bytes.NewBuffer(data)
+	for {
+		if response && r.Len() == 0 {
+			break
 		}
-		s.mu.Lock()
-		if s.state != streamDone {
-			if s.state == streamReadDone {
-				s.state = streamDone
-			} else {
-				s.state = streamWriteDone
-			}
-		}
-		s.mu.Unlock()
-		return nil
-	} else {
-		// TODO(zhaoq): Support multi-writers for a single stream.
-		var writeHeaderFrame bool
-		s.mu.Lock()
-		if s.state == streamDone {
-			s.mu.Unlock()
-			return StreamErrorf(codes.Unknown, "the stream has been done")
-		}
-		if !s.headerOk {
-			writeHeaderFrame = true
-			s.headerOk = true
-		}
-		s.mu.Unlock()
-		if writeHeaderFrame {
-			if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
-				return err
-			}
-			t.hBuf.Reset()
-			t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-			t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-			if s.sendCompress != "" {
-				t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
-			}
-			p := http2.HeadersFrameParam{
-				StreamID:      s.id,
-				BlockFragment: t.hBuf.Bytes(),
-				EndHeaders:    true,
-			}
-			if err := t.framer.writeHeaders(false, p); err != nil {
-				t.notifyError(err)
-				return ConnectionErrorf("transport: %v", err)
-			}
-			t.writableChan <- 0
-		}
-		r := bytes.NewBuffer(data)
-		for {
-			if r.Len() == 0 {
-				return nil
-			}
+		var p []byte
+		if r.Len() > 0 {
 			size := http2MaxFrameLen
 			s.sendQuotaPool.add(0)
 			// Wait until the stream has some quota to send the data.
@@ -1198,7 +1069,7 @@ func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
 			if tq < size {
 				size = tq
 			}
-			p := r.Next(size)
+			p = r.Next(size)
 			ps := len(p)
 			if ps < sq {
 				// Overbooked stream quota. Return it back.
@@ -1208,47 +1079,75 @@ func (t *http2Transport) Write(s *Stream, data []byte, opts *Options) error {
 				// Overbooked transport quota. Return it back.
 				t.sendQuotaPool.add(tq - ps)
 			}
-			t.framer.adjustNumWriters(1)
-			// Got some quota. Try to acquire writing privilege on the
-			// transport.
-			if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
-				if _, ok := err.(StreamError); ok {
-					// Return the connection quota back.
-					t.sendQuotaPool.add(ps)
-				}
-				if t.framer.adjustNumWriters(-1) == 0 {
-					// This writer is the last one in this batch and has the
-					// responsibility to flush the buffered frames. It queues
-					// a flush request to controlBuf instead of flushing directly
-					// in order to avoid the race with other writing or flushing.
-					t.controlBuf.put(&flushIO{})
-				}
-				return err
-			}
-			select {
-			case <-s.ctx.Done():
-				t.sendQuotaPool.add(ps)
-				if t.framer.adjustNumWriters(-1) == 0 {
-					t.controlBuf.put(&flushIO{})
-				}
-				t.writableChan <- 0
-				return ContextErr(s.ctx.Err())
-			default:
-			}
-			var forceFlush bool
-			if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
-				forceFlush = true
-			}
-			if err := t.framer.writeData(forceFlush, s.id, false, p); err != nil {
-				t.notifyError(err)
-				return ConnectionErrorf("transport: %v", err)
+		}
+		var endStream bool
+		if t.isClient && opts.Last && r.Len() == 0 {
+			endStream = true
+		}
+		// Indicate there is a writer who is about to write a data frame.
+		t.framer.adjustNumWriters(1)
+		// Got some quota. Try to acquire writing privilege on the
+		// transport.
+		if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
+			if _, ok := err.(StreamError); ok {
+				// Return the connection quota back.
+				t.sendQuotaPool.add(len(p))
 			}
 			if t.framer.adjustNumWriters(-1) == 0 {
-				t.framer.flushWrite()
+				// This writer is the last one in this batch and has the
+				// responsibility to flush the buffered frames. It queues
+				// a flush request to controlBuf instead of flushing directly
+				// in order to avoid the race with other writing or flushing.
+				t.controlBuf.put(&flushIO{})
+			}
+			return err
+		}
+		select {
+		case <-s.ctx.Done():
+			t.sendQuotaPool.add(len(p))
+			if t.framer.adjustNumWriters(-1) == 0 {
+				t.controlBuf.put(&flushIO{})
 			}
 			t.writableChan <- 0
+			return ContextErr(s.ctx.Err())
+		default:
+		}
+		var forceFlush bool
+		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
+			// Do a force flush iff this is last frame for the entire gRPC message
+			// and the caller is the only writer at this moment.
+			forceFlush = true
+		}
+		// If WriteData fails, all the pending streams will be handled
+		// by http2Client.Close(). No explicit CloseStream() needs to be
+		// invoked.
+		if err := t.framer.writeData(forceFlush, s.id, endStream, p); err != nil {
+			t.notifyError(err)
+			return ConnectionErrorf("transport: %v", err)
+		}
+		if t.framer.adjustNumWriters(-1) == 0 {
+			t.framer.flushWrite()
+		}
+		t.writableChan <- 0
+		if !response && r.Len() == 0 {
+			break
 		}
 	}
+	if !response {
+		if !opts.Last {
+			return nil
+		}
+		s.mu.Lock()
+		if s.state != streamDone {
+			if s.state == streamReadDone {
+				s.state = streamDone
+			} else {
+				s.state = streamWriteDone
+			}
+		}
+		s.mu.Unlock()
+	}
+	return nil
 }
 
 // TODO(dennwc): comments
