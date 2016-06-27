@@ -35,7 +35,6 @@ package grpc
 
 import (
 	"bytes"
-	//"fmt"
 	"io"
 	"time"
 
@@ -170,8 +169,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			// ALl the other errors are treated as Internal errors.
 			return Errorf(codes.Internal, "%v", err)
-			// All the remaining cases are treated as fatal.
-			//panic(fmt.Sprintf("ClientConn.getTransport got an unsupported error: %v", err))
 		}
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)

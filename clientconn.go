@@ -664,7 +664,7 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 		default:
 			if ac.state == TransientFailure && failFast {
 				ac.mu.Unlock()
-				return nil, transport.StreamErrorf(codes.Canceled, "grpc: RPC failed fast due to transport failure")
+				return nil, transport.StreamErrorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
 			}
 			ready := ac.ready
 			if ready == nil {
@@ -680,7 +680,7 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 				ac.mu.Lock()
 				if ac.state == TransientFailure && failFast {
 					ac.mu.Unlock()
-					return nil, transport.StreamErrorf(codes.Canceled, "grpc: RPC failed fast due to transport failure")
+					return nil, transport.StreamErrorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
 				}
 				ac.mu.Unlock()
 
