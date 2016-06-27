@@ -32,6 +32,7 @@
 package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -141,6 +142,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
 
     @Override
     public NameResolver newNameResolver(URI targetUri, Attributes params) {
+      checkForProviders();
       for (NameResolverProvider provider : providers) {
         NameResolver resolver = provider.newNameResolver(targetUri, params);
         if (resolver != null) {
@@ -152,10 +154,14 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
 
     @Override
     public String getDefaultScheme() {
-      if (providers.isEmpty()) {
-        return "noproviders";
-      }
+      checkForProviders();
       return providers.get(0).getDefaultScheme();
+    }
+
+    private void checkForProviders() {
+      Preconditions.checkState(!providers.isEmpty(),
+          "No NameResolverProviders found via ServiceLoader, including for DNS. "
+          + "This is probably due to a broken build. If using ProGuard, check your configuration");
     }
   }
 }

@@ -34,6 +34,8 @@ package io.grpc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import io.grpc.internal.DnsNameResolverProvider;
@@ -60,8 +62,6 @@ public class NameResolverProviderTest {
         "io/grpc/NameResolverProviderTest-doesNotExist.txt");
     List<NameResolverProvider> providers = NameResolverProvider.load(cl);
     assertEquals(Collections.<NameResolverProvider>emptyList(), providers);
-    assertEquals("noproviders", NameResolverProvider.asFactory(providers).getDefaultScheme());
-    assertNull(null, NameResolverProvider.asFactory(providers).newNameResolver(uri, attributes));
   }
 
   @Test
@@ -89,6 +89,18 @@ public class NameResolverProviderTest {
   }
 
   @Test
+  public void getDefaultScheme_noProvider() {
+    List<NameResolverProvider> providers = Collections.<NameResolverProvider>emptyList();
+    NameResolver.Factory factory = NameResolverProvider.asFactory(providers);
+    try {
+      factory.getDefaultScheme();
+      fail("Expected exception");
+    } catch (IllegalStateException ex) {
+      assertTrue(ex.toString(), ex.getMessage().contains("No NameResolverProviders found"));
+    }
+  }
+
+  @Test
   public void newNameResolver_providerReturnsNull() {
     List<NameResolverProvider> providers = Collections.<NameResolverProvider>singletonList(
         new BaseProvider(true, 5) {
@@ -100,6 +112,18 @@ public class NameResolverProviderTest {
           }
         });
     assertNull(NameResolverProvider.asFactory(providers).newNameResolver(uri, attributes));
+  }
+
+  @Test
+  public void newNameResolver_noProvider() {
+    List<NameResolverProvider> providers = Collections.<NameResolverProvider>emptyList();
+    NameResolver.Factory factory = NameResolverProvider.asFactory(providers);
+    try {
+      factory.newNameResolver(uri, attributes);
+      fail("Expected exception");
+    } catch (IllegalStateException ex) {
+      assertTrue(ex.toString(), ex.getMessage().contains("No NameResolverProviders found"));
+    }
   }
 
   @Test
