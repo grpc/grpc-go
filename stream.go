@@ -105,9 +105,14 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		err error
 		put func()
 	)
-	// TODO(zhaoq): CallOption is omitted. Add support when it is needed.
+	c := defaultCallInfo
+	for _, o := range opts {
+		if err := o.before(&c); err != nil {
+			return nil, toRPCErr(err)
+		}
+	}
 	gopts := BalancerGetOptions{
-		BlockingWait: false,
+		BlockingWait: !c.failFast,
 	}
 	t, put, err = cc.getTransport(ctx, gopts)
 	if err != nil {
@@ -122,6 +127,8 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		callHdr.SendCompress = cc.dopts.cp.Type()
 	}
 	cs := &clientStream{
+		opts:    opts,
+		c:       c,
 		desc:    desc,
 		put:     put,
 		codec:   cc.dopts.codec,
@@ -167,6 +174,8 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
+	opts  []CallOption
+	c     callInfo
 	t     transport.ClientTransport
 	s     *transport.Stream
 	p     *parser
@@ -312,14 +321,17 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
-	if !cs.tracing {
-		return
-	}
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	for _, o := range cs.opts {
+		o.after(&cs.c)
+	}
 	if cs.put != nil {
 		cs.put()
 		cs.put = nil
+	}
+	if !cs.tracing {
+		return
 	}
 	if cs.trInfo.tr != nil {
 		if err == nil || err == io.EOF {

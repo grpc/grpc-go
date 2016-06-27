@@ -35,6 +35,7 @@ package grpc
 
 import (
 	"bytes"
+	//"fmt"
 	"io"
 	"time"
 
@@ -101,7 +102,7 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 // Invoke is called by generated code. Also users can call Invoke directly when it
 // is really needed in their use cases.
 func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (err error) {
-	var c callInfo
+	c := defaultCallInfo
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)
@@ -165,9 +166,12 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				if c.failFast {
 					return toRPCErr(err)
 				}
+				continue
 			}
-			// All the remaining cases are treated as retryable.
-			continue
+			// ALl the other errors are treated as Internal errors.
+			return Errorf(codes.Internal, "%v", err)
+			// All the remaining cases are treated as fatal.
+			//panic(fmt.Sprintf("ClientConn.getTransport got an unsupported error: %v", err))
 		}
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)

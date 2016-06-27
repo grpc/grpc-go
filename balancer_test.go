@@ -239,7 +239,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
 	var reply string
-	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err != nil {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
 	// Remove the server.
@@ -251,7 +251,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -262,7 +262,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -270,7 +270,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		defer wg.Done()
 		var reply string
 		time.Sleep(5 * time.Millisecond)
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -295,7 +295,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	for {
 		var reply string
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -305,7 +305,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err != nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 		}
 	}()

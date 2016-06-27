@@ -94,10 +94,10 @@ type Balancer interface {
 	// instead of blocking.
 	//
 	// The function returns put which is called once the rpc has completed or failed.
-	// put can collect and report RPC stats to a remote load balancer. gRPC internals
-	// will try to call this again if err is non-nil (unless err is ErrClientConnClosing).
+	// put can collect and report RPC stats to a remote load balancer.
 	//
-	// TODO: Add other non-recoverable errors?
+	// This function should only return the errors Balancer cannot recover by itself.
+	// gRPC internals will fail the RPC if an error is returned.
 	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
 	// Notify returns a channel that is used by gRPC internals to watch the addresses
 	// gRPC needs to connect. The addresses might be from a name resolver or remote
@@ -298,8 +298,20 @@ func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Ad
 			}
 		}
 	}
-	// There is no address available. Wait on rr.waitCh.
-	// TODO(zhaoq): Handle the case when opts.BlockingWait is false.
+	// There is no address available.
+	if !opts.BlockingWait {
+		if len(rr.addrs) == 0 {
+			rr.mu.Unlock()
+			err = fmt.Errorf("there is no address available")
+			return
+		}
+		// Returns the next addr on rr.addrs for failfast RPCs.
+		addr = rr.addrs[rr.next].addr
+		rr.next++
+		rr.mu.Unlock()
+		return
+	}
+	// Wait on rr.waitCh for non-failfast RPCs.
 	if rr.waitCh == nil {
 		ch = make(chan struct{})
 		rr.waitCh = ch
