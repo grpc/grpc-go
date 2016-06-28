@@ -37,16 +37,18 @@ protobuf {
     generateProtoTasks {
         all().each { task ->
             task.builtins {
-                javanano {
-                    // Options added to --javanano_out
-                    option 'ignore_services=true'
+                // Javanano is installed by default, but needs to be removed to use protobuf lite..
+                remove javanano
+                java {
+                    // Options added to --java_out
+                    option 'lite'
                 }
             }
 
             task.plugins {
                 grpc {
                     // Options added to --grpc_out
-                    option 'nano'
+                    option 'lite'
                 }
             }
         }
@@ -58,9 +60,10 @@ dependencies {
     compile 'com.google.code.findbugs:jsr305:3.0.0'
     compile 'com.google.guava:guava:18.0'
     compile 'com.squareup.okhttp:okhttp:2.2.0'
+
     // You need to build grpc-java to obtain these libraries below.
     compile 'io.grpc:grpc-okhttp:0.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-protobuf-nano:0.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-protobuf-lite:0.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-stub:0.15.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
 }

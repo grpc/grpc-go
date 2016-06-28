@@ -44,9 +44,9 @@ import android.widget.TextView;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.examples.helloworld.nano.GreeterGrpc;
-import io.grpc.examples.helloworld.nano.HelloReply;
-import io.grpc.examples.helloworld.nano.HelloRequest;
+import io.grpc.examples.helloworld.GreeterGrpc;
+import io.grpc.examples.helloworld.HelloReply;
+import io.grpc.examples.helloworld.HelloRequest;
 
 import java.util.concurrent.TimeUnit;
 
@@ -92,10 +92,9 @@ public class HelloworldActivity extends ActionBarActivity {
 
         private String sayHello(ManagedChannel channel) {
             GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
-            HelloRequest message = new HelloRequest();
-            message.name = mMessage;
+            HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
             HelloReply reply = stub.sayHello(message);
-            return reply.message;
+            return reply.getMessage();
         }
 
         @Override
