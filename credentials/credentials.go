@@ -66,7 +66,7 @@ type PerRPCCredentials interface {
 	// TODO(zhaoq): Define the set of the qualified keys instead of leaving
 	// it as an arbitrary string.
 	GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error)
-	// RequireTransportSecurity indicates whether the credentails requires
+	// RequireTransportSecurity indicates whether the credentials requires
 	// transport security.
 	RequireTransportSecurity() bool
 }
