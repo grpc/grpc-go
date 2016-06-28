@@ -69,7 +69,6 @@ import javax.net.ssl.SSLPeerUnverifiedException;
  */
 @RunWith(JUnit4.class)
 public class Http2OkHttpTest extends AbstractInteropTest {
-  private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */
   @BeforeClass
@@ -85,7 +84,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
           .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"));
       GrpcSslContexts.configure(contextBuilder, sslProvider);
       contextBuilder.ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE);
-      startStaticServer(NettyServerBuilder.forPort(serverPort)
+      startStaticServer(NettyServerBuilder.forPort(0)
           .sslContext(contextBuilder.build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
@@ -99,13 +98,13 @@ public class Http2OkHttpTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", getPort())
         .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
-            TestUtils.TEST_SERVER_HOST, serverPort));
+            TestUtils.TEST_SERVER_HOST, getPort()));
     try {
       builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem")));
     } catch (Exception e) {
@@ -139,13 +138,13 @@ public class Http2OkHttpTest extends AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void wrongHostNameFailHostnameVerification() throws Exception {
-    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", serverPort)
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", getPort())
         .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
-            "I.am.a.bad.hostname", serverPort));
+            "I.am.a.bad.hostname", getPort()));
     ManagedChannel channel = builder.sslSocketFactory(
         TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"))).build();
     TestServiceGrpc.TestServiceBlockingStub blockingStub =

@@ -65,6 +65,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.SocketAddress;
 import java.util.concurrent.ThreadFactory;
 
@@ -278,5 +279,22 @@ public final class Utils {
         .setResponseSize(respLength)
         .setPayload(payload)
         .build();
+  }
+
+  /**
+   * Picks a port that is not used right at this moment.
+   * Warning: Not thread safe. May see "BindException: Address already in use: bind" if using the
+   * returned port to create a new server socket when other threads/processes are concurrently
+   * creating new sockets without a specific port.
+   */
+  public static int pickUnusedPort() {
+    try {
+      ServerSocket serverSocket = new ServerSocket(0);
+      int port = serverSocket.getLocalPort();
+      serverSocket.close();
+      return port;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

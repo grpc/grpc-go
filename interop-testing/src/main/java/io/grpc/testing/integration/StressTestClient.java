@@ -273,6 +273,11 @@ public class StressTestClient {
     }
   }
 
+  @VisibleForTesting
+  int getMetricServerPort() {
+    return metricsServer.getPort();
+  }
+
   private static List<InetSocketAddress> parseServerAddresses(String addressesStr) {
     List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
 

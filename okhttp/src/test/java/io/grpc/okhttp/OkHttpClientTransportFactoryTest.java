@@ -33,7 +33,6 @@ package io.grpc.okhttp;
 
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.testing.AbstractClientTransportFactoryTest;
-import io.grpc.testing.TestUtils;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -41,7 +40,7 @@ import org.junit.runners.JUnit4;
 public class OkHttpClientTransportFactoryTest extends AbstractClientTransportFactoryTest {
   @Override
   protected ClientTransportFactory newClientTransportFactory() {
-    return OkHttpChannelBuilder.forAddress("localhost", TestUtils.pickUnusedPort())
+    return OkHttpChannelBuilder.forAddress("localhost", 0)
         .buildTransportFactory();
   }
 }

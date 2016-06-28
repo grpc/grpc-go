@@ -158,6 +158,11 @@ public class TestServiceServer {
     MoreExecutors.shutdownAndAwaitTermination(executor, 5, TimeUnit.SECONDS);
   }
 
+  @VisibleForTesting
+  int getPort() {
+    return server.getPort();
+  }
+
   /**
    * Await termination on the main thread since the grpc library uses daemon threads.
    */

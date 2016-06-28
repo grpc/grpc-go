@@ -49,6 +49,7 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.auth.oauth2.OAuth2Credentials;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.auth.oauth2.ServiceAccountJwtAccessCredentials;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
@@ -142,6 +143,11 @@ public abstract class AbstractInteropTest {
   protected static void stopStaticServer() {
     server.shutdownNow();
     testServiceExecutor.shutdown();
+  }
+
+  @VisibleForTesting
+  static int getPort() {
+    return server.getPort();
   }
 
   protected ManagedChannel channel;

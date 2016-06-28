@@ -53,13 +53,12 @@ import java.io.IOException;
  */
 @RunWith(JUnit4.class)
 public class Http2NettyTest extends AbstractInteropTest {
-  private static int serverPort = TestUtils.pickUnusedPort();
 
   /** Starts the server with HTTPS. */
   @BeforeClass
   public static void startServer() {
     try {
-      startStaticServer(NettyServerBuilder.forPort(serverPort)
+      startStaticServer(NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
           .sslContext(GrpcSslContexts
               .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
@@ -82,7 +81,7 @@ public class Http2NettyTest extends AbstractInteropTest {
   protected ManagedChannel createChannel() {
     try {
       return NettyChannelBuilder
-          .forAddress(TestUtils.testServerAddress(serverPort))
+          .forAddress(TestUtils.testServerAddress(getPort()))
           .sslContext(GrpcSslContexts
               .forClient()
               .keyManager(TestUtils.loadCert("client.pem"), TestUtils.loadCert("client.key"))

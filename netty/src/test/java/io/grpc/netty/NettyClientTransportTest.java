@@ -95,7 +95,7 @@ public class NettyClientTransportTest {
   private ManagedClientTransport.Listener clientTransportListener;
 
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
-  private NioEventLoopGroup group;
+  private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private InetSocketAddress address;
   private String authority;
   private NettyServer server;
@@ -104,10 +104,6 @@ public class NettyClientTransportTest {
   @Before
   public void setup() throws Exception {
     MockitoAnnotations.initMocks(this);
-
-    group = new NioEventLoopGroup(1);
-    address = TestUtils.testServerAddress(TestUtils.pickUnusedPort());
-    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
   }
 
   @After
@@ -125,6 +121,8 @@ public class NettyClientTransportTest {
 
   @Test
   public void testToString() throws Exception {
+    address = TestUtils.testServerAddress(12345);
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
     String s = newTransport(newNegotiator()).toString();
     transports.clear();
     assertTrue("Unexpected: " + s, s.contains("NettyClientTransport"));
@@ -318,9 +316,12 @@ public class NettyClientTransportTest {
     SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
         .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
     ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(serverContext);
-    server = new NettyServer(address, NioServerSocketChannel.class, group, group, negotiator,
+    server = new NettyServer(TestUtils.testServerAddress(0),
+        NioServerSocketChannel.class, group, group, negotiator,
         maxStreamsPerConnection, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
     server.start(serverListener);
+    address = TestUtils.testServerAddress(server.getPort());
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
   }
 
   private static class Rpc {

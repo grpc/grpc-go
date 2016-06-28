@@ -31,7 +31,7 @@
 
 package io.grpc.benchmarks;
 
-import static io.grpc.testing.TestUtils.pickUnusedPort;
+import static io.grpc.benchmarks.Utils.pickUnusedPort;
 
 import com.google.protobuf.ByteString;
 

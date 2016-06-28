@@ -37,7 +37,6 @@ import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
 import io.grpc.netty.NettyServerBuilder;
-import io.grpc.testing.TestUtils;
 
 import org.junit.After;
 import org.junit.Ignore;
@@ -50,10 +49,9 @@ import java.net.InetSocketAddress;
 /** Unit tests for OkHttp transport. */
 @RunWith(JUnit4.class)
 public class OkHttpTransportTest extends AbstractTransportTest {
-  private static final int SERVER_PORT = TestUtils.pickUnusedPort();
   private ClientTransportFactory clientFactory = OkHttpChannelBuilder
       // Although specified here, address is ignored because we never call build.
-      .forAddress("127.0.0.1", SERVER_PORT)
+      .forAddress("127.0.0.1", 0)
       .negotiationType(NegotiationType.PLAINTEXT)
       .buildTransportFactory();
 
@@ -66,15 +64,25 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   protected InternalServer newServer() {
     return AccessProtectedHack.serverBuilderBuildTransportServer(
         NettyServerBuilder
-          .forPort(SERVER_PORT)
+          .forPort(0)
           .flowControlWindow(65 * 1024));
   }
 
   @Override
-  protected ManagedClientTransport newClientTransport() {
+  protected InternalServer newServer(InternalServer server) {
+    int port = server.getPort();
+    return AccessProtectedHack.serverBuilderBuildTransportServer(
+        NettyServerBuilder
+            .forPort(port)
+            .flowControlWindow(65 * 1024));
+  }
+
+  @Override
+  protected ManagedClientTransport newClientTransport(InternalServer server) {
+    int port = server.getPort();
     return clientFactory.newClientTransport(
-        new InetSocketAddress("127.0.0.1", SERVER_PORT),
-        "127.0.0.1:" + SERVER_PORT,
+        new InetSocketAddress("127.0.0.1", port),
+        "127.0.0.1:" + port,
         null /* agent */);
   }
 

@@ -149,7 +149,6 @@ public class ConcurrencyTest {
   private static final int NUM_CONCURRENT_REQUESTS = 100;
   private static final int NUM_RESPONSES_PER_REQUEST = 100;
 
-  private int port = TestUtils.pickUnusedPort();
   private Server server;
   private ManagedChannel clientChannel;
   private TestServiceGrpc.TestServiceStub clientStub;
@@ -213,7 +212,7 @@ public class ConcurrencyTest {
                        .clientAuth(ClientAuth.REQUIRE)
                        .build();
 
-    return NettyServerBuilder.forPort(port)
+    return NettyServerBuilder.forPort(0)
         .sslContext(sslContext)
         .addService(TestServiceGrpc.bindService(new TestServiceImpl(serverExecutor)))
         .build()
@@ -233,7 +232,7 @@ public class ConcurrencyTest {
                        .trustManager(clientTrustedCaCerts)
                        .build();
 
-    return NettyChannelBuilder.forAddress("localhost", port)
+    return NettyChannelBuilder.forAddress("localhost", server.getPort())
         .overrideAuthority(TestUtils.TEST_SERVER_HOST)
         .negotiationType(NegotiationType.TLS)
         .sslContext(sslContext)

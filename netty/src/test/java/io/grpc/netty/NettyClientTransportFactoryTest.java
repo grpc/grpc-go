@@ -33,7 +33,6 @@ package io.grpc.netty;
 
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.testing.AbstractClientTransportFactoryTest;
-import io.grpc.testing.TestUtils;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -41,7 +40,7 @@ import org.junit.runners.JUnit4;
 public class NettyClientTransportFactoryTest extends AbstractClientTransportFactoryTest {
   @Override protected ClientTransportFactory newClientTransportFactory() {
     return NettyChannelBuilder
-        .forAddress("localhost", TestUtils.pickUnusedPort())
+        .forAddress("localhost", 0)
         .buildTransportFactory();
   }
 }

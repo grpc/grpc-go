@@ -32,7 +32,6 @@
 package io.grpc.internal.testing;
 
 import io.grpc.internal.ClientTransportFactory;
-import io.grpc.testing.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -54,10 +53,9 @@ public abstract class AbstractClientTransportFactoryTest {
 
   @Test(expected = IllegalStateException.class)
   public void newClientTransportAfterCloseShouldThrow() {
-    int port = TestUtils.pickUnusedPort();
     ClientTransportFactory transportFactory = newClientTransportFactory();
     transportFactory.close();
     transportFactory.newClientTransport(
-        new InetSocketAddress("localhost", port), "localhost:" + port, "agent");
+        new InetSocketAddress("localhost", 12345), "localhost:" + 12345, "agent");
   }
 }

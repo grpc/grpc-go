@@ -37,7 +37,6 @@ import static java.lang.Integer.parseInt;
 import io.grpc.benchmarks.SocketAddressValidator;
 import io.grpc.benchmarks.Utils;
 import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.testing.TestUtils;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -163,7 +162,7 @@ class ServerConfiguration implements Configuration {
         SocketAddress address = Utils.parseSocketAddress(value);
         if (address instanceof InetSocketAddress) {
           InetSocketAddress addr = (InetSocketAddress) address;
-          int port = addr.getPort() == 0 ? TestUtils.pickUnusedPort() : addr.getPort();
+          int port = addr.getPort() == 0 ? Utils.pickUnusedPort() : addr.getPort();
           // Re-create the address so that the server is available on all local addresses.
           address = new InetSocketAddress(port);
         }

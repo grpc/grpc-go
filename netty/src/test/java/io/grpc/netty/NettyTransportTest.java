@@ -35,7 +35,6 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
-import io.grpc.testing.TestUtils;
 
 import org.junit.After;
 import org.junit.Ignore;
@@ -48,13 +47,12 @@ import java.net.InetSocketAddress;
 /** Unit tests for Netty transport. */
 @RunWith(JUnit4.class)
 public class NettyTransportTest extends AbstractTransportTest {
-  private static final int SERVER_PORT = TestUtils.pickUnusedPort();
   // Avoid LocalChannel for testing because LocalChannel can fail with
   // io.netty.channel.ChannelException instead of java.net.ConnectException which breaks
   // serverNotListening test.
   private ClientTransportFactory clientFactory = NettyChannelBuilder
       // Although specified here, address is ignored because we never call build.
-      .forAddress("localhost", SERVER_PORT)
+      .forAddress("localhost", 0)
       .flowControlWindow(65 * 1024)
       .negotiationType(NegotiationType.PLAINTEXT)
       .buildTransportFactory();
@@ -67,16 +65,26 @@ public class NettyTransportTest extends AbstractTransportTest {
   @Override
   protected InternalServer newServer() {
     return NettyServerBuilder
-        .forPort(SERVER_PORT)
+        .forPort(0)
         .flowControlWindow(65 * 1024)
         .buildTransportServer();
   }
 
   @Override
-  protected ManagedClientTransport newClientTransport() {
+  protected InternalServer newServer(InternalServer server) {
+    int port = server.getPort();
+    return NettyServerBuilder
+        .forPort(port)
+        .flowControlWindow(65 * 1024)
+        .buildTransportServer();
+  }
+
+  @Override
+  protected ManagedClientTransport newClientTransport(InternalServer server) {
+    int port = server.getPort();
     return clientFactory.newClientTransport(
-        new InetSocketAddress("localhost", SERVER_PORT),
-        "localhost:" + SERVER_PORT,
+        new InetSocketAddress("localhost", port),
+        "localhost:" + port,
         null /* agent */);
   }
 

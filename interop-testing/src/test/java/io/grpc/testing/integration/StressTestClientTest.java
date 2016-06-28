@@ -40,7 +40,6 @@ import com.google.common.collect.ImmutableList;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.grpc.testing.TestUtils;
 import io.grpc.testing.integration.Metrics.EmptyMessage;
 import io.grpc.testing.integration.Metrics.GaugeResponse;
 import io.grpc.testing.integration.StressTestClient.TestCaseWeightPair;
@@ -112,22 +111,20 @@ public class StressTestClientTest {
 
   @Test(timeout = 5000)
   public void gaugesShouldBeExported() throws Exception {
-    int serverPort = TestUtils.pickUnusedPort();
-    int metricsPort = TestUtils.pickUnusedPort();
 
     TestServiceServer server = new TestServiceServer();
-    server.parseArgs(new String[]{"--port=" + serverPort, "--use_tls=false"});
+    server.parseArgs(new String[]{"--port=" + 0, "--use_tls=false"});
     server.start();
 
     StressTestClient client = new StressTestClient();
     client.parseArgs(new String[] {"--test_cases=empty_unary:1",
-        "--server_addresses=localhost:" + serverPort, "--metrics_port=" + metricsPort,
+        "--server_addresses=localhost:" + server.getPort(), "--metrics_port=" + 0,
         "--num_stubs_per_channel=2"});
     client.startMetricsService();
     client.runStressTest();
 
     // Connect to the metrics service
-    ManagedChannel ch = ManagedChannelBuilder.forAddress("localhost", metricsPort)
+    ManagedChannel ch = ManagedChannelBuilder.forAddress("localhost", client.getMetricServerPort())
         .usePlaintext(true)
         .build();
 

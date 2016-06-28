@@ -99,7 +99,7 @@ final class LoadServer {
 
   LoadServer(Control.ServerConfig config) throws Exception {
     LOG.log(Level.INFO, "Server Config \n" + config.toString());
-    port = config.getPort() ==  0 ? TestUtils.pickUnusedPort() : config.getPort();
+    port = config.getPort() ==  0 ? Utils.pickUnusedPort() : config.getPort();
     ServerBuilder<?> serverBuilder = ServerBuilder.forPort(port);
     int asyncThreads = config.getAsyncServerThreads() == 0
         ? Runtime.getRuntime().availableProcessors()
