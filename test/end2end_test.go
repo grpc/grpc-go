@@ -1148,9 +1148,7 @@ func testNoService(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	// Make sure setting ack has been sent.
-	time.Sleep(20 * time.Millisecond)
-	stream, err := tc.FullDuplexCall(te.ctx)
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.FailFast(false))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}

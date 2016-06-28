@@ -155,19 +155,19 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
+			if _, ok := err.(rpcError); ok {
+				return err
+			}
 			if err == ErrClientConnClosing {
 				return Errorf(codes.FailedPrecondition, "%v", err)
 			}
-			if _, ok := err.(transport.StreamError); ok {
-				return toRPCErr(err)
-			}
-			if _, ok := err.(transport.ConnectionError); ok {
+			if err == errConnClosing {
 				if c.failFast {
-					return toRPCErr(err)
+					return Errorf(codes.Unavailable, "%v", errConnClosing)
 				}
 				continue
 			}
-			// ALl the other errors are treated as Internal errors.
+			// All the other errors are treated as Internal errors.
 			return Errorf(codes.Internal, "%v", err)
 		}
 		if c.traceInfo.tr != nil {

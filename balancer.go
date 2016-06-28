@@ -40,7 +40,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/naming"
-	"google.golang.org/grpc/transport"
 )
 
 // Address represents a server the client connects to.
@@ -321,7 +320,7 @@ func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Ad
 	for {
 		select {
 		case <-ctx.Done():
-			err = transport.ContextErr(ctx.Err())
+			err = ctx.Err()
 			return
 		case <-ch:
 			rr.mu.Lock()

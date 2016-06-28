@@ -389,6 +389,19 @@ func toRPCErr(err error) error {
 			code: codes.Internal,
 			desc: e.Desc,
 		}
+	default:
+		switch err {
+		case context.DeadlineExceeded:
+			return rpcError{
+				code: codes.DeadlineExceeded,
+				desc: err.Error(),
+			}
+		case context.Canceled:
+			return rpcError{
+				code: codes.Canceled,
+				desc: err.Error(),
+			}
+		}
 	}
 	return Errorf(codes.Unknown, "%v", err)
 }

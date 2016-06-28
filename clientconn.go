@@ -426,7 +426,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
 	addr, put, err := cc.balancer.Get(ctx, opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, toRPCErr(err)
 	}
 	cc.mu.RLock()
 	if cc.conns == nil {
@@ -439,7 +439,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		if put != nil {
 			put()
 		}
-		return nil, nil, transport.StreamErrorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
+		return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
 	}
 	t, err := ac.wait(ctx, !opts.BlockingWait)
 	if err != nil {
@@ -661,11 +661,10 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 			ct := ac.transport
 			ac.mu.Unlock()
 			return ct, nil
+		case ac.state == TransientFailure && failFast:
+			ac.mu.Unlock()
+			return nil, Errorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
 		default:
-			if ac.state == TransientFailure && failFast {
-				ac.mu.Unlock()
-				return nil, transport.StreamErrorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
-			}
 			ready := ac.ready
 			if ready == nil {
 				ready = make(chan struct{})
@@ -674,16 +673,9 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 			ac.mu.Unlock()
 			select {
 			case <-ctx.Done():
-				return nil, transport.ContextErr(ctx.Err())
+				return nil, toRPCErr(ctx.Err())
 			// Wait until the new transport is ready or failed.
 			case <-ready:
-				ac.mu.Lock()
-				if ac.state == TransientFailure && failFast {
-					ac.mu.Unlock()
-					return nil, transport.StreamErrorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
-				}
-				ac.mu.Unlock()
-
 			}
 		}
 	}

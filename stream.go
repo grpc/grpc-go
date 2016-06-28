@@ -102,6 +102,7 @@ type ClientStream interface {
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
 	var (
 		t   transport.ClientTransport
+		s   *transport.Stream
 		err error
 		put func()
 	)
@@ -110,13 +111,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		if err := o.before(&c); err != nil {
 			return nil, toRPCErr(err)
 		}
-	}
-	gopts := BalancerGetOptions{
-		BlockingWait: !c.failFast,
-	}
-	t, put, err = cc.getTransport(ctx, gopts)
-	if err != nil {
-		return nil, toRPCErr(err)
 	}
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
@@ -130,7 +124,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		opts:    opts,
 		c:       c,
 		desc:    desc,
-		put:     put,
 		codec:   cc.dopts.codec,
 		cp:      cc.dopts.cp,
 		dc:      cc.dopts.dc,
@@ -149,11 +142,47 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cs.trInfo.tr.LazyLog(&cs.trInfo.firstLine, false)
 		ctx = trace.NewContext(ctx, cs.trInfo.tr)
 	}
-	s, err := t.NewStream(ctx, callHdr)
-	if err != nil {
-		cs.finish(err)
-		return nil, toRPCErr(err)
+	gopts := BalancerGetOptions{
+		BlockingWait: !c.failFast,
 	}
+	for {
+		t, put, err = cc.getTransport(ctx, gopts)
+		if err != nil {
+			// TODO(zhaoq): Probably revisit the error handling.
+			if _, ok := err.(rpcError); ok {
+				return nil, err
+			}
+			if err == ErrClientConnClosing {
+				return nil, Errorf(codes.FailedPrecondition, "%v", err)
+			}
+			if err == errConnClosing {
+				if c.failFast {
+					return nil, Errorf(codes.Unavailable, "%v", errConnClosing)
+				}
+				continue
+			}
+			// All the other errors are treated as Internal errors.
+			return nil, Errorf(codes.Internal, "%v", err)
+		}
+
+		s, err = t.NewStream(ctx, callHdr)
+		if err != nil {
+			if put != nil {
+				put()
+				put = nil
+			}
+			if _, ok := err.(transport.ConnectionError); ok {
+				if c.failFast {
+					cs.finish(err)
+					return nil, toRPCErr(err)
+				}
+				continue
+			}
+			return nil, toRPCErr(err)
+		}
+		break
+	}
+	cs.put = put
 	cs.t = t
 	cs.s = s
 	cs.p = &parser{r: s}
