@@ -152,9 +152,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			if _, ok := err.(rpcError); ok {
 				return nil, err
 			}
-			if err == ErrClientConnClosing {
-				return nil, Errorf(codes.FailedPrecondition, "%v", err)
-			}
 			if err == errConnClosing {
 				if c.failFast {
 					return nil, Errorf(codes.Unavailable, "%v", errConnClosing)

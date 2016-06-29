@@ -431,7 +431,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	cc.mu.RLock()
 	if cc.conns == nil {
 		cc.mu.RUnlock()
-		return nil, nil, ErrClientConnClosing
+		return nil, nil, toRPCErr(ErrClientConnClosing)
 	}
 	ac, ok := cc.conns[addr]
 	cc.mu.RUnlock()

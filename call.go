@@ -158,9 +158,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			if _, ok := err.(rpcError); ok {
 				return err
 			}
-			if err == ErrClientConnClosing {
-				return Errorf(codes.FailedPrecondition, "%v", err)
-			}
 			if err == errConnClosing {
 				if c.failFast {
 					return Errorf(codes.Unavailable, "%v", errConnClosing)

@@ -401,7 +401,13 @@ func toRPCErr(err error) error {
 				code: codes.Canceled,
 				desc: err.Error(),
 			}
+		case ErrClientConnClosing:
+			return rpcError{
+				code: codes.FailedPrecondition,
+				desc: err.Error(),
+			}
 		}
+
 	}
 	return Errorf(codes.Unknown, "%v", err)
 }
