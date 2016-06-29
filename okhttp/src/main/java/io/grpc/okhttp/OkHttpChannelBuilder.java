@@ -32,6 +32,8 @@
 package io.grpc.okhttp;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -58,6 +60,7 @@ import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
@@ -118,6 +121,9 @@ public class OkHttpChannelBuilder extends
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
+  private boolean enableKeepAlive;
+  private long keepAliveDelayNanos;
+  private long keepAliveTimeoutNanos;
 
   protected OkHttpChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
@@ -145,6 +151,31 @@ public class OkHttpChannelBuilder extends
    */
   public final OkHttpChannelBuilder negotiationType(NegotiationType type) {
     negotiationType = Preconditions.checkNotNull(type);
+    return this;
+  }
+
+  /**
+   * Enable keepalive with default delay and timeout.
+   */
+  public final OkHttpChannelBuilder enableKeepAlive(boolean enable) {
+    enableKeepAlive = enable;
+    if (enable) {
+      keepAliveDelayNanos = DEFAULT_KEEPALIVE_DELAY_NANOS;
+      keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+    }
+    return this;
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   */
+  public final OkHttpChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
+    enableKeepAlive = enable;
+    if (enable) {
+      keepAliveDelayNanos = delayUnit.toNanos(keepAliveDelay);
+      keepAliveTimeoutNanos = timeoutUnit.toNanos(keepAliveTimeout);
+    }
     return this;
   }
 
@@ -207,7 +238,8 @@ public class OkHttpChannelBuilder extends
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(transportExecutor,
-        createSocketFactory(), connectionSpec, maxMessageSize);
+        createSocketFactory(), connectionSpec, maxMessageSize, enableKeepAlive, keepAliveDelayNanos,
+        keepAliveTimeoutNanos);
   }
 
   @Override
@@ -252,16 +284,24 @@ public class OkHttpChannelBuilder extends
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
-
+    private boolean enableKeepAlive;
+    private long keepAliveDelayNanos;
+    private long keepAliveTimeoutNanos;
     private boolean closed;
 
     private OkHttpTransportFactory(Executor executor,
         @Nullable SSLSocketFactory socketFactory,
         ConnectionSpec connectionSpec,
-        int maxMessageSize) {
+        int maxMessageSize,
+        boolean enableKeepAlive,
+        long keepAliveDelayNanos,
+        long keepAliveTimeoutNanos) {
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
+      this.enableKeepAlive = enableKeepAlive;
+      this.keepAliveDelayNanos = keepAliveDelayNanos;
+      this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
 
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
@@ -279,8 +319,12 @@ public class OkHttpChannelBuilder extends
         throw new IllegalStateException("The transport factory is closed.");
       }
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
-      return new OkHttpClientTransport(inetSocketAddr, authority, userAgent, executor,
-          socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
+      OkHttpClientTransport transport = new OkHttpClientTransport(inetSocketAddr, authority,
+          userAgent, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
+      if (enableKeepAlive) {
+        transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
+      }
+      return transport;
     }
 
     @Override

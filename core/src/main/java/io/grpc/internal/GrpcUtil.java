@@ -147,6 +147,16 @@ public final class GrpcUtil {
   private static final String IMPLEMENTATION_VERION = getImplementationVersion();
 
   /**
+   * The default delay in nanos before we send a keepalive.
+   */
+  public static final long DEFAULT_KEEPALIVE_DELAY_NANOS = TimeUnit.MINUTES.toNanos(1);
+
+  /**
+   * The default timeout in nanos for a keepalive ping request.
+   */
+  public static final long DEFAULT_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MINUTES.toNanos(2);
+
+  /**
    * Maps HTTP error response status codes to transport codes.
    */
   public static Status httpStatusToGrpcStatus(int httpStatusCode) {

@@ -32,6 +32,7 @@
 package io.grpc.okhttp;
 
 import static com.google.common.base.Preconditions.checkState;
+import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -49,7 +50,9 @@ import io.grpc.Status.Code;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.SerializingExecutor;
+import io.grpc.internal.SharedResourceHolder;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -81,6 +84,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -168,6 +172,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private LinkedList<OkHttpClientStream> pendingStreams = new LinkedList<OkHttpClientStream>();
   private final ConnectionSpec connectionSpec;
   private FrameWriter testFrameWriter;
+  private ScheduledExecutorService scheduler;
+  private KeepAliveManager keepAliveManager;
+  private boolean enableKeepAlive;
+  private long keepAliveDelayNanos;
+  private long keepAliveTimeoutNanos;
 
   // The following fields should only be used for test.
   Runnable connectingCallback;
@@ -212,6 +221,16 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.connectionSpec = null;
     this.connectingCallback = connectingCallback;
     this.connectedFuture = Preconditions.checkNotNull(connectedFuture);
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   */
+  void enableKeepAlive(boolean enable, long keepAliveDelayNanos,
+      long keepAliveTimeoutNanos) {
+    enableKeepAlive = enable;
+    this.keepAliveDelayNanos = keepAliveDelayNanos;
+    this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
   }
 
   private boolean isForTest() {
@@ -327,6 +346,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   @Override
   public void start(Listener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
+
+    if (enableKeepAlive) {
+      scheduler = SharedResourceHolder.get(TIMER_SERVICE);
+      keepAliveManager = new KeepAliveManager(this, scheduler, keepAliveDelayNanos,
+          keepAliveTimeoutNanos);
+    }
 
     frameWriter = new AsyncFrameWriter(this, serializingExecutor);
     outboundFlow = new OutboundFlowController(this, frameWriter);
@@ -463,6 +488,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       goAwayStatus = Status.UNAVAILABLE.withDescription("Transport stopped");
       listener.transportShutdown(goAwayStatus);
       stopIfNecessary();
+      if (keepAliveManager != null) {
+        keepAliveManager.onTransportShutdown();
+        // KeepAliveManager should stop using the scheduler after onTransportShutdown gets called.
+        scheduler = SharedResourceHolder.release(TIMER_SERVICE, scheduler);
+      }
     }
   }
 
@@ -633,6 +663,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       if (pendingStreams.isEmpty() && streams.isEmpty()) {
         inUse = false;
         listener.transportInUse(false);
+        if (keepAliveManager != null) {
+          // We don't have any active streams. No need to do keepalives any more.
+          // Again, we have to call this inside the lock to avoid the race between onTransportIdle
+          // and onTransportActive.
+          keepAliveManager.onTransportIdle();
+        }
       }
     }
   }
@@ -642,6 +678,13 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     if (!inUse) {
       inUse = true;
       listener.transportInUse(true);
+      if (keepAliveManager != null) {
+        // We have a new stream. We might need to do keepalives now.
+        // Note that we have to do this inside the lock to avoid calling
+        // KeepAliveManager.onTransportActive and KeepAliveManager.onTransportIdle in the wrong
+        // order.
+        keepAliveManager.onTransportActive();
+      }
     }
   }
 
@@ -696,6 +739,9 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       try {
         // Read until the underlying socket closes.
         while (frameReader.nextFrame(this)) {
+          if (keepAliveManager != null) {
+            keepAliveManager.onDataReceived();
+          }
         }
         // frameReader.nextFrame() returns false when the underlying read encounters an IOException,
         // it may be triggered by the socket closing, in such case, the startGoAway() will do
