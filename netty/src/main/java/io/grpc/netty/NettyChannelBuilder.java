@@ -191,7 +191,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
   /**
    * Sets the maximum message size allowed to be received on the channel. If not called,
-   * defaults to {@link GrpcUtil#DEFAULT_MAX_MESSAGE_SIZE}.
+   * defaults to 4 MiB. The default provides protection to clients who haven't considered the
+   * possibility of receiving large messages while trying to be large enough to not be hit in normal
+   * usage.
    */
   public final NettyChannelBuilder maxMessageSize(int maxMessageSize) {
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");

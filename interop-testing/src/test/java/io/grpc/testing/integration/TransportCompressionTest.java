@@ -46,15 +46,15 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.ForwardingClientCall;
 import io.grpc.ForwardingClientCallListener;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerBuilder;
 import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.testing.integration.Messages.CompressionType;
 import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.PayloadType;
@@ -101,7 +101,8 @@ public class TransportCompressionTest extends AbstractInteropTest {
     compressors.register(FZIPPER);
     compressors.register(Codec.Identity.NONE);
     startStaticServer(
-        ServerBuilder.forPort(0)
+        NettyServerBuilder.forPort(0)
+            .maxMessageSize(16 * 1024 * 1024)
             .compressorRegistry(compressors)
             .decompressorRegistry(decompressors),
         new ServerInterceptor() {
@@ -147,7 +148,8 @@ public class TransportCompressionTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    return ManagedChannelBuilder.forAddress("localhost", getPort())
+    return NettyChannelBuilder.forAddress("localhost", getPort())
+        .maxMessageSize(16 * 1024 * 1024)
         .decompressorRegistry(decompressors)
         .compressorRegistry(compressors)
         .intercept(new ClientInterceptor() {

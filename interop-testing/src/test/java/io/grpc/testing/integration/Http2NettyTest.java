@@ -60,6 +60,7 @@ public class Http2NettyTest extends AbstractInteropTest {
     try {
       startStaticServer(NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)
+          .maxMessageSize(16 * 1024 * 1024)
           .sslContext(GrpcSslContexts
               .forServer(TestUtils.loadCert("server1.pem"), TestUtils.loadCert("server1.key"))
               .clientAuth(ClientAuth.REQUIRE)
@@ -82,6 +83,8 @@ public class Http2NettyTest extends AbstractInteropTest {
     try {
       return NettyChannelBuilder
           .forAddress(TestUtils.testServerAddress(getPort()))
+          .flowControlWindow(65 * 1024)
+          .maxMessageSize(16 * 1024 * 1024)
           .sslContext(GrpcSslContexts
               .forClient()
               .keyManager(TestUtils.loadCert("client.pem"), TestUtils.loadCert("client.key"))

@@ -85,6 +85,8 @@ public class Http2OkHttpTest extends AbstractInteropTest {
       GrpcSslContexts.configure(contextBuilder, sslProvider);
       contextBuilder.ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE);
       startStaticServer(NettyServerBuilder.forPort(0)
+          .flowControlWindow(65 * 1024)
+          .maxMessageSize(16 * 1024 * 1024)
           .sslContext(contextBuilder.build()));
     } catch (IOException ex) {
       throw new RuntimeException(ex);
@@ -99,6 +101,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   @Override
   protected ManagedChannel createChannel() {
     OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("127.0.0.1", getPort())
+        .maxMessageSize(16 * 1024 * 1024)
         .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))

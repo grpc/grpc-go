@@ -333,7 +333,8 @@ public class MessageDeframer implements Closeable {
     // Update the required length to include the length of the frame.
     requiredLength = nextFrame.readInt();
     if (requiredLength < 0 || requiredLength > maxMessageSize) {
-      throw Status.INTERNAL.withDescription(String.format("Frame size %d exceeds maximum: %d, ",
+      throw Status.INTERNAL.withDescription(String.format("Frame size %d exceeds maximum: %d. "
+              + "If this is normal, increase the maxMessageSize in the channel/server builder",
               requiredLength, maxMessageSize)).asRuntimeException();
     }
 
@@ -440,7 +441,8 @@ public class MessageDeframer implements Closeable {
     private void verifySize() {
       if (count > maxMessageSize) {
         throw Status.INTERNAL.withDescription(String.format(
-                "Compressed frame exceeds maximum frame size: %d. Bytes read: %d",
+                "Compressed frame exceeds maximum frame size: %d. Bytes read: %d. "
+                + "If this is normal, increase the maxMessageSize in the channel/server builder",
                 maxMessageSize, count)).asRuntimeException();
       }
     }
