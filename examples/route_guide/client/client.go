@@ -42,6 +42,7 @@ import (
 	"io"
 	"math/rand"
 	"time"
+        _"fmt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -56,6 +57,8 @@ var (
 	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 )
+
+fmt.Printf("Hello World")
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
