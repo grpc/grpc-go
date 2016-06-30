@@ -590,16 +590,18 @@ func testFailFast(t *testing.T, e env) {
 	}
 	// Stop the server and tear down all the exisiting connections.
 	te.srv.Stop()
-	// Issue an RPC to make sure the server teardown is propagated to the client already.
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+	// Loop until the server teardown is propagated to the client.
+	for {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.Unavailable {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/EmptyCall(_, _, _) = _, %v, want _, error code: %d", err, codes.Unavailable)
 	}
-	if _, err := tc.StreamingInputCall(ctx); grpc.Code(err) != codes.Unavailable {
+	if _, err := tc.StreamingInputCall(context.Background()); grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/StreamingInputCall(_) = _, %v, want _, error code: %d", err, codes.Unavailable)
 	}
 
