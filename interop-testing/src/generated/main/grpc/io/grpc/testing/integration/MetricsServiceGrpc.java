@@ -71,7 +71,7 @@ public class MetricsServiceGrpc {
 
   /**
    */
-  public static interface MetricsService {
+  @java.lang.Deprecated public static interface MetricsService {
 
     /**
      * <pre>
@@ -92,7 +92,7 @@ public class MetricsServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractMetricsService implements MetricsService, io.grpc.BindableService {
+  public static abstract class MetricsServiceImplBase implements MetricsService, io.grpc.BindableService {
 
     @java.lang.Override
     public void getAllGauges(io.grpc.testing.integration.Metrics.EmptyMessage request,
@@ -113,7 +113,7 @@ public class MetricsServiceGrpc {
 
   /**
    */
-  public static interface MetricsServiceBlockingClient {
+  @java.lang.Deprecated public static interface MetricsServiceBlockingClient {
 
     /**
      * <pre>
@@ -134,7 +134,7 @@ public class MetricsServiceGrpc {
 
   /**
    */
-  public static interface MetricsServiceFutureClient {
+  @java.lang.Deprecated public static interface MetricsServiceFutureClient {
 
     /**
      * <pre>
@@ -233,6 +233,8 @@ public class MetricsServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractMetricsService extends MetricsServiceImplBase {}
+
   private static final int METHODID_GET_ALL_GAUGES = 0;
   private static final int METHODID_GET_GAUGE = 1;
 
@@ -283,7 +285,7 @@ public class MetricsServiceGrpc {
         METHOD_GET_GAUGE);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final MetricsService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

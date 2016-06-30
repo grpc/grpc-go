@@ -71,7 +71,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static interface BenchmarkService {
+  @java.lang.Deprecated public static interface BenchmarkService {
 
     /**
      * <pre>
@@ -93,7 +93,7 @@ public class BenchmarkServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractBenchmarkService implements BenchmarkService, io.grpc.BindableService {
+  public static abstract class BenchmarkServiceImplBase implements BenchmarkService, io.grpc.BindableService {
 
     @java.lang.Override
     public void unaryCall(io.grpc.benchmarks.proto.Messages.SimpleRequest request,
@@ -114,7 +114,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static interface BenchmarkServiceBlockingClient {
+  @java.lang.Deprecated public static interface BenchmarkServiceBlockingClient {
 
     /**
      * <pre>
@@ -127,7 +127,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static interface BenchmarkServiceFutureClient {
+  @java.lang.Deprecated public static interface BenchmarkServiceFutureClient {
 
     /**
      * <pre>
@@ -220,6 +220,8 @@ public class BenchmarkServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractBenchmarkService extends BenchmarkServiceImplBase {}
+
   private static final int METHODID_UNARY_CALL = 0;
   private static final int METHODID_STREAMING_CALL = 1;
 
@@ -269,7 +271,7 @@ public class BenchmarkServiceGrpc {
         METHOD_STREAMING_CALL);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final BenchmarkService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

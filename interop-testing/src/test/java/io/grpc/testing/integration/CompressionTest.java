@@ -262,7 +262,7 @@ public class CompressionTest {
     }
   }
 
-  private static final class LocalServer extends TestServiceGrpc.AbstractTestService {
+  private static final class LocalServer extends TestServiceGrpc.TestServiceImplBase {
     @Override
     public void unaryCall(SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
       responseObserver.onNext(SimpleResponse.newBuilder()

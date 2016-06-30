@@ -57,7 +57,7 @@ public final class HealthStatusManager {
   /**
    * Gets the health check service created in the constructor.
    */
-  public HealthGrpc.AbstractHealth getHealthService() {
+  public HealthGrpc.HealthImplBase getHealthService() {
     return healthService;
   }
 

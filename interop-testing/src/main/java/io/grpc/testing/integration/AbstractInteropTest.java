@@ -131,7 +131,7 @@ public abstract class AbstractInteropTest {
         .build();
 
     builder.addService(ServerInterceptors.intercept(
-        TestServiceGrpc.bindService(new TestServiceImpl(testServiceExecutor)),
+        new TestServiceImpl(testServiceExecutor),
         allInterceptors));
     try {
       server = builder.build().start();
@@ -152,7 +152,7 @@ public abstract class AbstractInteropTest {
 
   protected ManagedChannel channel;
   protected TestServiceGrpc.TestServiceBlockingStub blockingStub;
-  protected TestServiceGrpc.TestService asyncStub;
+  protected TestServiceGrpc.TestServiceStub asyncStub;
 
   /**
    * Must be called by the subclass setup method if overridden.
@@ -777,7 +777,7 @@ public abstract class AbstractInteropTest {
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   @Test(timeout = 10000)
   public void timeoutOnSleepingServer() {
-    TestServiceGrpc.TestService stub = TestServiceGrpc.newStub(channel)
+    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel)
         .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
     @SuppressWarnings("unchecked")
     StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);

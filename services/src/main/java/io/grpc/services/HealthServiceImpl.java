@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 
 
-final class HealthServiceImpl extends HealthGrpc.AbstractHealth {
+final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
 
   /* Due to the latency of rpc calls, synchronization of the map does not help with consistency.
    * However, need use ConcurrentHashMap to prevent the possible race condition of currently putting

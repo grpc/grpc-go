@@ -95,7 +95,7 @@ public class RouteGuideGrpc {
    * Interface exported by the server.
    * </pre>
    */
-  public static interface RouteGuide {
+  @java.lang.Deprecated public static interface RouteGuide {
 
     /**
      * <pre>
@@ -142,7 +142,7 @@ public class RouteGuideGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractRouteGuide implements RouteGuide, io.grpc.BindableService {
+  public static abstract class RouteGuideImplBase implements RouteGuide, io.grpc.BindableService {
 
     @java.lang.Override
     public void getFeature(io.grpc.examples.routeguide.Point request,
@@ -178,7 +178,7 @@ public class RouteGuideGrpc {
    * Interface exported by the server.
    * </pre>
    */
-  public static interface RouteGuideBlockingClient {
+  @java.lang.Deprecated public static interface RouteGuideBlockingClient {
 
     /**
      * <pre>
@@ -208,7 +208,7 @@ public class RouteGuideGrpc {
    * Interface exported by the server.
    * </pre>
    */
-  public static interface RouteGuideFutureClient {
+  @java.lang.Deprecated public static interface RouteGuideFutureClient {
 
     /**
      * <pre>
@@ -324,6 +324,8 @@ public class RouteGuideGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractRouteGuide extends RouteGuideImplBase {}
+
   private static final int METHODID_GET_FEATURE = 0;
   private static final int METHODID_LIST_FEATURES = 1;
   private static final int METHODID_RECORD_ROUTE = 2;
@@ -384,7 +386,7 @@ public class RouteGuideGrpc {
         METHOD_ROUTE_CHAT);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final RouteGuide serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

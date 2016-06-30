@@ -69,7 +69,7 @@ public class LoadWorker {
         .directExecutor()
         .workerEventLoopGroup(singleThreadGroup)
         .bossEventLoopGroup(singleThreadGroup)
-        .addService(WorkerServiceGrpc.bindService(new WorkerServiceImpl()))
+        .addService(new WorkerServiceImpl())
         .build();
   }
 
@@ -134,7 +134,7 @@ public class LoadWorker {
   /**
    * Implement the worker service contract which can launch clients and servers.
    */
-  private class WorkerServiceImpl implements WorkerServiceGrpc.WorkerService {
+  private class WorkerServiceImpl extends WorkerServiceGrpc.WorkerServiceImplBase {
 
     private LoadServer workerServer;
     private LoadClient workerClient;

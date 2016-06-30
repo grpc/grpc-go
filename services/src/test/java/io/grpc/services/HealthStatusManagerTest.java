@@ -43,7 +43,7 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.health.v1.HealthCheckRequest;
 import io.grpc.health.v1.HealthCheckResponse;
-import io.grpc.health.v1.HealthGrpc.Health;
+import io.grpc.health.v1.HealthGrpc;
 import io.grpc.stub.StreamObserver;
 
 import org.junit.Test;
@@ -57,7 +57,7 @@ import org.mockito.InOrder;
 public class HealthStatusManagerTest {
 
   private final HealthStatusManager manager = new HealthStatusManager();
-  private final Health health = manager.getHealthService();
+  private final HealthGrpc.HealthImplBase health = manager.getHealthService();
   private final HealthCheckResponse.ServingStatus status
       = HealthCheckResponse.ServingStatus.UNKNOWN;
 

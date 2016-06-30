@@ -62,7 +62,7 @@ public class HealthGrpc {
 
   /**
    */
-  public static interface Health {
+  @java.lang.Deprecated public static interface Health {
 
     /**
      */
@@ -71,7 +71,7 @@ public class HealthGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractHealth implements Health, io.grpc.BindableService {
+  public static abstract class HealthImplBase implements Health, io.grpc.BindableService {
 
     @java.lang.Override
     public void check(io.grpc.health.v1.HealthCheckRequest request,
@@ -86,7 +86,7 @@ public class HealthGrpc {
 
   /**
    */
-  public static interface HealthBlockingClient {
+  @java.lang.Deprecated public static interface HealthBlockingClient {
 
     /**
      */
@@ -95,7 +95,7 @@ public class HealthGrpc {
 
   /**
    */
-  public static interface HealthFutureClient {
+  @java.lang.Deprecated public static interface HealthFutureClient {
 
     /**
      */
@@ -177,6 +177,8 @@ public class HealthGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractHealth extends HealthImplBase {}
+
   private static final int METHODID_CHECK = 0;
 
   private static class MethodHandlers<Req, Resp> implements
@@ -221,7 +223,7 @@ public class HealthGrpc {
         METHOD_CHECK);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final Health serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

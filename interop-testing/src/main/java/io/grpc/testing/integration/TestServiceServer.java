@@ -144,7 +144,7 @@ public class TestServiceServer {
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)
         .addService(ServerInterceptors.intercept(
-            TestServiceGrpc.bindService(new TestServiceImpl(executor)),
+            new TestServiceImpl(executor),
             TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
         .build().start();
   }

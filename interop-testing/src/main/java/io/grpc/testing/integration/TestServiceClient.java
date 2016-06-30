@@ -52,8 +52,8 @@ import java.nio.charset.Charset;
 import javax.net.ssl.SSLSocketFactory;
 
 /**
- * Application that starts a client for the {@link TestServiceGrpc.TestService} and runs through a
- * series of tests.
+ * Application that starts a client for the {@link TestServiceGrpc.TestServiceImplBase} and runs
+ * through a series of tests.
  */
 public class TestServiceClient {
 

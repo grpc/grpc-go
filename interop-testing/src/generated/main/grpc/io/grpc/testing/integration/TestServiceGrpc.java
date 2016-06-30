@@ -115,7 +115,7 @@ public class TestServiceGrpc {
    * performance with various types of payload.
    * </pre>
    */
-  public static interface TestService {
+  @java.lang.Deprecated public static interface TestService {
 
     /**
      * <pre>
@@ -174,7 +174,7 @@ public class TestServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
+  public static abstract class TestServiceImplBase implements TestService, io.grpc.BindableService {
 
     @java.lang.Override
     public void emptyCall(com.google.protobuf.EmptyProtos.Empty request,
@@ -223,7 +223,7 @@ public class TestServiceGrpc {
    * performance with various types of payload.
    * </pre>
    */
-  public static interface TestServiceBlockingClient {
+  @java.lang.Deprecated public static interface TestServiceBlockingClient {
 
     /**
      * <pre>
@@ -255,7 +255,7 @@ public class TestServiceGrpc {
    * performance with various types of payload.
    * </pre>
    */
-  public static interface TestServiceFutureClient {
+  @java.lang.Deprecated public static interface TestServiceFutureClient {
 
     /**
      * <pre>
@@ -403,6 +403,8 @@ public class TestServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractTestService extends TestServiceImplBase {}
+
   private static final int METHODID_EMPTY_CALL = 0;
   private static final int METHODID_UNARY_CALL = 1;
   private static final int METHODID_STREAMING_OUTPUT_CALL = 2;
@@ -474,7 +476,7 @@ public class TestServiceGrpc {
         METHOD_HALF_DUPLEX_CALL);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

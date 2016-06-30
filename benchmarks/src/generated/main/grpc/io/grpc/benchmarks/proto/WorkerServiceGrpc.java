@@ -89,7 +89,7 @@ public class WorkerServiceGrpc {
 
   /**
    */
-  public static interface WorkerService {
+  @java.lang.Deprecated public static interface WorkerService {
 
     /**
      * <pre>
@@ -135,7 +135,7 @@ public class WorkerServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractWorkerService implements WorkerService, io.grpc.BindableService {
+  public static abstract class WorkerServiceImplBase implements WorkerService, io.grpc.BindableService {
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.ServerArgs> runServer(
@@ -168,7 +168,7 @@ public class WorkerServiceGrpc {
 
   /**
    */
-  public static interface WorkerServiceBlockingClient {
+  @java.lang.Deprecated public static interface WorkerServiceBlockingClient {
 
     /**
      * <pre>
@@ -187,7 +187,7 @@ public class WorkerServiceGrpc {
 
   /**
    */
-  public static interface WorkerServiceFutureClient {
+  @java.lang.Deprecated public static interface WorkerServiceFutureClient {
 
     /**
      * <pre>
@@ -314,6 +314,8 @@ public class WorkerServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractWorkerService extends WorkerServiceImplBase {}
+
   private static final int METHODID_CORE_COUNT = 0;
   private static final int METHODID_QUIT_WORKER = 1;
   private static final int METHODID_RUN_SERVER = 2;
@@ -374,7 +376,7 @@ public class WorkerServiceGrpc {
         METHOD_QUIT_WORKER);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final WorkerService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

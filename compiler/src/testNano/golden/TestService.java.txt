@@ -182,7 +182,7 @@ public class TestServiceGrpc {
    * Test service that supports all call types.
    * </pre>
    */
-  public static interface TestService {
+  @java.lang.Deprecated public static interface TestService {
 
     /**
      * <pre>
@@ -234,7 +234,7 @@ public class TestServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractTestService implements TestService, io.grpc.BindableService {
+  public static abstract class TestServiceImplBase implements TestService, io.grpc.BindableService {
 
     @java.lang.Override
     public void unaryCall(io.grpc.testing.integration.nano.Test.SimpleRequest request,
@@ -276,7 +276,7 @@ public class TestServiceGrpc {
    * Test service that supports all call types.
    * </pre>
    */
-  public static interface TestServiceBlockingClient {
+  @java.lang.Deprecated public static interface TestServiceBlockingClient {
 
     /**
      * <pre>
@@ -301,7 +301,7 @@ public class TestServiceGrpc {
    * Test service that supports all call types.
    * </pre>
    */
-  public static interface TestServiceFutureClient {
+  @java.lang.Deprecated public static interface TestServiceFutureClient {
 
     /**
      * <pre>
@@ -422,6 +422,8 @@ public class TestServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractTestService extends TestServiceImplBase {}
+
   private static final int METHODID_UNARY_CALL = 0;
   private static final int METHODID_STREAMING_OUTPUT_CALL = 1;
   private static final int METHODID_STREAMING_INPUT_CALL = 2;
@@ -487,7 +489,7 @@ public class TestServiceGrpc {
         METHOD_HALF_BIDI_CALL);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final TestService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

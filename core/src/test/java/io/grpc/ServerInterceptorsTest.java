@@ -111,7 +111,8 @@ public class ServerInterceptorsTest {
 
   @Test(expected = NullPointerException.class)
   public void npeForNullServiceDefinition() {
-    ServerInterceptors.intercept(null, Arrays.<ServerInterceptor>asList());
+    ServerServiceDefinition serviceDef = null;
+    ServerInterceptors.intercept(serviceDef, Arrays.<ServerInterceptor>asList());
   }
 
   @Test(expected = NullPointerException.class)

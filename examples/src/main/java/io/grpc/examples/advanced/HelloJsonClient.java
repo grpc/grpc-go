@@ -63,7 +63,7 @@ public final class HelloJsonClient {
   private static final Logger logger = Logger.getLogger(HelloWorldClient.class.getName());
 
   private final ManagedChannel channel;
-  private final GreeterGrpc.GreeterBlockingClient blockingStub;
+  private final HelloJsonStub blockingStub;
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public HelloJsonClient(String host, int port) {
@@ -109,8 +109,7 @@ public final class HelloJsonClient {
     }
   }
 
-  static final class HelloJsonStub extends AbstractStub<HelloJsonStub>
-      implements GreeterGrpc.GreeterBlockingClient {
+  static final class HelloJsonStub extends AbstractStub<HelloJsonStub> {
 
     static final MethodDescriptor<HelloRequest, HelloReply> METHOD_SAY_HELLO =
         MethodDescriptor.create(
@@ -132,7 +131,6 @@ public final class HelloJsonClient {
       return new HelloJsonStub(channel, callOptions);
     }
 
-    @Override
     public HelloReply sayHello(HelloRequest request) {
       return blockingUnaryCall(
           getChannel(), METHOD_SAY_HELLO, getCallOptions(), request);

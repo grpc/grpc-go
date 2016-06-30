@@ -147,7 +147,7 @@ final class LoadServer {
               .addMethod(GENERIC_STREAMING_PING_PONG_METHOD, new GenericServiceCallHandler())
               .build());
     } else {
-      serverBuilder.addService(BenchmarkServiceGrpc.bindService(benchmarkService));
+      serverBuilder.addService(benchmarkService);
     }
     server = serverBuilder.build();
 
@@ -196,7 +196,7 @@ final class LoadServer {
     server.shutdownNow();
   }
 
-  private class BenchmarkServiceImpl implements BenchmarkServiceGrpc.BenchmarkService {
+  private class BenchmarkServiceImpl extends BenchmarkServiceGrpc.BenchmarkServiceImplBase {
 
     @Override
     public void unaryCall(Messages.SimpleRequest request,

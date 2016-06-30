@@ -68,7 +68,7 @@ public class GreeterGrpc {
    * The greeting service definition.
    * </pre>
    */
-  public static interface Greeter {
+  @java.lang.Deprecated public static interface Greeter {
 
     /**
      * <pre>
@@ -80,7 +80,7 @@ public class GreeterGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractGreeter implements Greeter, io.grpc.BindableService {
+  public static abstract class GreeterImplBase implements Greeter, io.grpc.BindableService {
 
     @java.lang.Override
     public void sayHello(io.grpc.examples.helloworld.HelloRequest request,
@@ -98,7 +98,7 @@ public class GreeterGrpc {
    * The greeting service definition.
    * </pre>
    */
-  public static interface GreeterBlockingClient {
+  @java.lang.Deprecated public static interface GreeterBlockingClient {
 
     /**
      * <pre>
@@ -113,7 +113,7 @@ public class GreeterGrpc {
    * The greeting service definition.
    * </pre>
    */
-  public static interface GreeterFutureClient {
+  @java.lang.Deprecated public static interface GreeterFutureClient {
 
     /**
      * <pre>
@@ -198,6 +198,8 @@ public class GreeterGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractGreeter extends GreeterImplBase {}
+
   private static final int METHODID_SAY_HELLO = 0;
 
   private static class MethodHandlers<Req, Resp> implements
@@ -242,7 +244,7 @@ public class GreeterGrpc {
         METHOD_SAY_HELLO);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final Greeter serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

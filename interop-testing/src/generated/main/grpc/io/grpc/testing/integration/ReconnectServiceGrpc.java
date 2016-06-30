@@ -77,7 +77,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static interface ReconnectService {
+  @java.lang.Deprecated public static interface ReconnectService {
 
     /**
      */
@@ -91,7 +91,7 @@ public class ReconnectServiceGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractReconnectService implements ReconnectService, io.grpc.BindableService {
+  public static abstract class ReconnectServiceImplBase implements ReconnectService, io.grpc.BindableService {
 
     @java.lang.Override
     public void start(com.google.protobuf.EmptyProtos.Empty request,
@@ -115,7 +115,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static interface ReconnectServiceBlockingClient {
+  @java.lang.Deprecated public static interface ReconnectServiceBlockingClient {
 
     /**
      */
@@ -131,7 +131,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static interface ReconnectServiceFutureClient {
+  @java.lang.Deprecated public static interface ReconnectServiceFutureClient {
 
     /**
      */
@@ -238,6 +238,8 @@ public class ReconnectServiceGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractReconnectService extends ReconnectServiceImplBase {}
+
   private static final int METHODID_START = 0;
   private static final int METHODID_STOP = 1;
 
@@ -288,7 +290,7 @@ public class ReconnectServiceGrpc {
         METHOD_STOP);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final ReconnectService serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

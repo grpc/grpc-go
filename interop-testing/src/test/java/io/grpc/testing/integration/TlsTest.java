@@ -130,7 +130,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
+        .addService(new TestServiceImpl(executor))
         .build()
         .start();
 
@@ -166,7 +166,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
+        .addService(new TestServiceImpl(executor))
         .build()
         .start();
 
@@ -213,7 +213,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
+        .addService(new TestServiceImpl(executor))
         .build()
         .start();
 
@@ -255,7 +255,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(TestServiceGrpc.bindService(new TestServiceImpl(executor)))
+        .addService(new TestServiceImpl(executor))
         .build()
         .start();
 

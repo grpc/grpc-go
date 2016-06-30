@@ -62,7 +62,7 @@ public class LoadBalancerGrpc {
 
   /**
    */
-  public static interface LoadBalancer {
+  @java.lang.Deprecated public static interface LoadBalancer {
 
     /**
      * <pre>
@@ -74,7 +74,7 @@ public class LoadBalancerGrpc {
   }
 
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class AbstractLoadBalancer implements LoadBalancer, io.grpc.BindableService {
+  public static abstract class LoadBalancerImplBase implements LoadBalancer, io.grpc.BindableService {
 
     @java.lang.Override
     public io.grpc.stub.StreamObserver<io.grpc.grpclb.LoadBalanceRequest> balanceLoad(
@@ -89,12 +89,12 @@ public class LoadBalancerGrpc {
 
   /**
    */
-  public static interface LoadBalancerBlockingClient {
+  @java.lang.Deprecated public static interface LoadBalancerBlockingClient {
   }
 
   /**
    */
-  public static interface LoadBalancerFutureClient {
+  @java.lang.Deprecated public static interface LoadBalancerFutureClient {
   }
 
   public static class LoadBalancerStub extends io.grpc.stub.AbstractStub<LoadBalancerStub>
@@ -158,6 +158,8 @@ public class LoadBalancerGrpc {
     }
   }
 
+  @java.lang.Deprecated public static abstract class AbstractLoadBalancer extends LoadBalancerImplBase {}
+
   private static final int METHODID_BALANCE_LOAD = 0;
 
   private static class MethodHandlers<Req, Resp> implements
@@ -201,7 +203,7 @@ public class LoadBalancerGrpc {
         METHOD_BALANCE_LOAD);
   }
 
-  public static io.grpc.ServerServiceDefinition bindService(
+  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
       final LoadBalancer serviceImpl) {
     return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
         .addMethod(

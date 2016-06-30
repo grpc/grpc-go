@@ -54,6 +54,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
@@ -71,7 +72,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class CascadingTest {
 
   @Mock
-  TestServiceGrpc.TestService service;
+  TestServiceGrpc.TestServiceImplBase service;
   private ManagedChannelImpl channel;
   private ServerImpl server;
   private AtomicInteger nodeCount;
@@ -85,6 +86,7 @@ public class CascadingTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+    Mockito.when(service.bindService()).thenCallRealMethod();
     nodeCount = new AtomicInteger();
     scheduler = Executors.newScheduledThreadPool(1);
     // Use a cached thread pool as we need a thread for each blocked call
@@ -202,7 +204,7 @@ public class CascadingTest {
   private void startChainingServer(final int depthThreshold)
       throws IOException {
     server = InProcessServerBuilder.forName("channel").executor(otherWork).addService(
-        ServerInterceptors.intercept(TestServiceGrpc.bindService(service),
+        ServerInterceptors.intercept(service,
             new ServerInterceptor() {
               @Override
               public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
@@ -258,7 +260,7 @@ public class CascadingTest {
   private void startCallTreeServer(int depthThreshold) throws IOException {
     final AtomicInteger nodeCount = new AtomicInteger((2 << depthThreshold) - 1);
     server = InProcessServerBuilder.forName("channel").executor(otherWork).addService(
-        ServerInterceptors.intercept(TestServiceGrpc.bindService(service),
+        ServerInterceptors.intercept(service,
             new ServerInterceptor() {
               @Override
               public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(

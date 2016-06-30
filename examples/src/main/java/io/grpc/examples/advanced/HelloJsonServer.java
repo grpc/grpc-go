@@ -37,7 +37,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.examples.helloworld.GreeterGrpc;
-import io.grpc.examples.helloworld.GreeterGrpc.Greeter;
+import io.grpc.examples.helloworld.GreeterGrpc.GreeterImplBase;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloWorldServer;
@@ -106,7 +106,7 @@ public class HelloJsonServer {
     server.blockUntilShutdown();
   }
 
-  private class GreeterImpl implements GreeterGrpc.Greeter {
+  private class GreeterImpl extends GreeterImplBase {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
@@ -116,7 +116,7 @@ public class HelloJsonServer {
     }
   }
 
-  private ServerServiceDefinition bindService(final Greeter serviceImpl) {
+  private ServerServiceDefinition bindService(final GreeterImplBase serviceImpl) {
     return io.grpc.ServerServiceDefinition
         .builder(GreeterGrpc.getServiceDescriptor())
         .addMethod(HelloJsonClient.HelloJsonStub.METHOD_SAY_HELLO,

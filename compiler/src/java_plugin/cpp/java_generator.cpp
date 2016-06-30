@@ -433,7 +433,7 @@ static void PrintStub(
     map<string, string>* vars,
     Printer* p, StubType type, bool generate_nano) {
   (*vars)["service_name"] = service->name();
-  (*vars)["abstract_name"] = "Abstract" + service->name();
+  (*vars)["abstract_name"] = service->name() + "ImplBase";
   string interface_name = service->name();
   string impl_name = service->name();
   bool abstract = false;
@@ -510,7 +510,7 @@ static void PrintStub(
     GrpcWriteServiceDocComment(p, service);
     p->Print(
         *vars,
-        "public static interface $interface_name$ {\n");
+        "@$Deprecated$ public static interface $interface_name$ {\n");
   } else {
     p->Print(
         *vars,
@@ -883,7 +883,7 @@ static void PrintBindServiceMethod(const ServiceDescriptor* service,
   (*vars)["service_name"] = service->name();
   p->Print(
       *vars,
-      "public static $ServerServiceDefinition$ bindService(\n"
+      "@$Deprecated$ public static $ServerServiceDefinition$ bindService(\n"
       "    final $service_name$ serviceImpl) {\n");
   p->Indent();
   p->Print(*vars,
@@ -1018,6 +1018,9 @@ static void PrintService(const ServiceDescriptor* service,
   PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
   PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
+  p->Print(*vars,
+           "@$Deprecated$ public static abstract class Abstract$service_name$"
+           " extends $service_name$ImplBase {}\n\n");
   PrintMethodHandlerClass(service, vars, p, generate_nano);
   PrintGetServiceDescriptorMethod(service, vars, p, generate_nano);
   PrintBindServiceMethod(service, vars, p, generate_nano);
@@ -1068,6 +1071,7 @@ void GenerateService(const ServiceDescriptor* service,
   map<string, string> vars;
   vars["String"] = "java.lang.String";
   vars["Override"] = "java.lang.Override";
+  vars["Deprecated"] = "java.lang.Deprecated";
   vars["Channel"] = "io.grpc.Channel";
   vars["CallOptions"] = "io.grpc.CallOptions";
   vars["MethodType"] = "io.grpc.MethodDescriptor.MethodType";

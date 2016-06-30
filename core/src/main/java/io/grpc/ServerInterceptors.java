@@ -61,7 +61,6 @@ public class ServerInterceptors {
     return interceptForward(serviceDef, Arrays.asList(interceptors));
   }
 
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1701")
   public static ServerServiceDefinition interceptForward(BindableService bindableService,
       ServerInterceptor... interceptors) {
     return interceptForward(bindableService.bindService(), Arrays.asList(interceptors));
@@ -84,6 +83,12 @@ public class ServerInterceptors {
     return intercept(serviceDef, copy);
   }
 
+  public static ServerServiceDefinition interceptForward(
+      BindableService bindableService,
+      List<? extends ServerInterceptor> interceptors) {
+    return interceptForward(bindableService.bindService(), interceptors);
+  }
+
   /**
    * Create a new {@code ServerServiceDefinition} whose {@link ServerCallHandler}s will call
    * {@code interceptors} before calling the pre-existing {@code ServerCallHandler}. The last
@@ -100,6 +105,7 @@ public class ServerInterceptors {
 
   public static ServerServiceDefinition intercept(BindableService bindableService,
       ServerInterceptor... interceptors) {
+    Preconditions.checkNotNull(bindableService);
     return intercept(bindableService.bindService(), Arrays.asList(interceptors));
   }
 
@@ -124,6 +130,12 @@ public class ServerInterceptors {
       wrapAndAddMethod(serviceDefBuilder, method, interceptors);
     }
     return serviceDefBuilder.build();
+  }
+
+  public static ServerServiceDefinition intercept(BindableService bindableService,
+      List<? extends ServerInterceptor> interceptors) {
+    Preconditions.checkNotNull(bindableService);
+    return intercept(bindableService.bindService(), interceptors);
   }
 
   /**

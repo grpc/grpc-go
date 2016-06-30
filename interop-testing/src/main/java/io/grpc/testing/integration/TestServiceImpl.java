@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
  * Implementation of the business logic for the TestService. Uses an executor to schedule chunks
  * sent in response streams.
  */
-public class TestServiceImpl implements TestServiceGrpc.TestService {
+public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   private static final String UNCOMPRESSABLE_FILE =
       "/io/grpc/testing/integration/testdata/uncompressable.bin";
   private final Random random = new Random();

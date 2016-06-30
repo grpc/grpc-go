@@ -196,7 +196,7 @@ public class StressTestClient {
     Preconditions.checkState(!shutdown, "client was shutdown.");
 
     metricsServer = ServerBuilder.forPort(metricsPort)
-        .addService(MetricsServiceGrpc.bindService(new MetricsServiceImpl()))
+        .addService(new MetricsServiceImpl())
         .build()
         .start();
   }
@@ -517,7 +517,7 @@ public class StressTestClient {
   /**
    * Service that exports the QPS metrics of the stress test.
    */
-  private class MetricsServiceImpl implements MetricsServiceGrpc.MetricsService {
+  private class MetricsServiceImpl extends MetricsServiceGrpc.MetricsServiceImplBase {
 
     @Override
     public void getAllGauges(Metrics.EmptyMessage request,
