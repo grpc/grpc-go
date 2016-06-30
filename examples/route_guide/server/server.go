@@ -56,15 +56,20 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
+
+	"google.golang.org/grpc/metadata"
+	"github.com/opentracing/opentracing-go"
+	"github.com/lightstep/lightstep-tracer-go"
 )
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 	certFile   = flag.String("cert_file", "testdata/server1.pem", "The TLS cert file")
 	keyFile    = flag.String("key_file", "testdata/server1.key", "The TLS key file")
-	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
+	jsonDBFile = flag.String("json_db_file", "../testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )
+
 
 type routeGuideServer struct {
 	savedFeatures []*pb.Feature
@@ -219,8 +224,18 @@ func newServer() *routeGuideServer {
 	return s
 }
 
+func join(ctx context.Context) (opentracing.Span, error){
+	mp, _ := metadata.FromContext(ctx)
+	span := opentracing.GlobalTracer().StartSpanWithOptions(opentracing.StartSpanOptions{
+		OperationName: mp["op"][0],
+	    StartTime: time.Now(),
+	})
+	return span, nil
+}
+
 func main() {
 	flag.Parse()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		grpclog.Fatalf("failed to listen: %v", err)
@@ -233,6 +248,23 @@ func main() {
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
+
+	lightstepTracer := lightstep.NewTracer(lightstep.Options{
+	    AccessToken: "38500368f614ded2704772cdba398f4b",
+	})
+	opentracing.InitGlobalTracer(lightstepTracer)
+
+	opts = append(opts, grpc.UnaryInterceptor(
+		func (ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,)(resp interface{}, err error){
+			span, err := join(ctx)
+			span.LogEvent("GetFeature_called")
+
+			defer span.FinishWithOptions(opentracing.FinishOptions{FinishTime: time.Now()})
+			ctx = opentracing.ContextWithSpan(ctx,span)
+
+			return handler(ctx,req)
+			}))
+
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	grpcServer.Serve(lis)
