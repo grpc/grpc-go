@@ -70,7 +70,8 @@ var (
         per_rpc_creds: large_unary with per rpc token;
         oauth2_auth_token: large_unary with oauth2 token auth;
         cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
-        cancel_after_first_response: cancellation after receiving 1st message from the server.`)
+        cancel_after_first_response: cancellation after receiving 1st message from the server;
+        status_code_and_message: status code propagated back to client.`)
 
 	// The test CA root cert file
 	testCAFile = "testdata/ca.pem"
@@ -180,6 +181,9 @@ func main() {
 	case "cancel_after_first_response":
 		interop.DoCancelAfterFirstResponse(tc)
 		grpclog.Println("CancelAfterFirstResponse done")
+	case "status_code_and_message":
+		interop.DoStatusCodeAndMessage(tc)
+		grpclog.Println("StatusCodeAndMessage done")
 	default:
 		grpclog.Fatal("Unsupported test case: ", *testCase)
 	}
