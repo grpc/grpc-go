@@ -115,12 +115,12 @@ func runRecordRoute(client pb.RouteGuideClient) {
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
 func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
-		{&pb.Point{0, 1}, "First message"},
-		{&pb.Point{0, 2}, "Second message"},
-		{&pb.Point{0, 3}, "Third message"},
-		{&pb.Point{0, 1}, "Fourth message"},
-		{&pb.Point{0, 2}, "Fifth message"},
-		{&pb.Point{0, 3}, "Sixth message"},
+		{&pb.Point{Latitude: 0, Longitude: 1}, "First message"},
+		{&pb.Point{Latitude: 0, Longitude: 2}, "Second message"},
+		{&pb.Point{Latitude: 0, Longitude: 3}, "Third message"},
+		{&pb.Point{Latitude: 0, Longitude: 1}, "Fourth message"},
+		{&pb.Point{Latitude: 0, Longitude: 2}, "Fifth message"},
+		{&pb.Point{Latitude: 0, Longitude: 3}, "Sixth message"},
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
@@ -192,7 +192,7 @@ func main() {
 	printFeature(client, &pb.Point{0, 0})
 
 	// Looking for features between 40, -75 and 42, -73.
-	printFeatures(client, &pb.Rectangle{&pb.Point{400000000, -750000000}, &pb.Point{420000000, -730000000}})
+	printFeatures(client, &pb.Rectangle{&pb.Point{Latitude: 400000000, Longitude: -750000000}, &pb.Point{Latitude: 420000000, Longitude: -730000000}})
 
 	// RecordRoute
 	runRecordRoute(client)

@@ -1929,7 +1929,7 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 			t.Fatal("timeout waiting for error")
 		}
 		if se, ok := got.(transport.StreamError); !ok || se.Code != codes.Canceled {
-			t.Errorf("error = %#v; want transport.StreamError with code Canceled")
+			t.Errorf("error = %#v; want transport.StreamError with code Canceled", got)
 		}
 	})
 }

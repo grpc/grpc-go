@@ -60,7 +60,7 @@ type byteBufCodec struct {
 func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
 	b, ok := v.(*[]byte)
 	if !ok {
-		return nil, fmt.Errorf("failed to marshal: %v is not type of *[]byte")
+		return nil, fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)
 	}
 	return *b, nil
 }
@@ -68,7 +68,7 @@ func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
 func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
 	b, ok := v.(*[]byte)
 	if !ok {
-		return fmt.Errorf("failed to marshal: %v is not type of *[]byte")
+		return fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)
 	}
 	*b = data
 	return nil
@@ -138,8 +138,6 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 			return err
 		}
 	}
-
-	return nil
 }
 
 func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) error {
@@ -191,13 +189,11 @@ func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) er
 			return err
 		}
 	}
-
-	return nil
 }
 
 func (s *workerServer) CoreCount(ctx context.Context, in *testpb.CoreRequest) (*testpb.CoreResponse, error) {
 	grpclog.Printf("core count: %v", runtime.NumCPU())
-	return &testpb.CoreResponse{int32(runtime.NumCPU())}, nil
+	return &testpb.CoreResponse{Cores: int32(runtime.NumCPU())}, nil
 }
 
 func (s *workerServer) QuitWorker(ctx context.Context, in *testpb.Void) (*testpb.Void, error) {
