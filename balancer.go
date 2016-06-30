@@ -158,7 +158,7 @@ type roundRobin struct {
 func (rr *roundRobin) watchAddrUpdates() error {
 	updates, err := rr.w.Next()
 	if err != nil {
-		grpclog.Println("grpc: the naming watcher stops working due to %v.", err)
+		grpclog.Printf("grpc: the naming watcher stops working due to %v.\n", err)
 		return err
 	}
 	rr.mu.Lock()
