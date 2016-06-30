@@ -68,7 +68,7 @@ public class CallOptionsTest {
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
       .withAffinity(sampleAffinity)
-      .withCredentials(sampleCreds)
+      .withCallCredentials(sampleCreds)
       .withCompression(sampleCompressor)
       .withWaitForReady()
       .withExecutor(directExecutor())
@@ -120,7 +120,8 @@ public class CallOptionsTest {
         .isTrue();
     assertThat(
         equal(allSet,
-            allSet.withCredentials(mock(CallCredentials.class)).withCredentials(sampleCreds)))
+            allSet.withCallCredentials(mock(CallCredentials.class))
+            .withCallCredentials(sampleCreds)))
         .isTrue();
   }
 
@@ -165,7 +166,7 @@ public class CallOptionsTest {
     String actual = allSet
         .withDeadline(null)
         .withExecutor(new SerializingExecutor(directExecutor()))
-        .withCredentials(null)
+        .withCallCredentials(null)
         .toString();
 
     assertThat(actual).isEqualTo(expected);

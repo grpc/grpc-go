@@ -120,7 +120,7 @@ public class CallCredentialsApplyingTest {
         mockTransportFactory, mockExecutor);
     transport = (ForwardingConnectionClientTransport) transportFactory.newClientTransport(
         address, authority, userAgent);
-    callOptions = CallOptions.DEFAULT.withCredentials(mockCreds);
+    callOptions = CallOptions.DEFAULT.withCallCredentials(mockCreds);
     verify(mockTransportFactory).newClientTransport(address, authority, userAgent);
     assertSame(mockTransport, transport.delegate());
   }
@@ -270,7 +270,7 @@ public class CallCredentialsApplyingTest {
 
   @Test
   public void noCreds() {
-    callOptions = callOptions.withCredentials(null);
+    callOptions = callOptions.withCallCredentials(null);
     ClientStream stream = transport.newStream(method, origHeaders, callOptions);
 
     verify(mockTransport).newStream(method, origHeaders, callOptions);

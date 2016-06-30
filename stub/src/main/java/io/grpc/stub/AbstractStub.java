@@ -179,6 +179,6 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    */
   @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
   public final S withCallCredentials(CallCredentials credentials) {
-    return build(channel, callOptions.withCredentials(credentials));
+    return build(channel, callOptions.withCallCredentials(credentials));
   }
 }
