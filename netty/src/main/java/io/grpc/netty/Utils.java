@@ -106,8 +106,9 @@ class Utils {
 
   private static byte[] bytes(CharSequence seq) {
     if (seq instanceof AsciiString) {
-      // Fast path - no copy.
-      return ((AsciiString) seq).array();
+      // Fast path - sometimes copy.
+      AsciiString str = (AsciiString) seq;
+      return str.isEntireArrayUsed() ? str.array() : str.toByteArray();
     }
     // Slow path - copy.
     return seq.toString().getBytes(UTF_8);
