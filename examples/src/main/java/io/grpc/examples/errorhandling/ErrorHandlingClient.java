@@ -71,7 +71,7 @@ public class ErrorHandlingClient {
   private ManagedChannel channel;
 
   void run() throws Exception {
-    server = ServerBuilder.forPort(0).addService(new GreeterGrpc.AbstractGreeter() {
+    server = ServerBuilder.forPort(0).addService(new GreeterGrpc.GreeterImplBase() {
       @Override
       public void sayHello(HelloRequest request, StreamObserver<HelloReply> responseObserver) {
         responseObserver.onError(Status.INTERNAL
