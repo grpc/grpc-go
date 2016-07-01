@@ -94,6 +94,8 @@ func TestGetServiceInfo(t *testing.T) {
 		"grpc.testing.EmptyService": &ServiceInfo{
 			Methods: []string{
 				"EmptyCall",
+			},
+			Streams: []string{
 				"EmptyStream",
 			},
 			Metadata: []int{0, 2, 1, 3},

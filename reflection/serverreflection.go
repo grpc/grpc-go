@@ -214,7 +214,7 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 		return nil, fmt.Errorf("unknown symbol: %v", name)
 	}
 
-	// Search for method in info.
+	// Search for method in info.Methods.
 	var found bool
 	for _, m := range info.Methods {
 		if m == name[pos+1:] {
@@ -222,11 +222,22 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 			break
 		}
 	}
-	if !found {
-		return nil, fmt.Errorf("unknown symbol: %v", name)
+	if found {
+		return info.Metadata, nil
 	}
 
-	return info.Metadata, nil
+	// Search for stream in info.Streams.
+	for _, m := range info.Streams {
+		if m == name[pos+1:] {
+			found = true
+			break
+		}
+	}
+	if found {
+		return info.Metadata, nil
+	}
+
+	return nil, fmt.Errorf("unknown symbol: %v", name)
 }
 
 // fileDescEncodingContainingSymbol finds the file descriptor containing the given symbol,
