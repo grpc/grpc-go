@@ -248,30 +248,40 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 			return nil, errNoAddr
 		}
 	}
-	waitC := make(chan error, 1)
-	go func() {
-		for _, a := range addrs {
-			if err := cc.newAddrConn(a, false); err != nil {
-				waitC <- err
-				return
-			}
-		}
-		close(waitC)
-	}()
+
+	errC := make(chan error, len(addrs))
+	for _, addr := range addrs {
+		go func(a Address) {
+			errC <- cc.newAddrConn(a, false)
+		}(addr)
+	}
 	var timeoutCh <-chan time.Time
 	if cc.dopts.timeout > 0 {
 		timeoutCh = time.After(cc.dopts.timeout)
 	}
-	select {
-	case err := <-waitC:
-		if err != nil {
+	errs := make([]error, 0, len(addrs))
+	for range addrs {
+		var err error
+		select {
+		case err = <-errC:
+		case <-timeoutCh:
 			cc.Close()
-			return nil, err
+			return nil, ErrClientConnTimeout
 		}
-	case <-timeoutCh:
-		cc.Close()
-		return nil, ErrClientConnTimeout
+		if err == nil {
+			break
+		}
+		errs = append(errs, err)
 	}
+	if len(errs) == len(addrs) {
+		cc.Close()
+		if len(errs) == 1 {
+			// preserve error if only one
+			return nil, errs[0]
+		}
+		return nil, fmt.Errorf("%v", errs)
+	}
+
 	if ok {
 		go cc.lbWatcher()
 	}
