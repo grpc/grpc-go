@@ -525,7 +525,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	resp := in.GetResponseStatus()
-	if *resp.Code != 0 {
+	if resp != nil && *resp.Code != 0 {
 		return nil, grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
@@ -539,7 +539,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	resp := args.GetResponseStatus()
-	if *resp.Code != 0 {
+	if resp != nil && *resp.Code != 0 {
 		return grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
 	}
 	cs := args.GetResponseParameters()
