@@ -21,7 +21,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
  * </pre>
  */
 @javax.annotation.Generated(
-    value = "by gRPC proto compiler (version 0.15.0-SNAPSHOT)",
+    value = "by gRPC proto compiler (version 1.0.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
 public class ReconnectServiceGrpc {
 
