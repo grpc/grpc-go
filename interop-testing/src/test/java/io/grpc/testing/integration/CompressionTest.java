@@ -281,7 +281,9 @@ public class CompressionTest {
         call.setCompression("fzip");
       }
       call.setMessageCompression(enableServerMessageCompression);
-      serverResponseHeaders = headers;
+      Metadata headersCopy = new Metadata();
+      headersCopy.merge(headers);
+      serverResponseHeaders = headersCopy;
       return next.startCall(call, headers);
     }
   }
@@ -319,7 +321,9 @@ public class CompressionTest {
     @Override
     public void onHeaders(Metadata headers) {
       super.onHeaders(headers);
-      clientResponseHeaders = headers;
+      Metadata headersCopy = new Metadata();
+      headersCopy.merge(headers);
+      clientResponseHeaders = headersCopy;
     }
   }
 }
