@@ -458,11 +458,11 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	var code int32 = 2
 	msg := "test status message"
-	// Test UnaryCall.
 	respStatus := &testpb.EchoStatus{
 		Code:    &code,
 		Message: &msg,
 	}
+	// Test UnaryCall.
 	req := &testpb.SimpleRequest{
 		ResponseStatus: respStatus,
 	}
@@ -470,7 +470,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	if grpc.Code(err) != codes.Code(code) {
 		grpclog.Fatalf("/TestService/UnaryCall RPC compleled with error code %d, want %d", grpc.Code(err), code)
 	}
-	if err.Error() != msg {
+	if err.Error() != fmt.Sprint("rpc error: code = ", code, " desc = ", msg) {
 		grpclog.Fatal("/TestService/UnaryCall unexpected RPC error message: ", err)
 	}
 	// Test FullDuplexCall.
@@ -488,7 +488,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	if grpc.Code(err) != codes.Code(code) {
 		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), code)
 	}
-	if err.Error() != msg {
+	if err.Error() != fmt.Sprint("rpc error: code = ", code, " desc = ", msg) {
 		grpclog.Fatalf("%v unexpected RPC error message: %v", stream, err)
 	}
 }
