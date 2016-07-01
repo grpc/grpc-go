@@ -124,7 +124,7 @@ public class TransportBenchmark {
 
         // Reflection used since they are only available on linux.
         Class<?> groupClass = Class.forName("io.netty.channel.epoll.EpollEventLoopGroup");
-        EventLoopGroup group = (EventLoopGroup) groupClass.newInstance();
+        EventLoopGroup group = (EventLoopGroup) groupClass.getConstructor().newInstance();
 
         @SuppressWarnings("unchecked")
         Class<? extends ServerChannel> serverChannelClass = (Class<? extends ServerChannel>)

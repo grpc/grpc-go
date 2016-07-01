@@ -31,8 +31,6 @@
 
 package io.grpc.benchmarks;
 
-import static io.grpc.benchmarks.proto.Messages.SimpleResponse;
-
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.protobuf.ByteString;
 
@@ -41,6 +39,7 @@ import io.grpc.Status;
 import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Messages.Payload;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
+import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;

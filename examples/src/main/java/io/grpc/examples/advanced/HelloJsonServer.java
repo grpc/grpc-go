@@ -106,7 +106,7 @@ public class HelloJsonServer {
     server.blockUntilShutdown();
   }
 
-  private class GreeterImpl extends GreeterImplBase {
+  private static class GreeterImpl extends GreeterImplBase {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {

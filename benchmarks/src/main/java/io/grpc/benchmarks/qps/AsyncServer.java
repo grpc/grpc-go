@@ -133,8 +133,8 @@ public class AsyncServer {
           @SuppressWarnings("unchecked")
           Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
               Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
-          boss = (EventLoopGroup) groupClass.newInstance();
-          worker = (EventLoopGroup) groupClass.newInstance();
+          boss = (EventLoopGroup) groupClass.getConstructor().newInstance();
+          worker = (EventLoopGroup) groupClass.getConstructor().newInstance();
           channelType = channelClass;
           break;
         } catch (Exception e) {
@@ -148,8 +148,8 @@ public class AsyncServer {
           @SuppressWarnings("unchecked")
           Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
               Class.forName("io.netty.channel.epoll.EpollServerDomainSocketChannel");
-          boss = (EventLoopGroup) groupClass.newInstance();
-          worker = (EventLoopGroup) groupClass.newInstance();
+          boss = (EventLoopGroup) groupClass.getConstructor().newInstance();
+          worker = (EventLoopGroup) groupClass.getConstructor().newInstance();
           channelType = channelClass;
           break;
         } catch (Exception e) {
