@@ -27,7 +27,7 @@ sudo tc qdisc add dev lo root handle 1: prio
 sudo tc qdisc add dev lo parent 1:1 handle 2: netem delay 0.1ms rate 10gbit
 # Add a filter which selects the new qdisc class for traffic to 127.127.127.127
 sudo tc filter add dev lo parent 1:0 protocol ip prio 1 u32 match ip dst 127.127.127.127 flowid 2:1
-# Create an interface alias call 'lo:benchmark' that maps 127.127.127.126 to loopback
+# Create an interface alias call 'lo:benchmark' that maps 127.127.127.127 to loopback
 sudo ip addr add dev lo 127.127.127.127/32 label lo:benchmark
 ```
 
