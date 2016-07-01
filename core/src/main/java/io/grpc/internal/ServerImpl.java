@@ -60,6 +60,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.concurrent.GuardedBy;
+
 /**
  * Default implementation of {@link io.grpc.Server}, for creation by transports.
  *
@@ -79,22 +81,23 @@ public final class ServerImpl extends io.grpc.Server {
 
   /** Executor for application processing. */
   private Executor executor;
-  private boolean usingSharedExecutor;
+  @GuardedBy("lock") private boolean usingSharedExecutor;
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
-  private boolean started;
-  private boolean shutdown;
+  @GuardedBy("lock") private boolean started;
+  @GuardedBy("lock") private boolean shutdown;
   /** non-{@code null} if immediate shutdown has been requested. */
-  private Status shutdownNowStatus;
+  @GuardedBy("lock") private Status shutdownNowStatus;
   /** {@code true} if ServerListenerImpl.serverShutdown() was called. */
-  private boolean serverShutdownCallbackInvoked;
-  private boolean terminated;
+  @GuardedBy("lock") private boolean serverShutdownCallbackInvoked;
+  @GuardedBy("lock") private boolean terminated;
   /** Service encapsulating something similar to an accept() socket. */
   private final InternalServer transportServer;
   private final Object lock = new Object();
-  private boolean transportServerTerminated;
+  @GuardedBy("lock") private boolean transportServerTerminated;
   /** {@code transportServer} and services encapsulating something similar to a TCP connection. */
-  private final Collection<ServerTransport> transports = new HashSet<ServerTransport>();
+  @GuardedBy("lock") private final Collection<ServerTransport> transports =
+      new HashSet<ServerTransport>();
 
   private final ScheduledExecutorService timeoutService = SharedResourceHolder.get(TIMER_SERVICE);
   private final Context rootContext;
