@@ -37,6 +37,7 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ServerListener;
+import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -133,7 +134,18 @@ class NettyServer implements InternalServer {
         });
         NettyServerTransport transport = new NettyServerTransport(ch, protocolNegotiator,
             maxStreamsPerConnection, flowControlWindow, maxMessageSize, maxHeaderListSize);
-        transport.start(listener.transportCreated(transport));
+        ServerTransportListener transportListener;
+        // This is to order callbacks on the listener, not to guard access to channel.
+        synchronized (NettyServer.this) {
+          if (channel != null && !channel.isOpen()) {
+            // Server already shutdown.
+            ch.close();
+            return;
+          }
+
+          transportListener = listener.transportCreated(transport);
+        }
+        transport.start(transportListener);
       }
     });
     // Bind and start to accept incoming connections.
@@ -162,7 +174,9 @@ class NettyServer implements InternalServer {
         if (!future.isSuccess()) {
           log.log(Level.WARNING, "Error shutting down server", future.cause());
         }
-        listener.serverShutdown();
+        synchronized (NettyServer.this) {
+          listener.serverShutdown();
+        }
         eventLoopReferenceCounter.release();
       }
     });
