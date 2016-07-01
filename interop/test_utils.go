@@ -482,14 +482,18 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 		ResponseStatus: respStatus,
 	}
 	if err := stream.Send(stream_req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, stream_req, err)
+		grpclog.Fatalf("stream %v.Send(%v) = %v", stream, stream_req, err)
 	}
 	err = stream.CloseSend()
+	if err != nil {
+		grpclog.Fatalf("stream %v.CloseSend() = %v", stream, err)
+	}
+	_, err = stream.Recv()
 	if grpc.Code(err) != codes.Code(code) {
-		grpclog.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), code)
+		grpclog.Fatalf("stream %v compleled with error code %d, want %d", stream, grpc.Code(err), code)
 	}
 	if err.Error() != fmt.Sprint("rpc error: code = ", code, " desc = ", msg) {
-		grpclog.Fatalf("%v unexpected RPC error message: %v", stream, err)
+		grpclog.Fatalf("stream %v unexpected RPC error message: %v", stream, err)
 	}
 }
 
