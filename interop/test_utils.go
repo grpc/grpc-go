@@ -542,10 +542,6 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 }
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
-	resp := args.GetResponseStatus()
-	if resp != nil && *resp.Code != 0 {
-		return grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
-	}
 	cs := args.GetResponseParameters()
 	for _, c := range cs {
 		if us := c.GetIntervalUs(); us > 0 {
@@ -590,6 +586,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		}
 		if err != nil {
 			return err
+		}
+		resp := in.GetResponseStatus()
+		if resp != nil && *resp.Code != 0 {
+			return grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
 		}
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
