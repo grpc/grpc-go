@@ -78,6 +78,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
      build.gradle android-interop-testing/app/build.gradle \
      examples/android/app/build.gradle
+   $ ./gradlew build
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
 3. Go through PR review and push the master branch to GitHub:
@@ -96,6 +97,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ sed -i 's/-SNAPSHOT\(.*CURRENT_GRPC_VERSION\)/\1/' \
      build.gradle android-interop-testing/app/build.gradle \
      examples/android/app/build.gradle
+   $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$PATCH"
    $ git tag -a v$MAJOR.$MINOR.$PATCH -m "Version $MAJOR.$MINOR.$PATCH"
    ```
@@ -107,6 +109,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT'\1/' \
      build.gradle android-interop-testing/app/build.gradle \
      examples/android/app/build.gradle
+   $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT"
    ```
 6. Go through PR review and push the release tag and updated release branch to
