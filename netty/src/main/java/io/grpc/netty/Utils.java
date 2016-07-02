@@ -50,7 +50,6 @@ import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.DefaultThreadFactory;
-import io.netty.util.concurrent.FastThreadLocalThread;
 
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
@@ -182,8 +181,7 @@ class Utils {
     public EventLoopGroup create() {
       // Use Netty's DefaultThreadFactory in order to get the benefit of FastThreadLocal.
       boolean useDaemonThreads = true;
-      ThreadFactory threadFactory = new ThreadGroupSavingDefaultThreadFactory(
-          name, useDaemonThreads);
+      ThreadFactory threadFactory = new DefaultThreadFactory(name, useDaemonThreads);
       int parallelism = numEventLoops == 0
           ? Runtime.getRuntime().availableProcessors() * 2 : numEventLoops;
       return new NioEventLoopGroup(parallelism, threadFactory);
@@ -197,22 +195,6 @@ class Utils {
     @Override
     public String toString() {
       return name;
-    }
-  }
-
-  // A workaround for https://github.com/netty/netty/issues/5084
-  // TODO(zhangkun83): remove it once the issue has been resolved in netty.
-  private static class ThreadGroupSavingDefaultThreadFactory extends DefaultThreadFactory {
-    final ThreadGroup threadGroup;
-
-    ThreadGroupSavingDefaultThreadFactory(String name, boolean daemon) {
-      super(name, daemon);
-      threadGroup = Thread.currentThread().getThreadGroup();
-    }
-
-    @Override
-    protected Thread newThread(Runnable r, String name) {
-      return new FastThreadLocalThread(threadGroup, r, name);
     }
   }
 
