@@ -38,7 +38,7 @@ import java.util.concurrent.Executor;
 /**
  * Command sent from the transport to the Netty channel to send a PING frame.
  */
-class SendPingCommand {
+class SendPingCommand extends WriteQueue.AbstractQueuedCommand {
   private final PingCallback callback;
   private final Executor executor;
 

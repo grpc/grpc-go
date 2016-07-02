@@ -194,7 +194,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     return handler().connection();
   }
 
-  protected final ChannelFuture enqueue(Object command) {
+  protected final ChannelFuture enqueue(WriteQueue.QueuedCommand command) {
     ChannelFuture future = writeQueue.enqueue(command, newPromise(), true);
     channel.runPendingTasks();
     return future;

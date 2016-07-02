@@ -54,6 +54,7 @@ import com.google.common.collect.ListMultimap;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
+import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.channel.ChannelPromise;
@@ -287,8 +288,8 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
         }
         return null;
       }
-    }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
-    when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
+    }).when(writeQueue).enqueue(any(QueuedCommand.class), any(ChannelPromise.class), anyBoolean());
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     NettyServerStream.TransportState state =
         new NettyServerStream.TransportState(handler, http2Stream, DEFAULT_MAX_MESSAGE_SIZE);
     NettyServerStream stream = new NettyServerStream(channel, state);

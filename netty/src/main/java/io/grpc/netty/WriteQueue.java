@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.netty.channel.Channel;
@@ -47,7 +48,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class WriteQueue {
 
-  private static final int DEQUE_CHUNK_SIZE = 128;
+  // Dequeue in chunks, so we don't have to acquire the queue's log too often.
+  @VisibleForTesting
+  static final int DEQUE_CHUNK_SIZE = 128;
 
   /**
    * {@link Runnable} used to schedule work onto the tail of the event loop.
@@ -60,18 +63,18 @@ class WriteQueue {
   };
 
   private final Channel channel;
-  private final BlockingQueue<Runnable> queue;
+  private final BlockingQueue<QueuedCommand> queue;
   private final AtomicBoolean scheduled = new AtomicBoolean();
 
   /**
    * ArrayDeque to copy queue into when flushing in event loop.
    */
-  private final ArrayDeque<Runnable> writeChunk =
-      new ArrayDeque<Runnable>(DEQUE_CHUNK_SIZE);
+  private final ArrayDeque<QueuedCommand> writeChunk =
+      new ArrayDeque<QueuedCommand>(DEQUE_CHUNK_SIZE);
 
   public WriteQueue(Channel channel) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    queue = new LinkedBlockingQueue<Runnable>();
+    queue = new LinkedBlockingQueue<QueuedCommand>();
   }
 
   /**
@@ -93,7 +96,7 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
-  ChannelFuture enqueue(Object command, boolean flush) {
+  ChannelFuture enqueue(QueuedCommand command, boolean flush) {
     return enqueue(command, channel.newPromise(), flush);
   }
 
@@ -105,8 +108,12 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
-  ChannelFuture enqueue(Object command, ChannelPromise promise, boolean flush) {
-    queue.add(new QueuedCommand(command, promise));
+  ChannelFuture enqueue(QueuedCommand command, ChannelPromise promise, boolean flush) {
+    // Detect erroneous code that tries to reuse command objects.
+    Preconditions.checkNotNull(command.promise() == null, "promise must not be set on command");
+
+    command.promise(promise);
+    queue.add(command);
     if (flush) {
       scheduleFlush();
     }
@@ -117,12 +124,17 @@ class WriteQueue {
    * Process the queue of commands and dispatch them to the stream. This method is only
    * called in the event loop
    */
+  /**
+   * Process the queue of commands and dispatch them to the stream. This method is only
+   * called in the event loop
+   */
   private void flush() {
     try {
       boolean flushed = false;
       while (queue.drainTo(writeChunk, DEQUE_CHUNK_SIZE) > 0) {
         while (writeChunk.size() > 0) {
-          writeChunk.poll().run();
+          QueuedCommand cmd = writeChunk.poll();
+          channel.write(cmd, cmd.promise());
         }
         // Flush each chunk so we are releasing buffers periodically. In theory this loop
         // might never end as new events are continuously added to the queue, if we never
@@ -143,22 +155,33 @@ class WriteQueue {
     }
   }
 
-  /**
-   * Simple wrapper type around a command and its optional completion listener.
-   */
-  private final class QueuedCommand implements Runnable {
-    private final Object command;
-    private final ChannelPromise promise;
+  abstract static class AbstractQueuedCommand implements QueuedCommand {
 
-    private QueuedCommand(Object command, ChannelPromise promise) {
-      this.command = command;
+    private ChannelPromise promise;
+
+    @Override
+    public final void promise(ChannelPromise promise) {
       this.promise = promise;
     }
 
     @Override
-    public void run() {
-      channel.write(command, promise);
+    public final ChannelPromise promise() {
+      return promise;
     }
   }
-}
 
+  /**
+   * Simple wrapper type around a command and its optional completion listener.
+   */
+  interface QueuedCommand {
+    /**
+     * Returns the promise beeing notified of the success/failure of the write.
+     */
+    ChannelPromise promise();
+
+    /**
+     * Sets the promise.
+     */
+    void promise(ChannelPromise promise);
+  }
+}

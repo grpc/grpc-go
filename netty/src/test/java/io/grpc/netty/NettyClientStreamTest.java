@@ -60,6 +60,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -380,7 +381,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     metadata.put(GrpcUtil.USER_AGENT_KEY, "bad agent");
     listener = mock(ClientStreamListener.class);
     Mockito.reset(writeQueue);
-    when(writeQueue.enqueue(any(), any(boolean.class))).thenReturn(future);
+    when(writeQueue.enqueue(any(QueuedCommand.class), any(boolean.class))).thenReturn(future);
 
     stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel, handler,
         DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"),
@@ -404,8 +405,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         }
         return null;
       }
-    }).when(writeQueue).enqueue(any(), any(ChannelPromise.class), anyBoolean());
-    when(writeQueue.enqueue(any(), anyBoolean())).thenReturn(future);
+    }).when(writeQueue).enqueue(any(QueuedCommand.class), any(ChannelPromise.class), anyBoolean());
+    when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     NettyClientStream stream = new NettyClientStreamImpl(methodDescriptor, new Metadata(), channel,
         handler, DEFAULT_MAX_MESSAGE_SIZE, AsciiString.of("localhost"), AsciiString.of("http"),
         AsciiString.of("agent"));

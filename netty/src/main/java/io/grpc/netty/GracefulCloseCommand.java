@@ -37,7 +37,7 @@ import io.grpc.Status;
  * A command to trigger close. It is buffered differently than normal close and also includes
  * reason for closure.
  */
-class GracefulCloseCommand {
+class GracefulCloseCommand extends WriteQueue.AbstractQueuedCommand {
   private final Status status;
 
   public GracefulCloseCommand(Status status) {

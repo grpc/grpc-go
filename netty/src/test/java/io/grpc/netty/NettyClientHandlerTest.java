@@ -373,12 +373,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Test
   public void createIncrementsIdsForActualAndBufferdStreams() throws Exception {
     receiveMaxConcurrentStreams(2);
-    CreateStreamCommand command = new CreateStreamCommand(grpcHeaders, stream);
-    enqueue(command);
+    enqueue(new CreateStreamCommand(grpcHeaders, stream));
     verify(stream).id(eq(3));
-    enqueue(command);
+    enqueue(new CreateStreamCommand(grpcHeaders, stream));
     verify(stream).id(eq(5));
-    enqueue(command);
+    enqueue(new CreateStreamCommand(grpcHeaders, stream));
     verify(stream).id(eq(7));
   }
 

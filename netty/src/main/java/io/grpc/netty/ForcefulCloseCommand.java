@@ -37,7 +37,7 @@ import io.grpc.Status;
  * A command to trigger close and close all streams. It is buffered differently than normal close
  * and also includes reason for closure.
  */
-class ForcefulCloseCommand {
+class ForcefulCloseCommand extends WriteQueue.AbstractQueuedCommand {
   private final Status status;
 
   public ForcefulCloseCommand(Status status) {

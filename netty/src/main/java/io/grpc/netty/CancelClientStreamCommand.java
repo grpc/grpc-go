@@ -38,7 +38,7 @@ import io.grpc.Status;
 /**
  * Command sent from a Netty client stream to the handler to cancel the stream.
  */
-class CancelClientStreamCommand {
+class CancelClientStreamCommand extends WriteQueue.AbstractQueuedCommand {
   private final NettyClientStream stream;
   private final Status reason;
 

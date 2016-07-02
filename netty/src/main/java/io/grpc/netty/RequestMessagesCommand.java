@@ -37,7 +37,7 @@ import io.grpc.internal.Stream;
 /**
  * Command which requests messages from the deframer.
  */
-class RequestMessagesCommand {
+class RequestMessagesCommand extends WriteQueue.AbstractQueuedCommand {
 
   private final int numMessages;
   private final Stream stream;
