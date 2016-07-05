@@ -354,8 +354,10 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authI
 type ConnectOptions struct {
 	// UserAgent is the application user agent.
 	UserAgent string
+	// Cancel is closed to indicate that dialing should be cancelled.
+	Cancel chan struct{}
 	// Dialer specifies how to dial a network address.
-	Dialer func(string, time.Duration) (net.Conn, error)
+	Dialer func(string, time.Duration, <-chan struct{}) (net.Conn, error)
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
 	// TransportCredentials stores the Authenticator required to setup a client connection.
