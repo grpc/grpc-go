@@ -79,7 +79,7 @@ func TestGetServiceInfo(t *testing.T) {
 			{
 				StreamName:    "EmptyStream",
 				Handler:       nil,
-				ServerStreams: true,
+				ServerStreams: false,
 				ClientStreams: true,
 			},
 		},
@@ -95,9 +95,11 @@ func TestGetServiceInfo(t *testing.T) {
 			Methods: []string{
 				"EmptyCall",
 			},
-			Streams: []string{
-				"EmptyStream",
-			},
+			Streams: []*StreamInfo{&StreamInfo{
+				Name:           "EmptyStream",
+				IsClientStream: true,
+				IsServerStream: false,
+			}},
 			Metadata: []int{0, 2, 1, 3},
 		},
 	}

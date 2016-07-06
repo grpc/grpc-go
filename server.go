@@ -245,12 +245,22 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// ServiceInfo contains unary rpc names, streaming rpc names and metadata for a service.
+// StreamInfo contains information about a streaming RPC.
+type StreamInfo struct {
+	// Name is the RPC name only, without the service name or package name.
+	Name string
+	// IsClientStream indicates whether the RPC is a client streaming RPC.
+	IsClientStream bool
+	// IsServerStream indicates whether the RPC is a server streaming RPC.
+	IsServerStream bool
+}
+
+// ServiceInfo contains unary RPC names, streaming RPC infos and metadata for a service.
 type ServiceInfo struct {
-	// Methods are unary rpc names only, without the service name or package name.
+	// Methods are unary RPC names only, without the service name or package name.
 	Methods []string
-	// Streams are streaming rpc names only, without the service name or package name.
-	Streams []string
+	// Streams are streaming RPC names and streaming types.
+	Streams []*StreamInfo
 	// Metadata is the metadata specified in ServiceDesc when registering service.
 	Metadata interface{}
 }
@@ -264,9 +274,13 @@ func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
 		for m := range srv.md {
 			methods = append(methods, m)
 		}
-		streams := make([]string, 0, len(srv.sd))
-		for s := range srv.sd {
-			streams = append(streams, s)
+		streams := make([]*StreamInfo, 0, len(srv.sd))
+		for s, d := range srv.sd {
+			streams = append(streams, &StreamInfo{
+				Name:           s,
+				IsClientStream: d.ClientStreams,
+				IsServerStream: d.ServerStreams,
+			})
 		}
 
 		ret[n] = &ServiceInfo{

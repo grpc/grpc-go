@@ -228,7 +228,7 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 
 	// Search for stream in info.Streams.
 	for _, m := range info.Streams {
-		if m == name[pos+1:] {
+		if m.Name == name[pos+1:] {
 			found = true
 			break
 		}
