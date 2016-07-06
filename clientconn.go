@@ -218,27 +218,26 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
+
+	// Set defaults.
 	if cc.dopts.codec == nil {
-		// Set the default codec.
 		cc.dopts.codec = protoCodec{}
 	}
-
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
-
-	cc.balancer = cc.dopts.balancer
-	if cc.balancer == nil {
-		cc.balancer = RoundRobin(nil)
+	if cc.dopts.balancer == nil {
+		cc.dopts.balancer = RoundRobin(nil)
 	}
-	if err := cc.balancer.Start(target); err != nil {
+
+	if err := cc.dopts.balancer.Start(target); err != nil {
 		return nil, err
 	}
 	var (
 		ok    bool
 		addrs []Address
 	)
-	ch := cc.balancer.Notify()
+	ch := cc.dopts.balancer.Notify()
 	if ch == nil {
 		// There is no name resolver installed.
 		addrs = append(addrs, Address{Addr: target})
@@ -319,7 +318,6 @@ func (s ConnectivityState) String() string {
 // ClientConn represents a client connection to an RPC server.
 type ClientConn struct {
 	target    string
-	balancer  Balancer
 	authority string
 	dopts     dialOptions
 
@@ -328,7 +326,7 @@ type ClientConn struct {
 }
 
 func (cc *ClientConn) lbWatcher() {
-	for addrs := range cc.balancer.Notify() {
+	for addrs := range cc.dopts.balancer.Notify() {
 		var (
 			add []Address   // Addresses need to setup connections.
 			del []*addrConn // Connections need to tear down.
@@ -424,7 +422,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
-	addr, put, err := cc.balancer.Get(ctx, opts)
+	addr, put, err := cc.dopts.balancer.Get(ctx, opts)
 	if err != nil {
 		return nil, nil, toRPCErr(err)
 	}
@@ -461,7 +459,7 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.mu.Unlock()
-	cc.balancer.Close()
+	cc.dopts.balancer.Close()
 	for _, ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
@@ -609,7 +607,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			close(ac.ready)
 			ac.ready = nil
 		}
-		ac.down = ac.cc.balancer.Up(ac.addr)
+		ac.down = ac.cc.dopts.balancer.Up(ac.addr)
 		ac.mu.Unlock()
 		return nil
 	}
