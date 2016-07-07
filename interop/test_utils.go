@@ -473,16 +473,16 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	// Test FullDuplexCall.
 	stream, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
 	stream_req := &testpb.StreamingOutputCallRequest{
 		ResponseStatus: respStatus,
 	}
 	if err := stream.Send(stream_req); err != nil {
-		grpclog.Fatalf("stream %v.Send(%v) = %v", stream, stream_req, err)
+		grpclog.Fatalf("stream %v.Send(%v) = %v, want <nil>", stream, stream_req, err)
 	}
 	if err := stream.CloseSend(); err != nil {
-		grpclog.Fatalf("stream %v.CloseSend() = %v", stream, err)
+		grpclog.Fatalf("stream %v.CloseSend() = %v, want <nil>", stream, err)
 	}
 	if _, err = stream.Recv(); err.Error() != expectedErr.Error() {
 		grpclog.Fatalf("stream %v.Recv() returned error %v, want %v", err, expectedErr)
