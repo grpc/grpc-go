@@ -458,20 +458,17 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	var code int32 = 2
 	msg := "test status message"
+        expectedErr := grpc.Errorf(codes.Code(code), msg)
 	respStatus := &testpb.EchoStatus{
-		Code:    &code,
-		Message: &msg,
+		Code:    proto.Int32(code),
+		Message: proto.String(msg),
 	}
 	// Test UnaryCall.
 	req := &testpb.SimpleRequest{
 		ResponseStatus: respStatus,
 	}
-	_, err := tc.UnaryCall(context.Background(), req)
-	if grpc.Code(err) != codes.Code(code) {
-		grpclog.Fatalf("/TestService/UnaryCall RPC compleled with error code %d, want %d", grpc.Code(err), code)
-	}
-	if err.Error() != fmt.Sprint("rpc error: code = ", code, " desc = ", msg) {
-		grpclog.Fatal("/TestService/UnaryCall unexpected RPC error message: ", err)
+	if _, err := tc.UnaryCall(context.Background(), req); err.Error() != expectedErr.Error() {
+		grpclog.Fatalf("UnaryCall RPC returned error %v, want %v", err, expectedErr)
 	}
 	// Test FullDuplexCall.
 	stream, err := tc.FullDuplexCall(context.Background())
@@ -484,16 +481,11 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	if err := stream.Send(stream_req); err != nil {
 		grpclog.Fatalf("stream %v.Send(%v) = %v", stream, stream_req, err)
 	}
-	err = stream.CloseSend()
-	if err != nil {
+	if err := stream.CloseSend(); err != nil {
 		grpclog.Fatalf("stream %v.CloseSend() = %v", stream, err)
 	}
-	_, err = stream.Recv()
-	if grpc.Code(err) != codes.Code(code) {
-		grpclog.Fatalf("stream %v compleled with error code %d, want %d", stream, grpc.Code(err), code)
-	}
-	if err.Error() != fmt.Sprint("rpc error: code = ", code, " desc = ", msg) {
-		grpclog.Fatalf("stream %v unexpected RPC error message: %v", stream, err)
+	if _, err = stream.Recv(); err.Error() != expectedErr.Error() {
+		grpclog.Fatalf("stream %v.Recv() returned error %v, want %v", err, expectedErr)
 	}
 }
 
