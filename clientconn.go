@@ -422,15 +422,14 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
-	// TODO(zhaoq): Implement fail-fast logic.
 	addr, put, err := cc.dopts.balancer.Get(ctx, opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, toRPCErr(err)
 	}
 	cc.mu.RLock()
 	if cc.conns == nil {
 		cc.mu.RUnlock()
-		return nil, nil, ErrClientConnClosing
+		return nil, nil, toRPCErr(ErrClientConnClosing)
 	}
 	ac, ok := cc.conns[addr]
 	cc.mu.RUnlock()
@@ -438,9 +437,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		if put != nil {
 			put()
 		}
-		return nil, nil, transport.StreamErrorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
+		return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
 	}
-	t, err := ac.wait(ctx)
+	t, err := ac.wait(ctx, !opts.BlockingWait)
 	if err != nil {
 		if put != nil {
 			put()
@@ -647,8 +646,9 @@ func (ac *addrConn) transportMonitor() {
 	}
 }
 
-// wait blocks until i) the new transport is up or ii) ctx is done or iii) ac is closed.
-func (ac *addrConn) wait(ctx context.Context) (transport.ClientTransport, error) {
+// wait blocks until i) the new transport is up or ii) ctx is done or iii) ac is closed or
+// iv) transport is in TransientFailure and the RPC is fail-fast.
+func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTransport, error) {
 	for {
 		ac.mu.Lock()
 		switch {
@@ -659,6 +659,9 @@ func (ac *addrConn) wait(ctx context.Context) (transport.ClientTransport, error)
 			ct := ac.transport
 			ac.mu.Unlock()
 			return ct, nil
+		case ac.state == TransientFailure && failFast:
+			ac.mu.Unlock()
+			return nil, Errorf(codes.Unavailable, "grpc: RPC failed fast due to transport failure")
 		default:
 			ready := ac.ready
 			if ready == nil {
@@ -668,7 +671,7 @@ func (ac *addrConn) wait(ctx context.Context) (transport.ClientTransport, error)
 			ac.mu.Unlock()
 			select {
 			case <-ctx.Done():
-				return nil, transport.ContextErr(ctx.Err())
+				return nil, toRPCErr(ctx.Err())
 			// Wait until the new transport is ready or failed.
 			case <-ready:
 			}

@@ -141,6 +141,8 @@ type callInfo struct {
 	traceInfo traceInfo // in trace.go
 }
 
+var defaultCallInfo = callInfo{failFast: true}
+
 // CallOption configures a Call before it starts or extracts information from
 // a Call after it completes.
 type CallOption interface {
@@ -176,6 +178,19 @@ func Header(md *metadata.MD) CallOption {
 func Trailer(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
 		*md = c.trailerMD
+	})
+}
+
+// FailFast configures the action to take when an RPC is attempted on broken
+// connections or unreachable servers. If failfast is true, the RPC will fail
+// immediately. Otherwise, the RPC client will block the call until a
+// connection is available (or the call is canceled or times out) and will retry
+// the call if it fails due to a transient error. Please refer to
+// https://github.com/grpc/grpc/blob/master/doc/fail_fast.md
+func FailFast(failFast bool) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.failFast = failFast
+		return nil
 	})
 }
 
@@ -374,6 +389,25 @@ func toRPCErr(err error) error {
 			code: codes.Internal,
 			desc: e.Desc,
 		}
+	default:
+		switch err {
+		case context.DeadlineExceeded:
+			return rpcError{
+				code: codes.DeadlineExceeded,
+				desc: err.Error(),
+			}
+		case context.Canceled:
+			return rpcError{
+				code: codes.Canceled,
+				desc: err.Error(),
+			}
+		case ErrClientConnClosing:
+			return rpcError{
+				code: codes.FailedPrecondition,
+				desc: err.Error(),
+			}
+		}
+
 	}
 	return Errorf(codes.Unknown, "%v", err)
 }

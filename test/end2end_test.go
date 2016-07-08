@@ -550,7 +550,7 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	te.srv.Stop()
@@ -558,9 +558,53 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	// notification in time the failure path of the 1st invoke of
 	// ClientConn.wait hits the deadline exceeded error.
 	ctx, _ := context.WithTimeout(context.Background(), -1)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
+	awaitNewConnLogOutput()
+}
+
+func TestFailFast(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testFailFast(t, e)
+	}
+}
+
+func testFailFast(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer()
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	// Stop the server and tear down all the exisiting connections.
+	te.srv.Stop()
+	// Loop until the server teardown is propagated to the client.
+	for {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.Unavailable {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _, _) = _, %v, want _, error code: %d", err, codes.Unavailable)
+	}
+	if _, err := tc.StreamingInputCall(context.Background()); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/StreamingInputCall(_) = _, %v, want _, error code: %d", err, codes.Unavailable)
+	}
+
 	awaitNewConnLogOutput()
 }
 
@@ -879,7 +923,7 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	reply, err := tc.UnaryCall(context.Background(), req)
+	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
 	if err != nil {
 		t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 		return
@@ -1106,9 +1150,7 @@ func testNoService(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	// Make sure setting ack has been sent.
-	time.Sleep(20 * time.Millisecond)
-	stream, err := tc.FullDuplexCall(te.ctx)
+	stream, err := tc.FullDuplexCall(te.ctx, grpc.FailFast(false))
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
