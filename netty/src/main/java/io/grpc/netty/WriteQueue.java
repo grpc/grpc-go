@@ -110,7 +110,7 @@ class WriteQueue {
    */
   ChannelFuture enqueue(QueuedCommand command, ChannelPromise promise, boolean flush) {
     // Detect erroneous code that tries to reuse command objects.
-    Preconditions.checkNotNull(command.promise() == null, "promise must not be set on command");
+    Preconditions.checkArgument(command.promise() == null, "promise must not be set on command");
 
     command.promise(promise);
     queue.add(command);
