@@ -149,13 +149,17 @@ func TestToRPCErr(t *testing.T) {
 		// input
 		errIn error
 		// outputs
-		errOut error
+		errOut *rpcError
 	}{
-		{transport.StreamErrorf(codes.Unknown, ""), Errorf(codes.Unknown, "")},
-		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc)},
+		{transport.StreamErrorf(codes.Unknown, ""), Errorf(codes.Unknown, "").(*rpcError)},
+		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc).(*rpcError)},
 	} {
 		err := toRPCErr(test.errIn)
-		if err != test.errOut {
+		rpcErr, ok := err.(*rpcError)
+		if !ok {
+			t.Fatalf("toRPCErr{%v} returned type %T, want %T", test.errIn, err, rpcError{})
+		}
+		if *rpcErr != *test.errOut {
 			t.Fatalf("toRPCErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
 		}
 	}
