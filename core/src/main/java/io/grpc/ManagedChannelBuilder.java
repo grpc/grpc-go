@@ -191,7 +191,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>This is an advisory option. Do not rely on any specific behavior related to this option.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/pull/1986")
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2022")
   public abstract T idleTimeout(long value, TimeUnit unit);
 
   /**
