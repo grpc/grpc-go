@@ -62,7 +62,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;
   private final Context.CancellableContext context;
-  private Metadata inboundHeaders;
+  private final String messageAcceptEncoding;
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
 
@@ -78,7 +78,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     this.stream = stream;
     this.method = method;
     this.context = context;
-    this.inboundHeaders = inboundHeaders;
+    this.messageAcceptEncoding = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
 
@@ -108,9 +108,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     if (compressor == null) {
       compressor = Codec.Identity.NONE;
     } else {
-      if (inboundHeaders.containsKey(MESSAGE_ACCEPT_ENCODING_KEY)) {
-        String acceptEncodings = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
-        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITER.splitToList(acceptEncodings);
+      if (messageAcceptEncoding != null) {
+        List<String> acceptedEncodingsList =
+            ACCEPT_ENCODING_SPLITER.splitToList(messageAcceptEncoding);
         if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
           // resort to using no compression.
           compressor = Codec.Identity.NONE;
@@ -119,7 +119,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         compressor = Codec.Identity.NONE;
       }
     }
-    inboundHeaders = null;
 
     // Always put compressor, even if it's identity.
     headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
@@ -178,7 +177,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   public void close(Status status, Metadata trailers) {
     checkState(!closeCalled, "call already closed");
     closeCalled = true;
-    inboundHeaders = null;
     stream.close(status, trailers);
   }
 
