@@ -151,14 +151,16 @@ func (c *tlsCreds) ClientHandshake(addr string, rawConn net.Conn, timeout time.D
 			errChannel <- timeoutError{}
 		})
 	}
+	// use local cfg to avoid clobbering ServerName if using multiple endpoints
+	cfg := *c.config
 	if c.config.ServerName == "" {
 		colonPos := strings.LastIndex(addr, ":")
 		if colonPos == -1 {
 			colonPos = len(addr)
 		}
-		c.config.ServerName = addr[:colonPos]
+		cfg.ServerName = addr[:colonPos]
 	}
-	conn := tls.Client(rawConn, c.config)
+	conn := tls.Client(rawConn, &cfg)
 	if timeout == 0 {
 		err = conn.Handshake()
 	} else {
