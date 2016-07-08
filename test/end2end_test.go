@@ -2129,23 +2129,5 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 }
 
 func equalErrors(l, r error) bool {
-	if l == nil && r != nil {
-		return false
-	}
-	if l != nil && r == nil {
-		return false
-	}
 	return grpc.Code(l) == grpc.Code(r) && grpc.ErrorDesc(l) == grpc.ErrorDesc(r)
-}
-
-func TestErrorsWithSameParameters(t *testing.T) {
-	const description = "some description"
-	e1 := grpc.Errorf(codes.AlreadyExists, description)
-	e2 := grpc.Errorf(codes.AlreadyExists, description)
-	if e1 == e2 {
-		t.Fatalf("Error interfaces should not be considered equal - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
-	}
-	if !equalErrors(e1, e2) {
-		t.Fatalf("Expected errors to have same code and description - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
-	}
 }
