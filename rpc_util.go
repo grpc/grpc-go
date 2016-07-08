@@ -392,17 +392,17 @@ func toRPCErr(err error) error {
 	default:
 		switch err {
 		case context.DeadlineExceeded:
-			return rpcError{
+			return &rpcError{
 				code: codes.DeadlineExceeded,
 				desc: err.Error(),
 			}
 		case context.Canceled:
-			return rpcError{
+			return &rpcError{
 				code: codes.Canceled,
 				desc: err.Error(),
 			}
 		case ErrClientConnClosing:
-			return rpcError{
+			return &rpcError{
 				code: codes.FailedPrecondition,
 				desc: err.Error(),
 			}
