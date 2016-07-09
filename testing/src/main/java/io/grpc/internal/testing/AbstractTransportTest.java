@@ -51,6 +51,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -452,7 +453,13 @@ public abstract class AbstractTransportTest {
     }
     verify(mockPingCallback, timeout(TIMEOUT_MS)).onFailure(throwableCaptor.capture());
     Status status = Status.fromThrowable(throwableCaptor.getValue());
-    assertCodeEquals(Status.UNAVAILABLE, status);
+    // TODO(buchgr): Remove once https://github.com/grpc/grpc-java/issues/1330 is resolved.
+    String stackTrace = "";
+    if (Status.UNAVAILABLE.getCode() != status.getCode()
+        && status.getCause() != null) {
+      stackTrace = Throwables.getStackTraceAsString(status.getCause());
+    }
+    assertCodeEquals(stackTrace, Status.UNAVAILABLE, status);
   }
 
   @Test
@@ -1068,13 +1075,17 @@ public abstract class AbstractTransportTest {
    * Only assert that the Status.Code matches, but provide the entire actual result in case the
    * assertion fails.
    */
-  private static void assertCodeEquals(Status expected, Status actual) {
+  private static void assertCodeEquals(String message, Status expected, Status actual) {
     if (expected == null) {
       fail("expected should not be null");
     }
     if (actual == null || !expected.getCode().equals(actual.getCode())) {
-      assertEquals(expected, actual);
+      assertEquals(message, expected, actual);
     }
+  }
+
+  private static void assertCodeEquals(Status expected, Status actual) {
+    assertCodeEquals(null, expected, actual);
   }
 
   private static boolean waitForFuture(Future<?> future, long timeout, TimeUnit unit)
