@@ -21,6 +21,7 @@ before_install:
   - ln -s "/tmp/protobuf-${PROTOBUF_VERSION}/$(uname -s)-$(uname -p)" /tmp/protobuf
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
+  - echo "failOnWarnings=true" >> $HOME/.gradle/gradle.properties
 
 install:
   - ./gradlew assemble generateTestProto

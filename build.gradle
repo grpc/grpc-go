@@ -32,6 +32,9 @@ subprojects {
     [compileJava, compileTestJava].each() {
         it.options.compilerArgs += ["-Xlint:all", "-Xlint:-options"]
         it.options.encoding = "UTF-8"
+        if (rootProject.hasProperty('failOnWarnings') && rootProject.failOnWarnings.toBoolean()) {
+            it.options.compilerArgs += ["-Werror"]
+        }
     }
 
     compileTestJava {
