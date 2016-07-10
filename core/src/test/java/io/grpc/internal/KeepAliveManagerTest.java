@@ -33,10 +33,10 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.grpc.Status;
 
@@ -88,9 +88,9 @@ public final class KeepAliveManagerTest {
     Long delay = delayCaptor.getValue();
     assertEquals(1000 - 1, delay.longValue());
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -150,9 +150,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -183,9 +183,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -218,9 +218,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -273,9 +273,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -307,9 +307,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -335,9 +335,9 @@ public final class KeepAliveManagerTest {
 
   @Test
   public void transportShutsdownAfterPingScheduled() {
-    ScheduledFuture pingFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(pingFuture);
+    ScheduledFuture<?> pingFuture = mock(ScheduledFuture.class);
+    doReturn(pingFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Ping will be scheduled.
     keepAliveManager.onTransportActive();
     verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class),
@@ -356,9 +356,9 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
     Runnable sendPing = sendPingCaptor.getValue();
 
-    ScheduledFuture shutdownFuture = mock(ScheduledFuture.class);
-    when(scheduler.schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class)))
-        .thenReturn(shutdownFuture);
+    ScheduledFuture<?> shutdownFuture = mock(ScheduledFuture.class);
+    doReturn(shutdownFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Mannually running the Runnable will send the ping. Shutdown task should be scheduled.
     ticker.time = 1000;
     sendPing.run();
@@ -372,11 +372,11 @@ public final class KeepAliveManagerTest {
     keepAliveManager.onTransportShutdown();
     // Shutdown task has been cancelled.
     verify(shutdownFuture).cancel(isA(Boolean.class));
-    
-    ClientTransport.PingCallback pingCallback = pingCallbackCaptor.getValue();    
+
+    ClientTransport.PingCallback pingCallback = pingCallbackCaptor.getValue();
     // Ping fails after transport shutting down. We will not shutdown the transport again.
     pingCallback.onFailure(new Throwable());
-    verify(transport, times(0)).shutdownNow(isA(Status.class));    
+    verify(transport, times(0)).shutdownNow(isA(Status.class));
   }
 }
 
