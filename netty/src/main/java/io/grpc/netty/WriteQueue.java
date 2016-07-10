@@ -124,10 +124,6 @@ class WriteQueue {
    * Process the queue of commands and dispatch them to the stream. This method is only
    * called in the event loop
    */
-  /**
-   * Process the queue of commands and dispatch them to the stream. This method is only
-   * called in the event loop
-   */
   private void flush() {
     try {
       boolean flushed = false;
