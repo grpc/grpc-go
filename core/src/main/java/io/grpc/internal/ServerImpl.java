@@ -79,9 +79,10 @@ import javax.annotation.concurrent.GuardedBy;
 public final class ServerImpl extends io.grpc.Server {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
-  /** Executor for application processing. */
+  /** Executor for application processing. Safe to read after {@link #start()}. */
   private Executor executor;
-  @GuardedBy("lock") private boolean usingSharedExecutor;
+  /** Safe to read after {@link #start()}. */
+  private boolean usingSharedExecutor;
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
   @GuardedBy("lock") private boolean started;

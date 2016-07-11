@@ -259,6 +259,15 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     return balancer;
   }
 
+  // ErrorProne's GuardedByChecker can't figure out that the idleModeTimer is a nested instance of
+  // this particular instance. It is worried about something like:
+  // ManagedChannelImpl a = ...;
+  // ManagedChannelImpl b = ...;
+  // a.idleModeTimer = b.idleModeTimer;
+  // a.cancelIdleTimer(); // access of b.idleModeTimer is guarded by a.lock, not b.lock
+  //
+  // _We_ know that isn't happening, so we suppress the warning.
+  @SuppressWarnings("GuardedByChecker")
   @GuardedBy("lock")
   private void cancelIdleTimer() {
     if (idleModeTimerFuture != null) {
