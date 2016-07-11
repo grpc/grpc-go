@@ -149,7 +149,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := err.(rpcError); ok {
+			if _, ok := err.(*rpcError); ok {
 				return nil, err
 			}
 			if err == errConnClosing {

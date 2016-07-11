@@ -334,7 +334,7 @@ type rpcError struct {
 	desc string
 }
 
-func (e rpcError) Error() string {
+func (e *rpcError) Error() string {
 	return fmt.Sprintf("rpc error: code = %d desc = %s", e.code, e.desc)
 }
 
@@ -344,7 +344,7 @@ func Code(err error) codes.Code {
 	if err == nil {
 		return codes.OK
 	}
-	if e, ok := err.(rpcError); ok {
+	if e, ok := err.(*rpcError); ok {
 		return e.code
 	}
 	return codes.Unknown
@@ -356,7 +356,7 @@ func ErrorDesc(err error) string {
 	if err == nil {
 		return ""
 	}
-	if e, ok := err.(rpcError); ok {
+	if e, ok := err.(*rpcError); ok {
 		return e.desc
 	}
 	return err.Error()
@@ -368,7 +368,7 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	if c == codes.OK {
 		return nil
 	}
-	return rpcError{
+	return &rpcError{
 		code: c,
 		desc: fmt.Sprintf(format, a...),
 	}
@@ -377,32 +377,32 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 // toRPCErr converts an error into a rpcError.
 func toRPCErr(err error) error {
 	switch e := err.(type) {
-	case rpcError:
+	case *rpcError:
 		return err
 	case transport.StreamError:
-		return rpcError{
+		return &rpcError{
 			code: e.Code,
 			desc: e.Desc,
 		}
 	case transport.ConnectionError:
-		return rpcError{
+		return &rpcError{
 			code: codes.Internal,
 			desc: e.Desc,
 		}
 	default:
 		switch err {
 		case context.DeadlineExceeded:
-			return rpcError{
+			return &rpcError{
 				code: codes.DeadlineExceeded,
 				desc: err.Error(),
 			}
 		case context.Canceled:
-			return rpcError{
+			return &rpcError{
 				code: codes.Canceled,
 				desc: err.Error(),
 			}
 		case ErrClientConnClosing:
-			return rpcError{
+			return &rpcError{
 				code: codes.FailedPrecondition,
 				desc: err.Error(),
 			}
