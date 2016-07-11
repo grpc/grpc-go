@@ -19,7 +19,7 @@ subprojects {
     apply plugin: "com.google.osdetector"
 
     group = "io.grpc"
-    version = "1.0.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+    version = "1.1.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
     sourceCompatibility = 1.6
     targetCompatibility = 1.6

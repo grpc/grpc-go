@@ -22,7 +22,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
  * </pre>
  */
 @javax.annotation.Generated(
-    value = "by gRPC proto compiler (version 1.0.0-SNAPSHOT)",
+    value = "by gRPC proto compiler (version 1.1.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
 public class UnimplementedServiceGrpc {
 
