@@ -241,11 +241,18 @@ public abstract class AbstractManagedChannelImplBuilder
       transportFactory = new AuthorityOverridingTransportFactory(
         transportFactory, authorityOverride);
     }
+    NameResolver.Factory nameResolverFactory = this.nameResolverFactory;
+    if (nameResolverFactory == null) {
+      // Avoid loading the provider unless necessary, as a way to workaround a possibly-costly
+      // and poorly optimized getResource() call on Android. If any other piece of code calls
+      // getResource(), then this shouldn't be a problem unless called on the UI thread.
+      nameResolverFactory = NameResolverProvider.asFactory();
+    }
     return new ManagedChannelImpl(
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
         new ExponentialBackoffPolicy.Provider(),
-        firstNonNull(nameResolverFactory, NameResolverProvider.asFactory()),
+        nameResolverFactory,
         getNameResolverParams(),
         firstNonNull(loadBalancerFactory, DummyLoadBalancerFactory.getInstance()),
         transportFactory,
