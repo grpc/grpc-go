@@ -214,20 +214,9 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 		return nil, fmt.Errorf("unknown symbol: %v", name)
 	}
 
-	// Search for method in info.Methods.
+	// Search for method name in info.Methods.
 	var found bool
 	for _, m := range info.Methods {
-		if m == name[pos+1:] {
-			found = true
-			break
-		}
-	}
-	if found {
-		return info.Metadata, nil
-	}
-
-	// Search for stream in info.Streams.
-	for _, m := range info.Streams {
 		if m.Name == name[pos+1:] {
 			found = true
 			break

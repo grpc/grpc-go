@@ -245,9 +245,9 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// StreamInfo contains information about a streaming RPC.
-type StreamInfo struct {
-	// Name is the RPC name only, without the service name or package name.
+// MethodInfo contains information about an RPC.
+type MethodInfo struct {
+	// Name is the method name only, without the service name or package name.
 	Name string
 	// IsClientStream indicates whether the RPC is a client streaming RPC.
 	IsClientStream bool
@@ -255,12 +255,9 @@ type StreamInfo struct {
 	IsServerStream bool
 }
 
-// ServiceInfo contains unary RPC names, streaming RPC infos and metadata for a service.
+// ServiceInfo contains unary RPC method info, streaming RPC methid info and metadata for a service.
 type ServiceInfo struct {
-	// Methods are unary RPC names only, without the service name or package name.
-	Methods []string
-	// Streams are streaming RPC names and streaming types.
-	Streams []*StreamInfo
+	Methods []MethodInfo
 	// Metadata is the metadata specified in ServiceDesc when registering service.
 	Metadata interface{}
 }
@@ -270,14 +267,17 @@ type ServiceInfo struct {
 func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
 	ret := make(map[string]*ServiceInfo)
 	for n, srv := range s.m {
-		methods := make([]string, 0, len(srv.md))
+		methods := make([]MethodInfo, 0, len(srv.md)+len(srv.sd))
 		for m := range srv.md {
-			methods = append(methods, m)
+			methods = append(methods, MethodInfo{
+				Name:           m,
+				IsClientStream: false,
+				IsServerStream: false,
+			})
 		}
-		streams := make([]*StreamInfo, 0, len(srv.sd))
-		for s, d := range srv.sd {
-			streams = append(streams, &StreamInfo{
-				Name:           s,
+		for m, d := range srv.sd {
+			methods = append(methods, MethodInfo{
+				Name:           m,
 				IsClientStream: d.ClientStreams,
 				IsServerStream: d.ServerStreams,
 			})
@@ -285,7 +285,6 @@ func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
 
 		ret[n] = &ServiceInfo{
 			Methods:  methods,
-			Streams:  streams,
 			Metadata: srv.mdata,
 		}
 	}
