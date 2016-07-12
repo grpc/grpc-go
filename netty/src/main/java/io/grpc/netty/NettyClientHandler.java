@@ -116,7 +116,7 @@ class NettyClientHandler extends AbstractNettyHandler {
                                        Ticker ticker) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new DefaultHttp2HeadersDecoder(
-        maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE, true);
+        maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE, true, 32);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     Http2Connection connection = new DefaultHttp2Connection(false);
