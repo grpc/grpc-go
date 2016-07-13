@@ -408,9 +408,8 @@ func (te *test) tearDown() {
 // modify it before calling its startServer and clientConn methods.
 func newTest(t *testing.T, e env) *test {
 	te := &test{
-		t: t,
-		e: e,
-		//testServer: &testServer{security: e.security},
+		t:         t,
+		e:         e,
 		maxStream: math.MaxUint32,
 	}
 	te.ctx, te.cancel = context.WithCancel(context.Background())
