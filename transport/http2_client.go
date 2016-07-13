@@ -497,6 +497,12 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
+	s.mu.Lock()
+	if s.state == streamDone {
+		s.mu.Unlock()
+		return StreamErrorf(s.statusCode, "%s", s.statusDesc)
+	}
+	s.mu.Unlock()
 	r := bytes.NewBuffer(data)
 	for {
 		var p []byte
