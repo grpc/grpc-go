@@ -140,6 +140,10 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	}
 	select {
 	case <-r.ctx.Done():
+		// ctx might be canceled by gRPC internals to unblocking pending writing operations
+		// when the client receives the final status prematurely (for client and bi-directional
+		// streaming RPCs). Used to return the real status to the users instead of the
+		// cancellation.
 		select {
 		case i := <-r.recv.get():
 			m := i.(*recvMsg)
