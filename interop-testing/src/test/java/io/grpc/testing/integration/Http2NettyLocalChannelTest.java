@@ -57,7 +57,7 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
         NettyServerBuilder
             .forAddress(new LocalAddress("in-process-1"))
             .flowControlWindow(65 * 1024)
-            .maxMessageSize(16 * 1024 * 1024)
+            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
             .channelType(LocalServerChannel.class));
   }
 
@@ -74,7 +74,7 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
         .negotiationType(NegotiationType.PLAINTEXT)
         .channelType(LocalChannel.class)
         .flowControlWindow(65 * 1024)
-        .maxMessageSize(16 * 1024 * 1024)
+        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .build();
   }
 }

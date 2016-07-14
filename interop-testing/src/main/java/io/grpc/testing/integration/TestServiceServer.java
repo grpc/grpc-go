@@ -143,7 +143,7 @@ public class TestServiceServer {
     }
     server = NettyServerBuilder.forPort(port)
         .sslContext(sslContext)
-        .maxMessageSize(16 * 1024 * 1024)
+        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .addService(ServerInterceptors.intercept(
             new TestServiceImpl(executor),
             TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))

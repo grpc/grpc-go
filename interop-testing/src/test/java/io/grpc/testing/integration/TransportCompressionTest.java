@@ -102,7 +102,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
     compressors.register(Codec.Identity.NONE);
     startStaticServer(
         NettyServerBuilder.forPort(0)
-            .maxMessageSize(16 * 1024 * 1024)
+            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
             .compressorRegistry(compressors)
             .decompressorRegistry(decompressors),
         new ServerInterceptor() {
@@ -149,7 +149,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
   @Override
   protected ManagedChannel createChannel() {
     return NettyChannelBuilder.forAddress("localhost", getPort())
-        .maxMessageSize(16 * 1024 * 1024)
+        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .decompressorRegistry(decompressors)
         .compressorRegistry(compressors)
         .intercept(new ClientInterceptor() {
