@@ -166,7 +166,14 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				put()
 				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+			if e, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+				if c.failFast || e.Temporary() {
+					cs.finish(err)
+					return nil, toRPCErr(err)
+				}
+				continue
+			}
+			if err == transport.ErrStreamDrain {
 				if c.failFast {
 					cs.finish(err)
 					return nil, toRPCErr(err)

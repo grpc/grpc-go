@@ -605,6 +605,9 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		if err != nil {
 			cancel()
 
+			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+				return fmt.Errorf("failed to create client transport: %v", err)
+			}
 			ac.mu.Lock()
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.

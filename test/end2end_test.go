@@ -2267,6 +2267,26 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 	})
 }
 
+func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-tls", network: "tcp", security: "bad-tls"})
+	te.startServer()
+	defer te.tearDown()
+
+	var (
+		err  error
+		opts []grpc.DialOption
+	)
+	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "wrong-server.com")
+	if err != nil {
+		te.t.Fatalf("Failed to load credentials: %v", err)
+	}
+	opts = append(opts, grpc.WithTransportCredentials(creds), grpc.WithBlock())
+	te.cc, err = grpc.Dial(te.srvAddr, opts...)
+	if err == nil {
+		te.t.Fatalf("Dial(%q) = %v, want ConnectionError: credentials handshake failed", te.srvAddr, err)
+	}
+}
+
 // interestingGoroutines returns all goroutines we care about for the purpose
 // of leak checking. It excludes testing or runtime ones.
 func interestingGoroutines() (gs []string) {

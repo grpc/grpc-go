@@ -84,7 +84,7 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 	}
 	defer func() {
 		if err != nil {
-			if _, ok := err.(transport.ConnectionError); !ok {
+			if e, ok := err.(transport.ConnectionError); !ok || !e.Temporary() {
 				t.CloseStream(stream, err)
 			}
 		}
@@ -190,8 +190,11 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+			if e, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
 				if c.failFast {
+					return toRPCErr(err)
+				}
+				if ok && !e.Temporary() {
 					return toRPCErr(err)
 				}
 				continue
@@ -204,7 +207,16 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				put()
 				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+			if e, ok := err.(transport.ConnectionError); ok {
+				if c.failFast {
+					return toRPCErr(err)
+				}
+				if !e.Temporary() {
+					return toRPCErr(err)
+				}
+				continue
+			}
+			if err == transport.ErrStreamDrain {
 				if c.failFast {
 					return toRPCErr(err)
 				}
