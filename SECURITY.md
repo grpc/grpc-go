@@ -245,7 +245,7 @@ avoid needing extra permissions from the OS.
 Server server = ServerBuilder.forPort(8443)
     // Enable TLS
     .useTransportSecurity(certChainFile, privateKeyFile)
-    .addService(TestServiceGrpc.bindService(serviceImplementation))
+    .addService(serviceImplementation)
     .build();
 server.start();
 ```
