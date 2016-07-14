@@ -245,7 +245,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// MethodInfo contains information about an RPC.
+// MethodInfo contains the information of an RPC including its method name and type.
 type MethodInfo struct {
 	// Name is the method name only, without the service name or package name.
 	Name string
@@ -320,9 +320,11 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.lis[lis] = true
 	s.mu.Unlock()
 	defer func() {
-		lis.Close()
 		s.mu.Lock()
-		delete(s.lis, lis)
+		if s.lis != nil && s.lis[lis] {
+			lis.Close()
+			delete(s.lis, lis)
+		}
 		s.mu.Unlock()
 	}()
 	for {
