@@ -90,8 +90,8 @@ var (
 var raceMode bool // set by race_test.go in race mode
 
 type testServer struct {
-	security              string // indicate the authentication protocol used by this server.
-	streamingInputCallErr bool   // whether to error out the StreamingInputCall handler prematurely.
+	security  string // indicate the authentication protocol used by this server.
+	earlyFail bool   // whether to error out the execution of a service handler.
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
@@ -220,7 +220,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 		}
 		p := in.GetPayload().GetBody()
 		sum += len(p)
-		if s.streamingInputCallErr {
+		if s.earlyFail {
 			return grpc.Errorf(codes.NotFound, "not found")
 		}
 	}
@@ -1515,7 +1515,7 @@ func TestClientStreamingError(t *testing.T) {
 
 func testClientStreamingError(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, streamingInputCallErr: true})
+	te.startServer(&testServer{security: e.security, earlyFail: true})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
@@ -1538,12 +1538,11 @@ func testClientStreamingError(t *testing.T, e env) {
 	for {
 		if err := stream.Send(req); err == nil {
 			continue
-		} else {
-			if grpc.Code(err) != codes.NotFound {
-				t.Fatalf("%v.Send(_) = %v, want error %d", stream, err, codes.NotFound)
-			}
-			break
 		}
+		if _, err := stream.CloseAndRecv(); grpc.Code(err) != codes.NotFound {
+			t.Fatalf("%v.Send(_) = %v, want error %d", stream, err, codes.NotFound)
+		}
+		break
 	}
 }
 

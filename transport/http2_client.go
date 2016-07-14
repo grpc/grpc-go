@@ -498,9 +498,10 @@ func (t *http2Client) GracefulClose() error {
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	s.mu.Lock()
+	// The stream has been done. Return the status directly.
 	if s.state == streamDone {
 		s.mu.Unlock()
-		return StreamErrorf(s.statusCode, "%s", s.statusDesc)
+		return StreamErrorf(s.statusCode, "%v", s.statusDesc)
 	}
 	s.mu.Unlock()
 	r := bytes.NewBuffer(data)
@@ -599,11 +600,11 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	}
 	s.mu.Lock()
 	if s.state != streamDone {
-		if s.state == streamReadDone {
-			s.state = streamDone
-		} else {
-			s.state = streamWriteDone
-		}
+		//if s.state == streamReadDone {
+		//	s.state = streamDone
+		//} else {
+		s.state = streamWriteDone
+		//}
 	}
 	s.mu.Unlock()
 	return nil
@@ -678,11 +679,14 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
-		if s.state == streamWriteDone {
-			s.state = streamDone
-		} else {
-			s.state = streamReadDone
-		}
+		s.state = streamDone
+		/*
+			if s.state == streamWriteDone {
+				s.state = streamDone
+			} else {
+				s.state = streamReadDone
+			}
+		*/
 		s.statusCode = codes.Internal
 		s.statusDesc = "server closed the stream without sending trailers"
 		s.mu.Unlock()
@@ -786,12 +790,20 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if len(state.mdata) > 0 {
 		s.trailer = state.mdata
 	}
-	s.state = streamDone
 	s.statusCode = state.statusCode
 	s.statusDesc = state.statusDesc
+	var cancel bool
+	if s.state != streamWriteDone {
+		// s will be canceled. This is required to interrupt any pending
+		// blocking Write calls when the final RPC status has been arrived.
+		cancel = true
+	}
+	s.state = streamDone
 	s.mu.Unlock()
-
 	s.write(recvMsg{err: io.EOF})
+	if cancel {
+		s.cancel()
+	}
 }
 
 func handleMalformedHTTP2(s *Stream, err error) {

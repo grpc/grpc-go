@@ -140,6 +140,14 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	}
 	select {
 	case <-r.ctx.Done():
+		select {
+		case i := <-r.recv.get():
+			m := i.(*recvMsg)
+			if m.err != nil {
+				return 0, m.err
+			}
+		default:
+		}
 		return 0, ContextErr(r.ctx.Err())
 	case i := <-r.recv.get():
 		r.recv.load()
