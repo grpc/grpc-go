@@ -169,7 +169,7 @@ type streamState uint8
 const (
 	streamActive    streamState = iota
 	streamWriteDone             // EndStream sent
-	streamDone                  // sendDone and recvDone or RSTStreamFrame is sent or received.
+	streamDone                  // the entire stream is finished.
 )
 
 // Stream represents an RPC in the transport layer.
