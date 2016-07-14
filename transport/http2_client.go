@@ -600,11 +600,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	}
 	s.mu.Lock()
 	if s.state != streamDone {
-		//if s.state == streamReadDone {
-		//	s.state = streamDone
-		//} else {
 		s.state = streamWriteDone
-		//}
 	}
 	s.mu.Unlock()
 	return nil
@@ -680,13 +676,6 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
 		s.state = streamDone
-		/*
-			if s.state == streamWriteDone {
-				s.state = streamDone
-			} else {
-				s.state = streamReadDone
-			}
-		*/
 		s.statusCode = codes.Internal
 		s.statusDesc = "server closed the stream without sending trailers"
 		s.mu.Unlock()

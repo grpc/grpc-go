@@ -91,7 +91,7 @@ var raceMode bool // set by race_test.go in race mode
 
 type testServer struct {
 	security  string // indicate the authentication protocol used by this server.
-	earlyFail bool   // whether to error out the execution of a service handler.
+	earlyFail bool   // whether to error out the execution of a service handler prematurely.
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

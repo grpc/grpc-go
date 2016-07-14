@@ -165,7 +165,6 @@ type streamState uint8
 const (
 	streamActive    streamState = iota
 	streamWriteDone             // EndStream sent
-	streamReadDone              // EndStream received
 	streamDone                  // sendDone and recvDone or RSTStreamFrame is sent or received.
 )
 
