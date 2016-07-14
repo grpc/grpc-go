@@ -245,7 +245,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
-// MethodInfo contains information about an RPC.
+// MethodInfo contains the information of an RPC including its method name and type.
 type MethodInfo struct {
 	// Name is the method name only, without the service name or package name.
 	Name string
