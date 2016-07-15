@@ -189,6 +189,10 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		select {
 		case <-t.Error():
 			// Incur transport error, simply exit.
+		case <-s.Done():
+			err := Errorf(s.StatusCode(), s.StatusDesc())
+			cs.finish(err)
+			cs.closeTransportStream(err)
 		case <-s.Context().Done():
 			err := s.Context().Err()
 			cs.finish(err)
@@ -251,7 +255,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		if err != nil {
 			cs.finish(err)
 		}
-		if err == nil || err == io.EOF || err == transport.ErrEarlyDone {
+		if err == nil || err == io.EOF {
 			return
 		}
 		if _, ok := err.(transport.ConnectionError); !ok {
@@ -326,11 +330,6 @@ func (cs *clientStream) CloseSend() (err error) {
 		}
 	}()
 	if err == nil || err == io.EOF {
-		return
-	}
-	if err == transport.ErrEarlyDone {
-		// If the RPC is done prematurely, Stream.RecvMsg(...) needs to be
-		// called to get the final status and clear the footprint.
 		return nil
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {

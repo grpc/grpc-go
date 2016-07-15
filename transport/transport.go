@@ -169,8 +169,8 @@ type Stream struct {
 	// ctx is the associated context of the stream.
 	ctx    context.Context
 	cancel context.CancelFunc
-	// earlyDone is closed when the final status arrives prematurely.
-	earlyDone chan struct{}
+	// done is closed when the final status arrives prematurely.
+	done chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
 	recvCompress string
@@ -214,6 +214,10 @@ func (s *Stream) RecvCompress() string {
 // SetSendCompress sets the compression algorithm to the stream.
 func (s *Stream) SetSendCompress(str string) {
 	s.sendCompress = str
+}
+
+func (s *Stream) Done() <-chan struct{} {
+	return s.done
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -460,7 +464,8 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 	}
 }
 
-var ErrEarlyDone = StreamErrorf(codes.Internal, "rpc is done prematurely")
+// ErrDone indicates
+//var ErrDone = StreamErrorf(codes.Internal, "rpc is done")
 
 // ConnectionErrorf creates an ConnectionError with the specified error description.
 func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
@@ -505,15 +510,22 @@ func ContextErr(err error) StreamError {
 
 // wait blocks until it can receive from ctx.Done, closing, or proceed.
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
-// If it receives from earlyDone, it returns 0, ErrEarlyDone.
+// If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
+// it return the StreamError for ctx.Err.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
-func wait(ctx context.Context, earlyDone, closing <-chan struct{}, proceed <-chan int) (int, error) {
+func wait(ctx context.Context, done, closing <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
-	case <-earlyDone:
-		return 0, ErrEarlyDone
+	case <-done:
+		// User cancellation has precedence.
+		select {
+		case <-ctx.Done():
+			return 0, ContextErr(ctx.Err())
+		default:
+		}
+		return 0, io.EOF
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:
