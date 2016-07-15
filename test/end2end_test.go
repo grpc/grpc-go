@@ -558,10 +558,7 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	te.srv.Stop()
-	// Set -1 as the timeout to make sure if transportMonitor gets error
-	// notification in time the failure path of the 1st invoke of
-	// ClientConn.wait hits the deadline exceeded error.
-	ctx, _ := context.WithTimeout(context.Background(), -1)
+	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
 	}
