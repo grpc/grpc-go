@@ -464,9 +464,6 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 	}
 }
 
-// ErrDone indicates
-//var ErrDone = StreamErrorf(codes.Internal, "rpc is done")
-
 // ConnectionErrorf creates an ConnectionError with the specified error description.
 func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
