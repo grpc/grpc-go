@@ -415,11 +415,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	if updateStreams {
 		t.streamsQuota.add(1)
 	}
-	// In case stream sending and receiving are invoked in separate
-	// goroutines (e.g., bi-directional streaming), the caller needs
-	// to call cancel on the stream to interrupt the blocking on
-	// other goroutines.
-	//s.cancel()
 	s.mu.Lock()
 	if q := s.fc.resetPendingData(); q > 0 {
 		if n := t.fc.onRead(q); n > 0 {
