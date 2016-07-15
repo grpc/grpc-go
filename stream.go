@@ -190,6 +190,8 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		case <-t.Error():
 			// Incur transport error, simply exit.
 		case <-s.Done():
+			// TODO: The trace of the RPC is terminated here when there is no pending
+			// I/O, which is probably not the optimal solution.
 			if s.StatusCode() == codes.OK {
 				cs.finish(nil)
 			} else {
