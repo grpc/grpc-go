@@ -190,7 +190,8 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		case <-t.Error():
 			// Incur transport error, simply exit.
 		case <-s.Done():
-			// Simply exit. Leave the next I/O op to do cleanup.
+			cs.finish(err)
+			cs.closeTransportStream(nil)
 		case <-s.Context().Done():
 			err := s.Context().Err()
 			cs.finish(err)
