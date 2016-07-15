@@ -647,6 +647,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.state = streamDone
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
+			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
 			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
@@ -664,9 +665,14 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// the read direction is closed, and set the status appropriately.
 	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
 		s.mu.Lock()
+		if s.state == streamDone {
+			s.mu.Unlock()
+			return
+		}
 		s.state = streamDone
 		s.statusCode = codes.Internal
 		s.statusDesc = "server closed the stream without sending trailers"
+		close(s.done)
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})
 	}
