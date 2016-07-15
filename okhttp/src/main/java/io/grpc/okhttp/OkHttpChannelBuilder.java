@@ -271,8 +271,7 @@ public class OkHttpChannelBuilder extends
       case TLS:
         try {
           if (sslSocketFactory == null) {
-            SSLContext sslContext = SSLContext.getInstance("TLS", Platform.get().getProvider());
-            sslContext.init(null, null, null);
+            SSLContext sslContext = SSLContext.getInstance("Default", Platform.get().getProvider());
             sslSocketFactory = sslContext.getSocketFactory();
           }
           return sslSocketFactory;

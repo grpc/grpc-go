@@ -61,7 +61,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
@@ -112,7 +111,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
             TestUtils.TEST_SERVER_HOST, getPort()));
     try {
       builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
-              new FileInputStream(TestUtils.loadCert("ca.pem"))));
+              TestUtils.loadCert("ca.pem")));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -153,7 +152,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
             "I.am.a.bad.hostname", getPort()));
     ManagedChannel channel = builder.sslSocketFactory(
         TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
-            new FileInputStream(TestUtils.loadCert("ca.pem")))).build();
+            TestUtils.loadCert("ca.pem"))).build();
     TestServiceGrpc.TestServiceBlockingStub blockingStub =
         TestServiceGrpc.newBlockingStub(channel);
 

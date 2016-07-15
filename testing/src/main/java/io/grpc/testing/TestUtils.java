@@ -52,7 +52,6 @@ import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
-import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -236,33 +235,13 @@ public class TestUtils {
   /**
    * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
    */
-  public static SSLSocketFactory newSslSocketFactoryForCa(File certChainFile) throws Exception {
-    InputStream is = new FileInputStream(certChainFile);
-    try {
-      return newSslSocketFactoryForCa(is);
-    } finally {
-      is.close();
-    }
-  }
-
-  /**
-   * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
-   */
-  public static SSLSocketFactory newSslSocketFactoryForCa(
-      InputStream certChain) throws Exception {
-    return newSslSocketFactoryForCa(Security.getProviders()[0], certChain);
-  }
-
-  /**
-   * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
-   */
   public static SSLSocketFactory newSslSocketFactoryForCa(Provider provider,
-      InputStream certChain) throws Exception {
+      File certChainFile) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null, null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     X509Certificate cert = (X509Certificate) cf.generateCertificate(
-        new BufferedInputStream(certChain));
+        new BufferedInputStream(new FileInputStream(certChainFile)));
     X500Principal principal = cert.getSubjectX500Principal();
     ks.setCertificateEntry(principal.getName("RFC2253"), cert);
 

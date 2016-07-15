@@ -39,6 +39,7 @@ import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
+import io.grpc.okhttp.internal.Platform;
 import io.grpc.testing.TestUtils;
 import io.netty.handler.ssl.SslContext;
 
@@ -324,7 +325,8 @@ public class TestServiceClient {
         if (useTls) {
           try {
             SSLSocketFactory factory = useTestCa
-                ? TestUtils.newSslSocketFactoryForCa(TestUtils.loadCert("ca.pem"))
+                ? TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
+                    TestUtils.loadCert("ca.pem"))
                 : (SSLSocketFactory) SSLSocketFactory.getDefault();
             builder.sslSocketFactory(factory);
           } catch (Exception e) {

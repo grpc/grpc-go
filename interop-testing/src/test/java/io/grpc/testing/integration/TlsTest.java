@@ -65,11 +65,14 @@ import org.junit.runners.Parameterized.Parameters;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLContext;
 
 
 /**
@@ -97,10 +100,16 @@ public class TlsTest {
   private SslContextBuilder clientContextBuilder;
 
   @Before
-  public void setUp() {
+  public void setUp() throws NoSuchAlgorithmException {
     executor = Executors.newSingleThreadScheduledExecutor();
     if (sslProvider == SslProvider.OPENSSL) {
       Assume.assumeTrue(OpenSsl.isAvailable());
+    }
+    if (sslProvider == SslProvider.JDK) {
+      Assume.assumeTrue(Arrays.asList(
+          SSLContext.getDefault().getSupportedSSLParameters().getCipherSuites())
+          .contains("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
+
     }
     clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), sslProvider);
   }
