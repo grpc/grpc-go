@@ -169,7 +169,7 @@ type Stream struct {
 	// ctx is the associated context of the stream.
 	ctx    context.Context
 	cancel context.CancelFunc
-	// done is closed when the final status arrives prematurely.
+	// done is closed when the final status arrives.
 	done chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
