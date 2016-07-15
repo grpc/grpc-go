@@ -79,7 +79,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
   private ManagedChannel channel;
   private TestServiceGrpc.TestServiceBlockingStub blockingStub;
-  private TestServiceGrpc.TestService asyncStub;
+  private TestServiceGrpc.TestServiceStub asyncStub;
   private String testCase;
   private TestListener listener;
   private static int TIMEOUT_MILLIS = 5000;
@@ -673,7 +673,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   public void timeoutOnSleepingServer() throws Exception {
-    TestServiceGrpc.TestService stub = TestServiceGrpc.newStub(channel)
+    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel)
         .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
