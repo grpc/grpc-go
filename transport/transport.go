@@ -167,8 +167,9 @@ type Stream struct {
 	// nil for client side Stream.
 	st ServerTransport
 	// ctx is the associated context of the stream.
-	ctx       context.Context
-	cancel    context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
+	// earlyDone is closed when the final status arrives prematurely.
 	earlyDone chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
