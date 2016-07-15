@@ -90,7 +90,10 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 		return nil, transport.StreamErrorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
-	if err != nil {
+	// NewStream could lead to an early rejection of the RPC (e.g., the service/method
+	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
+	// recvResponse to get the final status.
+	if err != nil || err != io.EOF {
 		return nil, err
 	}
 	// Sent successfully.
