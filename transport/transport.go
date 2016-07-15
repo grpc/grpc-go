@@ -504,7 +504,7 @@ func ContextErr(err error) StreamError {
 
 // wait blocks until it can receive from ctx.Done, closing, or proceed.
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
-// If it receives from earlyDone, it returns 0, errEarlyDone.
+// If it receives from earlyDone, it returns 0, ErrEarlyDone.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
 func wait(ctx context.Context, earlyDone, closing <-chan struct{}, proceed <-chan int) (int, error) {
