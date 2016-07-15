@@ -335,7 +335,7 @@ type rpcError struct {
 }
 
 func (e *rpcError) Error() string {
-	return fmt.Sprintf("rpc error: code = %d desc = %s", e.code, e.desc)
+	return fmt.Sprintf("rpc error: %s code = %d desc = %s", e.code, e.code, e.desc)
 }
 
 // Code returns the error code for err if it was produced by the rpc system.
