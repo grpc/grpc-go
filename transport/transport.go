@@ -140,18 +140,6 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	}
 	select {
 	case <-r.ctx.Done():
-		// ctx might be canceled by gRPC internals to unblocking pending writing operations
-		// when the client receives the final status prematurely (for client and bi-directional
-		// streaming RPCs). Used to return the real status to the users instead of the
-		// cancellation.
-		select {
-		case i := <-r.recv.get():
-			m := i.(*recvMsg)
-			if m.err != nil {
-				return 0, m.err
-			}
-		default:
-		}
 		return 0, ContextErr(r.ctx.Err())
 	case i := <-r.recv.get():
 		r.recv.load()
@@ -169,6 +157,7 @@ type streamState uint8
 const (
 	streamActive    streamState = iota
 	streamWriteDone             // EndStream sent
+	streamReadDone              // EndStream received
 	streamDone                  // the entire stream is finished.
 )
 
@@ -178,8 +167,9 @@ type Stream struct {
 	// nil for client side Stream.
 	st ServerTransport
 	// ctx is the associated context of the stream.
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc
+	earlyDone chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
 	recvCompress string
@@ -469,6 +459,8 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 	}
 }
 
+var ErrEarlyDone = StreamErrorf(codes.Internal, "rpc is done prematurely")
+
 // ConnectionErrorf creates an ConnectionError with the specified error description.
 func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
@@ -512,12 +504,15 @@ func ContextErr(err error) StreamError {
 
 // wait blocks until it can receive from ctx.Done, closing, or proceed.
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
+// If it receives from earlyDone, it returns 0, errEarlyDone.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
-func wait(ctx context.Context, closing <-chan struct{}, proceed <-chan int) (int, error) {
+func wait(ctx context.Context, earlyDone, closing <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
+	case <-earlyDone:
+		return 0, ErrEarlyDone
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:

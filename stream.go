@@ -251,7 +251,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		if err != nil {
 			cs.finish(err)
 		}
-		if err == nil || err == io.EOF {
+		if err == nil || err == io.EOF || err == transport.ErrEarlyDone {
 			return
 		}
 		if _, ok := err.(transport.ConnectionError); !ok {
@@ -327,6 +327,11 @@ func (cs *clientStream) CloseSend() (err error) {
 	}()
 	if err == nil || err == io.EOF {
 		return
+	}
+	if err == transport.ErrEarlyDone {
+		// If the RPC is done prematurely, Stream.RecvMsg(...) needs to be
+		// called to get the final status and clear the footprint.
+		return nil
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.closeTransportStream(err)

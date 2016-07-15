@@ -1540,7 +1540,7 @@ func testClientStreamingError(t *testing.T, e env) {
 			continue
 		}
 		if _, err := stream.CloseAndRecv(); grpc.Code(err) != codes.NotFound {
-			t.Fatalf("%v.Send(_) = %v, want error %d", stream, err, codes.NotFound)
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %d", stream, err, codes.NotFound)
 		}
 		break
 	}

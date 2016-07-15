@@ -202,6 +202,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
 		id:            t.nextID,
+		earlyDone:     make(chan struct{}),
 		method:        callHdr.Method,
 		sendCompress:  callHdr.SendCompress,
 		buf:           newRecvBuffer(),
@@ -278,7 +279,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	checkStreamsQuota := t.streamsQuota != nil
 	t.mu.Unlock()
 	if checkStreamsQuota {
-		sq, err := wait(ctx, t.shutdownChan, t.streamsQuota.acquire())
+		sq, err := wait(ctx, nil, t.shutdownChan, t.streamsQuota.acquire())
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +288,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.streamsQuota.add(sq - 1)
 		}
 	}
-	if _, err := wait(ctx, t.shutdownChan, t.writableChan); err != nil {
+	if _, err := wait(ctx, nil, t.shutdownChan, t.writableChan); err != nil {
 		// Return the quota back now because there is no stream returned to the caller.
 		if _, ok := err.(StreamError); ok && checkStreamsQuota {
 			t.streamsQuota.add(1)
@@ -497,13 +498,6 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
-	s.mu.Lock()
-	// The stream has been done. Return the status directly.
-	if s.state == streamDone {
-		s.mu.Unlock()
-		return StreamErrorf(s.statusCode, "%v", s.statusDesc)
-	}
-	s.mu.Unlock()
 	r := bytes.NewBuffer(data)
 	for {
 		var p []byte
@@ -511,13 +505,13 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			size := http2MaxFrameLen
 			s.sendQuotaPool.add(0)
 			// Wait until the stream has some quota to send the data.
-			sq, err := wait(s.ctx, t.shutdownChan, s.sendQuotaPool.acquire())
+			sq, err := wait(s.ctx, s.earlyDone, t.shutdownChan, s.sendQuotaPool.acquire())
 			if err != nil {
 				return err
 			}
 			t.sendQuotaPool.add(0)
 			// Wait until the transport has some quota to send the data.
-			tq, err := wait(s.ctx, t.shutdownChan, t.sendQuotaPool.acquire())
+			tq, err := wait(s.ctx, s.earlyDone, t.shutdownChan, t.sendQuotaPool.acquire())
 			if err != nil {
 				if _, ok := err.(StreamError); ok {
 					t.sendQuotaPool.cancel()
@@ -551,7 +545,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// Indicate there is a writer who is about to write a data frame.
 		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the transport.
-		if _, err := wait(s.ctx, t.shutdownChan, t.writableChan); err != nil {
+		if _, err := wait(s.ctx, s.earlyDone, t.shutdownChan, t.writableChan); err != nil {
 			if _, ok := err.(StreamError); ok {
 				// Return the connection quota back.
 				t.sendQuotaPool.add(len(p))
@@ -781,18 +775,14 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	s.statusCode = state.statusCode
 	s.statusDesc = state.statusDesc
-	var cancel bool
 	if s.state != streamWriteDone {
-		// s will be canceled. This is required to interrupt any pending
-		// blocking Write calls when the final RPC status has been arrived.
-		cancel = true
+		// This is required to interrupt any pending blocking Write calls
+		// when the final RPC status has been arrived.
+		close(s.earlyDone)
 	}
 	s.state = streamDone
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
-	if cancel {
-		s.cancel()
-	}
 }
 
 func handleMalformedHTTP2(s *Stream, err error) {
