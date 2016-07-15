@@ -429,11 +429,13 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 	// skipWait may overwrite the decision in ac.dopts.block.
 	if ac.dopts.block && !skipWait {
 		if err := ac.resetTransport(false); err != nil {
-			ac.cc.mu.Lock()
-			delete(ac.cc.conns, ac.addr)
-			ac.cc.mu.Unlock()
-			ac.tearDown(err)
-			return err
+			if err != errConnClosing {
+				ac.cc.mu.Lock()
+				delete(ac.cc.conns, ac.addr)
+				ac.cc.mu.Unlock()
+				ac.tearDown(err)
+			}
+			return fmt.Errorf("failed to create transport: %v", err)
 		}
 		// Start to monitor the error status of transport.
 		go ac.transportMonitor()
@@ -442,10 +444,12 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 		go func() {
 			if err := ac.resetTransport(false); err != nil {
 				grpclog.Printf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
-				ac.cc.mu.Lock()
-				delete(ac.cc.conns, ac.addr)
-				ac.cc.mu.Unlock()
-				ac.tearDown(err)
+				if err != errConnClosing {
+					ac.cc.mu.Lock()
+					delete(ac.cc.conns, ac.addr)
+					ac.cc.mu.Unlock()
+					ac.tearDown(err)
+				}
 				return
 			}
 			ac.transportMonitor()
@@ -519,6 +523,9 @@ type addrConn struct {
 	// due to timeout.
 	ready     chan struct{}
 	transport transport.ClientTransport
+
+	// The reason this addrConn is torn down.
+	tearDownErr error
 }
 
 // printf records an event in ac's event log, unless ac has been closed.
@@ -606,7 +613,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			cancel()
 
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-				return fmt.Errorf("failed to create client transport: %v", err)
+				return err
 			}
 			ac.mu.Lock()
 			if ac.state == Shutdown {
@@ -708,6 +715,9 @@ func (ac *addrConn) transportMonitor() {
 				ac.printf("transport exiting: %v", err)
 				ac.mu.Unlock()
 				grpclog.Printf("grpc: addrConn.transportMonitor exits due to: %v", err)
+				if err != errConnClosing {
+					ac.tearDown(err)
+				}
 				return
 			}
 		}
@@ -722,7 +732,7 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 		switch {
 		case ac.state == Shutdown:
 			ac.mu.Unlock()
-			return nil, errConnClosing
+			return nil, ac.tearDownErr
 		case ac.state == Ready:
 			ct := ac.transport
 			ac.mu.Unlock()
@@ -772,6 +782,7 @@ func (ac *addrConn) tearDown(err error) {
 		return
 	}
 	ac.state = Shutdown
+	ac.tearDownErr = err
 	ac.stateCV.Broadcast()
 	if ac.events != nil {
 		ac.events.Finish()
