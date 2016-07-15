@@ -1536,7 +1536,7 @@ func testClientStreamingError(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 	}
 	for {
-		if err := stream.Send(req); err == nil {
+		if err := stream.Send(req); err != io.EOF {
 			continue
 		}
 		if _, err := stream.CloseAndRecv(); grpc.Code(err) != codes.NotFound {
