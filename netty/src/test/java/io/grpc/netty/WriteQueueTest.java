@@ -45,6 +45,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -61,14 +62,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RunWith(JUnit4.class)
 public class WriteQueueTest {
 
+  private final Object lock = new Object();
+
   @Mock
   public Channel channel;
 
   @Mock
   public ChannelPromise promise;
 
-  private long flushCalledNanos;
   private long writeCalledNanos;
+  private long flushCalledNanos = writeCalledNanos + 1;
 
   /**
    * Set up for test.
@@ -93,9 +96,11 @@ public class WriteQueueTest {
     when(channel.flush()).thenAnswer(new Answer<Channel>() {
       @Override
       public Channel answer(InvocationOnMock invocation) throws Throwable {
-        flushCalledNanos = System.nanoTime();
-        if (flushCalledNanos == writeCalledNanos) {
-          flushCalledNanos += 1;
+        synchronized (lock) {
+          flushCalledNanos = System.nanoTime();
+          if (flushCalledNanos == writeCalledNanos) {
+            flushCalledNanos += 1;
+          }
         }
         return channel;
       }
@@ -105,9 +110,11 @@ public class WriteQueueTest {
         new Answer<ChannelFuture>() {
           @Override
           public ChannelFuture answer(InvocationOnMock invocation) throws Throwable {
-            writeCalledNanos = System.nanoTime();
-            if (writeCalledNanos == flushCalledNanos) {
-              writeCalledNanos += 1;
+            synchronized (lock) {
+              writeCalledNanos = System.nanoTime();
+              if (writeCalledNanos == flushCalledNanos) {
+                writeCalledNanos += 1;
+              }
             }
             return promise;
           }
@@ -167,8 +174,10 @@ public class WriteQueueTest {
       }
 
       void assertFlushCalledAfterWrites() {
-        if (flushCalledNanos - writeCalledNanos <= 0) {
-          fail("flush must be called after all writes");
+        synchronized (lock) {
+          if (flushCalledNanos - writeCalledNanos <= 0) {
+            fail("flush must be called after all writes");
+          }
         }
       }
     });

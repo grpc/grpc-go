@@ -38,9 +38,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
 
-import java.util.ArrayDeque;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -63,18 +62,12 @@ class WriteQueue {
   };
 
   private final Channel channel;
-  private final BlockingQueue<QueuedCommand> queue;
+  private final Queue<QueuedCommand> queue;
   private final AtomicBoolean scheduled = new AtomicBoolean();
-
-  /**
-   * ArrayDeque to copy queue into when flushing in event loop.
-   */
-  private final ArrayDeque<QueuedCommand> writeChunk =
-      new ArrayDeque<QueuedCommand>(DEQUE_CHUNK_SIZE);
 
   public WriteQueue(Channel channel) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
-    queue = new LinkedBlockingQueue<QueuedCommand>();
+    queue = new ConcurrentLinkedQueue<QueuedCommand>();
   }
 
   /**
@@ -126,20 +119,20 @@ class WriteQueue {
    */
   private void flush() {
     try {
-      boolean flushed = false;
-      while (queue.drainTo(writeChunk, DEQUE_CHUNK_SIZE) > 0) {
-        while (writeChunk.size() > 0) {
-          QueuedCommand cmd = writeChunk.poll();
-          channel.write(cmd, cmd.promise());
+      QueuedCommand cmd;
+      int i = 0;
+      while ((cmd = queue.poll()) != null) {
+        channel.write(cmd, cmd.promise());
+        if (++i == DEQUE_CHUNK_SIZE) {
+          i = 0;
+          // Flush each chunk so we are releasing buffers periodically. In theory this loop
+          // might never end as new events are continuously added to the queue, if we never
+          // flushed in that case we would be guaranteed to OOM.
+          channel.flush();
         }
-        // Flush each chunk so we are releasing buffers periodically. In theory this loop
-        // might never end as new events are continuously added to the queue, if we never
-        // flushed in that case we would be guaranteed to OOM.
-        flushed = true;
-        channel.flush();
       }
-      if (!flushed) {
-        // Must flush at least once
+      // Must flush at least once
+      if (i != 0) {
         channel.flush();
       }
     } finally {
