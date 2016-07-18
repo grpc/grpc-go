@@ -81,7 +81,7 @@ public class DeadlineTest {
     ticker.reset(System.nanoTime());
     Deadline reference = Deadline.after(0, TimeUnit.SECONDS, ticker);
     // Allow inaccuracy to account for system time advancing during test.
-    assertAbout(deadline()).that(d).isWithin(20, TimeUnit.MILLISECONDS).of(reference);
+    assertAbout(deadline()).that(d).isWithin(1, TimeUnit.SECONDS).of(reference);
   }
 
   @Test
