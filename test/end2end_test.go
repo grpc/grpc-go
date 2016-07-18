@@ -369,6 +369,7 @@ type test struct {
 	serverCompression bool
 	unaryInt          grpc.UnaryServerInterceptor
 	streamInt         grpc.StreamServerInterceptor
+	balancer          grpc.Balancer
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -404,6 +405,8 @@ func newTest(t *testing.T, e env) *test {
 		maxStream: math.MaxUint32,
 	}
 	te.ctx, te.cancel = context.WithCancel(context.Background())
+	// Install roundrobin balancer by default.
+	te.balancer = grpc.RoundRobin(nil)
 	return te
 }
 
@@ -501,6 +504,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}))
 	default:
 		opts = append(opts, grpc.WithInsecure())
+	}
+	if te.balancer != nil {
+		opts = append(opts, grpc.WithBalancer(te.balancer))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -2313,6 +2319,34 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
+}
+
+func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
+	// Uninstall balancer.
+	te.balancer = nil
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
+}
+
+func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
+	// Uninstall balancer.
+	te.balancer = nil
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
 		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
 	}
 }
