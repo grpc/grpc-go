@@ -183,12 +183,21 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	cs.t = t
 	cs.s = s
 	cs.p = &parser{r: s}
-	// Listen on ctx.Done() to detect cancellation when there is no pending
-	// I/O operations on this stream.
+	// Listen on ctx.Done() to detect cancellation and s.Done() to detect normal termination
+	// when there is no pending I/O operations on this stream.
 	go func() {
 		select {
 		case <-t.Error():
 			// Incur transport error, simply exit.
+		case <-s.Done():
+			// TODO: The trace of the RPC is terminated here when there is no pending
+			// I/O, which is probably not the optimal solution.
+			if s.StatusCode() == codes.OK {
+				cs.finish(nil)
+			} else {
+				cs.finish(Errorf(s.StatusCode(), "%s", s.StatusDesc()))
+			}
+			cs.closeTransportStream(nil)
 		case <-s.Context().Done():
 			err := s.Context().Err()
 			cs.finish(err)
@@ -326,7 +335,7 @@ func (cs *clientStream) CloseSend() (err error) {
 		}
 	}()
 	if err == nil || err == io.EOF {
-		return
+		return nil
 	}
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.closeTransportStream(err)
