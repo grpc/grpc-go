@@ -233,25 +233,27 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
-	if cc.dopts.balancer == nil {
-		cc.dopts.balancer = RoundRobin(nil)
-	}
 
-	if err := cc.dopts.balancer.Start(target); err != nil {
-		return nil, err
-	}
 	var (
 		ok    bool
 		addrs []Address
 	)
-	ch := cc.dopts.balancer.Notify()
-	if ch == nil {
-		// There is no name resolver installed.
+	if cc.dopts.balancer == nil {
+		// Connect to target directly if balancer is nil.
 		addrs = append(addrs, Address{Addr: target})
 	} else {
-		addrs, ok = <-ch
-		if !ok || len(addrs) == 0 {
-			return nil, errNoAddr
+		if err := cc.dopts.balancer.Start(target); err != nil {
+			return nil, err
+		}
+		ch := cc.dopts.balancer.Notify()
+		if ch == nil {
+			// There is no name resolver installed.
+			addrs = append(addrs, Address{Addr: target})
+		} else {
+			addrs, ok = <-ch
+			if !ok || len(addrs) == 0 {
+				return nil, errNoAddr
+			}
 		}
 	}
 	waitC := make(chan error, 1)
@@ -282,6 +284,8 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		return nil, ErrClientConnTimeout
 	}
 	if ok {
+		// If balancer is nil or balancer.Notify() is nil, ok will false here.
+		// Then this goroutine will not be created.
 		go cc.lbWatcher()
 	}
 	colonPos := strings.LastIndex(target, ":")
@@ -462,22 +466,35 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
-	addr, put, err := cc.dopts.balancer.Get(ctx, opts)
-	if err != nil {
-		return nil, nil, toRPCErr(err)
-	}
-	cc.mu.RLock()
-	if cc.conns == nil {
-		cc.mu.RUnlock()
-		return nil, nil, toRPCErr(ErrClientConnClosing)
-	}
-	ac, ok := cc.conns[addr]
-	cc.mu.RUnlock()
-	if !ok {
-		if put != nil {
-			put()
+	var (
+		ac  *addrConn
+		ok  bool
+		put func()
+	)
+	if cc.dopts.balancer == nil {
+		// If balancer is nil, there should be only one addrConn available.
+		for _, ac = range cc.conns {
+			// Break after the first loop to get the first addrConn.
+			break
 		}
-		return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
+	} else {
+		addr, put, err := cc.dopts.balancer.Get(ctx, opts)
+		if err != nil {
+			return nil, nil, toRPCErr(err)
+		}
+		cc.mu.RLock()
+		if cc.conns == nil {
+			cc.mu.RUnlock()
+			return nil, nil, toRPCErr(ErrClientConnClosing)
+		}
+		ac, ok = cc.conns[addr]
+		cc.mu.RUnlock()
+		if !ok {
+			if put != nil {
+				put()
+			}
+			return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
+		}
 	}
 	t, err := ac.wait(ctx, !opts.BlockingWait)
 	if err != nil {
@@ -501,7 +518,9 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.mu.Unlock()
-	cc.dopts.balancer.Close()
+	if cc.dopts.balancer != nil {
+		cc.dopts.balancer.Close()
+	}
 	for _, ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
@@ -657,7 +676,9 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			close(ac.ready)
 			ac.ready = nil
 		}
-		ac.down = ac.cc.dopts.balancer.Up(ac.addr)
+		if ac.cc.dopts.balancer != nil {
+			ac.down = ac.cc.dopts.balancer.Up(ac.addr)
+		}
 		ac.mu.Unlock()
 		return nil
 	}
