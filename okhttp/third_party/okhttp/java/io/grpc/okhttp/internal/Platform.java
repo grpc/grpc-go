@@ -20,6 +20,7 @@
 
 package io.grpc.okhttp.internal;
 
+import io.grpc.internal.GrpcUtil;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -30,6 +31,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -59,6 +61,16 @@ import okio.Buffer;
  */
 public class Platform {
   public static final Logger logger = Logger.getLogger(Platform.class.getName());
+
+  /**
+   * List of security providers to use in order of preference.
+   */
+  private static final String[] ANDROID_SECURITY_PROVIDERS = new String[]{
+      // See https://developer.android.com/training/articles/security-gms-provider.html
+      "com.google.android.gms.org.conscrypt.OpenSSLProvider",
+      "com.android.org.conscrypt.OpenSSLProvider",
+      "org.conscrypt.OpenSSLProvider",
+      "org.apache.harmony.xnet.provider.jsse.OpenSSLProvider"};
 
   private static final Platform PLATFORM = findPlatform();
 
@@ -120,50 +132,10 @@ public class Platform {
 
   /** Attempt to match the host runtime to a capable Platform implementation. */
   private static Platform findPlatform() {
-    // Find the conscrypt security provider if we can
-    Class<?> rawProviderClass = null;
-    try {
-      rawProviderClass = Class.forName("org.conscrypt.OpenSSLProvider");
-    } catch (ClassNotFoundException cnfe1) {
-      try {
-        rawProviderClass = Class.forName("com.android.org.conscrypt.OpenSSLProvider");
-      } catch (ClassNotFoundException cnfe2) {
-        try {
-          rawProviderClass = Class.forName("org.apache.harmony.xnet.provider.jsse.OpenSSLProvider");
-        } catch (ClassNotFoundException cnfe3) {
-          // Stick with what we have
-        }
-      }
-    }
-    boolean haveConscrypt = false;
-    Provider sslProvider = null;
-    try {
-      sslProvider = SSLContext.getDefault().getProvider();
-    } catch (NoSuchAlgorithmException nsae) {
-      // Ignore
-    }
-    if (rawProviderClass != null) {
-      if (sslProvider != null && sslProvider.getClass().equals(rawProviderClass)) {
-        haveConscrypt = true;
-      } else {
-        try {
-          Class<? extends Provider> providerClass = rawProviderClass.asSubclass(Provider.class);
-          sslProvider = providerClass.newInstance();
-          haveConscrypt = true;
-        } catch (InstantiationException iae) {
-          // Unable to use conscrypt, fall through to Jetty
-          logger.log(Level.WARNING,
-              "Unable to create conscrypt provider " + rawProviderClass.getName(), iae);
-        } catch (IllegalAccessException iaxe) {
-          // Unable to use conscrypt, fall through to Jetty
-          logger.log(Level.WARNING,
-              "Unable to create conscrypt provider " + rawProviderClass.getName(), iaxe);
-        }
-
-      }
-    }
-
-    if (haveConscrypt) {
+    Provider sslProvider = GrpcUtil.IS_RESTRICTED_APPENGINE ?
+        getAppEngineProvider()
+        : getAndroidSecurityProvider();
+    if (sslProvider != null) {
       // Attempt to find Android 2.3+ APIs.
       OptionalMethod<Socket> setUseSessionTickets
           = new OptionalMethod<Socket>(null, "setUseSessionTickets", boolean.class);
@@ -187,6 +159,11 @@ public class Platform {
       return new Android(setUseSessionTickets, setHostname, trafficStatsTagSocket,
           trafficStatsUntagSocket, getAlpnSelectedProtocol, setAlpnProtocols, sslProvider);
     }
+    try {
+      sslProvider = SSLContext.getDefault().getProvider();
+    } catch (NoSuchAlgorithmException nsae) {
+      throw new RuntimeException(nsae);
+    }
 
     // Find Jetty's ALPN extension for OpenJDK.
     try {
@@ -199,12 +176,43 @@ public class Platform {
       Method getMethod = negoClass.getMethod("get", SSLSocket.class);
       Method removeMethod = negoClass.getMethod("remove", SSLSocket.class);
       return new JdkWithJettyBootPlatform(
-          putMethod, getMethod, removeMethod, clientProviderClass, serverProviderClass, sslProvider);
+          putMethod, getMethod, removeMethod, clientProviderClass, serverProviderClass,
+          sslProvider);
     } catch (ClassNotFoundException ignored) {
     } catch (NoSuchMethodException ignored) {
     }
 
     return new Platform(sslProvider);
+  }
+
+  /**
+   * Forcibly load the conscrypt security provider on AppEngine if it's available. If not fail.
+   */
+  private static Provider getAppEngineProvider() {
+    try {
+      // Forcibly load conscrypt as it is unlikely to be an installed provider on AppEngine
+      return (Provider) Class.forName("org.conscrypt.OpenSSLProvider").newInstance();
+    } catch (Throwable t) {
+      throw new RuntimeException("Unable to load conscrypt security provider", t);
+    }
+  }
+
+  /**
+   * Select from the available security providers in preference order. If a preferred provider
+   * is not found then warn but continue.
+   */
+  private static Provider getAndroidSecurityProvider() {
+    for (String providerClassName : ANDROID_SECURITY_PROVIDERS) {
+      Provider[] providers = Security.getProviders();
+      for (Provider availableProvider : providers) {
+        if (providerClassName.equals(availableProvider.getClass().getName())) {
+          logger.log(Level.FINE, "Found registered provider {0}", providerClassName);
+          return availableProvider;
+        }
+      }
+    }
+    logger.log(Level.WARNING, "Unable to find Conscrypt");
+    return null;
   }
 
   /** Android 2.3 or better. */
