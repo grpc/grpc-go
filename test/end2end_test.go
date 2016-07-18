@@ -490,13 +490,16 @@ func (te *test) clientConn() *grpc.ClientConn {
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-	if te.e.security == "tls" {
+	switch te.e.security {
+	case "tls":
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
-	} else {
+	case "clientAlwaysFailCred":
+		opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}))
+	default:
 		opts = append(opts, grpc.WithInsecure())
 	}
 	var err error
@@ -2286,7 +2289,7 @@ func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
 
 func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
-	te.startServer()
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
 	defer te.tearDown()
 
 	var (
@@ -2296,6 +2299,18 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
 	if !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
+}
+
+func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
 		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
 	}
 }
