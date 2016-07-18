@@ -31,6 +31,8 @@
 
 package io.grpc.stub;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.AbstractFuture;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -38,9 +40,11 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 
 import java.util.Iterator;
@@ -205,8 +209,30 @@ public class ClientCalls {
       Thread.currentThread().interrupt();
       throw Status.CANCELLED.withCause(e).asRuntimeException();
     } catch (ExecutionException e) {
-      throw Status.fromThrowable(e).asRuntimeException();
+      throw toStatusRuntimeException(e);
     }
+  }
+
+  /**
+   * Wraps the given {@link Throwable} in a {@link StatusRuntimeException}. If it contains an
+   * embedded {@link StatusException} or {@link StatusRuntimeException}, the returned exception will
+   * contain the embedded trailers and status, with the given exception as the cause. Otherwise, an
+   * exception will be generated from an {@link Status#UNKNOWN} status.
+   */
+  private static StatusRuntimeException toStatusRuntimeException(Throwable t) {
+    Throwable cause = checkNotNull(t);
+    while (cause != null) {
+      // If we have an embedded status, use it and replace the cause
+      if (cause instanceof StatusException) {
+        StatusException se = (StatusException) cause;
+        return new StatusRuntimeException(se.getStatus().withCause(t), se.getTrailers());
+      } else if (cause instanceof StatusRuntimeException) {
+        StatusRuntimeException se = (StatusRuntimeException) cause;
+        return new StatusRuntimeException(se.getStatus().withCause(t), se.getTrailers());
+      }
+      cause = cause.getCause();
+    }
+    return Status.UNKNOWN.withCause(t).asRuntimeException();
   }
 
   private static <ReqT, RespT> void asyncUnaryRequestCall(
