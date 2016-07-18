@@ -55,6 +55,7 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.util.concurrent.DefaultThreadFactory;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -64,6 +65,7 @@ import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Enumeration;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -227,7 +229,8 @@ public abstract class AbstractBenchmark {
     }
 
     // Always use a different worker group from the client.
-    serverBuilder.workerEventLoopGroup(new NioEventLoopGroup());
+    ThreadFactory serverThreadFactory = new DefaultThreadFactory("STF pool", true /* daemon */);
+    serverBuilder.workerEventLoopGroup(new NioEventLoopGroup(0, serverThreadFactory));
 
     // Always set connection and stream window size to same value
     serverBuilder.flowControlWindow(windowSize.bytes());
@@ -376,10 +379,11 @@ public abstract class AbstractBenchmark {
     server = serverBuilder.build();
     server.start();
     channels = new ManagedChannel[channelCount];
+    ThreadFactory clientThreadFactory = new DefaultThreadFactory("CTF pool", true /* daemon */);
     for (int i = 0; i < channelCount; i++) {
       // Use a dedicated event-loop for each channel
       channels[i] = channelBuilder
-          .eventLoopGroup(new NioEventLoopGroup(1))
+          .eventLoopGroup(new NioEventLoopGroup(1, clientThreadFactory))
           .build();
     }
   }
