@@ -246,17 +246,16 @@ class NettyClientHandler extends AbstractNettyHandler {
   }
 
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream) {
-    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
+    NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
     stream.transportHeadersReceived(headers, endStream);
   }
 
   /**
    * Handler for an inbound HTTP/2 DATA frame.
    */
-
   private void onDataRead(int streamId, ByteBuf data, int padding, boolean endOfStream) {
     flowControlPing().onDataRead(data.readableBytes(), padding);
-    NettyClientStream stream = clientStream(requireHttp2Stream(streamId));
+    NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
     stream.transportDataReceived(data, endOfStream);
   }
 
@@ -265,7 +264,7 @@ class NettyClientHandler extends AbstractNettyHandler {
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
   private void onRstStreamRead(int streamId, long errorCode) {
-    NettyClientStream stream = clientStream(connection().stream(streamId));
+    NettyClientStream.TransportState stream = clientStream(connection().stream(streamId));
     if (stream != null) {
       Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
           .augmentDescription("Received Rst Stream");
@@ -295,7 +294,7 @@ class NettyClientHandler extends AbstractNettyHandler {
       connection().forEachActiveStream(new Http2StreamVisitor() {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
-          NettyClientStream clientStream = clientStream(stream);
+          NettyClientStream.TransportState clientStream = clientStream(stream);
           if (clientStream != null) {
             clientStream.transportReportStatus(
                 lifecycleManager.getShutdownStatus(), false, new Metadata());
@@ -322,7 +321,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   protected void onStreamError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception.StreamException http2Ex) {
     // Close the stream with a status that contains the cause.
-    NettyClientStream stream = clientStream(connection().stream(http2Ex.streamId()));
+    NettyClientStream.TransportState stream = clientStream(connection().stream(http2Ex.streamId()));
     if (stream != null) {
       stream.transportReportStatus(Utils.statusFromThrowable(cause), false, new Metadata());
     } else {
@@ -370,9 +369,9 @@ class NettyClientHandler extends AbstractNettyHandler {
       return;
     }
 
-    final NettyClientStream stream = command.stream();
+    final NettyClientStream.TransportState stream = command.stream();
     final Http2Headers headers = command.headers();
-    stream.id(streamId);
+    stream.setId(streamId);
 
     // Create an intermediate promise so that we can intercept the failure reported back to the
     // application.
@@ -418,7 +417,7 @@ class NettyClientHandler extends AbstractNettyHandler {
    */
   private void cancelStream(ChannelHandlerContext ctx, CancelClientStreamCommand cmd,
       ChannelPromise promise) {
-    NettyClientStream stream = cmd.stream();
+    NettyClientStream.TransportState stream = cmd.stream();
     stream.transportReportStatus(cmd.reason(), true, new Metadata());
     encoder().writeRstStream(ctx, stream.id(), Http2Error.CANCEL.code(), promise);
   }
@@ -507,7 +506,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     connection().forEachActiveStream(new Http2StreamVisitor() {
       @Override
       public boolean visit(Http2Stream stream) throws Http2Exception {
-        NettyClientStream clientStream = clientStream(stream);
+        NettyClientStream.TransportState clientStream = clientStream(stream);
         if (clientStream != null) {
           clientStream.transportReportStatus(msg.getStatus(), true, new Metadata());
           resetStream(ctx, stream.id(), Http2Error.CANCEL.code(), ctx.newPromise());
@@ -531,7 +530,7 @@ class NettyClientHandler extends AbstractNettyHandler {
         @Override
         public boolean visit(Http2Stream stream) throws Http2Exception {
           if (stream.id() > lastKnownStream) {
-            NettyClientStream clientStream = clientStream(stream);
+            NettyClientStream.TransportState clientStream = clientStream(stream);
             if (clientStream != null) {
               clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
             }
@@ -566,8 +565,8 @@ class NettyClientHandler extends AbstractNettyHandler {
   /**
    * Gets the client stream associated to the given HTTP/2 stream object.
    */
-  private NettyClientStream clientStream(Http2Stream stream) {
-    return stream == null ? null : (NettyClientStream) stream.getProperty(streamKey);
+  private NettyClientStream.TransportState clientStream(Http2Stream stream) {
+    return stream == null ? null : (NettyClientStream.TransportState) stream.getProperty(streamKey);
   }
 
   private int incrementAndGetNextStreamId() throws StatusException {

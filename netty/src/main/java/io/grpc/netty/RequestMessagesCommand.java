@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import io.grpc.internal.AbstractStream2;
-import io.grpc.internal.Stream;
 
 /**
  * Command which requests messages from the deframer.
@@ -40,26 +39,14 @@ import io.grpc.internal.Stream;
 class RequestMessagesCommand extends WriteQueue.AbstractQueuedCommand {
 
   private final int numMessages;
-  private final Stream stream;
   private final AbstractStream2.TransportState state;
-
-  public RequestMessagesCommand(Stream stream, int numMessages) {
-    this.state = null;
-    this.numMessages = numMessages;
-    this.stream = stream;
-  }
 
   public RequestMessagesCommand(AbstractStream2.TransportState state, int numMessages) {
     this.state = state;
     this.numMessages = numMessages;
-    this.stream = null;
   }
 
   void requestMessages() {
-    if (stream != null) {
-      stream.request(numMessages);
-    } else {
-      state.requestMessagesFromDeframer(numMessages);
-    }
+    state.requestMessagesFromDeframer(numMessages);
   }
 }

@@ -177,8 +177,8 @@ public class NettyClientTransportTest {
     } catch (ExecutionException e) {
       Status status = Status.fromThrowable(e);
       assertEquals(INTERNAL, status.getCode());
-      System.err.println(status.getDescription());
-      assertTrue(status.getDescription().contains("deframing"));
+      assertTrue("Missing exceeds maximum from: " + status.getDescription(),
+          status.getDescription().contains("exceeds maximum"));
     }
   }
 

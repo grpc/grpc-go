@@ -97,7 +97,7 @@ public abstract class AbstractStream2 implements Stream {
   }
 
   @Override
-  public final boolean isReady() {
+  public boolean isReady() {
     if (framer().isClosed()) {
       return false;
     }
@@ -139,6 +139,12 @@ public abstract class AbstractStream2 implements Stream {
      */
     @GuardedBy("onReadyLock")
     private boolean allocated;
+    /**
+     * Indicates that the stream no longer exists for the transport. Implies that the application
+     * should be discouraged from sending, because doing so would have no effect.
+     */
+    @GuardedBy("onReadyLock")
+    private boolean deallocated;
 
     protected TransportState(int maxMessageSize) {
       deframer = new MessageDeframer(this, Codec.Identity.NONE, maxMessageSize);
@@ -172,6 +178,13 @@ public abstract class AbstractStream2 implements Stream {
      */
     protected final void closeDeframer() {
       deframer.close();
+    }
+
+    /**
+     * Indicates whether delivery is currently stalled, pending receipt of more data.
+     */
+    protected final boolean isDeframerStalled() {
+      return deframer.isStalled();
     }
 
     /**
@@ -214,7 +227,7 @@ public abstract class AbstractStream2 implements Stream {
 
     private boolean isReady() {
       synchronized (onReadyLock) {
-        return allocated && numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;
+        return allocated && numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD && !deallocated;
       }
     }
 
@@ -231,6 +244,19 @@ public abstract class AbstractStream2 implements Stream {
         allocated = true;
       }
       notifyIfReady();
+    }
+
+    /**
+     * Notify that the stream does not exist in a usable state any longer. This causes {@link
+     * AbstractStream2#isReady()} to return {@code false} from this point forward.
+     *
+     * <p>This does not generally need to be called explicitly by the transport, as it is handled
+     * implicitly by {@link AbstractClientStream2} and {@link AbstractServerStream}.
+     */
+    protected final void onStreamDeallocated() {
+      synchronized (onReadyLock) {
+        deallocated = true;
+      }
     }
 
     /**
@@ -256,6 +282,8 @@ public abstract class AbstractStream2 implements Stream {
     public final void onSentBytes(int numBytes) {
       boolean doNotify;
       synchronized (onReadyLock) {
+        checkState(allocated,
+            "onStreamAllocated was not called, but it seems the stream is active");
         boolean belowThresholdBefore = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;
         numSentBytesQueued -= numBytes;
         boolean belowThresholdAfter = numSentBytesQueued < DEFAULT_ONREADY_THRESHOLD;

@@ -59,20 +59,16 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.GrpcUtil;
-import io.grpc.internal.MessageFramer;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
-import io.grpc.internal.WritableBuffer;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Error;
@@ -91,7 +87,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 
 /**
@@ -159,11 +154,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream.request(1);
 
     // Create a data frame and then trigger the handler to read it.
-    ByteBuf frame = dataFrame(STREAM_ID, endStream);
+    ByteBuf frame = grpcDataFrame(STREAM_ID, endStream, contentAsArray());
     channelRead(frame);
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(streamListener).messageRead(captor.capture());
     assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(captor.getValue()));
+    captor.getValue().close();
 
     if (endStream) {
       verify(streamListener).halfClosed();
@@ -333,33 +329,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream = streamCaptor.getValue();
   }
 
-  private ByteBuf dataFrame(int streamId, boolean endStream) {
-    byte[] contentAsArray = contentAsArray();
-    final ByteBuf compressionFrame = Unpooled.buffer(contentAsArray.length);
-    MessageFramer framer = new MessageFramer(new MessageFramer.Sink() {
-      @Override
-      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        if (frame != null) {
-          ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
-          compressionFrame.writeBytes(bytebuf);
-        }
-      }
-    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT));
-    framer.writePayload(new ByteArrayInputStream(contentAsArray));
-    framer.flush();
-    if (endStream) {
-      framer.close();
-    }
-    ChannelHandlerContext ctx = newMockContext();
-    new DefaultHttp2FrameWriter().writeData(ctx, streamId, compressionFrame, 0, endStream,
-        newPromise());
-    return captureWrite(ctx);
-  }
-
   private ByteBuf emptyGrpcFrame(int streamId, boolean endStream) throws Exception {
     ByteBuf buf = NettyTestUtil.messageFrame("");
     try {
-      return super.dataFrame(streamId, endStream, buf);
+      return dataFrame(streamId, endStream, buf);
     } finally {
       buf.release();
     }

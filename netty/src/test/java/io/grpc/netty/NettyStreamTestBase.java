@@ -138,7 +138,8 @@ public abstract class NettyStreamTestBase<T extends Stream> {
       ((NettyServerStream) stream).transportState()
           .inboundDataReceived(messageFrame(MESSAGE), false);
     } else {
-      ((NettyClientStream) stream).transportDataReceived(messageFrame(MESSAGE), false);
+      ((NettyClientStream) stream).transportState()
+          .transportDataReceived(messageFrame(MESSAGE), false);
     }
     ArgumentCaptor<InputStream> captor = ArgumentCaptor.forClass(InputStream.class);
     verify(listener()).messageRead(captor.capture());

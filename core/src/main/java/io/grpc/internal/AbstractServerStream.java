@@ -43,7 +43,6 @@ import javax.annotation.Nullable;
  * Abstract base class for {@link ServerStream} implementations. Extending classes only need to
  * implement {@link #transportState()} and {@link #abstractServerStreamSink()}. Must only be called
  * from the sending application thread.
-
  */
 public abstract class AbstractServerStream extends AbstractStream2
     implements ServerStream, MessageFramer.Sink {
@@ -158,6 +157,11 @@ public abstract class AbstractServerStream extends AbstractStream2
     abstractServerStreamSink().cancel(status);
   }
 
+  @Override
+  public final boolean isReady() {
+    return super.isReady();
+  }
+
   @Override public Attributes attributes() {
     return Attributes.EMPTY;
   }
@@ -241,6 +245,7 @@ public abstract class AbstractServerStream extends AbstractStream2
     private void closeListener(Status newStatus) {
       if (!listenerClosed) {
         listenerClosed = true;
+        onStreamDeallocated();
         closeDeframer();
         listener().closed(newStatus);
       }

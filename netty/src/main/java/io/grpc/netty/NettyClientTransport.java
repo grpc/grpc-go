@@ -120,13 +120,14 @@ class NettyClientTransport implements ConnectionClientTransport {
       callOptions) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
-    return new NettyClientStream(method, headers, channel, handler, maxMessageSize, authority,
-        negotiationHandler.scheme(), userAgent) {
-      @Override
-      protected Status statusFromFailedFuture(ChannelFuture f) {
-        return NettyClientTransport.this.statusFromFailedFuture(f);
-      }
-    };
+    return new NettyClientStream(
+        new NettyClientStream.TransportState(handler, maxMessageSize) {
+          @Override
+          protected Status statusFromFailedFuture(ChannelFuture f) {
+            return NettyClientTransport.this.statusFromFailedFuture(f);
+          }
+        },
+        method, headers, channel, authority, negotiationHandler.scheme(), userAgent);
   }
 
   @Override

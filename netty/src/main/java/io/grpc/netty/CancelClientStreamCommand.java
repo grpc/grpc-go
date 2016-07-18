@@ -39,17 +39,17 @@ import io.grpc.Status;
  * Command sent from a Netty client stream to the handler to cancel the stream.
  */
 class CancelClientStreamCommand extends WriteQueue.AbstractQueuedCommand {
-  private final NettyClientStream stream;
+  private final NettyClientStream.TransportState stream;
   private final Status reason;
 
-  CancelClientStreamCommand(NettyClientStream stream, Status reason) {
+  CancelClientStreamCommand(NettyClientStream.TransportState stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
     Preconditions.checkNotNull(reason, "reason");
     Preconditions.checkArgument(!reason.isOk(), "Should not cancel with OK status");
     this.reason = reason;
   }
 
-  NettyClientStream stream() {
+  NettyClientStream.TransportState stream() {
     return stream;
   }
 

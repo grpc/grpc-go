@@ -39,7 +39,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.grpc.internal.MessageFramer;
+import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -67,6 +70,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.verification.VerificationMode;
+
+import java.io.ByteArrayInputStream;
 
 /**
  * Base class for Netty handler unit tests.
@@ -142,6 +147,25 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   protected final void channelRead(Object obj) throws Exception {
     handler().channelRead(ctx, obj);
+  }
+
+  protected ByteBuf grpcDataFrame(int streamId, boolean endStream, byte[] content) {
+    final ByteBuf compressionFrame = Unpooled.buffer(content.length);
+    MessageFramer framer = new MessageFramer(new MessageFramer.Sink() {
+      @Override
+      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+        if (frame != null) {
+          ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+          compressionFrame.writeBytes(bytebuf);
+        }
+      }
+    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT));
+    framer.writePayload(new ByteArrayInputStream(content));
+    framer.flush();
+    ChannelHandlerContext ctx = newMockContext();
+    new DefaultHttp2FrameWriter().writeData(ctx, streamId, compressionFrame, 0, endStream,
+        newPromise());
+    return captureWrite(ctx);
   }
 
   protected final ByteBuf dataFrame(int streamId, boolean endStream, ByteBuf content) {
