@@ -121,7 +121,7 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	scheme := "http"
 	conn, connErr := dial(opts.Dialer, ctx, addr)
 	if connErr != nil {
-		return nil, ConnectionErrorf(true, "transport: %v", connErr)
+		return nil, ConnectionErrorf(true, connErr, "transport: %v", connErr)
 	}
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {
@@ -130,7 +130,7 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	}
 	if connErr != nil {
 		// Credentials handshake error is not a temporary error.
-		return nil, ConnectionErrorf(false, "transport: %v", connErr)
+		return nil, ConnectionErrorf(false, connErr, "transport: %v", connErr)
 	}
 	defer func() {
 		if err != nil {
@@ -174,11 +174,11 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	n, err := t.conn.Write(clientPreface)
 	if err != nil {
 		t.Close()
-		return nil, ConnectionErrorf(true, "transport: %v", err)
+		return nil, ConnectionErrorf(true, err, "transport: %v", err)
 	}
 	if n != len(clientPreface) {
 		t.Close()
-		return nil, ConnectionErrorf(true, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
+		return nil, ConnectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	if initialWindowSize != defaultWindowSize {
 		err = t.framer.writeSettings(true, http2.Setting{
@@ -190,13 +190,13 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	}
 	if err != nil {
 		t.Close()
-		return nil, ConnectionErrorf(true, "transport: %v", err)
+		return nil, ConnectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(initialConnWindowSize - defaultWindowSize); delta > 0 {
 		if err := t.framer.writeWindowUpdate(true, 0, delta); err != nil {
 			t.Close()
-			return nil, ConnectionErrorf(true, "transport: %v", err)
+			return nil, ConnectionErrorf(true, err, "transport: %v", err)
 		}
 	}
 	go t.controller()
@@ -406,7 +406,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		if err != nil {
 			t.notifyError(err)
-			return nil, ConnectionErrorf(true, "transport: %v", err)
+			return nil, ConnectionErrorf(true, err, "transport: %v", err)
 		}
 	}
 	t.writableChan <- 0
@@ -620,7 +620,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// invoked.
 		if err := t.framer.writeData(forceFlush, s.id, endStream, p); err != nil {
 			t.notifyError(err)
-			return ConnectionErrorf(true, "transport: %v", err)
+			return ConnectionErrorf(true, err, "transport: %v", err)
 		}
 		if t.framer.adjustNumWriters(-1) == 0 {
 			t.framer.flushWrite()
@@ -668,7 +668,7 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 func (t *http2Client) handleData(f *http2.DataFrame) {
 	size := len(f.Data())
 	if err := t.fc.onData(uint32(size)); err != nil {
-		t.notifyError(ConnectionErrorf(true, "%v", err))
+		t.notifyError(ConnectionErrorf(true, err, "%v", err))
 		return
 	}
 	// Select the right stream to dispatch.

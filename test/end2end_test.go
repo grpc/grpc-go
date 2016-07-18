@@ -2275,10 +2275,12 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 
 const clientAlwaysFailCredErrorMsg = "clientAlwaysFailCred always fails"
 
+var clientAlwaysFailCredError = errors.New(clientAlwaysFailCredErrorMsg)
+
 type clientAlwaysFailCred struct{}
 
 func (c clientAlwaysFailCred) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, _ credentials.AuthInfo, err error) {
-	return nil, nil, errors.New(clientAlwaysFailCredErrorMsg)
+	return nil, nil, clientAlwaysFailCredError
 }
 func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
@@ -2298,8 +2300,8 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	)
 	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
-	if !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
-		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	if err != clientAlwaysFailCredError {
+		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, clientAlwaysFailCredError)
 	}
 }
 

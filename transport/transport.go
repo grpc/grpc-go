@@ -485,18 +485,20 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 }
 
 // ConnectionErrorf creates an ConnectionError with the specified error description.
-func ConnectionErrorf(temp bool, format string, a ...interface{}) ConnectionError {
+func ConnectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
-		Desc: fmt.Sprintf(format, a...),
-		temp: temp,
+		Desc:    fmt.Sprintf(format, a...),
+		temp:    temp,
+		origErr: e,
 	}
 }
 
 // ConnectionError is an error that results in the termination of the
 // entire connection and the retry of all the active streams.
 type ConnectionError struct {
-	Desc string
-	temp bool
+	Desc    string
+	temp    bool
+	origErr error
 }
 
 func (e ConnectionError) Error() string {
@@ -506,6 +508,11 @@ func (e ConnectionError) Error() string {
 // Temporary indicates if this connection error is temporary or fatal.
 func (e ConnectionError) Temporary() bool {
 	return e.temp
+}
+
+// OriginalError returns the original error of this connection error.
+func (e ConnectionError) OriginalError() error {
+	return e.origErr
 }
 
 var (

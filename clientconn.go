@@ -435,7 +435,10 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 				ac.cc.mu.Unlock()
 				ac.tearDown(err)
 			}
-			return fmt.Errorf("failed to create transport: %v", err)
+			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+				return e.OriginalError()
+			}
+			return err
 		}
 		// Start to monitor the error status of transport.
 		go ac.transportMonitor()
