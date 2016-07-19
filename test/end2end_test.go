@@ -305,6 +305,7 @@ type env struct {
 	network     string // The type of network such as tcp, unix, etc.
 	security    string // The security protocol such as TLS, SSH, etc.
 	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
+	balancer    bool   // whether to use balancer
 }
 
 func (e env) runnable() bool {
@@ -319,12 +320,13 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 var (
-	tcpClearEnv  = env{name: "tcp-clear", network: "tcp"}
-	tcpTLSEnv    = env{name: "tcp-tls", network: "tcp", security: "tls"}
-	unixClearEnv = env{name: "unix-clear", network: "unix"}
-	unixTLSEnv   = env{name: "unix-tls", network: "unix", security: "tls"}
-	handlerEnv   = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true}
-	allEnv       = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv}
+	tcpClearEnv   = env{name: "tcp-clear", network: "tcp", balancer: true}
+	tcpTLSEnv     = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: true}
+	unixClearEnv  = env{name: "unix-clear", network: "unix", balancer: true}
+	unixTLSEnv    = env{name: "unix-tls", network: "unix", security: "tls", balancer: true}
+	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: true}
+	noBalancerEnv = env{name: "no-balancer", network: "tcp", security: "tls", balancer: false}
+	allEnv        = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv, noBalancerEnv}
 )
 
 var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', 'unix-tls', or 'handler-tls' to only run the tests for that environment. Empty means all.")
@@ -369,7 +371,6 @@ type test struct {
 	serverCompression bool
 	unaryInt          grpc.UnaryServerInterceptor
 	streamInt         grpc.StreamServerInterceptor
-	balancer          grpc.Balancer
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -405,8 +406,6 @@ func newTest(t *testing.T, e env) *test {
 		maxStream: math.MaxUint32,
 	}
 	te.ctx, te.cancel = context.WithCancel(context.Background())
-	// Install roundrobin balancer by default.
-	te.balancer = grpc.RoundRobin(nil)
 	return te
 }
 
@@ -505,8 +504,8 @@ func (te *test) clientConn() *grpc.ClientConn {
 	default:
 		opts = append(opts, grpc.WithInsecure())
 	}
-	if te.balancer != nil {
-		opts = append(opts, grpc.WithBalancer(te.balancer))
+	if te.e.balancer {
+		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -2296,7 +2295,7 @@ func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
 }
 
 func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
-	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
 	te.startServer(&testServer{security: "clientAlwaysFailCred"})
 	defer te.tearDown()
 
@@ -2312,7 +2311,7 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 }
 
 func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
-	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
 	te.startServer(&testServer{security: "clientAlwaysFailCred"})
 	defer te.tearDown()
 
@@ -2324,9 +2323,7 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 }
 
 func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
-	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
-	// Uninstall balancer.
-	te.balancer = nil
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
 	te.startServer(&testServer{security: "clientAlwaysFailCred"})
 	defer te.tearDown()
 
@@ -2338,9 +2335,7 @@ func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 }
 
 func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
-	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred"})
-	// Uninstall balancer.
-	te.balancer = nil
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
 	te.startServer(&testServer{security: "clientAlwaysFailCred"})
 	defer te.tearDown()
 
