@@ -769,29 +769,3 @@ func TestIsReservedHeader(t *testing.T) {
 		}
 	}
 }
-
-func TestGrpcMessageEncode(t *testing.T) {
-	testGrpcMessageEncode(t, "my favorite character is \u0000", "my favorite character is %00")
-	testGrpcMessageEncode(t, "my favorite character is %", "my favorite character is %25")
-}
-
-func TestGrpcMessageDecode(t *testing.T) {
-	testGrpcMessageDecode(t, "Hello", "Hello")
-	testGrpcMessageDecode(t, "H%61o", "Hao")
-	testGrpcMessageDecode(t, "H%6", "H%6")
-	testGrpcMessageDecode(t, "%G0", "%G0")
-}
-
-func testGrpcMessageEncode(t *testing.T, input string, expected string) {
-	actual := grpcMessageEncode(input)
-	if expected != actual {
-		t.Errorf("grpcMessageEncode(%v) = %v, want %v", input, actual, expected)
-	}
-}
-
-func testGrpcMessageDecode(t *testing.T, input string, expected string) {
-	actual := grpcMessageDecode(input)
-	if expected != actual {
-		t.Errorf("grpcMessageDncode(%v) = %v, want %v", input, actual, expected)
-	}
-}

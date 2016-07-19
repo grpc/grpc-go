@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -286,6 +287,80 @@ func timeoutDecode(s string) (time.Duration, error) {
 		return 0, err
 	}
 	return d * time.Duration(t), nil
+}
+
+const (
+	spaceByte   = ' '
+	tildaByte   = '~'
+	percentByte = '%'
+)
+
+// grpcMessageEncode is used to encode status code in header field
+// "grpc-message".
+// It checks to see if each individual byte in msg is an
+// allowable byte, and then either percent encoding or passing it through.
+// When percent encoding, the byte is converted into hexadecimal notation
+// with a '%' prepended.
+func grpcMessageEncode(msg string) string {
+	if msg == "" {
+		return ""
+	}
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
+			return grpcMessageEncodeUnchecked(msg)
+		}
+	}
+	return msg
+}
+
+func grpcMessageEncodeUnchecked(msg string) string {
+	var buf bytes.Buffer
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if c >= spaceByte && c < tildaByte && c != percentByte {
+			buf.WriteByte(c)
+		} else {
+			buf.WriteString(fmt.Sprintf("%%%02X", c))
+		}
+	}
+	return buf.String()
+}
+
+// grpcMessageDecode decodes the msg encoded by grpcMessageEncode.
+func grpcMessageDecode(msg string) string {
+	if msg == "" {
+		return ""
+	}
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		if msg[i] == percentByte && i+2 < lenMsg {
+			return grpcMessageDecodeUnchecked(msg)
+		}
+	}
+	return msg
+}
+
+func grpcMessageDecodeUnchecked(msg string) string {
+	var buf bytes.Buffer
+	lenMsg := len(msg)
+	for i := 0; i < lenMsg; i++ {
+		c := msg[i]
+		if c == percentByte && i+2 < lenMsg {
+			parsed, err := strconv.ParseInt(msg[i+1:i+3], 16, 8)
+			if err != nil {
+				buf.WriteByte(c)
+			} else {
+				buf.WriteByte(byte(parsed))
+				i += 2
+			}
+		} else {
+			buf.WriteByte(c)
+		}
+	}
+	return buf.String()
 }
 
 type framer struct {
