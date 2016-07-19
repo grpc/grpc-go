@@ -433,6 +433,7 @@ func TestMaxStreams(t *testing.T) {
 	}
 	done := make(chan struct{})
 	ch := make(chan int)
+	ready := make(chan struct{})
 	go func() {
 		for {
 			select {
@@ -440,6 +441,8 @@ func TestMaxStreams(t *testing.T) {
 				ch <- 0
 			case <-time.After(5 * time.Second):
 				close(done)
+				return
+			case <-ready:
 				return
 			}
 		}
@@ -467,6 +470,7 @@ func TestMaxStreams(t *testing.T) {
 		}
 		cc.mu.Unlock()
 	}
+	close(ready)
 	// Close the pending stream so that the streams quota becomes available for the next new stream.
 	ct.CloseStream(s, nil)
 	select {
@@ -690,7 +694,8 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.MaxFrame",
 	}
-	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
+	// Make the server flood the traffic to violate flow control window size of the connection.
+	for {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
 			break
