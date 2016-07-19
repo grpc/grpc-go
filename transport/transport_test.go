@@ -438,7 +438,11 @@ func TestMaxStreams(t *testing.T) {
 		for {
 			select {
 			case <-time.After(5 * time.Millisecond):
-				ch <- 0
+				select {
+				case ch <- 0:
+				case <-ready:
+					return
+				}
 			case <-time.After(5 * time.Second):
 				close(done)
 				return
