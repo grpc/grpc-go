@@ -257,7 +257,17 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		if err != nil {
 			cs.finish(err)
 		}
-		if err == nil || err == io.EOF {
+		if err == nil {
+			return
+		}
+		if err == io.EOF {
+			// Specialize the process for server streaming. SendMesg is only called
+			// once when creating the stream object. io.EOF needs to be skipped when
+			// the rpc is early finished (before the stream object is created.).
+			// TODO: It is probably better to move this into the generated code.
+			if !cs.desc.ClientStreams && cs.desc.ServerStreams {
+				err = nil
+			}
 			return
 		}
 		if _, ok := err.(transport.ConnectionError); !ok {
