@@ -71,7 +71,7 @@ public class WriteQueueTest {
   public ChannelPromise promise;
 
   private long writeCalledNanos;
-  private long flushCalledNanos = writeCalledNanos + 1;
+  private long flushCalledNanos = writeCalledNanos;
 
   /**
    * Set up for test.

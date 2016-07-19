@@ -121,6 +121,7 @@ class WriteQueue {
     try {
       QueuedCommand cmd;
       int i = 0;
+      boolean flushedOnce = false;
       while ((cmd = queue.poll()) != null) {
         channel.write(cmd, cmd.promise());
         if (++i == DEQUE_CHUNK_SIZE) {
@@ -129,10 +130,11 @@ class WriteQueue {
           // might never end as new events are continuously added to the queue, if we never
           // flushed in that case we would be guaranteed to OOM.
           channel.flush();
+          flushedOnce = true;
         }
       }
-      // Must flush at least once
-      if (i != 0) {
+      // Must flush at least once, even if there were no writes.
+      if (i != 0 || !flushedOnce) {
         channel.flush();
       }
     } finally {
