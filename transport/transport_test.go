@@ -732,7 +732,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	if _, err = ioutil.ReadAll(s); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Read got err %v, want <nil>", err)
 	}
 	ct.Close()
 	server.stop()
@@ -785,13 +785,13 @@ func TestGrpcMessageDecode(t *testing.T) {
 func testGrpcMessageEncode(t *testing.T, input string, expected string) {
 	actual := grpcMessageEncode(input)
 	if expected != actual {
-		t.Errorf("Expected %s from grpcMessageEncode, got %s", expected, actual)
+		t.Errorf("grpcMessageEncode(%v) = %v, want %v", input, actual, expected)
 	}
 }
 
 func testGrpcMessageDecode(t *testing.T, input string, expected string) {
 	actual := grpcMessageDecode(input)
 	if expected != actual {
-		t.Errorf("Expected %s from grpcMessageDecode, got %s", expected, actual)
+		t.Errorf("grpcMessageDncode(%v) = %v, want %v", input, actual, expected)
 	}
 }

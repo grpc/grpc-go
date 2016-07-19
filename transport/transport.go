@@ -566,8 +566,12 @@ const (
 	percentByte = '%'
 )
 
-// grpcMessageEncode encodes the grpc-message field in the same
-// manner as https://github.com/grpc/grpc-java/pull/1517.
+// grpcMessageEncode is used to encode status code in header field
+// "grpc-message".
+// It checks to see if each individual byte in msg is an
+// allowable byte, and then either percent encoding or passing it through.
+// When percent encoding, the byte is converted into hexadecimal notation
+// with a '%' prepended.
 func grpcMessageEncode(msg string) string {
 	if msg == "" {
 		return ""
@@ -596,8 +600,7 @@ func grpcMessageEncodeUnchecked(msg string) string {
 	return buf.String()
 }
 
-// grpcMessageDecode decodes the grpc-message field in the same
-// manner as https://github.com/grpc/grpc-java/pull/1517.
+// grpcMessageDecode decodes the msg encoded by grpcMessageEncode.
 func grpcMessageDecode(msg string) string {
 	if msg == "" {
 		return ""
