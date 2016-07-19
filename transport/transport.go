@@ -53,6 +53,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+var (
+	ErrDrain = ConnectionErrorf("transport: Server stopped accepting new RPCs")
+)
+
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
@@ -120,10 +124,11 @@ func (b *recvBuffer) get() <-chan item {
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
-	ctx  context.Context
-	recv *recvBuffer
-	last *bytes.Reader // Stores the remaining data in the previous calls.
-	err  error
+	ctx    context.Context
+	goAway chan struct{}
+	recv   *recvBuffer
+	last   *bytes.Reader // Stores the remaining data in the previous calls.
+	err    error
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -141,6 +146,8 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-r.ctx.Done():
 		return 0, ContextErr(r.ctx.Err())
+	case <-r.goAway:
+		return 0, ErrConnDrain
 	case i := <-r.recv.get():
 		r.recv.load()
 		m := i.(*recvMsg)
@@ -171,6 +178,8 @@ type Stream struct {
 	cancel context.CancelFunc
 	// done is closed when the final status arrives.
 	done chan struct{}
+	// goAway
+	goAway chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
 	recvCompress string
@@ -218,6 +227,10 @@ func (s *Stream) SetSendCompress(str string) {
 
 func (s *Stream) Done() <-chan struct{} {
 	return s.done
+}
+
+func (s *Stream) GoAway() <-chan struct{} {
+	return s.goAway
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -422,7 +435,18 @@ type ClientTransport interface {
 	// this in order to take action (e.g., close the current transport
 	// and create a new one) in error case. It should not return nil
 	// once the transport is initiated.
-	Error() <-chan struct{}
+	//Error() <-chan struct{}
+
+	// Done returns a channel that is closed when some I/O error
+	// happens or ClientTranspor receives the draining signal from the server
+	// (e.g., GOAWAY frame in HTTP/2). Typically the caller should have
+	// a goroutine to monitor this in order to take action (e.g., close
+	// the current transport and create a new one) in error case. It should
+	// not return nil once the transport is initiated.
+	Done() <-chan struct{}
+
+	// Err returns ...
+	Err() error
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -482,7 +506,10 @@ func (e ConnectionError) Error() string {
 }
 
 // ErrConnClosing indicates that the transport is closing.
-var ErrConnClosing = ConnectionError{Desc: "transport is closing"}
+var (
+	ErrConnClosing = ConnectionError{Desc: "transport is closing"}
+	ErrConnDrain   = ConnectionError{Desc: "transport is being drained"}
+)
 
 // StreamError is an error that only affects one stream within a connection.
 type StreamError struct {
@@ -509,9 +536,10 @@ func ContextErr(err error) StreamError {
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
 // If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
 // it return the StreamError for ctx.Err.
+// If it receives from goAway, it returns 0, ErrConnDrain.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
-func wait(ctx context.Context, done, closing <-chan struct{}, proceed <-chan int) (int, error) {
+func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
@@ -523,6 +551,8 @@ func wait(ctx context.Context, done, closing <-chan struct{}, proceed <-chan int
 		default:
 		}
 		return 0, io.EOF
+	case <-goAway:
+		return 0, ErrConnDrain
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:
