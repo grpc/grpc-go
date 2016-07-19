@@ -84,12 +84,9 @@ type ClientStream interface {
 	// Header returns the header metadata received from the server if there
 	// is any. It blocks if the metadata is not ready to read.
 	Header() (metadata.MD, error)
-	// Trailer returns the trailer metadata from the server. It must be called
-	// after stream.Recv() returns non-nil error (including io.EOF) for
-	// bi-directional streaming and server streaming or stream.CloseAndRecv()
-	// returns for client streaming in order to receive trailer metadata if
-	// present. Otherwise, it could returns an empty MD even though trailer
-	// is present.
+	// Trailer returns the trailer metadata from the server, if there is any.
+	// It must only be called after stream.CloseAndRecv has returned, or
+	// stream.Recv has returned a non-nil error (including io.EOF).
 	Trailer() metadata.MD
 	// CloseSend closes the send direction of the stream. It closes the stream
 	// when non-nil error is met.
