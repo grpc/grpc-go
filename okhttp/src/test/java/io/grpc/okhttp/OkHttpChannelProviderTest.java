@@ -41,8 +41,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.util.ServiceLoader;
-
 /** Unit tests for {@link OkHttpChannelProvider}. */
 @RunWith(JUnit4.class)
 public class OkHttpChannelProviderTest {
@@ -50,12 +48,24 @@ public class OkHttpChannelProviderTest {
 
   @Test
   public void provided() {
-    for (ManagedChannelProvider current : ServiceLoader.load(ManagedChannelProvider.class)) {
+    for (ManagedChannelProvider current
+        : ManagedChannelProvider.getCandidatesViaServiceLoader(getClass().getClassLoader())) {
       if (current instanceof OkHttpChannelProvider) {
         return;
       }
     }
     fail("ServiceLoader unable to load OkHttpChannelProvider");
+  }
+
+  @Test
+  public void providedHardCoded() {
+    for (ManagedChannelProvider current
+        : ManagedChannelProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
+      if (current instanceof OkHttpChannelProvider) {
+        return;
+      }
+    }
+    fail("Hard coded unable to load OkHttpChannelProvider");
   }
 
   @Test

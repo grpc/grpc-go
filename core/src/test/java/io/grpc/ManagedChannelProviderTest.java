@@ -31,12 +31,17 @@
 
 package io.grpc;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.ServiceConfigurationError;
 
 /** Unit tests for {@link ManagedChannelProvider}. */
 @RunWith(JUnit4.class)
@@ -60,6 +65,47 @@ public class ManagedChannelProviderTest {
     ClassLoader cl = new ReplacingClassLoader(getClass().getClassLoader(), serviceFile,
         "io/grpc/ManagedChannelProviderTest-unavailableProvider.txt");
     assertNull(ManagedChannelProvider.load(cl));
+  }
+
+  @Test
+  public void getCandidatesViaHardCoded_usesProvidedClassLoader() {
+    final RuntimeException toThrow = new RuntimeException();
+    try {
+      ManagedChannelProvider.getCandidatesViaHardCoded(new ClassLoader() {
+        @Override
+        public Class<?> loadClass(String name) {
+          throw toThrow;
+        }
+      });
+      fail("Expected exception");
+    } catch (RuntimeException ex) {
+      assertSame(toThrow, ex);
+    }
+  }
+
+  @Test
+  public void getCandidatesViaHardCoded_ignoresMissingClasses() {
+    Iterable<ManagedChannelProvider> i =
+        ManagedChannelProvider.getCandidatesViaHardCoded(new ClassLoader() {
+          @Override
+          public Class<?> loadClass(String name) throws ClassNotFoundException {
+            throw new ClassNotFoundException();
+          }
+        });
+    assertFalse("Iterator should be empty", i.iterator().hasNext());
+  }
+
+  @Test
+  public void create_throwsErrorOnMisconfiguration() throws Exception {
+    class PrivateClass {}
+
+    try {
+      ManagedChannelProvider.create(PrivateClass.class);
+      fail("Expected exception");
+    } catch (ServiceConfigurationError e) {
+      assertTrue("Expected ClassCastException cause: " + e.getCause(),
+          e.getCause() instanceof ClassCastException);
+    }
   }
 
   private static class BaseProvider extends ManagedChannelProvider {

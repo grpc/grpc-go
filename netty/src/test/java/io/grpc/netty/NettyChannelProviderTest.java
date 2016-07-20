@@ -34,6 +34,7 @@ package io.grpc.netty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import io.grpc.ManagedChannelProvider;
 
@@ -48,7 +49,24 @@ public class NettyChannelProviderTest {
 
   @Test
   public void provided() {
-    assertSame(NettyChannelProvider.class, ManagedChannelProvider.provider().getClass());
+    for (ManagedChannelProvider current
+        : ManagedChannelProvider.getCandidatesViaServiceLoader(getClass().getClassLoader())) {
+      if (current instanceof NettyChannelProvider) {
+        return;
+      }
+    }
+    fail("ServiceLoader unable to load NettyChannelProvider");
+  }
+
+  @Test
+  public void providedHardCoded() {
+    for (ManagedChannelProvider current
+        : ManagedChannelProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
+      if (current instanceof NettyChannelProvider) {
+        return;
+      }
+    }
+    fail("Hard coded unable to load NettyChannelProvider");
   }
 
   @Test

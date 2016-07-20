@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 
 /**
@@ -53,10 +54,14 @@ public abstract class ManagedChannelProvider {
 
   @VisibleForTesting
   static ManagedChannelProvider load(ClassLoader classLoader) {
-    ServiceLoader<ManagedChannelProvider> providers
-        = ServiceLoader.load(ManagedChannelProvider.class, classLoader);
+    Iterable<ManagedChannelProvider> candidates;
+    if (isAndroid()) {
+      candidates = getCandidatesViaHardCoded(classLoader);
+    } else {
+      candidates = getCandidatesViaServiceLoader(classLoader);
+    }
     List<ManagedChannelProvider> list = new ArrayList<ManagedChannelProvider>();
-    for (ManagedChannelProvider current : providers) {
+    for (ManagedChannelProvider current : candidates) {
       if (!current.isAvailable()) {
         continue;
       }
@@ -71,6 +76,44 @@ public abstract class ManagedChannelProvider {
           return f1.priority() - f2.priority();
         }
       });
+    }
+  }
+
+  @VisibleForTesting
+  public static Iterable<ManagedChannelProvider> getCandidatesViaServiceLoader(
+      ClassLoader classLoader) {
+    return ServiceLoader.load(ManagedChannelProvider.class, classLoader);
+  }
+
+  /**
+   * Load providers from a hard-coded list. This avoids using getResource(), which has performance
+   * problems on Android (see https://github.com/grpc/grpc-java/issues/2037). Any provider that may
+   * be used on Android is free to be added here.
+   */
+  @VisibleForTesting
+  public static Iterable<ManagedChannelProvider> getCandidatesViaHardCoded(
+      ClassLoader classLoader) {
+    List<ManagedChannelProvider> list = new ArrayList<ManagedChannelProvider>();
+    try {
+      list.add(create(Class.forName("io.grpc.okhttp.OkHttpChannelProvider", true, classLoader)));
+    } catch (ClassNotFoundException ex) {
+      // ignore
+    }
+    try {
+      list.add(create(Class.forName("io.grpc.netty.NettyChannelProvider", true, classLoader)));
+    } catch (ClassNotFoundException ex) {
+      // ignore
+    }
+    return list;
+  }
+
+  @VisibleForTesting
+  static ManagedChannelProvider create(Class<?> rawClass) {
+    try {
+      return rawClass.asSubclass(ManagedChannelProvider.class).newInstance();
+    } catch (Throwable t) {
+      throw new ServiceConfigurationError(
+          "Provider " + rawClass.getName() + " could not be instantiated: " + t, t);
     }
   }
 

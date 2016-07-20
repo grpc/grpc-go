@@ -52,7 +52,19 @@ public class DnsNameResolverProviderTest {
 
   @Test
   public void provided() {
-    for (NameResolverProvider current : NameResolverProvider.providers()) {
+    for (NameResolverProvider current
+        : NameResolverProvider.getCandidatesViaServiceLoader(getClass().getClassLoader())) {
+      if (current instanceof DnsNameResolverProvider) {
+        return;
+      }
+    }
+    fail("DnsNameResolverProvider not registered");
+  }
+
+  @Test
+  public void providedHardCoded() {
+    for (NameResolverProvider current
+        : NameResolverProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
       if (current instanceof DnsNameResolverProvider) {
         return;
       }

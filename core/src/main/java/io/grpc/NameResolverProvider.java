@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 
 /**
@@ -63,10 +64,14 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
 
   @VisibleForTesting
   static List<NameResolverProvider> load(ClassLoader classLoader) {
-    ServiceLoader<NameResolverProvider> providers
-        = ServiceLoader.load(NameResolverProvider.class, classLoader);
+    Iterable<NameResolverProvider> candidates;
+    if (isAndroid()) {
+      candidates = getCandidatesViaHardCoded(classLoader);
+    } else {
+      candidates = getCandidatesViaServiceLoader(classLoader);
+    }
     List<NameResolverProvider> list = new ArrayList<NameResolverProvider>();
-    for (NameResolverProvider current : providers) {
+    for (NameResolverProvider current : candidates) {
       if (!current.isAvailable()) {
         continue;
       }
@@ -80,6 +85,39 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
       }
     }));
     return Collections.unmodifiableList(list);
+  }
+
+  @VisibleForTesting
+  public static Iterable<NameResolverProvider> getCandidatesViaServiceLoader(
+      ClassLoader classLoader) {
+    return ServiceLoader.load(NameResolverProvider.class, classLoader);
+  }
+
+  /**
+   * Load providers from a hard-coded list. This avoids using getResource(), which has performance
+   * problems on Android (see https://github.com/grpc/grpc-java/issues/2037). Any provider that may
+   * be used on Android is free to be added here.
+   */
+  @VisibleForTesting
+  public static Iterable<NameResolverProvider> getCandidatesViaHardCoded(ClassLoader classLoader) {
+    List<NameResolverProvider> list = new ArrayList<NameResolverProvider>();
+    try {
+      list.add(create(
+          Class.forName("io.grpc.internal.DnsNameResolverProvider", true, classLoader)));
+    } catch (ClassNotFoundException ex) {
+      // ignore
+    }
+    return list;
+  }
+
+  @VisibleForTesting
+  static NameResolverProvider create(Class<?> rawClass) {
+    try {
+      return rawClass.asSubclass(NameResolverProvider.class).newInstance();
+    } catch (Throwable t) {
+      throw new ServiceConfigurationError(
+          "Provider " + rawClass.getName() + " could not be instantiated: " + t, t);
+    }
   }
 
   /**

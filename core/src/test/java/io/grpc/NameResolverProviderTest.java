@@ -32,6 +32,7 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -47,6 +48,7 @@ import org.junit.runners.JUnit4;
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
+import java.util.ServiceConfigurationError;
 
 /** Unit tests for {@link NameResolverProvider}. */
 @RunWith(JUnit4.class)
@@ -132,6 +134,47 @@ public class NameResolverProviderTest {
     assertEquals(1, providers.size());
     assertSame(DnsNameResolverProvider.class, providers.get(0).getClass());
     assertEquals("dns", NameResolverProvider.asFactory().getDefaultScheme());
+  }
+
+  @Test
+  public void getCandidatesViaHardCoded_usesProvidedClassLoader() {
+    final RuntimeException toThrow = new RuntimeException();
+    try {
+      NameResolverProvider.getCandidatesViaHardCoded(new ClassLoader() {
+        @Override
+        public Class<?> loadClass(String name) {
+          throw toThrow;
+        }
+      });
+      fail("Expected exception");
+    } catch (RuntimeException ex) {
+      assertSame(toThrow, ex);
+    }
+  }
+
+  @Test
+  public void getCandidatesViaHardCoded_ignoresMissingClasses() {
+    Iterable<NameResolverProvider> i =
+        NameResolverProvider.getCandidatesViaHardCoded(new ClassLoader() {
+          @Override
+          public Class<?> loadClass(String name) throws ClassNotFoundException {
+            throw new ClassNotFoundException();
+          }
+        });
+    assertFalse("Iterator should be empty", i.iterator().hasNext());
+  }
+
+  @Test
+  public void create_throwsErrorOnMisconfiguration() throws Exception {
+    class PrivateClass {}
+
+    try {
+      NameResolverProvider.create(PrivateClass.class);
+      fail("Expected exception");
+    } catch (ServiceConfigurationError e) {
+      assertTrue("Expected ClassCastException cause: " + e.getCause(),
+          e.getCause() instanceof ClassCastException);
+    }
   }
 
   private static class BaseProvider extends NameResolverProvider {
