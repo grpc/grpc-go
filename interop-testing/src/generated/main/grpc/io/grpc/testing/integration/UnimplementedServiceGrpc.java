@@ -70,28 +70,28 @@ public class UnimplementedServiceGrpc {
    * that case.
    * </pre>
    */
-  @java.lang.Deprecated public static interface UnimplementedService {
+  public static abstract class UnimplementedServiceImplBase implements io.grpc.BindableService {
 
     /**
      * <pre>
      * A call that no server should implement
      * </pre>
      */
-    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
-  }
-
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class UnimplementedServiceImplBase implements UnimplementedService, io.grpc.BindableService {
-
-    @java.lang.Override
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnimplementedUnaryCall(METHOD_UNIMPLEMENTED_CALL, responseObserver);
     }
 
     @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
-      return UnimplementedServiceGrpc.bindService(this);
+      return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+          .addMethod(
+            METHOD_UNIMPLEMENTED_CALL,
+            asyncUnaryCall(
+              new MethodHandlers<
+                com.google.protobuf.EmptyProtos.Empty,
+                com.google.protobuf.EmptyProtos.Empty>(
+                  this, METHODID_UNIMPLEMENTED_CALL)))
+          .build();
     }
   }
 
@@ -101,35 +101,7 @@ public class UnimplementedServiceGrpc {
    * that case.
    * </pre>
    */
-  @java.lang.Deprecated public static interface UnimplementedServiceBlockingClient {
-
-    /**
-     * <pre>
-     * A call that no server should implement
-     * </pre>
-     */
-    public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request);
-  }
-
-  /**
-   * <pre>
-   * A simple service NOT implemented at servers so clients can test for
-   * that case.
-   * </pre>
-   */
-  @java.lang.Deprecated public static interface UnimplementedServiceFutureClient {
-
-    /**
-     * <pre>
-     * A call that no server should implement
-     * </pre>
-     */
-    public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
-        com.google.protobuf.EmptyProtos.Empty request);
-  }
-
-  public static class UnimplementedServiceStub extends io.grpc.stub.AbstractStub<UnimplementedServiceStub>
-      implements UnimplementedService {
+  public static class UnimplementedServiceStub extends io.grpc.stub.AbstractStub<UnimplementedServiceStub> {
     private UnimplementedServiceStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -145,7 +117,11 @@ public class UnimplementedServiceGrpc {
       return new UnimplementedServiceStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
@@ -153,8 +129,13 @@ public class UnimplementedServiceGrpc {
     }
   }
 
-  public static class UnimplementedServiceBlockingStub extends io.grpc.stub.AbstractStub<UnimplementedServiceBlockingStub>
-      implements UnimplementedServiceBlockingClient {
+  /**
+   * <pre>
+   * A simple service NOT implemented at servers so clients can test for
+   * that case.
+   * </pre>
+   */
+  public static class UnimplementedServiceBlockingStub extends io.grpc.stub.AbstractStub<UnimplementedServiceBlockingStub> {
     private UnimplementedServiceBlockingStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -170,15 +151,24 @@ public class UnimplementedServiceGrpc {
       return new UnimplementedServiceBlockingStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
           getChannel(), METHOD_UNIMPLEMENTED_CALL, getCallOptions(), request);
     }
   }
 
-  public static class UnimplementedServiceFutureStub extends io.grpc.stub.AbstractStub<UnimplementedServiceFutureStub>
-      implements UnimplementedServiceFutureClient {
+  /**
+   * <pre>
+   * A simple service NOT implemented at servers so clients can test for
+   * that case.
+   * </pre>
+   */
+  public static class UnimplementedServiceFutureStub extends io.grpc.stub.AbstractStub<UnimplementedServiceFutureStub> {
     private UnimplementedServiceFutureStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -194,15 +184,17 @@ public class UnimplementedServiceGrpc {
       return new UnimplementedServiceFutureStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A call that no server should implement
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
     }
   }
-
-  @java.lang.Deprecated public static abstract class AbstractUnimplementedService extends UnimplementedServiceImplBase {}
 
   private static final int METHODID_UNIMPLEMENTED_CALL = 0;
 
@@ -211,10 +203,10 @@ public class UnimplementedServiceGrpc {
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
-    private final UnimplementedService serviceImpl;
+    private final UnimplementedServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(UnimplementedService serviceImpl, int methodId) {
+    public MethodHandlers(UnimplementedServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }
@@ -248,16 +240,4 @@ public class UnimplementedServiceGrpc {
         METHOD_UNIMPLEMENTED_CALL);
   }
 
-  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
-      final UnimplementedService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
-        .addMethod(
-          METHOD_UNIMPLEMENTED_CALL,
-          asyncUnaryCall(
-            new MethodHandlers<
-              com.google.protobuf.EmptyProtos.Empty,
-              com.google.protobuf.EmptyProtos.Empty>(
-                serviceImpl, METHODID_UNIMPLEMENTED_CALL)))
-        .build();
-  }
 }

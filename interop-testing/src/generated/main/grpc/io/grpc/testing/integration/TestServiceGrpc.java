@@ -115,7 +115,7 @@ public class TestServiceGrpc {
    * performance with various types of payload.
    * </pre>
    */
-  @java.lang.Deprecated public static interface TestService {
+  public static abstract class TestServiceImplBase implements io.grpc.BindableService {
 
     /**
      * <pre>
@@ -123,7 +123,9 @@ public class TestServiceGrpc {
      * </pre>
      */
     public void emptyCall(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
+        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_EMPTY_CALL, responseObserver);
+    }
 
     /**
      * <pre>
@@ -131,7 +133,9 @@ public class TestServiceGrpc {
      * </pre>
      */
     public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver);
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
+    }
 
     /**
      * <pre>
@@ -140,7 +144,9 @@ public class TestServiceGrpc {
      * </pre>
      */
     public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_STREAMING_OUTPUT_CALL, responseObserver);
+    }
 
     /**
      * <pre>
@@ -149,7 +155,9 @@ public class TestServiceGrpc {
      * </pre>
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver);
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_STREAMING_INPUT_CALL, responseObserver);
+    }
 
     /**
      * <pre>
@@ -159,7 +167,9 @@ public class TestServiceGrpc {
      * </pre>
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
+      return asyncUnimplementedStreamingCall(METHOD_FULL_DUPLEX_CALL, responseObserver);
+    }
 
     /**
      * <pre>
@@ -170,50 +180,55 @@ public class TestServiceGrpc {
      * </pre>
      */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver);
-  }
-
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class TestServiceImplBase implements TestService, io.grpc.BindableService {
-
-    @java.lang.Override
-    public void emptyCall(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
-      asyncUnimplementedUnaryCall(METHOD_EMPTY_CALL, responseObserver);
-    }
-
-    @java.lang.Override
-    public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
-    }
-
-    @java.lang.Override
-    public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(METHOD_STREAMING_OUTPUT_CALL, responseObserver);
-    }
-
-    @java.lang.Override
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(METHOD_STREAMING_INPUT_CALL, responseObserver);
-    }
-
-    @java.lang.Override
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
-      return asyncUnimplementedStreamingCall(METHOD_FULL_DUPLEX_CALL, responseObserver);
-    }
-
-    @java.lang.Override
-    public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       return asyncUnimplementedStreamingCall(METHOD_HALF_DUPLEX_CALL, responseObserver);
     }
 
     @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
-      return TestServiceGrpc.bindService(this);
+      return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+          .addMethod(
+            METHOD_EMPTY_CALL,
+            asyncUnaryCall(
+              new MethodHandlers<
+                com.google.protobuf.EmptyProtos.Empty,
+                com.google.protobuf.EmptyProtos.Empty>(
+                  this, METHODID_EMPTY_CALL)))
+          .addMethod(
+            METHOD_UNARY_CALL,
+            asyncUnaryCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.SimpleRequest,
+                io.grpc.testing.integration.Messages.SimpleResponse>(
+                  this, METHODID_UNARY_CALL)))
+          .addMethod(
+            METHOD_STREAMING_OUTPUT_CALL,
+            asyncServerStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
+                  this, METHODID_STREAMING_OUTPUT_CALL)))
+          .addMethod(
+            METHOD_STREAMING_INPUT_CALL,
+            asyncClientStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.StreamingInputCallRequest,
+                io.grpc.testing.integration.Messages.StreamingInputCallResponse>(
+                  this, METHODID_STREAMING_INPUT_CALL)))
+          .addMethod(
+            METHOD_FULL_DUPLEX_CALL,
+            asyncBidiStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
+                  this, METHODID_FULL_DUPLEX_CALL)))
+          .addMethod(
+            METHOD_HALF_DUPLEX_CALL,
+            asyncBidiStreamingCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
+                io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
+                  this, METHODID_HALF_DUPLEX_CALL)))
+          .build();
     }
   }
 
@@ -223,59 +238,7 @@ public class TestServiceGrpc {
    * performance with various types of payload.
    * </pre>
    */
-  @java.lang.Deprecated public static interface TestServiceBlockingClient {
-
-    /**
-     * <pre>
-     * One empty request followed by one empty response.
-     * </pre>
-     */
-    public com.google.protobuf.EmptyProtos.Empty emptyCall(com.google.protobuf.EmptyProtos.Empty request);
-
-    /**
-     * <pre>
-     * One request followed by one response.
-     * </pre>
-     */
-    public io.grpc.testing.integration.Messages.SimpleResponse unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request);
-
-    /**
-     * <pre>
-     * One request followed by a sequence of responses (streamed download).
-     * The server returns the payload with client desired type and sizes.
-     * </pre>
-     */
-    public java.util.Iterator<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> streamingOutputCall(
-        io.grpc.testing.integration.Messages.StreamingOutputCallRequest request);
-  }
-
-  /**
-   * <pre>
-   * A simple service to test the various types of RPCs and experiment with
-   * performance with various types of payload.
-   * </pre>
-   */
-  @java.lang.Deprecated public static interface TestServiceFutureClient {
-
-    /**
-     * <pre>
-     * One empty request followed by one empty response.
-     * </pre>
-     */
-    public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> emptyCall(
-        com.google.protobuf.EmptyProtos.Empty request);
-
-    /**
-     * <pre>
-     * One request followed by one response.
-     * </pre>
-     */
-    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> unaryCall(
-        io.grpc.testing.integration.Messages.SimpleRequest request);
-  }
-
-  public static class TestServiceStub extends io.grpc.stub.AbstractStub<TestServiceStub>
-      implements TestService {
+  public static class TestServiceStub extends io.grpc.stub.AbstractStub<TestServiceStub> {
     private TestServiceStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -291,42 +254,73 @@ public class TestServiceGrpc {
       return new TestServiceStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public void emptyCall(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(METHOD_EMPTY_CALL, getCallOptions()), request, responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public void unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request, responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One request followed by a sequence of responses (streamed download).
+     * The server returns the payload with client desired type and sizes.
+     * </pre>
+     */
     public void streamingOutputCall(io.grpc.testing.integration.Messages.StreamingOutputCallRequest request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       asyncServerStreamingCall(
           getChannel().newCall(METHOD_STREAMING_OUTPUT_CALL, getCallOptions()), request, responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A sequence of requests followed by one response (streamed upload).
+     * The server returns the aggregated size of client payload as the result.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallRequest> streamingInputCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingInputCallResponse> responseObserver) {
       return asyncClientStreamingCall(
           getChannel().newCall(METHOD_STREAMING_INPUT_CALL, getCallOptions()), responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A sequence of requests with each request served by the server immediately.
+     * As one request could lead to multiple responses, this interface
+     * demonstrates the idea of full duplexing.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> fullDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
           getChannel().newCall(METHOD_FULL_DUPLEX_CALL, getCallOptions()), responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * A sequence of requests followed by a sequence of responses.
+     * The server buffers all the client requests and then serves them in order. A
+     * stream of responses are returned to the client when the server starts with
+     * first request.
+     * </pre>
+     */
     public io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallRequest> halfDuplexCall(
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> responseObserver) {
       return asyncBidiStreamingCall(
@@ -334,8 +328,13 @@ public class TestServiceGrpc {
     }
   }
 
-  public static class TestServiceBlockingStub extends io.grpc.stub.AbstractStub<TestServiceBlockingStub>
-      implements TestServiceBlockingClient {
+  /**
+   * <pre>
+   * A simple service to test the various types of RPCs and experiment with
+   * performance with various types of payload.
+   * </pre>
+   */
+  public static class TestServiceBlockingStub extends io.grpc.stub.AbstractStub<TestServiceBlockingStub> {
     private TestServiceBlockingStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -351,19 +350,32 @@ public class TestServiceGrpc {
       return new TestServiceBlockingStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public com.google.protobuf.EmptyProtos.Empty emptyCall(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
           getChannel(), METHOD_EMPTY_CALL, getCallOptions(), request);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public io.grpc.testing.integration.Messages.SimpleResponse unaryCall(io.grpc.testing.integration.Messages.SimpleRequest request) {
       return blockingUnaryCall(
           getChannel(), METHOD_UNARY_CALL, getCallOptions(), request);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One request followed by a sequence of responses (streamed download).
+     * The server returns the payload with client desired type and sizes.
+     * </pre>
+     */
     public java.util.Iterator<io.grpc.testing.integration.Messages.StreamingOutputCallResponse> streamingOutputCall(
         io.grpc.testing.integration.Messages.StreamingOutputCallRequest request) {
       return blockingServerStreamingCall(
@@ -371,8 +383,13 @@ public class TestServiceGrpc {
     }
   }
 
-  public static class TestServiceFutureStub extends io.grpc.stub.AbstractStub<TestServiceFutureStub>
-      implements TestServiceFutureClient {
+  /**
+   * <pre>
+   * A simple service to test the various types of RPCs and experiment with
+   * performance with various types of payload.
+   * </pre>
+   */
+  public static class TestServiceFutureStub extends io.grpc.stub.AbstractStub<TestServiceFutureStub> {
     private TestServiceFutureStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -388,22 +405,28 @@ public class TestServiceGrpc {
       return new TestServiceFutureStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One empty request followed by one empty response.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> emptyCall(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_EMPTY_CALL, getCallOptions()), request);
     }
 
-    @java.lang.Override
+    /**
+     * <pre>
+     * One request followed by one response.
+     * </pre>
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> unaryCall(
         io.grpc.testing.integration.Messages.SimpleRequest request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
     }
   }
-
-  @java.lang.Deprecated public static abstract class AbstractTestService extends TestServiceImplBase {}
 
   private static final int METHODID_EMPTY_CALL = 0;
   private static final int METHODID_UNARY_CALL = 1;
@@ -417,10 +440,10 @@ public class TestServiceGrpc {
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
-    private final TestService serviceImpl;
+    private final TestServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(TestService serviceImpl, int methodId) {
+    public MethodHandlers(TestServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }
@@ -476,51 +499,4 @@ public class TestServiceGrpc {
         METHOD_HALF_DUPLEX_CALL);
   }
 
-  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
-      final TestService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
-        .addMethod(
-          METHOD_EMPTY_CALL,
-          asyncUnaryCall(
-            new MethodHandlers<
-              com.google.protobuf.EmptyProtos.Empty,
-              com.google.protobuf.EmptyProtos.Empty>(
-                serviceImpl, METHODID_EMPTY_CALL)))
-        .addMethod(
-          METHOD_UNARY_CALL,
-          asyncUnaryCall(
-            new MethodHandlers<
-              io.grpc.testing.integration.Messages.SimpleRequest,
-              io.grpc.testing.integration.Messages.SimpleResponse>(
-                serviceImpl, METHODID_UNARY_CALL)))
-        .addMethod(
-          METHOD_STREAMING_OUTPUT_CALL,
-          asyncServerStreamingCall(
-            new MethodHandlers<
-              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
-                serviceImpl, METHODID_STREAMING_OUTPUT_CALL)))
-        .addMethod(
-          METHOD_STREAMING_INPUT_CALL,
-          asyncClientStreamingCall(
-            new MethodHandlers<
-              io.grpc.testing.integration.Messages.StreamingInputCallRequest,
-              io.grpc.testing.integration.Messages.StreamingInputCallResponse>(
-                serviceImpl, METHODID_STREAMING_INPUT_CALL)))
-        .addMethod(
-          METHOD_FULL_DUPLEX_CALL,
-          asyncBidiStreamingCall(
-            new MethodHandlers<
-              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
-                serviceImpl, METHODID_FULL_DUPLEX_CALL)))
-        .addMethod(
-          METHOD_HALF_DUPLEX_CALL,
-          asyncBidiStreamingCall(
-            new MethodHandlers<
-              io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
-              io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
-                serviceImpl, METHODID_HALF_DUPLEX_CALL)))
-        .build();
-  }
 }

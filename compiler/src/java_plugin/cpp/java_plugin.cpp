@@ -37,11 +37,16 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
 
     java_grpc_generator::ProtoFlavor flavor =
         java_grpc_generator::ProtoFlavor::NORMAL;
+
+    // TODO(zdapeng): turn the default value to false
+    bool enable_deprecated = true;
     for (int i = 0; i < options.size(); i++) {
       if (options[i].first == "nano") {
         flavor = java_grpc_generator::ProtoFlavor::NANO;
       } else if (options[i].first == "lite") {
         flavor = java_grpc_generator::ProtoFlavor::LITE;
+      } else if (options[i].first == "enable_deprecated") {
+        enable_deprecated = options[i].second == "true";
       }
     }
 
@@ -54,7 +59,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
           + java_grpc_generator::ServiceClassName(service) + ".java";
       std::unique_ptr<google::protobuf::io::ZeroCopyOutputStream> output(
           context->Open(filename));
-      java_grpc_generator::GenerateService(service, output.get(), flavor);
+      java_grpc_generator::GenerateService(service, output.get(), flavor, enable_deprecated);
     }
     return true;
   }

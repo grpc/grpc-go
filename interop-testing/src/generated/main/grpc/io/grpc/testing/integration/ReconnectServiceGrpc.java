@@ -77,36 +77,39 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  @java.lang.Deprecated public static interface ReconnectService {
+  public static abstract class ReconnectServiceImplBase implements io.grpc.BindableService {
 
     /**
      */
-    public void start(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver);
-
-    /**
-     */
-    public void stop(com.google.protobuf.EmptyProtos.Empty request,
-        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver);
-  }
-
-  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1469")
-  public static abstract class ReconnectServiceImplBase implements ReconnectService, io.grpc.BindableService {
-
-    @java.lang.Override
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnimplementedUnaryCall(METHOD_START, responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     */
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
       asyncUnimplementedUnaryCall(METHOD_STOP, responseObserver);
     }
 
     @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
-      return ReconnectServiceGrpc.bindService(this);
+      return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
+          .addMethod(
+            METHOD_START,
+            asyncUnaryCall(
+              new MethodHandlers<
+                com.google.protobuf.EmptyProtos.Empty,
+                com.google.protobuf.EmptyProtos.Empty>(
+                  this, METHODID_START)))
+          .addMethod(
+            METHOD_STOP,
+            asyncUnaryCall(
+              new MethodHandlers<
+                com.google.protobuf.EmptyProtos.Empty,
+                io.grpc.testing.integration.Messages.ReconnectInfo>(
+                  this, METHODID_STOP)))
+          .build();
     }
   }
 
@@ -115,37 +118,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  @java.lang.Deprecated public static interface ReconnectServiceBlockingClient {
-
-    /**
-     */
-    public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request);
-
-    /**
-     */
-    public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request);
-  }
-
-  /**
-   * <pre>
-   * A service used to control reconnect server.
-   * </pre>
-   */
-  @java.lang.Deprecated public static interface ReconnectServiceFutureClient {
-
-    /**
-     */
-    public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> start(
-        com.google.protobuf.EmptyProtos.Empty request);
-
-    /**
-     */
-    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.ReconnectInfo> stop(
-        com.google.protobuf.EmptyProtos.Empty request);
-  }
-
-  public static class ReconnectServiceStub extends io.grpc.stub.AbstractStub<ReconnectServiceStub>
-      implements ReconnectService {
+  public static class ReconnectServiceStub extends io.grpc.stub.AbstractStub<ReconnectServiceStub> {
     private ReconnectServiceStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -161,14 +134,16 @@ public class ReconnectServiceGrpc {
       return new ReconnectServiceStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     */
     public void start(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(METHOD_START, getCallOptions()), request, responseObserver);
     }
 
-    @java.lang.Override
+    /**
+     */
     public void stop(com.google.protobuf.EmptyProtos.Empty request,
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.ReconnectInfo> responseObserver) {
       asyncUnaryCall(
@@ -176,8 +151,12 @@ public class ReconnectServiceGrpc {
     }
   }
 
-  public static class ReconnectServiceBlockingStub extends io.grpc.stub.AbstractStub<ReconnectServiceBlockingStub>
-      implements ReconnectServiceBlockingClient {
+  /**
+   * <pre>
+   * A service used to control reconnect server.
+   * </pre>
+   */
+  public static class ReconnectServiceBlockingStub extends io.grpc.stub.AbstractStub<ReconnectServiceBlockingStub> {
     private ReconnectServiceBlockingStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -193,21 +172,27 @@ public class ReconnectServiceGrpc {
       return new ReconnectServiceBlockingStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     */
     public com.google.protobuf.EmptyProtos.Empty start(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
           getChannel(), METHOD_START, getCallOptions(), request);
     }
 
-    @java.lang.Override
+    /**
+     */
     public io.grpc.testing.integration.Messages.ReconnectInfo stop(com.google.protobuf.EmptyProtos.Empty request) {
       return blockingUnaryCall(
           getChannel(), METHOD_STOP, getCallOptions(), request);
     }
   }
 
-  public static class ReconnectServiceFutureStub extends io.grpc.stub.AbstractStub<ReconnectServiceFutureStub>
-      implements ReconnectServiceFutureClient {
+  /**
+   * <pre>
+   * A service used to control reconnect server.
+   * </pre>
+   */
+  public static class ReconnectServiceFutureStub extends io.grpc.stub.AbstractStub<ReconnectServiceFutureStub> {
     private ReconnectServiceFutureStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -223,22 +208,22 @@ public class ReconnectServiceGrpc {
       return new ReconnectServiceFutureStub(channel, callOptions);
     }
 
-    @java.lang.Override
+    /**
+     */
     public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> start(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_START, getCallOptions()), request);
     }
 
-    @java.lang.Override
+    /**
+     */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.ReconnectInfo> stop(
         com.google.protobuf.EmptyProtos.Empty request) {
       return futureUnaryCall(
           getChannel().newCall(METHOD_STOP, getCallOptions()), request);
     }
   }
-
-  @java.lang.Deprecated public static abstract class AbstractReconnectService extends ReconnectServiceImplBase {}
 
   private static final int METHODID_START = 0;
   private static final int METHODID_STOP = 1;
@@ -248,10 +233,10 @@ public class ReconnectServiceGrpc {
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.BidiStreamingMethod<Req, Resp> {
-    private final ReconnectService serviceImpl;
+    private final ReconnectServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(ReconnectService serviceImpl, int methodId) {
+    public MethodHandlers(ReconnectServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }
@@ -290,23 +275,4 @@ public class ReconnectServiceGrpc {
         METHOD_STOP);
   }
 
-  @java.lang.Deprecated public static io.grpc.ServerServiceDefinition bindService(
-      final ReconnectService serviceImpl) {
-    return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
-        .addMethod(
-          METHOD_START,
-          asyncUnaryCall(
-            new MethodHandlers<
-              com.google.protobuf.EmptyProtos.Empty,
-              com.google.protobuf.EmptyProtos.Empty>(
-                serviceImpl, METHODID_START)))
-        .addMethod(
-          METHOD_STOP,
-          asyncUnaryCall(
-            new MethodHandlers<
-              com.google.protobuf.EmptyProtos.Empty,
-              io.grpc.testing.integration.Messages.ReconnectInfo>(
-                serviceImpl, METHODID_STOP)))
-        .build();
-  }
 }

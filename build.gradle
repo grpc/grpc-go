@@ -95,7 +95,11 @@ subprojects {
                   // it's possible the version of protoc has been changed.
                   task.inputs.file "${rootProject.projectDir}/build.gradle"
                   task.plugins {
-                    grpc {}
+                    grpc {
+                      // To generate deprecated interfaces and static bindService method,
+                      // turn the enable_deprecated option to true below:
+                      option 'enable_deprecated=false'
+                    }
                   }
                 }
               }
