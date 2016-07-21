@@ -71,7 +71,8 @@ type http2Client struct {
 	shutdownChan chan struct{}
 	// errorChan is closed to notify the I/O error to the caller.
 	errorChan chan struct{}
-	err       error
+	//err       error
+	goAway chan struct{}
 
 	framer *framer
 	hBuf   *bytes.Buffer  // the buffer for HPACK encoding
@@ -149,6 +150,7 @@ func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err e
 		writableChan:    make(chan int, 1),
 		shutdownChan:    make(chan struct{}),
 		errorChan:       make(chan struct{}),
+		goAway:          make(chan struct{}),
 		framer:          newFramer(conn),
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
@@ -408,13 +410,13 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	if t.streamsQuota != nil {
 		updateStreams = true
 	}
-	if t.state == draining && len(t.activeStreams) == 1 {
+	delete(t.activeStreams, s.id)
+	if t.state == draining && len(t.activeStreams) == 0 {
 		// The transport is draining and s is the last live stream on t.
 		t.mu.Unlock()
 		t.Close()
 		return
 	}
-	delete(t.activeStreams, s.id)
 	t.mu.Unlock()
 	if updateStreams {
 		t.streamsQuota.add(1)
@@ -485,10 +487,14 @@ func (t *http2Client) GracefulClose() error {
 	}
 	t.state = draining
 	// Notify the streams which were initiated after the server sent GOAWAY.
-	for i := t.goAwayID + 2; i < t.nextID; i += 2 {
-		if s, ok := t.activeStreams[i]; ok {
-			close(s.goAway)
+	select {
+	case <-t.goAway:
+		for i := t.goAwayID + 2; i < t.nextID; i += 2 {
+			if s, ok := t.activeStreams[i]; ok {
+				close(s.goAway)
+			}
 		}
+	default:
 	}
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -736,8 +742,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
 	if t.state == reachable {
 		t.goAwayID = f.LastStreamID
-		t.err = ErrConnDrain
-		close(t.errorChan)
+		close(t.goAway)
 	}
 	t.mu.Unlock()
 }
@@ -944,13 +949,17 @@ func (t *http2Client) controller() {
 	}
 }
 
-func (t *http2Client) Done() <-chan struct{} {
+func (t *http2Client) Error() <-chan struct{} {
 	return t.errorChan
 }
 
-func (t *http2Client) Err() error {
-	return t.err
+func (t *http2Client) GoAway() <-chan struct{} {
+	return t.goAway
 }
+
+//func (t *http2Client) Err() error {
+//	return t.err
+//}
 
 func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()

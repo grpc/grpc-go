@@ -184,7 +184,7 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	// when there is no pending I/O operations on this stream.
 	go func() {
 		select {
-		case <-t.Done():
+		case <-t.Error():
 			// Incur transport error, simply exit.
 		case <-s.Done():
 			// TODO: The trace of the RPC is terminated here when there is no pending

@@ -737,6 +737,9 @@ func (t *http2Server) Close() (err error) {
 func (t *http2Server) closeStream(s *Stream) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
+	if t.state == draining && len(t.activeStreams) == 0 {
+		defer t.Close()
+	}
 	t.mu.Unlock()
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be

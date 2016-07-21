@@ -431,7 +431,7 @@ type ClientTransport interface {
 	// this in order to take action (e.g., close the current transport
 	// and create a new one) in error case. It should not return nil
 	// once the transport is initiated.
-	//Error() <-chan struct{}
+	Error() <-chan struct{}
 
 	// Done returns a channel that is closed when some I/O error
 	// happens or ClientTranspor receives the draining signal from the server
@@ -439,10 +439,10 @@ type ClientTransport interface {
 	// a goroutine to monitor this in order to take action (e.g., close
 	// the current transport and create a new one) in error case. It should
 	// not return nil once the transport is initiated.
-	Done() <-chan struct{}
+	GoAway() <-chan struct{}
 
 	// Err returns ...
-	Err() error
+	//Err() error
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport

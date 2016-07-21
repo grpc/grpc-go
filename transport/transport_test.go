@@ -271,8 +271,8 @@ func TestClientSendAndReceive(t *testing.T) {
 func TestClientErrorNotify(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, normal)
 	go server.stop()
-	// ct.reader should detect the error and activate ct.Done().
-	<-ct.Done()
+	// ct.reader should detect the error and activate ct.Error().
+	<-ct.Error()
 	ct.Close()
 }
 
@@ -309,7 +309,7 @@ func TestClientMix(t *testing.T) {
 		s.stop()
 	}(s)
 	go func(ct ClientTransport) {
-		<-ct.Done()
+		<-ct.Error()
 		ct.Close()
 	}(ct)
 	for i := 0; i < 1000; i++ {
@@ -709,7 +709,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 		}
 	}
 	// http2Client.errChan is closed due to connection flow control window size violation.
-	<-conn.Done()
+	<-conn.Error()
 	ct.Close()
 	server.stop()
 }

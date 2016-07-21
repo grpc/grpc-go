@@ -391,6 +391,7 @@ func (s *Server) serveNewHTTP2Transport(c net.Conn, authInfo credentials.AuthInf
 		st.Close()
 		return
 	}
+	grpclog.Println("DEBUG addConn ... ")
 	s.serveStreams(st)
 }
 
@@ -808,7 +809,6 @@ func (s *Server) GracefulStop() {
 		s.events = nil
 	}
 	s.mu.Unlock()
-
 }
 
 func init() {

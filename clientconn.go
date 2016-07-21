@@ -625,19 +625,23 @@ func (ac *addrConn) transportMonitor() {
 		// the addrConn is idle (i.e., no RPC in flight).
 		case <-ac.shutdownChan:
 			return
-		case <-t.Done():
+		case <-t.GoAway():
+			ac.tearDown(errConnDrain)
+			ac.cc.newAddrConn(ac.addr, true)
+			return
+		case <-t.Error():
 			ac.mu.Lock()
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
 				ac.mu.Unlock()
 				return
 			}
-			if t.Err() == transport.ErrConnDrain {
-				ac.mu.Unlock()
-				ac.tearDown(errConnDrain)
-				ac.cc.newAddrConn(ac.addr, true)
-				return
-			}
+			//if t.Err() == transport.ErrConnDrain {
+			//	ac.mu.Unlock()
+			//	ac.tearDown(errConnDrain)
+			//	ac.cc.newAddrConn(ac.addr, true)
+			//	return
+			//}
 			ac.state = TransientFailure
 			ac.stateCV.Broadcast()
 			ac.mu.Unlock()
