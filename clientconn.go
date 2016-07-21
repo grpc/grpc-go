@@ -635,6 +635,7 @@ func (ac *addrConn) transportMonitor() {
 			if t.Err() == transport.ErrConnDrain {
 				ac.mu.Unlock()
 				ac.tearDown(errConnDrain)
+				ac.cc.newAddrConn(ac.addr, true)
 				return
 			}
 			ac.state = TransientFailure

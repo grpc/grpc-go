@@ -196,15 +196,22 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.recvCompress = state.encoding
 	s.method = state.method
 	t.mu.Lock()
+	if t.state == draining {
+		t.mu.Unlock()
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+		return
+	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return
 	}
+
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
 		return
 	}
+
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -263,13 +270,16 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			id := frame.Header().StreamID
+			t.mu.Lock()
 			if id%2 != 1 || id <= t.maxStreamID {
+				t.mu.Unlock()
 				// illegal gRPC stream id.
 				grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", id)
 				t.Close()
 				break
 			}
 			t.maxStreamID = id
+			t.mu.Unlock()
 			t.operateHeaders(frame, handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
@@ -282,6 +292,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		case *http2.GoAwayFrame:
+			t.Close()
 			break
 		default:
 			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
@@ -675,6 +686,12 @@ func (t *http2Server) controller() {
 					}
 				case *resetStream:
 					t.framer.writeRSTStream(true, i.streamID, i.code)
+				case *goAway:
+					t.mu.Lock()
+					sid := t.maxStreamID
+					t.state = draining
+					t.mu.Unlock()
+					t.framer.writeGoAway(true, sid, http2.ErrCodeNo, nil)
 				case *flushIO:
 					t.framer.flushWrite()
 				case *ping:
@@ -741,4 +758,8 @@ func (t *http2Server) closeStream(s *Stream) {
 
 func (t *http2Server) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
+}
+
+func (t *http2Server) GoAway() {
+	t.controlBuf.put(&goAway{})
 }

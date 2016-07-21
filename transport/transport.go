@@ -53,10 +53,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var (
-	ErrDrain = ConnectionErrorf("transport: Server stopped accepting new RPCs")
-)
-
 // recvMsg represents the received msg from the transport. All transport
 // protocol specific info has been removed.
 type recvMsg struct {
@@ -147,7 +143,7 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	case <-r.ctx.Done():
 		return 0, ContextErr(r.ctx.Err())
 	case <-r.goAway:
-		return 0, ErrConnDrain
+		return 0, ErrStreamDrain
 	case i := <-r.recv.get():
 		r.recv.load()
 		m := i.(*recvMsg)
@@ -478,6 +474,9 @@ type ServerTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
+
+	// GoAway ...
+	GoAway()
 }
 
 // StreamErrorf creates an StreamError with the specified error code and description.
@@ -509,6 +508,7 @@ func (e ConnectionError) Error() string {
 var (
 	ErrConnClosing = ConnectionError{Desc: "transport is closing"}
 	ErrConnDrain   = ConnectionError{Desc: "transport is being drained"}
+	ErrStreamDrain = StreamErrorf(codes.Unavailable, "afjlalf")
 )
 
 // StreamError is an error that only affects one stream within a connection.
@@ -536,7 +536,7 @@ func ContextErr(err error) StreamError {
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
 // If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
 // it return the StreamError for ctx.Err.
-// If it receives from goAway, it returns 0, ErrConnDrain.
+// If it receives from goAway, it returns 0, ErrStreamDrain.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
 func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-chan int) (int, error) {
@@ -552,7 +552,7 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 		}
 		return 0, io.EOF
 	case <-goAway:
-		return 0, ErrConnDrain
+		return 0, ErrStreamDrain
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:

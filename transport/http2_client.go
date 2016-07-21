@@ -205,6 +205,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	s := &Stream{
 		id:            t.nextID,
 		done:          make(chan struct{}),
+		goAway:        make(chan struct{}),
 		method:        callHdr.Method,
 		sendCompress:  callHdr.SendCompress,
 		buf:           newRecvBuffer(),
@@ -219,8 +220,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// Make a stream be able to cancel the pending operations by itself.
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.dec = &recvBufferReader{
-		ctx:  s.ctx,
-		recv: s.buf,
+		ctx:    s.ctx,
+		goAway: s.goAway,
+		recv:   s.buf,
 	}
 	return s
 }
@@ -443,12 +445,12 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 // accessed any more.
 func (t *http2Client) Close() (err error) {
 	t.mu.Lock()
-	if t.state == reachable {
-		close(t.errorChan)
-	}
 	if t.state == closing {
 		t.mu.Unlock()
 		return
+	}
+	if t.state == reachable {
+		close(t.errorChan)
 	}
 	t.state = closing
 	t.mu.Unlock()
@@ -732,16 +734,11 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
-	t.goAwayID = f.LastStreamID
-	t.err = ErrDrain
-	close(t.errorChan)
-
-	// Notify the streams which were initiated after the server sent GOAWAY.
-	//for i := f.LastStreamID + 2; i < t.nextID; i += 2 {
-	//	if s, ok := t.activeStreams[i]; ok {
-	//		close(s.goAway)
-	//	}
-	//}
+	if t.state == reachable {
+		t.goAwayID = f.LastStreamID
+		t.err = ErrConnDrain
+		close(t.errorChan)
+	}
 	t.mu.Unlock()
 }
 

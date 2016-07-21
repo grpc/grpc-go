@@ -385,6 +385,12 @@ func toRPCErr(err error) error {
 			desc: e.Desc,
 		}
 	case transport.ConnectionError:
+		if err == transport.ErrConnDrain {
+			return &rpcError{
+				code: codes.Unavailable,
+				desc: e.Desc,
+			}
+		}
 		return &rpcError{
 			code: codes.Internal,
 			desc: e.Desc,

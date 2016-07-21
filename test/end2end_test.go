@@ -572,6 +572,55 @@ func TestFailFast(t *testing.T) {
 	}
 }
 
+func TestServerGoAway(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		//if e.name != "tcp-clear" {
+		//	continue
+		//}
+		testServerGoAway(t, e)
+	}
+}
+
+func testServerGoAway(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	ch := make(chan struct{})
+	go func() {
+		te.srv.GracefulStop()
+		close(ch)
+	}()
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+			continue
+		}
+		break
+	}
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err == nil || grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, error code: %d", err, codes.Unavailable)
+	}
+	<-ch
+	awaitNewConnLogOutput()
+}
+
 func testFailFast(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA

@@ -92,6 +92,8 @@ type Server struct {
 	mu     sync.Mutex // guards following
 	lis    map[net.Listener]bool
 	conns  map[io.Closer]bool
+	drain  bool
+	cv     *sync.Cond
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
 }
@@ -186,6 +188,7 @@ func NewServer(opt ...ServerOption) *Server {
 		conns: make(map[io.Closer]bool),
 		m:     make(map[string]*service),
 	}
+	s.cv = sync.NewCond(&s.mu)
 	if EnableTracing {
 		_, file, line, _ := runtime.Caller(1)
 		s.events = trace.NewEventLog("grpc.Server", fmt.Sprintf("%s:%d", file, line))
@@ -468,7 +471,7 @@ func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Strea
 func (s *Server) addConn(c io.Closer) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.conns == nil {
+	if s.conns == nil || s.drain {
 		return false
 	}
 	s.conns[c] = true
@@ -480,6 +483,7 @@ func (s *Server) removeConn(c io.Closer) {
 	defer s.mu.Unlock()
 	if s.conns != nil {
 		delete(s.conns, c)
+		s.cv.Signal()
 	}
 }
 
@@ -766,14 +770,14 @@ func (s *Server) Stop() {
 	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
-	cs := s.conns
+	st := s.conns
 	s.conns = nil
 	s.mu.Unlock()
 
 	for lis := range listeners {
 		lis.Close()
 	}
-	for c := range cs {
+	for c := range st {
 		c.Close()
 	}
 
@@ -783,6 +787,28 @@ func (s *Server) Stop() {
 		s.events = nil
 	}
 	s.mu.Unlock()
+}
+
+func (s *Server) GracefulStop() {
+	s.mu.Lock()
+	s.drain = true
+	for lis := range s.lis {
+		lis.Close()
+	}
+	for c := range s.conns {
+		c.(transport.ServerTransport).GoAway()
+	}
+	for len(s.conns) != 0 {
+		s.cv.Wait()
+	}
+	s.lis = nil
+	s.conns = nil
+	if s.events != nil {
+		s.events.Finish()
+		s.events = nil
+	}
+	s.mu.Unlock()
+
 }
 
 func init() {
