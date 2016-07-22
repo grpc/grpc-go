@@ -71,7 +71,8 @@ type http2Client struct {
 	shutdownChan chan struct{}
 	// errorChan is closed to notify the I/O error to the caller.
 	errorChan chan struct{}
-	//err       error
+	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
+	// that the server sent GoAway on this transport.
 	goAway chan struct{}
 
 	framer *framer
@@ -99,7 +100,8 @@ type http2Client struct {
 	maxStreams int
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	goAwayID        uint32
+	// goAwayID records the Last-Stream-ID in the GoAway frame from the server.
+	goAwayID uint32
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -956,10 +958,6 @@ func (t *http2Client) Error() <-chan struct{} {
 func (t *http2Client) GoAway() <-chan struct{} {
 	return t.goAway
 }
-
-//func (t *http2Client) Err() error {
-//	return t.err
-//}
 
 func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()

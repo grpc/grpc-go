@@ -589,6 +589,7 @@ func testServerGoAway(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
+	// Finish an RPC to make sure the connection is good.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -597,6 +598,7 @@ func testServerGoAway(t *testing.T, e env) {
 		te.srv.GracefulStop()
 		close(ch)
 	}()
+	// Loop until the server side GoAway signal is propagated to the client.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
@@ -604,6 +606,7 @@ func testServerGoAway(t *testing.T, e env) {
 		}
 		break
 	}
+	// A new RPC should fail with Unavailable error.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err == nil || grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, error code: %d", err, codes.Unavailable)
 	}
@@ -640,6 +643,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
+	// Finish an RPC to make sure the connection is good.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("fadjflajdflkaflj")
 	}
@@ -648,13 +652,13 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		te.srv.GracefulStop()
 		close(ch)
 	}()
+	// Loop until the server side GoAway signal is propagated to the client.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
 			continue
-		} else {
-			break
 		}
+		break
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
@@ -670,6 +674,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
+	// The existing RPC should be still good to proceed.
 	if err := stream.Send(req); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 	}

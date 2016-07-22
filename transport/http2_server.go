@@ -196,11 +196,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.recvCompress = state.encoding
 	s.method = state.method
 	t.mu.Lock()
-	if t.state == draining {
-		t.mu.Unlock()
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
-		return
-	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return
@@ -292,8 +287,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		case *http2.GoAwayFrame:
-			t.Close()
-			break
+			// TODO: Handle GoAway from the client appropriately.
 		default:
 			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}

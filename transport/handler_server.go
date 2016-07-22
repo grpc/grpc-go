@@ -371,6 +371,7 @@ func (ht *serverHandlerTransport) runStream() {
 }
 
 func (ht *serverHandlerTransport) GoAway() {
+	panic("not implemented")
 }
 
 // mapRecvMsgError returns the non-nil err into the appropriate

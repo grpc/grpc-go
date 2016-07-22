@@ -174,7 +174,7 @@ type Stream struct {
 	cancel context.CancelFunc
 	// done is closed when the final status arrives.
 	done chan struct{}
-	// goAway
+	// goAway is closed when the server sent GoAways signal before this stream was initiated.
 	goAway chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
@@ -221,10 +221,14 @@ func (s *Stream) SetSendCompress(str string) {
 	s.sendCompress = str
 }
 
+// Done returns a chanel which is closed when it receives the final status
+// from the server.
 func (s *Stream) Done() <-chan struct{} {
 	return s.done
 }
 
+// GoAway returns a channel which is closed when the server sent GoAways signal
+// before this stream was initiated.
 func (s *Stream) GoAway() <-chan struct{} {
 	return s.goAway
 }
@@ -433,16 +437,10 @@ type ClientTransport interface {
 	// once the transport is initiated.
 	Error() <-chan struct{}
 
-	// Done returns a channel that is closed when some I/O error
-	// happens or ClientTranspor receives the draining signal from the server
-	// (e.g., GOAWAY frame in HTTP/2). Typically the caller should have
-	// a goroutine to monitor this in order to take action (e.g., close
-	// the current transport and create a new one) in error case. It should
-	// not return nil once the transport is initiated.
+	// GoAway returns a channel that is closed when ClientTranspor
+	// receives the draining signal from the server (e.g., GOAWAY frame in
+	// HTTP/2).
 	GoAway() <-chan struct{}
-
-	// Err returns ...
-	//Err() error
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -475,7 +473,7 @@ type ServerTransport interface {
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
 
-	// GoAway ...
+	// GoAway notifies the client this ServerTransport stops accepting new RPCs.
 	GoAway()
 }
 
@@ -504,11 +502,12 @@ func (e ConnectionError) Error() string {
 	return fmt.Sprintf("connection error: desc = %q", e.Desc)
 }
 
-// ErrConnClosing indicates that the transport is closing.
 var (
+	// ErrConnClosing indicates that the transport is closing.
 	ErrConnClosing = ConnectionError{Desc: "transport is closing"}
-	ErrConnDrain   = ConnectionError{Desc: "transport is being drained"}
-	ErrStreamDrain = StreamErrorf(codes.Unavailable, "afjlalf")
+	// ErrStreamDrain indicates that the stream is rejected by the server because
+	// the server stops accepting new RPCs.
+	ErrStreamDrain = StreamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
 )
 
 // StreamError is an error that only affects one stream within a connection.

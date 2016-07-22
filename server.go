@@ -89,10 +89,12 @@ type service struct {
 type Server struct {
 	opts options
 
-	mu     sync.Mutex // guards following
-	lis    map[net.Listener]bool
-	conns  map[io.Closer]bool
-	drain  bool
+	mu    sync.Mutex // guards following
+	lis   map[net.Listener]bool
+	conns map[io.Closer]bool
+	drain bool
+	// A CondVar to let GracefulStop() blocks until all the pending RPCs are finished
+	// and all the transport goes away.
 	cv     *sync.Cond
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
@@ -391,7 +393,6 @@ func (s *Server) serveNewHTTP2Transport(c net.Conn, authInfo credentials.AuthInf
 		st.Close()
 		return
 	}
-	grpclog.Println("DEBUG addConn ... ")
 	s.serveStreams(st)
 }
 
@@ -790,6 +791,8 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
+// GracefulStop stops the gRPC server gracefully. It stops the server to accept new
+// connections and RPCs and blocks until all the pending RPCs are finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	s.drain = true
