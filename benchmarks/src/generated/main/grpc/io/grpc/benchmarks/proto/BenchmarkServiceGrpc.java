@@ -117,7 +117,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static class BenchmarkServiceStub extends io.grpc.stub.AbstractStub<BenchmarkServiceStub> {
+  public static final class BenchmarkServiceStub extends io.grpc.stub.AbstractStub<BenchmarkServiceStub> {
     private BenchmarkServiceStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -160,7 +160,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static class BenchmarkServiceBlockingStub extends io.grpc.stub.AbstractStub<BenchmarkServiceBlockingStub> {
+  public static final class BenchmarkServiceBlockingStub extends io.grpc.stub.AbstractStub<BenchmarkServiceBlockingStub> {
     private BenchmarkServiceBlockingStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -190,7 +190,7 @@ public class BenchmarkServiceGrpc {
 
   /**
    */
-  public static class BenchmarkServiceFutureStub extends io.grpc.stub.AbstractStub<BenchmarkServiceFutureStub> {
+  public static final class BenchmarkServiceFutureStub extends io.grpc.stub.AbstractStub<BenchmarkServiceFutureStub> {
     private BenchmarkServiceFutureStub(io.grpc.Channel channel) {
       super(channel);
     }

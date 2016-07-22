@@ -118,7 +118,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static class ReconnectServiceStub extends io.grpc.stub.AbstractStub<ReconnectServiceStub> {
+  public static final class ReconnectServiceStub extends io.grpc.stub.AbstractStub<ReconnectServiceStub> {
     private ReconnectServiceStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -156,7 +156,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static class ReconnectServiceBlockingStub extends io.grpc.stub.AbstractStub<ReconnectServiceBlockingStub> {
+  public static final class ReconnectServiceBlockingStub extends io.grpc.stub.AbstractStub<ReconnectServiceBlockingStub> {
     private ReconnectServiceBlockingStub(io.grpc.Channel channel) {
       super(channel);
     }
@@ -192,7 +192,7 @@ public class ReconnectServiceGrpc {
    * A service used to control reconnect server.
    * </pre>
    */
-  public static class ReconnectServiceFutureStub extends io.grpc.stub.AbstractStub<ReconnectServiceFutureStub> {
+  public static final class ReconnectServiceFutureStub extends io.grpc.stub.AbstractStub<ReconnectServiceFutureStub> {
     private ReconnectServiceFutureStub(io.grpc.Channel channel) {
       super(channel);
     }
