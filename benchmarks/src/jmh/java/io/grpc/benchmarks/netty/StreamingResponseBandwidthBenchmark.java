@@ -41,6 +41,8 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -64,6 +66,8 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
 
   private static AtomicLong callCounter;
   private AtomicBoolean completed;
+  private AtomicBoolean record;
+  private CountDownLatch latch;
 
   /**
    * Use an AuxCounter so we can measure that calls as they occur without consuming CPU
@@ -98,7 +102,8 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
         1);
     callCounter = new AtomicLong();
     completed = new AtomicBoolean();
-    startFlowControlledStreamingCalls(maxConcurrentStreams, callCounter, completed,
+    record = new AtomicBoolean();
+    latch = startFlowControlledStreamingCalls(maxConcurrentStreams, callCounter, record, completed,
         responseSize.bytes());
   }
 
@@ -109,7 +114,9 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
   @TearDown(Level.Trial)
   public void teardown() throws Exception {
     completed.set(true);
-    Thread.sleep(5000);
+    if (!latch.await(5, TimeUnit.SECONDS)) {
+      System.err.println("Failed to shutdown all calls.");
+    }
     super.teardown();
   }
 
@@ -118,8 +125,10 @@ public class StreamingResponseBandwidthBenchmark extends AbstractBenchmark {
    */
   @Benchmark
   public void stream(AdditionalCounters counters) throws Exception {
+    record.set(true);
     // No need to do anything, just sleep here.
     Thread.sleep(1001);
+    record.set(false);
   }
 
   /**

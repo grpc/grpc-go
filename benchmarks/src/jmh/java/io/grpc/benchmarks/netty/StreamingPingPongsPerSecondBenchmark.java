@@ -41,8 +41,11 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Logger;
 
 /**
  * Benchmark measuring messages per second using a set of permanently open duplex streams which
@@ -51,6 +54,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @State(Scope.Benchmark)
 @Fork(1)
 public class StreamingPingPongsPerSecondBenchmark extends AbstractBenchmark {
+  private static final Logger logger =
+      Logger.getLogger(StreamingPingPongsPerSecondBenchmark.class.getName());
 
   @Param({"1", "2", "4", "8"})
   public int channelCount = 1;
@@ -60,6 +65,8 @@ public class StreamingPingPongsPerSecondBenchmark extends AbstractBenchmark {
 
   private static AtomicLong callCounter;
   private AtomicBoolean completed;
+  private AtomicBoolean record;
+  private CountDownLatch latch;
 
   /**
    * Use an AuxCounter so we can measure that calls as they occur without consuming CPU
@@ -94,7 +101,8 @@ public class StreamingPingPongsPerSecondBenchmark extends AbstractBenchmark {
         channelCount);
     callCounter = new AtomicLong();
     completed = new AtomicBoolean();
-    startStreamingCalls(maxConcurrentStreams, callCounter, completed, 1);
+    record = new AtomicBoolean();
+    latch = startStreamingCalls(maxConcurrentStreams, callCounter, record, completed, 1);
   }
 
   /**
@@ -104,7 +112,9 @@ public class StreamingPingPongsPerSecondBenchmark extends AbstractBenchmark {
   @TearDown(Level.Trial)
   public void teardown() throws Exception {
     completed.set(true);
-    Thread.sleep(5000);
+    if (!latch.await(5, TimeUnit.SECONDS)) {
+      logger.warning("Failed to shutdown all calls.");
+    }
     super.teardown();
   }
 
@@ -114,8 +124,10 @@ public class StreamingPingPongsPerSecondBenchmark extends AbstractBenchmark {
    */
   @Benchmark
   public void pingPong(AdditionalCounters counters) throws Exception {
+    record.set(true);
     // No need to do anything, just sleep here.
     Thread.sleep(1001);
+    record.set(false);
   }
 
   /**
