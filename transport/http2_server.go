@@ -142,7 +142,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 }
 
 // operateHeader takes action on the decoded headers.
-func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) {
+func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) (close bool) {
 	buf := newRecvBuffer()
 	s := &Stream{
 		id:  frame.Header().StreamID,
@@ -200,13 +200,18 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.mu.Unlock()
 		return
 	}
-
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
 		return
 	}
-
+	if s.id%2 != 1 || s.id <= t.maxStreamID {
+		t.mu.Unlock()
+		// illegal gRPC stream id.
+		grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", s.id)
+		return true
+	}
+	t.maxStreamID = s.id
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -214,6 +219,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.updateWindow(s, uint32(n))
 	}
 	handle(s)
+	return
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
@@ -264,18 +270,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			id := frame.Header().StreamID
-			t.mu.Lock()
-			if id%2 != 1 || id <= t.maxStreamID {
-				t.mu.Unlock()
-				// illegal gRPC stream id.
-				grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", id)
+			if t.operateHeaders(frame, handle) {
 				t.Close()
 				break
 			}
-			t.maxStreamID = id
-			t.mu.Unlock()
-			t.operateHeaders(frame, handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
