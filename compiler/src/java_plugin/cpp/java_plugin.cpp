@@ -38,8 +38,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
     java_grpc_generator::ProtoFlavor flavor =
         java_grpc_generator::ProtoFlavor::NORMAL;
 
-    // TODO(zdapeng): turn the default value to false
-    bool enable_deprecated = true;
+    bool enable_deprecated = false;
     for (int i = 0; i < options.size(); i++) {
       if (options[i].first == "nano") {
         flavor = java_grpc_generator::ProtoFlavor::NANO;
