@@ -18,6 +18,10 @@
 #define XSTR(s) STR(s)
 #endif
 
+#ifndef FALLTHROUGH_INTENDED
+#define FALLTHROUGH_INTENDED
+#endif
+
 namespace java_grpc_generator {
 
 using google::protobuf::FileDescriptor;
@@ -488,6 +492,7 @@ static void PrintStub(
       break;
     case BLOCKING_CLIENT_INTERFACE:
       interface = true;
+      FALLTHROUGH_INTENDED;
     case BLOCKING_CLIENT_IMPL:
       call_type = BLOCKING_CALL;
       stub_name += "BlockingStub";
@@ -495,6 +500,7 @@ static void PrintStub(
       break;
     case FUTURE_CLIENT_INTERFACE:
       interface = true;
+      FALLTHROUGH_INTENDED;
     case FUTURE_CLIENT_IMPL:
       call_type = FUTURE_CALL;
       stub_name += "FutureStub";
