@@ -246,9 +246,13 @@ public abstract class AbstractBenchmark {
 
     // Create buffers of the desired size for requests and responses.
     PooledByteBufAllocator alloc = PooledByteBufAllocator.DEFAULT;
-    request = alloc.buffer(requestSize.bytes());
+    // Use a heap buffer for now, since MessageFramer doesn't know how to directly convert this
+    // into a WritableBuffer
+    // TODO(carl-mastrangelo): convert this into a regular buffer() call.  See
+    // https://github.com/grpc/grpc-java/issues/2062#issuecomment-234646216
+    request = alloc.heapBuffer(requestSize.bytes());
     request.writerIndex(request.capacity() - 1);
-    response = alloc.buffer(responseSize.bytes());
+    response = alloc.heapBuffer(responseSize.bytes());
     response.writerIndex(response.capacity() - 1);
 
     // Simple method that sends and receives NettyByteBuf
