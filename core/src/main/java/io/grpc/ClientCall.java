@@ -209,9 +209,7 @@ public abstract class ClientCall<ReqT, RespT> {
    * @param message if not {@code null}, will appear as the description of the CANCELLED status
    * @param cause if not {@code null}, will appear as the cause of the CANCELLED status
    */
-  public void cancel(@Nullable String message, @Nullable Throwable cause) {
-    throw new UnsupportedOperationException(getClass() + " should implement this method");
-  }
+  public abstract void cancel(@Nullable String message, @Nullable Throwable cause);
 
   /**
    * Close the call for request message sending. Incoming response messages are unaffected.  This
