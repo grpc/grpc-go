@@ -102,6 +102,8 @@ type http2Client struct {
 	streamSendQuota uint32
 	// goAwayID records the Last-Stream-ID in the GoAway frame from the server.
 	goAwayID uint32
+	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
+	prevGoAwayID uint32
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -483,21 +485,25 @@ func (t *http2Client) GracefulClose() error {
 		t.mu.Unlock()
 		return nil
 	}
-	if t.state == draining {
-		t.mu.Unlock()
-		return nil
-	}
-	t.state = draining
 	// Notify the streams which were initiated after the server sent GOAWAY.
 	select {
 	case <-t.goAway:
-		for i := t.goAwayID + 2; i < t.nextID; i += 2 {
+		n := t.prevGoAwayID
+		if n == 0 && t.nextID > 1 {
+			n = t.nextID - 2
+		}
+		for i := t.goAwayID + 2; i <= n; i += 2 {
 			if s, ok := t.activeStreams[i]; ok {
 				close(s.goAway)
 			}
 		}
 	default:
 	}
+	if t.state == draining {
+		t.mu.Unlock()
+		return nil
+	}
+	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
@@ -742,9 +748,21 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
-	if t.state == reachable {
+	if t.state == reachable || t.state == draining {
+		if t.goAwayID > 0 && t.goAwayID < f.LastStreamID {
+			id := t.goAwayID
+			t.mu.Unlock()
+			t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
+			return
+		}
+		t.prevGoAwayID = t.goAwayID
 		t.goAwayID = f.LastStreamID
-		close(t.goAway)
+		select {
+		case <-t.goAway:
+			// t.goAway has been closed (i.e.,multiple GoAways).
+		default:
+			close(t.goAway)
+		}
 	}
 	t.mu.Unlock()
 }

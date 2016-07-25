@@ -697,14 +697,21 @@ func (ac *addrConn) tearDown(err error) {
 		}
 		ac.cc.mu.Unlock()
 	}()
-	if ac.state == Shutdown {
-		return
-	}
-	ac.state = Shutdown
 	if ac.down != nil {
 		ac.down(downErrorf(false, false, "%v", err))
 		ac.down = nil
 	}
+	if err == errConnDrain && ac.transport != nil {
+		// GracefulClose(...) may be executed multiple times when
+		// i) receiving multiple GoAway frames from the server; or
+		// ii) there are concurrent name resolver/Balancer triggered
+		// address removal and GoAway.
+		ac.transport.GracefulClose()
+	}
+	if ac.state == Shutdown {
+		return
+	}
+	ac.state = Shutdown
 	ac.stateCV.Broadcast()
 	if ac.events != nil {
 		ac.events.Finish()
@@ -714,12 +721,8 @@ func (ac *addrConn) tearDown(err error) {
 		close(ac.ready)
 		ac.ready = nil
 	}
-	if ac.transport != nil {
-		if err == errConnDrain {
-			ac.transport.GracefulClose()
-		} else {
-			ac.transport.Close()
-		}
+	if ac.transport != nil && err != errConnDrain {
+		ac.transport.Close()
 	}
 	if ac.shutdownChan != nil {
 		close(ac.shutdownChan)

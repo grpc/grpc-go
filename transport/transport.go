@@ -473,8 +473,8 @@ type ServerTransport interface {
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
 
-	// GoAway notifies the client this ServerTransport stops accepting new RPCs.
-	GoAway()
+	// Drain notifies the client this ServerTransport stops accepting new RPCs.
+	Drain()
 }
 
 // StreamErrorf creates an StreamError with the specified error code and description.

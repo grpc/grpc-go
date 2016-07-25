@@ -370,8 +370,8 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
-func (ht *serverHandlerTransport) GoAway() {
-	panic("not implemented")
+func (ht *serverHandlerTransport) Drain() {
+	panic("Drain() is not implemented")
 }
 
 // mapRecvMsgError returns the non-nil err into the appropriate

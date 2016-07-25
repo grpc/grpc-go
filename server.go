@@ -795,12 +795,16 @@ func (s *Server) Stop() {
 // connections and RPCs and blocks until all the pending RPCs are finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
+	if s.drain == true || s.conns == nil {
+		s.mu.Lock()
+		return
+	}
 	s.drain = true
 	for lis := range s.lis {
 		lis.Close()
 	}
 	for c := range s.conns {
-		c.(transport.ServerTransport).GoAway()
+		c.(transport.ServerTransport).Drain()
 	}
 	for len(s.conns) != 0 {
 		s.cv.Wait()

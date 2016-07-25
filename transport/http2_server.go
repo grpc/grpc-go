@@ -755,6 +755,6 @@ func (t *http2Server) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
 }
 
-func (t *http2Server) GoAway() {
+func (t *http2Server) Drain() {
 	t.controlBuf.put(&goAway{})
 }
