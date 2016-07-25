@@ -1,0 +1,81 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              tools:context=".RouteGuideActivity"
+              android:orientation="vertical" >
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+        <EditText
+                android:id="@+id/host_edit_text"
+                android:layout_weight="2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:hint="Enter Host" />
+        <EditText
+                android:id="@+id/port_edit_text"
+                android:layout_weight="1"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"
+                android:hint="Enter Port" />
+    </LinearLayout>
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+        <Button
+            android:id="@+id/start_route_guide_button"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:onClick="startRouteGuide"
+            android:text="Start Route Guide" />
+        <Button
+            android:id="@+id/exit_route_guide_button"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:onClick="exitRouteGuide"
+            android:text="Exit Route Guide" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/get_feature_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="getFeature"
+        android:text="Get Feature" />
+
+    <Button
+        android:id="@+id/list_features_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="listFeatures"
+        android:text="List Features" />
+
+    <Button
+        android:id="@+id/record_route_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="recordRoute"
+        android:text="Record Route" />
+
+    <Button
+        android:id="@+id/route_chat_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="routeChat"
+        android:text="Route Chat" />
+
+    <TextView
+            android:id="@+id/result_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars = "vertical"
+            android:textSize="16sp" />
+
+</LinearLayout>
