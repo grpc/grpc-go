@@ -328,6 +328,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
   @Override
   public void cancel(@Nullable String message, @Nullable Throwable cause) {
+    if (message == null && cause == null) {
+      cause = new CancellationException("Cancelled without a message or cause");
+      log.log(Level.WARNING, "Cancelling without a message or cause is suboptimal", cause);
+    }
     if (cancelCalled) {
       return;
     }
@@ -342,12 +346,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
         }
         if (cause != null) {
           status = status.withCause(cause);
-        }
-        if (message == null && cause == null) {
-          // TODO(zhangkun83): log a warning with this exception once cancel() has been deleted from
-          // ClientCall.
-          status = status.withCause(
-              new CancellationException("Client called cancel() without any detail"));
         }
         stream.cancel(status);
       }
