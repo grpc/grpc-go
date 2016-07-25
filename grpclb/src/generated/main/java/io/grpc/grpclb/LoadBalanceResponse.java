@@ -7,11 +7,11 @@ package io.grpc.grpclb;
  * Protobuf type {@code grpc.lb.v1.LoadBalanceResponse}
  */
 public  final class LoadBalanceResponse extends
-    com.google.protobuf.GeneratedMessage implements
+    com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.LoadBalanceResponse)
     LoadBalanceResponseOrBuilder {
   // Use LoadBalanceResponse.newBuilder() to construct.
-  private LoadBalanceResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  private LoadBalanceResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
   private LoadBalanceResponse() {
@@ -86,7 +86,7 @@ public  final class LoadBalanceResponse extends
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceResponse_descriptor;
   }
 
-  protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceResponse_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
@@ -227,6 +227,59 @@ public  final class LoadBalanceResponse extends
   }
 
   private static final long serialVersionUID = 0L;
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
+    if (obj == this) {
+     return true;
+    }
+    if (!(obj instanceof io.grpc.grpclb.LoadBalanceResponse)) {
+      return super.equals(obj);
+    }
+    io.grpc.grpclb.LoadBalanceResponse other = (io.grpc.grpclb.LoadBalanceResponse) obj;
+
+    boolean result = true;
+    result = result && getLoadBalanceResponseTypeCase().equals(
+        other.getLoadBalanceResponseTypeCase());
+    if (!result) return false;
+    switch (loadBalanceResponseTypeCase_) {
+      case 1:
+        result = result && getInitialResponse()
+            .equals(other.getInitialResponse());
+        break;
+      case 2:
+        result = result && getServerList()
+            .equals(other.getServerList());
+        break;
+      case 0:
+      default:
+    }
+    return result;
+  }
+
+  @java.lang.Override
+  public int hashCode() {
+    if (memoizedHashCode != 0) {
+      return memoizedHashCode;
+    }
+    int hash = 41;
+    hash = (19 * hash) + getDescriptorForType().hashCode();
+    switch (loadBalanceResponseTypeCase_) {
+      case 1:
+        hash = (37 * hash) + INITIAL_RESPONSE_FIELD_NUMBER;
+        hash = (53 * hash) + getInitialResponse().hashCode();
+        break;
+      case 2:
+        hash = (37 * hash) + SERVER_LIST_FIELD_NUMBER;
+        hash = (53 * hash) + getServerList().hashCode();
+        break;
+      case 0:
+      default:
+    }
+    hash = (29 * hash) + unknownFields.hashCode();
+    memoizedHashCode = hash;
+    return hash;
+  }
+
   public static io.grpc.grpclb.LoadBalanceResponse parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -250,39 +303,39 @@ public  final class LoadBalanceResponse extends
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.LoadBalanceResponse parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
@@ -300,7 +353,7 @@ public  final class LoadBalanceResponse extends
 
   @java.lang.Override
   protected Builder newBuilderForType(
-      com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -308,7 +361,7 @@ public  final class LoadBalanceResponse extends
    * Protobuf type {@code grpc.lb.v1.LoadBalanceResponse}
    */
   public static final class Builder extends
-      com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+      com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:grpc.lb.v1.LoadBalanceResponse)
       io.grpc.grpclb.LoadBalanceResponseOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -316,7 +369,7 @@ public  final class LoadBalanceResponse extends
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceResponse_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_LoadBalanceResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -329,12 +382,13 @@ public  final class LoadBalanceResponse extends
     }
 
     private Builder(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
     private void maybeForceBuilderInitialization() {
-      if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+      if (com.google.protobuf.GeneratedMessageV3
+              .alwaysUseFieldBuilders) {
       }
     }
     public Builder clear() {
@@ -382,6 +436,32 @@ public  final class LoadBalanceResponse extends
       return result;
     }
 
+    public Builder clone() {
+      return (Builder) super.clone();
+    }
+    public Builder setField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.setField(field, value);
+    }
+    public Builder clearField(
+        com.google.protobuf.Descriptors.FieldDescriptor field) {
+      return (Builder) super.clearField(field);
+    }
+    public Builder clearOneof(
+        com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+      return (Builder) super.clearOneof(oneof);
+    }
+    public Builder setRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        int index, Object value) {
+      return (Builder) super.setRepeatedField(field, index, value);
+    }
+    public Builder addRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.addRepeatedField(field, value);
+    }
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.grpclb.LoadBalanceResponse) {
         return mergeFrom((io.grpc.grpclb.LoadBalanceResponse)other);
@@ -447,7 +527,7 @@ public  final class LoadBalanceResponse extends
     }
 
 
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceResponse, io.grpc.grpclb.InitialLoadBalanceResponse.Builder, io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder> initialResponseBuilder_;
     /**
      * <pre>
@@ -590,14 +670,14 @@ public  final class LoadBalanceResponse extends
      *
      * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceResponse, io.grpc.grpclb.InitialLoadBalanceResponse.Builder, io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder> 
         getInitialResponseFieldBuilder() {
       if (initialResponseBuilder_ == null) {
         if (!(loadBalanceResponseTypeCase_ == 1)) {
           loadBalanceResponseType_ = io.grpc.grpclb.InitialLoadBalanceResponse.getDefaultInstance();
         }
-        initialResponseBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+        initialResponseBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
             io.grpc.grpclb.InitialLoadBalanceResponse, io.grpc.grpclb.InitialLoadBalanceResponse.Builder, io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder>(
                 (io.grpc.grpclb.InitialLoadBalanceResponse) loadBalanceResponseType_,
                 getParentForChildren(),
@@ -609,7 +689,7 @@ public  final class LoadBalanceResponse extends
       return initialResponseBuilder_;
     }
 
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.ServerList, io.grpc.grpclb.ServerList.Builder, io.grpc.grpclb.ServerListOrBuilder> serverListBuilder_;
     /**
      * <pre>
@@ -760,14 +840,14 @@ public  final class LoadBalanceResponse extends
      *
      * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
      */
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.ServerList, io.grpc.grpclb.ServerList.Builder, io.grpc.grpclb.ServerListOrBuilder> 
         getServerListFieldBuilder() {
       if (serverListBuilder_ == null) {
         if (!(loadBalanceResponseTypeCase_ == 2)) {
           loadBalanceResponseType_ = io.grpc.grpclb.ServerList.getDefaultInstance();
         }
-        serverListBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+        serverListBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
             io.grpc.grpclb.ServerList, io.grpc.grpclb.ServerList.Builder, io.grpc.grpclb.ServerListOrBuilder>(
                 (io.grpc.grpclb.ServerList) loadBalanceResponseType_,
                 getParentForChildren(),

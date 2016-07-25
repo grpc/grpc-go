@@ -62,7 +62,7 @@ subprojects {
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
         guavaVersion = '19.0'
-        protobufVersion = '3.0.0-beta-3'
+        protobufVersion = '3.0.0'
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {
@@ -133,7 +133,7 @@ subprojects {
 
           compileJava {
             // Protobuf-generated code produces some warnings.
-            options.compilerArgs = compileJava.options.compilerArgs + ["-Xlint:-deprecation"]
+            options.compilerArgs += ["-Xlint:-cast"]
           }
         }
 

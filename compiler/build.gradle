@@ -137,10 +137,13 @@ sourceSets {
   }
 }
 
+compileTestJava {
+  options.compilerArgs += ["-Xlint:-cast"]
+}
+
 compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
-  options.compilerArgs = compileTestJava.options.compilerArgs +
-      ["-Xlint:-unchecked", "-Xlint:-rawtypes", "-Xlint:-fallthrough"]
+  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked"]
 }
 
 compileTestNanoJava {
@@ -156,6 +159,9 @@ protobuf {
     }
   }
   plugins {
+    javalite {
+      artifact = "com.google.protobuf:protoc-gen-javalite:${protobufVersion}"
+    }
     grpc {
       path = javaPluginPath
     }
@@ -168,9 +174,15 @@ protobuf {
     ofSourceSet('test')*.plugins {
       grpc {}
     }
-    ofSourceSet('testLite')*.plugins {
-      grpc {
-        option 'lite'
+    ofSourceSet('testLite')*.each { task ->
+      task.builtins {
+        remove java
+      }
+      task.plugins {
+        javalite {}
+        grpc {
+          option 'lite'
+        }
       }
     }
     ofSourceSet('testNano').each { task ->

@@ -12,11 +12,11 @@ package io.grpc.grpclb;
  * Protobuf type {@code grpc.lb.v1.ClientStats}
  */
 public  final class ClientStats extends
-    com.google.protobuf.GeneratedMessage implements
+    com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.ClientStats)
     ClientStatsOrBuilder {
   // Use ClientStats.newBuilder() to construct.
-  private ClientStats(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  private ClientStats(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
   private ClientStats() {
@@ -81,7 +81,7 @@ public  final class ClientStats extends
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_descriptor;
   }
 
-  protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
@@ -172,6 +172,47 @@ public  final class ClientStats extends
   }
 
   private static final long serialVersionUID = 0L;
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
+    if (obj == this) {
+     return true;
+    }
+    if (!(obj instanceof io.grpc.grpclb.ClientStats)) {
+      return super.equals(obj);
+    }
+    io.grpc.grpclb.ClientStats other = (io.grpc.grpclb.ClientStats) obj;
+
+    boolean result = true;
+    result = result && (getTotalRequests()
+        == other.getTotalRequests());
+    result = result && (getClientRpcErrors()
+        == other.getClientRpcErrors());
+    result = result && (getDroppedRequests()
+        == other.getDroppedRequests());
+    return result;
+  }
+
+  @java.lang.Override
+  public int hashCode() {
+    if (memoizedHashCode != 0) {
+      return memoizedHashCode;
+    }
+    int hash = 41;
+    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (37 * hash) + TOTAL_REQUESTS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getTotalRequests());
+    hash = (37 * hash) + CLIENT_RPC_ERRORS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getClientRpcErrors());
+    hash = (37 * hash) + DROPPED_REQUESTS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getDroppedRequests());
+    hash = (29 * hash) + unknownFields.hashCode();
+    memoizedHashCode = hash;
+    return hash;
+  }
+
   public static io.grpc.grpclb.ClientStats parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -195,39 +236,39 @@ public  final class ClientStats extends
   }
   public static io.grpc.grpclb.ClientStats parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ClientStats parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.ClientStats parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ClientStats parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.ClientStats parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ClientStats parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
@@ -245,7 +286,7 @@ public  final class ClientStats extends
 
   @java.lang.Override
   protected Builder newBuilderForType(
-      com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -258,7 +299,7 @@ public  final class ClientStats extends
    * Protobuf type {@code grpc.lb.v1.ClientStats}
    */
   public static final class Builder extends
-      com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+      com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:grpc.lb.v1.ClientStats)
       io.grpc.grpclb.ClientStatsOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -266,7 +307,7 @@ public  final class ClientStats extends
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStats_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -279,12 +320,13 @@ public  final class ClientStats extends
     }
 
     private Builder(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
     private void maybeForceBuilderInitialization() {
-      if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+      if (com.google.protobuf.GeneratedMessageV3
+              .alwaysUseFieldBuilders) {
       }
     }
     public Builder clear() {
@@ -324,6 +366,32 @@ public  final class ClientStats extends
       return result;
     }
 
+    public Builder clone() {
+      return (Builder) super.clone();
+    }
+    public Builder setField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.setField(field, value);
+    }
+    public Builder clearField(
+        com.google.protobuf.Descriptors.FieldDescriptor field) {
+      return (Builder) super.clearField(field);
+    }
+    public Builder clearOneof(
+        com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+      return (Builder) super.clearOneof(oneof);
+    }
+    public Builder setRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        int index, Object value) {
+      return (Builder) super.setRepeatedField(field, index, value);
+    }
+    public Builder addRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.addRepeatedField(field, value);
+    }
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.grpclb.ClientStats) {
         return mergeFrom((io.grpc.grpclb.ClientStats)other);

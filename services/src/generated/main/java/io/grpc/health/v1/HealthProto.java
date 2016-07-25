@@ -6,17 +6,23 @@ package io.grpc.health.v1;
 public final class HealthProto {
   private HealthProto() {}
   public static void registerAllExtensions(
+      com.google.protobuf.ExtensionRegistryLite registry) {
+  }
+
+  public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistry registry) {
+    registerAllExtensions(
+        (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_health_v1_HealthCheckRequest_descriptor;
   static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_health_v1_HealthCheckRequest_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_health_v1_HealthCheckResponse_descriptor;
   static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_health_v1_HealthCheckResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
@@ -53,13 +59,13 @@ public final class HealthProto {
     internal_static_grpc_health_v1_HealthCheckRequest_descriptor =
       getDescriptor().getMessageTypes().get(0);
     internal_static_grpc_health_v1_HealthCheckRequest_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_health_v1_HealthCheckRequest_descriptor,
         new java.lang.String[] { "Service", });
     internal_static_grpc_health_v1_HealthCheckResponse_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_health_v1_HealthCheckResponse_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_health_v1_HealthCheckResponse_descriptor,
         new java.lang.String[] { "Status", });
   }

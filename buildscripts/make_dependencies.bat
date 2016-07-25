@@ -4,7 +4,7 @@ REM 7za is in http://www.7-zip.org/a/7z1507-extra.7z
 REM Prerequisite:
 REM   7za.exe in current directory or PATH
 
-set PROTOBUF_VER=3.0.0-beta-3
+set PROTOBUF_VER=3.0.0
 set CMAKE_NAME=cmake-3.3.2-win32-x86
 
 if not exist "protobuf-%PROTOBUF_VER%\cmake\build\Release\" (
@@ -25,7 +25,7 @@ set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
 powershell -command "& { iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }"
 7za X protobuf.zip
 del protobuf.zip
-pushd protobuf-3.0.0-beta-3\cmake
+pushd protobuf-3.0.0\cmake
 mkdir build
 cd build
 cmake -Dprotobuf_BUILD_TESTS=OFF ..

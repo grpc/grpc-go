@@ -7,11 +7,11 @@ package io.grpc.grpclb;
  * Protobuf type {@code grpc.lb.v1.InitialLoadBalanceResponse}
  */
 public  final class InitialLoadBalanceResponse extends
-    com.google.protobuf.GeneratedMessage implements
+    com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.InitialLoadBalanceResponse)
     InitialLoadBalanceResponseOrBuilder {
   // Use InitialLoadBalanceResponse.newBuilder() to construct.
-  private InitialLoadBalanceResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  private InitialLoadBalanceResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
   private InitialLoadBalanceResponse() {
@@ -77,7 +77,7 @@ public  final class InitialLoadBalanceResponse extends
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceResponse_descriptor;
   }
 
-  protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceResponse_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
@@ -229,7 +229,7 @@ public  final class InitialLoadBalanceResponse extends
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     if (initialResponseTypeCase_ == 2) {
-      com.google.protobuf.GeneratedMessage.writeString(output, 2, initialResponseType_);
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 2, initialResponseType_);
     }
     if (clientStatsReportInterval_ != null) {
       output.writeMessage(3, getClientStatsReportInterval());
@@ -242,7 +242,7 @@ public  final class InitialLoadBalanceResponse extends
 
     size = 0;
     if (initialResponseTypeCase_ == 2) {
-      size += com.google.protobuf.GeneratedMessage.computeStringSize(2, initialResponseType_);
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, initialResponseType_);
     }
     if (clientStatsReportInterval_ != null) {
       size += com.google.protobuf.CodedOutputStream
@@ -253,6 +253,60 @@ public  final class InitialLoadBalanceResponse extends
   }
 
   private static final long serialVersionUID = 0L;
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
+    if (obj == this) {
+     return true;
+    }
+    if (!(obj instanceof io.grpc.grpclb.InitialLoadBalanceResponse)) {
+      return super.equals(obj);
+    }
+    io.grpc.grpclb.InitialLoadBalanceResponse other = (io.grpc.grpclb.InitialLoadBalanceResponse) obj;
+
+    boolean result = true;
+    result = result && (hasClientStatsReportInterval() == other.hasClientStatsReportInterval());
+    if (hasClientStatsReportInterval()) {
+      result = result && getClientStatsReportInterval()
+          .equals(other.getClientStatsReportInterval());
+    }
+    result = result && getInitialResponseTypeCase().equals(
+        other.getInitialResponseTypeCase());
+    if (!result) return false;
+    switch (initialResponseTypeCase_) {
+      case 2:
+        result = result && getLoadBalancerDelegate()
+            .equals(other.getLoadBalancerDelegate());
+        break;
+      case 0:
+      default:
+    }
+    return result;
+  }
+
+  @java.lang.Override
+  public int hashCode() {
+    if (memoizedHashCode != 0) {
+      return memoizedHashCode;
+    }
+    int hash = 41;
+    hash = (19 * hash) + getDescriptorForType().hashCode();
+    if (hasClientStatsReportInterval()) {
+      hash = (37 * hash) + CLIENT_STATS_REPORT_INTERVAL_FIELD_NUMBER;
+      hash = (53 * hash) + getClientStatsReportInterval().hashCode();
+    }
+    switch (initialResponseTypeCase_) {
+      case 2:
+        hash = (37 * hash) + LOAD_BALANCER_DELEGATE_FIELD_NUMBER;
+        hash = (53 * hash) + getLoadBalancerDelegate().hashCode();
+        break;
+      case 0:
+      default:
+    }
+    hash = (29 * hash) + unknownFields.hashCode();
+    memoizedHashCode = hash;
+    return hash;
+  }
+
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -276,39 +330,39 @@ public  final class InitialLoadBalanceResponse extends
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.InitialLoadBalanceResponse parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
@@ -326,7 +380,7 @@ public  final class InitialLoadBalanceResponse extends
 
   @java.lang.Override
   protected Builder newBuilderForType(
-      com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -334,7 +388,7 @@ public  final class InitialLoadBalanceResponse extends
    * Protobuf type {@code grpc.lb.v1.InitialLoadBalanceResponse}
    */
   public static final class Builder extends
-      com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+      com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:grpc.lb.v1.InitialLoadBalanceResponse)
       io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -342,7 +396,7 @@ public  final class InitialLoadBalanceResponse extends
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceResponse_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_InitialLoadBalanceResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -355,12 +409,13 @@ public  final class InitialLoadBalanceResponse extends
     }
 
     private Builder(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
     private void maybeForceBuilderInitialization() {
-      if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+      if (com.google.protobuf.GeneratedMessageV3
+              .alwaysUseFieldBuilders) {
       }
     }
     public Builder clear() {
@@ -408,6 +463,32 @@ public  final class InitialLoadBalanceResponse extends
       return result;
     }
 
+    public Builder clone() {
+      return (Builder) super.clone();
+    }
+    public Builder setField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.setField(field, value);
+    }
+    public Builder clearField(
+        com.google.protobuf.Descriptors.FieldDescriptor field) {
+      return (Builder) super.clearField(field);
+    }
+    public Builder clearOneof(
+        com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+      return (Builder) super.clearOneof(oneof);
+    }
+    public Builder setRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        int index, Object value) {
+      return (Builder) super.setRepeatedField(field, index, value);
+    }
+    public Builder addRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.addRepeatedField(field, value);
+    }
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.grpclb.InitialLoadBalanceResponse) {
         return mergeFrom((io.grpc.grpclb.InitialLoadBalanceResponse)other);
@@ -590,7 +671,7 @@ public  final class InitialLoadBalanceResponse extends
     }
 
     private com.google.protobuf.Duration clientStatsReportInterval_ = null;
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> clientStatsReportIntervalBuilder_;
     /**
      * <pre>
@@ -746,11 +827,11 @@ public  final class InitialLoadBalanceResponse extends
      *
      * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
      */
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 
         getClientStatsReportIntervalFieldBuilder() {
       if (clientStatsReportIntervalBuilder_ == null) {
-        clientStatsReportIntervalBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+        clientStatsReportIntervalBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
             com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder>(
                 getClientStatsReportInterval(),
                 getParentForChildren(),

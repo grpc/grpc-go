@@ -7,11 +7,11 @@ package io.grpc.health.v1;
  * Protobuf type {@code grpc.health.v1.HealthCheckRequest}
  */
 public  final class HealthCheckRequest extends
-    com.google.protobuf.GeneratedMessage implements
+    com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.health.v1.HealthCheckRequest)
     HealthCheckRequestOrBuilder {
   // Use HealthCheckRequest.newBuilder() to construct.
-  private HealthCheckRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  private HealthCheckRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
   private HealthCheckRequest() {
@@ -65,7 +65,7 @@ public  final class HealthCheckRequest extends
     return io.grpc.health.v1.HealthProto.internal_static_grpc_health_v1_HealthCheckRequest_descriptor;
   }
 
-  protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.health.v1.HealthProto.internal_static_grpc_health_v1_HealthCheckRequest_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
@@ -119,7 +119,7 @@ public  final class HealthCheckRequest extends
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     if (!getServiceBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessage.writeString(output, 1, service_);
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, service_);
     }
   }
 
@@ -129,13 +129,43 @@ public  final class HealthCheckRequest extends
 
     size = 0;
     if (!getServiceBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessage.computeStringSize(1, service_);
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, service_);
     }
     memoizedSize = size;
     return size;
   }
 
   private static final long serialVersionUID = 0L;
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
+    if (obj == this) {
+     return true;
+    }
+    if (!(obj instanceof io.grpc.health.v1.HealthCheckRequest)) {
+      return super.equals(obj);
+    }
+    io.grpc.health.v1.HealthCheckRequest other = (io.grpc.health.v1.HealthCheckRequest) obj;
+
+    boolean result = true;
+    result = result && getService()
+        .equals(other.getService());
+    return result;
+  }
+
+  @java.lang.Override
+  public int hashCode() {
+    if (memoizedHashCode != 0) {
+      return memoizedHashCode;
+    }
+    int hash = 41;
+    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (37 * hash) + SERVICE_FIELD_NUMBER;
+    hash = (53 * hash) + getService().hashCode();
+    hash = (29 * hash) + unknownFields.hashCode();
+    memoizedHashCode = hash;
+    return hash;
+  }
+
   public static io.grpc.health.v1.HealthCheckRequest parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -159,39 +189,39 @@ public  final class HealthCheckRequest extends
   }
   public static io.grpc.health.v1.HealthCheckRequest parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckRequest parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.health.v1.HealthCheckRequest parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckRequest parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.health.v1.HealthCheckRequest parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.health.v1.HealthCheckRequest parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
@@ -209,7 +239,7 @@ public  final class HealthCheckRequest extends
 
   @java.lang.Override
   protected Builder newBuilderForType(
-      com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -217,7 +247,7 @@ public  final class HealthCheckRequest extends
    * Protobuf type {@code grpc.health.v1.HealthCheckRequest}
    */
   public static final class Builder extends
-      com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+      com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:grpc.health.v1.HealthCheckRequest)
       io.grpc.health.v1.HealthCheckRequestOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -225,7 +255,7 @@ public  final class HealthCheckRequest extends
       return io.grpc.health.v1.HealthProto.internal_static_grpc_health_v1_HealthCheckRequest_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.health.v1.HealthProto.internal_static_grpc_health_v1_HealthCheckRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -238,12 +268,13 @@ public  final class HealthCheckRequest extends
     }
 
     private Builder(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
     private void maybeForceBuilderInitialization() {
-      if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+      if (com.google.protobuf.GeneratedMessageV3
+              .alwaysUseFieldBuilders) {
       }
     }
     public Builder clear() {
@@ -277,6 +308,32 @@ public  final class HealthCheckRequest extends
       return result;
     }
 
+    public Builder clone() {
+      return (Builder) super.clone();
+    }
+    public Builder setField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.setField(field, value);
+    }
+    public Builder clearField(
+        com.google.protobuf.Descriptors.FieldDescriptor field) {
+      return (Builder) super.clearField(field);
+    }
+    public Builder clearOneof(
+        com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+      return (Builder) super.clearOneof(oneof);
+    }
+    public Builder setRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        int index, Object value) {
+      return (Builder) super.setRepeatedField(field, index, value);
+    }
+    public Builder addRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.addRepeatedField(field, value);
+    }
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.health.v1.HealthCheckRequest) {
         return mergeFrom((io.grpc.health.v1.HealthCheckRequest)other);

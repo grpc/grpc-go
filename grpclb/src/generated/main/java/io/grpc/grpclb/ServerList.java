@@ -7,11 +7,11 @@ package io.grpc.grpclb;
  * Protobuf type {@code grpc.lb.v1.ServerList}
  */
 public  final class ServerList extends
-    com.google.protobuf.GeneratedMessage implements
+    com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.ServerList)
     ServerListOrBuilder {
   // Use ServerList.newBuilder() to construct.
-  private ServerList(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+  private ServerList(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
   private ServerList() {
@@ -48,7 +48,8 @@ public  final class ServerList extends
               servers_ = new java.util.ArrayList<io.grpc.grpclb.Server>();
               mutable_bitField0_ |= 0x00000001;
             }
-            servers_.add(input.readMessage(io.grpc.grpclb.Server.parser(), extensionRegistry));
+            servers_.add(
+                input.readMessage(io.grpc.grpclb.Server.parser(), extensionRegistry));
             break;
           }
           case 26: {
@@ -83,7 +84,7 @@ public  final class ServerList extends
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_descriptor;
   }
 
-  protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
     return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
@@ -241,6 +242,47 @@ public  final class ServerList extends
   }
 
   private static final long serialVersionUID = 0L;
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
+    if (obj == this) {
+     return true;
+    }
+    if (!(obj instanceof io.grpc.grpclb.ServerList)) {
+      return super.equals(obj);
+    }
+    io.grpc.grpclb.ServerList other = (io.grpc.grpclb.ServerList) obj;
+
+    boolean result = true;
+    result = result && getServersList()
+        .equals(other.getServersList());
+    result = result && (hasExpirationInterval() == other.hasExpirationInterval());
+    if (hasExpirationInterval()) {
+      result = result && getExpirationInterval()
+          .equals(other.getExpirationInterval());
+    }
+    return result;
+  }
+
+  @java.lang.Override
+  public int hashCode() {
+    if (memoizedHashCode != 0) {
+      return memoizedHashCode;
+    }
+    int hash = 41;
+    hash = (19 * hash) + getDescriptorForType().hashCode();
+    if (getServersCount() > 0) {
+      hash = (37 * hash) + SERVERS_FIELD_NUMBER;
+      hash = (53 * hash) + getServersList().hashCode();
+    }
+    if (hasExpirationInterval()) {
+      hash = (37 * hash) + EXPIRATION_INTERVAL_FIELD_NUMBER;
+      hash = (53 * hash) + getExpirationInterval().hashCode();
+    }
+    hash = (29 * hash) + unknownFields.hashCode();
+    memoizedHashCode = hash;
+    return hash;
+  }
+
   public static io.grpc.grpclb.ServerList parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -264,39 +306,39 @@ public  final class ServerList extends
   }
   public static io.grpc.grpclb.ServerList parseFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ServerList parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.ServerList parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ServerList parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
   public static io.grpc.grpclb.ServerList parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
   public static io.grpc.grpclb.ServerList parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
-    return com.google.protobuf.GeneratedMessage
+    return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
@@ -314,7 +356,7 @@ public  final class ServerList extends
 
   @java.lang.Override
   protected Builder newBuilderForType(
-      com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -322,7 +364,7 @@ public  final class ServerList extends
    * Protobuf type {@code grpc.lb.v1.ServerList}
    */
   public static final class Builder extends
-      com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+      com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:grpc.lb.v1.ServerList)
       io.grpc.grpclb.ServerListOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -330,7 +372,7 @@ public  final class ServerList extends
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ServerList_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -343,12 +385,13 @@ public  final class ServerList extends
     }
 
     private Builder(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
     private void maybeForceBuilderInitialization() {
-      if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+      if (com.google.protobuf.GeneratedMessageV3
+              .alwaysUseFieldBuilders) {
         getServersFieldBuilder();
       }
     }
@@ -409,6 +452,32 @@ public  final class ServerList extends
       return result;
     }
 
+    public Builder clone() {
+      return (Builder) super.clone();
+    }
+    public Builder setField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.setField(field, value);
+    }
+    public Builder clearField(
+        com.google.protobuf.Descriptors.FieldDescriptor field) {
+      return (Builder) super.clearField(field);
+    }
+    public Builder clearOneof(
+        com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+      return (Builder) super.clearOneof(oneof);
+    }
+    public Builder setRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        int index, Object value) {
+      return (Builder) super.setRepeatedField(field, index, value);
+    }
+    public Builder addRepeatedField(
+        com.google.protobuf.Descriptors.FieldDescriptor field,
+        Object value) {
+      return (Builder) super.addRepeatedField(field, value);
+    }
     public Builder mergeFrom(com.google.protobuf.Message other) {
       if (other instanceof io.grpc.grpclb.ServerList) {
         return mergeFrom((io.grpc.grpclb.ServerList)other);
@@ -439,7 +508,7 @@ public  final class ServerList extends
             servers_ = other.servers_;
             bitField0_ = (bitField0_ & ~0x00000001);
             serversBuilder_ = 
-              com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+              com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
                  getServersFieldBuilder() : null;
           } else {
             serversBuilder_.addAllMessages(other.servers_);
@@ -485,7 +554,7 @@ public  final class ServerList extends
        }
     }
 
-    private com.google.protobuf.RepeatedFieldBuilder<
+    private com.google.protobuf.RepeatedFieldBuilderV3<
         io.grpc.grpclb.Server, io.grpc.grpclb.Server.Builder, io.grpc.grpclb.ServerOrBuilder> serversBuilder_;
 
     /**
@@ -827,11 +896,11 @@ public  final class ServerList extends
          getServersBuilderList() {
       return getServersFieldBuilder().getBuilderList();
     }
-    private com.google.protobuf.RepeatedFieldBuilder<
+    private com.google.protobuf.RepeatedFieldBuilderV3<
         io.grpc.grpclb.Server, io.grpc.grpclb.Server.Builder, io.grpc.grpclb.ServerOrBuilder> 
         getServersFieldBuilder() {
       if (serversBuilder_ == null) {
-        serversBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+        serversBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
             io.grpc.grpclb.Server, io.grpc.grpclb.Server.Builder, io.grpc.grpclb.ServerOrBuilder>(
                 servers_,
                 ((bitField0_ & 0x00000001) == 0x00000001),
@@ -843,7 +912,7 @@ public  final class ServerList extends
     }
 
     private com.google.protobuf.Duration expirationInterval_ = null;
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> expirationIntervalBuilder_;
     /**
      * <pre>
@@ -1008,11 +1077,11 @@ public  final class ServerList extends
      *
      * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
      */
-    private com.google.protobuf.SingleFieldBuilder<
+    private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 
         getExpirationIntervalFieldBuilder() {
       if (expirationIntervalBuilder_ == null) {
-        expirationIntervalBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+        expirationIntervalBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
             com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder>(
                 getExpirationInterval(),
                 getParentForChildren(),

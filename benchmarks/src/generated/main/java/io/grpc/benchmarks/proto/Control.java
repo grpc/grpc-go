@@ -6,7 +6,13 @@ package io.grpc.benchmarks.proto;
 public final class Control {
   private Control() {}
   public static void registerAllExtensions(
+      com.google.protobuf.ExtensionRegistryLite registry) {
+  }
+
+  public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistry registry) {
+    registerAllExtensions(
+        (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   /**
    * Protobuf enum {@code grpc.testing.ClientType}
@@ -333,11 +339,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.PoissonParams}
    */
   public  static final class PoissonParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.PoissonParams)
       PoissonParamsOrBuilder {
     // Use PoissonParams.newBuilder() to construct.
-    private PoissonParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private PoissonParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private PoissonParams() {
@@ -390,7 +396,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -441,6 +447,39 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.PoissonParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.PoissonParams other = (io.grpc.benchmarks.proto.Control.PoissonParams) obj;
+
+      boolean result = true;
+      result = result && (
+          java.lang.Double.doubleToLongBits(getOfferedLoad())
+          == java.lang.Double.doubleToLongBits(
+              other.getOfferedLoad()));
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + OFFERED_LOAD_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getOfferedLoad()));
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -464,39 +503,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.PoissonParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -514,7 +553,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -527,7 +566,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.PoissonParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.PoissonParams)
         io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -535,7 +574,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_PoissonParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -548,12 +587,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -587,6 +627,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.PoissonParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.PoissonParams)other);
@@ -731,11 +797,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.UniformParams}
    */
   public  static final class UniformParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.UniformParams)
       UniformParamsOrBuilder {
     // Use UniformParams.newBuilder() to construct.
-    private UniformParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private UniformParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private UniformParams() {
@@ -794,7 +860,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -857,6 +923,46 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.UniformParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.UniformParams other = (io.grpc.benchmarks.proto.Control.UniformParams) obj;
+
+      boolean result = true;
+      result = result && (
+          java.lang.Double.doubleToLongBits(getInterarrivalLo())
+          == java.lang.Double.doubleToLongBits(
+              other.getInterarrivalLo()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getInterarrivalHi())
+          == java.lang.Double.doubleToLongBits(
+              other.getInterarrivalHi()));
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + INTERARRIVAL_LO_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getInterarrivalLo()));
+      hash = (37 * hash) + INTERARRIVAL_HI_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getInterarrivalHi()));
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -880,39 +986,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -930,7 +1036,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -938,7 +1044,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.UniformParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.UniformParams)
         io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -946,7 +1052,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -959,12 +1065,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -1001,6 +1108,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.UniformParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.UniformParams)other);
@@ -1157,11 +1290,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.DeterministicParams}
    */
   public  static final class DeterministicParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.DeterministicParams)
       DeterministicParamsOrBuilder {
     // Use DeterministicParams.newBuilder() to construct.
-    private DeterministicParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private DeterministicParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private DeterministicParams() {
@@ -1214,7 +1347,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -1261,6 +1394,39 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.DeterministicParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.DeterministicParams other = (io.grpc.benchmarks.proto.Control.DeterministicParams) obj;
+
+      boolean result = true;
+      result = result && (
+          java.lang.Double.doubleToLongBits(getOfferedLoad())
+          == java.lang.Double.doubleToLongBits(
+              other.getOfferedLoad()));
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + OFFERED_LOAD_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getOfferedLoad()));
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1284,39 +1450,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -1334,7 +1500,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -1342,7 +1508,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.DeterministicParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.DeterministicParams)
         io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -1350,7 +1516,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -1363,12 +1529,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -1402,6 +1569,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.DeterministicParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.DeterministicParams)other);
@@ -1534,11 +1727,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ParetoParams}
    */
   public  static final class ParetoParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ParetoParams)
       ParetoParamsOrBuilder {
     // Use ParetoParams.newBuilder() to construct.
-    private ParetoParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ParetoParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ParetoParams() {
@@ -1597,7 +1790,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -1660,6 +1853,46 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ParetoParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ParetoParams other = (io.grpc.benchmarks.proto.Control.ParetoParams) obj;
+
+      boolean result = true;
+      result = result && (
+          java.lang.Double.doubleToLongBits(getInterarrivalBase())
+          == java.lang.Double.doubleToLongBits(
+              other.getInterarrivalBase()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getAlpha())
+          == java.lang.Double.doubleToLongBits(
+              other.getAlpha()));
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + INTERARRIVAL_BASE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getInterarrivalBase()));
+      hash = (37 * hash) + ALPHA_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getAlpha()));
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1683,39 +1916,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -1733,7 +1966,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -1741,7 +1974,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ParetoParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ParetoParams)
         io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -1749,7 +1982,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -1762,12 +1995,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -1804,6 +2038,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ParetoParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ParetoParams)other);
@@ -1960,11 +2220,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ClosedLoopParams}
    */
   public  static final class ClosedLoopParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ClosedLoopParams)
       ClosedLoopParamsOrBuilder {
     // Use ClosedLoopParams.newBuilder() to construct.
-    private ClosedLoopParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ClosedLoopParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ClosedLoopParams() {
@@ -2010,7 +2270,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -2041,6 +2301,32 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ClosedLoopParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ClosedLoopParams other = (io.grpc.benchmarks.proto.Control.ClosedLoopParams) obj;
+
+      boolean result = true;
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2064,39 +2350,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClosedLoopParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -2114,7 +2400,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -2127,7 +2413,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ClosedLoopParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ClosedLoopParams)
         io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -2135,7 +2421,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -2148,12 +2434,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -2184,6 +2471,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ClosedLoopParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ClosedLoopParams)other);
@@ -2324,11 +2637,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.LoadParams}
    */
   public  static final class LoadParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.LoadParams)
       LoadParamsOrBuilder {
     // Use LoadParams.newBuilder() to construct.
-    private LoadParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private LoadParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private LoadParams() {
@@ -2445,7 +2758,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -2655,6 +2968,83 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.LoadParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.LoadParams other = (io.grpc.benchmarks.proto.Control.LoadParams) obj;
+
+      boolean result = true;
+      result = result && getLoadCase().equals(
+          other.getLoadCase());
+      if (!result) return false;
+      switch (loadCase_) {
+        case 1:
+          result = result && getClosedLoop()
+              .equals(other.getClosedLoop());
+          break;
+        case 2:
+          result = result && getPoisson()
+              .equals(other.getPoisson());
+          break;
+        case 3:
+          result = result && getUniform()
+              .equals(other.getUniform());
+          break;
+        case 4:
+          result = result && getDeterm()
+              .equals(other.getDeterm());
+          break;
+        case 5:
+          result = result && getPareto()
+              .equals(other.getPareto());
+          break;
+        case 0:
+        default:
+      }
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      switch (loadCase_) {
+        case 1:
+          hash = (37 * hash) + CLOSED_LOOP_FIELD_NUMBER;
+          hash = (53 * hash) + getClosedLoop().hashCode();
+          break;
+        case 2:
+          hash = (37 * hash) + POISSON_FIELD_NUMBER;
+          hash = (53 * hash) + getPoisson().hashCode();
+          break;
+        case 3:
+          hash = (37 * hash) + UNIFORM_FIELD_NUMBER;
+          hash = (53 * hash) + getUniform().hashCode();
+          break;
+        case 4:
+          hash = (37 * hash) + DETERM_FIELD_NUMBER;
+          hash = (53 * hash) + getDeterm().hashCode();
+          break;
+        case 5:
+          hash = (37 * hash) + PARETO_FIELD_NUMBER;
+          hash = (53 * hash) + getPareto().hashCode();
+          break;
+        case 0:
+        default:
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2678,39 +3068,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.LoadParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -2728,7 +3118,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -2736,7 +3126,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.LoadParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.LoadParams)
         io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -2744,7 +3134,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_LoadParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -2757,12 +3147,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -2831,6 +3222,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.LoadParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.LoadParams)other);
@@ -2908,7 +3325,7 @@ public final class Control {
       }
 
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> closedLoopBuilder_;
       /**
        * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
@@ -3019,14 +3436,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> 
           getClosedLoopFieldBuilder() {
         if (closedLoopBuilder_ == null) {
           if (!(loadCase_ == 1)) {
             load_ = io.grpc.benchmarks.proto.Control.ClosedLoopParams.getDefaultInstance();
           }
-          closedLoopBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          closedLoopBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.ClosedLoopParams) load_,
                   getParentForChildren(),
@@ -3038,7 +3455,7 @@ public final class Control {
         return closedLoopBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> poissonBuilder_;
       /**
        * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
@@ -3149,14 +3566,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> 
           getPoissonFieldBuilder() {
         if (poissonBuilder_ == null) {
           if (!(loadCase_ == 2)) {
             load_ = io.grpc.benchmarks.proto.Control.PoissonParams.getDefaultInstance();
           }
-          poissonBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          poissonBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.PoissonParams) load_,
                   getParentForChildren(),
@@ -3168,7 +3585,7 @@ public final class Control {
         return poissonBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> uniformBuilder_;
       /**
        * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
@@ -3279,14 +3696,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> 
           getUniformFieldBuilder() {
         if (uniformBuilder_ == null) {
           if (!(loadCase_ == 3)) {
             load_ = io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
           }
-          uniformBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          uniformBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.UniformParams) load_,
                   getParentForChildren(),
@@ -3298,7 +3715,7 @@ public final class Control {
         return uniformBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> determBuilder_;
       /**
        * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
@@ -3409,14 +3826,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> 
           getDetermFieldBuilder() {
         if (determBuilder_ == null) {
           if (!(loadCase_ == 4)) {
             load_ = io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
           }
-          determBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          determBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.DeterministicParams) load_,
                   getParentForChildren(),
@@ -3428,7 +3845,7 @@ public final class Control {
         return determBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> paretoBuilder_;
       /**
        * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
@@ -3539,14 +3956,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> 
           getParetoFieldBuilder() {
         if (paretoBuilder_ == null) {
           if (!(loadCase_ == 5)) {
             load_ = io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
           }
-          paretoBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          paretoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.ParetoParams) load_,
                   getParentForChildren(),
@@ -3633,11 +4050,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.SecurityParams}
    */
   public  static final class SecurityParams extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.SecurityParams)
       SecurityParamsOrBuilder {
     // Use SecurityParams.newBuilder() to construct.
-    private SecurityParams(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private SecurityParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private SecurityParams() {
@@ -3697,7 +4114,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -3763,7 +4180,7 @@ public final class Control {
         output.writeBool(1, useTestCa_);
       }
       if (!getServerHostOverrideBytes().isEmpty()) {
-        com.google.protobuf.GeneratedMessage.writeString(output, 2, serverHostOverride_);
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, serverHostOverride_);
       }
     }
 
@@ -3777,13 +4194,48 @@ public final class Control {
           .computeBoolSize(1, useTestCa_);
       }
       if (!getServerHostOverrideBytes().isEmpty()) {
-        size += com.google.protobuf.GeneratedMessage.computeStringSize(2, serverHostOverride_);
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, serverHostOverride_);
       }
       memoizedSize = size;
       return size;
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.SecurityParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.SecurityParams other = (io.grpc.benchmarks.proto.Control.SecurityParams) obj;
+
+      boolean result = true;
+      result = result && (getUseTestCa()
+          == other.getUseTestCa());
+      result = result && getServerHostOverride()
+          .equals(other.getServerHostOverride());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + USE_TEST_CA_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getUseTestCa());
+      hash = (37 * hash) + SERVER_HOST_OVERRIDE_FIELD_NUMBER;
+      hash = (53 * hash) + getServerHostOverride().hashCode();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3807,39 +4259,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.SecurityParams parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -3857,7 +4309,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -3869,7 +4321,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.SecurityParams}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.SecurityParams)
         io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -3877,7 +4329,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_SecurityParams_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -3890,12 +4342,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -3932,6 +4385,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.SecurityParams) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.SecurityParams)other);
@@ -4130,7 +4609,7 @@ public final class Control {
      *
      * <code>repeated string server_targets = 1;</code>
      */
-    com.google.protobuf.ProtocolStringList
+    java.util.List<java.lang.String>
         getServerTargetsList();
     /**
      * <pre>
@@ -4303,11 +4782,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ClientConfig}
    */
   public  static final class ClientConfig extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ClientConfig)
       ClientConfigOrBuilder {
     // Use ClientConfig.newBuilder() to construct.
-    private ClientConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ClientConfig(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ClientConfig() {
@@ -4482,7 +4961,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -4547,7 +5026,7 @@ public final class Control {
      * <code>optional .grpc.testing.ClientType client_type = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
-      io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.forNumber(clientType_);
+      io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
       return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
     }
 
@@ -4625,7 +5104,7 @@ public final class Control {
      * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
      */
     public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
-      io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.forNumber(rpcType_);
+      io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
       return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
     }
 
@@ -4762,7 +5241,7 @@ public final class Control {
                         throws java.io.IOException {
       getSerializedSize();
       for (int i = 0; i < serverTargets_.size(); i++) {
-        com.google.protobuf.GeneratedMessage.writeString(output, 1, serverTargets_.getRaw(i));
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, serverTargets_.getRaw(i));
       }
       if (clientType_ != io.grpc.benchmarks.proto.Control.ClientType.SYNC_CLIENT.getNumber()) {
         output.writeEnum(2, clientType_);
@@ -4792,8 +5271,8 @@ public final class Control {
         output.writeMessage(12, getHistogramParams());
       }
       if (getCoreListList().size() > 0) {
-        output.writeRawVarint32(106);
-        output.writeRawVarint32(coreListMemoizedSerializedSize);
+        output.writeUInt32NoTag(106);
+        output.writeUInt32NoTag(coreListMemoizedSerializedSize);
       }
       for (int i = 0; i < coreList_.size(); i++) {
         output.writeInt32NoTag(coreList_.get(i));
@@ -4875,6 +5354,102 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ClientConfig)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ClientConfig other = (io.grpc.benchmarks.proto.Control.ClientConfig) obj;
+
+      boolean result = true;
+      result = result && getServerTargetsList()
+          .equals(other.getServerTargetsList());
+      result = result && clientType_ == other.clientType_;
+      result = result && (hasSecurityParams() == other.hasSecurityParams());
+      if (hasSecurityParams()) {
+        result = result && getSecurityParams()
+            .equals(other.getSecurityParams());
+      }
+      result = result && (getOutstandingRpcsPerChannel()
+          == other.getOutstandingRpcsPerChannel());
+      result = result && (getClientChannels()
+          == other.getClientChannels());
+      result = result && (getAsyncClientThreads()
+          == other.getAsyncClientThreads());
+      result = result && rpcType_ == other.rpcType_;
+      result = result && (hasLoadParams() == other.hasLoadParams());
+      if (hasLoadParams()) {
+        result = result && getLoadParams()
+            .equals(other.getLoadParams());
+      }
+      result = result && (hasPayloadConfig() == other.hasPayloadConfig());
+      if (hasPayloadConfig()) {
+        result = result && getPayloadConfig()
+            .equals(other.getPayloadConfig());
+      }
+      result = result && (hasHistogramParams() == other.hasHistogramParams());
+      if (hasHistogramParams()) {
+        result = result && getHistogramParams()
+            .equals(other.getHistogramParams());
+      }
+      result = result && getCoreListList()
+          .equals(other.getCoreListList());
+      result = result && (getCoreLimit()
+          == other.getCoreLimit());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      if (getServerTargetsCount() > 0) {
+        hash = (37 * hash) + SERVER_TARGETS_FIELD_NUMBER;
+        hash = (53 * hash) + getServerTargetsList().hashCode();
+      }
+      hash = (37 * hash) + CLIENT_TYPE_FIELD_NUMBER;
+      hash = (53 * hash) + clientType_;
+      if (hasSecurityParams()) {
+        hash = (37 * hash) + SECURITY_PARAMS_FIELD_NUMBER;
+        hash = (53 * hash) + getSecurityParams().hashCode();
+      }
+      hash = (37 * hash) + OUTSTANDING_RPCS_PER_CHANNEL_FIELD_NUMBER;
+      hash = (53 * hash) + getOutstandingRpcsPerChannel();
+      hash = (37 * hash) + CLIENT_CHANNELS_FIELD_NUMBER;
+      hash = (53 * hash) + getClientChannels();
+      hash = (37 * hash) + ASYNC_CLIENT_THREADS_FIELD_NUMBER;
+      hash = (53 * hash) + getAsyncClientThreads();
+      hash = (37 * hash) + RPC_TYPE_FIELD_NUMBER;
+      hash = (53 * hash) + rpcType_;
+      if (hasLoadParams()) {
+        hash = (37 * hash) + LOAD_PARAMS_FIELD_NUMBER;
+        hash = (53 * hash) + getLoadParams().hashCode();
+      }
+      if (hasPayloadConfig()) {
+        hash = (37 * hash) + PAYLOAD_CONFIG_FIELD_NUMBER;
+        hash = (53 * hash) + getPayloadConfig().hashCode();
+      }
+      if (hasHistogramParams()) {
+        hash = (37 * hash) + HISTOGRAM_PARAMS_FIELD_NUMBER;
+        hash = (53 * hash) + getHistogramParams().hashCode();
+      }
+      if (getCoreListCount() > 0) {
+        hash = (37 * hash) + CORE_LIST_FIELD_NUMBER;
+        hash = (53 * hash) + getCoreListList().hashCode();
+      }
+      hash = (37 * hash) + CORE_LIMIT_FIELD_NUMBER;
+      hash = (53 * hash) + getCoreLimit();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -4898,39 +5473,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientConfig parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -4948,7 +5523,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -4956,7 +5531,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ClientConfig}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ClientConfig)
         io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -4964,7 +5539,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientConfig_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -4977,12 +5552,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -5092,6 +5668,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ClientConfig) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ClientConfig)other);
@@ -5329,7 +5931,7 @@ public final class Control {
        * <code>optional .grpc.testing.ClientType client_type = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
-        io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.forNumber(clientType_);
+        io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
       }
       /**
@@ -5355,7 +5957,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
        * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
@@ -5457,11 +6059,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
           getSecurityParamsFieldBuilder() {
         if (securityParamsBuilder_ == null) {
-          securityParamsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          securityParamsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder>(
                   getSecurityParams(),
                   getParentForChildren(),
@@ -5610,7 +6212,7 @@ public final class Control {
        * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
        */
       public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
-        io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.forNumber(rpcType_);
+        io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
         return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
       }
       /**
@@ -5636,7 +6238,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Control.LoadParams loadParams_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> loadParamsBuilder_;
       /**
        * <pre>
@@ -5774,11 +6376,11 @@ public final class Control {
        *
        * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> 
           getLoadParamsFieldBuilder() {
         if (loadParamsBuilder_ == null) {
-          loadParamsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          loadParamsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder>(
                   getLoadParams(),
                   getParentForChildren(),
@@ -5789,7 +6391,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
        * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
@@ -5891,11 +6493,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
           getPayloadConfigFieldBuilder() {
         if (payloadConfigBuilder_ == null) {
-          payloadConfigBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          payloadConfigBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder>(
                   getPayloadConfig(),
                   getParentForChildren(),
@@ -5906,7 +6508,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Stats.HistogramParams histogramParams_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> histogramParamsBuilder_;
       /**
        * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
@@ -6008,11 +6610,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> 
           getHistogramParamsFieldBuilder() {
         if (histogramParamsBuilder_ == null) {
-          histogramParamsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          histogramParamsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder>(
                   getHistogramParams(),
                   getParentForChildren(),
@@ -6211,11 +6813,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ClientStatus}
    */
   public  static final class ClientStatus extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ClientStatus)
       ClientStatusOrBuilder {
     // Use ClientStatus.newBuilder() to construct.
-    private ClientStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ClientStatus(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ClientStatus() {
@@ -6275,7 +6877,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -6334,6 +6936,41 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ClientStatus)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ClientStatus other = (io.grpc.benchmarks.proto.Control.ClientStatus) obj;
+
+      boolean result = true;
+      result = result && (hasStats() == other.hasStats());
+      if (hasStats()) {
+        result = result && getStats()
+            .equals(other.getStats());
+      }
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      if (hasStats()) {
+        hash = (37 * hash) + STATS_FIELD_NUMBER;
+        hash = (53 * hash) + getStats().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -6357,39 +6994,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientStatus parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -6407,7 +7044,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -6415,7 +7052,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ClientStatus}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ClientStatus)
         io.grpc.benchmarks.proto.Control.ClientStatusOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -6423,7 +7060,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientStatus_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -6436,12 +7073,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -6483,6 +7121,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ClientStatus) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ClientStatus)other);
@@ -6524,7 +7188,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Stats.ClientStats stats_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> statsBuilder_;
       /**
        * <code>optional .grpc.testing.ClientStats stats = 1;</code>
@@ -6626,11 +7290,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ClientStats stats = 1;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
           getStatsFieldBuilder() {
         if (statsBuilder_ == null) {
-          statsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          statsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder>(
                   getStats(),
                   getParentForChildren(),
@@ -6709,11 +7373,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.Mark}
    */
   public  static final class Mark extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.Mark)
       MarkOrBuilder {
     // Use Mark.newBuilder() to construct.
-    private Mark(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private Mark(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private Mark() {
@@ -6766,7 +7430,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -6817,6 +7481,37 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.Mark)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.Mark other = (io.grpc.benchmarks.proto.Control.Mark) obj;
+
+      boolean result = true;
+      result = result && (getReset()
+          == other.getReset());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + RESET_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getReset());
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -6840,39 +7535,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Mark parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -6890,7 +7585,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -6902,7 +7597,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.Mark}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.Mark)
         io.grpc.benchmarks.proto.Control.MarkOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -6910,7 +7605,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Mark_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -6923,12 +7618,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -6962,6 +7658,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.Mark) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.Mark)other);
@@ -7116,11 +7838,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ClientArgs}
    */
   public  static final class ClientArgs extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ClientArgs)
       ClientArgsOrBuilder {
     // Use ClientArgs.newBuilder() to construct.
-    private ClientArgs(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ClientArgs(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ClientArgs() {
@@ -7195,7 +7917,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -7318,6 +8040,59 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ClientArgs)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ClientArgs other = (io.grpc.benchmarks.proto.Control.ClientArgs) obj;
+
+      boolean result = true;
+      result = result && getArgtypeCase().equals(
+          other.getArgtypeCase());
+      if (!result) return false;
+      switch (argtypeCase_) {
+        case 1:
+          result = result && getSetup()
+              .equals(other.getSetup());
+          break;
+        case 2:
+          result = result && getMark()
+              .equals(other.getMark());
+          break;
+        case 0:
+        default:
+      }
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      switch (argtypeCase_) {
+        case 1:
+          hash = (37 * hash) + SETUP_FIELD_NUMBER;
+          hash = (53 * hash) + getSetup().hashCode();
+          break;
+        case 2:
+          hash = (37 * hash) + MARK_FIELD_NUMBER;
+          hash = (53 * hash) + getMark().hashCode();
+          break;
+        case 0:
+        default:
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -7341,39 +8116,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ClientArgs parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -7391,7 +8166,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -7399,7 +8174,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ClientArgs}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ClientArgs)
         io.grpc.benchmarks.proto.Control.ClientArgsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -7407,7 +8182,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ClientArgs_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -7420,12 +8195,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -7473,6 +8249,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ClientArgs) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ClientArgs)other);
@@ -7538,7 +8340,7 @@ public final class Control {
       }
 
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> setupBuilder_;
       /**
        * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
@@ -7649,14 +8451,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> 
           getSetupFieldBuilder() {
         if (setupBuilder_ == null) {
           if (!(argtypeCase_ == 1)) {
             argtype_ = io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance();
           }
-          setupBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          setupBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.ClientConfig) argtype_,
                   getParentForChildren(),
@@ -7668,7 +8470,7 @@ public final class Control {
         return setupBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
        * <code>optional .grpc.testing.Mark mark = 2;</code>
@@ -7779,14 +8581,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
           getMarkFieldBuilder() {
         if (markBuilder_ == null) {
           if (!(argtypeCase_ == 2)) {
             argtype_ = io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
           }
-          markBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          markBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.Mark) argtype_,
                   getParentForChildren(),
@@ -7953,11 +8755,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ServerConfig}
    */
   public  static final class ServerConfig extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ServerConfig)
       ServerConfigOrBuilder {
     // Use ServerConfig.newBuilder() to construct.
-    private ServerConfig(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ServerConfig(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ServerConfig() {
@@ -8080,7 +8882,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -8100,7 +8902,7 @@ public final class Control {
      * <code>optional .grpc.testing.ServerType server_type = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
-      io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.forNumber(serverType_);
+      io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
       return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
     }
 
@@ -8264,8 +9066,8 @@ public final class Control {
         output.writeMessage(9, getPayloadConfig());
       }
       if (getCoreListList().size() > 0) {
-        output.writeRawVarint32(82);
-        output.writeRawVarint32(coreListMemoizedSerializedSize);
+        output.writeUInt32NoTag(82);
+        output.writeUInt32NoTag(coreListMemoizedSerializedSize);
       }
       for (int i = 0; i < coreList_.size(); i++) {
         output.writeInt32NoTag(coreList_.get(i));
@@ -8320,6 +9122,71 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ServerConfig)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ServerConfig other = (io.grpc.benchmarks.proto.Control.ServerConfig) obj;
+
+      boolean result = true;
+      result = result && serverType_ == other.serverType_;
+      result = result && (hasSecurityParams() == other.hasSecurityParams());
+      if (hasSecurityParams()) {
+        result = result && getSecurityParams()
+            .equals(other.getSecurityParams());
+      }
+      result = result && (getPort()
+          == other.getPort());
+      result = result && (getAsyncServerThreads()
+          == other.getAsyncServerThreads());
+      result = result && (getCoreLimit()
+          == other.getCoreLimit());
+      result = result && (hasPayloadConfig() == other.hasPayloadConfig());
+      if (hasPayloadConfig()) {
+        result = result && getPayloadConfig()
+            .equals(other.getPayloadConfig());
+      }
+      result = result && getCoreListList()
+          .equals(other.getCoreListList());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + SERVER_TYPE_FIELD_NUMBER;
+      hash = (53 * hash) + serverType_;
+      if (hasSecurityParams()) {
+        hash = (37 * hash) + SECURITY_PARAMS_FIELD_NUMBER;
+        hash = (53 * hash) + getSecurityParams().hashCode();
+      }
+      hash = (37 * hash) + PORT_FIELD_NUMBER;
+      hash = (53 * hash) + getPort();
+      hash = (37 * hash) + ASYNC_SERVER_THREADS_FIELD_NUMBER;
+      hash = (53 * hash) + getAsyncServerThreads();
+      hash = (37 * hash) + CORE_LIMIT_FIELD_NUMBER;
+      hash = (53 * hash) + getCoreLimit();
+      if (hasPayloadConfig()) {
+        hash = (37 * hash) + PAYLOAD_CONFIG_FIELD_NUMBER;
+        hash = (53 * hash) + getPayloadConfig().hashCode();
+      }
+      if (getCoreListCount() > 0) {
+        hash = (37 * hash) + CORE_LIST_FIELD_NUMBER;
+        hash = (53 * hash) + getCoreListList().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8343,39 +9210,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerConfig parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -8393,7 +9260,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -8401,7 +9268,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ServerConfig}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ServerConfig)
         io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -8409,7 +9276,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerConfig_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -8422,12 +9289,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -8502,6 +9370,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ServerConfig) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ServerConfig)other);
@@ -8587,7 +9481,7 @@ public final class Control {
        * <code>optional .grpc.testing.ServerType server_type = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
-        io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.forNumber(serverType_);
+        io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
       }
       /**
@@ -8613,7 +9507,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
        * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
@@ -8715,11 +9609,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
           getSecurityParamsFieldBuilder() {
         if (securityParamsBuilder_ == null) {
-          securityParamsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          securityParamsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder>(
                   getSecurityParams(),
                   getParentForChildren(),
@@ -8844,7 +9738,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
        * <pre>
@@ -8982,11 +9876,11 @@ public final class Control {
        *
        * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
           getPayloadConfigFieldBuilder() {
         if (payloadConfigBuilder_ == null) {
-          payloadConfigBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          payloadConfigBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder>(
                   getPayloadConfig(),
                   getParentForChildren(),
@@ -9166,11 +10060,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ServerArgs}
    */
   public  static final class ServerArgs extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ServerArgs)
       ServerArgsOrBuilder {
     // Use ServerArgs.newBuilder() to construct.
-    private ServerArgs(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ServerArgs(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ServerArgs() {
@@ -9245,7 +10139,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -9368,6 +10262,59 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ServerArgs)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ServerArgs other = (io.grpc.benchmarks.proto.Control.ServerArgs) obj;
+
+      boolean result = true;
+      result = result && getArgtypeCase().equals(
+          other.getArgtypeCase());
+      if (!result) return false;
+      switch (argtypeCase_) {
+        case 1:
+          result = result && getSetup()
+              .equals(other.getSetup());
+          break;
+        case 2:
+          result = result && getMark()
+              .equals(other.getMark());
+          break;
+        case 0:
+        default:
+      }
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      switch (argtypeCase_) {
+        case 1:
+          hash = (37 * hash) + SETUP_FIELD_NUMBER;
+          hash = (53 * hash) + getSetup().hashCode();
+          break;
+        case 2:
+          hash = (37 * hash) + MARK_FIELD_NUMBER;
+          hash = (53 * hash) + getMark().hashCode();
+          break;
+        case 0:
+        default:
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -9391,39 +10338,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerArgs parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -9441,7 +10388,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -9449,7 +10396,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ServerArgs}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ServerArgs)
         io.grpc.benchmarks.proto.Control.ServerArgsOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -9457,7 +10404,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerArgs_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -9470,12 +10417,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -9523,6 +10471,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ServerArgs) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ServerArgs)other);
@@ -9588,7 +10562,7 @@ public final class Control {
       }
 
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> setupBuilder_;
       /**
        * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
@@ -9699,14 +10673,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> 
           getSetupFieldBuilder() {
         if (setupBuilder_ == null) {
           if (!(argtypeCase_ == 1)) {
             argtype_ = io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance();
           }
-          setupBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          setupBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.ServerConfig) argtype_,
                   getParentForChildren(),
@@ -9718,7 +10692,7 @@ public final class Control {
         return setupBuilder_;
       }
 
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
        * <code>optional .grpc.testing.Mark mark = 2;</code>
@@ -9829,14 +10803,14 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.Mark mark = 2;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
           getMarkFieldBuilder() {
         if (markBuilder_ == null) {
           if (!(argtypeCase_ == 2)) {
             argtype_ = io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
           }
-          markBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          markBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder>(
                   (io.grpc.benchmarks.proto.Control.Mark) argtype_,
                   getParentForChildren(),
@@ -9935,11 +10909,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.ServerStatus}
    */
   public  static final class ServerStatus extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ServerStatus)
       ServerStatusOrBuilder {
     // Use ServerStatus.newBuilder() to construct.
-    private ServerStatus(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private ServerStatus(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private ServerStatus() {
@@ -10011,7 +10985,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -10110,6 +11084,49 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ServerStatus)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ServerStatus other = (io.grpc.benchmarks.proto.Control.ServerStatus) obj;
+
+      boolean result = true;
+      result = result && (hasStats() == other.hasStats());
+      if (hasStats()) {
+        result = result && getStats()
+            .equals(other.getStats());
+      }
+      result = result && (getPort()
+          == other.getPort());
+      result = result && (getCores()
+          == other.getCores());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      if (hasStats()) {
+        hash = (37 * hash) + STATS_FIELD_NUMBER;
+        hash = (53 * hash) + getStats().hashCode();
+      }
+      hash = (37 * hash) + PORT_FIELD_NUMBER;
+      hash = (53 * hash) + getPort();
+      hash = (37 * hash) + CORES_FIELD_NUMBER;
+      hash = (53 * hash) + getCores();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -10133,39 +11150,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.ServerStatus parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -10183,7 +11200,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -10191,7 +11208,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.ServerStatus}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.ServerStatus)
         io.grpc.benchmarks.proto.Control.ServerStatusOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -10199,7 +11216,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ServerStatus_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -10212,12 +11229,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -10265,6 +11283,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.ServerStatus) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.ServerStatus)other);
@@ -10312,7 +11356,7 @@ public final class Control {
       }
 
       private io.grpc.benchmarks.proto.Stats.ServerStats stats_ = null;
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> statsBuilder_;
       /**
        * <code>optional .grpc.testing.ServerStats stats = 1;</code>
@@ -10414,11 +11458,11 @@ public final class Control {
       /**
        * <code>optional .grpc.testing.ServerStats stats = 1;</code>
        */
-      private com.google.protobuf.SingleFieldBuilder<
+      private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
           getStatsFieldBuilder() {
         if (statsBuilder_ == null) {
-          statsBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+          statsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
               io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder>(
                   getStats(),
                   getParentForChildren(),
@@ -10560,11 +11604,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.CoreRequest}
    */
   public  static final class CoreRequest extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.CoreRequest)
       CoreRequestOrBuilder {
     // Use CoreRequest.newBuilder() to construct.
-    private CoreRequest(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private CoreRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private CoreRequest() {
@@ -10610,7 +11654,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -10641,6 +11685,32 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.CoreRequest)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.CoreRequest other = (io.grpc.benchmarks.proto.Control.CoreRequest) obj;
+
+      boolean result = true;
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -10664,39 +11734,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreRequest parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -10714,7 +11784,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -10722,7 +11792,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.CoreRequest}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.CoreRequest)
         io.grpc.benchmarks.proto.Control.CoreRequestOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -10730,7 +11800,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreRequest_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -10743,12 +11813,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -10779,6 +11850,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.CoreRequest) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.CoreRequest)other);
@@ -10881,11 +11978,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.CoreResponse}
    */
   public  static final class CoreResponse extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.CoreResponse)
       CoreResponseOrBuilder {
     // Use CoreResponse.newBuilder() to construct.
-    private CoreResponse(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private CoreResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private CoreResponse() {
@@ -10938,7 +12035,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -10989,6 +12086,36 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.CoreResponse)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.CoreResponse other = (io.grpc.benchmarks.proto.Control.CoreResponse) obj;
+
+      boolean result = true;
+      result = result && (getCores()
+          == other.getCores());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (37 * hash) + CORES_FIELD_NUMBER;
+      hash = (53 * hash) + getCores();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -11012,39 +12139,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.CoreResponse parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -11062,7 +12189,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -11070,7 +12197,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.CoreResponse}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.CoreResponse)
         io.grpc.benchmarks.proto.Control.CoreResponseOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -11078,7 +12205,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_CoreResponse_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -11091,12 +12218,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -11130,6 +12258,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.CoreResponse) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.CoreResponse)other);
@@ -11264,11 +12418,11 @@ public final class Control {
    * Protobuf type {@code grpc.testing.Void}
    */
   public  static final class Void extends
-      com.google.protobuf.GeneratedMessage implements
+      com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.Void)
       VoidOrBuilder {
     // Use Void.newBuilder() to construct.
-    private Void(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private Void(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
     }
     private Void() {
@@ -11314,7 +12468,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_descriptor;
     }
 
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
       return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
@@ -11345,6 +12499,32 @@ public final class Control {
     }
 
     private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.Void)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.Void other = (io.grpc.benchmarks.proto.Control.Void) obj;
+
+      boolean result = true;
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -11368,39 +12548,39 @@ public final class Control {
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input);
     }
     public static io.grpc.benchmarks.proto.Control.Void parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
+      return com.google.protobuf.GeneratedMessageV3
           .parseWithIOException(PARSER, input, extensionRegistry);
     }
 
@@ -11418,7 +12598,7 @@ public final class Control {
 
     @java.lang.Override
     protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       Builder builder = new Builder(parent);
       return builder;
     }
@@ -11426,7 +12606,7 @@ public final class Control {
      * Protobuf type {@code grpc.testing.Void}
      */
     public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
         // @@protoc_insertion_point(builder_implements:grpc.testing.Void)
         io.grpc.benchmarks.proto.Control.VoidOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
@@ -11434,7 +12614,7 @@ public final class Control {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_descriptor;
       }
 
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
           internalGetFieldAccessorTable() {
         return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Void_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
@@ -11447,12 +12627,13 @@ public final class Control {
       }
 
       private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
         super(parent);
         maybeForceBuilderInitialization();
       }
       private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders) {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
         }
       }
       public Builder clear() {
@@ -11483,6 +12664,32 @@ public final class Control {
         return result;
       }
 
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
       public Builder mergeFrom(com.google.protobuf.Message other) {
         if (other instanceof io.grpc.benchmarks.proto.Control.Void) {
           return mergeFrom((io.grpc.benchmarks.proto.Control.Void)other);
@@ -11571,87 +12778,87 @@ public final class Control {
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_PoissonParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_PoissonParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_UniformParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_UniformParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_DeterministicParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_DeterministicParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ParetoParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ParetoParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClosedLoopParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_LoadParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_LoadParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_SecurityParams_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_SecurityParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientConfig_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ClientConfig_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientStatus_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ClientStatus_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Mark_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_Mark_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientArgs_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ClientArgs_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerConfig_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ServerConfig_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerArgs_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ServerArgs_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ServerStatus_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_ServerStatus_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_CoreRequest_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_CoreRequest_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_CoreResponse_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_CoreResponse_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Void_descriptor;
   private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_Void_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
@@ -11730,103 +12937,103 @@ public final class Control {
     internal_static_grpc_testing_PoissonParams_descriptor =
       getDescriptor().getMessageTypes().get(0);
     internal_static_grpc_testing_PoissonParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_PoissonParams_descriptor,
         new java.lang.String[] { "OfferedLoad", });
     internal_static_grpc_testing_UniformParams_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_testing_UniformParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_UniformParams_descriptor,
         new java.lang.String[] { "InterarrivalLo", "InterarrivalHi", });
     internal_static_grpc_testing_DeterministicParams_descriptor =
       getDescriptor().getMessageTypes().get(2);
     internal_static_grpc_testing_DeterministicParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_DeterministicParams_descriptor,
         new java.lang.String[] { "OfferedLoad", });
     internal_static_grpc_testing_ParetoParams_descriptor =
       getDescriptor().getMessageTypes().get(3);
     internal_static_grpc_testing_ParetoParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ParetoParams_descriptor,
         new java.lang.String[] { "InterarrivalBase", "Alpha", });
     internal_static_grpc_testing_ClosedLoopParams_descriptor =
       getDescriptor().getMessageTypes().get(4);
     internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClosedLoopParams_descriptor,
         new java.lang.String[] { });
     internal_static_grpc_testing_LoadParams_descriptor =
       getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_testing_LoadParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_LoadParams_descriptor,
         new java.lang.String[] { "ClosedLoop", "Poisson", "Uniform", "Determ", "Pareto", "Load", });
     internal_static_grpc_testing_SecurityParams_descriptor =
       getDescriptor().getMessageTypes().get(6);
     internal_static_grpc_testing_SecurityParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SecurityParams_descriptor,
         new java.lang.String[] { "UseTestCa", "ServerHostOverride", });
     internal_static_grpc_testing_ClientConfig_descriptor =
       getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_testing_ClientConfig_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientConfig_descriptor,
         new java.lang.String[] { "ServerTargets", "ClientType", "SecurityParams", "OutstandingRpcsPerChannel", "ClientChannels", "AsyncClientThreads", "RpcType", "LoadParams", "PayloadConfig", "HistogramParams", "CoreList", "CoreLimit", });
     internal_static_grpc_testing_ClientStatus_descriptor =
       getDescriptor().getMessageTypes().get(8);
     internal_static_grpc_testing_ClientStatus_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientStatus_descriptor,
         new java.lang.String[] { "Stats", });
     internal_static_grpc_testing_Mark_descriptor =
       getDescriptor().getMessageTypes().get(9);
     internal_static_grpc_testing_Mark_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_Mark_descriptor,
         new java.lang.String[] { "Reset", });
     internal_static_grpc_testing_ClientArgs_descriptor =
       getDescriptor().getMessageTypes().get(10);
     internal_static_grpc_testing_ClientArgs_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
     internal_static_grpc_testing_ServerConfig_descriptor =
       getDescriptor().getMessageTypes().get(11);
     internal_static_grpc_testing_ServerConfig_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerConfig_descriptor,
         new java.lang.String[] { "ServerType", "SecurityParams", "Port", "AsyncServerThreads", "CoreLimit", "PayloadConfig", "CoreList", });
     internal_static_grpc_testing_ServerArgs_descriptor =
       getDescriptor().getMessageTypes().get(12);
     internal_static_grpc_testing_ServerArgs_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
     internal_static_grpc_testing_ServerStatus_descriptor =
       getDescriptor().getMessageTypes().get(13);
     internal_static_grpc_testing_ServerStatus_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerStatus_descriptor,
         new java.lang.String[] { "Stats", "Port", "Cores", });
     internal_static_grpc_testing_CoreRequest_descriptor =
       getDescriptor().getMessageTypes().get(14);
     internal_static_grpc_testing_CoreRequest_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_CoreRequest_descriptor,
         new java.lang.String[] { });
     internal_static_grpc_testing_CoreResponse_descriptor =
       getDescriptor().getMessageTypes().get(15);
     internal_static_grpc_testing_CoreResponse_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_CoreResponse_descriptor,
         new java.lang.String[] { "Cores", });
     internal_static_grpc_testing_Void_descriptor =
       getDescriptor().getMessageTypes().get(16);
     internal_static_grpc_testing_Void_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_Void_descriptor,
         new java.lang.String[] { });
     io.grpc.benchmarks.proto.Payloads.getDescriptor();
