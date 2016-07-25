@@ -27,33 +27,33 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-netty</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-protobuf</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-stub</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 ```
 
 Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-netty:0.14.0'
-compile 'io.grpc:grpc-protobuf:0.14.0'
-compile 'io.grpc:grpc-stub:0.14.0'
+compile 'io.grpc:grpc-netty:0.15.0'
+compile 'io.grpc:grpc-protobuf:0.15.0'
+compile 'io.grpc:grpc-stub:0.15.0'
 ```
 
 For Android client, use `grpc-okhttp` instead of `grpc-netty` and
 `grpc-protobuf-nano` or `grpc-protobuf-lite` instead of `grpc-protobuf`:
 ```gradle
-compile 'io.grpc:grpc-okhttp:0.14.0'
-compile 'io.grpc:grpc-protobuf-nano:0.14.0'
-compile 'io.grpc:grpc-stub:0.14.0'
+compile 'io.grpc:grpc-okhttp:0.15.0'
+compile 'io.grpc:grpc-protobuf-nano:0.15.0'
+compile 'io.grpc:grpc-stub:0.15.0'
 ```
 
 [the JARs]:
@@ -87,9 +87,9 @@ For protobuf-based codegen integrated with the Maven build system, you can use
           protobuf-java directly, you will be transitively depending on the
           protobuf-java version that grpc depends on.
         -->
-        <protocArtifact>com.google.protobuf:protoc:3.0.0-beta-2:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.0.0-beta-3:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.14.0:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:0.15.0:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -128,11 +128,11 @@ protobuf {
     // The version of protoc must match protobuf-java. If you don't depend on
     // protobuf-java directly, you will be transitively depending on the
     // protobuf-java version that grpc depends on.
-    artifact = "com.google.protobuf:protoc:3.0.0-beta-2"
+    artifact = "com.google.protobuf:protoc:3.0.0-beta-3"
   }
   plugins {
     grpc {
-      artifact = 'io.grpc:protoc-gen-grpc-java:0.14.0'
+      artifact = 'io.grpc:protoc-gen-grpc-java:0.15.0'
     }
   }
   generateProtoTasks {
