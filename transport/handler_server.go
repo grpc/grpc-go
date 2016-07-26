@@ -370,6 +370,10 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
+func (ht *serverHandlerTransport) Drain() {
+	panic("Drain() is not implemented")
+}
+
 // mapRecvMsgError returns the non-nil err into the appropriate
 // error value as expected by callers of *grpc.parser.recvMsg.
 // In particular, in can only be:
