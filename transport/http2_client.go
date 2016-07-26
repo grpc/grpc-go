@@ -752,15 +752,15 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
-	id := t.goAwayID
 	if t.state == reachable || t.state == draining {
 		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
 			t.mu.Unlock()
-			t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: stream ID %d is even", id))
+			t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
 			return
 		}
 		select {
 		case <-t.goAway:
+			id := t.goAwayID
 			// t.goAway has been closed (i.e.,multiple GoAways).
 			if id < f.LastStreamID {
 				t.mu.Unlock()

@@ -645,7 +645,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	// Finish an RPC to make sure the connection is good.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
-		t.Fatalf("fadjflajdflkaflj")
+		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
 	}
 	ch := make(chan struct{})
 	go func() {
@@ -679,7 +679,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
 	}
 	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = %v, want _, <nil>", stream, err)
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
 	}
 	cancel()
 	<-ch
