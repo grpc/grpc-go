@@ -36,6 +36,7 @@ package grpc
 import (
 	"bytes"
 	"io"
+	"math"
 	"time"
 
 	"golang.org/x/net/context"
@@ -57,7 +58,7 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 	}
 	p := &parser{r: stream}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32); err != nil {
 			if err == io.EOF {
 				break
 			}
