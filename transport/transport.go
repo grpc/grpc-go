@@ -121,10 +121,11 @@ func (b *recvBuffer) get() <-chan item {
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
-	ctx  context.Context
-	recv *recvBuffer
-	last *bytes.Reader // Stores the remaining data in the previous calls.
-	err  error
+	ctx    context.Context
+	goAway chan struct{}
+	recv   *recvBuffer
+	last   *bytes.Reader // Stores the remaining data in the previous calls.
+	err    error
 }
 
 // Read reads the next len(p) bytes from last. If last is drained, it tries to
@@ -142,6 +143,8 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	select {
 	case <-r.ctx.Done():
 		return 0, ContextErr(r.ctx.Err())
+	case <-r.goAway:
+		return 0, ErrStreamDrain
 	case i := <-r.recv.get():
 		r.recv.load()
 		m := i.(*recvMsg)
@@ -172,6 +175,8 @@ type Stream struct {
 	cancel context.CancelFunc
 	// done is closed when the final status arrives.
 	done chan struct{}
+	// goAway is closed when the server sent GoAways signal before this stream was initiated.
+	goAway chan struct{}
 	// method records the associated RPC method of the stream.
 	method       string
 	recvCompress string
@@ -217,8 +222,16 @@ func (s *Stream) SetSendCompress(str string) {
 	s.sendCompress = str
 }
 
+// Done returns a chanel which is closed when it receives the final status
+// from the server.
 func (s *Stream) Done() <-chan struct{} {
 	return s.done
+}
+
+// GoAway returns a channel which is closed when the server sent GoAways signal
+// before this stream was initiated.
+func (s *Stream) GoAway() <-chan struct{} {
+	return s.goAway
 }
 
 // Header acquires the key-value pairs of header metadata once it
@@ -424,6 +437,11 @@ type ClientTransport interface {
 	// and create a new one) in error case. It should not return nil
 	// once the transport is initiated.
 	Error() <-chan struct{}
+
+	// GoAway returns a channel that is closed when ClientTranspor
+	// receives the draining signal from the server (e.g., GOAWAY frame in
+	// HTTP/2).
+	GoAway() <-chan struct{}
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -455,6 +473,9 @@ type ServerTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
+
+	// Drain notifies the client this ServerTransport stops accepting new RPCs.
+	Drain()
 }
 
 // StreamErrorf creates an StreamError with the specified error code and description.
@@ -482,8 +503,13 @@ func (e ConnectionError) Error() string {
 	return fmt.Sprintf("connection error: desc = %q", e.Desc)
 }
 
-// ErrConnClosing indicates that the transport is closing.
-var ErrConnClosing = ConnectionError{Desc: "transport is closing"}
+var (
+	// ErrConnClosing indicates that the transport is closing.
+	ErrConnClosing = ConnectionError{Desc: "transport is closing"}
+	// ErrStreamDrain indicates that the stream is rejected by the server because
+	// the server stops accepting new RPCs.
+	ErrStreamDrain = StreamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
+)
 
 // StreamError is an error that only affects one stream within a connection.
 type StreamError struct {
@@ -510,9 +536,10 @@ func ContextErr(err error) StreamError {
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
 // If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
 // it return the StreamError for ctx.Err.
+// If it receives from goAway, it returns 0, ErrStreamDrain.
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
-func wait(ctx context.Context, done, closing <-chan struct{}, proceed <-chan int) (int, error) {
+func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
@@ -524,6 +551,8 @@ func wait(ctx context.Context, done, closing <-chan struct{}, proceed <-chan int
 		default:
 		}
 		return 0, io.EOF
+	case <-goAway:
+		return 0, ErrStreamDrain
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:

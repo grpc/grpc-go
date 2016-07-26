@@ -565,6 +565,127 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
+func TestServerGoAway(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testServerGoAway(t, e)
+	}
+}
+
+func testServerGoAway(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// Finish an RPC to make sure the connection is good.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	ch := make(chan struct{})
+	go func() {
+		te.srv.GracefulStop()
+		close(ch)
+	}()
+	// Loop until the server side GoAway signal is propagated to the client.
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+			continue
+		}
+		break
+	}
+	// A new RPC should fail with Unavailable error.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err == nil || grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, error code: %d", err, codes.Unavailable)
+	}
+	<-ch
+	awaitNewConnLogOutput()
+}
+
+func TestServerGoAwayPendingRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testServerGoAwayPendingRPC(t, e)
+	}
+}
+
+func testServerGoAwayPendingRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithCancel(context.Background())
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	// Finish an RPC to make sure the connection is good.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
+	}
+	ch := make(chan struct{})
+	go func() {
+		te.srv.GracefulStop()
+		close(ch)
+	}()
+	// Loop until the server side GoAway signal is propagated to the client.
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+			continue
+		}
+		break
+	}
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(1),
+		},
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	// The existing RPC should be still good to proceed.
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+	}
+	cancel()
+	<-ch
+	awaitNewConnLogOutput()
+}
+
 func TestFailFast(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -1993,6 +2114,7 @@ func interestingGoroutines() (gs []string) {
 
 		if stack == "" ||
 			strings.Contains(stack, "testing.Main(") ||
+			strings.Contains(stack, "testing.tRunner(") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "created by google3/base/go/log.init") ||

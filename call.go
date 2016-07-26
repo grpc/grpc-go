@@ -179,7 +179,10 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				put()
 				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok {
+			// Retry a non-failfast RPC when
+			// i) there is a connection error; or
+			// ii) the server started to drain before this RPC was initiated.
+			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
 				if c.failFast {
 					return toRPCErr(err)
 				}

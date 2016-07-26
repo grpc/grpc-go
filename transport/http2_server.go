@@ -142,7 +142,7 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 }
 
 // operateHeader takes action on the decoded headers.
-func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) {
+func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream)) (close bool) {
 	buf := newRecvBuffer()
 	s := &Stream{
 		id:  frame.Header().StreamID,
@@ -205,6 +205,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
 		return
 	}
+	if s.id%2 != 1 || s.id <= t.maxStreamID {
+		t.mu.Unlock()
+		// illegal gRPC stream id.
+		grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", s.id)
+		return true
+	}
+	t.maxStreamID = s.id
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
 	t.activeStreams[s.id] = s
 	t.mu.Unlock()
@@ -212,6 +219,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.updateWindow(s, uint32(n))
 	}
 	handle(s)
+	return
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
@@ -262,15 +270,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			id := frame.Header().StreamID
-			if id%2 != 1 || id <= t.maxStreamID {
-				// illegal gRPC stream id.
-				grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", id)
+			if t.operateHeaders(frame, handle) {
 				t.Close()
 				break
 			}
-			t.maxStreamID = id
-			t.operateHeaders(frame, handle)
 		case *http2.DataFrame:
 			t.handleData(frame)
 		case *http2.RSTStreamFrame:
@@ -282,7 +285,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		case *http2.GoAwayFrame:
-			break
+			// TODO: Handle GoAway from the client appropriately.
 		default:
 			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
@@ -451,7 +454,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	s.headerOk = true
 	s.mu.Unlock()
-	if _, err := wait(s.ctx, nil, t.shutdownChan, t.writableChan); err != nil {
+	if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
 		return err
 	}
 	t.hBuf.Reset()
@@ -491,7 +494,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 		headersSent = true
 	}
 	s.mu.Unlock()
-	if _, err := wait(s.ctx, nil, t.shutdownChan, t.writableChan); err != nil {
+	if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
 		return err
 	}
 	t.hBuf.Reset()
@@ -540,7 +543,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 	}
 	s.mu.Unlock()
 	if writeHeaderFrame {
-		if _, err := wait(s.ctx, nil, t.shutdownChan, t.writableChan); err != nil {
+		if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
 			return err
 		}
 		t.hBuf.Reset()
@@ -568,13 +571,13 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		size := http2MaxFrameLen
 		s.sendQuotaPool.add(0)
 		// Wait until the stream has some quota to send the data.
-		sq, err := wait(s.ctx, nil, t.shutdownChan, s.sendQuotaPool.acquire())
+		sq, err := wait(s.ctx, nil, nil, t.shutdownChan, s.sendQuotaPool.acquire())
 		if err != nil {
 			return err
 		}
 		t.sendQuotaPool.add(0)
 		// Wait until the transport has some quota to send the data.
-		tq, err := wait(s.ctx, nil, t.shutdownChan, t.sendQuotaPool.acquire())
+		tq, err := wait(s.ctx, nil, nil, t.shutdownChan, t.sendQuotaPool.acquire())
 		if err != nil {
 			if _, ok := err.(StreamError); ok {
 				t.sendQuotaPool.cancel()
@@ -600,7 +603,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the
 		// transport.
-		if _, err := wait(s.ctx, nil, t.shutdownChan, t.writableChan); err != nil {
+		if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
 			if _, ok := err.(StreamError); ok {
 				// Return the connection quota back.
 				t.sendQuotaPool.add(ps)
@@ -675,6 +678,12 @@ func (t *http2Server) controller() {
 					}
 				case *resetStream:
 					t.framer.writeRSTStream(true, i.streamID, i.code)
+				case *goAway:
+					t.mu.Lock()
+					sid := t.maxStreamID
+					t.state = draining
+					t.mu.Unlock()
+					t.framer.writeGoAway(true, sid, http2.ErrCodeNo, nil)
 				case *flushIO:
 					t.framer.flushWrite()
 				case *ping:
@@ -720,6 +729,9 @@ func (t *http2Server) Close() (err error) {
 func (t *http2Server) closeStream(s *Stream) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
+	if t.state == draining && len(t.activeStreams) == 0 {
+		defer t.Close()
+	}
 	t.mu.Unlock()
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
@@ -741,4 +753,8 @@ func (t *http2Server) closeStream(s *Stream) {
 
 func (t *http2Server) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
+}
+
+func (t *http2Server) Drain() {
+	t.controlBuf.put(&goAway{})
 }

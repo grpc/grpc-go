@@ -195,6 +195,9 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				cs.finish(Errorf(s.StatusCode(), "%s", s.StatusDesc()))
 			}
 			cs.closeTransportStream(nil)
+		case <-s.GoAway():
+			cs.finish(errConnDrain)
+			cs.closeTransportStream(errConnDrain)
 		case <-s.Context().Done():
 			err := s.Context().Err()
 			cs.finish(err)
