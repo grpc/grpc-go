@@ -492,7 +492,11 @@ func (t *http2Client) GracefulClose() error {
 		if n == 0 && t.nextID > 1 {
 			n = t.nextID - 2
 		}
-		for i := t.goAwayID + 2; i <= n; i += 2 {
+		m := t.goAwayID + 2
+		if m == 2 {
+			m = 1
+		}
+		for i := m; i <= n; i += 2 {
 			if s, ok := t.activeStreams[i]; ok {
 				close(s.goAway)
 			}
@@ -749,7 +753,7 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Lock()
 	if t.state == reachable || t.state == draining {
-		if t.goAwayID > 0 && t.goAwayID < f.LastStreamID {
+		if f.LastStreamID > 0 && (f.LastStreamID%2 != 1 || t.goAwayID < f.LastStreamID) {
 			id := t.goAwayID
 			t.mu.Unlock()
 			t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
