@@ -101,11 +101,14 @@ type options struct {
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
+	msgLimit             int
 	unaryInt             UnaryServerInterceptor
 	streamInt            StreamServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
+
+var defaultMsgLimit = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
 // A ServerOption sets options.
 type ServerOption func(*options)
@@ -128,6 +131,12 @@ func RPCCompressor(cp Compressor) ServerOption {
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
+	}
+}
+
+func MsgLimit(m int) ServerOption {
+	return func(o *options) {
+		o.msgLimit = m
 	}
 }
 
@@ -173,6 +182,7 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
 	var opts options
+	opts.msgLimit = defaultMsgLimit
 	for _, o := range opt {
 		o(&opts)
 	}
@@ -568,6 +578,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					}
 					return err
 				}
+			}
+			if len(req) > s.opts.msgLimit {
+				// TODO: Revisit the error code. Currently keep it consistent with
+				// java implementation.
+				statusCode = codes.Internal
+				statusDesc = fmt.Sprintf("server received a message of %d bytes exceeding %d limit", len(req), s.opts.msgLimit)
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
