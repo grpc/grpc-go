@@ -774,7 +774,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	if t.state == reachable || t.state == draining {
 		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
 			t.mu.Unlock()
-			t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
+			t.notifyError(ConnectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
 			return
 		}
 		select {
@@ -783,7 +783,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			// t.goAway has been closed (i.e.,multiple GoAways).
 			if id < f.LastStreamID {
 				t.mu.Unlock()
-				t.notifyError(ConnectionErrorf("received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
+				t.notifyError(ConnectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
 				return
 			}
 			t.prevGoAwayID = id

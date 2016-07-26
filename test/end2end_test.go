@@ -2284,7 +2284,7 @@ var clientAlwaysFailCredError = errors.New(clientAlwaysFailCredErrorMsg)
 
 type clientAlwaysFailCred struct{}
 
-func (c clientAlwaysFailCred) ClientHandshake(addr string, rawConn net.Conn, timeout time.Duration) (_ net.Conn, _ credentials.AuthInfo, err error) {
+func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, clientAlwaysFailCredError
 }
 func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {

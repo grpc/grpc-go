@@ -473,12 +473,19 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	)
 	if cc.dopts.balancer == nil {
 		// If balancer is nil, there should be only one addrConn available.
+		cc.mu.RLock()
 		for _, ac = range cc.conns {
 			// Break after the first loop to get the first addrConn.
+			ok = true
 			break
 		}
+		cc.mu.RUnlock()
 	} else {
-		addr, put, err := cc.dopts.balancer.Get(ctx, opts)
+		var (
+			addr Address
+			err  error
+		)
+		addr, put, err = cc.dopts.balancer.Get(ctx, opts)
 		if err != nil {
 			return nil, nil, toRPCErr(err)
 		}
@@ -489,12 +496,12 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		}
 		ac, ok = cc.conns[addr]
 		cc.mu.RUnlock()
-		if !ok {
-			if put != nil {
-				put()
-			}
-			return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
+	}
+	if !ok {
+		if put != nil {
+			put()
 		}
+		return nil, nil, Errorf(codes.Internal, "grpc: failed to find the transport to send the rpc")
 	}
 	t, err := ac.wait(ctx, !opts.BlockingWait)
 	if err != nil {

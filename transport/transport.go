@@ -512,6 +512,11 @@ func (e ConnectionError) Temporary() bool {
 
 // OriginalError returns the original error of this connection error.
 func (e ConnectionError) OriginalError() error {
+	// Never return nil error here.
+	// If original error is nil, return itself.
+	if e.origErr == nil {
+		return e
+	}
 	return e.origErr
 }
 
