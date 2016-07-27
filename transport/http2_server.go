@@ -265,6 +265,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 				t.controlBuf.put(&resetStream{se.StreamID, se.Code})
 				continue
 			}
+			grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 			t.Close()
 			return
 		}
