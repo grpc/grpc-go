@@ -91,14 +91,14 @@ func TestGetServiceInfo(t *testing.T) {
 
 	info := server.GetServiceInfo()
 	want := map[string]*ServiceInfo{
-		"grpc.testing.EmptyService": &ServiceInfo{
+		"grpc.testing.EmptyService": {
 			Methods: []MethodInfo{
-				MethodInfo{
+				{
 					Name:           "EmptyCall",
 					IsClientStream: false,
 					IsServerStream: false,
 				},
-				MethodInfo{
+				{
 					Name:           "EmptyStream",
 					IsClientStream: true,
 					IsServerStream: false,

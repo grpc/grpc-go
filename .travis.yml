@@ -5,6 +5,7 @@ go:
   - 1.6
 
 before_install:
+  - go get golang.org/x/tools/cmd/goimports
   - go get github.com/axw/gocov/gocov
   - go get github.com/mattn/goveralls
   - go get golang.org/x/tools/cmd/cover
@@ -14,4 +15,6 @@ install:
   - mv "$TRAVIS_BUILD_DIR" "$GOPATH/src/google.golang.org/grpc"
 
 script:
+  - '! gofmt -s -d -l . 2>&1 | read'
+  - '! goimports -l . | read'
   - make test testrace
