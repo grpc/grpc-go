@@ -107,20 +107,21 @@ type http2Client struct {
 	prevGoAwayID uint32
 }
 
+func dial(fn func(string, time.Duration) (net.Conn, error), addr string, timeout time.Duration) (net.Conn, error) {
+	if fn != nil {
+		return fn(addr, timeout)
+	}
+	return net.DialTimeout("tcp", addr, timeout)
+}
+
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err error) {
-	if opts.Dialer == nil {
-		// Set the default Dialer.
-		opts.Dialer = func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, timeout)
-		}
-	}
+func newHTTP2Client(addr string, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
 	startT := time.Now()
 	timeout := opts.Timeout
-	conn, connErr := opts.Dialer(addr, timeout)
+	conn, connErr := dial(opts.Dialer, addr, timeout)
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}

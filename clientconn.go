@@ -558,12 +558,13 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			t.Close()
 		}
 		sleepTime := ac.dopts.bs.backoff(retries)
-		ac.dopts.copts.Timeout = sleepTime
+		copts := ac.dopts.copts
+		copts.Timeout = sleepTime
 		if sleepTime < minConnectTimeout {
-			ac.dopts.copts.Timeout = minConnectTimeout
+			copts.Timeout = minConnectTimeout
 		}
 		connectTime := time.Now()
-		newTransport, err := transport.NewClientTransport(ac.addr.Addr, &ac.dopts.copts)
+		newTransport, err := transport.NewClientTransport(ac.addr.Addr, copts)
 		if err != nil {
 			ac.mu.Lock()
 			if ac.state == Shutdown {
