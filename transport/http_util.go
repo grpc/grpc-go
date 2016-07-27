@@ -175,11 +175,11 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 		d.statusCode = codes.Code(code)
 	case "grpc-message":
-		d.statusDesc = grpcMessageDecode(f.Value)
+		d.statusDesc = decodeGrpcMessage(f.Value)
 	case "grpc-timeout":
 		d.timeoutSet = true
 		var err error
-		d.timeout, err = timeoutDecode(f.Value)
+		d.timeout, err = decodeTimeout(f.Value)
 		if err != nil {
 			d.setErr(StreamErrorf(codes.Internal, "transport: malformed time-out: %v", err))
 			return
@@ -252,7 +252,7 @@ func div(d, r time.Duration) int64 {
 }
 
 // TODO(zhaoq): It is the simplistic and not bandwidth efficient. Improve it.
-func timeoutEncode(t time.Duration) string {
+func encodeTimeout(t time.Duration) string {
 	if d := div(t, time.Nanosecond); d <= maxTimeoutValue {
 		return strconv.FormatInt(d, 10) + "n"
 	}
@@ -272,7 +272,7 @@ func timeoutEncode(t time.Duration) string {
 	return strconv.FormatInt(div(t, time.Hour), 10) + "H"
 }
 
-func timeoutDecode(s string) (time.Duration, error) {
+func decodeTimeout(s string) (time.Duration, error) {
 	size := len(s)
 	if size < 2 {
 		return 0, fmt.Errorf("transport: timeout string is too short: %q", s)
@@ -295,13 +295,13 @@ const (
 	percentByte = '%'
 )
 
-// grpcMessageEncode is used to encode status code in header field
+// encodeGrpcMessage is used to encode status code in header field
 // "grpc-message".
 // It checks to see if each individual byte in msg is an
 // allowable byte, and then either percent encoding or passing it through.
 // When percent encoding, the byte is converted into hexadecimal notation
 // with a '%' prepended.
-func grpcMessageEncode(msg string) string {
+func encodeGrpcMessage(msg string) string {
 	if msg == "" {
 		return ""
 	}
@@ -309,13 +309,13 @@ func grpcMessageEncode(msg string) string {
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
 		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
-			return grpcMessageEncodeUnchecked(msg)
+			return encodeGrpcMessageUnchecked(msg)
 		}
 	}
 	return msg
 }
 
-func grpcMessageEncodeUnchecked(msg string) string {
+func encodeGrpcMessageUnchecked(msg string) string {
 	var buf bytes.Buffer
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
@@ -329,21 +329,21 @@ func grpcMessageEncodeUnchecked(msg string) string {
 	return buf.String()
 }
 
-// grpcMessageDecode decodes the msg encoded by grpcMessageEncode.
-func grpcMessageDecode(msg string) string {
+// decodeGrpcMessage decodes the msg encoded by encodeGrpcMessage.
+func decodeGrpcMessage(msg string) string {
 	if msg == "" {
 		return ""
 	}
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
 		if msg[i] == percentByte && i+2 < lenMsg {
-			return grpcMessageDecodeUnchecked(msg)
+			return decodeGrpcMessageUnchecked(msg)
 		}
 	}
 	return msg
 }
 
-func grpcMessageDecodeUnchecked(msg string) string {
+func decodeGrpcMessageUnchecked(msg string) string {
 	var buf bytes.Buffer
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {

@@ -507,7 +507,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 			Name:  "grpc-status",
 			Value: strconv.Itoa(int(statusCode)),
 		})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: grpcMessageEncode(statusDesc)})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(statusDesc)})
 	// Attach the trailer metadata.
 	for k, v := range s.trailer {
 		// Clients don't tolerate reading restricted headers after some non restricted ones were sent.
