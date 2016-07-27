@@ -90,7 +90,7 @@ func TestGetServiceInfo(t *testing.T) {
 	server.RegisterService(&testSd, &testServer{})
 
 	info := server.GetServiceInfo()
-	want := map[string]*ServiceInfo{
+	want := map[string]ServiceInfo{
 		"grpc.testing.EmptyService": {
 			Methods: []MethodInfo{
 				{
@@ -108,6 +108,6 @@ func TestGetServiceInfo(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(info, want) {
-		t.Errorf("GetServiceInfo() = %q, want %q", info, want)
+		t.Errorf("GetServiceInfo() = %+v, want %+v", info, want)
 	}
 }
