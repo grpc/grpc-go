@@ -239,6 +239,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 	}
 
 	frame, err := t.framer.readFrame()
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		t.Close()
+		return
+	}
 	if err != nil {
 		grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 		t.Close()
@@ -264,6 +268,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 				}
 				t.controlBuf.put(&resetStream{se.StreamID, se.Code})
 				continue
+			}
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				t.Close()
+				return
 			}
 			grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 			t.Close()
