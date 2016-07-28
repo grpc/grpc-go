@@ -68,7 +68,7 @@ var (
 	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
 	// and grpc.WithInsecure() are both called for a connection.
 	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
-	// errNetworkIP indicates that the connection is down due to some network I/O error.
+	// errNetworkIO indicates that the connection is down due to some network I/O error.
 	errNetworkIO = errors.New("grpc: failed with network I/O error")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
 	errConnDrain = errors.New("grpc: the connection is drained")
@@ -631,13 +631,18 @@ func (ac *addrConn) transportMonitor() {
 			}
 			return
 		case <-t.GoAway():
+			// If GoAway happens without any network I/O error, ac is closed without shutting down the
+			// underlying transport (the transport will be closed when all the pending RPCs finished or
+			// failed.).
+			// If GoAway and some network I/O error happen concurrently, ac and its underlying transport
+			// are closed.
+			// In both cases, a new ac is created.
 			select {
 			case <-t.Error():
-				t.Close()
-				return
+				ac.tearDown(errNetworkIO)
 			default:
+				ac.tearDown(errConnDrain)
 			}
-			ac.tearDown(errConnDrain)
 			ac.cc.newAddrConn(ac.addr, true)
 			return
 		case <-t.Error():
@@ -646,7 +651,8 @@ func (ac *addrConn) transportMonitor() {
 				t.Close()
 				return
 			case <-t.GoAway():
-				t.Close()
+				ac.tearDown(errNetworkIO)
+				ac.cc.newAddrConn(ac.addr, true)
 				return
 			default:
 			}

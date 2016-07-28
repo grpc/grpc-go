@@ -710,50 +710,19 @@ func testConcurrentClientConnCloseAndServerGoAway(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	stream, err := tc.FullDuplexCall(context.Background(), grpc.FailFast(false))
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	// Finish an RPC to make sure the connection is good.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
 	}
 	ch := make(chan struct{})
+	// Close ClientConn and Server concurrently.
 	go func() {
 		te.srv.GracefulStop()
 		close(ch)
 	}()
-	// Loop until the server side GoAway signal is propagated to the client.
-	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
-			continue
-		}
-		break
-	}
-	// Stop the server and close all the connections.
-	te.srv.Stop()
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: proto.Int32(1),
-		},
-	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	if err := stream.Send(req); err == nil {
-		if _, err := stream.Recv(); err == nil {
-			t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-		}
-	}
+	go func() {
+		cc.Close()
+	}()
 	<-ch
-	awaitNewConnLogOutput()
 }
 
 func TestConcurrentServerStopAndGoAway(t *testing.T) {
