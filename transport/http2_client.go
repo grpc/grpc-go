@@ -419,9 +419,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
 		// The transport is draining and s is the last live stream on t.
-		t.mu.Unlock()
-		t.Close()
-		return
+		defer t.Close()
 	}
 	t.mu.Unlock()
 	if updateStreams {
@@ -457,7 +455,7 @@ func (t *http2Client) Close() (err error) {
 		t.mu.Unlock()
 		return
 	}
-	if t.state == reachable {
+	if t.state == reachable || t.state == draining {
 		close(t.errorChan)
 	}
 	t.state = closing
@@ -994,11 +992,16 @@ func (t *http2Client) GoAway() <-chan struct{} {
 
 func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	// make sure t.errorChan is closed only once.
+	if t.state == draining {
+		t.mu.Unlock()
+		t.Close()
+		return
+	}
 	if t.state == reachable {
 		t.state = unreachable
 		close(t.errorChan)
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
+	t.mu.Unlock()
 }

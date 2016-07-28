@@ -681,6 +681,11 @@ func (t *http2Server) controller() {
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *goAway:
 					t.mu.Lock()
+					if t.state == closing {
+						t.mu.Unlock()
+						// The transport is closing.
+						return
+					}
 					sid := t.maxStreamID
 					t.state = draining
 					t.mu.Unlock()
