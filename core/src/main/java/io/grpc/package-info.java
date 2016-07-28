@@ -29,7 +29,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc;
 /**
  * The gRPC core public API.
  *
@@ -39,16 +38,17 @@ package io.grpc;
  * messages, they half close their respective connections.  The RPC is complete as soon as the
  * server closes.
  *
- * <p>To send an RPC, first create a {@link Channel} using {@link ManagedChannelBuilder#forTarget}.
- * When using auto generate Protobuf stubs, the stub class will have constructors for wrapping the
- * channel.  These include {@code newBlockingStub}, {@code newStub}, and {@code newFutureStub}
- * which you can use based on your design.  The stub is the primary way a client interacts with a
- * server.
+ * <p>To send an RPC, first create a {@link io.grpc.Channel} using
+ * {@link io.grpc.ManagedChannelBuilder#forTarget}.  When using auto generate Protobuf stubs, the
+ * stub class will have constructors for wrapping the channel.  These include
+ * {@code newBlockingStub}, {@code newStub}, and {@code newFutureStub} which you can use based on
+ * your design.  The stub is the primary way a client interacts with a server.
  *
- * <p>To receive RPCs, create a {@link Server} using {@link ServerBuilder#forPort}.  The Protobuf
- * stub will contain an abstract class called AbstractFoo, where Foo is the name of your service.
- * Extend this class, and pass an instance of it to {@link ServerBuilder#addService}.  Once your
- * server is built, call {@link Server#start} to begin accepting RPCs.
+ * <p>To receive RPCs, create a {@link io.grpc.Server} using {@link io.grpc.ServerBuilder#forPort}.
+ * The Protobuf stub will contain an abstract class called AbstractFoo, where Foo is the name of
+ * your service. Extend this class, and pass an instance of it to
+ * {@link io.grpc.ServerBuilder#addService}.  Once your server is built, call
+ * {@link io.grpc.Server#start} to begin accepting RPCs.
  *
  * <p>Both Clients and Servers should use a custom {@link java.util.concurrent.Executor}.  The gRPC
  * runtime includes a default executor that eases testing and examples, but is not ideal for use in
@@ -68,4 +68,4 @@ package io.grpc;
  * <a href="https://groups.google.com/forum/#!forum/grpc-io">grpc-io</a> if you have questions
  * about gRPC.
  */
-
+package io.grpc;
