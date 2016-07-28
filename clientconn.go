@@ -624,12 +624,32 @@ func (ac *addrConn) transportMonitor() {
 		// shutdownChan is needed to detect the teardown when
 		// the addrConn is idle (i.e., no RPC in flight).
 		case <-ac.shutdownChan:
+			select {
+			case <-t.Error():
+				t.Close()
+			default:
+			}
 			return
 		case <-t.GoAway():
+			select {
+			case <-t.Error():
+				t.Close()
+				return
+			default:
+			}
 			ac.tearDown(errConnDrain)
 			ac.cc.newAddrConn(ac.addr, true)
 			return
 		case <-t.Error():
+			select {
+			case <-ac.shutdownChan:
+				t.Close()
+				return
+			case <-t.GoAway():
+				t.Close()
+				return
+			default:
+			}
 			ac.mu.Lock()
 			if ac.state == Shutdown {
 				// ac has been shutdown.
