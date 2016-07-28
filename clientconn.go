@@ -196,9 +196,11 @@ func WithTimeout(d time.Duration) DialOption {
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
-func WithDialer(f func(string, time.Duration, <-chan struct{}) (net.Conn, error)) DialOption {
+func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 	return func(o *dialOptions) {
-		o.copts.Dialer = f
+		o.copts.Dialer = func(addr string, timeout time.Duration, _ <-chan struct{}) (net.Conn, error) {
+			return f(addr, timeout)
+		}
 	}
 }
 
