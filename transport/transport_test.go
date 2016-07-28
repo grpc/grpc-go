@@ -220,7 +220,7 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, Client
 		ct      ClientTransport
 		connErr error
 	)
-	ct, connErr = NewClientTransport(addr, &ConnectOptions{})
+	ct, connErr = NewClientTransport(addr, ConnectOptions{})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
