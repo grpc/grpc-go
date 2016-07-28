@@ -454,7 +454,7 @@ func (t *http2Client) Close() (err error) {
 		t.mu.Unlock()
 		return
 	}
-	if t.state == reachable {
+	if t.state == reachable || t.state == draining {
 		close(t.errorChan)
 	}
 	t.state = closing
@@ -856,7 +856,11 @@ func (t *http2Client) reader() {
 	// Check the validity of server preface.
 	frame, err := t.framer.readFrame()
 	if err != nil {
-		t.notifyError(err)
+		if t.state == draining {
+			t.Close()
+		} else {
+			t.notifyError(err)
+		}
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
@@ -884,7 +888,12 @@ func (t *http2Client) reader() {
 				continue
 			} else {
 				// Transport error.
-				t.notifyError(err)
+				if t.state == draining {
+					// A network error happened after the connection is drained. Fail the connection immediately.
+					t.Close()
+				} else {
+					t.notifyError(err)
+				}
 				return
 			}
 		}
@@ -993,7 +1002,7 @@ func (t *http2Client) notifyError(err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// make sure t.errorChan is closed only once.
-	if t.state == reachable {
+	if t.state == reachable || t.state == draining {
 		t.state = unreachable
 		close(t.errorChan)
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)

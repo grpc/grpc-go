@@ -296,6 +296,8 @@ const (
 	TransientFailure
 	// Shutdown indicates the ClientConn has started shutting down.
 	Shutdown
+	// Drain
+	Drain
 )
 
 func (s ConnectivityState) String() string {
@@ -310,6 +312,8 @@ func (s ConnectivityState) String() string {
 		return "TRANSIENT_FAILURE"
 	case Shutdown:
 		return "SHUTDOWN"
+	case Drain:
+		return "DRAIN"
 	default:
 		panic(fmt.Sprintf("unknown connectivity state: %d", s))
 	}
@@ -632,7 +636,7 @@ func (ac *addrConn) transportMonitor() {
 		case <-t.Error():
 			ac.mu.Lock()
 			if ac.state == Shutdown {
-				// ac.tearDown(...) has been invoked.
+				// ac has been shutdown.
 				ac.mu.Unlock()
 				return
 			}
