@@ -367,7 +367,7 @@ type test struct {
 
 	// Configurable knobs, after newTest returns:
 	testServer        testpb.TestServiceServer // nil means none
-	healthServer      *health.HealthServer     // nil means disabled
+	healthServer      *health.Server           // nil means disabled
 	maxStream         uint32
 	userAgent         string
 	clientCompression bool
@@ -742,7 +742,7 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 
 func testHealthCheckOnSuccess(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	hs.SetServingStatus("grpc.health.v1.Health", 1)
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
@@ -768,7 +768,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 		"Failed to dial ",
 		"grpc: the client connection is closing; please retry",
 	)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
@@ -812,7 +812,7 @@ func TestHealthCheckServingStatus(t *testing.T) {
 
 func testHealthCheckServingStatus(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()

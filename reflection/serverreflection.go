@@ -70,7 +70,7 @@ import (
 type serverReflectionServer struct {
 	s *grpc.Server
 	// TODO add more cache if necessary
-	serviceInfo map[string]*grpc.ServiceInfo // cache for s.GetServiceInfo()
+	serviceInfo map[string]grpc.ServiceInfo // cache for s.GetServiceInfo()
 }
 
 // Register registers the server reflection service on the given gRPC server.
