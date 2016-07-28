@@ -314,13 +314,7 @@ func (e env) runnable() bool {
 	return true
 }
 
-func (e env) dialer(addr string, timeout time.Duration, cancel <-chan struct{}) (net.Conn, error) {
-	// NB: Go 1.6 added a Cancel field on net.Dialer, which would allow this
-	// to be written as
-	//
-	// `(&net.Dialer{Cancel: cancel, Timeout: timeout}).Dial(e.network, addr)`
-	//
-	// but that would break compatibility with earlier Go versions.
+func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout(e.network, addr, timeout)
 }
 
@@ -511,7 +505,7 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
-	c, err := te.e.dialer(te.srvAddr, 10*time.Second, nil)
+	c, err := te.e.dialer(te.srvAddr, 10*time.Second)
 	if err != nil {
 		te.t.Fatal(err)
 	}
