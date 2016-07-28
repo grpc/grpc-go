@@ -356,7 +356,7 @@ func (cc *ClientConn) lbWatcher() {
 			cc.newAddrConn(a, true)
 		}
 		for _, c := range del {
-			// tearDown ac and remove it from cc.
+			// Tear down ac and remove it from cc.
 			c.tearDown(errConnDrain, true)
 		}
 	}
@@ -400,7 +400,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		// There is an addrConn alive on ac.addr already. This could be due to
 		// i) stale's Close is undergoing;
 		// ii) a buggy Balancer notifies duplicated Addresses.
-		// tearDown this ac but don't remove from cc,
+		// Tear down this ac but don't remove it from cc
 		// because the ac in cc is a new one, not this stale one.
 		stale.tearDown(errConnDrain, false)
 	}
@@ -656,7 +656,7 @@ func (ac *addrConn) transportMonitor() {
 				t.Close()
 				return
 			case <-t.GoAway():
-				ac.tearDown(errNetworkIO)
+				ac.tearDown(errNetworkIO, true)
 				ac.cc.newAddrConn(ac.addr, true)
 				return
 			default:
