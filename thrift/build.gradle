@@ -1,0 +1,29 @@
+description = 'gRPC: Thrift'
+
+dependencies {
+    compile project(':grpc-core'),
+            'org.apache.thrift:libthrift:0.9.3'
+}
+
+
+String generatedSourcePath = "${projectDir}/src/generated"
+project.sourceSets {
+  main {
+    java {
+      srcDir "${generatedSourcePath}/main/java"
+      srcDir "${generatedSourcePath}/main/grpc"
+    }
+  }
+  test {
+    java {
+      srcDir "${generatedSourcePath}/test/java"
+      srcDir "${generatedSourcePath}/test/grpc"
+    }
+  }
+}
+
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/test/java");
+    }
+}

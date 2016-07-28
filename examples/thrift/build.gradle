@@ -1,0 +1,55 @@
+apply plugin: 'application'
+
+description = "Thrift Examples"
+
+startScripts.enabled = false
+
+def grpcVersion = '1.1.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+}
+
+dependencies {
+  compile "io.grpc:grpc-stub:${grpcVersion}"
+  compile "io.grpc:grpc-thrift:${grpcVersion}"
+  compile "io.grpc:grpc-netty:${grpcVersion}"
+}
+
+String generatedSourcePath = "${projectDir}/src/generated"
+project.sourceSets {
+  main {
+    java {
+      srcDir "${generatedSourcePath}/main/java"
+      srcDir "${generatedSourcePath}/main/grpc"
+    }
+  }
+}
+
+task thriftHelloWorldServer(type: CreateStartScripts) {
+    mainClassName = "io.grpc.examples.thrift.helloworld.HelloWorldServer"
+    applicationName = "thrift-hello-world-server"
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task thriftHelloWorldClient(type: CreateStartScripts) {
+   mainClassName = "io.grpc.examples.thrift.helloworld.HelloWorldClient"
+   applicationName = "thrift-hello-world-client"
+   outputDir = new File(project.buildDir, 'tmp')
+   classpath = jar.outputs.files + project.configurations.runtime
+}
+
+applicationDistribution.into("bin") {
+    from(thriftHelloWorldServer)
+    from(thriftHelloWorldClient)
+    fileMode = 0755
+}
+
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
+    }
+}
