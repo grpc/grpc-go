@@ -2282,8 +2282,8 @@ func leakCheck(t testing.TB) func() {
 	}
 	return func() {
 		// Loop, waiting for goroutines to shut down.
-		// Wait up to 5 seconds, but finish as quickly as possible.
-		deadline := time.Now().Add(5 * time.Second)
+		// Wait up to 10 seconds, but finish as quickly as possible.
+		deadline := time.Now().Add(10 * time.Second)
 		for {
 			var leaked []string
 			for _, g := range interestingGoroutines() {
