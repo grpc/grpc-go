@@ -184,8 +184,8 @@ func TestContextErr(t *testing.T) {
 
 func TestErrorsWithSameParameters(t *testing.T) {
 	const description = "some description"
-	e1 := Errorf(codes.AlreadyExists, description)
-	e2 := Errorf(codes.AlreadyExists, description)
+	e1 := Errorf(codes.AlreadyExists, description).(*rpcError)
+	e2 := Errorf(codes.AlreadyExists, description).(*rpcError)
 	if e1 == e2 {
 		t.Fatalf("Error interfaces should not be considered equal - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
 	}

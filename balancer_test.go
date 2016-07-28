@@ -243,7 +243,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
 	// Remove the server.
-	updates := []*naming.Update{&naming.Update{
+	updates := []*naming.Update{{
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
@@ -287,7 +287,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
 	// Remove all servers so that all upcoming RPCs will block on waitCh.
-	updates := []*naming.Update{&naming.Update{
+	updates := []*naming.Update{{
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
@@ -310,7 +310,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 		}
 	}()
 	// Add a connected server to get the above RPC through.
-	updates = []*naming.Update{&naming.Update{
+	updates = []*naming.Update{{
 		Op:   naming.Add,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}

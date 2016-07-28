@@ -58,7 +58,7 @@ func closeLoopUnary() {
 
 	for i := 0; i < *maxConcurrentRPCs; i++ {
 		go func() {
-			for _ = range ch {
+			for range ch {
 				start := time.Now()
 				unaryCaller(tc)
 				elapse := time.Since(start)

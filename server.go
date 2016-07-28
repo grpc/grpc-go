@@ -269,8 +269,8 @@ type ServiceInfo struct {
 
 // GetServiceInfo returns a map from service names to ServiceInfo.
 // Service names include the package names, in the form of <package>.<service>.
-func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
-	ret := make(map[string]*ServiceInfo)
+func (s *Server) GetServiceInfo() map[string]ServiceInfo {
+	ret := make(map[string]ServiceInfo)
 	for n, srv := range s.m {
 		methods := make([]MethodInfo, 0, len(srv.md)+len(srv.sd))
 		for m := range srv.md {
@@ -288,7 +288,7 @@ func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
 			})
 		}
 
-		ret[n] = &ServiceInfo{
+		ret[n] = ServiceInfo{
 			Methods:  methods,
 			Metadata: srv.mdata,
 		}
