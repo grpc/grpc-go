@@ -79,7 +79,7 @@ func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb
 		}
 	}
 	// No feature was found, return an unnamed feature
-	return &pb.Feature{"", point}, nil
+	return &pb.Feature{Location: point}, nil
 }
 
 // ListFeatures lists all features contained within the given bounding Rectangle.

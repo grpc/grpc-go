@@ -107,20 +107,21 @@ type http2Client struct {
 	prevGoAwayID uint32
 }
 
+func dial(fn func(string, time.Duration, <-chan struct{}) (net.Conn, error), addr string, timeout time.Duration, cancel <-chan struct{}) (net.Conn, error) {
+	if fn != nil {
+		return fn(addr, timeout, cancel)
+	}
+	return newDialer(timeout, cancel).Dial("tcp", addr)
+}
+
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, opts *ConnectOptions) (_ ClientTransport, err error) {
-	if opts.Dialer == nil {
-		// Set the default Dialer.
-		opts.Dialer = func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, timeout)
-		}
-	}
+func newHTTP2Client(addr string, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
 	startT := time.Now()
 	timeout := opts.Timeout
-	conn, connErr := opts.Dialer(addr, timeout)
+	conn, connErr := dial(opts.Dialer, addr, timeout, opts.Cancel)
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
@@ -341,7 +342,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: callHdr.SendCompress})
 	}
 	if timeout > 0 {
-		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: timeoutEncode(timeout)})
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: encodeTimeout(timeout)})
 	}
 	for k, v := range authData {
 		// Capital header names are illegal in HTTP/2.

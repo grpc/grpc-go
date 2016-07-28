@@ -153,7 +153,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 func randomPoint(r *rand.Rand) *pb.Point {
 	lat := (r.Int31n(180) - 90) * 1e7
 	long := (r.Int31n(360) - 180) * 1e7
-	return &pb.Point{lat, long}
+	return &pb.Point{Latitude: lat, Longitude: long}
 }
 
 func main() {
@@ -186,13 +186,16 @@ func main() {
 	client := pb.NewRouteGuideClient(conn)
 
 	// Looking for a valid feature
-	printFeature(client, &pb.Point{409146138, -746188906})
+	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
 
 	// Feature missing.
-	printFeature(client, &pb.Point{0, 0})
+	printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
 
 	// Looking for features between 40, -75 and 42, -73.
-	printFeatures(client, &pb.Rectangle{&pb.Point{Latitude: 400000000, Longitude: -750000000}, &pb.Point{Latitude: 420000000, Longitude: -730000000}})
+	printFeatures(client, &pb.Rectangle{
+		Lo: &pb.Point{Latitude: 400000000, Longitude: -750000000},
+		Hi: &pb.Point{Latitude: 420000000, Longitude: -730000000},
+	})
 
 	// RecordRoute
 	runRecordRoute(client)

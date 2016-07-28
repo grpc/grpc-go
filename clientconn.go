@@ -196,7 +196,7 @@ func WithTimeout(d time.Duration) DialOption {
 }
 
 // WithDialer returns a DialOption that specifies a function to use for dialing network addresses.
-func WithDialer(f func(addr string, timeout time.Duration) (net.Conn, error)) DialOption {
+func WithDialer(f func(string, time.Duration, <-chan struct{}) (net.Conn, error)) DialOption {
 	return func(o *dialOptions) {
 		o.copts.Dialer = f
 	}
@@ -361,11 +361,11 @@ func (cc *ClientConn) lbWatcher() {
 
 func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 	ac := &addrConn{
-		cc:           cc,
-		addr:         addr,
-		dopts:        cc.dopts,
-		shutdownChan: make(chan struct{}),
+		cc:    cc,
+		addr:  addr,
+		dopts: cc.dopts,
 	}
+	ac.dopts.copts.Cancel = make(chan struct{})
 	if EnableTracing {
 		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
 	}
@@ -468,11 +468,10 @@ func (cc *ClientConn) Close() error {
 
 // addrConn is a network connection to a given address.
 type addrConn struct {
-	cc           *ClientConn
-	addr         Address
-	dopts        dialOptions
-	shutdownChan chan struct{}
-	events       trace.EventLog
+	cc     *ClientConn
+	addr   Address
+	dopts  dialOptions
+	events trace.EventLog
 
 	mu      sync.Mutex
 	state   ConnectivityState
@@ -558,12 +557,13 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			t.Close()
 		}
 		sleepTime := ac.dopts.bs.backoff(retries)
-		ac.dopts.copts.Timeout = sleepTime
+		copts := ac.dopts.copts
+		copts.Timeout = sleepTime
 		if sleepTime < minConnectTimeout {
-			ac.dopts.copts.Timeout = minConnectTimeout
+			copts.Timeout = minConnectTimeout
 		}
 		connectTime := time.Now()
-		newTransport, err := transport.NewClientTransport(ac.addr.Addr, &ac.dopts.copts)
+		newTransport, err := transport.NewClientTransport(ac.addr.Addr, copts)
 		if err != nil {
 			ac.mu.Lock()
 			if ac.state == Shutdown {
@@ -586,7 +586,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			closeTransport = false
 			select {
 			case <-time.After(sleepTime):
-			case <-ac.shutdownChan:
+			case <-ac.dopts.copts.Cancel:
 			}
 			retries++
 			grpclog.Printf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, ac.addr)
@@ -621,9 +621,9 @@ func (ac *addrConn) transportMonitor() {
 		t := ac.transport
 		ac.mu.Unlock()
 		select {
-		// shutdownChan is needed to detect the teardown when
+		// Cancel is needed to detect the teardown when
 		// the addrConn is idle (i.e., no RPC in flight).
-		case <-ac.shutdownChan:
+		case <-ac.dopts.copts.Cancel:
 			return
 		case <-t.GoAway():
 			ac.tearDown(errConnDrain)
@@ -724,8 +724,8 @@ func (ac *addrConn) tearDown(err error) {
 	if ac.transport != nil && err != errConnDrain {
 		ac.transport.Close()
 	}
-	if ac.shutdownChan != nil {
-		close(ac.shutdownChan)
+	if ac.dopts.copts.Cancel != nil {
+		close(ac.dopts.copts.Cancel)
 	}
 	return
 }

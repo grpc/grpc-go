@@ -43,7 +43,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -354,8 +353,10 @@ func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authI
 type ConnectOptions struct {
 	// UserAgent is the application user agent.
 	UserAgent string
+	// Cancel is closed to indicate that dialing should be cancelled.
+	Cancel chan struct{}
 	// Dialer specifies how to dial a network address.
-	Dialer func(string, time.Duration) (net.Conn, error)
+	Dialer func(string, time.Duration, <-chan struct{}) (net.Conn, error)
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
 	// TransportCredentials stores the Authenticator required to setup a client connection.
@@ -366,7 +367,7 @@ type ConnectOptions struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(target string, opts *ConnectOptions) (ClientTransport, error) {
+func NewClientTransport(target string, opts ConnectOptions) (ClientTransport, error) {
 	return newHTTP2Client(target, opts)
 }
 
@@ -558,75 +559,4 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 	case i := <-proceed:
 		return i, nil
 	}
-}
-
-const (
-	spaceByte   = ' '
-	tildaByte   = '~'
-	percentByte = '%'
-)
-
-// grpcMessageEncode encodes the grpc-message field in the same
-// manner as https://github.com/grpc/grpc-java/pull/1517.
-func grpcMessageEncode(msg string) string {
-	if msg == "" {
-		return ""
-	}
-	lenMsg := len(msg)
-	for i := 0; i < lenMsg; i++ {
-		c := msg[i]
-		if !(c >= spaceByte && c < tildaByte && c != percentByte) {
-			return grpcMessageEncodeUnchecked(msg)
-		}
-	}
-	return msg
-}
-
-func grpcMessageEncodeUnchecked(msg string) string {
-	var buf bytes.Buffer
-	lenMsg := len(msg)
-	for i := 0; i < lenMsg; i++ {
-		c := msg[i]
-		if c >= spaceByte && c < tildaByte && c != percentByte {
-			_ = buf.WriteByte(c)
-		} else {
-			_, _ = buf.WriteString(fmt.Sprintf("%%%02X", c))
-		}
-	}
-	return buf.String()
-}
-
-// grpcMessageDecode decodes the grpc-message field in the same
-// manner as https://github.com/grpc/grpc-java/pull/1517.
-func grpcMessageDecode(msg string) string {
-	if msg == "" {
-		return ""
-	}
-	lenMsg := len(msg)
-	for i := 0; i < lenMsg; i++ {
-		if msg[i] == percentByte && i+2 < lenMsg {
-			return grpcMessageDecodeUnchecked(msg)
-		}
-	}
-	return msg
-}
-
-func grpcMessageDecodeUnchecked(msg string) string {
-	var buf bytes.Buffer
-	lenMsg := len(msg)
-	for i := 0; i < lenMsg; i++ {
-		c := msg[i]
-		if c == percentByte && i+2 < lenMsg {
-			parsed, err := strconv.ParseInt(msg[i+1:i+3], 16, 8)
-			if err != nil {
-				_ = buf.WriteByte(c)
-			} else {
-				_ = buf.WriteByte(byte(parsed))
-				i += 2
-			}
-		} else {
-			_ = buf.WriteByte(c)
-		}
-	}
-	return buf.String()
 }

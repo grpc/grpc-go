@@ -300,39 +300,35 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 
 const tlsDir = "testdata/"
 
-func unixDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", addr, timeout)
-}
-
 type env struct {
 	name        string
 	network     string // The type of network such as tcp, unix, etc.
-	dialer      func(addr string, timeout time.Duration) (net.Conn, error)
 	security    string // The security protocol such as TLS, SSH, etc.
 	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
 }
 
 func (e env) runnable() bool {
-	if runtime.GOOS == "windows" && strings.HasPrefix(e.name, "unix-") {
+	if runtime.GOOS == "windows" && e.network == "unix" {
 		return false
 	}
 	return true
 }
 
-func (e env) getDialer() func(addr string, timeout time.Duration) (net.Conn, error) {
-	if e.dialer != nil {
-		return e.dialer
-	}
-	return func(addr string, timeout time.Duration) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, timeout)
-	}
+func (e env) dialer(addr string, timeout time.Duration, cancel <-chan struct{}) (net.Conn, error) {
+	// NB: Go 1.6 added a Cancel field on net.Dialer, which would allow this
+	// to be written as
+	//
+	// `(&net.Dialer{Cancel: cancel, Timeout: timeout}).Dial(e.network, addr)`
+	//
+	// but that would break compatibility with earlier Go versions.
+	return net.DialTimeout(e.network, addr, timeout)
 }
 
 var (
 	tcpClearEnv  = env{name: "tcp-clear", network: "tcp"}
 	tcpTLSEnv    = env{name: "tcp-tls", network: "tcp", security: "tls"}
-	unixClearEnv = env{name: "unix-clear", network: "unix", dialer: unixDialer}
-	unixTLSEnv   = env{name: "unix-tls", network: "unix", dialer: unixDialer, security: "tls"}
+	unixClearEnv = env{name: "unix-clear", network: "unix"}
+	unixTLSEnv   = env{name: "unix-tls", network: "unix", security: "tls"}
 	handlerEnv   = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true}
 	allEnv       = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv}
 )
@@ -371,7 +367,7 @@ type test struct {
 
 	// Configurable knobs, after newTest returns:
 	testServer        testpb.TestServiceServer // nil means none
-	healthServer      *health.HealthServer     // nil means disabled
+	healthServer      *health.Server           // nil means disabled
 	maxStream         uint32
 	maxMsgSize        int
 	userAgent         string
@@ -519,9 +515,7 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
-	var c net.Conn
-	var err error
-	c, err = te.e.getDialer()(te.srvAddr, 10*time.Second)
+	c, err := te.e.dialer(te.srvAddr, 10*time.Second, nil)
 	if err != nil {
 		te.t.Fatal(err)
 	}
@@ -752,7 +746,7 @@ func TestHealthCheckOnSuccess(t *testing.T) {
 
 func testHealthCheckOnSuccess(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	hs.SetServingStatus("grpc.health.v1.Health", 1)
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
@@ -778,7 +772,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 		"Failed to dial ",
 		"grpc: the client connection is closing; please retry",
 	)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	hs.SetServingStatus("grpc.health.v1.HealthCheck", 1)
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
@@ -822,7 +816,7 @@ func TestHealthCheckServingStatus(t *testing.T) {
 
 func testHealthCheckServingStatus(t *testing.T, e env) {
 	te := newTest(t, e)
-	hs := health.NewHealthServer()
+	hs := health.NewServer()
 	te.healthServer = hs
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
