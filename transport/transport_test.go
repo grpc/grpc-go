@@ -553,6 +553,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("Failed to cancel the context of the sever side stream.")
 	}
+	server.stop()
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
@@ -732,7 +733,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		Last:  true,
 		Delay: false,
 	}
-	if err := ct.Write(s, expectedRequest, &opts); err != nil {
+	if err := ct.Write(s, expectedRequest, &opts); err != nil || err == io.EOF {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
