@@ -798,7 +798,7 @@ func (s *Server) Stop() {
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	if s.drain == true || s.conns == nil {
-		s.mu.Lock()
+		s.mu.Unlock()
 		return
 	}
 	s.drain = true
