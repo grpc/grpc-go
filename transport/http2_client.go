@@ -430,7 +430,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
 		// The transport is draining and s is the last live stream on t.
-		defer t.Close()
+		t.mu.Unlock()
+		t.Close()
+		return
 	}
 	t.mu.Unlock()
 	if updateStreams {

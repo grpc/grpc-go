@@ -368,8 +368,8 @@ func TestGracefulClose(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := ct.NewStream(context.Background(), callHdr); err != ErrConnClosing {
-				t.Errorf("%v.NewStream(_, _) = _, %v, want _, %v", ct, err, ErrConnClosing)
+			if _, err := ct.NewStream(context.Background(), callHdr); err != ErrStreamDrain {
+				t.Errorf("%v.NewStream(_, _) = _, %v, want _, %v", ct, err, ErrStreamDrain)
 			}
 		}()
 	}
