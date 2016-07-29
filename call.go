@@ -52,6 +52,13 @@ import (
 func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) error {
 	// Try to acquire header metadata from the server if there is any.
 	var err error
+	defer func() {
+		if err != nil {
+			if _, ok := err.(transport.ConnectionError); !ok {
+				t.CloseStream(stream, err)
+			}
+		}
+	}()
 	c.headerMD, err = stream.Header()
 	if err != nil {
 		return err
@@ -191,20 +198,18 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		// Receive the response
 		err = recvResponse(cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
 				put()
 				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok {
+			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
 				if c.failFast {
 					return toRPCErr(err)
 				}
 				continue
 			}
-			t.CloseStream(stream, err)
 			return toRPCErr(err)
 		}
 		if c.traceInfo.tr != nil {

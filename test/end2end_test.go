@@ -314,13 +314,7 @@ func (e env) runnable() bool {
 	return true
 }
 
-func (e env) dialer(addr string, timeout time.Duration, cancel <-chan struct{}) (net.Conn, error) {
-	// NB: Go 1.6 added a Cancel field on net.Dialer, which would allow this
-	// to be written as
-	//
-	// `(&net.Dialer{Cancel: cancel, Timeout: timeout}).Dial(e.network, addr)`
-	//
-	// but that would break compatibility with earlier Go versions.
+func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout(e.network, addr, timeout)
 }
 
@@ -515,7 +509,7 @@ func (te *test) declareLogNoise(phrases ...string) {
 }
 
 func (te *test) withServerTester(fn func(st *serverTester)) {
-	c, err := te.e.dialer(te.srvAddr, 10*time.Second, nil)
+	c, err := te.e.dialer(te.srvAddr, 10*time.Second)
 	if err != nil {
 		te.t.Fatal(err)
 	}
@@ -563,6 +557,27 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
+func TestServerGracefulStopIdempotent(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testServerGracefulStopIdempotent(t, e)
+	}
+}
+
+func testServerGracefulStopIdempotent(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	for i := 0; i < 3; i++ {
+		te.srv.GracefulStop()
+	}
+}
+
 func TestServerGoAway(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -576,12 +591,6 @@ func TestServerGoAway(t *testing.T) {
 func testServerGoAway(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
-	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -680,6 +689,115 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
 	}
 	cancel()
+	<-ch
+	awaitNewConnLogOutput()
+}
+
+func TestConcurrentClientConnCloseAndServerGoAway(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testConcurrentClientConnCloseAndServerGoAway(t, e)
+	}
+}
+
+func testConcurrentClientConnCloseAndServerGoAway(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
+	}
+	ch := make(chan struct{})
+	// Close ClientConn and Server concurrently.
+	go func() {
+		te.srv.GracefulStop()
+		close(ch)
+	}()
+	go func() {
+		cc.Close()
+	}()
+	<-ch
+}
+
+func TestConcurrentServerStopAndGoAway(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testConcurrentServerStopAndGoAway(t, e)
+	}
+}
+
+func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
+		"grpc: Conn.resetTransport failed to create client transport: connection error",
+		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	stream, err := tc.FullDuplexCall(context.Background(), grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	// Finish an RPC to make sure the connection is good.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
+	}
+	ch := make(chan struct{})
+	go func() {
+		te.srv.GracefulStop()
+		close(ch)
+	}()
+	// Loop until the server side GoAway signal is propagated to the client.
+	for {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+			continue
+		}
+		break
+	}
+	// Stop the server and close all the connections.
+	te.srv.Stop()
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(1),
+		},
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	if err := stream.Send(req); err == nil {
+		if _, err := stream.Recv(); err == nil {
+			t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+		}
+	}
 	<-ch
 	awaitNewConnLogOutput()
 }
@@ -2199,8 +2317,8 @@ func leakCheck(t testing.TB) func() {
 	}
 	return func() {
 		// Loop, waiting for goroutines to shut down.
-		// Wait up to 5 seconds, but finish as quickly as possible.
-		deadline := time.Now().Add(5 * time.Second)
+		// Wait up to 10 seconds, but finish as quickly as possible.
+		deadline := time.Now().Add(10 * time.Second)
 		for {
 			var leaked []string
 			for _, g := range interestingGoroutines() {

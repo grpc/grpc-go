@@ -793,6 +793,8 @@ func (s *Server) Stop() {
 	s.lis = nil
 	st := s.conns
 	s.conns = nil
+	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
+	s.cv.Signal()
 	s.mu.Unlock()
 
 	for lis := range listeners {
@@ -815,20 +817,20 @@ func (s *Server) Stop() {
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	if s.drain == true || s.conns == nil {
-		s.mu.Lock()
+		s.mu.Unlock()
 		return
 	}
 	s.drain = true
 	for lis := range s.lis {
 		lis.Close()
 	}
+	s.lis = nil
 	for c := range s.conns {
 		c.(transport.ServerTransport).Drain()
 	}
 	for len(s.conns) != 0 {
 		s.cv.Wait()
 	}
-	s.lis = nil
 	s.conns = nil
 	if s.events != nil {
 		s.events.Finish()
