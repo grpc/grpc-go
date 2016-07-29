@@ -553,6 +553,27 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
+func TestServerGracefulStopIdempotent(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testServerGracefulStopIdempotent(t, e)
+	}
+}
+
+func testServerGracefulStopIdempotent(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	for i := 0; i < 3; i++ {
+		te.srv.GracefulStop()
+	}
+}
+
 func TestServerGoAway(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
