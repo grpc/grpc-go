@@ -559,6 +559,12 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 	case <-closing:
 		return 0, ErrConnClosing
 	case i := <-proceed:
+		// User cancellation has precedence.
+		select {
+		case <-ctx.Done():
+			return 0, ContextErr(ctx.Err())
+		default:
+		}
 		return i, nil
 	}
 }

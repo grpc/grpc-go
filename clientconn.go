@@ -356,7 +356,8 @@ func (cc *ClientConn) lbWatcher() {
 			cc.newAddrConn(a, true)
 		}
 		for _, c := range del {
-			c.tearDown(errConnDrain)
+			// Tear down ac and remove it from cc.
+			c.tearDown(errConnDrain, true)
 		}
 	}
 }
@@ -399,12 +400,14 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		// There is an addrConn alive on ac.addr already. This could be due to
 		// i) stale's Close is undergoing;
 		// ii) a buggy Balancer notifies duplicated Addresses.
-		stale.tearDown(errConnDrain)
+		// Tear down this ac but don't remove it from cc
+		// because the ac in cc is a new one, not this stale one.
+		stale.tearDown(errConnDrain, false)
 	}
 	// skipWait may overwrite the decision in ac.dopts.block.
 	if ac.dopts.block && !skipWait {
 		if err := ac.resetTransport(false); err != nil {
-			ac.tearDown(err)
+			ac.tearDown(err, true)
 			return err
 		}
 		// Start to monitor the error status of transport.
@@ -414,7 +417,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		go func() {
 			if err := ac.resetTransport(false); err != nil {
 				grpclog.Printf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
-				ac.tearDown(err)
+				ac.tearDown(err, true)
 				return
 			}
 			ac.transportMonitor()
@@ -463,7 +466,7 @@ func (cc *ClientConn) Close() error {
 	cc.mu.Unlock()
 	cc.dopts.balancer.Close()
 	for _, ac := range conns {
-		ac.tearDown(ErrClientConnClosing)
+		ac.tearDown(ErrClientConnClosing, true)
 	}
 	return nil
 }
@@ -641,9 +644,9 @@ func (ac *addrConn) transportMonitor() {
 			// In both cases, a new ac is created.
 			select {
 			case <-t.Error():
-				ac.tearDown(errNetworkIO)
+				ac.tearDown(errNetworkIO, true)
 			default:
-				ac.tearDown(errConnDrain)
+				ac.tearDown(errConnDrain, true)
 			}
 			ac.cc.newAddrConn(ac.addr, true)
 			return
@@ -653,7 +656,7 @@ func (ac *addrConn) transportMonitor() {
 				t.Close()
 				return
 			case <-t.GoAway():
-				ac.tearDown(errNetworkIO)
+				ac.tearDown(errNetworkIO, true)
 				ac.cc.newAddrConn(ac.addr, true)
 				return
 			default:
@@ -712,18 +715,22 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 }
 
 // tearDown starts to tear down the addrConn.
+// err is the tearDown reason, remove indicates whether
+// this addrConn should be removed from ClientConn.
 // TODO(zhaoq): Make this synchronous to avoid unbounded memory consumption in
 // some edge cases (e.g., the caller opens and closes many addrConn's in a
 // tight loop.
-func (ac *addrConn) tearDown(err error) {
+func (ac *addrConn) tearDown(err error, remove bool) {
 	ac.mu.Lock()
 	defer func() {
 		ac.mu.Unlock()
-		ac.cc.mu.Lock()
-		if ac.cc.conns != nil {
-			delete(ac.cc.conns, ac.addr)
+		if remove {
+			ac.cc.mu.Lock()
+			if ac.cc.conns != nil {
+				delete(ac.cc.conns, ac.addr)
+			}
+			ac.cc.mu.Unlock()
 		}
-		ac.cc.mu.Unlock()
 	}()
 	if ac.down != nil {
 		ac.down(downErrorf(false, false, "%v", err))
