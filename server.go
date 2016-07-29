@@ -538,7 +538,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	p := &parser{r: stream}
 	for {
-		pf, req, err := p.recvMsg()
+		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -548,6 +548,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if err != nil {
 			switch err := err.(type) {
+			case *rpcError:
+				if err := t.WriteStatus(stream, err.code, err.desc); err != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				}
 			case transport.ConnectionError:
 				// Nothing to do here.
 			case transport.StreamError:
