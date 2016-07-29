@@ -496,7 +496,7 @@ func (t *http2Client) Close() (err error) {
 
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
-	if t.state == closing {
+	if t.state == closing || t.state == unreachable {
 		t.mu.Unlock()
 		return nil
 	}
