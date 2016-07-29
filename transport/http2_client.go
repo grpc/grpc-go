@@ -314,7 +314,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.mu.Lock()
 	if t.state == draining {
 		t.mu.Unlock()
-		t.streamsQuota.add(1)
+		if checkStreamsQuota {
+			t.streamsQuota.add(1)
+		}
 		// Need to make t writable again so that the rpc in flight can still proceed.
 		t.writableChan <- 0
 		return nil, ErrStreamDrain
