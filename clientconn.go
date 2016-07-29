@@ -367,6 +367,7 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		addr:  addr,
 		dopts: cc.dopts,
 	}
+	ac.stateCV = sync.NewCond(&ac.mu)
 	ac.dopts.copts.Cancel = make(chan struct{})
 	if EnableTracing {
 		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
@@ -400,7 +401,6 @@ func (cc *ClientConn) newAddrConn(addr Address, skipWait bool) error {
 		// ii) a buggy Balancer notifies duplicated Addresses.
 		stale.tearDown(errConnDrain)
 	}
-	ac.stateCV = sync.NewCond(&ac.mu)
 	// skipWait may overwrite the decision in ac.dopts.block.
 	if ac.dopts.block && !skipWait {
 		if err := ac.resetTransport(false); err != nil {
