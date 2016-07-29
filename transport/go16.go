@@ -1,7 +1,7 @@
-// +build go1.6
+// +build go1.6,!go1.7
 
 /*
- * Copyright 2014, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,10 +36,11 @@ package transport
 
 import (
 	"net"
-	"time"
+
+	"golang.org/x/net/context"
 )
 
-// newDialer constructs a net.Dialer.
-func newDialer(timeout time.Duration, cancel <-chan struct{}) *net.Dialer {
-	return &net.Dialer{Cancel: cancel, Timeout: timeout}
+// dialContext connects to the address on the named network.
+func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
 }

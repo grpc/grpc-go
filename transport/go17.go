@@ -1,4 +1,4 @@
-// +build !go1.6
+// +build go1.7
 
 /*
  * Copyright 2016, Google Inc.
@@ -36,16 +36,11 @@ package transport
 
 import (
 	"net"
-	"time"
 
 	"golang.org/x/net/context"
 )
 
 // dialContext connects to the address on the named network.
 func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	var dialer net.Dialer
-	if deadline, ok := ctx.Deadline(); ok {
-		dialer.Timeout = deadline.Sub(time.Now())
-	}
-	return dialer.Dial(network, address)
+	return (&net.Dialer{}).DialContext(ctx, network, address)
 }
