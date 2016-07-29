@@ -284,6 +284,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.mu.Unlock()
 		return nil, ErrConnClosing
 	}
+	if t.state == draining {
+		t.mu.Unlock()
+		return nil, ErrStreamDrain
+	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil, ErrConnClosing
@@ -308,6 +312,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, err
 	}
 	t.mu.Lock()
+	if t.state == draining {
+		t.mu.Unlock()
+		if checkStreamsQuota {
+			t.streamsQuota.add(1)
+		}
+		// Need to make t writable again so that the rpc in flight can still proceed.
+		t.writableChan <- 0
+		return nil, ErrStreamDrain
+	}
 	if t.state != reachable {
 		t.mu.Unlock()
 		return nil, ErrConnClosing
@@ -419,7 +432,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
 		// The transport is draining and s is the last live stream on t.
-		defer t.Close()
+		t.mu.Unlock()
+		t.Close()
+		return
 	}
 	t.mu.Unlock()
 	if updateStreams {
@@ -481,7 +496,7 @@ func (t *http2Client) Close() (err error) {
 
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
-	if t.state == closing {
+	if t.state == closing || t.state == unreachable {
 		t.mu.Unlock()
 		return nil
 	}
