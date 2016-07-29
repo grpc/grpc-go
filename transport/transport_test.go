@@ -111,13 +111,17 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
-	size := 1
+	var end, size int
 	if s.Method() == "foo.MaxFrame" {
-		size = http2MaxFrameLen
+		size = http2MaxFrameLen - 1
+		end = initialWindowSize
+	} else {
+		size = 1
+		end = initialWindowSize + 1
 	}
-	// Drain the client side stream flow control window.
+	// Violate the client side stream/connection flow control window.
 	var sent int
-	for sent <= initialWindowSize {
+	for sent < end {
 		<-conn.writableChan
 		if err := conn.framer.writeData(true, s.id, false, make([]byte, size)); err != nil {
 			conn.writableChan <- 0
@@ -671,7 +675,8 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-	if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+	d := make([]byte, 1)
+	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
 		t.Fatalf("Failed to write: %v", err)
 	}
 	// Read without window update.
@@ -693,13 +698,9 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}
 	// Test the logic for the violation of the connection flow control window size restriction.
 	//
-	// Generate enough streams to drain the connection window.
-	callHdr = &CallHdr{
-		Host:   "localhost",
-		Method: "foo.MaxFrame",
-	}
-	d := make([]byte, 1)
-	// Make the server flood the traffic to violate flow control window size of the connection.
+	// Generate enough streams to drain the connection window. Make the server flood the traffic
+	// to violate flow control window size of the connection.
+	callHdr.Method = "foo.MaxFrame"
 	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
