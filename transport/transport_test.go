@@ -553,6 +553,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("Failed to cancel the context of the sever side stream.")
 	}
+	server.stop()
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
