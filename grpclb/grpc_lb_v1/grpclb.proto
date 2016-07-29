@@ -59,12 +59,6 @@ message Timestamp {
   int32 nanos = 2;
 }
 
-service LoadBalancer {
-  // Bidirectional rpc to get a list of servers.
-  rpc BalanceLoad(stream LoadBalanceRequest)
-      returns (stream LoadBalanceResponse);
-}
-
 message LoadBalanceRequest {
   oneof load_balance_request_type {
     // This message should be sent on the first request to the load balancer.
