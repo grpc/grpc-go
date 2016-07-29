@@ -797,8 +797,8 @@ func (s *Server) Stop() {
 // connections and RPCs and blocks until all the pending RPCs are finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.drain == true || s.conns == nil {
-		s.mu.Unlock()
 		return
 	}
 	s.drain = true
@@ -817,7 +817,6 @@ func (s *Server) GracefulStop() {
 		s.events.Finish()
 		s.events = nil
 	}
-	s.mu.Unlock()
 }
 
 func init() {
