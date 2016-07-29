@@ -697,14 +697,15 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.MaxFrame",
 	}
+	d := make([]byte, 1)
 	// Make the server flood the traffic to violate flow control window size of the connection.
-	for {
+	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
-			break
+			t.Fatalf("Failed to create a new stream: %v", err)
 		}
-		if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
-			break
+		if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
+			t.Fatalf("Failed to write data to %v: %v", s, err)
 		}
 	}
 	// http2Client.errChan is closed due to connection flow control window size violation.
