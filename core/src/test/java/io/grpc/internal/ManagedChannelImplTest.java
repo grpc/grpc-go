@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
@@ -53,12 +54,15 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Attributes;
+import io.grpc.CallCredentials.MetadataApplier;
+import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
+import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.DummyLoadBalancerFactory;
 import io.grpc.IntegerMarshaller;
@@ -67,6 +71,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
+import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.TransportManager;
@@ -91,8 +96,10 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -136,6 +143,8 @@ public class ManagedChannelImplTest {
   private ClientCall.Listener<Integer> mockCallListener3;
   @Mock
   private SharedResourceHolder.Resource<ScheduledExecutorService> timerService;
+  @Mock
+  private CallCredentials creds;
 
   private ArgumentCaptor<ManagedClientTransport.Listener> transportListenerCaptor =
       ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
@@ -811,6 +820,107 @@ public class ManagedChannelImplTest {
     assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("0a:/").matches()); // '0' not matched
     assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("a,:/").matches()); // ',' not matched
     assertFalse(ManagedChannelImpl.URI_PATTERN.matcher(" a:/").matches()); // space not matched
+  }
+
+  /**
+   * Test that information such as the Call's context, MethodDescriptor, authority, executor are
+   * propagated to newStream() and applyRequestMetadata().
+   */
+  @Test
+  public void informationPropagatedToNewStreamAndCallCredentials() {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    Metadata headers = new Metadata();
+    CallOptions callOptions = CallOptions.DEFAULT.withCallCredentials(creds);
+    final Context.Key<String> testKey = Context.key("testing");
+    Context ctx = Context.current().withValue(testKey, "testValue");
+    final LinkedList<Context> credsApplyContexts = new LinkedList<Context>();
+    final LinkedList<Context> newStreamContexts = new LinkedList<Context>();
+    doAnswer(new Answer<Void>() {
+        @Override
+        public Void answer(InvocationOnMock in) throws Throwable {
+          credsApplyContexts.add(Context.current());
+          return null;
+        }
+      }).when(creds).applyRequestMetadata(
+          any(MethodDescriptor.class), any(Attributes.class), any(Executor.class),
+          any(MetadataApplier.class));
+
+    final ConnectionClientTransport transport = mock(ConnectionClientTransport.class);
+    when(transport.getAttrs()).thenReturn(Attributes.EMPTY);
+    when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class),
+            any(String.class))).thenReturn(transport);
+    doAnswer(new Answer<ClientStream>() {
+        @Override
+        public ClientStream answer(InvocationOnMock in) throws Throwable {
+          newStreamContexts.add(Context.current());
+          return mock(ClientStream.class);
+        }
+      }).when(transport).newStream(
+          any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
+
+    // First call will be on delayed transport.  Only newCall() is run within the expected context,
+    // so that we can verify that the context is explicitly attached before calling newStream() and
+    // applyRequestMetadata(), which happens after we detach the context from the thread.
+    Context origCtx = ctx.attach();
+    assertEquals("testValue", testKey.get());
+    ClientCall<String, Integer> call = channel.newCall(method, callOptions);
+    ctx.detach(origCtx);
+    assertNull(testKey.get());
+    call.start(mockCallListener, new Metadata());
+
+    ArgumentCaptor<ManagedClientTransport.Listener> transportListenerCaptor =
+        ArgumentCaptor.forClass(ManagedClientTransport.Listener.class);
+    verify(mockTransportFactory).newClientTransport(
+        same(socketAddress), eq(authority), eq(userAgent));
+    verify(transport).start(transportListenerCaptor.capture());
+    verify(creds, never()).applyRequestMetadata(
+        any(MethodDescriptor.class), any(Attributes.class), any(Executor.class),
+        any(MetadataApplier.class));
+
+    // applyRequestMetadata() is called after the transport becomes ready.
+    transportListenerCaptor.getValue().transportReady();
+    executor.runDueTasks();
+    ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(Attributes.class);
+    ArgumentCaptor<MetadataApplier> applierCaptor = ArgumentCaptor.forClass(MetadataApplier.class);
+    verify(creds).applyRequestMetadata(same(method), attrsCaptor.capture(),
+        same(executor.scheduledExecutorService), applierCaptor.capture());
+    assertEquals("testValue", testKey.get(credsApplyContexts.poll()));
+    assertEquals(authority, attrsCaptor.getValue().get(CallCredentials.ATTR_AUTHORITY));
+    assertEquals(SecurityLevel.NONE,
+        attrsCaptor.getValue().get(CallCredentials.ATTR_SECURITY_LEVEL));
+    verify(transport, never()).newStream(
+        any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
+
+    // newStream() is called after apply() is called
+    applierCaptor.getValue().apply(new Metadata());
+    verify(transport).newStream(same(method), any(Metadata.class), same(callOptions));
+    assertEquals("testValue", testKey.get(newStreamContexts.poll()));
+    // The context should not live beyond the scope of newStream() and applyRequestMetadata()
+    assertNull(testKey.get());
+
+
+    // Second call will not be on delayed transport
+    origCtx = ctx.attach();
+    call = channel.newCall(method, callOptions);
+    ctx.detach(origCtx);
+    call.start(mockCallListener, new Metadata());
+
+    verify(creds, times(2)).applyRequestMetadata(same(method), attrsCaptor.capture(),
+        same(executor.scheduledExecutorService), applierCaptor.capture());
+    assertEquals("testValue", testKey.get(credsApplyContexts.poll()));
+    assertEquals(authority, attrsCaptor.getValue().get(CallCredentials.ATTR_AUTHORITY));
+    assertEquals(SecurityLevel.NONE,
+        attrsCaptor.getValue().get(CallCredentials.ATTR_SECURITY_LEVEL));
+    // This is from the first call
+    verify(transport).newStream(
+        any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
+
+    // Still, newStream() is called after apply() is called
+    applierCaptor.getValue().apply(new Metadata());
+    verify(transport, times(2)).newStream(same(method), any(Metadata.class), same(callOptions));
+    assertEquals("testValue", testKey.get(newStreamContexts.poll()));
+
+    assertNull(testKey.get());
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {

@@ -60,11 +60,11 @@ public interface CallCredentials {
    * Pass the credential data to the given {@link MetadataApplier}, which will propagate it to
    * the request metadata.
    *
-   * <p>It is called for each individual RPC, before the stream is about to be created on a
-   * transport. Implementations should not block in this method. If metadata is not immediately
-   * available, e.g., needs to be fetched from network, the implementation may give the {@code
-   * applier} to an asynchronous task which will eventually call the {@code applier}. The RPC
-   * proceeds only after the {@code applier} is called.
+   * <p>It is called for each individual RPC, within the {@link Context} of the call, before the
+   * stream is about to be created on a transport. Implementations should not block in this
+   * method. If metadata is not immediately available, e.g., needs to be fetched from network, the
+   * implementation may give the {@code applier} to an asynchronous task which will eventually call
+   * the {@code applier}. The RPC proceeds only after the {@code applier} is called.
    *
    * @param method The method descriptor of this RPC
    * @param attrs Additional attributes from the transport, along with the keys defined in this

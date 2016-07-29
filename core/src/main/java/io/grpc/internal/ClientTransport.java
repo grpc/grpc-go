@@ -55,6 +55,8 @@ public interface ClientTransport {
    * the error information. Any sent messages for this stream will be buffered until creation has
    * completed (either successfully or unsuccessfully).
    *
+   * <p>This method is called under the {@link io.grpc.Context} of the {@link io.grpc.ClientCall}.
+   *
    * @param method the descriptor of the remote method to be called for this stream.
    * @param headers to send at the beginning of the call
    * @param callOptions runtime options of the call

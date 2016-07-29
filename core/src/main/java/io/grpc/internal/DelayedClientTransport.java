@@ -37,6 +37,7 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 
 import io.grpc.CallOptions;
+import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -370,16 +371,25 @@ class DelayedClientTransport implements ManagedClientTransport {
     private final MethodDescriptor<?, ?> method;
     private final Metadata headers;
     private final CallOptions callOptions;
+    private final Context context;
 
     private PendingStream(MethodDescriptor<?, ?> method, Metadata headers,
         CallOptions callOptions) {
       this.method = method;
       this.headers = headers;
       this.callOptions = callOptions;
+      this.context = Context.current();
     }
 
     private void createRealStream(ClientTransport transport) {
-      setStream(transport.newStream(method, headers, callOptions));
+      ClientStream realStream;
+      Context origContext = context.attach();
+      try {
+        realStream = transport.newStream(method, headers, callOptions);
+      } finally {
+        context.detach(origContext);
+      }
+      setStream(realStream);
     }
 
     @Override
