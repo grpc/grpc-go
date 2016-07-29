@@ -49,10 +49,10 @@ compile 'io.grpc:grpc-stub:0.15.0'
 ```
 
 For Android client, use `grpc-okhttp` instead of `grpc-netty` and
-`grpc-protobuf-nano` or `grpc-protobuf-lite` instead of `grpc-protobuf`:
+`grpc-protobuf-lite` or `grpc-protobuf-nano` instead of `grpc-protobuf`:
 ```gradle
 compile 'io.grpc:grpc-okhttp:0.15.0'
-compile 'io.grpc:grpc-protobuf-nano:0.15.0'
+compile 'io.grpc:grpc-protobuf-lite:0.15.0'
 compile 'io.grpc:grpc-stub:0.15.0'
 ```
 
