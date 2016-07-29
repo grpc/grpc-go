@@ -1,13 +1,61 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+    dependencies {
+        classpath libraries.protobuf_plugin
+    }
+}
+
 plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
+
+apply plugin: 'com.google.protobuf'
 
 description = 'gRPC: Protobuf Lite'
 
 dependencies {
     compile project(':grpc-core'),
-            libraries.protobuf,
+            libraries.protobuf_lite,
             libraries.guava
+
+    testProtobuf libraries.protobuf
+}
+
+compileTestJava {
+  // Protobuf-generated Lite produces quite a few warnings.
+  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked", "-Xlint:-fallthrough"]
+}
+
+protobuf {
+  protoc {
+    if (project.hasProperty('protoc')) {
+      path = project.protoc
+    } else {
+      artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+  }
+  plugins {
+    javalite {
+      if (project.hasProperty('protoc-gen-javalite')) {
+        path = project['protoc-gen-javalite']
+      } else {
+        artifact = "com.google.protobuf:protoc-gen-javalite:${protobufVersion}"
+      }
+    }
+  }
+  generateProtoTasks {
+    ofSourceSet('test')*.each { task ->
+      task.builtins {
+        remove java
+      }
+      task.plugins {
+        javalite {}
+      }
+    }
+  }
 }
 
 animalsniffer {

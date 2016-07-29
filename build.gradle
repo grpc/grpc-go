@@ -151,6 +151,8 @@ subprojects {
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.6.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
+                // swap to ${protobufVersion} after versions align again
+                protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.7.7',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
