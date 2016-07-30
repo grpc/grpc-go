@@ -708,10 +708,10 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
-			t.Fatalf("Failed to create a new stream: %v", err)
+			break
 		}
 		if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
-			t.Fatalf("Failed to write data to %v: %v", s, err)
+			break
 		}
 	}
 	// http2Client.errChan is closed due to connection flow control window size violation.
