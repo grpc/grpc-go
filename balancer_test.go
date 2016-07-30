@@ -320,3 +320,34 @@ func TestGetOnWaitChannel(t *testing.T) {
 	cc.Close()
 	servers[0].stop()
 }
+
+// oneNotifyBalancer sends a single notify and nothing more
+type oneNotifyBalancer struct{ ch chan []Address }
+
+func (*oneNotifyBalancer) Start(target string) error   { return nil }
+func (*oneNotifyBalancer) Up(addr Address) func(error) { return func(error) {} }
+func (*oneNotifyBalancer) Get(ctx context.Context, opts BalancerGetOptions) (Address, func(), error) {
+	return Address{}, func() {}, nil
+}
+func (onb *oneNotifyBalancer) Notify() <-chan []Address { return onb.ch }
+func (onb *oneNotifyBalancer) Close() error {
+	close(onb.ch)
+	return nil
+}
+
+func TestDialSomeDownAddrs(t *testing.T) {
+	servers, _ := startServers(t, 1, 1)
+	defer servers[0].stop()
+	ch := make(chan []Address, 1)
+	ch <- []Address{
+		Address{Addr: "bad.com:11111"},
+		Address{Addr: "127.0.0.1:" + servers[0].port},
+		Address{Addr: "bad.com:22222"},
+	}
+	b := &oneNotifyBalancer{ch}
+	cc, err := Dial("127.0.0.1", WithBalancer(b), WithBlock(), WithTimeout(time.Second), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("failed to dial listening address (%v)", err)
+	}
+	cc.Close()
+}
