@@ -111,20 +111,22 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
-	var end int
-	if s.Method() == "foo.Connection" {
-		// Violate connection level flow control window of client but do not
-		// violate any stream level windows.
-		end = initialWindowSize
-	} else {
-		// Violate stream level flow control window of client.
-		end = initialWindowSize + 1
-	}
-	// Violate the client side stream/connection flow control window.
 	var sent int
-	p := make([]byte, 1)
-	for sent < end {
+	p := make([]byte, http2MaxFrameLen)
+	for sent < initialWindowSize {
 		<-conn.writableChan
+		n := initialWindowSize - sent
+		// The last message may be smaller than http2MaxFrameLen
+		if n < http2MaxFrameLen {
+			if s.Method() == "foo.Connection" {
+				// Violate connection level flow control window of client but do not
+				// violate any stream level windows.
+				p = make([]byte, n)
+			} else {
+				// Violate stream level flow control window of client.
+				p = make([]byte, n+1)
+			}
+		}
 		if err := conn.framer.writeData(true, s.id, false, p); err != nil {
 			conn.writableChan <- 0
 			break
