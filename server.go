@@ -105,11 +105,14 @@ type options struct {
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
+	maxMsgSize           int
 	unaryInt             UnaryServerInterceptor
 	streamInt            StreamServerInterceptor
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
+
+var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
 // A ServerOption sets options.
 type ServerOption func(*options)
@@ -121,17 +124,25 @@ func CustomCodec(codec Codec) ServerOption {
 	}
 }
 
-// RPCCompressor returns a ServerOption that sets a compressor for outbound message.
+// RPCCompressor returns a ServerOption that sets a compressor for outbound messages.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
 	}
 }
 
-// RPCDecompressor returns a ServerOption that sets a decompressor for inbound message.
+// RPCDecompressor returns a ServerOption that sets a decompressor for inbound messages.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
+	}
+}
+
+// MaxMsgSize returns a ServerOption to set the max message size in bytes for inbound mesages.
+// If this is not set, gRPC uses the default 4MB.
+func MaxMsgSize(m int) ServerOption {
+	return func(o *options) {
+		o.maxMsgSize = m
 	}
 }
 
@@ -177,6 +188,7 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
 	var opts options
+	opts.maxMsgSize = defaultMaxMsgSize
 	for _, o := range opt {
 		o(&opts)
 	}
@@ -526,7 +538,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	p := &parser{r: stream}
 	for {
-		pf, req, err := p.recvMsg()
+		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -536,6 +548,10 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if err != nil {
 			switch err := err.(type) {
+			case *rpcError:
+				if err := t.WriteStatus(stream, err.code, err.desc); err != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				}
 			case transport.ConnectionError:
 				// Nothing to do here.
 			case transport.StreamError:
@@ -574,6 +590,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					}
 					return err
 				}
+			}
+			if len(req) > s.opts.maxMsgSize {
+				// TODO: Revisit the error code. Currently keep it consistent with
+				// java implementation.
+				statusCode = codes.Internal
+				statusDesc = fmt.Sprintf("grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
@@ -634,13 +656,14 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	ss := &serverStream{
-		t:      t,
-		s:      stream,
-		p:      &parser{r: stream},
-		codec:  s.opts.codec,
-		cp:     s.opts.cp,
-		dc:     s.opts.dc,
-		trInfo: trInfo,
+		t:          t,
+		s:          stream,
+		p:          &parser{r: stream},
+		codec:      s.opts.codec,
+		cp:         s.opts.cp,
+		dc:         s.opts.dc,
+		maxMsgSize: s.opts.maxMsgSize,
+		trInfo:     trInfo,
 	}
 	if ss.cp != nil {
 		ss.cbuf = new(bytes.Buffer)

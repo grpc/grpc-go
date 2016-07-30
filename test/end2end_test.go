@@ -363,6 +363,7 @@ type test struct {
 	testServer        testpb.TestServiceServer // nil means none
 	healthServer      *health.Server           // nil means disabled
 	maxStream         uint32
+	maxMsgSize        int
 	userAgent         string
 	clientCompression bool
 	serverCompression bool
@@ -413,6 +414,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	e := te.e
 	te.t.Logf("Running test in %s environment...", e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
+	if te.maxMsgSize > 0 {
+		sopts = append(sopts, grpc.MaxMsgSize(te.maxMsgSize))
+	}
 	if te.serverCompression {
 		sopts = append(sopts,
 			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
@@ -1065,6 +1069,65 @@ func testLargeUnary(t *testing.T, e env) {
 	ps := len(reply.GetPayload().GetBody())
 	if pt != testpb.PayloadType_COMPRESSABLE || ps != respSize {
 		t.Fatalf("Got the reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
+	}
+}
+
+func TestExceedMsgLimit(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testExceedMsgLimit(t, e)
+	}
+}
+
+func testExceedMsgLimit(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.maxMsgSize = 1024
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	argSize := int32(te.maxMsgSize + 1)
+	const respSize = 1
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(respSize),
+		Payload:      payload,
+	}
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Internal {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %d", err, codes.Internal)
+	}
+
+	stream, err := tc.FullDuplexCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(1),
+		},
+	}
+
+	spayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(te.maxMsgSize+1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            spayload,
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Internal {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %d", stream, err, codes.Internal)
 	}
 }
 
