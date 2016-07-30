@@ -2156,8 +2156,8 @@ func testClientRequestBodyError_Cancel(t *testing.T, e env) {
 	te.withServerTester(func(st *serverTester) {
 		st.writeHeadersGRPC(1, "/grpc.testing.TestService/UnaryCall")
 		// Say we have 5 bytes coming, but cancel it instead.
-		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
 		st.writeRSTStream(1, http2.ErrCodeCancel)
+		st.writeData(1, false, []byte{0, 0, 0, 0, 5})
 
 		// Verify we didn't a call yet.
 		select {

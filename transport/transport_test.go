@@ -111,20 +111,28 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	if !ok {
 		t.Fatalf("Failed to convert %v to *http2Server", s.ServerTransport())
 	}
-	size := 1
-	if s.Method() == "foo.MaxFrame" {
-		size = http2MaxFrameLen
-	}
-	// Drain the client side stream flow control window.
 	var sent int
-	for sent <= initialWindowSize {
+	p := make([]byte, http2MaxFrameLen)
+	for sent < initialWindowSize {
 		<-conn.writableChan
-		if err := conn.framer.writeData(true, s.id, false, make([]byte, size)); err != nil {
+		n := initialWindowSize - sent
+		// The last message may be smaller than http2MaxFrameLen
+		if n <= http2MaxFrameLen {
+			if s.Method() == "foo.Connection" {
+				// Violate connection level flow control window of client but do not
+				// violate any stream level windows.
+				p = make([]byte, n)
+			} else {
+				// Violate stream level flow control window of client.
+				p = make([]byte, n+1)
+			}
+		}
+		if err := conn.framer.writeData(true, s.id, false, p); err != nil {
 			conn.writableChan <- 0
 			break
 		}
 		conn.writableChan <- 0
-		sent += size
+		sent += len(p)
 	}
 }
 
@@ -553,6 +561,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("Failed to cancel the context of the sever side stream.")
 	}
+	server.stop()
 }
 
 func TestServerWithMisbehavedClient(t *testing.T) {
@@ -659,7 +668,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, misbehaved)
 	callHdr := &CallHdr{
 		Host:   "localhost",
-		Method: "foo",
+		Method: "foo.Stream",
 	}
 	conn, ok := ct.(*http2Client)
 	if !ok {
@@ -670,7 +679,8 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-	if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+	d := make([]byte, 1)
+	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
 		t.Fatalf("Failed to write: %v", err)
 	}
 	// Read without window update.
@@ -692,18 +702,15 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}
 	// Test the logic for the violation of the connection flow control window size restriction.
 	//
-	// Generate enough streams to drain the connection window.
-	callHdr = &CallHdr{
-		Host:   "localhost",
-		Method: "foo.MaxFrame",
-	}
-	// Make the server flood the traffic to violate flow control window size of the connection.
-	for {
+	// Generate enough streams to drain the connection window. Make the server flood the traffic
+	// to violate flow control window size of the connection.
+	callHdr.Method = "foo.Connection"
+	for i := 0; i < int(initialConnWindowSize/initialWindowSize+10); i++ {
 		s, err := ct.NewStream(context.Background(), callHdr)
 		if err != nil {
 			break
 		}
-		if err := ct.Write(s, expectedRequest, &Options{Last: true, Delay: false}); err != nil {
+		if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
 			break
 		}
 	}
@@ -732,7 +739,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		Last:  true,
 		Delay: false,
 	}
-	if err := ct.Write(s, expectedRequest, &opts); err != nil || err == io.EOF {
+	if err := ct.Write(s, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
