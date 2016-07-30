@@ -1100,7 +1100,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Internal {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: ", err, codes.Internal)
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %d", err, codes.Internal)
 	}
 
 	stream, err := tc.FullDuplexCall(te.ctx)
@@ -1127,7 +1127,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Internal {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: ", stream, err, codes.Internal)
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %d", stream, err, codes.Internal)
 	}
 }
 

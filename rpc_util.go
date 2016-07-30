@@ -328,7 +328,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	if len(d) > maxMsgSize {
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
-		return Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(d), maxMsgSize)
+		return Errorf(codes.Internal, "grpc: received a message of %d bytes exceeding %d limit", len(d), maxMsgSize)
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
