@@ -117,7 +117,7 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 		<-conn.writableChan
 		n := initialWindowSize - sent
 		// The last message may be smaller than http2MaxFrameLen
-		if n < http2MaxFrameLen {
+		if n <= http2MaxFrameLen {
 			if s.Method() == "foo.Connection" {
 				// Violate connection level flow control window of client but do not
 				// violate any stream level windows.
