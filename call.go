@@ -84,7 +84,8 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 	}
 	defer func() {
 		if err != nil {
-			if e, ok := err.(transport.ConnectionError); !ok || !e.Temporary() {
+			// If err is connection error, t will be closed, no need to close stream here.
+			if _, ok := err.(transport.ConnectionError); !ok {
 				t.CloseStream(stream, err)
 			}
 		}

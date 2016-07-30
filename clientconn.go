@@ -283,9 +283,9 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		cc.Close()
 		return nil, ErrClientConnTimeout
 	}
+	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
+	// The lbWatcher goroutine will not be created.
 	if ok {
-		// If balancer is nil or balancer.Notify() is nil, ok will false here.
-		// Then this goroutine will not be created.
 		go cc.lbWatcher()
 	}
 	colonPos := strings.LastIndex(target, ":")
@@ -434,13 +434,14 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 	if ac.dopts.block && !skipWait {
 		if err := ac.resetTransport(false); err != nil {
 			if err != errConnClosing {
-				ac.cc.mu.Lock()
-				delete(ac.cc.conns, ac.addr)
-				ac.cc.mu.Unlock()
+				// Tear down ac and delete it from cc.conns.
+				cc.mu.Lock()
+				delete(cc.conns, ac.addr)
+				cc.mu.Unlock()
 				ac.tearDown(err)
 			}
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-				return e.OriginalError()
+				return e.Origin()
 			}
 			return err
 		}
@@ -452,9 +453,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 			if err := ac.resetTransport(false); err != nil {
 				grpclog.Printf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
 				if err != errConnClosing {
-					ac.cc.mu.Lock()
-					delete(ac.cc.conns, ac.addr)
-					ac.cc.mu.Unlock()
+					// Keep this ac in cc.conns, to get the reason it's torn down.
 					ac.tearDown(err)
 				}
 				return
@@ -475,7 +474,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		// If balancer is nil, there should be only one addrConn available.
 		cc.mu.RLock()
 		for _, ac = range cc.conns {
-			// Break after the first loop to get the first addrConn.
+			// Break after the first iteration to get the first addrConn.
 			ok = true
 			break
 		}
@@ -747,6 +746,7 @@ func (ac *addrConn) transportMonitor() {
 				ac.mu.Unlock()
 				grpclog.Printf("grpc: addrConn.transportMonitor exits due to: %v", err)
 				if err != errConnClosing {
+					// Keep this ac in cc.conns, to get the reason it's torn down.
 					ac.tearDown(err)
 				}
 				return
@@ -762,8 +762,9 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 		ac.mu.Lock()
 		switch {
 		case ac.state == Shutdown:
+			err := ac.tearDownErr
 			ac.mu.Unlock()
-			return nil, ac.tearDownErr
+			return nil, err
 		case ac.state == Ready:
 			ct := ac.transport
 			ac.mu.Unlock()
