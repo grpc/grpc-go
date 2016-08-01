@@ -259,7 +259,7 @@ func TestClientSendAndReceive(t *testing.T) {
 		Last:  true,
 		Delay: false,
 	}
-	if err := ct.Write(s1, expectedRequest, &opts); err != nil {
+	if err := ct.Write(s1, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("failed to send data: %v", err)
 	}
 	p := make([]byte, len(expectedResponse))
@@ -296,7 +296,7 @@ func performOneRPC(ct ClientTransport) {
 		Last:  true,
 		Delay: false,
 	}
-	if err := ct.Write(s, expectedRequest, &opts); err == nil {
+	if err := ct.Write(s, expectedRequest, &opts); err == nil || err == io.EOF {
 		time.Sleep(5 * time.Millisecond)
 		// The following s.Recv()'s could error out because the
 		// underlying transport is gone.
@@ -340,7 +340,7 @@ func TestLargeMessage(t *testing.T) {
 			if err != nil {
 				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 			}
-			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil {
+			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
@@ -386,7 +386,7 @@ func TestGracefulClose(t *testing.T) {
 		Delay: false,
 	}
 	// The stream which was created before graceful close can still proceed.
-	if err := ct.Write(s, expectedRequest, &opts); err != nil {
+	if err := ct.Write(s, expectedRequest, &opts); err != nil && err != io.EOF {
 		t.Fatalf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 	}
 	p := make([]byte, len(expectedResponse))
@@ -416,7 +416,7 @@ func TestLargeMessageSuspension(t *testing.T) {
 	// Write should not be done successfully due to flow control.
 	err = ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false})
 	expectedErr := StreamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
-	if err == nil || err != expectedErr {
+	if err != expectedErr {
 		t.Fatalf("Write got %v, want %v", err, expectedErr)
 	}
 	ct.Close()
@@ -680,7 +680,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 	d := make([]byte, 1)
-	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil {
+	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
 		t.Fatalf("Failed to write: %v", err)
 	}
 	// Read without window update.
