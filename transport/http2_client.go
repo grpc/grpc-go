@@ -107,31 +107,26 @@ type http2Client struct {
 	prevGoAwayID uint32
 }
 
-func dial(fn func(string, time.Duration, <-chan struct{}) (net.Conn, error), addr string, timeout time.Duration, cancel <-chan struct{}) (net.Conn, error) {
+func dial(fn func(context.Context, string) (net.Conn, error), ctx context.Context, addr string) (net.Conn, error) {
 	if fn != nil {
-		return fn(addr, timeout, cancel)
+		return fn(ctx, addr)
 	}
-	return newDialer(timeout, cancel).Dial("tcp", addr)
+	return dialContext(ctx, "tcp", addr)
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(addr string, opts ConnectOptions) (_ ClientTransport, err error) {
+func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
-	startT := time.Now()
-	timeout := opts.Timeout
-	conn, connErr := dial(opts.Dialer, addr, timeout, opts.Cancel)
+	conn, connErr := dial(opts.Dialer, ctx, addr)
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)
 	}
 	var authInfo credentials.AuthInfo
-	if opts.TransportCredentials != nil {
+	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
-		if timeout > 0 {
-			timeout -= time.Since(startT)
-		}
-		conn, authInfo, connErr = opts.TransportCredentials.ClientHandshake(addr, conn, timeout)
+		conn, authInfo, connErr = creds.ClientHandshake(ctx, addr, conn)
 	}
 	if connErr != nil {
 		return nil, ConnectionErrorf("transport: %v", connErr)

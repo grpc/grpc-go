@@ -537,9 +537,8 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -636,9 +635,8 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -708,9 +706,8 @@ func testConcurrentClientConnCloseAndServerGoAway(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -747,9 +744,8 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -814,9 +810,8 @@ func testFailFast(t *testing.T, e env) {
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: Conn.transportMonitor exits due to: grpc: the client connection is closing",
-		"grpc: Conn.resetTransport failed to create client transport: connection error",
-		"grpc: Conn.resetTransport failed to create client transport: connection error: desc = \"transport: dial unix",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 	)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -1851,7 +1846,7 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	te.declareLogNoise(
 		"http2Client.notifyError got notified that the client transport was broken",
 		"Conn.resetTransport failed to create client transport",
-		"grpc: the client connection is closing",
+		"grpc: the connection is closing",
 	)
 	te.maxStream = 1 // Only allows 1 live stream per server transport.
 	te.startServer(&testServer{security: e.security})
@@ -1892,7 +1887,7 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 	te.declareLogNoise(
 		"http2Client.notifyError got notified that the client transport was broken",
 		"Conn.resetTransport failed to create client transport",
-		"grpc: the client connection is closing",
+		"grpc: the connection is closing",
 	)
 	te.maxStream = 1 // Allows 1 live stream.
 	te.startServer(&testServer{security: e.security})
