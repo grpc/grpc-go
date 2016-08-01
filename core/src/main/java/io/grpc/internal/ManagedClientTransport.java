@@ -33,6 +33,8 @@ package io.grpc.internal;
 
 import io.grpc.Status;
 
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -53,12 +55,16 @@ public interface ManagedClientTransport extends ClientTransport, WithLogId {
    * Starts transport. This method may only be called once.
    *
    * <p>Implementations must not call {@code listener} from within {@link #start}; implementations
-   * are expected to notify listener on a separate thread.  This method should not throw any
-   * exceptions.
+   * are expected to notify listener on a separate thread or when the returned {@link Runnable} is
+   * run. This method and the returned {@code Runnable} should not throw any exceptions.
    *
    * @param listener non-{@code null} listener of transport events
+   * @return a {@link Runnable} that is executed after-the-fact by the original caller, typically
+   *     after locks are released
    */
-  void start(Listener listener);
+  @CheckReturnValue
+  @Nullable
+  Runnable start(Listener listener);
 
   /**
    * Initiates an orderly shutdown of the transport.  Existing streams continue, but the transport

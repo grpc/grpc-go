@@ -133,7 +133,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public void start(Listener transportListener) {
+  public Runnable start(Listener transportListener) {
     lifecycleManager = new ClientTransportLifecycleManager(
         Preconditions.checkNotNull(transportListener, "listener"));
 
@@ -191,6 +191,7 @@ class NettyClientTransport implements ConnectionClientTransport {
             Status.INTERNAL.withDescription("Connection closed with unknown cause"));
       }
     });
+    return null;
   }
 
   @Override

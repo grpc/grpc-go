@@ -62,6 +62,7 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.CheckReturnValue;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -89,8 +90,9 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         .build();
   }
 
+  @CheckReturnValue
   @Override
-  public synchronized void start(ManagedClientTransport.Listener listener) {
+  public synchronized Runnable start(ManagedClientTransport.Listener listener) {
     this.clientTransportListener = listener;
     InProcessServer server = InProcessServer.findServer(name);
     if (server != null) {
@@ -99,7 +101,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
     if (serverTransportListener == null) {
       shutdownStatus = Status.UNAVAILABLE.withDescription("Could not find server: " + name);
       final Status localShutdownStatus = shutdownStatus;
-      Thread shutdownThread = new Thread(new Runnable() {
+      return new Runnable() {
         @Override
         public void run() {
           synchronized (InProcessTransport.this) {
@@ -107,23 +109,16 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
             notifyTerminated();
           }
         }
-      });
-      shutdownThread.setDaemon(true);
-      shutdownThread.setName("grpc-inprocess-shutdown");
-      shutdownThread.start();
-      return;
+      };
     }
-    Thread readyThread = new Thread(new Runnable() {
+    return new Runnable() {
       @Override
       public void run() {
         synchronized (InProcessTransport.this) {
           clientTransportListener.transportReady();
         }
       }
-    });
-    readyThread.setDaemon(true);
-    readyThread.setName("grpc-inprocess-ready");
-    readyThread.start();
+    };
   }
 
   @Override

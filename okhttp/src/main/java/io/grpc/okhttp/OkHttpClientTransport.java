@@ -344,7 +344,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public void start(Listener listener) {
+  public Runnable start(Listener listener) {
     this.listener = Preconditions.checkNotNull(listener, "listener");
 
     if (enableKeepAlive) {
@@ -433,6 +433,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         }
       }
     });
+    return null;
   }
 
   @Override
