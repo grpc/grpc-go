@@ -139,7 +139,7 @@ public class ClientCallsTest {
   @Test
   public void unaryBlockingCallFailed() throws Exception {
     Integer req = 2;
-    final Status status = Status.INTERNAL;
+    final Status status = Status.INTERNAL.withDescription("Unique status");
     final Metadata trailers = new Metadata();
 
     doAnswer(new Answer<Void>() {
@@ -156,7 +156,7 @@ public class ClientCallsTest {
       ClientCalls.blockingUnaryCall(call, req);
       fail("Should fail");
     } catch (StatusRuntimeException e) {
-      assertSame(status.getCode(), e.getStatus().getCode());
+      assertSame(status, e.getStatus());
       assertSame(trailers, e.getTrailers());
     }
   }

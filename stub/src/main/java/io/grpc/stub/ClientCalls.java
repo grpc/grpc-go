@@ -224,10 +224,10 @@ public class ClientCalls {
       // If we have an embedded status, use it and replace the cause
       if (cause instanceof StatusException) {
         StatusException se = (StatusException) cause;
-        return new StatusRuntimeException(se.getStatus().withCause(t), se.getTrailers());
+        return new StatusRuntimeException(se.getStatus(), se.getTrailers());
       } else if (cause instanceof StatusRuntimeException) {
         StatusRuntimeException se = (StatusRuntimeException) cause;
-        return new StatusRuntimeException(se.getStatus().withCause(t), se.getTrailers());
+        return new StatusRuntimeException(se.getStatus(), se.getTrailers());
       }
       cause = cause.getCause();
     }
