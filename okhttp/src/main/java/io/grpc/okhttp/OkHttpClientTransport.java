@@ -548,10 +548,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
    * Finish all active streams due to an IOException, then close the transport.
    */
   void onException(Throwable failureCause) {
+    Preconditions.checkNotNull(failureCause, "failureCause");
     Status status = Status.UNAVAILABLE.withCause(failureCause);
-    if (failureCause != null) {
-      status = status.augmentDescription("No provided cause");
-    }
     startGoAway(0, ErrorCode.INTERNAL_ERROR, status);
   }
 
