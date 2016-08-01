@@ -496,7 +496,14 @@ func (t *http2Client) Close() (err error) {
 
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
-	if t.state == closing || t.state == unreachable {
+	switch t.state {
+	case unreachable:
+		// The server may close the connection concurrently. t is not available for
+		// any streams. Close it now.
+		t.mu.Unlock()
+		t.Close()
+		return nil
+	case closing:
 		t.mu.Unlock()
 		return nil
 	}

@@ -363,9 +363,9 @@ func (cc *ClientConn) lbWatcher() {
 }
 
 // resetAddrConn creates an addrConn for addr and adds it to cc.conns.
-// If there is an old addrConn for addr, it will be torn down, using errTearDown as the reason.
-// If errTearDown is nil, errConnDrain will be used instead.
-func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, errTearDown error) error {
+// If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
+// If tearDownErr is nil, errConnDrain will be used instead.
+func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr error) error {
 	ac := &addrConn{
 		cc:    cc,
 		addr:  addr,
@@ -401,19 +401,18 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, errTearDown err
 	ac.cc.mu.Unlock()
 	if stale != nil {
 		// There is an addrConn alive on ac.addr already. This could be due to
-		// 1) stale's Close is undergoing;
-		// 2) a buggy Balancer notifies duplicated Addresses;
-		// 3) goaway was received, a new ac will replace the old ac.
+		// 1) a buggy Balancer notifies duplicated Addresses;
+		// 2) goaway was received, a new ac will replace the old ac.
 		//    The old ac should be deleted from cc.conns, but the
 		//    underlying transport should drain rather than close.
-		if errTearDown == nil {
-			// errTearDown is nil if resetAddrConn is called by
+		if tearDownErr == nil {
+			// tearDownErr is nil if resetAddrConn is called by
 			// 1) Dial
 			// 2) lbWatcher
 			// In both cases, the stale ac should drain, not close.
 			stale.tearDown(errConnDrain)
 		} else {
-			stale.tearDown(errTearDown)
+			stale.tearDown(tearDownErr)
 		}
 	}
 	// skipWait may overwrite the decision in ac.dopts.block.
