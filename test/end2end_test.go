@@ -1797,6 +1797,9 @@ func testClientStreaming(t *testing.T, e env) {
 func TestClientStreamingError(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
 		testClientStreamingError(t, e)
 	}
 }
