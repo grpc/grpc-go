@@ -485,9 +485,11 @@ func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 }
 
 // ConnectionErrorf creates an ConnectionError with the specified error description.
-func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
+func ConnectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
 		Desc: fmt.Sprintf(format, a...),
+		temp: temp,
+		err:  e,
 	}
 }
 
@@ -495,15 +497,32 @@ func ConnectionErrorf(format string, a ...interface{}) ConnectionError {
 // entire connection and the retry of all the active streams.
 type ConnectionError struct {
 	Desc string
+	temp bool
+	err  error
 }
 
 func (e ConnectionError) Error() string {
 	return fmt.Sprintf("connection error: desc = %q", e.Desc)
 }
 
+// Temporary indicates if this connection error is temporary or fatal.
+func (e ConnectionError) Temporary() bool {
+	return e.temp
+}
+
+// Origin returns the original error of this connection error.
+func (e ConnectionError) Origin() error {
+	// Never return nil error here.
+	// If the original error is nil, return itself.
+	if e.err == nil {
+		return e
+	}
+	return e.err
+}
+
 var (
 	// ErrConnClosing indicates that the transport is closing.
-	ErrConnClosing = ConnectionError{Desc: "transport is closing"}
+	ErrConnClosing = ConnectionError{Desc: "transport is closing", temp: true}
 	// ErrStreamDrain indicates that the stream is rejected by the server because
 	// the server stops accepting new RPCs.
 	ErrStreamDrain = StreamErrorf(codes.Unavailable, "the server stops accepting new RPCs")

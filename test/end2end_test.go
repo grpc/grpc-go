@@ -305,6 +305,7 @@ type env struct {
 	network     string // The type of network such as tcp, unix, etc.
 	security    string // The security protocol such as TLS, SSH, etc.
 	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
+	balancer    bool   // whether to use balancer
 }
 
 func (e env) runnable() bool {
@@ -319,12 +320,13 @@ func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 var (
-	tcpClearEnv  = env{name: "tcp-clear", network: "tcp"}
-	tcpTLSEnv    = env{name: "tcp-tls", network: "tcp", security: "tls"}
-	unixClearEnv = env{name: "unix-clear", network: "unix"}
-	unixTLSEnv   = env{name: "unix-tls", network: "unix", security: "tls"}
-	handlerEnv   = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true}
-	allEnv       = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv}
+	tcpClearEnv   = env{name: "tcp-clear", network: "tcp", balancer: true}
+	tcpTLSEnv     = env{name: "tcp-tls", network: "tcp", security: "tls", balancer: true}
+	unixClearEnv  = env{name: "unix-clear", network: "unix", balancer: true}
+	unixTLSEnv    = env{name: "unix-tls", network: "unix", security: "tls", balancer: true}
+	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: true}
+	noBalancerEnv = env{name: "no-balancer", network: "tcp", security: "tls", balancer: false}
+	allEnv        = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv, noBalancerEnv}
 )
 
 var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', 'unix-tls', or 'handler-tls' to only run the tests for that environment. Empty means all.")
@@ -439,12 +441,15 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
-	if te.e.security == "tls" {
+	switch te.e.security {
+	case "tls":
 		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 		if err != nil {
 			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
 		sopts = append(sopts, grpc.Creds(creds))
+	case "clientAlwaysFailCred":
+		sopts = append(sopts, grpc.Creds(clientAlwaysFailCred{}))
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
@@ -487,14 +492,20 @@ func (te *test) clientConn() *grpc.ClientConn {
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-	if te.e.security == "tls" {
+	switch te.e.security {
+	case "tls":
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 		if err != nil {
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
-	} else {
+	case "clientAlwaysFailCred":
+		opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}))
+	default:
 		opts = append(opts, grpc.WithInsecure())
+	}
+	if te.e.balancer {
+		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -2268,6 +2279,74 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 			t.Errorf("error = %#v; want transport.StreamError with code Canceled", got)
 		}
 	})
+}
+
+const clientAlwaysFailCredErrorMsg = "clientAlwaysFailCred always fails"
+
+var clientAlwaysFailCredError = errors.New(clientAlwaysFailCredErrorMsg)
+
+type clientAlwaysFailCred struct{}
+
+func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, clientAlwaysFailCredError
+}
+func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+
+func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	var (
+		err  error
+		opts []grpc.DialOption
+	)
+	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
+	te.cc, err = grpc.Dial(te.srvAddr, opts...)
+	if err != clientAlwaysFailCredError {
+		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, clientAlwaysFailCredError)
+	}
+}
+
+func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
+}
+
+func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
+}
+
+func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
+	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
+	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		te.t.Fatalf("Dial(%q) = %v, want err.Error() contains %q", te.srvAddr, err, clientAlwaysFailCredErrorMsg)
+	}
 }
 
 // interestingGoroutines returns all goroutines we care about for the purpose
