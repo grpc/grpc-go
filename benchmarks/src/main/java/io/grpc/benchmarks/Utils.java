@@ -31,7 +31,10 @@
 
 package io.grpc.benchmarks;
 
+import static java.util.concurrent.ForkJoinPool.defaultForkJoinWorkerThreadFactory;
+
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.common.util.concurrent.UncaughtExceptionHandlers;
 import com.google.protobuf.ByteString;
 
 import io.grpc.ManagedChannel;
@@ -67,7 +70,11 @@ import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
@@ -223,6 +230,21 @@ public final class Utils {
     }
     if (directExecutor) {
       builder.directExecutor();
+    } else {
+      // TODO(carl-mastrangelo): This should not be necessary.  I don't know where this should be
+      // put.  Move it somewhere else, or remove it if no longer necessary.
+      // See: https://github.com/grpc/grpc-java/issues/2119
+      builder.executor(new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
+          new ForkJoinWorkerThreadFactory() {
+            final AtomicInteger num = new AtomicInteger();
+            @Override
+            public ForkJoinWorkerThread newThread(ForkJoinPool pool) {
+              ForkJoinWorkerThread thread = defaultForkJoinWorkerThreadFactory.newThread(pool);
+              thread.setDaemon(true);
+              thread.setName("grpc-server-app-" + "-" + num.getAndIncrement());
+              return thread;
+            }
+          }, UncaughtExceptionHandlers.systemExit(), true /* async */));
     }
     return builder.build();
   }
