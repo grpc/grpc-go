@@ -25,9 +25,12 @@ android {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.0.0-beta-3'
+        artifact = 'com.google.protobuf:protoc:3.0.0'
     }
     plugins {
+        javalite {
+            artifact = "com.google.protobuf:protoc-gen-javalite:3.0.0"
+        }
         grpc {
             artifact = 'io.grpc:protoc-gen-grpc-java:1.1.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
@@ -37,13 +40,10 @@ protobuf {
             task.builtins {
                 // Javanano is installed by default, but needs to be removed to use protobuf lite..
                 remove javanano
-                java {
-                    // Options added to --java_out
-                    option 'lite'
-                }
             }
 
             task.plugins {
+                javalite {}
                 grpc {
                     // Options added to --grpc_out
                     option 'lite'
