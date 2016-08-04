@@ -364,10 +364,10 @@ public final class ServerImpl extends io.grpc.Server {
               stream.close(Status.fromThrowable(e), new Metadata());
               context.cancel(null);
               throw e;
-            } catch (Throwable t) {
-              stream.close(Status.fromThrowable(t), new Metadata());
+            } catch (Error e) {
+              stream.close(Status.fromThrowable(e), new Metadata());
               context.cancel(null);
-              throw new RuntimeException(t);
+              throw e;
             } finally {
               jumpListener.setListener(listener);
             }
@@ -487,9 +487,9 @@ public final class ServerImpl extends io.grpc.Server {
           } catch (RuntimeException e) {
             internalClose(Status.fromThrowable(e), new Metadata());
             throw e;
-          } catch (Throwable t) {
-            internalClose(Status.fromThrowable(t), new Metadata());
-            throw new RuntimeException(t);
+          } catch (Error e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
           }
         }
       });
@@ -505,9 +505,9 @@ public final class ServerImpl extends io.grpc.Server {
           } catch (RuntimeException e) {
             internalClose(Status.fromThrowable(e), new Metadata());
             throw e;
-          } catch (Throwable t) {
-            internalClose(Status.fromThrowable(t), new Metadata());
-            throw new RuntimeException(t);
+          } catch (Error e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
           }
         }
       });

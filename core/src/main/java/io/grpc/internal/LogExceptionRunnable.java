@@ -33,6 +33,8 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Throwables;
+
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -56,7 +58,8 @@ public final class LogExceptionRunnable implements Runnable {
       task.run();
     } catch (Throwable t) {
       log.log(Level.SEVERE, "Exception while executing runnable " + task, t);
-      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+      Throwables.propagateIfPossible(t);
+      throw new AssertionError(t);
     }
   }
 
