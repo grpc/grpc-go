@@ -108,7 +108,7 @@ import javax.annotation.Nullable;
  */
 public class Context {
 
-  private static final Logger LOG = Logger.getLogger(Context.class.getName());
+  private static final Logger log = Logger.getLogger(Context.class.getName());
 
   private static final Object[][] EMPTY_ENTRIES = new Object[0][2];
 
@@ -354,7 +354,7 @@ public class Context {
       // Log a severe message instead of throwing an exception as the context to attach is assumed
       // to be the correct one and the unbalanced state represents a coding mistake in a lower
       // layer in the stack that cannot be recovered from here.
-      LOG.log(Level.SEVERE, "Context was not attached when detaching",
+      log.log(Level.SEVERE, "Context was not attached when detaching",
           new Throwable().fillInStackTrace());
     }
   }
@@ -657,7 +657,11 @@ public class Context {
           pendingDeadline = deadline.runOnExpiration(new Runnable() {
             @Override
             public void run() {
-              cancel(cause);
+              try {
+                cancel(cause);
+              } catch (Throwable t) {
+                log.log(Level.SEVERE, "Cancel threw an exception, which should not happen", t);
+              }
             }
           }, scheduler);
         } else {
@@ -817,7 +821,7 @@ public class Context {
       try {
         executor.execute(this);
       } catch (Throwable t) {
-        LOG.log(Level.INFO, "Exception notifying context listener", t);
+        log.log(Level.INFO, "Exception notifying context listener", t);
       }
     }
 
