@@ -34,9 +34,9 @@ package io.grpc;
 import javax.annotation.Nullable;
 
 /**
- * {@link Status} in Exception form, for propagating Status information via exceptions.
- *
- * @see StatusRuntimeException
+ * {@link Status} in Exception form, for propagating Status information via exceptions. This is
+ * semantically equivalent to {@link StatusRuntimeException}, except for usage in APIs that promote
+ * checked exceptions. gRPC's stubs favor {@code StatusRuntimeException}.
  */
 public class StatusException extends Exception {
   private static final long serialVersionUID = -660954903976144640L;
