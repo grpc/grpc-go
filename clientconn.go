@@ -93,6 +93,14 @@ type dialOptions struct {
 	copts    transport.ConnectOptions
 }
 
+// timeoutNotify creates a channel for a timeout notification if any timeout is given.
+func (o *dialOptions) timeoutNotify() <-chan time.Time {
+	if o.timeout == 0 {
+		return nil
+	}
+	return time.After(o.timeout)
+}
+
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
@@ -266,10 +274,6 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 		}
 		close(waitC)
 	}()
-	var timeoutCh <-chan time.Time
-	if cc.dopts.timeout > 0 {
-		timeoutCh = time.After(cc.dopts.timeout)
-	}
 	select {
 	case err := <-waitC:
 		if err != nil {
@@ -279,7 +283,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	case <-cc.ctx.Done():
 		cc.Close()
 		return nil, cc.ctx.Err()
-	case <-timeoutCh:
+	case <-cc.dopts.timeoutNotify():
 		cc.Close()
 		return nil, ErrClientConnTimeout
 	}
@@ -784,6 +788,8 @@ func (ac *addrConn) wait(ctx context.Context, failFast bool) (transport.ClientTr
 				return nil, toRPCErr(ctx.Err())
 			// Wait until the new transport is ready or failed.
 			case <-ready:
+			case <-ac.dopts.timeoutNotify():
+				return nil, ErrClientConnTimeout
 			}
 		}
 	}
