@@ -28,7 +28,7 @@ del protobuf.zip
 pushd protobuf-3.0.0\cmake
 mkdir build
 cd build
-cmake -Dprotobuf_BUILD_TESTS=OFF ..
+cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio %VisualStudioVersion:~0,2%" ..
 msbuild /maxcpucount /p:Configuration=Release libprotoc.vcxproj
 call extract_includes.bat
 popd
