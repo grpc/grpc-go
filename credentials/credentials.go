@@ -167,7 +167,6 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, addr string, rawConn net
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {
 	conn := tls.Server(rawConn, c.config)
 	if err := conn.Handshake(); err != nil {
-		rawConn.Close()
 		return nil, nil, err
 	}
 	return conn, TLSInfo{conn.ConnectionState()}, nil
