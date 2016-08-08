@@ -139,7 +139,7 @@ func (c *tlsCreds) RequireTransportSecurity() bool {
 func (c *tlsCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (_ net.Conn, _ AuthInfo, err error) {
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
 	cfg := cloneTLSConfig(c.config)
-	if c.config.ServerName == "" {
+	if cfg.ServerName == "" {
 		colonPos := strings.LastIndex(addr, ":")
 		if colonPos == -1 {
 			colonPos = len(addr)
@@ -154,7 +154,6 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, addr string, rawConn net
 	select {
 	case err := <-errChannel:
 		if err != nil {
-			rawConn.Close()
 			return nil, nil, err
 		}
 	case <-ctx.Done():
