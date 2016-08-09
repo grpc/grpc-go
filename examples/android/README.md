@@ -24,6 +24,6 @@ $ ./gradlew install -PskipCodegen=true
 
 **3. Install the app**
 ```sh
-$ cd examples/android
+$ cd examples/android/helloworld  (or cd examples/android/routeguide)
 $ ./gradlew installDebug
 ```
