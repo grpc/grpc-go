@@ -249,9 +249,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     class NameResolverStartTask implements Runnable {
       @Override
       public void run() {
+        NameResolverListenerImpl listener = new NameResolverListenerImpl(balancer);
         // This may trigger quite a few non-trivial work in LoadBalancer and NameResolver,
         // we don't want to do it in the lock.
-        resolver.start(new NameResolverListenerImpl(balancer));
+        try {
+          resolver.start(listener);
+        } catch (Throwable t) {
+          listener.onError(Status.fromThrowable(t));
+        }
       }
     }
 
