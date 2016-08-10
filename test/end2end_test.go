@@ -538,31 +538,45 @@ func (te *test) withServerTester(fn func(st *serverTester)) {
 
 func TestTimeoutOnDeadServer(t *testing.T) {
 	defer leakCheck(t)()
+	testTimeoutOnDeadServer(t, env{})
 	for _, e := range listTestEnv() {
 		testTimeoutOnDeadServer(t, e)
 	}
 }
 
 func testTimeoutOnDeadServer(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
+	if (e == env{}) {
+		cc, err := grpc.Dial("not.a.real.address:1234", grpc.WithInsecure())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cc.Close()
+		tc := testpb.NewTestServiceClient(cc)
+		ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+		}
+	} else {
+		te := newTest(t, e)
+		te.userAgent = testAppUA
+		te.declareLogNoise(
+			"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+			"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+			"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		)
+		te.startServer(&testServer{security: e.security})
+		defer te.tearDown()
 
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
-	}
-	te.srv.Stop()
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+		cc := te.clientConn()
+		tc := testpb.NewTestServiceClient(cc)
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+		}
+		te.srv.Stop()
+		ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(%v, _) = _, %v, want _, error code: %d", ctx, err, codes.DeadlineExceeded)
+		}
 	}
 	awaitNewConnLogOutput()
 }
