@@ -609,8 +609,7 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
-	var retries int
-	for {
+	for retries := 0; ; retries++ {
 		ac.mu.Lock()
 		ac.printf("connecting")
 		if ac.state == Shutdown {
@@ -643,6 +642,7 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
 				return err
 			}
+			grpclog.Printf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, ac.addr)
 			ac.mu.Lock()
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
@@ -663,8 +663,6 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			case <-ac.ctx.Done():
 				return ac.ctx.Err()
 			}
-			retries++
-			grpclog.Printf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %q", err, ac.addr)
 			continue
 		}
 		ac.mu.Lock()
