@@ -1685,7 +1685,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 
 // concurrentSendServer is a TestServiceServer whose
 // StreamingOutputCall makes ten serial Send calls, sending payloads
-// "0".."9", inclusive.  TestServerStreaming_Concurrent verifies they
+// "0".."9", inclusive.  TestServerStreamingConcurrent verifies they
 // were received in the correct order, and that there were no races.
 //
 // All other TestServiceServer methods crash if called.
@@ -1705,14 +1705,14 @@ func (s concurrentSendServer) StreamingOutputCall(args *testpb.StreamingOutputCa
 }
 
 // Tests doing a bunch of concurrent streaming output calls.
-func TestServerStreaming_Concurrent(t *testing.T) {
+func TestServerStreamingConcurrent(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testServerStreaming_Concurrent(t, e)
+		testServerStreamingConcurrent(t, e)
 	}
 }
 
-func testServerStreaming_Concurrent(t *testing.T, e env) {
+func testServerStreamingConcurrent(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(concurrentSendServer{})
 	defer te.tearDown()
@@ -2160,14 +2160,14 @@ func (s *funcServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 	return s.streamingInputCall(stream)
 }
 
-func TestClientRequestBodyError_UnexpectedEOF(t *testing.T) {
+func TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testClientRequestBodyError_UnexpectedEOF(t, e)
+		testClientRequestBodyErrorUnexpectedEOF(t, e)
 	}
 }
 
-func testClientRequestBodyError_UnexpectedEOF(t *testing.T, e env) {
+func testClientRequestBodyErrorUnexpectedEOF(t *testing.T, e env) {
 	te := newTest(t, e)
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
@@ -2184,14 +2184,14 @@ func testClientRequestBodyError_UnexpectedEOF(t *testing.T, e env) {
 	})
 }
 
-func TestClientRequestBodyError_CloseAfterLength(t *testing.T) {
+func TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testClientRequestBodyError_CloseAfterLength(t, e)
+		testClientRequestBodyErrorCloseAfterLength(t, e)
 	}
 }
 
-func testClientRequestBodyError_CloseAfterLength(t *testing.T, e env) {
+func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("Server.processUnaryRPC failed to write status")
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -2209,14 +2209,14 @@ func testClientRequestBodyError_CloseAfterLength(t *testing.T, e env) {
 	})
 }
 
-func TestClientRequestBodyError_Cancel(t *testing.T) {
+func TestClientRequestBodyErrorCancel(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testClientRequestBodyError_Cancel(t, e)
+		testClientRequestBodyErrorCancel(t, e)
 	}
 }
 
-func testClientRequestBodyError_Cancel(t *testing.T, e env) {
+func testClientRequestBodyErrorCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	gotCall := make(chan bool, 1)
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -2246,14 +2246,14 @@ func testClientRequestBodyError_Cancel(t *testing.T, e env) {
 	})
 }
 
-func TestClientRequestBodyError_Cancel_StreamingInput(t *testing.T) {
+func TestClientRequestBodyErrorCancelStreamingInput(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testClientRequestBodyError_Cancel_StreamingInput(t, e)
+		testClientRequestBodyErrorCancelStreamingInput(t, e)
 	}
 }
 
-func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
+func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 	te := newTest(t, e)
 	recvErr := make(chan error, 1)
 	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
@@ -2283,12 +2283,12 @@ func testClientRequestBodyError_Cancel_StreamingInput(t *testing.T, e env) {
 
 const clientAlwaysFailCredErrorMsg = "clientAlwaysFailCred always fails"
 
-var clientAlwaysFailCredError = errors.New(clientAlwaysFailCredErrorMsg)
+var errClientAlwaysFailCred = errors.New(clientAlwaysFailCredErrorMsg)
 
 type clientAlwaysFailCred struct{}
 
 func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return nil, nil, clientAlwaysFailCredError
+	return nil, nil, errClientAlwaysFailCred
 }
 func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
@@ -2308,8 +2308,8 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	)
 	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
-	if err != clientAlwaysFailCredError {
-		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, clientAlwaysFailCredError)
+	if err != errClientAlwaysFailCred {
+		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, errClientAlwaysFailCred)
 	}
 }
 

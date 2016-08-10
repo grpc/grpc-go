@@ -8,11 +8,7 @@ go:
 go_import_path: google.golang.org/grpc
 
 before_install:
-  - go get golang.org/x/tools/cmd/goimports
-  - go get github.com/golang/lint/golint
-  - go get github.com/axw/gocov/gocov
-  - go get github.com/mattn/goveralls
-  - go get golang.org/x/tools/cmd/cover
+  - go get -u golang.org/x/tools/cmd/goimports github.com/golang/lint/golint github.com/axw/gocov/gocov github.com/mattn/goveralls golang.org/x/tools/cmd/cover
 
 script:
   - '! gofmt -s -d -l . 2>&1 | read'
