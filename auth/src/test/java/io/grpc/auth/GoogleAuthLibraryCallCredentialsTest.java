@@ -85,7 +85,7 @@ import java.util.concurrent.Executor;
  * Tests for {@link GoogleAuthLibraryCallCredentials}.
  */
 @RunWith(JUnit4.class)
-public class GoogleAuthLibraryCallCredentialsTests {
+public class GoogleAuthLibraryCallCredentialsTest {
 
   private static final Metadata.Key<String> AUTHORIZATION = Metadata.Key.of("Authorization",
       Metadata.ASCII_STRING_MARSHALLER);
