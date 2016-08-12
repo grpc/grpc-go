@@ -312,7 +312,7 @@ public final class ReadableBuffers {
   /**
    * An {@link InputStream} that is backed by a {@link ReadableBuffer}.
    */
-  private static class BufferInputStream extends InputStream implements KnownLength {
+  private static final class BufferInputStream extends InputStream implements KnownLength {
     final ReadableBuffer buffer;
 
     public BufferInputStream(ReadableBuffer buffer) {
