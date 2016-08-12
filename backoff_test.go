@@ -18,7 +18,7 @@ func TestBackoffWitDifferentNumberOfRetries(t *testing.T) {
 		backoffTime := b.backoff(retries)
 		// Backoff time should be between basedelay and max delay.
 		if backoffTime < b.baseDelay || backoffTime > b.MaxDelay {
-			t.Fatalf("expected backoff time: %v to be between basedelay: %v and maxdelay: %v",backoffTime,b.baseDelay,b.MaxDelay)
+			t.Fatalf("expected backoff time: %v to be between basedelay: %v and maxdelay: %v", backoffTime, b.baseDelay, b.MaxDelay)
 		}
 	}
 }
@@ -33,7 +33,7 @@ func TestBackOffTimeIncreasesWithRetries(t *testing.T) {
 		backoffTime := b.backoff(retries)
 		// Backoff time should increase as the number of retries increase.
 		if backoffTime <= lastBackOffTime {
-			t.Fatalf("backoffTime for %v retries : %v is smaller than backoffTime for %v retries: %v",retries,backoffTime,retries-1,lastBackOffTime)
+			t.Fatalf("backoffTime for %v retries : %v is smaller than backoffTime for %v retries: %v", retries, backoffTime, retries-1, lastBackOffTime)
 		}
 		lastBackOffTime = backoffTime
 	}
