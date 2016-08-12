@@ -233,8 +233,8 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
     private MethodDescriptor<?, ?> method;
 
     private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers) {
-      this.method = checkNotNull(method);
-      this.headers = checkNotNull(headers);
+      this.method = checkNotNull(method, "method");
+      this.headers = checkNotNull(headers, "headers");
 
     }
 

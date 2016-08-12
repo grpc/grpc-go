@@ -60,7 +60,7 @@ public final class Deadline implements Comparable<Deadline> {
 
   @VisibleForTesting
   static Deadline after(long duration, TimeUnit units, Ticker ticker) {
-    Preconditions.checkNotNull(units);
+    Preconditions.checkNotNull(units, "units");
     return new Deadline(ticker, units.toNanos(duration), true);
   }
 

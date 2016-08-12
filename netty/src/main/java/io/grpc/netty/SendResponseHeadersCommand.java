@@ -44,8 +44,8 @@ class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
   private final boolean endOfStream;
 
   SendResponseHeadersCommand(StreamIdHolder stream, Http2Headers headers, boolean endOfStream) {
-    this.stream = Preconditions.checkNotNull(stream);
-    this.headers = Preconditions.checkNotNull(headers);
+    this.stream = Preconditions.checkNotNull(stream, "stream");
+    this.headers = Preconditions.checkNotNull(headers, "headers");
     this.endOfStream = endOfStream;
   }
 

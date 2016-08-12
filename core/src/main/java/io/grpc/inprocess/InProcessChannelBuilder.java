@@ -64,7 +64,7 @@ public class InProcessChannelBuilder extends
 
   private InProcessChannelBuilder(String name) {
     super(new InProcessSocketAddress(name), "localhost");
-    this.name = Preconditions.checkNotNull(name);
+    this.name = Preconditions.checkNotNull(name, "name");
   }
 
   /**

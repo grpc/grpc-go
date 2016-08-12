@@ -104,7 +104,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * Specify the channel type to use, by default we use {@link NioServerSocketChannel}.
    */
   public NettyServerBuilder channelType(Class<? extends ServerChannel> channelType) {
-    this.channelType = Preconditions.checkNotNull(channelType);
+    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     return this;
   }
 

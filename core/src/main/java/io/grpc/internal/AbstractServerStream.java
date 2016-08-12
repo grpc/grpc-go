@@ -177,7 +177,7 @@ public abstract class AbstractServerStream extends AbstractStream2
      * thread.
      */
     public final void setListener(ServerStreamListener listener) {
-      this.listener = Preconditions.checkNotNull(listener);
+      this.listener = Preconditions.checkNotNull(listener, "listener");
 
       // Now that the stream has actually been initialized, call the listener's onReady callback if
       // appropriate.

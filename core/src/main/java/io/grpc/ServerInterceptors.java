@@ -105,7 +105,7 @@ public class ServerInterceptors {
 
   public static ServerServiceDefinition intercept(BindableService bindableService,
       ServerInterceptor... interceptors) {
-    Preconditions.checkNotNull(bindableService);
+    Preconditions.checkNotNull(bindableService, "bindableService");
     return intercept(bindableService.bindService(), Arrays.asList(interceptors));
   }
 
@@ -120,7 +120,7 @@ public class ServerInterceptors {
    */
   public static ServerServiceDefinition intercept(ServerServiceDefinition serviceDef,
                                                   List<? extends ServerInterceptor> interceptors) {
-    Preconditions.checkNotNull(serviceDef);
+    Preconditions.checkNotNull(serviceDef, "serviceDef");
     if (interceptors.isEmpty()) {
       return serviceDef;
     }
@@ -134,7 +134,7 @@ public class ServerInterceptors {
 
   public static ServerServiceDefinition intercept(BindableService bindableService,
       List<? extends ServerInterceptor> interceptors) {
-    Preconditions.checkNotNull(bindableService);
+    Preconditions.checkNotNull(bindableService, "bindableService");
     return intercept(bindableService.bindService(), interceptors);
   }
 

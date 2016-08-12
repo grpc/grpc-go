@@ -123,7 +123,7 @@ public final class ServerImpl extends io.grpc.Server {
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
-    this.rootContext = Preconditions.checkNotNull(rootContext).fork();
+    this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
   }

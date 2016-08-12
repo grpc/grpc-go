@@ -49,7 +49,7 @@ public final class LogExceptionRunnable implements Runnable {
   private final Runnable task;
 
   public LogExceptionRunnable(Runnable task) {
-    this.task = checkNotNull(task);
+    this.task = checkNotNull(task, "task");
   }
 
   @Override

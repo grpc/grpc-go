@@ -124,7 +124,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
    * Specify the channel type to use, by default we use {@link NioSocketChannel}.
    */
   public final NettyChannelBuilder channelType(Class<? extends Channel> channelType) {
-    this.channelType = Preconditions.checkNotNull(channelType);
+    this.channelType = Preconditions.checkNotNull(channelType, "channelType");
     return this;
   }
 

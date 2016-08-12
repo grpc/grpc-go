@@ -406,7 +406,7 @@ public final class Status {
    * @return non-{@code null} status
    */
   public static Status fromThrowable(Throwable t) {
-    Throwable cause = checkNotNull(t);
+    Throwable cause = checkNotNull(t, "t");
     while (cause != null) {
       if (cause instanceof StatusException) {
         return ((StatusException) cause).getStatus();
@@ -426,7 +426,7 @@ public final class Status {
    */
   @ExperimentalApi
   public static Metadata trailersFromThrowable(Throwable t) {
-    Throwable cause = checkNotNull(t);
+    Throwable cause = checkNotNull(t, "t");
     while (cause != null) {
       if (cause instanceof StatusException) {
         return ((StatusException) cause).getTrailers();
@@ -455,7 +455,7 @@ public final class Status {
   }
 
   private Status(Code code, @Nullable String description, @Nullable Throwable cause) {
-    this.code = checkNotNull(code);
+    this.code = checkNotNull(code, "code");
     this.description = description;
     this.cause = cause;
   }

@@ -349,7 +349,7 @@ public class Context {
    * will still be bound.
    */
   public void detach(Context toAttach) {
-    Preconditions.checkNotNull(toAttach);
+    Preconditions.checkNotNull(toAttach, "toAttach");
     if (toAttach.attach() != this) {
       // Log a severe message instead of throwing an exception as the context to attach is assumed
       // to be the correct one and the unbalanced state represents a coding mistake in a lower
@@ -406,8 +406,8 @@ public class Context {
    */
   public void addListener(final CancellationListener cancellationListener,
                           final Executor executor) {
-    Preconditions.checkNotNull(cancellationListener);
-    Preconditions.checkNotNull(executor);
+    Preconditions.checkNotNull(cancellationListener, "cancellationListener");
+    Preconditions.checkNotNull(executor, "executor");
     if (canBeCancelled) {
       ExecutableListener executableListener =
           new ExecutableListener(executor, cancellationListener);
@@ -778,7 +778,7 @@ public class Context {
     }
 
     Key(String name, T defaultValue) {
-      this.name = Preconditions.checkNotNull(name);
+      this.name = Preconditions.checkNotNull(name, "name");
       this.defaultValue = defaultValue;
     }
 

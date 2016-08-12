@@ -82,7 +82,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    * @param headers the received headers
    */
   protected void transportHeadersReceived(Metadata headers) {
-    Preconditions.checkNotNull(headers);
+    Preconditions.checkNotNull(headers, "headers");
     if (transportError != null) {
       // Already received a transport error so just augment it.
       transportError = transportError.augmentDescription(headers.toString());
@@ -150,7 +150,7 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    * @param trailers the received terminal trailer metadata
    */
   protected void transportTrailersReceived(Metadata trailers) {
-    Preconditions.checkNotNull(trailers);
+    Preconditions.checkNotNull(trailers, "trailers");
     if (transportError != null) {
       // Already received a transport error so just augment it.
       transportError = transportError.augmentDescription(trailers.toString());

@@ -70,7 +70,7 @@ public final class ClientAuthInterceptor implements ClientInterceptor {
 
   public ClientAuthInterceptor(
       Credentials credentials, @SuppressWarnings("unused") Executor executor) {
-    this.credentials = Preconditions.checkNotNull(credentials);
+    this.credentials = Preconditions.checkNotNull(credentials, "credentials");
     // TODO(louiscryan): refresh token asynchronously with this executor.
   }
 

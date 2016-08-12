@@ -154,7 +154,7 @@ public class OkHttpChannelBuilder extends
    * <p>Default: <code>TLS</code>
    */
   public final OkHttpChannelBuilder negotiationType(NegotiationType type) {
-    negotiationType = Preconditions.checkNotNull(type);
+    negotiationType = Preconditions.checkNotNull(type, "type");
     return this;
   }
 

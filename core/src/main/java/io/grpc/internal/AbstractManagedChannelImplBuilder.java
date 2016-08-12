@@ -112,7 +112,7 @@ public abstract class AbstractManagedChannelImplBuilder
   private long idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
 
   protected AbstractManagedChannelImplBuilder(String target) {
-    this.target = Preconditions.checkNotNull(target);
+    this.target = Preconditions.checkNotNull(target, "target");
     this.directServerAddress = null;
   }
 

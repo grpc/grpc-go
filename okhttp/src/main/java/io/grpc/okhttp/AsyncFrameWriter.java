@@ -70,8 +70,8 @@ class AsyncFrameWriter implements FrameWriter {
   void becomeConnected(FrameWriter frameWriter, Socket socket) {
     Preconditions.checkState(this.frameWriter == null,
         "AsyncFrameWriter's setFrameWriter() should only be called once.");
-    this.frameWriter = Preconditions.checkNotNull(frameWriter);
-    this.socket = Preconditions.checkNotNull(socket);
+    this.frameWriter = Preconditions.checkNotNull(frameWriter, "frameWriter");
+    this.socket = Preconditions.checkNotNull(socket, "socket");
   }
 
   @Override

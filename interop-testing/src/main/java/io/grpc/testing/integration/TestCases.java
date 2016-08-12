@@ -71,7 +71,7 @@ public enum TestCases {
    * matching is done case insensitive.
    */
   public static TestCases fromString(String s) {
-    Preconditions.checkNotNull(s);
+    Preconditions.checkNotNull(s, "s");
     return TestCases.valueOf(s.toUpperCase());
   }
 }

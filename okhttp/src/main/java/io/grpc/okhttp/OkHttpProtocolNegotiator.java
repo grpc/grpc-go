@@ -61,7 +61,7 @@ class OkHttpProtocolNegotiator {
 
   @VisibleForTesting
   OkHttpProtocolNegotiator(Platform platform) {
-    this.platform = checkNotNull(platform);
+    this.platform = checkNotNull(platform, "platform");
   }
 
   public static OkHttpProtocolNegotiator get() {

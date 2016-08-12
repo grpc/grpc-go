@@ -98,7 +98,7 @@ public class ClientInterceptors {
    * @return a new channel instance with the interceptors applied.
    */
   public static Channel intercept(Channel channel, List<? extends ClientInterceptor> interceptors) {
-    Preconditions.checkNotNull(channel);
+    Preconditions.checkNotNull(channel, "channel");
     for (ClientInterceptor interceptor : interceptors) {
       channel = new InterceptorChannel(channel, interceptor);
     }

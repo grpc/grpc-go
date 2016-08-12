@@ -372,8 +372,8 @@ public class ServerCalls {
    */
   public static void asyncUnimplementedUnaryCall(MethodDescriptor<?, ?> methodDescriptor,
       StreamObserver<?> responseObserver) {
-    checkNotNull(methodDescriptor);
-    checkNotNull(responseObserver);
+    checkNotNull(methodDescriptor, "methodDescriptor");
+    checkNotNull(responseObserver, "responseObserver");
     responseObserver.onError(Status.UNIMPLEMENTED
         .withDescription(String.format("Method %s is unimplemented",
             methodDescriptor.getFullMethodName()))

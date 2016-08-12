@@ -211,16 +211,16 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
     this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
-    this.executor = Preconditions.checkNotNull(executor);
+    this.executor = Preconditions.checkNotNull(executor, "executor");
     serializingExecutor = new SerializingExecutor(executor);
-    this.testFrameReader = Preconditions.checkNotNull(frameReader);
-    this.testFrameWriter = Preconditions.checkNotNull(testFrameWriter);
-    this.socket = Preconditions.checkNotNull(socket);
+    this.testFrameReader = Preconditions.checkNotNull(frameReader, "frameReader");
+    this.testFrameWriter = Preconditions.checkNotNull(testFrameWriter, "testFrameWriter");
+    this.socket = Preconditions.checkNotNull(socket, "socket");
     this.nextStreamId = nextStreamId;
     this.ticker = ticker;
     this.connectionSpec = null;
     this.connectingCallback = connectingCallback;
-    this.connectedFuture = Preconditions.checkNotNull(connectedFuture);
+    this.connectedFuture = Preconditions.checkNotNull(connectedFuture, "connectedFuture");
   }
 
   /**

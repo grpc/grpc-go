@@ -45,8 +45,8 @@ class CancelServerStreamCommand extends WriteQueue.AbstractQueuedCommand {
   private final Status reason;
 
   CancelServerStreamCommand(NettyServerStream.TransportState stream, Status reason) {
-    this.stream = Preconditions.checkNotNull(stream);
-    this.reason = Preconditions.checkNotNull(reason);
+    this.stream = Preconditions.checkNotNull(stream, "stream");
+    this.reason = Preconditions.checkNotNull(reason, "reason");
   }
 
   NettyServerStream.TransportState stream() {

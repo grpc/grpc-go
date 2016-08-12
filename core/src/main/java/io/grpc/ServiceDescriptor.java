@@ -51,7 +51,7 @@ public final class ServiceDescriptor {
   }
 
   public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
-    this.name = Preconditions.checkNotNull(name);
+    this.name = Preconditions.checkNotNull(name, "name");
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
 

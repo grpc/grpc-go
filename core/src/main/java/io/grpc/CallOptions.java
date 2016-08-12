@@ -183,7 +183,7 @@ public final class CallOptions {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
   public CallOptions withAffinity(Attributes affinity) {
     CallOptions newOptions = new CallOptions(this);
-    newOptions.affinity = Preconditions.checkNotNull(affinity);
+    newOptions.affinity = Preconditions.checkNotNull(affinity, "affinity");
     return newOptions;
   }
 
@@ -289,7 +289,7 @@ public final class CallOptions {
      * @return Key object
      */
     public static <T> Key<T> of(String name, T defaultValue) {
-      Preconditions.checkNotNull(name);
+      Preconditions.checkNotNull(name, "name");
       return new Key<T>(name, defaultValue);
     }
   }
@@ -302,8 +302,8 @@ public final class CallOptions {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   public <T> CallOptions withOption(Key<T> key, T value) {
-    Preconditions.checkNotNull(key);
-    Preconditions.checkNotNull(value);
+    Preconditions.checkNotNull(key, "key");
+    Preconditions.checkNotNull(value, "value");
 
     CallOptions newOptions = new CallOptions(this);
     int existingIdx = -1;
@@ -335,7 +335,7 @@ public final class CallOptions {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   @SuppressWarnings("unchecked")
   public <T> T getOption(Key<T> key) {
-    Preconditions.checkNotNull(key);
+    Preconditions.checkNotNull(key, "key");
     for (int i = 0; i < customOptions.length; i++) {
       if (key.equals(customOptions[i][0])) {
         return (T) customOptions[i][1];

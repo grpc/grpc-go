@@ -65,7 +65,7 @@ public abstract class AbstractStream2 implements Stream {
 
   @Override
   public final void writeMessage(InputStream message) {
-    checkNotNull(message);
+    checkNotNull(message, "message");
     if (!framer().isClosed()) {
       framer().writePayload(message);
     }

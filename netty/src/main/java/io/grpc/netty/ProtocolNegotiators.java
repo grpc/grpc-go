@@ -223,8 +223,8 @@ public final class ProtocolNegotiators {
     private final int port;
 
     TlsNegotiator(SslContext sslContext, String host, int port) {
-      this.sslContext = checkNotNull(sslContext);
-      this.host = checkNotNull(host);
+      this.sslContext = checkNotNull(sslContext, "sslContext");
+      this.host = checkNotNull(host, "host");
       this.port = port;
     }
 

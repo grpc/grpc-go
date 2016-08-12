@@ -59,7 +59,7 @@ public final class ServerServiceDefinition {
 
   private ServerServiceDefinition(
       ServiceDescriptor serviceDescriptor, Map<String, ServerMethodDefinition<?, ?>> methods) {
-    this.serviceDescriptor = checkNotNull(serviceDescriptor);
+    this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
     this.methods = ImmutableMap.copyOf(methods);
   }
 

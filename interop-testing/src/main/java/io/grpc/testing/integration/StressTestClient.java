@@ -364,10 +364,11 @@ public class StressTestClient {
     Worker(ManagedChannel channel, List<TestCaseWeightPair> testCaseWeightPairs,
         int durationSec, String gaugeName) {
       Preconditions.checkArgument(durationSec >= -1, "durationSec must be gte -1.");
-      this.channel = Preconditions.checkNotNull(channel);
-      this.testCaseWeightPairs = Preconditions.checkNotNull(testCaseWeightPairs);
+      this.channel = Preconditions.checkNotNull(channel, "channel");
+      this.testCaseWeightPairs =
+          Preconditions.checkNotNull(testCaseWeightPairs, "testCaseWeightPairs");
       this.durationSec = durationSec == -1 ? null : durationSec;
-      this.gaugeName = Preconditions.checkNotNull(gaugeName);
+      this.gaugeName = Preconditions.checkNotNull(gaugeName, "gaugeName");
     }
 
     @Override
@@ -493,7 +494,7 @@ public class StressTestClient {
       final Iterator<TestCases> testCases;
 
       WeightedTestCaseSelector(List<TestCaseWeightPair> testCaseWeightPairs) {
-        Preconditions.checkNotNull(testCaseWeightPairs);
+        Preconditions.checkNotNull(testCaseWeightPairs, "testCaseWeightPairs");
         Preconditions.checkArgument(testCaseWeightPairs.size() > 0);
 
         List<TestCases> testCases = new ArrayList<TestCases>();
@@ -549,7 +550,7 @@ public class StressTestClient {
 
     TestCaseWeightPair(TestCases testCase, int weight) {
       Preconditions.checkArgument(weight >= 0, "weight must be positive.");
-      this.testCase = Preconditions.checkNotNull(testCase);
+      this.testCase = Preconditions.checkNotNull(testCase, "testCase");
       this.weight = weight;
     }
 

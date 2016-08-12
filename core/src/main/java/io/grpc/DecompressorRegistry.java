@@ -160,7 +160,7 @@ public final class DecompressorRegistry {
     final boolean advertised;
 
     DecompressorInfo(Decompressor decompressor, boolean advertised) {
-      this.decompressor = checkNotNull(decompressor);
+      this.decompressor = checkNotNull(decompressor, "decompressor");
       this.advertised = advertised;
     }
   }

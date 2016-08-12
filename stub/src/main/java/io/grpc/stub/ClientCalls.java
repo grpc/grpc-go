@@ -219,7 +219,7 @@ public class ClientCalls {
    * exception will be generated from an {@link Status#UNKNOWN} status.
    */
   private static StatusRuntimeException toStatusRuntimeException(Throwable t) {
-    Throwable cause = checkNotNull(t);
+    Throwable cause = checkNotNull(t, "t");
     while (cause != null) {
       // If we have an embedded status, use it and replace the cause
       if (cause instanceof StatusException) {

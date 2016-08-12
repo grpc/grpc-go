@@ -44,7 +44,7 @@ class CancelClientStreamCommand extends WriteQueue.AbstractQueuedCommand {
 
   CancelClientStreamCommand(NettyClientStream stream, Status reason) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
-    Preconditions.checkNotNull(reason);
+    Preconditions.checkNotNull(reason, "reason");
     Preconditions.checkArgument(!reason.isOk(), "Should not cancel with OK status");
     this.reason = reason;
   }

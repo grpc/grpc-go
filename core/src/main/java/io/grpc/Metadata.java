@@ -320,7 +320,7 @@ public final class Metadata {
    * Perform a simple merge of two sets of metadata.
    */
   public void merge(Metadata other) {
-    Preconditions.checkNotNull(other);
+    Preconditions.checkNotNull(other, "other");
     for (Map.Entry<String, List<MetadataEntry>> keyEntry : other.store.entrySet()) {
       for (int i = 0; i < keyEntry.getValue().size(); i++) {
         // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
@@ -334,7 +334,7 @@ public final class Metadata {
    * Merge values for the given set of keys into this set of metadata.
    */
   public void merge(Metadata other, Set<Key<?>> keys) {
-    Preconditions.checkNotNull(other);
+    Preconditions.checkNotNull(other, "other");
     for (Key<?> key : keys) {
       List<MetadataEntry> values = other.store.get(key.name());
       if (values == null) {
@@ -480,7 +480,7 @@ public final class Metadata {
     }
 
     private static String validateName(String n) {
-      checkNotNull(n);
+      checkNotNull(n, "name");
       checkArgument(n.length() != 0, "token must have at least 1 tchar");
       for (int i = 0; i < n.length(); i++) {
         char tChar = n.charAt(i);
@@ -496,7 +496,7 @@ public final class Metadata {
     }
 
     private Key(String name) {
-      this.originalName = checkNotNull(name);
+      this.originalName = checkNotNull(name, "name");
       // Intern the result for faster string identity checking.
       this.name = validateName(this.originalName.toLowerCase(Locale.ROOT)).intern();
       this.nameBytes = this.name.getBytes(US_ASCII);
@@ -604,7 +604,7 @@ public final class Metadata {
           !name.endsWith(BINARY_HEADER_SUFFIX),
           "ASCII header is named %s. It must not end with %s",
           name, BINARY_HEADER_SUFFIX);
-      this.marshaller = Preconditions.checkNotNull(marshaller);
+      this.marshaller = Preconditions.checkNotNull(marshaller, "marshaller");
     }
 
     @Override
@@ -630,8 +630,8 @@ public final class Metadata {
      * Constructor used when application layer adds a parsed value.
      */
     private MetadataEntry(Key<?> key, Object parsed) {
-      this.parsed = Preconditions.checkNotNull(parsed);
-      this.key = Preconditions.checkNotNull(key);
+      this.parsed = Preconditions.checkNotNull(parsed, "parsed");
+      this.key = Preconditions.checkNotNull(key, "key");
       this.isBinary = key instanceof BinaryKey;
     }
 
@@ -639,7 +639,7 @@ public final class Metadata {
      * Constructor used when reading a value from the transport.
      */
     private MetadataEntry(boolean isBinary, byte[] serialized) {
-      Preconditions.checkNotNull(serialized);
+      Preconditions.checkNotNull(serialized, "serialized");
       this.serializedBinary = serialized;
       this.isBinary = isBinary;
     }

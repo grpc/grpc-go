@@ -166,7 +166,7 @@ public abstract class AbstractStream<IdT> implements Stream {
 
   @Override
   public void writeMessage(InputStream message) {
-    checkNotNull(message);
+    checkNotNull(message, "message");
     outboundPhase(Phase.MESSAGE);
     if (!framer.isClosed()) {
       framer.writePayload(message);

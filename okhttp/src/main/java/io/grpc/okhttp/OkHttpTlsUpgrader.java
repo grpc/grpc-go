@@ -65,9 +65,9 @@ final class OkHttpTlsUpgrader {
    */
   public static SSLSocket upgrade(SSLSocketFactory sslSocketFactory,
       Socket socket, String host, int port, ConnectionSpec spec) throws IOException {
-    Preconditions.checkNotNull(sslSocketFactory);
-    Preconditions.checkNotNull(socket);
-    Preconditions.checkNotNull(spec);
+    Preconditions.checkNotNull(sslSocketFactory, "sslSocketFactory");
+    Preconditions.checkNotNull(socket, "socket");
+    Preconditions.checkNotNull(spec, "spec");
     SSLSocket sslSocket = (SSLSocket) sslSocketFactory.createSocket(
         socket, host, port, true /* auto close */);
     spec.apply(sslSocket, false);

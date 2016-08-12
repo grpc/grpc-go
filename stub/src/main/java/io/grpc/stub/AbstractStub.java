@@ -73,8 +73,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
   protected AbstractStub(Channel channel, CallOptions callOptions) {
-    this.channel = checkNotNull(channel);
-    this.callOptions = checkNotNull(callOptions);
+    this.channel = checkNotNull(channel, "channel");
+    this.callOptions = checkNotNull(callOptions, "callOptions");
   }
 
   /**
@@ -155,7 +155,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   public final S withChannel(Channel newChannel) {
     return build(newChannel, callOptions);
   }
-  
+
   /**
    * Sets a custom option to be passed to client interceptors on the channel
    * {@link io.grpc.ClientInterceptor} via the CallOptions parameter.

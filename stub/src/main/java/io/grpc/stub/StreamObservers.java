@@ -56,8 +56,8 @@ public class StreamObservers {
    */
   public static <V> void copyWithFlowControl(final Iterator<V> source,
       final CallStreamObserver<V> target) {
-    Preconditions.checkNotNull(source);
-    Preconditions.checkNotNull(target);
+    Preconditions.checkNotNull(source, "source");
+    Preconditions.checkNotNull(target, "target");
     target.setOnReadyHandler(new Runnable() {
       @Override
       public void run() {
@@ -84,7 +84,7 @@ public class StreamObservers {
    */
   public static <V> void copyWithFlowControl(final Iterable<V> source,
       CallStreamObserver<V> target) {
-    Preconditions.checkNotNull(source);
+    Preconditions.checkNotNull(source, "source");
     copyWithFlowControl(source.iterator(), target);
   }
 }
