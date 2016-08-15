@@ -135,8 +135,9 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 		conn, authInfo, connErr = creds.ClientHandshake(ctx, addr, conn)
 	}
 	if connErr != nil {
-		// Credentials handshake error is not a temporary error.
-		return nil, ConnectionErrorf(false, connErr, "transport: %v", connErr)
+		// Credentials handshake error is not a temporary error (unless the error
+		// was the connection closing).
+		return nil, ConnectionErrorf(connErr == io.EOF, connErr, "transport: %v", connErr)
 	}
 	ua := primaryUA
 	if opts.UserAgent != "" {
