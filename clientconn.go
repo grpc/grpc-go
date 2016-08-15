@@ -464,7 +464,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 	return nil
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
+func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (_ transport.ClientTransport, _ func(), err error) {
 	var (
 		ac  *addrConn
 		ok  bool
@@ -480,14 +480,19 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		}
 		cc.mu.RUnlock()
 	} else {
-		var (
-			addr Address
-			err  error
-		)
+		var addr Address
 		addr, put, err = cc.dopts.balancer.Get(ctx, opts)
 		if err != nil {
 			return nil, nil, toRPCErr(err)
 		}
+		defer func() {
+			// put != nil means balancer.Get() returned non-nil put.
+			// err != nil means func put will not be returned to the caller.
+			// If we don't call put now, put will never be called.
+			if err != nil && put != nil {
+				put()
+			}
+		}()
 		cc.mu.RLock()
 		if cc.conns == nil {
 			cc.mu.RUnlock()
@@ -497,16 +502,11 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		cc.mu.RUnlock()
 	}
 	if !ok {
-		if put != nil {
-			put()
-		}
 		return nil, nil, errConnClosing
 	}
-	t, err := ac.wait(ctx, !opts.BlockingWait)
+	var t transport.ClientTransport
+	t, err = ac.wait(ctx, !opts.BlockingWait)
 	if err != nil {
-		if put != nil {
-			put()
-		}
 		return nil, nil, err
 	}
 	return t, put, nil
