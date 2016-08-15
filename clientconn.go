@@ -214,9 +214,14 @@ func WithUserAgent(s string) DialOption {
 	}
 }
 
-// Dial creates a client connection the given target.
+// Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
-	ctx := context.Background()
+	return DialContext(context.Background(), target, opts...)
+}
+
+// DialContext creates a client connection to the given target
+// using the supplied context.
+func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[Address]*addrConn),
