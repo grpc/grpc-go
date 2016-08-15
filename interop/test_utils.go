@@ -404,6 +404,98 @@ func DoPerRPCCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScop
 }
 
 var (
+	testMetadataHeaderKey    = "x-grpc-test-echo-initial"
+	testMetadataHeaderValue  = "test_initial_metadata_value"
+	testMetadataTrailerKey   = "x-grpc-test-echo-trailing-bin"
+	testMetadataTrailerValue = "0xababab"
+)
+
+//DoCustomMetadata performs both unary and full-duplex RPC with custom metadata information
+func DoCustomMetadata(tc testpb.TestServiceClient) {
+	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(largeRespSize)),
+		Payload:      pl,
+	}
+	// Creating context with custom metadata information.
+	ctx := metadata.NewContext(context.Background(), metadata.Pairs(
+		testMetadataHeaderKey, testMetadataHeaderValue,
+		testMetadataTrailerKey, testMetadataTrailerValue,
+	))
+	var header, trailer metadata.MD
+	// Performing UnaryCall with custom metadata.
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer)); err != nil {
+		grpclog.Fatalf("/TestService/UnaryCall RPC failed: ", err)
+	}
+	// Make sure that the header and trailer contain expected values.
+	checkHeaderAndTrailer(header, trailer)
+
+	// Clearing header and trailer.
+	header, trailer = nil, nil
+
+	// Performing FullDuplex Call with custom metadata.
+	stream, er := tc.FullDuplexCall(ctx)
+	if er != nil {
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, er)
+	}
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(int32(largeRespSize)),
+		},
+	}
+	streamingReq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            pl,
+	}
+	if err := stream.Send(streamingReq); err != nil {
+		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+	}
+	// Half Close.
+	if err := stream.CloseSend(); err != nil {
+		grpclog.Fatalf("%v.CloseSend() = %v", stream, err)
+	}
+	// Recieve data.
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			// get header and trailer here and check if they contain the correct value.
+			header, err = stream.Header()
+			if err != nil {
+				grpclog.Fatalf("%v.ClientStream.Header() = _, %v", stream, err)
+			}
+			trailer = stream.Trailer()
+			checkHeaderAndTrailer(header, trailer)
+			break
+		}
+		if err != nil {
+			grpclog.Fatalf("%v.Recv() = _, %v", stream, err)
+		}
+		// Do nothing with the received data.
+	}
+}
+
+func checkHeaderAndTrailer(header, trailer metadata.MD) {
+	// Assert that header contains the header key and correct value.
+	if val, ok := header[testMetadataHeaderKey]; ok {
+		if val[0] != testMetadataHeaderValue {
+			grpclog.Fatalf("Unexpected metadata: Client expected value %v for key %v from the header recieved, instead got %v", testMetadataHeaderValue, testMetadataHeaderKey, val)
+		}
+	} else {
+		grpclog.Fatalf("Client didn't get the expected metadata info, %v, in the header", testMetadataHeaderKey)
+	}
+	// Assert that trailer contains the trailer key and correct value.
+	if val, ok := trailer[testMetadataTrailerKey]; ok {
+		if val[0] != testMetadataTrailerValue {
+			grpclog.Fatalf("Unexpected metadata: Client expected value %v for key %v from the trailer recieved, instead got %v", testMetadataTrailerValue, testMetadataTrailerKey, val[0])
+		}
+	} else {
+		grpclog.Fatalf("Client didn't get the expected metadata info, %v, in the trailer", testMetadataTrailerKey)
+	}
+}
+
+var (
 	testMetadata = metadata.MD{
 		"key1": []string{"value1"},
 		"key2": []string{"value2"},
@@ -485,6 +577,18 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	if md, ok := metadata.FromContext(ctx); ok {
+		if err := grpc.SendHeader(ctx, md); err != nil {
+			grpclog.Fatalf("grpc.SendHeader(_,%v) = %v, want %v", md, err, nil)
+		}
+		if val, ok := md[testMetadataTrailerKey]; ok {
+			grpc.SetTrailer(ctx, metadata.Pairs(
+				testMetadataTrailerKey, val[0],
+			))
+		} else {
+			grpclog.Fatalf("Didn't find expected key : %v in metadata of context", testMetadataTrailerKey)
+		}
+	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
 		return nil, err
@@ -531,6 +635,18 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+	if md, ok := metadata.FromContext(stream.Context()); ok {
+		if err := stream.SendHeader(md); err != nil {
+			grpclog.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+		}
+		if val, ok := md[testMetadataTrailerKey]; ok {
+			stream.SetTrailer(metadata.Pairs(
+				testMetadataTrailerKey, val[0],
+			))
+		} else {
+			grpclog.Fatalf("Didn't find expected key : %v in metadata of context", testMetadataTrailerKey)
+		}
+	}
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {

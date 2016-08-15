@@ -68,6 +68,7 @@ var (
         service_account_creds: large_unary with service account auth;
         jwt_token_creds: large_unary with jwt token auth;
         per_rpc_creds: large_unary with per rpc token;
+	custom_metadata: unary_call and full-duplex with custom metadata info;
         oauth2_auth_token: large_unary with oauth2 token auth;
         cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
         cancel_after_first_response: cancellation after receiving 1st message from the server.`)
@@ -168,6 +169,9 @@ func main() {
 		}
 		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Println("PerRPCCreds done")
+	case "custom_metadata":
+		interop.DoCustomMetadata(tc)
+		grpclog.Println("CustomMetadata done")
 	case "oauth2_auth_token":
 		if !*useTLS {
 			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
