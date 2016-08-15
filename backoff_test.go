@@ -29,7 +29,7 @@ func TestBackOffTimeIncreasesWithRetries(t *testing.T) {
 	setDefaults(&b)
 	// Base delay.
 	lastBackOffTime := b.backoff(0)
-	for retries := 1; retries <= maxRetries; retries++ {
+	for retries := 1; retries < maxRetries; retries++ {
 		backoffTime := b.backoff(retries)
 		// Backoff time should increase as the number of retries increase.
 		if backoffTime <= lastBackOffTime {
