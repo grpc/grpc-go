@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import java.util.Collections;
@@ -106,6 +107,42 @@ public final class Attributes {
   @Override
   public String toString() {
     return data.toString();
+  }
+
+  /**
+   * Returns true if the given object is also a {@link Attributes} with an equal attribute values.
+   *
+   * <p>Note that if a stored values are mutable, it is possible for two objects to be considered
+   * equal at one point in time and not equal at another (due to concurrent mutation of attribute
+   * values).
+   *
+   * @param o an object.
+   * @return true if the given object is a {@link Attributes} equal attributes.
+   */
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    Attributes that = (Attributes) o;
+    return Objects.equal(data, that.data);
+  }
+
+  /**
+   * Returns a hash code for the attributes.
+   *
+   * <p>Note that if a stored values are mutable, it is possible for two objects to be considered
+   * equal at one point in time and not equal at another (due to concurrent mutation of attribute
+   * values).
+   *
+   * @return a hash code for the attributes map.
+   */
+  @Override
+  public int hashCode() {
+    return data.hashCode();
   }
 
   public static final class Builder {
