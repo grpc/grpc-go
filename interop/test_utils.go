@@ -426,7 +426,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 	var header, trailer metadata.MD
 	// Performing UnaryCall with custom metadata.
 	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer)); err != nil {
-		grpclog.Fatalf("/TestService/UnaryCall RPC failed: ", err)
+		grpclog.Fatalf("/TestService/UnaryCall RPC failed: %v", err)
 	}
 	// Make sure that the header and trailer contain expected values.
 	checkHeaderAndTrailer(header, trailer)
