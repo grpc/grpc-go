@@ -31,6 +31,7 @@
 
 package io.grpc.thrift;
 
+import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
@@ -43,6 +44,7 @@ import org.apache.thrift.TSerializer;
 import java.io.IOException;
 import java.io.InputStream;
 
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/2170")
 public final class ThriftUtils {
 
   /** Create a {@code Marshaller} for thrift messages. */

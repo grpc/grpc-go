@@ -31,11 +31,14 @@
 
 package io.grpc.thrift;
 
+import io.grpc.ExperimentalApi;
+
 import org.apache.thrift.TBase;
 
 /** 
  *  Produce new Message Instances. Used by Marshaller to deserialize incoming messages. 
  */
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/2170")
 public interface MessageFactory<T extends TBase<T,?>> {
   T newInstance();
 }
