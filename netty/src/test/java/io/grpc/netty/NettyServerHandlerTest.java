@@ -353,4 +353,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   protected WriteQueue initWriteQueue() {
     return handler().getWriteQueue();
   }
+
+  @Override
+  protected void makeStream() throws Exception {
+    createStream();
+  }
 }

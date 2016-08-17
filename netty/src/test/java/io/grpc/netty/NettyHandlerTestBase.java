@@ -32,6 +32,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.spy;
@@ -56,8 +57,11 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
+import io.netty.handler.codec.http2.Http2Stream;
 
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -222,4 +226,99 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   protected abstract T newHandler() throws Http2Exception;
 
   protected abstract WriteQueue initWriteQueue();
+
+  protected abstract void makeStream() throws Exception;
+
+  @Test
+  public void dataPingSentOnHeaderRecieved() throws Exception {
+    makeStream();
+    AbstractNettyHandler handler = (AbstractNettyHandler) handler();
+    handler.setAutoTuneFlowControl(true);
+
+    channelRead(dataFrame(3, false, content()));
+
+    assertEquals(1, handler.flowControlPing().getPingCount());
+  }
+
+  @Test
+  public void dataPingAckIsRecognized() throws Exception {
+    makeStream();
+    AbstractNettyHandler handler = (AbstractNettyHandler) handler();
+    handler.setAutoTuneFlowControl(true);
+
+    channelRead(dataFrame(3, false, content()));
+    long pingData = handler.flowControlPing().payload();
+    ByteBuf payload = handler.ctx().alloc().buffer(8);
+    payload.writeLong(pingData);
+    channelRead(pingFrame(true, payload));
+
+    assertEquals(1, handler.flowControlPing().getPingCount());
+    assertEquals(1, handler.flowControlPing().getPingReturn());
+  }
+
+  @Test
+  public void dataSizeSincePingAccumulates() throws Exception {
+    makeStream();
+    AbstractNettyHandler handler = (AbstractNettyHandler) handler();
+    handler.setAutoTuneFlowControl(true);
+    long frameData = 123456;
+    ByteBuf buff = ctx().alloc().buffer(16);
+    buff.writeLong(frameData);
+    int length = buff.readableBytes();
+
+    channelRead(dataFrame(3, false, buff.copy()));
+    channelRead(dataFrame(3, false, buff.copy()));
+    channelRead(dataFrame(3, false, buff.copy()));
+
+    assertEquals(length * 3, handler.flowControlPing().getDataSincePing());
+  }
+
+  @Test
+  public void windowUpdateMatchesTarget() throws Exception {
+    Http2Stream connectionStream = connection().connectionStream();
+    Http2LocalFlowController localFlowController = connection().local().flowController();
+    makeStream();
+    AbstractNettyHandler handler = (AbstractNettyHandler) handler();
+    handler.setAutoTuneFlowControl(true);
+
+    ByteBuf data = ctx().alloc().buffer(1024);
+    while (data.isWritable()) {
+      data.writeLong(1111);
+    }
+    int length = data.readableBytes();
+    ByteBuf frame = dataFrame(3, false, data.copy());
+    channelRead(frame);
+    int accumulator = length;
+    // 40 is arbitrary, any number large enough to trigger a window update would work
+    for (int i = 0; i < 40; i++) {
+      channelRead(dataFrame(3, false, data.copy()));
+      accumulator += length;
+    }
+    long pingData = handler.flowControlPing().payload();
+    ByteBuf buffer = handler.ctx().alloc().buffer(8);
+    buffer.writeLong(pingData);
+    channelRead(pingFrame(true, buffer));
+
+    assertEquals(accumulator, handler.flowControlPing().getDataSincePing());
+    assertEquals(2 * accumulator, localFlowController.initialWindowSize(connectionStream));
+  }
+
+  @Test
+  public void windowShouldNotExceedMaxWindowSize() throws Exception {
+    makeStream();
+    AbstractNettyHandler handler = (AbstractNettyHandler) handler();
+    handler.setAutoTuneFlowControl(true);
+    Http2Stream connectionStream = connection().connectionStream();
+    Http2LocalFlowController localFlowController = connection().local().flowController();
+    int maxWindow = handler.flowControlPing().maxWindow();
+
+    handler.flowControlPing().setDataSizeSincePing(maxWindow);
+    int payload = handler.flowControlPing().payload();
+    ByteBuf buffer = handler.ctx().alloc().buffer(8);
+    buffer.writeLong(payload);
+    channelRead(pingFrame(true, buffer));
+
+    assertEquals(maxWindow, localFlowController.initialWindowSize(connectionStream));
+  }
+
 }

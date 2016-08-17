@@ -94,7 +94,6 @@ import org.mockito.MockitoAnnotations;
  */
 @RunWith(JUnit4.class)
 public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHandler> {
-
   // TODO(zhangkun83): mocking concrete classes is not safe. Consider making NettyClientStream an
   // interface.
   @Mock
@@ -368,6 +367,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     int actualWindowSize = localFlowController.windowSize(connectionStream);
     assertEquals(flowControlWindow, actualWindowSize);
     assertEquals(flowControlWindow, actualInitialWindowSize);
+    assertEquals(1048576, actualWindowSize);
   }
 
   @Test
@@ -456,6 +456,31 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   }
 
   @Test
+  public void oustandingUserPingShouldNotInteractWithDataPing() throws Exception {
+    createStream();
+    handler().setAutoTuneFlowControl(true);
+
+    PingCallbackImpl callback = new PingCallbackImpl();
+    sendPing(callback);
+    ArgumentCaptor<ByteBuf> captor = ArgumentCaptor.forClass(ByteBuf.class);
+    verifyWrite().writePing(eq(ctx()), eq(false), captor.capture(), any(ChannelPromise.class));
+    ByteBuf payload = captor.getValue();
+    channelRead(dataFrame(3, false));
+    long pingData = handler().flowControlPing().payload();
+    ByteBuf buffer = handler().ctx().alloc().buffer(8);
+    buffer.writeLong(pingData);
+    channelRead(pingFrame(true, buffer));
+
+    assertEquals(1, handler().flowControlPing().getPingReturn());
+    assertEquals(0, callback.invocationCount);
+
+    channelRead(pingFrame(true, payload));
+
+    assertEquals(1, handler().flowControlPing().getPingReturn());
+    assertEquals(1, callback.invocationCount);
+  }
+
+  @Test
   public void exceptionCaughtShouldCloseConnection() throws Exception {
     handler().exceptionCaught(ctx(), new RuntimeException("fake exception"));
 
@@ -464,6 +489,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Once https://github.com/netty/netty/issues/4316 is resolved, we should also verify that
     // any open streams are closed properly.
     assertFalse(channel().isOpen());
+  }
+
+  @Override
+  protected void makeStream() throws Exception {
+    createStream();
   }
 
   private ChannelFuture sendPing(PingCallback callback) {

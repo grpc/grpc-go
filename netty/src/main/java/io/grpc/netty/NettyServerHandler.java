@@ -130,8 +130,9 @@ class NettyServerHandler extends AbstractNettyHandler {
     Http2Connection connection = new DefaultHttp2Connection(true);
 
     // Create the local flow controller configured to auto-refill the connection window.
-    connection.local().flowController(new DefaultHttp2LocalFlowController(connection,
-            DEFAULT_WINDOW_UPDATE_RATIO, true));
+    connection.local().flowController(
+        new DefaultHttp2LocalFlowController(connection, DEFAULT_WINDOW_UPDATE_RATIO, true));
+
 
     Http2ConnectionEncoder encoder = new DefaultHttp2ConnectionEncoder(connection, frameWriter);
     Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
@@ -211,7 +212,9 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
-  private void onDataRead(int streamId, ByteBuf data, boolean endOfStream) throws Http2Exception {
+  private void onDataRead(int streamId, ByteBuf data, int padding, boolean endOfStream)
+      throws Http2Exception {
+    flowControlPing().onDataRead(data.readableBytes(), padding);
     try {
       NettyServerStream.TransportState stream = serverStream(requireHttp2Stream(streamId));
       stream.inboundDataReceived(data, endOfStream);
@@ -426,6 +429,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
+
   /**
    * Returns the server stream associated to the given HTTP/2 stream object.
    */
@@ -443,7 +447,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     @Override
     public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
         boolean endOfStream) throws Http2Exception {
-      NettyServerHandler.this.onDataRead(streamId, data, endOfStream);
+      NettyServerHandler.this.onDataRead(streamId, data, padding, endOfStream);
       return padding;
     }
 
@@ -463,6 +467,19 @@ class NettyServerHandler extends AbstractNettyHandler {
     public void onRstStreamRead(ChannelHandlerContext ctx, int streamId, long errorCode)
         throws Http2Exception {
       NettyServerHandler.this.onRstStreamRead(streamId);
+    }
+
+    @Override
+    public void onPingAckRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+      if (data.getLong(data.readerIndex()) == flowControlPing().payload()) {
+        flowControlPing().updateWindow();
+        if (logger.isLoggable(Level.FINE)) {
+          logger.log(Level.FINE, String.format("Window: %d",
+              decoder().flowController().initialWindowSize(connection().connectionStream())));
+        }
+      } else {
+        logger.warning("Received unexpected ping ack. No ping outstanding");
+      }
     }
   }
 }
