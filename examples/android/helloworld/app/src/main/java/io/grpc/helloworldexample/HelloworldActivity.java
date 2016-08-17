@@ -36,6 +36,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
 import android.text.TextUtils;
+import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -48,6 +49,8 @@ import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.concurrent.TimeUnit;
 
 public class HelloworldActivity extends ActionBarActivity {
@@ -66,6 +69,7 @@ public class HelloworldActivity extends ActionBarActivity {
         mPortEdit = (EditText) findViewById(R.id.port_edit_text);
         mMessageEdit = (EditText) findViewById(R.id.message_edit_text);
         mResultText = (TextView) findViewById(R.id.grpc_response_text);
+        mResultText.setMovementMethod(new ScrollingMovementMethod());
     }
 
     public void sendMessage(View view) {
@@ -90,22 +94,22 @@ public class HelloworldActivity extends ActionBarActivity {
             mResultText.setText("");
         }
 
-        private String sayHello(ManagedChannel channel) {
-            GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
-            HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
-            HelloReply reply = stub.sayHello(message);
-            return reply.getMessage();
-        }
-
         @Override
         protected String doInBackground(Void... nothing) {
             try {
                 mChannel = ManagedChannelBuilder.forAddress(mHost, mPort)
                     .usePlaintext(true)
                     .build();
-                return sayHello(mChannel);
+                GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(mChannel);
+                HelloRequest message = HelloRequest.newBuilder().setName(mMessage).build();
+                HelloReply reply = stub.sayHello(message);
+                return reply.getMessage();
             } catch (Exception e) {
-                return "Failed... : " + e.getMessage();
+                StringWriter sw = new StringWriter();
+                PrintWriter pw = new PrintWriter(sw);
+                e.printStackTrace(pw);
+                pw.flush();
+                return "Failed... : " + System.lineSeparator() + sw;
             }
         }
 
