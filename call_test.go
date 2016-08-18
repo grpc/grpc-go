@@ -276,3 +276,19 @@ func TestInvokeCancel(t *testing.T) {
 	cc.Close()
 	server.stop()
 }
+
+// TestInvokeCancelClosedNoFail checks that a canceled Invoke with FailFast=false
+// on a closed client will terminate.
+func TestInvokeCancelClosedNoFailFast(t *testing.T) {
+	server, cc := setUp(t, 0, math.MaxUint32)
+	var reply string
+	cc.Close()
+	req := "hello"
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := Invoke(ctx, "/foo/bar", &req, &reply, cc, FailFast(false))
+	if err == nil {
+		t.Fatalf("canceled invoke on closed connection should fail")
+	}
+	server.stop()
+}
