@@ -506,6 +506,9 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		if put != nil {
 			put()
 		}
+		if ctx.Err() != nil {
+			return nil, nil, toRPCErr(ctx.Err())
+		}
 		return nil, nil, errConnClosing
 	}
 	t, err := ac.wait(ctx, cc.dopts.balancer != nil, !opts.BlockingWait)
