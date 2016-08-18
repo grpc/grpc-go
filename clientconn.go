@@ -479,6 +479,10 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	if cc.dopts.balancer == nil {
 		// If balancer is nil, there should be only one addrConn available.
 		cc.mu.RLock()
+		if cc.conns == nil {
+			cc.mu.RUnlock()
+			return nil, nil, toRPCErr(ErrClientConnClosing)
+		}
 		for _, ac = range cc.conns {
 			// Break after the first iteration to get the first addrConn.
 			ok = true
