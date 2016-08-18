@@ -407,7 +407,7 @@ var (
 	testMetadataHeaderKey    = "x-grpc-test-echo-initial"
 	testMetadataHeaderValue  = "test_initial_metadata_value"
 	testMetadataTrailerKey   = "x-grpc-test-echo-trailing-bin"
-	testMetadataTrailerValue = "0xababab"
+	testMetadataTrailerValue = "\x0a\x0b\x0a\x0b\x0a\x0b"
 )
 
 //DoCustomMetadata performs both unary and full-duplex RPC with custom metadata information
@@ -578,7 +578,13 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	if md, ok := metadata.FromContext(ctx); ok {
-		if err := grpc.SendHeader(ctx, md); err != nil {
+		var metadataString []string
+		for k, v := range md {
+			for _, vv := range v {
+				metadataString = append(metadataString, k, vv)
+			}
+		}
+		if err := grpc.SendHeader(ctx, metadata.Pairs(metadataString...)); err != nil {
 			grpclog.Fatalf("grpc.SendHeader(_,%v) = %v, want %v", md, err, nil)
 		}
 		if val, ok := md[testMetadataTrailerKey]; ok {
@@ -636,7 +642,13 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	if md, ok := metadata.FromContext(stream.Context()); ok {
-		if err := stream.SendHeader(md); err != nil {
+		var metadataString []string
+		for k, v := range md {
+			for _, vv := range v {
+				metadataString = append(metadataString, k, vv)
+			}
+		}
+		if err := stream.SendHeader(metadata.Pairs(metadataString...)); err != nil {
 			grpclog.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
 		}
 		if val, ok := md[testMetadataTrailerKey]; ok {
