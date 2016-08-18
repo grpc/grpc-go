@@ -39,11 +39,6 @@ protobuf {
     }
     generateProtoTasks {
         all().each { task ->
-            task.builtins {
-                // Javanano is installed by default, but needs to be removed to use protobuf lite..
-                remove javanano
-            }
-
             task.plugins {
                 javalite {}
                 grpc {
