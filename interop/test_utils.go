@@ -585,7 +585,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			}
 		}
 		if err := grpc.SendHeader(ctx, metadata.Pairs(metadataString...)); err != nil {
-			grpclog.Fatalf("grpc.SendHeader(_,%v) = %v, want %v", md, err, nil)
+			grpclog.Fatalf("grpc.SendHeader(_,metadata.Pairs(%v)) = %v, want %v", metadataString, err, nil)
 		}
 		if val, ok := md[testMetadataTrailerKey]; ok {
 			grpc.SetTrailer(ctx, metadata.Pairs(
@@ -649,7 +649,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 			}
 		}
 		if err := stream.SendHeader(metadata.Pairs(metadataString...)); err != nil {
-			grpclog.Fatalf("%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+			grpclog.Fatalf("%v.SendHeader(metadata.Pairs(%v)) = %v, want %v", stream, metadataString, err, nil)
 		}
 		if val, ok := md[testMetadataTrailerKey]; ok {
 			stream.SetTrailer(metadata.Pairs(
