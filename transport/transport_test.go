@@ -39,7 +39,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -754,11 +753,11 @@ func TestEncodingRequiredStatus(t *testing.T) {
 }
 
 func TestStreamContext(t *testing.T) {
-	expectedStream := Stream{}
-	ctx := newContextWithStream(context.Background(), &expectedStream)
+	expectedStream := &Stream{}
+	ctx := newContextWithStream(context.Background(), expectedStream)
 	s, ok := StreamFromContext(ctx)
-	if !ok || !reflect.DeepEqual(expectedStream, *s) {
-		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, *s, ok, expectedStream)
+	if !ok || expectedStream != s {
+		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, s, ok, expectedStream)
 	}
 }
 
