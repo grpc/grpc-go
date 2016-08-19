@@ -66,6 +66,15 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
 
    ```bash
    $ MAJOR=0 MINOR=7 PATCH=0 # Set appropriately for new release
+   $ VERSION_FILES=(
+     build.gradle
+     android-interop-testing/app/build.gradle
+     examples/build.gradle
+     examples/pom.xml
+     examples/android/helloworld/app/build.gradle
+     examples/android/routeguide/app/build.gradle
+     examples/thrift/build.gradle
+     )
    $ git checkout -b v$MAJOR.$MINOR.x master
    $ git push upstream v$MAJOR.$MINOR.x
    ```
@@ -76,9 +85,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ git checkout -b bump-version master
    # Change version to next minor (and keep -SNAPSHOT)
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$((MINOR+1)).0'\1/' \
-     build.gradle android-interop-testing/app/build.gradle \
-     examples/build.gradle examples/pom.xml \
-     examples/android/app/build.gradle examples/thrift/build.gradle
+     "${VERSION_FILES[@]}"
    $ ./gradlew build
    $ git commit -a -m "Start $MAJOR.$((MINOR+1)).0 development cycle"
    ```
@@ -104,10 +111,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
 
    ```bash
    # Change version to remove -SNAPSHOT
-   $ sed -i 's/-SNAPSHOT\(.*CURRENT_GRPC_VERSION\)/\1/' \
-     build.gradle android-interop-testing/app/build.gradle \
-     examples/build.gradle examples/pom.xml \
-     examples/android/app/build.gradle examples/thrift/build.gradle
+   $ sed -i 's/-SNAPSHOT\(.*CURRENT_GRPC_VERSION\)/\1/' "${VERSION_FILES[@]}"
    $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$PATCH"
    $ git tag -a v$MAJOR.$MINOR.$PATCH -m "Version $MAJOR.$MINOR.$PATCH"
@@ -118,9 +122,7 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    ```bash
    # Change version to next patch and add -SNAPSHOT
    $ sed -i 's/[0-9]\+\.[0-9]\+\.[0-9]\+\(.*CURRENT_GRPC_VERSION\)/'$MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT'\1/' \
-     build.gradle android-interop-testing/app/build.gradle \
-     examples/build.gradle examples/pom.xml \
-     examples/android/app/build.gradle examples/thrift/build.gradle
+     "${VERSION_FILES[@]}"
    $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT"
    ```
