@@ -28,9 +28,10 @@ public interface ServerOrBuilder extends
 
   /**
    * <pre>
-   * An opaque token that is passed from the client to the server in metadata.
-   * The server may expect this token to indicate that the request from the
-   * client was load balanced.
+   * An opaque but printable token given to the frontend for each pick. All
+   * frontend requests for that pick must include the token in its initial
+   * metadata. The token is used by the backend to verify the request and to
+   * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
    * <code>optional string load_balance_token = 3;</code>
@@ -38,9 +39,10 @@ public interface ServerOrBuilder extends
   java.lang.String getLoadBalanceToken();
   /**
    * <pre>
-   * An opaque token that is passed from the client to the server in metadata.
-   * The server may expect this token to indicate that the request from the
-   * client was load balanced.
+   * An opaque but printable token given to the frontend for each pick. All
+   * frontend requests for that pick must include the token in its initial
+   * metadata. The token is used by the backend to verify the request and to
+   * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
    * <code>optional string load_balance_token = 3;</code>

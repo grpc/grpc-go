@@ -15,6 +15,7 @@ public  final class InitialLoadBalanceResponse extends
     super(builder);
   }
   private InitialLoadBalanceResponse() {
+    loadBalancerDelegate_ = "";
   }
 
   @java.lang.Override
@@ -42,13 +43,13 @@ public  final class InitialLoadBalanceResponse extends
             }
             break;
           }
-          case 18: {
+          case 10: {
             java.lang.String s = input.readStringRequireUtf8();
-            initialResponseTypeCase_ = 2;
-            initialResponseType_ = s;
+
+            loadBalancerDelegate_ = s;
             break;
           }
-          case 26: {
+          case 18: {
             com.google.protobuf.Duration.Builder subBuilder = null;
             if (clientStatsReportInterval_ != null) {
               subBuilder = clientStatsReportInterval_.toBuilder();
@@ -84,100 +85,55 @@ public  final class InitialLoadBalanceResponse extends
             io.grpc.grpclb.InitialLoadBalanceResponse.class, io.grpc.grpclb.InitialLoadBalanceResponse.Builder.class);
   }
 
-  private int initialResponseTypeCase_ = 0;
-  private java.lang.Object initialResponseType_;
-  public enum InitialResponseTypeCase
-      implements com.google.protobuf.Internal.EnumLite {
-    LOAD_BALANCER_DELEGATE(2),
-    INITIALRESPONSETYPE_NOT_SET(0);
-    private final int value;
-    private InitialResponseTypeCase(int value) {
-      this.value = value;
-    }
-    /**
-     * @deprecated Use {@link #forNumber(int)} instead.
-     */
-    @java.lang.Deprecated
-    public static InitialResponseTypeCase valueOf(int value) {
-      return forNumber(value);
-    }
-
-    public static InitialResponseTypeCase forNumber(int value) {
-      switch (value) {
-        case 2: return LOAD_BALANCER_DELEGATE;
-        case 0: return INITIALRESPONSETYPE_NOT_SET;
-        default: return null;
-      }
-    }
-    public int getNumber() {
-      return this.value;
-    }
-  };
-
-  public InitialResponseTypeCase
-  getInitialResponseTypeCase() {
-    return InitialResponseTypeCase.forNumber(
-        initialResponseTypeCase_);
-  }
-
-  public static final int LOAD_BALANCER_DELEGATE_FIELD_NUMBER = 2;
+  public static final int LOAD_BALANCER_DELEGATE_FIELD_NUMBER = 1;
+  private volatile java.lang.Object loadBalancerDelegate_;
   /**
    * <pre>
-   * This is an application layer redirect that indicates the client should
-   * use the specified server for load balancing. When this field is set in
+   * This is an application layer redirect that indicates the client should use
+   * the specified server for load balancing. When this field is non-empty in
    * the response, the client should open a separate connection to the
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 2;</code>
+   * <code>optional string load_balancer_delegate = 1;</code>
    */
   public java.lang.String getLoadBalancerDelegate() {
-    java.lang.Object ref = "";
-    if (initialResponseTypeCase_ == 2) {
-      ref = initialResponseType_;
-    }
+    java.lang.Object ref = loadBalancerDelegate_;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
       com.google.protobuf.ByteString bs = 
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
-      if (initialResponseTypeCase_ == 2) {
-        initialResponseType_ = s;
-      }
+      loadBalancerDelegate_ = s;
       return s;
     }
   }
   /**
    * <pre>
-   * This is an application layer redirect that indicates the client should
-   * use the specified server for load balancing. When this field is set in
+   * This is an application layer redirect that indicates the client should use
+   * the specified server for load balancing. When this field is non-empty in
    * the response, the client should open a separate connection to the
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 2;</code>
+   * <code>optional string load_balancer_delegate = 1;</code>
    */
   public com.google.protobuf.ByteString
       getLoadBalancerDelegateBytes() {
-    java.lang.Object ref = "";
-    if (initialResponseTypeCase_ == 2) {
-      ref = initialResponseType_;
-    }
+    java.lang.Object ref = loadBalancerDelegate_;
     if (ref instanceof java.lang.String) {
       com.google.protobuf.ByteString b = 
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
-      if (initialResponseTypeCase_ == 2) {
-        initialResponseType_ = b;
-      }
+      loadBalancerDelegate_ = b;
       return b;
     } else {
       return (com.google.protobuf.ByteString) ref;
     }
   }
 
-  public static final int CLIENT_STATS_REPORT_INTERVAL_FIELD_NUMBER = 3;
+  public static final int CLIENT_STATS_REPORT_INTERVAL_FIELD_NUMBER = 2;
   private com.google.protobuf.Duration clientStatsReportInterval_;
   /**
    * <pre>
@@ -186,7 +142,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public boolean hasClientStatsReportInterval() {
     return clientStatsReportInterval_ != null;
@@ -198,7 +154,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public com.google.protobuf.Duration getClientStatsReportInterval() {
     return clientStatsReportInterval_ == null ? com.google.protobuf.Duration.getDefaultInstance() : clientStatsReportInterval_;
@@ -210,7 +166,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder() {
     return getClientStatsReportInterval();
@@ -228,11 +184,11 @@ public  final class InitialLoadBalanceResponse extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (initialResponseTypeCase_ == 2) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 2, initialResponseType_);
+    if (!getLoadBalancerDelegateBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, loadBalancerDelegate_);
     }
     if (clientStatsReportInterval_ != null) {
-      output.writeMessage(3, getClientStatsReportInterval());
+      output.writeMessage(2, getClientStatsReportInterval());
     }
   }
 
@@ -241,12 +197,12 @@ public  final class InitialLoadBalanceResponse extends
     if (size != -1) return size;
 
     size = 0;
-    if (initialResponseTypeCase_ == 2) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, initialResponseType_);
+    if (!getLoadBalancerDelegateBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, loadBalancerDelegate_);
     }
     if (clientStatsReportInterval_ != null) {
       size += com.google.protobuf.CodedOutputStream
-        .computeMessageSize(3, getClientStatsReportInterval());
+        .computeMessageSize(2, getClientStatsReportInterval());
     }
     memoizedSize = size;
     return size;
@@ -264,21 +220,12 @@ public  final class InitialLoadBalanceResponse extends
     io.grpc.grpclb.InitialLoadBalanceResponse other = (io.grpc.grpclb.InitialLoadBalanceResponse) obj;
 
     boolean result = true;
+    result = result && getLoadBalancerDelegate()
+        .equals(other.getLoadBalancerDelegate());
     result = result && (hasClientStatsReportInterval() == other.hasClientStatsReportInterval());
     if (hasClientStatsReportInterval()) {
       result = result && getClientStatsReportInterval()
           .equals(other.getClientStatsReportInterval());
-    }
-    result = result && getInitialResponseTypeCase().equals(
-        other.getInitialResponseTypeCase());
-    if (!result) return false;
-    switch (initialResponseTypeCase_) {
-      case 2:
-        result = result && getLoadBalancerDelegate()
-            .equals(other.getLoadBalancerDelegate());
-        break;
-      case 0:
-      default:
     }
     return result;
   }
@@ -290,17 +237,11 @@ public  final class InitialLoadBalanceResponse extends
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (37 * hash) + LOAD_BALANCER_DELEGATE_FIELD_NUMBER;
+    hash = (53 * hash) + getLoadBalancerDelegate().hashCode();
     if (hasClientStatsReportInterval()) {
       hash = (37 * hash) + CLIENT_STATS_REPORT_INTERVAL_FIELD_NUMBER;
       hash = (53 * hash) + getClientStatsReportInterval().hashCode();
-    }
-    switch (initialResponseTypeCase_) {
-      case 2:
-        hash = (37 * hash) + LOAD_BALANCER_DELEGATE_FIELD_NUMBER;
-        hash = (53 * hash) + getLoadBalancerDelegate().hashCode();
-        break;
-      case 0:
-      default:
     }
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
@@ -420,14 +361,14 @@ public  final class InitialLoadBalanceResponse extends
     }
     public Builder clear() {
       super.clear();
+      loadBalancerDelegate_ = "";
+
       if (clientStatsReportIntervalBuilder_ == null) {
         clientStatsReportInterval_ = null;
       } else {
         clientStatsReportInterval_ = null;
         clientStatsReportIntervalBuilder_ = null;
       }
-      initialResponseTypeCase_ = 0;
-      initialResponseType_ = null;
       return this;
     }
 
@@ -450,15 +391,12 @@ public  final class InitialLoadBalanceResponse extends
 
     public io.grpc.grpclb.InitialLoadBalanceResponse buildPartial() {
       io.grpc.grpclb.InitialLoadBalanceResponse result = new io.grpc.grpclb.InitialLoadBalanceResponse(this);
-      if (initialResponseTypeCase_ == 2) {
-        result.initialResponseType_ = initialResponseType_;
-      }
+      result.loadBalancerDelegate_ = loadBalancerDelegate_;
       if (clientStatsReportIntervalBuilder_ == null) {
         result.clientStatsReportInterval_ = clientStatsReportInterval_;
       } else {
         result.clientStatsReportInterval_ = clientStatsReportIntervalBuilder_.build();
       }
-      result.initialResponseTypeCase_ = initialResponseTypeCase_;
       onBuilt();
       return result;
     }
@@ -500,19 +438,12 @@ public  final class InitialLoadBalanceResponse extends
 
     public Builder mergeFrom(io.grpc.grpclb.InitialLoadBalanceResponse other) {
       if (other == io.grpc.grpclb.InitialLoadBalanceResponse.getDefaultInstance()) return this;
+      if (!other.getLoadBalancerDelegate().isEmpty()) {
+        loadBalancerDelegate_ = other.loadBalancerDelegate_;
+        onChanged();
+      }
       if (other.hasClientStatsReportInterval()) {
         mergeClientStatsReportInterval(other.getClientStatsReportInterval());
-      }
-      switch (other.getInitialResponseTypeCase()) {
-        case LOAD_BALANCER_DELEGATE: {
-          initialResponseTypeCase_ = 2;
-          initialResponseType_ = other.initialResponseType_;
-          onChanged();
-          break;
-        }
-        case INITIALRESPONSETYPE_NOT_SET: {
-          break;
-        }
       }
       onChanged();
       return this;
@@ -539,44 +470,25 @@ public  final class InitialLoadBalanceResponse extends
       }
       return this;
     }
-    private int initialResponseTypeCase_ = 0;
-    private java.lang.Object initialResponseType_;
-    public InitialResponseTypeCase
-        getInitialResponseTypeCase() {
-      return InitialResponseTypeCase.forNumber(
-          initialResponseTypeCase_);
-    }
 
-    public Builder clearInitialResponseType() {
-      initialResponseTypeCase_ = 0;
-      initialResponseType_ = null;
-      onChanged();
-      return this;
-    }
-
-
+    private java.lang.Object loadBalancerDelegate_ = "";
     /**
      * <pre>
-     * This is an application layer redirect that indicates the client should
-     * use the specified server for load balancing. When this field is set in
+     * This is an application layer redirect that indicates the client should use
+     * the specified server for load balancing. When this field is non-empty in
      * the response, the client should open a separate connection to the
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 2;</code>
+     * <code>optional string load_balancer_delegate = 1;</code>
      */
     public java.lang.String getLoadBalancerDelegate() {
-      java.lang.Object ref = "";
-      if (initialResponseTypeCase_ == 2) {
-        ref = initialResponseType_;
-      }
+      java.lang.Object ref = loadBalancerDelegate_;
       if (!(ref instanceof java.lang.String)) {
         com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        if (initialResponseTypeCase_ == 2) {
-          initialResponseType_ = s;
-        }
+        loadBalancerDelegate_ = s;
         return s;
       } else {
         return (java.lang.String) ref;
@@ -584,27 +496,22 @@ public  final class InitialLoadBalanceResponse extends
     }
     /**
      * <pre>
-     * This is an application layer redirect that indicates the client should
-     * use the specified server for load balancing. When this field is set in
+     * This is an application layer redirect that indicates the client should use
+     * the specified server for load balancing. When this field is non-empty in
      * the response, the client should open a separate connection to the
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 2;</code>
+     * <code>optional string load_balancer_delegate = 1;</code>
      */
     public com.google.protobuf.ByteString
         getLoadBalancerDelegateBytes() {
-      java.lang.Object ref = "";
-      if (initialResponseTypeCase_ == 2) {
-        ref = initialResponseType_;
-      }
+      java.lang.Object ref = loadBalancerDelegate_;
       if (ref instanceof String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        if (initialResponseTypeCase_ == 2) {
-          initialResponseType_ = b;
-        }
+        loadBalancerDelegate_ = b;
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
@@ -612,51 +519,49 @@ public  final class InitialLoadBalanceResponse extends
     }
     /**
      * <pre>
-     * This is an application layer redirect that indicates the client should
-     * use the specified server for load balancing. When this field is set in
+     * This is an application layer redirect that indicates the client should use
+     * the specified server for load balancing. When this field is non-empty in
      * the response, the client should open a separate connection to the
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 2;</code>
+     * <code>optional string load_balancer_delegate = 1;</code>
      */
     public Builder setLoadBalancerDelegate(
         java.lang.String value) {
       if (value == null) {
     throw new NullPointerException();
   }
-  initialResponseTypeCase_ = 2;
-      initialResponseType_ = value;
+  
+      loadBalancerDelegate_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * This is an application layer redirect that indicates the client should
-     * use the specified server for load balancing. When this field is set in
+     * This is an application layer redirect that indicates the client should use
+     * the specified server for load balancing. When this field is non-empty in
      * the response, the client should open a separate connection to the
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 2;</code>
+     * <code>optional string load_balancer_delegate = 1;</code>
      */
     public Builder clearLoadBalancerDelegate() {
-      if (initialResponseTypeCase_ == 2) {
-        initialResponseTypeCase_ = 0;
-        initialResponseType_ = null;
-        onChanged();
-      }
+      
+      loadBalancerDelegate_ = getDefaultInstance().getLoadBalancerDelegate();
+      onChanged();
       return this;
     }
     /**
      * <pre>
-     * This is an application layer redirect that indicates the client should
-     * use the specified server for load balancing. When this field is set in
+     * This is an application layer redirect that indicates the client should use
+     * the specified server for load balancing. When this field is non-empty in
      * the response, the client should open a separate connection to the
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 2;</code>
+     * <code>optional string load_balancer_delegate = 1;</code>
      */
     public Builder setLoadBalancerDelegateBytes(
         com.google.protobuf.ByteString value) {
@@ -664,8 +569,8 @@ public  final class InitialLoadBalanceResponse extends
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-      initialResponseTypeCase_ = 2;
-      initialResponseType_ = value;
+      
+      loadBalancerDelegate_ = value;
       onChanged();
       return this;
     }
@@ -680,7 +585,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public boolean hasClientStatsReportInterval() {
       return clientStatsReportIntervalBuilder_ != null || clientStatsReportInterval_ != null;
@@ -692,7 +597,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.Duration getClientStatsReportInterval() {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -708,7 +613,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder setClientStatsReportInterval(com.google.protobuf.Duration value) {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -730,7 +635,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder setClientStatsReportInterval(
         com.google.protobuf.Duration.Builder builderForValue) {
@@ -750,7 +655,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder mergeClientStatsReportInterval(com.google.protobuf.Duration value) {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -774,7 +679,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder clearClientStatsReportInterval() {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -794,7 +699,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.Duration.Builder getClientStatsReportIntervalBuilder() {
       
@@ -808,7 +713,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder() {
       if (clientStatsReportIntervalBuilder_ != null) {
@@ -825,7 +730,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 3;</code>
+     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 

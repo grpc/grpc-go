@@ -71,19 +71,19 @@ public final class LoadBalancerProto {
       "al_response\030\001 \001(\0132&.grpc.lb.v1.InitialLo" +
       "adBalanceResponseH\000\022-\n\013server_list\030\002 \001(\013" +
       "2\026.grpc.lb.v1.ServerListH\000B\034\n\032load_balan" +
-      "ce_response_type\"\230\001\n\032InitialLoadBalanceR" +
-      "esponse\022 \n\026load_balancer_delegate\030\002 \001(\tH" +
-      "\000\022?\n\034client_stats_report_interval\030\003 \001(\0132" +
-      "\031.google.protobuf.DurationB\027\n\025initial_re" +
-      "sponse_type\"i\n\nServerList\022#\n\007servers\030\001 \003" +
-      "(\0132\022.grpc.lb.v1.Server\0226\n\023expiration_int" +
-      "erval\030\003 \001(\0132\031.google.protobuf.Duration\"\\",
-      "\n\006Server\022\022\n\nip_address\030\001 \001(\014\022\014\n\004port\030\002 \001" +
-      "(\005\022\032\n\022load_balance_token\030\003 \001(\t\022\024\n\014drop_r" +
-      "equest\030\004 \001(\0102b\n\014LoadBalancer\022R\n\013BalanceL" +
-      "oad\022\036.grpc.lb.v1.LoadBalanceRequest\032\037.gr" +
-      "pc.lb.v1.LoadBalanceResponse(\0010\001B%\n\016io.g" +
-      "rpc.grpclbB\021LoadBalancerProtoP\001b\006proto3"
+      "ce_response_type\"}\n\032InitialLoadBalanceRe" +
+      "sponse\022\036\n\026load_balancer_delegate\030\001 \001(\t\022?" +
+      "\n\034client_stats_report_interval\030\002 \001(\0132\031.g" +
+      "oogle.protobuf.Duration\"i\n\nServerList\022#\n" +
+      "\007servers\030\001 \003(\0132\022.grpc.lb.v1.Server\0226\n\023ex" +
+      "piration_interval\030\003 \001(\0132\031.google.protobu" +
+      "f.Duration\"\\\n\006Server\022\022\n\nip_address\030\001 \001(\014",
+      "\022\014\n\004port\030\002 \001(\005\022\032\n\022load_balance_token\030\003 \001" +
+      "(\t\022\024\n\014drop_request\030\004 \001(\0102b\n\014LoadBalancer" +
+      "\022R\n\013BalanceLoad\022\036.grpc.lb.v1.LoadBalance" +
+      "Request\032\037.grpc.lb.v1.LoadBalanceResponse" +
+      "(\0010\001B%\n\016io.grpc.grpclbB\021LoadBalancerProt" +
+      "oP\001b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -127,7 +127,7 @@ public final class LoadBalancerProto {
     internal_static_grpc_lb_v1_InitialLoadBalanceResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_lb_v1_InitialLoadBalanceResponse_descriptor,
-        new java.lang.String[] { "LoadBalancerDelegate", "ClientStatsReportInterval", "InitialResponseType", });
+        new java.lang.String[] { "LoadBalancerDelegate", "ClientStatsReportInterval", });
     internal_static_grpc_lb_v1_ServerList_descriptor =
       getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_lb_v1_ServerList_fieldAccessorTable = new
