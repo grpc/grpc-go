@@ -33,6 +33,8 @@ package io.grpc.testing.integration;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import io.netty.util.concurrent.DefaultThreadFactory;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -66,7 +68,8 @@ public final class TrafficControlProxy {
   private Socket serverSock;
   private Socket clientSock;
   private final ThreadPoolExecutor executor =
-      new ThreadPoolExecutor(5, 10, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+      new ThreadPoolExecutor(5, 10, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(),
+          new DefaultThreadFactory("proxy-pool", true));
 
   /**
    * Returns a new TrafficControlProxy with default bandwidth and latency.
