@@ -6,6 +6,7 @@ description = 'gRPC: Core'
 
 dependencies {
     compile libraries.guava,
+            libraries.errorprone,
             libraries.jsr305
     testCompile project(':grpc-testing')
 }

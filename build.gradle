@@ -143,6 +143,7 @@ subprojects {
             epoll_suffix = ":" + osdetector.classifier
         }
         libraries = [
+                errorprone: "com.google.errorprone:error_prone_annotations:2.0.11",
                 guava: "com.google.guava:guava:${guavaVersion}",
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',

@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.errorprone.annotations.DoNotMock;
+
 import javax.annotation.Nullable;
 
 /**
@@ -111,6 +113,7 @@ import javax.annotation.Nullable;
  * @param <ReqT> type of message sent one or more times to the server.
  * @param <RespT> type of message received one or more times from the server.
  */
+@DoNotMock("Use InProcessTransport and make a fake server instead")
 public abstract class ClientCall<ReqT, RespT> {
   /**
    * Callbacks for receiving metadata, response messages and completion status from the server.

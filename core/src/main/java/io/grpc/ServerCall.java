@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.errorprone.annotations.DoNotMock;
+
 import java.net.SocketAddress;
 
 import javax.net.ssl.SSLSession;
@@ -52,6 +54,7 @@ import javax.net.ssl.SSLSession;
  * @param <ReqT> parsed type of request message.
  * @param <RespT> parsed type of response message.
  */
+@DoNotMock("Use InProcessTransport and make a fake server instead")
 public abstract class ServerCall<ReqT, RespT> {
   /**
    * {@link Attributes.Key} for the remote address of server call attributes
