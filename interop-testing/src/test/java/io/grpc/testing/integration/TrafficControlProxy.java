@@ -56,13 +56,12 @@ public final class TrafficControlProxy {
   private static final Logger logger = Logger.getLogger(TrafficControlProxy.class.getName());
 
   // TODO: make host and ports arguments
-  private String localhost = "127.0.0.1";
-  private int proxyPort = 5050;
-  private int serverPort = 5001;
-  private int queueLength;
-  private int chunkSize;
-  private int bandwidth;
-  private long latency;
+  private final String localhost = "localhost";
+  private final int serverPort;
+  private final int queueLength;
+  private final int chunkSize;
+  private final int bandwidth;
+  private final long latency;
   private volatile boolean shutDown;
   private ServerSocket clientAcceptor;
   private Socket serverSock;
@@ -74,17 +73,19 @@ public final class TrafficControlProxy {
   /**
    * Returns a new TrafficControlProxy with default bandwidth and latency.
    */
-  public TrafficControlProxy() {
-    this(DEFAULT_BAND_BPS, DEFAULT_DELAY_NANOS, TimeUnit.NANOSECONDS);
+  public TrafficControlProxy(int serverPort) {
+    this(serverPort, DEFAULT_BAND_BPS, DEFAULT_DELAY_NANOS, TimeUnit.NANOSECONDS);
   }
 
   /**
    * Returns a new TrafficControlProxy with bandwidth set to targetBPS, and latency set to
    * targetLatency in latencyUnits.
    */
-  public TrafficControlProxy(int targetBps, int targetLatency, TimeUnit latencyUnits) {
+  public TrafficControlProxy(int serverPort, int targetBps, int targetLatency,
+      TimeUnit latencyUnits) {
     checkArgument(targetBps > 0);
     checkArgument(targetLatency > 0);
+    this.serverPort = serverPort;
     bandwidth = targetBps;
     // divide by 2 because latency is applied in both directions
     latency = latencyUnits.toNanos(targetLatency) / 2;
@@ -99,10 +100,8 @@ public final class TrafficControlProxy {
     // ClientAcceptor uses a ServerSocket server so that the client can connect to the proxy as it
     // normally would a server. serverSock then connects the server using a regular Socket as a
     // client normally would.
-    logger.info("Starting new proxy on port " + proxyPort + " with Queue Length " + queueLength);
     clientAcceptor = new ServerSocket();
-    clientAcceptor.setReuseAddress(true);
-    clientAcceptor.bind(new InetSocketAddress(localhost, proxyPort));
+    clientAcceptor.bind(new InetSocketAddress(localhost, 0));
     executor.submit(new Runnable() {
       @Override
       public void run() {
@@ -116,6 +115,12 @@ public final class TrafficControlProxy {
         }
       }
     });
+    logger.info("Started new proxy on port " + clientAcceptor.getLocalPort()
+        + " with Queue Length " + queueLength);
+  }
+
+  public int getPort() {
+    return clientAcceptor.getLocalPort();
   }
 
   /** Interrupt all workers and close sockets. */

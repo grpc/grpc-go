@@ -56,15 +56,13 @@ import java.util.concurrent.TimeUnit;
 @RunWith(JUnit4.class)
 public class ProxyTest {
 
-  private int serverPort = 5001;
-  private int proxyPort = 5050;
-  private static TrafficControlProxy proxy;
-  private static Socket client;
-  private static Server server;
-
   private static ThreadPoolExecutor executor =
       new ThreadPoolExecutor(8, 8, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(),
           new DefaultThreadFactory("proxy-test-pool", true));
+
+  private TrafficControlProxy proxy;
+  private Socket client;
+  private Server server;
 
   @AfterClass
   public static void stopExecutor() {
@@ -82,12 +80,13 @@ public class ProxyTest {
   public void smallLatency()
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
+    int serverPort = server.init();
     executor.submit(server);
 
     int latency = (int) TimeUnit.MILLISECONDS.toNanos(50);
-    proxy = new TrafficControlProxy(1024 * 1024, latency, TimeUnit.NANOSECONDS);
+    proxy = new TrafficControlProxy(serverPort, 1024 * 1024, latency, TimeUnit.NANOSECONDS);
     startProxy(proxy).get();
-    client = new Socket("localhost", proxyPort);
+    client = new Socket("localhost", proxy.getPort());
     client.setReuseAddress(true);
     DataOutputStream clientOut = new DataOutputStream(client.getOutputStream());
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
@@ -113,12 +112,13 @@ public class ProxyTest {
   public void bigLatency()
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
+    int serverPort = server.init();
     executor.submit(server);
 
     int latency = (int) TimeUnit.MILLISECONDS.toNanos(250);
-    proxy = new TrafficControlProxy(1024 * 1024, latency, TimeUnit.NANOSECONDS);
+    proxy = new TrafficControlProxy(serverPort, 1024 * 1024, latency, TimeUnit.NANOSECONDS);
     startProxy(proxy).get();
-    client = new Socket("localhost", proxyPort);
+    client = new Socket("localhost", proxy.getPort());
     DataOutputStream clientOut = new DataOutputStream(client.getOutputStream());
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
     byte[] message = new byte[1];
@@ -143,14 +143,15 @@ public class ProxyTest {
   public void smallBandwidth()
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
+    int serverPort = server.init();
     server.setMode("stream");
     executor.submit(server);
     assertEquals(server.mode(), "stream");
 
     int bandwidth = 64 * 1024;
-    proxy = new TrafficControlProxy(bandwidth, 200, TimeUnit.MILLISECONDS);
+    proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
     startProxy(proxy).get();
-    client = new Socket("localhost", proxyPort);
+    client = new Socket("localhost", proxy.getPort());
     DataOutputStream clientOut = new DataOutputStream(client.getOutputStream());
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
 
@@ -168,13 +169,14 @@ public class ProxyTest {
   public void largeBandwidth()
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
+    int serverPort = server.init();
     server.setMode("stream");
     executor.submit(server);
     assertEquals(server.mode(), "stream");
     int bandwidth = 10 * 1024 * 1024;
-    proxy = new TrafficControlProxy(bandwidth, 200, TimeUnit.MILLISECONDS);
+    proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
     startProxy(proxy).get();
-    client = new Socket("localhost", proxyPort);
+    client = new Socket("localhost", proxy.getPort());
     DataOutputStream clientOut = new DataOutputStream(client.getOutputStream());
     DataInputStream clientIn = new DataInputStream(client.getInputStream());
 
@@ -216,6 +218,14 @@ public class ProxyTest {
       return mode;
     }
 
+    /**
+     * Initializes server and returns its listening port.
+     */
+    public int init() throws IOException {
+      server = new ServerSocket(0);
+      return server.getLocalPort();
+    }
+
     public void shutDown() {
       try {
         server.close();
@@ -229,7 +239,6 @@ public class ProxyTest {
     @Override
     public void run() {
       try {
-        server = new ServerSocket(serverPort);
         rcv = server.accept();
         DataInputStream serverIn = new DataInputStream(rcv.getInputStream());
         DataOutputStream serverOut = new DataOutputStream(rcv.getOutputStream());
