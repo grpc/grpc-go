@@ -138,6 +138,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         Preconditions.checkNotNull(transportListener, "listener"));
 
     handler = newHandler();
+    HandlerSettings.setAutoWindow(handler);
+
     negotiationHandler = negotiator.newHandler(handler);
 
     Bootstrap b = new Bootstrap();

@@ -75,6 +75,7 @@ class NettyServerTransport implements ServerTransport {
 
     // Create the Netty handler for the pipeline.
     final NettyServerHandler grpcHandler = createHandler(listener);
+    HandlerSettings.setAutoWindow(grpcHandler);
 
     // Notify when the channel closes.
     channel.closeFuture().addListener(new ChannelFutureListener() {
