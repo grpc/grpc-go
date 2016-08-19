@@ -66,17 +66,17 @@ public abstract class LoadBalancer<T> {
   public void shutdown() { }
 
   /**
-   * Handles newly resolved addresses and service config from name resolution system.  Sublists
-   * should be considered equivalent with an {@link EquivalentAddressGroup}, but may be flattened
-   * into a single list if needed.
+   * Handles newly resolved server groups and metadata attributes from name resolution system.
+   * {@code servers} contained in {@link ResolvedServerInfoGroup} should be considered equivalent
+   * but may be flattened into a single list if needed.
    *
    * <p>Implementations should not modify the given {@code servers}.
    *
    * @param servers the resolved server addresses, never empty.
-   * @param config extra configuration data from naming system.
+   * @param attributes extra metadata from naming system.
    */
-  public void handleResolvedAddresses(List<? extends List<ResolvedServerInfo>> servers,
-                                      Attributes config) { }
+  public void handleResolvedAddresses(List<ResolvedServerInfoGroup> servers,
+      Attributes attributes) { }
 
   /**
    * Handles an error from the name resolution system.

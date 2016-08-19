@@ -118,16 +118,15 @@ public abstract class NameResolver {
   @ThreadSafe
   public interface Listener {
     /**
-     * Handles updates on resolved addresses and config.
+     * Handles updates on resolved addresses and attributes.
      *
      * <p>Implementations will not modify the given {@code servers}.
      *
-     * @param servers the resolved server addresses.  Sublists should be considered to be
-     *                an {@link EquivalentAddressGroup}. An empty list or all sublists being empty
-     *                will trigger {@link #onError}
-     * @param config extra configuration data from naming system
+     * @param servers the resolved server groups, containing {@link ResolvedServerInfo} objects. An
+     *                empty list will trigger {@link #onError}
+     * @param attributes extra metadata from naming system
      */
-    void onUpdate(List<? extends List<ResolvedServerInfo>> servers, Attributes config);
+    void onUpdate(List<ResolvedServerInfoGroup> servers, Attributes attributes);
 
     /**
      * Handles an error from the resolver.

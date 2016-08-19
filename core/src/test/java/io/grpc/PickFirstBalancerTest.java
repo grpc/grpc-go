@@ -41,6 +41,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
+import com.google.common.collect.Lists;
 
 import io.grpc.TransportManager.InterimTransport;
 
@@ -54,7 +55,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 
 /** Unit test for {@link PickFirstBalancerFactory}. */
@@ -62,7 +62,7 @@ import java.util.List;
 public class PickFirstBalancerTest {
   private LoadBalancer<Transport> loadBalancer;
 
-  private List<List<ResolvedServerInfo>> servers;
+  private List<ResolvedServerInfoGroup> servers;
   private EquivalentAddressGroup addressGroup;
 
   @Mock private TransportManager<Transport> mockTransportManager;
@@ -76,15 +76,15 @@ public class PickFirstBalancerTest {
     MockitoAnnotations.initMocks(this);
     loadBalancer = PickFirstBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
-    servers = new ArrayList<List<ResolvedServerInfo>>();
-    servers.add(new ArrayList<ResolvedServerInfo>());
-    ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
+    servers = Lists.newArrayList();
+    List<ResolvedServerInfo> resolvedServerInfoList = Lists.newArrayList();
     for (int i = 0; i < 3; i++) {
-      SocketAddress addr = new FakeSocketAddress("server" + i);
-      servers.get(0).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
-      addresses.add(addr);
+      resolvedServerInfoList.add(new ResolvedServerInfo(new FakeSocketAddress("server" + i)));
     }
-    addressGroup = new EquivalentAddressGroup(addresses);
+    ResolvedServerInfoGroup resolvedServerInfoGroup = ResolvedServerInfoGroup.builder().addAll(
+        resolvedServerInfoList).build();
+    servers.add(resolvedServerInfoGroup);
+    addressGroup = resolvedServerInfoGroup.toEquivalentAddressGroup();
     when(mockTransportManager.getTransport(eq(addressGroup))).thenReturn(mockTransport);
     when(mockTransportManager.createInterimTransport()).thenReturn(mockInterimTransport);
     when(mockInterimTransport.transport()).thenReturn(mockInterimTransportAsTransport);

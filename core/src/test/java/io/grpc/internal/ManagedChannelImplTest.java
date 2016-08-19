@@ -53,6 +53,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableList;
+
 import io.grpc.Attributes;
 import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
@@ -71,6 +73,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.PickFirstBalancerFactory;
 import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
@@ -554,7 +557,7 @@ public class ManagedChannelImplTest {
     String errorDescription = "NameResolver returned an empty list";
 
     // Name resolution is started as soon as channel is created
-    createChannel(new FakeNameResolverFactory(new ArrayList<ResolvedServerInfo>()), NO_INTERCEPTOR);
+    createChannel(new FakeNameResolverFactory(), NO_INTERCEPTOR);
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
     timer.runDueTasks();
@@ -587,7 +590,7 @@ public class ManagedChannelImplTest {
     assertEquals(1, loadBalancerFactory.balancers.size());
     LoadBalancer<?> loadBalancer = loadBalancerFactory.balancers.get(0);
     doThrow(ex).when(loadBalancer).handleResolvedAddresses(
-        Matchers.<List<List<ResolvedServerInfo>>>anyObject(), any(Attributes.class));
+        Matchers.<List<ResolvedServerInfoGroup>>anyObject(), any(Attributes.class));
 
     // NameResolver returns addresses.
     nameResolverFactory.allResolved();
@@ -936,18 +939,24 @@ public class ManagedChannelImplTest {
   }
 
   private class FakeNameResolverFactory extends NameResolver.Factory {
-    final List<ResolvedServerInfo> servers;
+    final List<ResolvedServerInfoGroup> servers;
     final boolean resolvedAtStart;
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
 
     FakeNameResolverFactory(boolean resolvedAtStart) {
       this.resolvedAtStart = resolvedAtStart;
-      servers = Collections.singletonList(server);
+      servers = Collections.singletonList(ResolvedServerInfoGroup.builder().add(server).build());
     }
 
     FakeNameResolverFactory(List<ResolvedServerInfo> servers) {
       resolvedAtStart = true;
-      this.servers = servers;
+      this.servers = Collections.singletonList(
+          ResolvedServerInfoGroup.builder().addAll(servers).build());
+    }
+
+    public FakeNameResolverFactory() {
+      resolvedAtStart = true;
+      this.servers = ImmutableList.of();
     }
 
     @Override
@@ -988,7 +997,7 @@ public class ManagedChannelImplTest {
       }
 
       void resolved() {
-        listener.onUpdate(Collections.singletonList(servers), Attributes.EMPTY);
+        listener.onUpdate(servers, Attributes.EMPTY);
       }
 
       @Override public void shutdown() {

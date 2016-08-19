@@ -44,6 +44,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.Lists;
+
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -57,6 +59,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.StringMarshaller;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager.OobTransportProvider;
@@ -103,7 +106,7 @@ public class ManagedChannelImplIdlenessTest {
       MethodDescriptor.MethodType.UNKNOWN, "/service/method",
       new StringMarshaller(), new IntegerMarshaller());
 
-  private final List<List<ResolvedServerInfo>> servers = new ArrayList<List<ResolvedServerInfo>>();
+  private final List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
   private final List<EquivalentAddressGroup> addressGroupList =
       new ArrayList<EquivalentAddressGroup>();
   
@@ -139,14 +142,13 @@ public class ManagedChannelImplIdlenessTest {
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
     for (int i = 0; i < 2; i++) {
-      servers.add(new ArrayList<ResolvedServerInfo>());
-      ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
+      ResolvedServerInfoGroup.Builder resolvedServerInfoGroup = ResolvedServerInfoGroup.builder();
       for (int j = 0; j < 2; j++) {
-        SocketAddress addr = new FakeSocketAddress("servergroup" + i + "server" + j);
-        servers.get(i).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
-        addresses.add(addr);
+        resolvedServerInfoGroup.add(
+            new ResolvedServerInfo(new FakeSocketAddress("servergroup" + i + "server" + j)));
       }
-      addressGroupList.add(new EquivalentAddressGroup(addresses));
+      servers.add(resolvedServerInfoGroup.build());
+      addressGroupList.add(resolvedServerInfoGroup.build().toEquivalentAddressGroup());
     }
     verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
     // Verify the initial idleness

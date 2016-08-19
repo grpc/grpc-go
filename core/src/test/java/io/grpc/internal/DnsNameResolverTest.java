@@ -44,7 +44,7 @@ import com.google.common.collect.Iterables;
 
 import io.grpc.Attributes;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -107,7 +107,7 @@ public class DnsNameResolverTest {
   @Mock
   private NameResolver.Listener mockListener;
   @Captor
-  private ArgumentCaptor<List<List<ResolvedServerInfo>>> resultCaptor;
+  private ArgumentCaptor<List<ResolvedServerInfoGroup>> resultCaptor;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
 
@@ -290,10 +290,11 @@ public class DnsNameResolverTest {
   }
 
   private static void assertAnswerMatches(InetAddress[] addrs, int port,
-      List<ResolvedServerInfo> result) {
-    assertEquals(addrs.length, result.size());
+      ResolvedServerInfoGroup result) {
+    assertEquals(addrs.length, result.getResolvedServerInfoList().size());
     for (int i = 0; i < addrs.length; i++) {
-      InetSocketAddress socketAddr = (InetSocketAddress) result.get(i).getAddress();
+      InetSocketAddress socketAddr = (InetSocketAddress) result.getResolvedServerInfoList().get(
+          i).getAddress();
       assertEquals("Addr " + i, port, socketAddr.getPort());
       assertEquals("Addr " + i, addrs[i], socketAddr.getAddress());
     }

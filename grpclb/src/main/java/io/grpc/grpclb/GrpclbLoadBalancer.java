@@ -41,6 +41,7 @@ import io.grpc.Channel;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
@@ -150,19 +151,14 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
   }
 
   @Override
-  public void handleResolvedAddresses(
-      List<? extends List<ResolvedServerInfo>> updatedServers, Attributes config) {
+  public void handleResolvedAddresses(List<ResolvedServerInfoGroup> updatedServers,
+      Attributes attributes) {
     synchronized (lock) {
       if (closed) {
         return;
       }
-      ArrayList<SocketAddress> addrs = new ArrayList<SocketAddress>(updatedServers.size());
-      for (List<ResolvedServerInfo> serverInfos : updatedServers) {
-        for (ResolvedServerInfo serverInfo : serverInfos) {
-          addrs.add(serverInfo.getAddress());
-        }
-      }
-      EquivalentAddressGroup newLbAddresses = new EquivalentAddressGroup(addrs);
+      EquivalentAddressGroup newLbAddresses = resolvedServerInfoGroupsToEquivalentAddressGroup(
+          updatedServers);
       if (!newLbAddresses.equals(lbAddresses)) {
         lbAddresses = newLbAddresses;
         connectToLb();
@@ -274,6 +270,20 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
     tm.updateRetainedTransports(addresses);
   }
 
+  /**
+   * Converts list of ResolvedServerInfoGroup objects into one EquivalentAddressGroup object.
+   */
+  private static EquivalentAddressGroup resolvedServerInfoGroupsToEquivalentAddressGroup(
+      List<ResolvedServerInfoGroup> groupList) {
+    List<SocketAddress> addrs = new ArrayList<SocketAddress>(groupList.size());
+    for (ResolvedServerInfoGroup group : groupList) {
+      for (ResolvedServerInfo srv : group.getResolvedServerInfoList()) {
+        addrs.add(srv.getAddress());
+      }
+    }
+    return new EquivalentAddressGroup(addrs);
+  }
+
   private class LbResponseObserver implements StreamObserver<LoadBalanceResponse> {
     @Override public void onNext(LoadBalanceResponse response) {
       logger.info("Got a LB response: " + response);
@@ -286,12 +296,12 @@ class GrpclbLoadBalancer<T> extends LoadBalancer<T> {
       // TODO(zhangkun83): honor expiration_interval
       for (Server server : serverList.getServersList()) {
         if (server.getDropRequest()) {
-          listBuilder.add(null);
+          listBuilder.addSocketAddress(null);
         } else {
           try {
             InetSocketAddress address = new InetSocketAddress(
                 InetAddress.getByAddress(server.getIpAddress().toByteArray()), server.getPort());
-            listBuilder.add(address);
+            listBuilder.addSocketAddress(address);
             // TODO(zhangkun83): fill the LB token to the attributes, and insert it to the
             // application RPCs.
             if (!newServerMap.containsKey(address)) {

@@ -52,7 +52,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
@@ -353,16 +353,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     if (log.isLoggable(Level.INFO)) {
       log.log(Level.INFO, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
     }
-  }
-
-  private static boolean serversAreEmpty(List<? extends List<ResolvedServerInfo>> servers) {
-    for (List<ResolvedServerInfo> serverInfos : servers) {
-      if (!serverInfos.isEmpty()) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   @VisibleForTesting
@@ -687,18 +677,19 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     }
 
     @Override
-    public void onUpdate(List<? extends List<ResolvedServerInfo>> servers, Attributes config) {
-      if (serversAreEmpty(servers)) {
+    public void onUpdate(List<ResolvedServerInfoGroup> servers, Attributes config) {
+      if (servers.isEmpty()) {
         onError(Status.UNAVAILABLE.withDescription("NameResolver returned an empty list"));
-      } else {
-        try {
-          balancer.handleResolvedAddresses(servers, config);
-        } catch (Throwable e) {
-          // It must be a bug! Push the exception back to LoadBalancer in the hope that it may be
-          // propagated to the application.
-          balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
-              .withDescription("Thrown from handleResolvedAddresses(): " + e));
-        }
+        return;
+      }
+
+      try {
+        balancer.handleResolvedAddresses(servers, config);
+      } catch (Throwable e) {
+        // It must be a bug! Push the exception back to LoadBalancer in the hope that it may be
+        // propagated to the application.
+        balancer.handleNameResolutionError(Status.INTERNAL.withCause(e)
+            .withDescription("Thrown from handleResolvedAddresses(): " + e));
       }
     }
 

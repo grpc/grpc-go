@@ -106,21 +106,15 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public void handleResolvedAddresses(
-        List<? extends List<ResolvedServerInfo>> updatedServers, Attributes config) {
+    public void handleResolvedAddresses(List<ResolvedServerInfoGroup> updatedServers,
+        Attributes attributes) {
       InterimTransport<T> savedInterimTransport;
       final EquivalentAddressGroup newAddresses;
       synchronized (lock) {
         if (closed) {
           return;
         }
-        ArrayList<SocketAddress> newAddressList = new ArrayList<SocketAddress>();
-        for (List<ResolvedServerInfo> servers : updatedServers) {
-          for (ResolvedServerInfo server : servers) {
-            newAddressList.add(server.getAddress());
-          }
-        }
-        newAddresses = new EquivalentAddressGroup(newAddressList);
+        newAddresses = resolvedServerInfoGroupsToEquivalentAddressGroup(updatedServers);
         if (newAddresses.equals(addresses)) {
           return;
         }
@@ -169,6 +163,20 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
       if (savedInterimTransport != null) {
         savedInterimTransport.closeWithError(SHUTDOWN_STATUS);
       }
+    }
+
+    /**
+     * Converts list of ResolvedServerInfoGroup objects into one EquivalentAddressGroup object.
+     */
+    private static EquivalentAddressGroup resolvedServerInfoGroupsToEquivalentAddressGroup(
+        List<ResolvedServerInfoGroup> groupList) {
+      List<SocketAddress> addrs = new ArrayList<SocketAddress>(groupList.size());
+      for (ResolvedServerInfoGroup group : groupList) {
+        for (ResolvedServerInfo srv : group.getResolvedServerInfoList()) {
+          addrs.add(srv.getAddress());
+        }
+      }
+      return new EquivalentAddressGroup(addrs);
     }
   }
 }

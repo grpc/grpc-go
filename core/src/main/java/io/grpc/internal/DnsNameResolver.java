@@ -37,6 +37,7 @@ import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 
@@ -44,9 +45,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -160,15 +159,13 @@ class DnsNameResolver extends NameResolver {
             savedListener.onError(Status.UNAVAILABLE.withCause(e));
             return;
           }
-          List<ResolvedServerInfo> servers =
-              new ArrayList<ResolvedServerInfo>(inetAddrs.length);
+          ResolvedServerInfoGroup.Builder servers = ResolvedServerInfoGroup.builder();
           for (int i = 0; i < inetAddrs.length; i++) {
             InetAddress inetAddr = inetAddrs[i];
             servers.add(
                 new ResolvedServerInfo(new InetSocketAddress(inetAddr, port), Attributes.EMPTY));
           }
-          savedListener.onUpdate(
-              Collections.singletonList(servers), Attributes.EMPTY);
+          savedListener.onUpdate(Collections.singletonList(servers.build()), Attributes.EMPTY);
         } finally {
           synchronized (DnsNameResolver.this) {
             resolving = false;

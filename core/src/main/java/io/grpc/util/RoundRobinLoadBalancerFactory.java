@@ -38,13 +38,12 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.internal.RoundRobinServerList;
 
-import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.concurrent.GuardedBy;
@@ -116,27 +115,16 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public void handleResolvedAddresses(
-        List<? extends List<ResolvedServerInfo>> updatedServers, Attributes config) {
+    public void handleResolvedAddresses(List<ResolvedServerInfoGroup> updatedServers,
+        Attributes attributes) {
       final InterimTransport<T> savedInterimTransport;
       final RoundRobinServerList<T> addressesCopy;
       synchronized (lock) {
         if (closed) {
           return;
         }
-        RoundRobinServerList.Builder<T> listBuilder = new RoundRobinServerList.Builder<T>(tm);
-        for (List<ResolvedServerInfo> servers : updatedServers) {
-          if (servers.isEmpty()) {
-            continue;
-          }
-
-          final List<SocketAddress> socketAddresses = new ArrayList<SocketAddress>(servers.size());
-          for (ResolvedServerInfo server : servers) {
-            socketAddresses.add(server.getAddress());
-          }
-          listBuilder.addList(socketAddresses);
-        }
-        addresses = listBuilder.build();
+        addresses = new RoundRobinServerList.Builder<T>(tm).addAll(
+            resolvedServerInfoGroupToEquivalentAddressGroup(updatedServers)).build();
         addressesCopy = addresses;
         nameResolutionError = null;
         savedInterimTransport = interimTransport;
@@ -182,6 +170,15 @@ public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
       if (savedInterimTransport != null) {
         savedInterimTransport.closeWithError(SHUTDOWN_STATUS);
       }
+    }
+
+    private static List<EquivalentAddressGroup> resolvedServerInfoGroupToEquivalentAddressGroup(
+        List<ResolvedServerInfoGroup> groupList) {
+      List<EquivalentAddressGroup> addrs = new ArrayList<EquivalentAddressGroup>(groupList.size());
+      for (ResolvedServerInfoGroup group : groupList) {
+        addrs.add(group.toEquivalentAddressGroup());
+      }
+      return addrs;
     }
   }
 }

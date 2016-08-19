@@ -41,12 +41,14 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
+import com.google.common.collect.Lists;
 
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 
 import io.grpc.ResolvedServerInfo;
+import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
@@ -63,7 +65,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 
 /** Unit test for {@link RoundRobinLoadBalancerFactory}. */
@@ -71,7 +72,7 @@ import java.util.List;
 public class RoundRobinLoadBalancerTest {
   private LoadBalancer<Transport> loadBalancer;
 
-  private List<List<ResolvedServerInfo>> servers;
+  private List<ResolvedServerInfoGroup> servers;
   private List<EquivalentAddressGroup> addressGroupList;
 
   @Mock private TransportManager<Transport> mockTransportManager;
@@ -87,17 +88,16 @@ public class RoundRobinLoadBalancerTest {
     MockitoAnnotations.initMocks(this);
     loadBalancer = RoundRobinLoadBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
-    addressGroupList = new ArrayList<EquivalentAddressGroup>();
-    servers = new ArrayList<List<ResolvedServerInfo>>();
+    addressGroupList = Lists.newArrayList();
+    servers = Lists.newArrayList();
     for (int i = 0; i < 3; i++) {
-      servers.add(new ArrayList<ResolvedServerInfo>());
-      ArrayList<SocketAddress> addresses = new ArrayList<SocketAddress>();
+      ResolvedServerInfoGroup.Builder resolvedServerInfoGroup = ResolvedServerInfoGroup.builder();
       for (int j = 0; j < 3; j++) {
-        SocketAddress addr = new FakeSocketAddress("servergroup" + i + "server" + j);
-        servers.get(i).add(new ResolvedServerInfo(addr, Attributes.EMPTY));
-        addresses.add(addr);
+        resolvedServerInfoGroup.add(
+            new ResolvedServerInfo(new FakeSocketAddress("servergroup" + i + "server" + j)));
       }
-      addressGroupList.add(new EquivalentAddressGroup(addresses));
+      servers.add(resolvedServerInfoGroup.build());
+      addressGroupList.add(resolvedServerInfoGroup.build().toEquivalentAddressGroup());
     }
     when(mockTransportManager.getTransport(eq(addressGroupList.get(0))))
         .thenReturn(mockTransport0);

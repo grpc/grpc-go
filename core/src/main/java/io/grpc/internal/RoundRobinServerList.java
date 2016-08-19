@@ -40,6 +40,7 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 
 import java.net.SocketAddress;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -105,17 +106,29 @@ public class RoundRobinServerList<T> {
     /**
      * Adds a server to the list, or {@code null} for a drop entry.
      */
-    public void add(@Nullable SocketAddress address) {
+    public Builder<T> addSocketAddress(@Nullable SocketAddress address) {
       listBuilder.add(new EquivalentAddressGroup(address));
+      return this;
     }
 
     /**
-     * Adds a list of servers to the list grouped into a single {@link EquivalentAddressGroup}.
+     * Adds a address group to the list.
      *
      * @param addresses the addresses to add
      */
-    public void addList(List<SocketAddress> addresses) {
-      listBuilder.add(new EquivalentAddressGroup(addresses));
+    public Builder<T> add(EquivalentAddressGroup addresses) {
+      listBuilder.add(addresses);
+      return this;
+    }
+
+    /**
+     * Adds a list of address groups.
+     *
+     * @param addresses the list of addresses group.
+     */
+    public Builder<T> addAll(Collection<EquivalentAddressGroup> addresses) {
+      listBuilder.addAll(addresses);
+      return this;
     }
 
     public RoundRobinServerList<T> build() {
