@@ -849,6 +849,11 @@ func init() {
 	internal.TestingUseHandlerImpl = func(arg interface{}) {
 		arg.(*Server).opts.useHandlerImpl = true
 	}
+	internal.TestingSetMinConnectTimeout = func(timeout time.Duration) func() {
+		before := minConnectTimeout
+		minConnectTimeout = timeout
+		return func() { minConnectTimeout = before }
+	}
 }
 
 // testingCloseConns closes all existing transports but keeps s.lis

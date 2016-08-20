@@ -10,7 +10,7 @@ import (
 var (
 	DefaultBackoffConfig = BackoffConfig{
 		MaxDelay:  120 * time.Second,
-		baseDelay: 1.0 * time.Second,
+		BaseDelay: 1.0 * time.Second,
 		factor:    1.6,
 		jitter:    0.2,
 	}
@@ -38,9 +38,9 @@ type BackoffConfig struct {
 	// gRPC decides to allow more interesting backoff strategies, these fields
 	// may be opened up in the future.
 
-	// baseDelay is the amount of time to wait before retrying after the first
+	// BaseDelay is the amount of time to wait before retrying after the first
 	// failure.
-	baseDelay time.Duration
+	BaseDelay time.Duration
 
 	// factor is applied to the backoff after each retry.
 	factor float64
@@ -60,9 +60,9 @@ func setDefaults(bc *BackoffConfig) {
 
 func (bc BackoffConfig) backoff(retries int) (t time.Duration) {
 	if retries == 0 {
-		return bc.baseDelay
+		return bc.BaseDelay
 	}
-	backoff, max := float64(bc.baseDelay), float64(bc.MaxDelay)
+	backoff, max := float64(bc.BaseDelay), float64(bc.MaxDelay)
 	for backoff < max && retries > 0 {
 		backoff *= bc.factor
 		retries--
