@@ -2349,6 +2349,54 @@ func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 	}
 }
 
+type serverDispatchCred struct {
+	ready   chan struct{}
+	rawConn net.Conn
+}
+
+func newServerDispatchCred() *serverDispatchCred {
+	return &serverDispatchCred{
+		ready: make(chan struct{}),
+	}
+}
+func (c *serverDispatchCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.rawConn = rawConn
+	close(c.ready)
+	return nil, nil, credentials.ErrConnDispatched
+}
+func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *serverDispatchCred) getRawConn() net.Conn {
+	<-c.ready
+	return c.rawConn
+}
+
+func TestServerCredsDispatch(t *testing.T) {
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	cred := newServerDispatchCred()
+	s := grpc.NewServer(grpc.Creds(cred))
+	go s.Serve(lis)
+	defer s.Stop()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(cred))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+
+	// Check rawConn is not closed.
+	if n, err := cred.getRawConn().Write([]byte{0}); n <= 0 || err != nil {
+		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
+	}
+}
+
 // interestingGoroutines returns all goroutines we care about for the purpose
 // of leak checking. It excludes testing or runtime ones.
 func interestingGoroutines() (gs []string) {
