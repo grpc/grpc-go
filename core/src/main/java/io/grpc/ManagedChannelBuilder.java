@@ -158,7 +158,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Provides a custom {@link LoadBalancer.Factory} for the channel.
    *
-   * <p>If this method is not called, the builder will use {@link DummyLoadBalancerFactory}
+   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
    * for the channel.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")

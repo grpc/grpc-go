@@ -64,12 +64,12 @@ import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
-import io.grpc.DummyLoadBalancerFactory;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
+import io.grpc.PickFirstBalancerFactory;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
@@ -124,7 +124,7 @@ public class ManagedChannelImplTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private SpyingLoadBalancerFactory loadBalancerFactory =
-      new SpyingLoadBalancerFactory(DummyLoadBalancerFactory.getInstance());
+      new SpyingLoadBalancerFactory(PickFirstBalancerFactory.getInstance());
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 

@@ -57,9 +57,9 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Unit test for {@link DummyLoadBalancerFactory}. */
+/** Unit test for {@link PickFirstBalancerFactory}. */
 @RunWith(JUnit4.class)
-public class DummyLoadBalancerTest {
+public class PickFirstBalancerTest {
   private LoadBalancer<Transport> loadBalancer;
 
   private List<List<ResolvedServerInfo>> servers;
@@ -74,7 +74,7 @@ public class DummyLoadBalancerTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    loadBalancer = DummyLoadBalancerFactory.getInstance().newLoadBalancer(
+    loadBalancer = PickFirstBalancerFactory.getInstance().newLoadBalancer(
         "fakeservice", mockTransportManager);
     servers = new ArrayList<List<ResolvedServerInfo>>();
     servers.add(new ArrayList<ResolvedServerInfo>());

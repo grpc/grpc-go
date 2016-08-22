@@ -47,25 +47,25 @@ import javax.annotation.concurrent.GuardedBy;
  * (currently pick-first) is used for all addresses found.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-public final class DummyLoadBalancerFactory extends LoadBalancer.Factory {
+public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
 
-  private static final DummyLoadBalancerFactory instance = new DummyLoadBalancerFactory();
+  private static final PickFirstBalancerFactory instance = new PickFirstBalancerFactory();
 
-  private DummyLoadBalancerFactory() {
+  private PickFirstBalancerFactory() {
   }
 
-  public static DummyLoadBalancerFactory getInstance() {
+  public static PickFirstBalancerFactory getInstance() {
     return instance;
   }
 
   @Override
   public <T> LoadBalancer<T> newLoadBalancer(String serviceName, TransportManager<T> tm) {
-    return new DummyLoadBalancer<T>(tm);
+    return new PickFirstBalancer<T>(tm);
   }
 
-  private static class DummyLoadBalancer<T> extends LoadBalancer<T> {
+  private static class PickFirstBalancer<T> extends LoadBalancer<T> {
     private static final Status SHUTDOWN_STATUS =
-        Status.UNAVAILABLE.augmentDescription("DummyLoadBalancer has shut down");
+        Status.UNAVAILABLE.augmentDescription("PickFirstBalancer has shut down");
 
     private final Object lock = new Object();
 
@@ -80,7 +80,7 @@ public final class DummyLoadBalancerFactory extends LoadBalancer.Factory {
 
     private final TransportManager<T> tm;
 
-    private DummyLoadBalancer(TransportManager<T> tm) {
+    private PickFirstBalancer(TransportManager<T> tm) {
       this.tm = tm;
     }
 
