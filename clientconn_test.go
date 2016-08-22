@@ -45,6 +45,13 @@ import (
 
 const tlsDir = "testdata/"
 
+func TestDialEmptyTarget(t *testing.T) {
+	conn, err := Dial("", WithInsecure(), WithTimeout(10*time.Millisecond))
+	if err != ErrTargetInvalid {
+		t.Fatalf("Dial(\"\", _ = %v, %v, want _, %v", conn, err, ErrTargetInvalid)
+	}
+}
+
 func TestDialTimeout(t *testing.T) {
 	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
 	if err == nil {
