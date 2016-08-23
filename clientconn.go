@@ -220,8 +220,8 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target
-// using the supplied context.
+// DialContext creates a client connection to the given target using the supplied context.
+// The returned ClientConn will be bound with ctx, which means if ctx is canceled, ClientConn will be closed.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
 	cc := &ClientConn{
 		target: target,
@@ -294,6 +294,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 	if ok {
 		go cc.lbWatcher()
 	}
+	// Start a goroutine to monitor cc.ctx.
+	// cc.Close() needs to be called if cc.ctx is canceled.
+	go func() {
+		<-cc.ctx.Done()
+		cc.Close()
+	}()
 	colonPos := strings.LastIndex(target, ":")
 	if colonPos == -1 {
 		colonPos = len(target)
