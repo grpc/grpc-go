@@ -298,13 +298,15 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case err := <-waitC:
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		if err != nil {
 			cc.Close()
 			return nil, err
 		}
-	case <-cc.ctx.Done():
-		cc.Close()
-		return nil, cc.ctx.Err()
 	case <-timeoutCh:
 		cc.Close()
 		return nil, ErrClientConnTimeout
