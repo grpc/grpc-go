@@ -220,14 +220,29 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
-// DialContext creates a client connection to the given target
-// using the supplied context.
-func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
+// DialContext creates a client connection to the given target. ctx can be used to
+// cancel or expire the pending connecting. Once this function returns, the
+// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
+// to terminate all the pending operations after this function returns.
+// This is the EXPERIMENTAL API.
+func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
-	cc.ctx, cc.cancel = context.WithCancel(ctx)
+	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	defer func() {
+		select {
+		case <-ctx.Done():
+			if conn != nil {
+				conn.Close()
+			}
+			conn = nil
+			err = ctx.Err()
+		default:
+		}
+	}()
+
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -277,14 +292,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 		timeoutCh = time.After(cc.dopts.timeout)
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case err := <-waitC:
 		if err != nil {
 			cc.Close()
 			return nil, err
 		}
-	case <-cc.ctx.Done():
-		cc.Close()
-		return nil, cc.ctx.Err()
 	case <-timeoutCh:
 		cc.Close()
 		return nil, ErrClientConnTimeout
