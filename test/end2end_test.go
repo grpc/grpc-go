@@ -836,9 +836,11 @@ func testFailFast(t *testing.T, e env) {
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.Unavailable {
+		_, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
+		if grpc.Code(err) == codes.Unavailable {
 			break
 		}
+		grpclog.Println("%v.EmptyCall(_, _) = _, %v", err)
 		time.Sleep(10 * time.Millisecond)
 	}
 	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
