@@ -146,7 +146,7 @@ public class MessageFramer {
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {
     if (messageLength != -1) {
-      return writeKnownLength(message, messageLength, false);
+      return writeKnownLengthUncompressed(message, messageLength);
     }
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
     int written = writeToOutputStream(message, bufferChain);
@@ -177,12 +177,12 @@ public class MessageFramer {
   }
 
   /**
-   * Write an unserialized message with a known length.
+   * Write an unserialized message with a known length, uncompressed.
    */
-  private int writeKnownLength(InputStream message, int messageLength, boolean compressed)
+  private int writeKnownLengthUncompressed(InputStream message, int messageLength)
       throws IOException {
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
-    header.put(compressed ? COMPRESSED : UNCOMPRESSED);
+    header.put(UNCOMPRESSED);
     header.putInt(messageLength);
     // Allocate the initial buffer chunk based on frame header + payload length.
     // Note that the allocator may allocate a buffer larger or smaller than this length
