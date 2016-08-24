@@ -225,24 +225,21 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
 // to terminate all the pending operations after this function returns.
 // This is the EXPERIMENTAL API.
-func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
+func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
+	defer func() {
 		select {
 		case <-ctx.Done():
-			cc.Close()
-		case <-done:
-			select {
-			case <-ctx.Done():
-				cc.Close()
-			default:
+			if conn != nil {
+				conn.Close()
 			}
+			conn = nil
+			err = ctx.Err()
+		default:
 		}
 	}()
 
@@ -298,11 +295,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case err := <-waitC:
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		if err != nil {
 			cc.Close()
 			return nil, err
