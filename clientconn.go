@@ -221,19 +221,29 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 }
 
 // DialContext creates a client connection to the given target. ctx can be used to
-// cancel or expire the pending connecting. Once the initial connection is done,
-// the cancellation and expiration of ctx will not affect the connection.
+// cancel or expire the pending connecting. Once this function returns, the
+// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
+// to terminate all the pending operations after this function returns.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
 	cc := &ClientConn{
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		select {
 		case <-ctx.Done():
 			cc.Close()
+		case <-done:
+			select {
+			case <-ctx.Done():
+				cc.Close()
+			default:
+			}
 		case <-cc.ctx.Done():
+			// ClientConn.Close has been called.
 		}
 	}()
 
