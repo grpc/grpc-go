@@ -114,6 +114,34 @@ func dial(fn func(context.Context, string) (net.Conn, error), ctx context.Contex
 	return dialContext(ctx, "tcp", addr)
 }
 
+func isTemporary(err error) bool {
+	switch err {
+	case io.EOF:
+		// Connection closures may be resolved upon retry, and are thus
+		// treated as temporary.
+		return true
+	case context.DeadlineExceeded:
+		// In Go 1.7, context.DeadlineExceeded implements Timeout(), and this
+		// special case is not needed. Until then, we need to keep this
+		// clause.
+		return true
+	}
+
+	switch err := err.(type) {
+	case interface {
+		Temporary() bool
+	}:
+		return err.Temporary()
+	case interface {
+		Timeout() bool
+	}:
+		// Timeouts may be resolved upon retry, and are thus treated as
+		// temporary.
+		return err.Timeout()
+	}
+	return false
+}
+
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
@@ -135,14 +163,8 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 		conn, authInfo, err = creds.ClientHandshake(ctx, addr, conn)
 		if err != nil {
 			// Credentials handshake errors are typically considered permanent
-			// to avoid retrying on e.g. bad certificates. However, timeouts
-			// and connection closures may be resolved upon retry, and are
-			// thus treated as temporary.
-			temp := false
-			switch err {
-			case io.EOF, context.DeadlineExceeded:
-				temp = true
-			}
+			// to avoid retrying on e.g. bad certificates.
+			temp := isTemporary(err)
 			return nil, ConnectionErrorf(temp, err, "transport: %v", err)
 		}
 	}
