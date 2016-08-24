@@ -55,6 +55,8 @@ var (
 	// ErrClientConnTimeout indicates that the ClientConn cannot establish the
 	// underlying connections within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
+	// ErrTargetInvalid indicates that dial target is invalid.
+	ErrTargetInvalid = errors.New("grpc: target is invalid")
 
 	// errNoTransportSecurity indicates that there is no transport security
 	// being set for ClientConn. Users should either set one or explicitly
@@ -246,6 +248,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 	)
 	if cc.dopts.balancer == nil {
 		// Connect to target directly if balancer is nil.
+		if target == "" {
+			return nil, ErrTargetInvalid
+		}
 		addrs = append(addrs, Address{Addr: target})
 	} else {
 		if err := cc.dopts.balancer.Start(target); err != nil {
