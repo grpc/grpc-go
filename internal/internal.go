@@ -34,6 +34,8 @@
 // the godoc of the top-level grpc package.
 package internal
 
+import "time"
+
 // TestingCloseConns closes all existing transports but keeps
 // grpcServer.lis accepting new connections.
 //
@@ -47,3 +49,6 @@ var TestingCloseConns func(grpcServer interface{})
 // The provided grpcServer must be of type *grpc.Server. It is untyped
 // for circular dependency reasons.
 var TestingUseHandlerImpl func(grpcServer interface{})
+
+// TestingSetMinConnectTimeout allows setting the connection timeout in tests.
+var TestingSetMinConnectTimeout func(time.Duration) func()
