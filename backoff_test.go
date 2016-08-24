@@ -10,7 +10,7 @@ func TestBackoffConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestBackoffWitDifferentNumberOfRetries(t *testing.T) {
+func TestBackoffWithDifferentNumberOfRetries(t *testing.T) {
 	const maxRetries = 10
 	for retries := 0; retries < maxRetries; retries++ {
 		b := BackoffConfig{}
