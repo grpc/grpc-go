@@ -478,6 +478,10 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 }
 
 func (te *test) clientConn() *grpc.ClientConn {
+	return te.clientConnWithContext(nil)
+}
+
+func (te *test) clientConnWithContext(ctx context.Context) *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
@@ -508,7 +512,11 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
 	}
 	var err error
-	te.cc, err = grpc.Dial(te.srvAddr, opts...)
+	if ctx == nil {
+		te.cc, err = grpc.Dial(te.srvAddr, opts...)
+	} else {
+		te.cc, err = grpc.DialContext(ctx, te.srvAddr, opts...)
+	}
 	if err != nil {
 		te.t.Fatalf("Dial(%q) = %v", te.srvAddr, err)
 	}
@@ -534,6 +542,50 @@ func (te *test) withServerTester(fn func(st *serverTester)) {
 	st := newServerTesterFromConn(te.t, c)
 	st.greet()
 	fn(st)
+}
+
+func TestDialContext(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testDialContext(t, e)
+	}
+}
+
+func testDialContext(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+	)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	// Create client with context that can be cancelled.
+	ctx, cancel := context.WithCancel(context.Background())
+	cc := te.clientConnWithContext(ctx)
+	tc := testpb.NewTestServiceClient(cc)
+	// Making an RPC call.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	// Calling cancel on the context used above
+	cancel()
+	// The following RPC call should work since the context passed above is detached from the lower transport layer
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	// Calling close on ClientConn
+	if err := cc.Close(); err != nil {
+		t.Fatalf("cc.Close() = %v, want %v", err, nil)
+	}
+	// RPC calls on closed ClientConnections should fail
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", grpc.Code(err), codes.FailedPrecondition)
+	}
+
+	awaitNewConnLogOutput()
 }
 
 func TestTimeoutOnDeadServer(t *testing.T) {
