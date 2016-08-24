@@ -72,8 +72,8 @@ func TestTLSDialTimeout(t *testing.T) {
 func TestDialContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled && err != ErrClientConnClosing {
-		t.Fatalf("grpc.DialContext(%v, _) = _, %v, want _, %v or %v", ctx, err, context.Canceled, ErrClientConnClosing)
+	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
+		t.Fatalf("grpc.DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
 	}
 }
 

@@ -224,6 +224,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 // cancel or expire the pending connecting. Once this function returns, the
 // cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
 // to terminate all the pending operations after this function returns.
+// This is the EXPERIMENTAL API.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (*ClientConn, error) {
 	cc := &ClientConn{
 		target: target,
@@ -242,8 +243,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 				cc.Close()
 			default:
 			}
-		case <-cc.ctx.Done():
-			// ClientConn.Close has been called.
 		}
 	}()
 
@@ -296,6 +295,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (*Clien
 		timeoutCh = time.After(cc.dopts.timeout)
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case err := <-waitC:
 		if err != nil {
 			cc.Close()
