@@ -234,12 +234,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	defer func() {
 		select {
 		case <-ctx.Done():
-			if conn != nil {
-				conn.Close()
-			}
-			conn = nil
-			err = ctx.Err()
+			conn, err = nil, ctx.Err()
 		default:
+		}
+
+		if err != nil {
+			cc.Close()
 		}
 	}()
 
@@ -296,11 +296,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		return nil, ctx.Err()
 	case err := <-waitC:
 		if err != nil {
-			cc.Close()
 			return nil, err
 		}
 	case <-timeoutCh:
-		cc.Close()
 		return nil, ErrClientConnTimeout
 	}
 	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
