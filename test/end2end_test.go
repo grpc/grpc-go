@@ -413,8 +413,7 @@ func newTest(t *testing.T, e env) *test {
 // call to te.tearDown to clean up.
 func (te *test) startServer(ts testpb.TestServiceServer) {
 	te.testServer = ts
-	e := te.e
-	te.t.Logf("Running test in %s environment...", e.name)
+	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
 	if te.maxMsgSize > 0 {
 		sopts = append(sopts, grpc.MaxMsgSize(te.maxMsgSize))
@@ -432,12 +431,12 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 		sopts = append(sopts, grpc.StreamInterceptor(te.streamInt))
 	}
 	la := "localhost:0"
-	switch e.network {
+	switch te.e.network {
 	case "unix":
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now())
 		syscall.Unlink(la)
 	}
-	lis, err := net.Listen(e.network, la)
+	lis, err := net.Listen(te.e.network, la)
 	if err != nil {
 		te.t.Fatalf("Failed to listen: %v", err)
 	}
@@ -455,7 +454,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
-	if e.httpHandler {
+	if te.e.httpHandler {
 		internal.TestingUseHandlerImpl(s)
 	}
 	if te.healthServer != nil {
@@ -465,7 +464,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 		testpb.RegisterTestServiceServer(s, te.testServer)
 	}
 	addr := la
-	switch e.network {
+	switch te.e.network {
 	case "unix":
 	default:
 		_, port, err := net.SplitHostPort(lis.Addr().String())
