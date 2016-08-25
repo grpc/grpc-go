@@ -2303,7 +2303,7 @@ func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
 
 func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
-	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
 	var (
@@ -2319,7 +2319,7 @@ func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 
 func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
-	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -2331,7 +2331,7 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 
 func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
-	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -2343,7 +2343,7 @@ func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 
 func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: false})
-	te.startServer(&testServer{security: "clientAlwaysFailCred"})
+	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -2374,7 +2374,7 @@ func (c *clientTimeoutCreds) Info() credentials.ProtocolInfo {
 func TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "clientTimeoutCreds", balancer: false})
 	te.userAgent = testAppUA
-	te.startServer(&testServer{security: "clientTimeoutCreds"})
+	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
