@@ -840,7 +840,7 @@ func testFailFast(t *testing.T, e env) {
 		if grpc.Code(err) == codes.Unavailable {
 			break
 		}
-		grpclog.Println("%v.EmptyCall(_, _) = _, %v", err)
+		grpclog.Printf("%v.EmptyCall(_, _) = _, %v", err)
 		time.Sleep(10 * time.Millisecond)
 	}
 	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
