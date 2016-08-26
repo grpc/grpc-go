@@ -64,7 +64,7 @@ import javax.annotation.Nullable;
  * between utilities in this class and the potential signatures in a generated stub class so
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
-public class ClientCalls {
+public final class ClientCalls {
   private static final Logger log = Logger.getLogger(ClientCalls.class.getName());
 
   // Prevent instantiation

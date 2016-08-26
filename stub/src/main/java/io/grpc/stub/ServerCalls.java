@@ -45,7 +45,7 @@ import io.grpc.Status;
  * meant to be used by the generated code.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1790")
-public class ServerCalls {
+public final class ServerCalls {
 
   private ServerCalls() {
   }

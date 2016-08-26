@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Utility functions for binding and receiving headers.
  */
-public class MetadataUtils {
+public final class MetadataUtils {
   // Prevent instantiation
   private MetadataUtils() {}
 

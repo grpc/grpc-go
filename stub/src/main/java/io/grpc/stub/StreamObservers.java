@@ -42,7 +42,7 @@ import java.util.Iterator;
  * {@link CallStreamObserver}.
  */
 @ExperimentalApi
-public class StreamObservers {
+public final class StreamObservers {
   /**
    * Copy the values of an {@link Iterator} to the target {@link CallStreamObserver} while properly
    * accounting for outbound flow-control.
