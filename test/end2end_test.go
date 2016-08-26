@@ -369,8 +369,10 @@ type test struct {
 	userAgent         string
 	clientCompression bool
 	serverCompression bool
-	unaryInt          grpc.UnaryServerInterceptor
-	streamInt         grpc.StreamServerInterceptor
+	unaryClientInt    grpc.UnaryClientInterceptor
+	streamClientInt   grpc.StreamClientInterceptor
+	unaryServerInt    grpc.UnaryServerInterceptor
+	streamServerInt   grpc.StreamServerInterceptor
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -425,11 +427,11 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-	if te.unaryInt != nil {
-		sopts = append(sopts, grpc.UnaryInterceptor(te.unaryInt))
+	if te.unaryServerInt != nil {
+		sopts = append(sopts, grpc.UnaryInterceptor(te.unaryServerInt))
 	}
-	if te.streamInt != nil {
-		sopts = append(sopts, grpc.StreamInterceptor(te.streamInt))
+	if te.streamServerInt != nil {
+		sopts = append(sopts, grpc.StreamInterceptor(te.streamServerInt))
 	}
 	la := "localhost:0"
 	switch e.network {
@@ -493,6 +495,12 @@ func (te *test) clientConn() *grpc.ClientConn {
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
+	}
+	if te.unaryClientInt != nil {
+		opts = append(opts, grpc.WithUnaryInterceptor(te.unaryClientInt))
+	}
+	if te.streamClientInt != nil {
+		opts = append(opts, grpc.WithStreamInterceptor(te.streamClientInt))
 	}
 	switch te.e.security {
 	case "tls":
@@ -2064,6 +2072,75 @@ func testCompressOK(t *testing.T, e env) {
 	}
 }
 
+func TestUnaryClientInterceptor(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testUnaryClientInterceptor(t, e)
+	}
+}
+
+func failOkayRPC(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if err == nil {
+		return grpc.Errorf(codes.NotFound, "")
+	}
+	return err
+}
+
+func testUnaryClientInterceptor(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.unaryClientInt = failOkayRPC
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.NotFound {
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.NotFound)
+	}
+}
+
+func TestStreamClientInterceptor(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testStreamClientInterceptor(t, e)
+	}
+}
+
+func failOkayStream(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	s, err := streamer(ctx, desc, cc, method, opts...)
+	if err == nil {
+		return nil, grpc.Errorf(codes.NotFound, "")
+	}
+	return s, nil
+}
+
+func testStreamClientInterceptor(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.streamClientInt = failOkayStream
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(int32(1)),
+		},
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	if _, err := tc.StreamingOutputCall(context.Background(), req); grpc.Code(err) != codes.NotFound {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", tc, err, codes.NotFound)
+	}
+}
+
 func TestUnaryServerInterceptor(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -2077,7 +2154,7 @@ func errInjector(ctx context.Context, req interface{}, info *grpc.UnaryServerInf
 
 func testUnaryServerInterceptor(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.unaryInt = errInjector
+	te.unaryServerInt = errInjector
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -2108,7 +2185,7 @@ func fullDuplexOnly(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServ
 
 func testStreamServerInterceptor(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.streamInt = fullDuplexOnly
+	te.streamServerInt = fullDuplexOnly
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
