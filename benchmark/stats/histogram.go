@@ -133,8 +133,8 @@ func (h *Histogram) Clear() {
 	h.SumOfSquares = 0
 	h.Min = math.MaxInt64
 	h.Max = math.MinInt64
-	for _, v := range h.Buckets {
-		v.Count = 0
+	for i := range h.Buckets {
+		h.Buckets[i].Count = 0
 	}
 }
 

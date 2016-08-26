@@ -37,6 +37,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 )
@@ -67,13 +69,21 @@ func TestTLSDialTimeout(t *testing.T) {
 	}
 }
 
+func TestDialContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
+		t.Fatalf("grpc.DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
+	}
+}
+
 func TestCredentialsMisuse(t *testing.T) {
 	tlsCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
 	}
 	// Two conflicting credential configurations
-	if _, err := Dial("Non-Existent.Server:80", WithTransportCredentials(tlsCreds), WithTimeout(time.Millisecond), WithBlock(), WithInsecure()); err != errCredentialsConflict {
+	if _, err := Dial("Non-Existent.Server:80", WithTransportCredentials(tlsCreds), WithBlock(), WithInsecure()); err != errCredentialsConflict {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errCredentialsConflict)
 	}
 	rpcCreds, err := oauth.NewJWTAccessFromKey(nil)
@@ -81,7 +91,7 @@ func TestCredentialsMisuse(t *testing.T) {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
 	// security info on insecure connection
-	if _, err := Dial("Non-Existent.Server:80", WithPerRPCCredentials(rpcCreds), WithTimeout(time.Millisecond), WithBlock(), WithInsecure()); err != errTransportCredentialsMissing {
+	if _, err := Dial("Non-Existent.Server:80", WithPerRPCCredentials(rpcCreds), WithBlock(), WithInsecure()); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 }
@@ -123,4 +133,5 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 	if actual != *expected {
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
 	}
+	conn.Close()
 }

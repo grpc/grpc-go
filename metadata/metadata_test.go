@@ -74,6 +74,8 @@ func TestDecodeKeyValue(t *testing.T) {
 		{"a", "abc", "a", "abc", nil},
 		{"key-bin", "Zm9vAGJhcg==", "key-bin", "foo\x00bar", nil},
 		{"key-bin", "woA=", "key-bin", binaryValue, nil},
+		{"a", "abc,efg", "a", "abc,efg", nil},
+		{"key-bin", "Zm9vAGJhcg==,Zm9vAGJhcg==", "key-bin", "foo\x00bar,foo\x00bar", nil},
 	} {
 		k, v, err := DecodeKeyValue(test.kin, test.vin)
 		if k != test.kout || !reflect.DeepEqual(v, test.vout) || !reflect.DeepEqual(err, test.err) {

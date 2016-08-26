@@ -79,7 +79,7 @@ func TestGetServiceInfo(t *testing.T) {
 			{
 				StreamName:    "EmptyStream",
 				Handler:       nil,
-				ServerStreams: true,
+				ServerStreams: false,
 				ClientStreams: true,
 			},
 		},
@@ -90,17 +90,24 @@ func TestGetServiceInfo(t *testing.T) {
 	server.RegisterService(&testSd, &testServer{})
 
 	info := server.GetServiceInfo()
-	want := map[string]*ServiceInfo{
-		"grpc.testing.EmptyService": &ServiceInfo{
-			Methods: []string{
-				"EmptyCall",
-				"EmptyStream",
-			},
+	want := map[string]ServiceInfo{
+		"grpc.testing.EmptyService": {
+			Methods: []MethodInfo{
+				{
+					Name:           "EmptyCall",
+					IsClientStream: false,
+					IsServerStream: false,
+				},
+				{
+					Name:           "EmptyStream",
+					IsClientStream: true,
+					IsServerStream: false,
+				}},
 			Metadata: []int{0, 2, 1, 3},
 		},
 	}
 
 	if !reflect.DeepEqual(info, want) {
-		t.Errorf("GetServiceInfo() = %q, want %q", info, want)
+		t.Errorf("GetServiceInfo() = %+v, want %+v", info, want)
 	}
 }

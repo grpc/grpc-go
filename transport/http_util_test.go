@@ -59,7 +59,7 @@ func TestTimeoutEncode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to parse duration string %s: %v", test.in, err)
 		}
-		out := timeoutEncode(d)
+		out := encodeTimeout(d)
 		if out != test.out {
 			t.Fatalf("timeoutEncode(%s) = %s, want %s", test.in, out, test.out)
 		}
@@ -79,7 +79,7 @@ func TestTimeoutDecode(t *testing.T) {
 		{"1", 0, fmt.Errorf("transport: timeout string is too short: %q", "1")},
 		{"", 0, fmt.Errorf("transport: timeout string is too short: %q", "")},
 	} {
-		d, err := timeoutDecode(test.s)
+		d, err := decodeTimeout(test.s)
 		if d != test.d || fmt.Sprint(err) != fmt.Sprint(test.err) {
 			t.Fatalf("timeoutDecode(%q) = %d, %v, want %d, %v", test.s, int64(d), err, int64(test.d), test.err)
 		}
@@ -104,6 +104,41 @@ func TestValidContentType(t *testing.T) {
 		got := validContentType(tt.h)
 		if got != tt.want {
 			t.Errorf("validContentType(%q) = %v; want %v", tt.h, got, tt.want)
+		}
+	}
+}
+
+func TestEncodeGrpcMessage(t *testing.T) {
+	for _, tt := range []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"Hello", "Hello"},
+		{"my favorite character is \u0000", "my favorite character is %00"},
+		{"my favorite character is %", "my favorite character is %25"},
+	} {
+		actual := encodeGrpcMessage(tt.input)
+		if tt.expected != actual {
+			t.Errorf("encodeGrpcMessage(%v) = %v, want %v", tt.input, actual, tt.expected)
+		}
+	}
+}
+
+func TestDecodeGrpcMessage(t *testing.T) {
+	for _, tt := range []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"Hello", "Hello"},
+		{"H%61o", "Hao"},
+		{"H%6", "H%6"},
+		{"%G0", "%G0"},
+	} {
+		actual := decodeGrpcMessage(tt.input)
+		if tt.expected != actual {
+			t.Errorf("dncodeGrpcMessage(%v) = %v, want %v", tt.input, actual, tt.expected)
 		}
 	}
 }

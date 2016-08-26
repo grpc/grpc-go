@@ -239,11 +239,11 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
 	var reply string
-	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err != nil {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want %s", err, servers[0].port)
 	}
 	// Remove the server.
-	updates := []*naming.Update{&naming.Update{
+	updates := []*naming.Update{{
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
@@ -251,7 +251,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	// Loop until the above update applies.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -262,7 +262,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -270,7 +270,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 		defer wg.Done()
 		var reply string
 		time.Sleep(5 * time.Millisecond)
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err == nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err == nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
 		}
 	}()
@@ -287,7 +287,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
 	// Remove all servers so that all upcoming RPCs will block on waitCh.
-	updates := []*naming.Update{&naming.Update{
+	updates := []*naming.Update{{
 		Op:   naming.Delete,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
@@ -295,7 +295,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	for {
 		var reply string
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); Code(err) == codes.DeadlineExceeded {
+		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -305,12 +305,12 @@ func TestGetOnWaitChannel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		var reply string
-		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+		if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err != nil {
 			t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 		}
 	}()
 	// Add a connected server to get the above RPC through.
-	updates = []*naming.Update{&naming.Update{
+	updates = []*naming.Update{{
 		Op:   naming.Add,
 		Addr: "127.0.0.1:" + servers[0].port,
 	}}
@@ -319,4 +319,120 @@ func TestGetOnWaitChannel(t *testing.T) {
 	wg.Wait()
 	cc.Close()
 	servers[0].stop()
+}
+
+func TestOneServerDown(t *testing.T) {
+	// Start 2 servers.
+	numServers := 2
+	servers, r := startServers(t, numServers, math.MaxUint32)
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	// Add servers[1] to the service discovery.
+	var updates []*naming.Update
+	updates = append(updates, &naming.Update{
+		Op:   naming.Add,
+		Addr: "127.0.0.1:" + servers[1].port,
+	})
+	r.w.inject(updates)
+	req := "port"
+	var reply string
+	// Loop until servers[1] is up
+	for {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var wg sync.WaitGroup
+	numRPC := 100
+	sleepDuration := 10 * time.Millisecond
+	wg.Add(1)
+	go func() {
+		time.Sleep(sleepDuration)
+		// After sleepDuration, kill server[0].
+		servers[0].stop()
+		wg.Done()
+	}()
+
+	// All non-failfast RPCs should not block because there's at least one connection available.
+	for i := 0; i < numRPC; i++ {
+		wg.Add(1)
+		go func() {
+			time.Sleep(sleepDuration)
+			// After sleepDuration, invoke RPC.
+			// server[0] is killed around the same time to make it racy between balancer and gRPC internals.
+			Invoke(context.Background(), "/foo/bar", &req, &reply, cc, FailFast(false))
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	cc.Close()
+	for i := 0; i < numServers; i++ {
+		servers[i].stop()
+	}
+}
+
+func TestOneAddressRemoval(t *testing.T) {
+	// Start 2 servers.
+	numServers := 2
+	servers, r := startServers(t, numServers, math.MaxUint32)
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	// Add servers[1] to the service discovery.
+	var updates []*naming.Update
+	updates = append(updates, &naming.Update{
+		Op:   naming.Add,
+		Addr: "127.0.0.1:" + servers[1].port,
+	})
+	r.w.inject(updates)
+	req := "port"
+	var reply string
+	// Loop until servers[1] is up
+	for {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[1].port {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var wg sync.WaitGroup
+	numRPC := 100
+	sleepDuration := 10 * time.Millisecond
+	wg.Add(1)
+	go func() {
+		time.Sleep(sleepDuration)
+		// After sleepDuration, delete server[0].
+		var updates []*naming.Update
+		updates = append(updates, &naming.Update{
+			Op:   naming.Delete,
+			Addr: "127.0.0.1:" + servers[0].port,
+		})
+		r.w.inject(updates)
+		wg.Done()
+	}()
+
+	// All non-failfast RPCs should not fail because there's at least one connection available.
+	for i := 0; i < numRPC; i++ {
+		wg.Add(1)
+		go func() {
+			var reply string
+			time.Sleep(sleepDuration)
+			// After sleepDuration, invoke RPC.
+			// server[0] is removed around the same time to make it racy between balancer and gRPC internals.
+			if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); err != nil {
+				t.Errorf("grpc.Invoke(_, _, _, _, _) = %v, want not nil", err)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	cc.Close()
+	for i := 0; i < numServers; i++ {
+		servers[i].stop()
+	}
 }
