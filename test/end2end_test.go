@@ -848,9 +848,11 @@ func testFailFast(t *testing.T, e env) {
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.Unavailable {
+		_, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
+		if grpc.Code(err) == codes.Unavailable {
 			break
 		}
+		fmt.Printf("%v.EmptyCall(_, _) = _, %v", tc, err)
 		time.Sleep(10 * time.Millisecond)
 	}
 	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
@@ -2459,6 +2461,54 @@ func TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	// This unary call should succeed, because ClientHandshake will succeed for the second time.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want <nil>", err)
+	}
+}
+
+type serverDispatchCred struct {
+	ready   chan struct{}
+	rawConn net.Conn
+}
+
+func newServerDispatchCred() *serverDispatchCred {
+	return &serverDispatchCred{
+		ready: make(chan struct{}),
+	}
+}
+func (c *serverDispatchCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.rawConn = rawConn
+	close(c.ready)
+	return nil, nil, credentials.ErrConnDispatched
+}
+func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *serverDispatchCred) getRawConn() net.Conn {
+	<-c.ready
+	return c.rawConn
+}
+
+func TestServerCredsDispatch(t *testing.T) {
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	cred := newServerDispatchCred()
+	s := grpc.NewServer(grpc.Creds(cred))
+	go s.Serve(lis)
+	defer s.Stop()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(cred))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+
+	// Check rawConn is not closed.
+	if n, err := cred.getRawConn().Write([]byte{0}); n <= 0 || err != nil {
+		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
 	}
 }
 
