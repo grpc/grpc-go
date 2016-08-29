@@ -37,9 +37,12 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.net.InetSocketAddress;
 
+@RunWith(JUnit4.class)
 public class ResolvedServerInfoTest {
   private static final Attributes.Key<String> FOO = Attributes.Key.of("foo");
   private static final Attributes ATTRS = Attributes.newBuilder().set(FOO, "bar").build();
