@@ -31,11 +31,12 @@
 
 package io.grpc.auth;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,8 +103,7 @@ public class ClientAuthInterceptorTest {
   @Mock
   Channel channel;
 
-  @Mock
-  ClientCall<String, Integer> call;
+  ClientCallRecorder call = new ClientCallRecorder();
 
   ClientAuthInterceptor interceptor;
 
@@ -130,7 +130,8 @@ public class ClientAuthInterceptorTest {
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
-    verify(call).start(listener, headers);
+    assertEquals(listener, call.responseListener);
+    assertEquals(headers, call.headers);
 
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);
     Assert.assertArrayEquals(new String[]{"token1", "token2"},
@@ -150,7 +151,8 @@ public class ClientAuthInterceptorTest {
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     Mockito.verify(listener).onClose(statusCaptor.capture(), isA(Metadata.class));
     Assert.assertNull(headers.getAll(AUTHORIZATION));
-    Mockito.verify(call, never()).start(listener, headers);
+    assertNull(call.responseListener);
+    assertNull(call.headers);
     Assert.assertEquals(Status.Code.UNAUTHENTICATED, statusCaptor.getValue().getCode());
     Assert.assertNotNull(statusCaptor.getValue().getCause());
   }
@@ -169,7 +171,8 @@ public class ClientAuthInterceptorTest {
         interceptor.interceptCall(descriptor, CallOptions.DEFAULT, channel);
     Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
-    verify(call).start(listener, headers);
+    assertEquals(listener, call.responseListener);
+    assertEquals(headers, call.headers);
     Iterable<String> authorization = headers.getAll(AUTHORIZATION);
     Assert.assertArrayEquals(new String[]{"Bearer allyourbase"},
         Iterables.toArray(authorization, String.class));
@@ -190,5 +193,43 @@ public class ClientAuthInterceptorTest {
     interceptedCall.start(listener, new Metadata());
     verify(credentials).getRequestMetadata(URI.create("https://example.com:123/a.service"));
     interceptedCall.cancel("Cancel for test", null);
+  }
+
+  private static final class ClientCallRecorder extends ClientCall<String, Integer> {
+    private ClientCall.Listener<Integer> responseListener;
+    private Metadata headers;
+    private int numMessages;
+    private String cancelMessage;
+    private Throwable cancelCause;
+    private boolean halfClosed;
+    private String sentMessage;
+
+    @Override
+    public void start(ClientCall.Listener<Integer> responseListener, Metadata headers) {
+      this.responseListener = responseListener;
+      this.headers = headers;
+    }
+
+    @Override
+    public void request(int numMessages) {
+      this.numMessages = numMessages;
+    }
+
+    @Override
+    public void cancel(String message, Throwable cause) {
+      this.cancelMessage = message;
+      this.cancelCause = cause;
+    }
+
+    @Override
+    public void halfClose() {
+      halfClosed = true;
+    }
+
+    @Override
+    public void sendMessage(String message) {
+      sentMessage = message;
+    }
+
   }
 }

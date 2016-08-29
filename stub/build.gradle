@@ -5,6 +5,7 @@ plugins {
 description = "gRPC: Stub"
 dependencies {
     compile project(':grpc-core')
+    testCompile libraries.truth
 }
 
 // Configure the animal sniffer plugin

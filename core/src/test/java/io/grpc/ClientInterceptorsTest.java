@@ -31,17 +31,16 @@
 
 package io.grpc;
 
+import static com.google.common.truth.Truth.assertThat;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -61,8 +60,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,8 +72,7 @@ public class ClientInterceptorsTest {
   @Mock
   private Channel channel;
 
-  @Mock
-  private ClientCall<String, Integer> call;
+  private BaseClientCall call = new BaseClientCall();
 
   @Mock
   private MethodDescriptor<String, Integer> method;
@@ -89,18 +85,6 @@ public class ClientInterceptorsTest {
     when(channel.newCall(
         Mockito.<MethodDescriptor<String, Integer>>any(), any(CallOptions.class)))
         .thenReturn(call);
-
-    // Emulate the precondition checks in ChannelImpl.CallImpl
-    Answer<Void> checkStartCalled = new Answer<Void>() {
-      @Override
-      public Void answer(InvocationOnMock invocation) {
-        verify(call).start(Mockito.<ClientCall.Listener<Integer>>any(), Mockito.<Metadata>any());
-        return null;
-      }
-    };
-    doAnswer(checkStartCalled).when(call).request(anyInt());
-    doAnswer(checkStartCalled).when(call).halfClose();
-    doAnswer(checkStartCalled).when(call).sendMessage(Mockito.<String>any());
   }
 
   @Test(expected = NullPointerException.class)
@@ -290,11 +274,10 @@ public class ClientInterceptorsTest {
     ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     // start() on the intercepted call will eventually reach the call created by the real channel
     interceptedCall.start(listener, new Metadata());
-    ArgumentCaptor<Metadata> captor = ArgumentCaptor.forClass(Metadata.class);
     // The headers passed to the real channel call will contain the information inserted by the
     // interceptor.
-    verify(call).start(same(listener), captor.capture());
-    assertEquals("abcd", captor.getValue().get(credKey));
+    assertSame(listener, call.listener);
+    assertEquals("abcd", call.headers.get(credKey));
   }
 
   @Test
@@ -327,12 +310,11 @@ public class ClientInterceptorsTest {
     ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     interceptedCall.start(listener, new Metadata());
     // Capture the underlying call listener that will receive headers from the transport.
-    ArgumentCaptor<ClientCall.Listener<Integer>> captor = ArgumentCaptor.forClass(null);
-    verify(call).start(captor.capture(), Mockito.<Metadata>any());
+
     Metadata inboundHeaders = new Metadata();
     // Simulate that a headers arrives on the underlying call listener.
-    captor.getValue().onHeaders(inboundHeaders);
-    assertEquals(Arrays.asList(inboundHeaders), examinedHeaders);
+    call.listener.onHeaders(inboundHeaders);
+    assertThat(examinedHeaders).contains(inboundHeaders);
   }
 
   @Test
@@ -354,13 +336,14 @@ public class ClientInterceptorsTest {
     ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
     Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
-    verify(call).start(same(listener), same(headers));
+    assertSame(listener, call.listener);
+    assertSame(headers, call.headers);
     interceptedCall.sendMessage("request");
-    verify(call).sendMessage(eq("request"));
+    assertThat(call.messages).containsExactly("request");
     interceptedCall.halfClose();
-    verify(call).halfClose();
+    assertTrue(call.halfClosed);
     interceptedCall.request(1);
-    verify(call).request(1);
+    assertThat(call.requests).containsExactly(1);
   }
 
   @Test
@@ -392,7 +375,7 @@ public class ClientInterceptorsTest {
     interceptedCall.sendMessage("request");
     interceptedCall.halfClose();
     interceptedCall.request(1);
-    verifyNoMoreInteractions(call);
+    call.done = true;
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
     verify(listener).onClose(captor.capture(), any(Metadata.class));
     assertSame(error, captor.getValue().getCause());
@@ -406,7 +389,6 @@ public class ClientInterceptorsTest {
     noop.halfClose();
     noop.sendMessage(null);
     assertFalse(noop.isReady());
-    verifyNoMoreInteractions(call);
   }
 
   @Test
@@ -432,12 +414,12 @@ public class ClientInterceptorsTest {
     CallOptions callOptions = CallOptions.DEFAULT.withOption(customOption, "value");
     ArgumentCaptor<CallOptions> passedOptions = ArgumentCaptor.forClass(CallOptions.class);
     ClientInterceptor interceptor = spy(new NoopInterceptor());
-    
+
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
-    
+
     assertSame(call, intercepted.newCall(method, callOptions));
     verify(channel).newCall(same(method), same(callOptions));
-    
+
     verify(interceptor).interceptCall(same(method), passedOptions.capture(), isA(Channel.class));
     assertSame("value", passedOptions.getValue().getOption(customOption));
   }
@@ -447,6 +429,66 @@ public class ClientInterceptorsTest {
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method,
         CallOptions callOptions, Channel next) {
       return next.newCall(method, callOptions);
+    }
+  }
+
+  private static class BaseClientCall extends ClientCall<String, Integer> {
+    private boolean started;
+    private boolean done;
+    private ClientCall.Listener<Integer> listener;
+    private Metadata headers;
+    private List<Integer> requests = new ArrayList<Integer>();
+    private List<String> messages = new ArrayList<String>();
+    private boolean halfClosed;
+    private Throwable cancelCause;
+    private String cancelMessage;
+
+    @Override
+    public void start(ClientCall.Listener<Integer> listener, Metadata headers) {
+      checkNotDone();
+      started = true;
+      this.listener = listener;
+      this.headers = headers;
+    }
+
+    @Override
+    public void request(int numMessages) {
+      checkNotDone();
+      checkStarted();
+      requests.add(numMessages);
+    }
+
+    @Override
+    public void cancel(String message, Throwable cause) {
+      checkNotDone();
+      this.cancelMessage = message;
+      this.cancelCause = cause;
+    }
+
+    @Override
+    public void halfClose() {
+      checkNotDone();
+      checkStarted();
+      this.halfClosed = true;
+    }
+
+    @Override
+    public void sendMessage(String message) {
+      checkNotDone();
+      checkStarted();
+      messages.add(message);
+    }
+
+    private void checkNotDone() {
+      if (done) {
+        throw new IllegalStateException("no more methods should be called");
+      }
+    }
+
+    private void checkStarted() {
+      if (!started) {
+        throw new IllegalStateException("should have called start");
+      }
     }
   }
 }

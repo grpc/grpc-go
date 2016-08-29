@@ -31,21 +31,18 @@
 
 package io.grpc.stub;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
-import io.grpc.ClientCall.Listener;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -64,12 +61,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,6 +72,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for {@link ClientCalls}.
@@ -95,9 +88,6 @@ public class ClientCallsTest {
 
   private Server server;
   private ManagedChannel channel;
-
-  @Mock
-  private ClientCall<Integer, String> call;
 
   @Before
   public void setUp() {
@@ -121,16 +111,13 @@ public class ClientCallsTest {
     final Status status = Status.OK;
     final Metadata trailers = new Metadata();
 
-    doAnswer(new Answer<Void>() {
+    BaseClientCall call = new BaseClientCall() {
       @Override
-      public Void answer(InvocationOnMock in) throws Throwable {
-        @SuppressWarnings("unchecked")
-        Listener<String> listener = (Listener<String>) in.getArguments()[0];
+      public void start(ClientCall.Listener<String> listener, Metadata headers) {
         listener.onMessage(resp);
         listener.onClose(status, trailers);
-        return null;
       }
-    }).when(call).start(Mockito.<Listener<String>>any(), any(Metadata.class));
+    };
 
     String actualResponse = ClientCalls.blockingUnaryCall(call, req);
     assertEquals(resp, actualResponse);
@@ -142,15 +129,12 @@ public class ClientCallsTest {
     final Status status = Status.INTERNAL.withDescription("Unique status");
     final Metadata trailers = new Metadata();
 
-    doAnswer(new Answer<Void>() {
+    BaseClientCall call = new BaseClientCall() {
       @Override
-      public Void answer(InvocationOnMock in) throws Throwable {
-        @SuppressWarnings("unchecked")
-        Listener<String> listener = (Listener<String>) in.getArguments()[0];
+      public void start(io.grpc.ClientCall.Listener<String> listener, Metadata headers) {
         listener.onClose(status, trailers);
-        return null;
       }
-    }).when(call).start(Mockito.<Listener<String>>any(), any(Metadata.class));
+    };
 
     try {
       ClientCalls.blockingUnaryCall(call, req);
@@ -163,27 +147,50 @@ public class ClientCallsTest {
 
   @Test
   public void unaryFutureCallSuccess() throws Exception {
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    final AtomicReference<Integer> message = new AtomicReference<Integer>();
+    final AtomicReference<Boolean> halfClosed = new AtomicReference<Boolean>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+
+      @Override
+      public void sendMessage(Integer msg) {
+        message.set(msg);
+      }
+
+      @Override
+      public void halfClose() {
+        halfClosed.set(true);
+      }
+    };
     Integer req = 2;
     ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    ClientCall.Listener<String> listener = listenerCaptor.getValue();
-    verify(call).sendMessage(req);
-    verify(call).halfClose();
-    listener.onMessage("bar");
-    listener.onClose(Status.OK, new Metadata());
+
+    assertEquals(req, message.get());
+    assertTrue(halfClosed.get());
+    listener.get().onMessage("bar");
+    listener.get().onClose(Status.OK, new Metadata());
     assertEquals("bar", future.get());
   }
 
   @Test
   public void unaryFutureCallFailed() throws Exception {
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+    };
     Integer req = 2;
     ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    ClientCall.Listener<String> listener = listenerCaptor.getValue();
     Metadata trailers = new Metadata();
-    listener.onClose(Status.INTERNAL, trailers);
+    listener.get().onClose(Status.INTERNAL, trailers);
     try {
       future.get();
       fail("Should fail");
@@ -197,15 +204,29 @@ public class ClientCallsTest {
 
   @Test
   public void unaryFutureCallCancelled() throws Exception {
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    final AtomicReference<String> cancelMessage = new AtomicReference<String>();
+    final AtomicReference<Throwable> cancelCause = new AtomicReference<Throwable>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+
+      @Override
+      public void cancel(String message, Throwable cause) {
+        cancelMessage.set(message);
+        cancelCause.set(cause);
+      }
+    };
     Integer req = 2;
     ListenableFuture<String> future = ClientCalls.futureUnaryCall(call, req);
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    ClientCall.Listener<String> listener = listenerCaptor.getValue();
     future.cancel(true);
-    verify(call).cancel("GrpcFuture was cancelled", null);
-    listener.onMessage("bar");
-    listener.onClose(Status.OK, new Metadata());
+    assertEquals("GrpcFuture was cancelled", cancelMessage.get());
+    assertNull(cancelCause.get());
+    listener.get().onMessage("bar");
+    listener.get().onClose(Status.OK, new Metadata());
     try {
       future.get();
       fail("Should fail");
@@ -216,6 +237,7 @@ public class ClientCallsTest {
 
   @Test
   public void cannotSetOnReadyAfterCallStarted() throws Exception {
+    BaseClientCall call = new BaseClientCall();
     CallStreamObserver<Integer> callStreamObserver =
         (CallStreamObserver<Integer>) ClientCalls.asyncClientStreamingCall(call,
             new NoopStreamObserver<String>());
@@ -235,7 +257,20 @@ public class ClientCallsTest {
   @Test
   public void disablingInboundAutoFlowControlSuppressesRequestsForMoreMessages()
       throws Exception {
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    final List<Integer> requests = new ArrayList<Integer>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+
+      @Override
+      public void request(int numMessages) {
+        requests.add(numMessages);
+      }
+    };
     ClientCalls.asyncBidiStreamingCall(call, new ClientResponseObserver<Integer, String>() {
       @Override
       public void beforeStart(ClientCallStreamObserver<Integer> requestStream) {
@@ -257,15 +292,13 @@ public class ClientCallsTest {
 
       }
     });
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    listenerCaptor.getValue().onMessage("message");
-    verify(call, times(1)).request(1);
+    listener.get().onMessage("message");
+    assertThat(requests).containsExactly(1);
   }
 
   @Test
   public void callStreamObserverPropagatesFlowControlRequestsToCall()
       throws Exception {
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
     ClientResponseObserver<Integer, String> responseObserver =
         new ClientResponseObserver<Integer, String>() {
           @Override
@@ -285,19 +318,32 @@ public class ClientCallsTest {
           public void onCompleted() {
           }
         };
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    final List<Integer> requests = new ArrayList<Integer>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+
+      @Override
+      public void request(int numMessages) {
+        requests.add(numMessages);
+      }
+    };
     CallStreamObserver<Integer> requestObserver =
         (CallStreamObserver<Integer>)
             ClientCalls.asyncBidiStreamingCall(call, responseObserver);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    listenerCaptor.getValue().onMessage("message");
+    listener.get().onMessage("message");
     requestObserver.request(5);
-    verify(call, times(1)).request(5);
+    assertThat(requests).contains(5);
   }
 
   @Test
   public void canCaptureInboundFlowControlForServerStreamingObserver()
       throws Exception {
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
+
     ClientResponseObserver<Integer, String> responseObserver =
         new ClientResponseObserver<Integer, String>() {
           @Override
@@ -318,11 +364,23 @@ public class ClientCallsTest {
           public void onCompleted() {
           }
         };
+    final AtomicReference<ClientCall.Listener<String>> listener =
+            new AtomicReference<ClientCall.Listener<String>>();
+    final List<Integer> requests = new ArrayList<Integer>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+
+      @Override
+      public void request(int numMessages) {
+        requests.add(numMessages);
+      }
+    };
     ClientCalls.asyncServerStreamingCall(call, 1, responseObserver);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    listenerCaptor.getValue().onMessage("message");
-    verify(call, times(1)).request(1);
-    verify(call, times(1)).request(5);
+    listener.get().onMessage("message");
+    assertThat(requests).containsExactly(5, 1).inOrder();
   }
 
   @Test
@@ -497,13 +555,20 @@ public class ClientCallsTest {
 
   @Test
   public void blockingResponseStreamFailed() throws Exception {
+    final AtomicReference<ClientCall.Listener<String>> listener =
+        new AtomicReference<ClientCall.Listener<String>>();
+    BaseClientCall call = new BaseClientCall() {
+      @Override
+      public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
+        listener.set(responseListener);
+      }
+    };
+
     Integer req = 2;
     Iterator<String> iter = ClientCalls.blockingServerStreamingCall(call, req);
-    ArgumentCaptor<ClientCall.Listener<String>> listenerCaptor = ArgumentCaptor.forClass(null);
-    verify(call).start(listenerCaptor.capture(), any(Metadata.class));
-    ClientCall.Listener<String> listener = listenerCaptor.getValue();
+
     Metadata trailers = new Metadata();
-    listener.onClose(Status.INTERNAL, trailers);
+    listener.get().onClose(Status.INTERNAL, trailers);
     try {
       iter.next();
       fail("Should fail");
@@ -513,5 +578,22 @@ public class ClientCallsTest {
       Metadata metadata = Status.trailersFromThrowable(e);
       assertSame(trailers, metadata);
     }
+  }
+
+  private static class BaseClientCall extends ClientCall<Integer, String> {
+    @Override
+    public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {}
+
+    @Override
+    public void request(int numMessages) {}
+
+    @Override
+    public void cancel(String message, Throwable cause) {}
+
+    @Override
+    public void halfClose() {}
+
+    @Override
+    public void sendMessage(Integer message) {}
   }
 }

@@ -45,7 +45,6 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall.Listener;
-import io.grpc.ServerMethodDefinition;
 
 import org.junit.After;
 import org.junit.Before;
@@ -78,9 +77,8 @@ public class ServerInterceptorsTest {
   private ServerCall.Listener<String> listener;
 
   private MethodDescriptor<String, Integer> flowMethod;
-  
-  @Mock
-  private ServerCall<String, Integer> call;
+
+  private ServerCall<String, Integer> call = new BaseServerCall<String, Integer>();
 
   private ServerServiceDefinition serviceDefinition;
 
@@ -282,7 +280,7 @@ public class ServerInterceptorsTest {
   @Test
   public void argumentsPassed() {
     @SuppressWarnings("unchecked")
-    final ServerCall<String, Integer> call2 = mock(ServerCall.class);
+    final ServerCall<String, Integer> call2 = new BaseServerCall<String, Integer>();
     @SuppressWarnings("unchecked")
     final ServerCall.Listener<String> listener2 = mock(ServerCall.Listener.class);
 
@@ -408,7 +406,7 @@ public class ServerInterceptorsTest {
         .intercept(inputStreamMessageService, interceptor2);
     ServerMethodDefinition<InputStream, InputStream> serverMethod =
         (ServerMethodDefinition<InputStream, InputStream>) intercepted2.getMethod("basic/wrapped");
-    ServerCall<InputStream, InputStream> call2 = mock(ServerCall.class);
+    ServerCall<InputStream, InputStream> call2 = new BaseServerCall<InputStream, InputStream>();
     byte[] bytes = {};
     serverMethod
         .getServerCallHandler()
@@ -457,6 +455,31 @@ public class ServerInterceptorsTest {
 
     public InputStream get() {
       return inputStream;
+    }
+  }
+
+  private static class BaseServerCall<ReqT, RespT> extends ServerCall<ReqT, RespT> {
+
+    @Override
+    public void request(int numMessages) {}
+
+    @Override
+    public void sendHeaders(Metadata headers) {}
+
+    @Override
+    public void sendMessage(RespT message) {}
+
+    @Override
+    public void close(Status status, Metadata trailers) {}
+
+    @Override
+    public boolean isCancelled() {
+      return false;
+    }
+
+    @Override
+    public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+      return null;
     }
   }
 }
