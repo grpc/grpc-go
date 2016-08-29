@@ -1,5 +1,5 @@
 /*
- * Copyright 2014, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,50 +29,32 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import io.grpc.Attributes;
-import io.grpc.Metadata;
-import io.grpc.Status;
+
+import java.net.SocketAddress;
+import javax.net.ssl.SSLSession;
 
 /**
- * Extension of {@link Stream} to support server-side termination semantics.
- *
- * <p>An implementation doesn't need to be thread-safe. All methods are expected to execute quickly.
+ * Stuff that are part of the public API but are not bound to particular classes, e.g., static
+ * methods, constants, attribute and context keys.
  */
-public interface ServerStream extends Stream {
+public final class Grpc {
+  private Grpc() {
+  }
 
   /**
-   * Writes custom metadata as headers on the response stream sent to the client. This method may
-   * only be called once and cannot be called after calls to {@link Stream#writeMessage}
-   * or {@link #close}.
-   *
-   * @param headers to send to client.
+   * Attribute key for the remote address of a transport.
    */
-  void writeHeaders(Metadata headers);
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
+  public static final Attributes.Key<SocketAddress> TRANSPORT_ATTR_REMOTE_ADDR =
+          Attributes.Key.of("remote-addr");
 
   /**
-   * Closes the stream for both reading and writing. A status code of
-   * {@link io.grpc.Status.Code#OK} implies normal termination of the
-   * stream. Any other value implies abnormal termination.
-   *
-   * @param status details of the closure
-   * @param trailers an additional block of metadata to pass to the client on stream closure.
+   * Attribute key for SSL session of a transport.
    */
-  void close(Status status, Metadata trailers);
-
-
-  /**
-   * Tears down the stream, typically in the event of a timeout. This method may be called multiple
-   * times and from any thread.
-   */
-  void cancel(Status status);
-
-  /**
-   * Attributes describing stream.  This is inherited from the transport attributes, and used
-   * as the basis of {@link io.grpc.ServerCall#attributes}.
-   *
-   * @return Attributes container
-   */
-  Attributes attributes();
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
+  public static final Attributes.Key<SSLSession> TRANSPORT_ATTR_SSL_SESSION =
+          Attributes.Key.of("ssl-session");
 }

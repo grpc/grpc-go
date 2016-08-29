@@ -41,6 +41,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
@@ -48,13 +49,16 @@ import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -85,6 +89,7 @@ public final class ServerImpl extends io.grpc.Server {
   private boolean usingSharedExecutor;
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
+  private final List<ServerTransportFilter> transportFilters;
   @GuardedBy("lock") private boolean started;
   @GuardedBy("lock") private boolean shutdown;
   /** non-{@code null} if immediate shutdown has been requested. */
@@ -116,7 +121,8 @@ public final class ServerImpl extends io.grpc.Server {
    */
   ServerImpl(Executor executor, InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
       InternalServer transportServer, Context rootContext,
-      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry) {
+      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
+      List<ServerTransportFilter> transportFilters) {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.fallbackRegistry = Preconditions.checkNotNull(fallbackRegistry, "fallbackRegistry");
@@ -126,6 +132,8 @@ public final class ServerImpl extends io.grpc.Server {
     this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
+    this.transportFilters = Collections.unmodifiableList(
+        new ArrayList<ServerTransportFilter>(transportFilters));
   }
 
   /**
@@ -315,13 +323,27 @@ public final class ServerImpl extends io.grpc.Server {
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
     private final ServerTransport transport;
+    private Attributes attributes;
 
     public ServerTransportListenerImpl(ServerTransport transport) {
       this.transport = transport;
     }
 
     @Override
+    public Attributes transportReady(Attributes attributes) {
+      for (ServerTransportFilter filter : transportFilters) {
+        attributes = Preconditions.checkNotNull(filter.transportReady(attributes),
+            "Filter %s returned null", filter);
+      }
+      this.attributes = attributes;
+      return attributes;
+    }
+
+    @Override
     public void transportTerminated() {
+      for (ServerTransportFilter filter : transportFilters) {
+        filter.transportTerminated(attributes);
+      }
       transportClosed(transport);
     }
 

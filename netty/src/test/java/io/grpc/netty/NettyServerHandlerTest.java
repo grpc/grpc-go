@@ -54,6 +54,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
@@ -118,7 +119,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         any(String.class),
         any(Metadata.class)))
         .thenReturn(streamListener);
-
+    when(transportListener.transportReady(any(Attributes.class))).thenReturn(Attributes.EMPTY);
     initChannel();
 
     // Simulate receipt of the connection preface

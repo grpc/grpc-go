@@ -153,15 +153,15 @@ public final class ProtocolNegotiators {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
           if (HTTP2_VERSION.equals(sslHandler(ctx.pipeline()).applicationProtocol())) {
-            // Successfully negotiated the protocol. Replace this handler with
-            // the GRPC handler.
-            ctx.pipeline().replace(this, null, grpcHandler);
-
             // TODO(lukaszx0) Short term solution. Long term we want to plumb this through
             // ProtocolNegotiator.Handler and pass the handler into NettyClientHandler and
             // NettyServerHandler (https://github.com/grpc/grpc-java/issues/1556)
             Attribute<SSLSession> sslSessionAttr = ctx.channel().attr(Utils.SSL_SESSION_ATTR_KEY);
+
             sslSessionAttr.set(sslHandler(ctx.pipeline()).engine().getSession());
+            // Successfully negotiated the protocol. Replace this handler with
+            // the GRPC handler.
+            ctx.pipeline().replace(this, null, grpcHandler);
           } else {
             fail(ctx, new Exception(
                 "Failed protocol negotiation: Unable to find compatible protocol."));

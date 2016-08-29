@@ -57,6 +57,7 @@ import com.google.protobuf.EmptyProtos.Empty;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Server;
@@ -942,7 +943,7 @@ public abstract class AbstractInteropTest {
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
     HostAndPort remoteAddress = HostAndPort.fromString(serverCallCapture.get().attributes()
-            .get(ServerCall.REMOTE_ADDR_KEY).toString());
+            .get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString());
     assertEquals(expectedRemoteAddress, remoteAddress.getHostText());
   }
 
@@ -955,7 +956,7 @@ public abstract class AbstractInteropTest {
 
     List<Certificate> certificates = Lists.newArrayList();
     SSLSession sslSession =
-        serverCallCapture.get().attributes().get(ServerCall.SSL_SESSION_KEY);
+        serverCallCapture.get().attributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
     try {
       certificates = Arrays.asList(sslSession.getPeerCertificates());
     } catch (SSLPeerUnverifiedException e) {

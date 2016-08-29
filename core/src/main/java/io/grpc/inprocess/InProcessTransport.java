@@ -37,9 +37,9 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -72,7 +72,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
   private final String name;
   private ServerTransportListener serverTransportListener;
-  private final Attributes serverStreamAttributes;
+  private Attributes serverStreamAttributes;
   private ManagedClientTransport.Listener clientTransportListener;
   @GuardedBy("this")
   private boolean shutdown;
@@ -85,9 +85,6 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
   public InProcessTransport(String name) {
     this.name = name;
-    this.serverStreamAttributes = Attributes.newBuilder()
-        .set(ServerCall.REMOTE_ADDR_KEY, new InProcessSocketAddress(name))
-        .build();
   }
 
   @CheckReturnValue
@@ -113,8 +110,13 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
     }
     return new Runnable() {
       @Override
+      @SuppressWarnings("deprecation")
       public void run() {
         synchronized (InProcessTransport.this) {
+          Attributes serverTransportAttrs = Attributes.newBuilder()
+              .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, new InProcessSocketAddress(name))
+              .build();
+          serverStreamAttributes = serverTransportListener.transportReady(serverTransportAttrs);
           clientTransportListener.transportReady();
         }
       }

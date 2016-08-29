@@ -74,6 +74,13 @@ public final class Attributes {
   }
 
   /**
+   * Create a new builder that is pre-populated with the content from a given container.
+   */
+  public static Builder newBuilder(Attributes base) {
+    return newBuilder().setAll(base);
+  }
+
+  /**
    * Create a new builder.
    */
   public static Builder newBuilder() {

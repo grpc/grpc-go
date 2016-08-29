@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -44,7 +45,9 @@ import io.grpc.Internal;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerTransportFilter;
 
+import java.util.ArrayList;
 import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
@@ -68,6 +71,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   private final InternalHandlerRegistry.Builder registryBuilder =
       new InternalHandlerRegistry.Builder();
+
+  private final ArrayList<ServerTransportFilter> transportFilters =
+      new ArrayList<ServerTransportFilter>();
 
   @Nullable
   private HandlerRegistry fallbackRegistry;
@@ -104,6 +110,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
+  public final T addTransportFilter(ServerTransportFilter filter) {
+    transportFilters.add(checkNotNull(filter, "filter"));
+    return thisT();
+  }
+
+  @Override
   public final T fallbackHandlerRegistry(HandlerRegistry registry) {
     this.fallbackRegistry = registry;
     return thisT();
@@ -127,7 +139,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return new ServerImpl(executor, registryBuilder.build(),
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
-        firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()));
+        firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
+        transportFilters);
   }
 
   /**

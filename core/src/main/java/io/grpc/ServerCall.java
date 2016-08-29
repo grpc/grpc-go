@@ -59,17 +59,24 @@ public abstract class ServerCall<ReqT, RespT> {
   /**
    * {@link Attributes.Key} for the remote address of server call attributes
    * {@link ServerCall#attributes()}
+   *
+   * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_REMOTE_ADDR} instead
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
+  @Deprecated
   public static final Attributes.Key<SocketAddress> REMOTE_ADDR_KEY =
-          Attributes.Key.of("remote-addr");
+      Grpc.TRANSPORT_ATTR_REMOTE_ADDR;
+
   /**
    * {@link Attributes.Key} for the SSL session of server call attributes
    * {@link ServerCall#attributes()}
+   *
+   * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_SSL_SESSION} instead
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
+  @Deprecated
   public static final Attributes.Key<SSLSession> SSL_SESSION_KEY =
-          Attributes.Key.of("ssl-session");
+      Grpc.TRANSPORT_ATTR_SSL_SESSION;
 
   /**
    * Callbacks for consuming incoming RPC messages.
@@ -221,8 +228,11 @@ public abstract class ServerCall<ReqT, RespT> {
   }
 
   /**
-   * Returns properties of a single call. This is a generic container which can contain any kind of
-   * information describing call like for example remote address, TLS information (OU etc.)
+   * Returns properties of a single call.
+   *
+   * <p>Attributes originate from the transport and can be altered by {@link ServerTransportFilter}.
+   * {@link Grpc} defines commonly used attributes, while the availability of them in a particular
+   * {@code ServerCall} is not guaranteed.
    *
    * @return Attributes container
    */

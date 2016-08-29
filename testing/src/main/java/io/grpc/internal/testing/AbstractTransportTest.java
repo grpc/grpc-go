@@ -35,6 +35,7 @@ import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -57,6 +58,8 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.Attributes;
+import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -97,7 +100,10 @@ import java.util.concurrent.TimeoutException;
 /** Standard unit tests for {@link ClientTransport}s and {@link ServerTransport}s. */
 @RunWith(JUnit4.class)
 public abstract class AbstractTransportTest {
-  private static int TIMEOUT_MS = 1000;
+  private static final int TIMEOUT_MS = 1000;
+
+  private static final Attributes.Key<String> ADDITIONAL_TRANSPORT_ATTR_KEY =
+      Attributes.Key.of("additional-attr");
 
   /**
    * Returns a new server that when started will be able to be connected to from the client. Each
@@ -559,6 +565,7 @@ public abstract class AbstractTransportTest {
   }
 
   @Test
+  @SuppressWarnings("deprecation")
   public void basicStream() throws Exception {
     server.start(serverListener);
     client = newClientTransport(server);
@@ -583,6 +590,10 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(serverStreamCreation.headers.getAll(binaryKey)));
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+
+    assertEquals("additional attribute value",
+        serverStream.attributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
+    assertNotNull(serverStream.attributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
 
     serverStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).onReady();
@@ -1140,6 +1151,7 @@ public abstract class AbstractTransportTest {
   private static class MockServerTransportListener implements ServerTransportListener {
     public final ServerTransport transport;
     public final BlockingQueue<StreamCreation> streams = new LinkedBlockingQueue<StreamCreation>();
+    private final SettableFuture<?> ready = SettableFuture.create();
     private final SettableFuture<?> terminated = SettableFuture.create();
 
     public MockServerTransportListener(ServerTransport transport) {
@@ -1152,6 +1164,14 @@ public abstract class AbstractTransportTest {
       ServerStreamListener listener = mock(ServerStreamListener.class);
       streams.add(new StreamCreation(stream, method, headers, listener));
       return listener;
+    }
+
+    @Override
+    public Attributes transportReady(Attributes attributes) {
+      return Attributes.newBuilder()
+          .setAll(attributes)
+          .set(ADDITIONAL_TRANSPORT_ATTR_KEY, "additional attribute value")
+          .build();
     }
 
     @Override

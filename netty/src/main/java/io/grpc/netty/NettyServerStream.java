@@ -35,7 +35,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import io.grpc.Attributes;
 import io.grpc.Metadata;
-import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
 import io.grpc.internal.WritableBuffer;
@@ -48,8 +47,6 @@ import io.netty.handler.codec.http2.Http2Stream;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.net.ssl.SSLSession;
 
 /**
  * Server stream for a Netty HTTP2 transport. Must only be called from the sending application
@@ -64,12 +61,12 @@ class NettyServerStream extends AbstractServerStream {
   private final WriteQueue writeQueue;
   private final Attributes attributes;
 
-  public NettyServerStream(Channel channel, TransportState state) {
+  public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs) {
     super(new NettyWritableBufferAllocator(channel.alloc()));
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
-    this.attributes = buildAttributes(channel);
+    this.attributes = checkNotNull(transportAttrs);
   }
 
   @Override
@@ -84,19 +81,6 @@ class NettyServerStream extends AbstractServerStream {
 
   @Override public Attributes attributes() {
     return attributes;
-  }
-
-  private static Attributes buildAttributes(Channel channel) {
-    // NB(lukaszx0) SSLSession will be set only if SSL handshake was successful
-    SSLSession sslSession = null;
-    if (channel.hasAttr(Utils.SSL_SESSION_ATTR_KEY)) {
-      sslSession = channel.attr(Utils.SSL_SESSION_ATTR_KEY).get();
-    }
-
-    return Attributes.newBuilder()
-        .set(ServerCall.REMOTE_ADDR_KEY, channel.remoteAddress())
-        .set(ServerCall.SSL_SESSION_KEY, sslSession)
-        .build();
   }
 
   private class Sink implements AbstractServerStream.Sink {

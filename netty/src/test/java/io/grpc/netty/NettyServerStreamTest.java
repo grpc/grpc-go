@@ -51,6 +51,7 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
@@ -292,7 +293,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     NettyServerStream.TransportState state =
         new NettyServerStream.TransportState(handler, http2Stream, DEFAULT_MAX_MESSAGE_SIZE);
-    NettyServerStream stream = new NettyServerStream(channel, state);
+    NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY);
     stream.transportState().setListener(serverListener);
     verify(serverListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(serverListener);

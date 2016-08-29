@@ -43,6 +43,7 @@ import static org.junit.Assert.fail;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -439,6 +440,11 @@ public class NettyClientTransportTest {
           EchoServerStreamListener listener = new EchoServerStreamListener(stream, method, headers);
           streamListeners.add(listener);
           return listener;
+        }
+
+        @Override
+        public Attributes transportReady(Attributes transportAttrs) {
+          return transportAttrs;
         }
 
         @Override

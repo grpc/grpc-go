@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 
 /**
@@ -49,6 +50,15 @@ public interface ServerTransportListener {
    */
   ServerStreamListener streamCreated(ServerStream stream, String method,
       Metadata headers);
+
+  /**
+   * The transport has finished all handshakes and is ready to process streams.
+   *
+   * @param attributes transport attributes
+   *
+   * @return the effective transport attributes that is used as the basis of call attributes
+   */
+  Attributes transportReady(Attributes attributes);
 
   /**
    * The transport completed shutting down. All resources have been released.

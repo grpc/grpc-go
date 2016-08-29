@@ -86,6 +86,13 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   public abstract T addService(BindableService bindableService);
 
   /**
+   * Adds a {@link ServerTransportFilter}. The order of filters being added is the order they will
+   * be executed.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2132")
+  public abstract T addTransportFilter(ServerTransportFilter filter);
+
+  /**
    * Sets a fallback handler registry that will be looked up in if a method is not found in the
    * primary registry.
    */

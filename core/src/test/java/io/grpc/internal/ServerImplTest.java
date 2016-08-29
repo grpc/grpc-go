@@ -48,13 +48,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import com.google.common.util.concurrent.MoreExecutors;
 
+import io.grpc.Attributes;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
+import io.grpc.Grpc;
 import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
@@ -63,6 +66,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
@@ -84,6 +88,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -91,6 +96,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Unit tests for {@link ServerImpl}. */
@@ -101,6 +107,7 @@ public class ServerImplTest {
   private static final Context.Key<String> SERVER_ONLY = Context.key("serverOnly");
   private static final Context.CancellableContext SERVER_CONTEXT =
       Context.ROOT.withValue(SERVER_ONLY, "yes").withCancellation();
+  private static final ImmutableList<ServerTransportFilter> NO_FILTERS = ImmutableList.of();
   private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
@@ -119,7 +126,7 @@ public class ServerImplTest {
   private MutableHandlerRegistry fallbackRegistry = new MutableHandlerRegistry();
   private SimpleServer transportServer = new SimpleServer();
   private ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-      SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+      SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
 
   @Mock
   private ServerStream stream;
@@ -151,7 +158,7 @@ public class ServerImplTest {
       public void shutdown() {}
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     server.shutdown();
     assertTrue(server.isShutdown());
@@ -169,7 +176,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.shutdown();
     assertTrue(server.isShutdown());
     assertTrue(server.isTerminated());
@@ -178,7 +185,7 @@ public class ServerImplTest {
   @Test
   public void startStopImmediateWithChildTransport() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -202,7 +209,7 @@ public class ServerImplTest {
   @Test
   public void startShutdownNowImmediateWithChildTransport() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -229,7 +236,7 @@ public class ServerImplTest {
   @Test
   public void shutdownNowAfterShutdown() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -263,7 +270,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
       boolean shutdown;
@@ -299,7 +306,8 @@ public class ServerImplTest {
     }
 
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry,
-        new FailingStartupServer(), SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        new FailingStartupServer(), SERVER_CONTEXT, decompressorRegistry, compressorRegistry,
+        NO_FILTERS);
     try {
       server.start();
       fail("expected exception");
@@ -386,6 +394,85 @@ public class ServerImplTest {
   }
 
   @Test
+  public void transportFilters() throws Exception {
+    final SocketAddress remoteAddr = mock(SocketAddress.class);
+    final Attributes.Key<String> key1 = Attributes.Key.of("test-key1");
+    final Attributes.Key<String> key2 = Attributes.Key.of("test-key2");
+    final Attributes.Key<String> key3 = Attributes.Key.of("test-key3");
+    final AtomicReference<Attributes> filter1TerminationCallbackArgument =
+        new AtomicReference<Attributes>();
+    final AtomicReference<Attributes> filter2TerminationCallbackArgument =
+        new AtomicReference<Attributes>();
+    final AtomicInteger readyCallbackCalled = new AtomicInteger(0);
+    final AtomicInteger terminationCallbackCalled = new AtomicInteger(0);
+    ServerTransportFilter filter1 = new ServerTransportFilter() {
+        @Override
+        public Attributes transportReady(Attributes attrs) {
+          assertEquals(Attributes.newBuilder()
+              .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, remoteAddr)
+              .build(), attrs);
+          readyCallbackCalled.incrementAndGet();
+          return Attributes.newBuilder(attrs)
+              .set(key1, "yalayala")
+              .set(key2, "blabla")
+              .build();
+        }
+
+        @Override
+        public void transportTerminated(Attributes attrs) {
+          terminationCallbackCalled.incrementAndGet();
+          filter1TerminationCallbackArgument.set(attrs);
+        }
+      };
+    ServerTransportFilter filter2 = new ServerTransportFilter() {
+        @Override
+        public Attributes transportReady(Attributes attrs) {
+          assertEquals(Attributes.newBuilder()
+              .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, remoteAddr)
+              .set(key1, "yalayala")
+              .set(key2, "blabla")
+              .build(), attrs);
+          readyCallbackCalled.incrementAndGet();
+          return Attributes.newBuilder(attrs)
+              .set(key1, "ouch")
+              .set(key3, "puff")
+              .build();
+        }
+
+        @Override
+        public void transportTerminated(Attributes attrs) {
+          terminationCallbackCalled.incrementAndGet();
+          filter2TerminationCallbackArgument.set(attrs);
+        }
+      };
+    Attributes expectedTransportAttrs = Attributes.newBuilder()
+        .set(key1, "ouch")
+        .set(key2, "blabla")
+        .set(key3, "puff")
+        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, remoteAddr)
+        .build();
+
+    ServerImpl server = new ServerImpl(MoreExecutors.directExecutor(), registry, fallbackRegistry,
+        transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry,
+        ImmutableList.of(filter1, filter2));
+    server.start();
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+    Attributes transportAttrs = transportListener.transportReady(Attributes.newBuilder()
+        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, remoteAddr).build());
+
+    assertEquals(expectedTransportAttrs, transportAttrs);
+
+    server.shutdown();
+    server.awaitTermination();
+
+    assertEquals(expectedTransportAttrs, filter1TerminationCallbackArgument.get());
+    assertEquals(expectedTransportAttrs, filter2TerminationCallbackArgument.get());
+    assertEquals(2, readyCallbackCalled.get());
+    assertEquals(2, terminationCallbackCalled.get());
+  }
+
+  @Test
   public void exceptionInStartCallPropagatesToStream() throws Exception {
     CyclicBarrier barrier = executeBarrier(executor);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
@@ -439,7 +526,7 @@ public class ServerImplTest {
 
     transportServer = new MaybeDeadlockingServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     new Thread() {
       @Override
@@ -624,7 +711,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
 
     Truth.assertThat(server.getPort()).isEqualTo(65535);
@@ -634,7 +721,7 @@ public class ServerImplTest {
   public void getPortBeforeStartedFails() {
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     thrown.expect(IllegalStateException.class);
     thrown.expectMessage("started");
     server.getPort();
@@ -644,7 +731,7 @@ public class ServerImplTest {
   public void getPortAfterTerminationFails() throws Exception {
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
     server.shutdown();
     server.awaitTermination();
@@ -664,7 +751,7 @@ public class ServerImplTest {
         .build();
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry);
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS);
     server.start();
 
     ServerTransportListener transportListener

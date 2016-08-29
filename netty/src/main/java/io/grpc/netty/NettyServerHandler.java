@@ -43,12 +43,15 @@ import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAU
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
+import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -85,6 +88,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
+import javax.net.ssl.SSLSession;
 
 /**
  * Server-side Netty handler for GRPC processing. All event handlers are executed entirely within
@@ -96,6 +100,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   private final Http2Connection.PropertyKey streamKey;
   private final ServerTransportListener transportListener;
   private final int maxMessageSize;
+  private Attributes attributes;
   private Throwable connectionError;
   private boolean teWarningLogged;
   private WriteQueue serverWriteQueue;
@@ -168,7 +173,21 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     serverWriteQueue = new WriteQueue(ctx.channel());
+    attributes = transportListener.transportReady(buildAttributes(ctx.channel()));
     super.handlerAdded(ctx);
+  }
+
+  private static Attributes buildAttributes(Channel channel) {
+    // NB(lukaszx0) SSLSession will be set only if SSL handshake was successful
+    SSLSession sslSession = null;
+    if (channel.hasAttr(Utils.SSL_SESSION_ATTR_KEY)) {
+      sslSession = channel.attr(Utils.SSL_SESSION_ATTR_KEY).get();
+    }
+
+    return Attributes.newBuilder()
+        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, channel.remoteAddress())
+        .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
+        .build();
   }
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
@@ -191,7 +210,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
       NettyServerStream.TransportState state =
           new NettyServerStream.TransportState(this, http2Stream, maxMessageSize);
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), state);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes);
 
       Metadata metadata = Utils.convertHeaders(headers);
 
