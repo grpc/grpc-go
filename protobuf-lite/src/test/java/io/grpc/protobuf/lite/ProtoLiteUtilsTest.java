@@ -47,6 +47,7 @@ import com.google.protobuf.Type;
 import io.grpc.Drainable;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
+import io.grpc.MethodDescriptor.PrototypeMarshaller;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
@@ -116,6 +117,14 @@ public class ProtoLiteUtilsTest {
     // Enum's name and Type's name are both strings with tag 1.
     Enum altProto = Enum.newBuilder().setName(proto.getName()).build();
     assertEquals(proto, marshaller.parse(enumMarshaller.stream(altProto)));
+  }
+
+  @Test
+  public void introspection() throws Exception {
+    Marshaller<Enum> enumMarshaller = ProtoLiteUtils.marshaller(Enum.getDefaultInstance());
+    PrototypeMarshaller<Enum> prototypeMarshaller = (PrototypeMarshaller<Enum>) enumMarshaller;
+    assertSame(Enum.getDefaultInstance(), prototypeMarshaller.getMessagePrototype());
+    assertSame(Enum.class, prototypeMarshaller.getMessageClass());
   }
 
   @Test

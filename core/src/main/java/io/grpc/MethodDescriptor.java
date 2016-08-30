@@ -147,6 +147,34 @@ public class MethodDescriptor<ReqT, RespT> {
     public T parse(InputStream stream);
   }
 
+  /** A marshaller that supports retrieving it's type parameter {@code T} at runtime. */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public interface ReflectableMarshaller<T> extends Marshaller<T> {
+    /**
+     * Returns the {@code Class} that this marshaller serializes and deserializes. If inheritance is
+     * allowed, this is the base class or interface for all supported classes.
+     *
+     * @return non-{@code null} base class for all objects produced and consumed by this marshaller
+     */
+    public Class<T> getMessageClass();
+  }
+
+  /** A marshaller that uses a fixed instance of the type it produces. */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public interface PrototypeMarshaller<T> extends ReflectableMarshaller<T> {
+    /**
+     * An instance of the expected message type, typically used as a schema and helper for producing
+     * other message instances. The {@code null} value may be a special value for the marshaller
+     * (like the equivalent of {@link Void}), so it is a valid return value. {@code null} does
+     * <em>not</em> mean "unsupported" or "unknown".
+     *
+     * <p>It is generally expected this would return the same instance each invocation, but it is
+     * not a requirement.
+     */
+    @Nullable
+    public T getMessagePrototype();
+  }
+
   /**
    * Creates a new {@code MethodDescriptor}.
    *
@@ -228,6 +256,20 @@ public class MethodDescriptor<ReqT, RespT> {
    */
   public InputStream streamResponse(RespT response) {
     return responseMarshaller.stream(response);
+  }
+
+  /**
+   * Returns the marshaller for the request type. Allows introspection of the request marshaller.
+   */
+  public Marshaller<ReqT> getRequestMarshaller() {
+    return requestMarshaller;
+  }
+
+  /**
+   * Returns the marshaller for the response type. Allows introspection of the response marshaller.
+   */
+  public Marshaller<RespT> getResponseMarshaller() {
+    return responseMarshaller;
   }
 
   /**

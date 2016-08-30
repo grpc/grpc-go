@@ -43,6 +43,7 @@ import io.grpc.ExperimentalApi;
 import io.grpc.KnownLength;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
+import io.grpc.MethodDescriptor.PrototypeMarshaller;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 
@@ -81,7 +82,20 @@ public class ProtoLiteUtils {
   public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
     @SuppressWarnings("unchecked")
     final Parser<T> parser = (Parser<T>) defaultInstance.getParserForType();
-    return new Marshaller<T>() {
+    // TODO(ejona): consider changing return type to PrototypeMarshaller (assuming ABI safe)
+    return new PrototypeMarshaller<T>() {
+      @SuppressWarnings("unchecked")
+      @Override
+      public Class<T> getMessageClass() {
+        // Precisely T since protobuf doesn't let messages extend other messages.
+        return (Class<T>) defaultInstance.getClass();
+      }
+
+      @Override
+      public T getMessagePrototype() {
+        return defaultInstance;
+      }
+
       @Override
       public InputStream stream(T value) {
         return new ProtoInputStream(value, parser);
