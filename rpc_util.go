@@ -349,13 +349,16 @@ func (e *rpcError) Error() string {
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 func Code(err error) codes.Code {
-	if err == nil {
+	switch e := err.(type) {
+	case nil:
 		return codes.OK
-	}
-	if e, ok := err.(*rpcError); ok {
+	case *rpcError:
 		return e.code
+	case transport.StreamError:
+		return e.Code
+	default:
+		return codes.Unknown
 	}
-	return codes.Unknown
 }
 
 // ErrorDesc returns the error description of err if it was produced by the rpc system.
