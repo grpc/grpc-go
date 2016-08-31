@@ -66,7 +66,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/transport"
 )
 
 var (
@@ -2280,8 +2279,8 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 		case <-time.After(3 * time.Second):
 			t.Fatal("timeout waiting for error")
 		}
-		if se, ok := got.(transport.StreamError); !ok || se.Code != codes.Canceled {
-			t.Errorf("error = %#v; want transport.StreamError with code Canceled", got)
+		if grpc.Code(got) != codes.Canceled {
+			t.Errorf("error = %#v; want error code %s", got, codes.Canceled)
 		}
 	})
 }
