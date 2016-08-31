@@ -48,8 +48,8 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.Deadline;
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.testing.NoopClientCall;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc;
@@ -80,28 +80,7 @@ public class StubConfigTest {
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
     ClientCall<SimpleRequest, SimpleResponse> call =
-        new ClientCall<SimpleRequest, SimpleResponse>() {
-          @Override
-          public void start(
-              ClientCall.Listener<SimpleResponse> responseListener, Metadata headers) {
-          }
-
-          @Override
-          public void request(int numMessages) {
-          }
-
-          @Override
-          public void cancel(String message, Throwable cause) {
-          }
-
-          @Override
-          public void halfClose() {
-          }
-
-          @Override
-          public void sendMessage(SimpleRequest message) {
-          }
-        };
+        new NoopClientCall<SimpleRequest, SimpleResponse>();
     when(channel.newCall(
         Mockito.<MethodDescriptor<SimpleRequest, SimpleResponse>>any(), any(CallOptions.class)))
         .thenReturn(call);

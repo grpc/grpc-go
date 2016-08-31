@@ -45,6 +45,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import io.grpc.internal.FakeClock;
+import io.grpc.testing.NoopServerCall;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,30 +68,7 @@ public class ContextsTest {
   @SuppressWarnings("unchecked")
   private MethodDescriptor<Object, Object> method = mock(MethodDescriptor.class);
   @SuppressWarnings("unchecked")
-  private ServerCall<Object, Object> call = new ServerCall<Object, Object>() {
-
-    @Override
-    public void request(int numMessages) {}
-
-    @Override
-    public void sendHeaders(Metadata headers) {}
-
-    @Override
-    public void sendMessage(Object message) {}
-
-    @Override
-    public void close(Status status, Metadata trailers) {}
-
-    @Override
-    public boolean isCancelled() {
-      return false;
-    }
-
-    @Override
-    public MethodDescriptor<Object, Object> getMethodDescriptor() {
-      return null;
-    }
-  };
+  private ServerCall<Object, Object> call = new NoopServerCall<Object, Object>();
   private Metadata headers = new Metadata();
 
   @Test

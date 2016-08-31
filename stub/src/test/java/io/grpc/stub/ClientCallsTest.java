@@ -55,6 +55,7 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.ServerCalls.NoopStreamObserver;
 import io.grpc.stub.ServerCallsTest.IntegerMarshaller;
+import io.grpc.testing.NoopClientCall;
 
 import org.junit.After;
 import org.junit.Before;
@@ -111,7 +112,7 @@ public class ClientCallsTest {
     final Status status = Status.OK;
     final Metadata trailers = new Metadata();
 
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(ClientCall.Listener<String> listener, Metadata headers) {
         listener.onMessage(resp);
@@ -129,7 +130,7 @@ public class ClientCallsTest {
     final Status status = Status.INTERNAL.withDescription("Unique status");
     final Metadata trailers = new Metadata();
 
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> listener, Metadata headers) {
         listener.onClose(status, trailers);
@@ -151,7 +152,7 @@ public class ClientCallsTest {
         new AtomicReference<ClientCall.Listener<String>>();
     final AtomicReference<Integer> message = new AtomicReference<Integer>();
     final AtomicReference<Boolean> halfClosed = new AtomicReference<Boolean>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -181,7 +182,7 @@ public class ClientCallsTest {
   public void unaryFutureCallFailed() throws Exception {
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -208,7 +209,7 @@ public class ClientCallsTest {
         new AtomicReference<ClientCall.Listener<String>>();
     final AtomicReference<String> cancelMessage = new AtomicReference<String>();
     final AtomicReference<Throwable> cancelCause = new AtomicReference<Throwable>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -237,7 +238,7 @@ public class ClientCallsTest {
 
   @Test
   public void cannotSetOnReadyAfterCallStarted() throws Exception {
-    BaseClientCall call = new BaseClientCall();
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>();
     CallStreamObserver<Integer> callStreamObserver =
         (CallStreamObserver<Integer>) ClientCalls.asyncClientStreamingCall(call,
             new NoopStreamObserver<String>());
@@ -260,7 +261,7 @@ public class ClientCallsTest {
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
     final List<Integer> requests = new ArrayList<Integer>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -321,7 +322,7 @@ public class ClientCallsTest {
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
     final List<Integer> requests = new ArrayList<Integer>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -367,7 +368,7 @@ public class ClientCallsTest {
     final AtomicReference<ClientCall.Listener<String>> listener =
             new AtomicReference<ClientCall.Listener<String>>();
     final List<Integer> requests = new ArrayList<Integer>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -557,7 +558,7 @@ public class ClientCallsTest {
   public void blockingResponseStreamFailed() throws Exception {
     final AtomicReference<ClientCall.Listener<String>> listener =
         new AtomicReference<ClientCall.Listener<String>>();
-    BaseClientCall call = new BaseClientCall() {
+    NoopClientCall<Integer, String> call = new NoopClientCall<Integer, String>() {
       @Override
       public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {
         listener.set(responseListener);
@@ -578,22 +579,5 @@ public class ClientCallsTest {
       Metadata metadata = Status.trailersFromThrowable(e);
       assertSame(trailers, metadata);
     }
-  }
-
-  private static class BaseClientCall extends ClientCall<Integer, String> {
-    @Override
-    public void start(io.grpc.ClientCall.Listener<String> responseListener, Metadata headers) {}
-
-    @Override
-    public void request(int numMessages) {}
-
-    @Override
-    public void cancel(String message, Throwable cause) {}
-
-    @Override
-    public void halfClose() {}
-
-    @Override
-    public void sendMessage(Integer message) {}
   }
 }
