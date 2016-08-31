@@ -55,6 +55,7 @@ public class MethodDescriptorTest {
     assertEquals(MethodType.CLIENT_STREAMING, descriptor.getType());
     assertEquals("/package.service/method", descriptor.getFullMethodName());
     assertFalse(descriptor.isIdempotent());
+    assertFalse(descriptor.isSafe());
   }
 
   @Test
@@ -70,6 +71,29 @@ public class MethodDescriptorTest {
     // All other fields should staty the same
     assertEquals(MethodType.SERVER_STREAMING, newDescriptor.getType());
     assertEquals("/package.service/method", newDescriptor.getFullMethodName());
+  }
+
+  @Test
+  public void safe() {
+    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>create(
+        MethodType.UNARY, "/package.service/method", new StringMarshaller(),
+        new StringMarshaller());
+    assertFalse(descriptor.isSafe());
+
+    // Create a new desriptor by setting safe to true
+    MethodDescriptor<String, String> newDescriptor = descriptor.withSafe(true);
+    assertTrue(newDescriptor.isSafe());
+    // All other fields should staty the same
+    assertEquals(MethodType.UNARY, newDescriptor.getType());
+    assertEquals("/package.service/method", newDescriptor.getFullMethodName());
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void safeAndNonUnary() {
+    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>create(
+        MethodType.SERVER_STREAMING, "/package.service/method", new StringMarshaller(),
+        new StringMarshaller());
+    MethodDescriptor<String, String> newDescriptor = descriptor.withSafe(true);
   }
 }
 
