@@ -1,5 +1,6 @@
 rootProject.name = "grpc"
 include ":grpc-core"
+include ":grpc-context"
 include ":grpc-stub"
 include ":grpc-auth"
 include ":grpc-okhttp"
@@ -16,6 +17,7 @@ include ":grpc-services"
 include ":grpc-thrift"
 
 project(':grpc-core').projectDir = "$rootDir/core" as File
+project(':grpc-context').projectDir = "$rootDir/context" as File
 project(':grpc-stub').projectDir = "$rootDir/stub" as File
 project(':grpc-auth').projectDir = "$rootDir/auth" as File
 project(':grpc-okhttp').projectDir = "$rootDir/okhttp" as File

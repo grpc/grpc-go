@@ -31,9 +31,6 @@
 
 package io.grpc;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -58,9 +55,9 @@ public final class Deadline implements Comparable<Deadline> {
     return after(duration, units, SYSTEM_TICKER);
   }
 
-  @VisibleForTesting
+  // For testing
   static Deadline after(long duration, TimeUnit units, Ticker ticker) {
-    Preconditions.checkNotNull(units, "units");
+    checkNotNull(units, "units");
     return new Deadline(ticker, units.toNanos(duration), true);
   }
 
@@ -146,8 +143,8 @@ public final class Deadline implements Comparable<Deadline> {
    * @return {@link ScheduledFuture} which can be used to cancel execution of the task
    */
   public ScheduledFuture<?> runOnExpiration(Runnable task, ScheduledExecutorService scheduler) {
-    Preconditions.checkNotNull(task, "task");
-    Preconditions.checkNotNull(scheduler, "scheduler");
+    checkNotNull(task, "task");
+    checkNotNull(scheduler, "scheduler");
     return scheduler.schedule(task, deadlineNanos - ticker.read(), TimeUnit.NANOSECONDS);
   }
 
@@ -178,5 +175,12 @@ public final class Deadline implements Comparable<Deadline> {
     public long read() {
       return System.nanoTime();
     }
+  }
+
+  private static <T> T checkNotNull(T reference, Object errorMessage) {
+    if (reference == null) {
+      throw new NullPointerException(String.valueOf(errorMessage));
+    }
+    return reference;
   }
 }

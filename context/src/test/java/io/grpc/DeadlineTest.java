@@ -265,7 +265,7 @@ public class DeadlineTest {
     assertEquals("12000 ns from now", d.toString());
   }
 
-  static class FakeTicker extends Deadline.Ticker {
+  private static class FakeTicker extends Deadline.Ticker {
     private long time;
 
     @Override

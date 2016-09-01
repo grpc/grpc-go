@@ -51,13 +51,14 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)
 public class CallOptionsTest {
   private String sampleAuthority = "authority";
   private String sampleCompressor = "compressor";
-  private Deadline.Ticker ticker = new DeadlineTest.FakeTicker();
+  private Deadline.Ticker ticker = new FakeTicker();
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
   private Key<String> sampleKey = Attributes.Key.of("sample");
   private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
@@ -232,5 +233,25 @@ public class CallOptionsTest {
         && Objects.equal(o1.getAuthority(), o2.getAuthority())
         && Objects.equal(o1.getAffinity(), o2.getAffinity())
         && Objects.equal(o1.getCredentials(), o2.getCredentials());
+  }
+
+  private static class FakeTicker extends Deadline.Ticker {
+    private long time;
+
+    @Override
+    public long read() {
+      return time;
+    }
+
+    public void reset(long time) {
+      this.time = time;
+    }
+
+    public void increment(long period, TimeUnit unit) {
+      if (period < 0) {
+        throw new IllegalArgumentException();
+      }
+      this.time += unit.toNanos(period);
+    }
   }
 }

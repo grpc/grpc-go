@@ -2,13 +2,9 @@ plugins {
     id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
 }
 
-description = 'gRPC: Core'
+description = 'gRPC: Context'
 
 dependencies {
-    compile libraries.guava,
-            libraries.errorprone,
-            libraries.jsr305,
-            project(':grpc-context')
     testCompile project(':grpc-testing')
 }
 
@@ -16,5 +12,3 @@ dependencies {
 animalsniffer {
     signature = "org.codehaus.mojo.signature:java16:+@signature"
 }
-
-javadoc.exclude 'io/grpc/internal/**'

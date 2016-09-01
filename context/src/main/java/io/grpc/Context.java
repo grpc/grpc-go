@@ -31,9 +31,6 @@
 
 package io.grpc;
 
-import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.MoreExecutors;
-
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
@@ -43,8 +40,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.annotation.Nullable;
 
 /**
  * A context propagation mechanism which can carry scoped-values across API boundaries and between
@@ -275,8 +270,8 @@ public class Context {
    */
   public CancellableContext withDeadline(Deadline deadline,
       ScheduledExecutorService scheduler) {
-    Preconditions.checkNotNull(deadline, "deadline");
-    Preconditions.checkNotNull(scheduler, "scheduler");
+    checkNotNull(deadline, "deadline");
+    checkNotNull(scheduler, "scheduler");
     return new CancellableContext(this, deadline, scheduler);
   }
 
@@ -349,7 +344,7 @@ public class Context {
    * will still be bound.
    */
   public void detach(Context toAttach) {
-    Preconditions.checkNotNull(toAttach, "toAttach");
+    checkNotNull(toAttach, "toAttach");
     if (toAttach.attach() != this) {
       // Log a severe message instead of throwing an exception as the context to attach is assumed
       // to be the correct one and the unbalanced state represents a coding mistake in a lower
@@ -383,7 +378,6 @@ public class Context {
    * <p>The cancellation cause is provided for informational purposes only and implementations
    * should generally assume that it has already been handled and logged properly.
    */
-  @Nullable
   public Throwable cancellationCause() {
     if (parent == null || !cascadesCancellation) {
       return null;
@@ -396,7 +390,6 @@ public class Context {
    * A context may have an associated {@link Deadline} at which it will be automatically cancelled.
    * @return A {@link io.grpc.Deadline} or {@code null} if no deadline is set.
    */
-  @Nullable
   public Deadline getDeadline() {
     return DEADLINE_KEY.get(this);
   }
@@ -406,8 +399,8 @@ public class Context {
    */
   public void addListener(final CancellationListener cancellationListener,
                           final Executor executor) {
-    Preconditions.checkNotNull(cancellationListener, "cancellationListener");
-    Preconditions.checkNotNull(executor, "executor");
+    checkNotNull(cancellationListener, "cancellationListener");
+    checkNotNull(executor, "executor");
     if (canBeCancelled) {
       ExecutableListener executableListener =
           new ExecutableListener(executor, cancellationListener);
@@ -420,7 +413,7 @@ public class Context {
             // we can cascade listener notification.
             listeners = new ArrayList<ExecutableListener>();
             listeners.add(executableListener);
-            parent.addListener(parentListener, MoreExecutors.directExecutor());
+            parent.addListener(parentListener, DirectExecutor.INSTANCE);
           } else {
             listeners.add(executableListener);
           }
@@ -689,13 +682,13 @@ public class Context {
     }
 
     /**
-     * Cancel this context and optionally provide a cause for the cancellation. This
-     * will trigger notification of listeners.
+     * Cancel this context and optionally provide a cause (can be {@code null}) for the
+     * cancellation. This will trigger notification of listeners.
      *
      * @return {@code true} if this context cancelled the context and notified listeners,
      *    {@code false} if the context was already cancelled.
      */
-    public boolean cancel(@Nullable Throwable cause) {
+    public boolean cancel(Throwable cause) {
       boolean triggeredCancel = false;
       synchronized (this) {
         if (!cancelled) {
@@ -721,7 +714,7 @@ public class Context {
      * @param toAttach context to make current.
      * @param cause of cancellation, can be {@code null}.
      */
-    public void detachAndCancel(Context toAttach, @Nullable Throwable cause) {
+    public void detachAndCancel(Context toAttach, Throwable cause) {
       try {
         detach(toAttach);
       } finally {
@@ -745,7 +738,6 @@ public class Context {
       return false;
     }
 
-    @Nullable
     @Override
     public Throwable cancellationCause() {
       if (isCancelled()) {
@@ -778,7 +770,7 @@ public class Context {
     }
 
     Key(String name, T defaultValue) {
-      this.name = Preconditions.checkNotNull(name, "name");
+      this.name = checkNotNull(name, "name");
       this.defaultValue = defaultValue;
     }
 
@@ -840,6 +832,27 @@ public class Context {
       } else {
         notifyAndClearListeners();
       }
+    }
+  }
+
+  private static <T> T checkNotNull(T reference, Object errorMessage) {
+    if (reference == null) {
+      throw new NullPointerException(String.valueOf(errorMessage));
+    }
+    return reference;
+  }
+
+  private enum DirectExecutor implements Executor {
+    INSTANCE;
+
+    @Override
+    public void execute(Runnable command) {
+      command.run();
+    }
+
+    @Override
+    public String toString() {
+      return "Context.DirectExecutor";
     }
   }
 }
