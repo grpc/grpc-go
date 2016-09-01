@@ -71,10 +71,27 @@ public final class InternalMetadata {
   /**
    * Copy of StandardCharsets, which is only available on Java 1.7 and above.
    */
+  @Internal
   public static final Charset US_ASCII = Charset.forName("US-ASCII");
 
   @Internal
   public static <T> Key<T> keyOf(String name, TrustedAsciiMarshaller<T> marshaller) {
     return Metadata.Key.of(name, marshaller);
+  }
+
+
+  @Internal
+  public static Metadata newMetadata(byte[]... binaryValues) {
+    return new Metadata(binaryValues);
+  }
+
+  @Internal
+  public static Metadata newMetadata(int usedNames, byte[]... binaryValues) {
+    return new Metadata(usedNames, binaryValues);
+  }
+
+  @Internal
+  public static byte[][] serialize(Metadata md) {
+    return md.serialize();
   }
 }

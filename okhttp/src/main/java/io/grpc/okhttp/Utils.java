@@ -33,6 +33,7 @@ package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
 
+import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.CipherSuite;
@@ -49,11 +50,11 @@ class Utils {
   static final int CONNECTION_STREAM_ID = 0;
 
   public static Metadata convertHeaders(List<Header> http2Headers) {
-    return new Metadata(convertHeadersToArray(http2Headers));
+    return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
   public static Metadata convertTrailers(List<Header> http2Headers) {
-    return new Metadata(convertHeadersToArray(http2Headers));
+    return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
   private static byte[][] convertHeadersToArray(List<Header> http2Headers) {

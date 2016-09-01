@@ -37,28 +37,32 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.io.BaseEncoding;
 
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
 
-import java.util.ArrayList;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * Provides access to read and write metadata values to be exchanged during a call.
- * <p>
- * This class is not thread safe, implementations should ensure that header reads and writes
- * do not occur in multiple threads concurrently.
- * </p>
+ *
+ * <p>This class is not thread safe, implementations should ensure that header reads and writes do
+ * not occur in multiple threads concurrently.
  */
 @NotThreadSafe
 public final class Metadata {
@@ -75,25 +79,25 @@ public final class Metadata {
    *
    * <p>This should be used when raw bytes are favored over un-serialized version of object. Can be
    * helpful in situations where more processing to bytes is needed on application side, avoids
-   * double encoding/decoding.</p>
+   * double encoding/decoding.
    *
-   * <p>Both {@link BinaryMarshaller#toBytes} and {@link BinaryMarshaller#parseBytes} methods do
-   * not return a copy of the byte array.  Do _not_ modify the byte arrays of either the arguments
-   * or return values.</p>
+   * <p>Both {@link BinaryMarshaller#toBytes} and {@link BinaryMarshaller#parseBytes} methods do not
+   * return a copy of the byte array. Do _not_ modify the byte arrays of either the arguments or
+   * return values.
    */
   public static final BinaryMarshaller<byte[]> BINARY_BYTE_MARSHALLER =
       new BinaryMarshaller<byte[]>() {
 
-    @Override
-    public byte[] toBytes(byte[] value) {
-      return value;
-    }
+        @Override
+        public byte[] toBytes(byte[] value) {
+          return value;
+        }
 
-    @Override
-    public byte[] parseBytes(byte[] serialized) {
-      return serialized;
-    }
-  };
+        @Override
+        public byte[] parseBytes(byte[] serialized) {
+          return serialized;
+        }
+      };
 
   /**
    * Simple metadata marshaller that encodes strings as is.
@@ -105,114 +109,175 @@ public final class Metadata {
   public static final AsciiMarshaller<String> ASCII_STRING_MARSHALLER =
       new AsciiMarshaller<String>() {
 
-    @Override
-    public String toAsciiString(String value) {
-      return value;
-    }
+        @Override
+        public String toAsciiString(String value) {
+          return value;
+        }
 
-    @Override
-    public String parseAsciiString(String serialized) {
-      return serialized;
-    }
-  };
+        @Override
+        public String parseAsciiString(String serialized) {
+          return serialized;
+        }
+      };
 
-  /**
-   * Simple metadata marshaller that encodes an integer as a signed decimal string.
-   */
-  static final AsciiMarshaller<Integer> INTEGER_MARSHALLER = new AsciiMarshaller<Integer>() {
+  /** Simple metadata marshaller that encodes an integer as a signed decimal string. */
+  static final AsciiMarshaller<Integer> INTEGER_MARSHALLER =
+      new AsciiMarshaller<Integer>() {
 
-    @Override
-    public String toAsciiString(Integer value) {
-      return value.toString();
-    }
+        @Override
+        public String toAsciiString(Integer value) {
+          return value.toString();
+        }
 
-    @Override
-    public Integer parseAsciiString(String serialized) {
-      return Integer.parseInt(serialized);
-    }
-  };
-
-  /** All value lists can be added to. No value list may be empty. */
-  // Use LinkedHashMap for consistent ordering for tests.
-  private final Map<String, List<MetadataEntry>> store =
-      new LinkedHashMap<String, List<MetadataEntry>>();
-
-  /** The number of headers stored by this metadata.  */
-  private int storeCount;
+        @Override
+        public Integer parseAsciiString(String serialized) {
+          return Integer.parseInt(serialized);
+        }
+      };
 
   /**
-   * Constructor called by the transport layer when it receives binary metadata.
+   * Constructor called by the transport layer when it receives binary metadata. Metadata will
+   * mutate the passed in array.
    */
-  // TODO(louiscryan): Convert to use ByteString so we can cache transformations
-  @Internal
-  public Metadata(byte[]... binaryValues) {
-    checkArgument(binaryValues.length % 2 == 0,
-        "Odd number of key-value pairs: %s", binaryValues.length);
-    for (int i = 0; i < binaryValues.length; i += 2) {
-      // The transport might provide an array with null values at the end.
-      if (binaryValues[i] == null) {
-        break;
-      }
-      String name = new String(binaryValues[i], US_ASCII);
-      storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[i + 1]));
-    }
+  Metadata(byte[]... binaryValues) {
+    this(binaryValues.length / 2, binaryValues);
   }
 
   /**
-   * Constructor called by the application layer when it wants to send metadata.
+   * Constructor called by the transport layer when it receives binary metadata. Metadata will
+   * mutate the passed in array.
+   *
+   * @param usedNames the number of
    */
+  Metadata(int usedNames, byte[]... binaryValues) {
+    assert (binaryValues.length & 1) == 0 : "Odd number of key-value pairs " + binaryValues.length;
+    size = usedNames;
+    namesAndValues = binaryValues;
+  }
+
+  private byte[][] namesAndValues;
+  // The unscaled number of headers present.
+  private int size;
+
+  private byte[] name(int i) {
+    return namesAndValues[i * 2];
+  }
+
+  private void name(int i, byte[] name) {
+    namesAndValues[i * 2] = name;
+  }
+
+  private byte[] value(int i) {
+    return namesAndValues[i * 2 + 1];
+  }
+
+  private void value(int i, byte[] value) {
+    namesAndValues[i * 2 + 1] = value;
+  }
+
+  private int cap() {
+    return namesAndValues != null ? namesAndValues.length : 0;
+  }
+
+  // The scaled version of size.
+  private int len() {
+    return size * 2;
+  }
+
+  private boolean isEmpty() {
+    /** checks when {@link #namesAndValues} is null or has no elements */
+    return size == 0;
+  }
+
+  /** Constructor called by the application layer when it wants to send metadata. */
   public Metadata() {}
 
-  private void storeAdd(String name, MetadataEntry value) {
-    List<MetadataEntry> values = store.get(name);
-    if (values == null) {
-      // We expect there to be usually unique header values, so prefer smaller arrays.
-      values = new ArrayList<MetadataEntry>(1);
-      store.put(name, values);
-    }
-    storeCount++;
-    values.add(value);
-  }
-
-  /**
-   * Returns the total number of key-value headers in this metadata, including duplicates.
-   */
+  /** Returns the total number of key-value headers in this metadata, including duplicates. */
   @Internal
   public int headerCount() {
-    return storeCount;
+    return size;
   }
 
-  /**
-   * Returns true if a value is defined for the given key.
-   */
+  /** Returns true if a value is defined for the given key. */
   public boolean containsKey(Key<?> key) {
-    return store.containsKey(key.name());
+    for (int i = 0; i < size; i++) {
+      if (bytesEqual(key.asciiName(), name(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
    * Returns the last metadata entry added with the name 'name' parsed as T.
+   *
    * @return the parsed metadata entry or null if there are none.
    */
   public <T> T get(Key<T> key) {
-    List<MetadataEntry> values = store.get(key.name());
-    if (values == null) {
-      return null;
+    for (int i = size - 1; i >= 0; i--) {
+      if (bytesEqual(key.asciiName(), name(i))) {
+        return key.parseBytes(value(i));
+      }
     }
-    MetadataEntry metadataEntry = values.get(values.size() - 1);
-    return metadataEntry.getParsed(key);
+    return null;
+  }
+
+  private final class IterableAt<T> implements Iterable<T> {
+    private final Key<T> key;
+    private int startIdx;
+
+    private IterableAt(Key<T> key, int startIdx) {
+      this.key = key;
+      this.startIdx = startIdx;
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+      return new Iterator<T>() {
+        private boolean hasNext = true;
+        private int idx = startIdx;
+
+        @Override
+        public boolean hasNext() {
+          if (hasNext) {
+            return true;
+          }
+          for (; idx < size; idx++) {
+            if (bytesEqual(key.asciiName(), name(idx))) {
+              hasNext = true;
+              return hasNext;
+            }
+          }
+          return false;
+        }
+
+        @Override
+        public T next() {
+          if (hasNext()) {
+            hasNext = false;
+            return key.parseBytes(value(idx++));
+          }
+          throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+          throw new UnsupportedOperationException();
+        }
+      };
+    }
   }
 
   /**
-   * Returns all the metadata entries named 'name', in the order they were received,
-   * parsed as T or null if there are none. The iterator is not guaranteed to be "live." It may or
-   * may not be accurate if Metadata is mutated.
+   * Returns all the metadata entries named 'name', in the order they were received, parsed as T or
+   * null if there are none. The iterator is not guaranteed to be "live." It may or may not be
+   * accurate if Metadata is mutated.
    */
-  public <T> Iterable<T> getAll(Key<T> key) {
-    if (containsKey(key)) {
-      /* This is unmodifiable currently, but could be made to support remove() in the future.  If
-       * removal support is added, the {@link #storeCount} variable needs to be updated
-       * appropriately. */
-      return new ValueIterable<T>(key, store.get(key.name()));
+  public <T> Iterable<T> getAll(final Key<T> key) {
+    for (int i = 0; i < size; i++) {
+      if (bytesEqual(key.asciiName(), name(i))) {
+        return new IterableAt<T>(key, i);
+      }
     }
     return null;
   }
@@ -222,8 +287,17 @@ public final class Metadata {
    *
    * @return unmodifiable Set of keys
    */
+  @SuppressWarnings("deprecation") // The String ctor is deprecated, but fast.
   public Set<String> keys() {
-    return Collections.unmodifiableSet(store.keySet());
+    if (isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> ks = new HashSet<String>(size);
+    for (int i = 0; i < size; i++) {
+      ks.add(new String(name(i), 0 /* hibyte */));
+    }
+    // immutable in case we decide to change the implementation later.
+    return Collections.unmodifiableSet(ks);
   }
 
   /**
@@ -235,7 +309,25 @@ public final class Metadata {
   public <T> void put(Key<T> key, T value) {
     Preconditions.checkNotNull(key, "key");
     Preconditions.checkNotNull(value, "value");
-    storeAdd(key.name, new MetadataEntry(key, value));
+    maybeExpand();
+    name(size, key.asciiName());
+    value(size, key.toBytes(value));
+    size++;
+  }
+
+  private void maybeExpand() {
+    if (len() == 0 || len() == cap()) {
+      expand(Math.max(len() * 2, 8));
+    }
+  }
+
+  // Expands to exactly the desired capacity.
+  private void expand(int newCapacity) {
+    byte[][] newNamesAndValues = new byte[newCapacity][];
+    if (!isEmpty()) {
+      System.arraycopy(namesAndValues, 0, newNamesAndValues, 0, len());
+    }
+    namesAndValues = newNamesAndValues;
   }
 
   /**
@@ -249,42 +341,75 @@ public final class Metadata {
   public <T> boolean remove(Key<T> key, T value) {
     Preconditions.checkNotNull(key, "key");
     Preconditions.checkNotNull(value, "value");
-    List<MetadataEntry> values = store.get(key.name());
-    if (values == null) {
-      return false;
-    }
-    for (int i = 0; i < values.size(); i++) {
-      MetadataEntry entry = values.get(i);
-      if (!value.equals(entry.getParsed(key))) {
+    for (int i = 0; i < size; i++) {
+      if (!bytesEqual(key.asciiName(), name(i))) {
         continue;
       }
-      values.remove(i);
-      storeCount--;
+      @SuppressWarnings("unchecked")
+      T stored = key.parseBytes(value(i));
+      if (!value.equals(stored)) {
+        continue;
+      }
+      int writeIdx = i * 2;
+      int readIdx = (i + 1) * 2;
+      int readLen = len() - readIdx;
+      System.arraycopy(namesAndValues, readIdx, namesAndValues, writeIdx, readLen);
+      size -= 1;
+      name(size, null);
+      value(size, null);
       return true;
     }
     return false;
   }
 
-  /**
-   * Remove all values for the given key. If there were no values, {@code null} is returned.
-   */
+  /** Remove all values for the given key. If there were no values, {@code null} is returned. */
   public <T> Iterable<T> removeAll(Key<T> key) {
-    List<MetadataEntry> values = store.remove(key.name());
-    if (values == null) {
+    if (isEmpty()) {
       return null;
     }
-    storeCount -= values.size();
-    return new ValueIterable<T>(key, values);
+    int writeIdx = 0;
+    int readIdx = 0;
+    List<T> ret = null;
+    for (; readIdx < size; readIdx++) {
+      if (bytesEqual(key.asciiName(), name(readIdx))) {
+        ret = ret != null ? ret : new LinkedList<T>();
+        ret.add(key.parseBytes(value(readIdx)));
+        continue;
+      }
+      name(writeIdx, name(readIdx));
+      value(writeIdx, value(readIdx));
+      writeIdx++;
+    }
+    int newSize = writeIdx;
+    // Multiply by two since namesAndValues is interleaved.
+    Arrays.fill(namesAndValues, writeIdx * 2, len(), null);
+    size = newSize;
+    return ret;
   }
 
   /**
-   * Remove all values for the given key without returning them.  This is a minor performance
+   * Remove all values for the given key without returning them. This is a minor performance
    * optimization if you do not need the previous values.
    */
   @ExperimentalApi
   public <T> void discardAll(Key<T> key) {
-    List<MetadataEntry> removed = store.remove(key.name());
-    storeCount -= removed != null ? removed.size() : 0;
+    if (isEmpty()) {
+      return;
+    }
+    int writeIdx = 0;
+    int readIdx = 0;
+    for (; readIdx < size; readIdx++) {
+      if (bytesEqual(key.asciiName(), name(readIdx))) {
+        continue;
+      }
+      name(writeIdx, name(readIdx));
+      value(writeIdx, value(readIdx));
+      writeIdx++;
+    }
+    int newSize = writeIdx;
+    // Multiply by two since namesAndValues is interleaved.
+    Arrays.fill(namesAndValues, writeIdx * 2, len(), null);
+    size = newSize;
   }
 
   /**
@@ -294,78 +419,84 @@ public final class Metadata {
    * result[i*2+1] are values.
    *
    * <p>Names are ASCII string bytes that contains only the characters listed in the class comment
-   * of {@link Key}. If the name ends with {@code "-bin"}, the value can be raw binary.  Otherwise,
+   * of {@link Key}. If the name ends with {@code "-bin"}, the value can be raw binary. Otherwise,
    * the value must contain only characters listed in the class comments of {@link AsciiMarshaller}
    *
-   * <p>The returned individual byte arrays <em>must not</em> be modified.  However, the top level
+   * <p>The returned individual byte arrays <em>must not</em> be modified. However, the top level
    * array may be modified.
    *
    * <p>This method is intended for transport use only.
    */
-  @Internal
-  public byte[][] serialize() {
-    // 2x for keys + values
-    byte[][] serialized = new byte[storeCount * 2][];
-    int i = 0;
-    for (Map.Entry<String, List<MetadataEntry>> storeEntry : store.entrySet()) {
-      // Foreach allocates an iterator per.
-      List<MetadataEntry> values = storeEntry.getValue();
-      for (int k = 0; k < values.size(); k++) {
-        serialized[i++] = values.get(k).key != null
-            ? values.get(k).key.asciiName() : storeEntry.getKey().getBytes(US_ASCII);
-        serialized[i++] = values.get(k).getSerialized();
-      }
+  @Nullable
+  byte[][] serialize() {
+    if (len() == cap()) {
+      return namesAndValues;
     }
+    byte[][] serialized = new byte[len()][];
+    System.arraycopy(namesAndValues, 0, serialized, 0, len());
     return serialized;
   }
 
-  /**
-   * Perform a simple merge of two sets of metadata.
-   */
+  /** Perform a simple merge of two sets of metadata. */
   public void merge(Metadata other) {
-    Preconditions.checkNotNull(other, "other");
-    for (Map.Entry<String, List<MetadataEntry>> keyEntry : other.store.entrySet()) {
-      for (int i = 0; i < keyEntry.getValue().size(); i++) {
-        // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
-        // used from different threads it would cause thread-safety issues.
-        storeAdd(keyEntry.getKey(), new MetadataEntry(keyEntry.getValue().get(i)));
-      }
+    if (other.isEmpty()) {
+      return;
     }
+    int remaining = cap() - len();
+    if (isEmpty() || remaining < other.len()) {
+      expand(len() + other.len() - remaining);
+    }
+    System.arraycopy(other.namesAndValues, 0, namesAndValues, len(), other.len());
+    size += other.size;
   }
 
-  /**
-   * Merge values for the given set of keys into this set of metadata.
-   */
+  /** Merge values for the given set of keys into this set of metadata. */
   public void merge(Metadata other, Set<Key<?>> keys) {
     Preconditions.checkNotNull(other, "other");
+    // Use ByteBuffer for equals and hashCode.
+    Map<ByteBuffer, Key<?>> asciiKeys = new HashMap<ByteBuffer, Key<?>>(keys.size());
     for (Key<?> key : keys) {
-      List<MetadataEntry> values = other.store.get(key.name());
-      if (values == null) {
-        continue;
-      }
-      for (int i = 0; i < values.size(); i++) {
-        // Must copy the MetadataEntries since they are mutated. If the two Metadata objects are
-        // used from different threads it would cause thread-safety issues.
-        storeAdd(key.name(), new MetadataEntry(values.get(i)));
+      asciiKeys.put(ByteBuffer.wrap(key.asciiName()), key);
+    }
+    for (int i = 0; i < other.size; i++) {
+      ByteBuffer wrappedNamed = ByteBuffer.wrap(other.name(i));
+      if (asciiKeys.containsKey(wrappedNamed)) {
+        maybeExpand();
+        name(size, other.name(i));
+        value(size, other.value(i));
+        size++;
       }
     }
   }
 
   @Override
   public String toString() {
-    return "Metadata(" + toStringInternal() + ")";
+    StringBuilder sb = new StringBuilder("Metadata(");
+    for (int i = 0; i < size; i++) {
+      if (i != 0) {
+        sb.append(',');
+      }
+      String headerName = new String(name(i), US_ASCII);
+      sb.append(headerName).append('=');
+      if (headerName.endsWith(BINARY_HEADER_SUFFIX)) {
+        sb.append(BaseEncoding.base64().encode(value(i)));
+      } else {
+        String headerValue = new String(value(i), US_ASCII);
+        sb.append(headerValue);
+      }
+    }
+    return sb.append(')').toString();
   }
 
-  private String toStringInternal() {
-    return store.toString();
+  private boolean bytesEqual(byte[] left, byte[] right) {
+    return Arrays.equals(left, right);
   }
 
-  /**
-   * Marshaller for metadata values that are serialized into raw binary.
-   */
+  /** Marshaller for metadata values that are serialized into raw binary. */
   public interface BinaryMarshaller<T> {
     /**
      * Serialize a metadata value to bytes.
+     *
      * @param value to serialize
      * @return serialized version of value
      */
@@ -373,6 +504,7 @@ public final class Metadata {
 
     /**
      * Parse a serialized metadata value from bytes.
+     *
      * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
@@ -382,10 +514,11 @@ public final class Metadata {
   /**
    * Marshaller for metadata values that are serialized into ASCII strings that contain only
    * following characters:
+   *
    * <ul>
-   *   <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value.
-   *   Leading or trailing whitespace may not be preserved.</li>
-   *   <li>ASCII visible characters ({@code 0x21-0x7E}).
+   * <li>Space: {@code 0x20}, but must not be at the beginning or at the end of the value. Leading
+   *     or trailing whitespace may not be preserved.
+   * <li>ASCII visible characters ({@code 0x21-0x7E}).
    * </ul>
    *
    * <p>Note this has to be the subset of valid characters in {@code field-content} from RFC 7230
@@ -404,6 +537,7 @@ public final class Metadata {
 
     /**
      * Parse a serialized metadata value from an ASCII string.
+     *
      * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
@@ -416,22 +550,23 @@ public final class Metadata {
    * <h3>Valid characters in key names</h3>
    *
    * <p>Only the following ASCII characters are allowed in the names of keys:
+   *
    * <ul>
-   *   <li>digits: {@code 0-9}</li>
-   *   <li>uppercase letters: {@code A-Z} (normalized to lower)</li>
-   *   <li>lowercase letters: {@code a-z}</li>
-   *   <li>special characters: {@code -_.}</li>
+   * <li>digits: {@code 0-9}
+   * <li>uppercase letters: {@code A-Z} (normalized to lower)
+   * <li>lowercase letters: {@code a-z}
+   * <li>special characters: {@code -_.}
    * </ul>
    *
-   * <p>This is a a strict subset of the HTTP field-name rules.  Applications may not send or
-   * receive metadata with invalid key names.  However, the gRPC library may preserve any metadata
-   * received even if it does not conform to the above limitations.  Additionally, if metadata
-   * contains non conforming field names, they will still be sent.  In this way, unknown metadata
-   * fields are parsed, serialized and preserved, but never interpreted.  They are similar to
-   * protobuf unknown fields.
+   * <p>This is a a strict subset of the HTTP field-name rules. Applications may not send or receive
+   * metadata with invalid key names. However, the gRPC library may preserve any metadata received
+   * even if it does not conform to the above limitations. Additionally, if metadata contains non
+   * conforming field names, they will still be sent. In this way, unknown metadata fields are
+   * parsed, serialized and preserved, but never interpreted. They are similar to protobuf unknown
+   * fields.
    *
    * <p>Note this has to be the subset of valid HTTP/2 token characters as defined in RFC7230
-   * Section 3.2.6 and RFC5234 Section B.1</p>
+   * Section 3.2.6 and RFC5234 Section B.1
    *
    * @see <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">Wire Spec</a>
    * @see <a href="https://tools.ietf.org/html/rfc7230#section-3.2.6">RFC7230</a>
@@ -446,7 +581,7 @@ public final class Metadata {
      * Creates a key for a binary header.
      *
      * @param name Must contain only the valid key characters as defined in the class comment. Must
-     *             end with {@link #BINARY_HEADER_SUFFIX}.
+     *     end with {@link #BINARY_HEADER_SUFFIX}.
      */
     public static <T> Key<T> of(String name, BinaryMarshaller<T> marshaller) {
       return new BinaryKey<T>(name, marshaller);
@@ -456,7 +591,7 @@ public final class Metadata {
      * Creates a key for an ASCII header.
      *
      * @param name Must contain only the valid key characters as defined in the class comment. Must
-     *             <b>not</b> end with {@link #BINARY_HEADER_SUFFIX}
+     *     <b>not</b> end with {@link #BINARY_HEADER_SUFFIX}
      */
     public static <T> Key<T> of(String name, AsciiMarshaller<T> marshaller) {
       return new AsciiKey<T>(name, marshaller);
@@ -472,7 +607,7 @@ public final class Metadata {
     private final byte[] nameBytes;
 
     private static BitSet generateValidTChars() {
-      BitSet valid  = new BitSet(0x7f);
+      BitSet valid = new BitSet(0x7f);
       valid.set('-');
       valid.set('_');
       valid.set('.');
@@ -496,8 +631,8 @@ public final class Metadata {
           continue;
         }
 
-        checkArgument(VALID_T_CHARS.get(tChar),
-            "Invalid character '%s' in key name '%s'", tChar, n);
+        checkArgument(
+            VALID_T_CHARS.get(tChar), "Invalid character '%s' in key name '%s'", tChar, n);
       }
       return n;
     }
@@ -560,6 +695,7 @@ public final class Metadata {
 
     /**
      * Serialize a metadata value to bytes.
+     *
      * @param value to serialize
      * @return serialized version of value
      */
@@ -567,6 +703,7 @@ public final class Metadata {
 
     /**
      * Parse a serialized metadata value from bytes.
+     *
      * @param serialized value of metadata to parse
      * @return a parsed instance of type T
      */
@@ -576,14 +713,14 @@ public final class Metadata {
   private static class BinaryKey<T> extends Key<T> {
     private final BinaryMarshaller<T> marshaller;
 
-    /**
-     * Keys have a name and a binary marshaller used for serialization.
-     */
+    /** Keys have a name and a binary marshaller used for serialization. */
     private BinaryKey(String name, BinaryMarshaller<T> marshaller) {
       super(name);
-      checkArgument(name.endsWith(BINARY_HEADER_SUFFIX),
+      checkArgument(
+          name.endsWith(BINARY_HEADER_SUFFIX),
           "Binary header is named %s. It must end with %s",
-          name, BINARY_HEADER_SUFFIX);
+          name,
+          BINARY_HEADER_SUFFIX);
       checkArgument(name.length() > BINARY_HEADER_SUFFIX.length(), "empty key name");
       this.marshaller = checkNotNull(marshaller, "marshaller is null");
     }
@@ -602,15 +739,14 @@ public final class Metadata {
   private static class AsciiKey<T> extends Key<T> {
     private final AsciiMarshaller<T> marshaller;
 
-    /**
-     * Keys have a name and an ASCII marshaller used for serialization.
-     */
+    /** Keys have a name and an ASCII marshaller used for serialization. */
     private AsciiKey(String name, AsciiMarshaller<T> marshaller) {
       super(name);
       Preconditions.checkArgument(
           !name.endsWith(BINARY_HEADER_SUFFIX),
           "ASCII header is named %s.  Only binary headers may end with %s",
-          name, BINARY_HEADER_SUFFIX);
+          name,
+          BINARY_HEADER_SUFFIX);
       this.marshaller = Preconditions.checkNotNull(marshaller, "marshaller");
     }
 
@@ -628,15 +764,14 @@ public final class Metadata {
   private static final class TrustedAsciiKey<T> extends Key<T> {
     private final TrustedAsciiMarshaller<T> marshaller;
 
-    /**
-     * Keys have a name and an ASCII marshaller used for serialization.
-     */
+    /** Keys have a name and an ASCII marshaller used for serialization. */
     private TrustedAsciiKey(String name, TrustedAsciiMarshaller<T> marshaller) {
       super(name);
       Preconditions.checkArgument(
           !name.endsWith(BINARY_HEADER_SUFFIX),
           "ASCII header is named %s.  Only binary headers may end with %s",
-          name, BINARY_HEADER_SUFFIX);
+          name,
+          BINARY_HEADER_SUFFIX);
       this.marshaller = Preconditions.checkNotNull(marshaller, "marshaller");
     }
 
@@ -648,114 +783,6 @@ public final class Metadata {
     @Override
     T parseBytes(byte[] serialized) {
       return marshaller.parseAsciiString(serialized);
-    }
-  }
-
-  private static class MetadataEntry {
-    Object parsed;
-
-    @SuppressWarnings("rawtypes")
-    Key key;
-    boolean isBinary;
-    byte[] serializedBinary;
-
-    /**
-     * Constructor used when application layer adds a parsed value.
-     */
-    private MetadataEntry(Key<?> key, Object parsed) {
-      this.parsed = Preconditions.checkNotNull(parsed, "parsed");
-      this.key = Preconditions.checkNotNull(key, "key");
-      this.isBinary = key instanceof BinaryKey;
-    }
-
-    /**
-     * Constructor used when reading a value from the transport.
-     */
-    private MetadataEntry(boolean isBinary, byte[] serialized) {
-      Preconditions.checkNotNull(serialized, "serialized");
-      this.serializedBinary = serialized;
-      this.isBinary = isBinary;
-    }
-
-    /**
-     * Copy constructor.
-     */
-    private MetadataEntry(MetadataEntry entry) {
-      this.parsed = entry.parsed;
-      this.key = entry.key;
-      this.isBinary = entry.isBinary;
-      this.serializedBinary = entry.serializedBinary;
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T> T getParsed(Key<T> key) {
-      T value = (T) parsed;
-      if (value != null) {
-        if (this.key != key) {
-          // Keys don't match so serialize using the old key
-          serializedBinary = this.key.toBytes(value);
-        } else {
-          return value;
-        }
-      }
-      this.key = key;
-      if (serializedBinary != null) {
-        value = key.parseBytes(serializedBinary);
-      }
-      parsed = value;
-      return value;
-    }
-
-    @SuppressWarnings("unchecked")
-    public byte[] getSerialized() {
-      return serializedBinary =
-          serializedBinary == null
-              ? key.toBytes(parsed) : serializedBinary;
-    }
-
-    @Override
-    public String toString() {
-      if (!isBinary) {
-        return new String(getSerialized(), US_ASCII);
-      } else {
-        // Assume that the toString of an Object is better than a binary encoding.
-        if (parsed != null) {
-          return "" + parsed;
-        } else {
-          return Arrays.toString(serializedBinary);
-        }
-      }
-    }
-  }
-
-  private static class ValueIterable<T> implements Iterable<T> {
-    private final Key<T> key;
-    private final Iterable<MetadataEntry> entries;
-
-    public ValueIterable(Key<T> key, Iterable<MetadataEntry> entries) {
-      this.key = key;
-      this.entries = entries;
-    }
-
-    @Override
-    public Iterator<T> iterator() {
-      final Iterator<MetadataEntry> iterator = entries.iterator();
-      class ValueIterator implements Iterator<T> {
-        @Override public boolean hasNext() {
-          return iterator.hasNext();
-        }
-
-        @Override public T next() {
-          return iterator.next().getParsed(key);
-        }
-
-        @Override public void remove() {
-          // Not implemented to not need to conditionally update {@link #storeCount}.
-          throw new UnsupportedOperationException();
-        }
-      }
-
-      return new ValueIterator();
     }
   }
 }

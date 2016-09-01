@@ -572,14 +572,17 @@ public abstract class AbstractTransportTest {
     clientHeaders.put(asciiKey, "dupvalue");
     clientHeaders.put(asciiKey, "dupvalue");
     clientHeaders.put(binaryKey, "äbinaryclient");
+    Metadata clientHeadersCopy = new Metadata();
+
+    clientHeadersCopy.merge(clientHeaders);
     ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
-    assertEquals(Lists.newArrayList(clientHeaders.getAll(asciiKey)),
+    assertEquals(Lists.newArrayList(clientHeadersCopy.getAll(asciiKey)),
         Lists.newArrayList(serverStreamCreation.headers.getAll(asciiKey)));
-    assertEquals(Lists.newArrayList(clientHeaders.getAll(binaryKey)),
+    assertEquals(Lists.newArrayList(clientHeadersCopy.getAll(binaryKey)),
         Lists.newArrayList(serverStreamCreation.headers.getAll(binaryKey)));
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
@@ -605,11 +608,13 @@ public abstract class AbstractTransportTest {
     serverHeaders.put(asciiKey, "dupvalue");
     serverHeaders.put(asciiKey, "dupvalue");
     serverHeaders.put(binaryKey, "äbinaryserver");
+    Metadata serverHeadersCopy = new Metadata();
+    serverHeadersCopy.merge(serverHeaders);
     serverStream.writeHeaders(serverHeaders);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).headersRead(metadataCaptor.capture());
-    assertEquals(Lists.newArrayList(serverHeaders.getAll(asciiKey)),
+    assertEquals(Lists.newArrayList(serverHeadersCopy.getAll(asciiKey)),
         Lists.newArrayList(metadataCaptor.getValue().getAll(asciiKey)));
-    assertEquals(Lists.newArrayList(serverHeaders.getAll(binaryKey)),
+    assertEquals(Lists.newArrayList(serverHeadersCopy.getAll(binaryKey)),
         Lists.newArrayList(metadataCaptor.getValue().getAll(binaryKey)));
 
     clientStream.request(1);

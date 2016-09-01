@@ -35,6 +35,7 @@ import static com.google.common.base.Charsets.US_ASCII;
 
 import com.google.common.io.BaseEncoding;
 
+import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 
 import java.util.Arrays;
@@ -61,7 +62,11 @@ public final class TransportFrameUtil {
    * @return the interleaved keys and values.
    */
   public static byte[][] toHttp2Headers(Metadata headers) {
-    byte[][] serializedHeaders = headers.serialize();
+    byte[][] serializedHeaders = InternalMetadata.serialize(headers);
+    // TODO(carl-mastrangelo): eventually remove this once all callers are updated.
+    if (serializedHeaders == null) {
+      return new byte[][]{};
+    }
     int k = 0;
     for (int i = 0; i < serializedHeaders.length; i += 2) {
       byte[] key = serializedHeaders[i];

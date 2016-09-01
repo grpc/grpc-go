@@ -40,6 +40,7 @@ import static io.netty.util.CharsetUtil.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
@@ -91,9 +92,10 @@ class Utils {
 
   public static Metadata convertHeaders(Http2Headers http2Headers) {
     if (http2Headers instanceof GrpcHttp2InboundHeaders) {
-      return new Metadata(((GrpcHttp2InboundHeaders) http2Headers).namesAndValues());
+      GrpcHttp2InboundHeaders h = (GrpcHttp2InboundHeaders) http2Headers;
+      return InternalMetadata.newMetadata(h.numHeaders(), h.namesAndValues());
     }
-    return new Metadata(convertHeadersToArray(http2Headers));
+    return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
   private static byte[][] convertHeadersToArray(Http2Headers http2Headers) {
@@ -141,9 +143,10 @@ class Utils {
 
   public static Metadata convertTrailers(Http2Headers http2Headers) {
     if (http2Headers instanceof GrpcHttp2InboundHeaders) {
-      return new Metadata(((GrpcHttp2InboundHeaders) http2Headers).namesAndValues());
+      GrpcHttp2InboundHeaders h = (GrpcHttp2InboundHeaders) http2Headers;
+      return InternalMetadata.newMetadata(h.numHeaders(), h.namesAndValues());
     }
-    return new Metadata(convertHeadersToArray(http2Headers));
+    return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
   public static Http2Headers convertTrailers(Metadata trailers, boolean headersSent) {

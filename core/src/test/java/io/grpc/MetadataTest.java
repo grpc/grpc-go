@@ -38,7 +38,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -126,12 +125,20 @@ public class MetadataTest {
   }
 
   @Test
+  public void discardAll_empty() {
+    Metadata metadata = new Metadata();
+    metadata.discardAll(KEY);
+    assertEquals(null, metadata.getAll(KEY));
+    assertEquals(null, metadata.get(KEY));
+  }
+
+  @Test
   public void testGetAllNoRemove() {
     Fish lance = new Fish(LANCE);
     Metadata metadata = new Metadata();
     metadata.put(KEY, lance);
     Iterator<Fish> i = metadata.getAll(KEY).iterator();
-    assertSame(lance, i.next());
+    assertEquals(lance, i.next());
 
     thrown.expect(UnsupportedOperationException.class);
     i.remove();
@@ -142,20 +149,18 @@ public class MetadataTest {
     Fish lance = new Fish(LANCE);
     Metadata metadata = new Metadata();
     metadata.put(KEY, lance);
-    // Should be able to read same instance out
-    assertSame(lance, metadata.get(KEY));
+    assertEquals(lance, metadata.get(KEY));
     Iterator<Fish> fishes = metadata.<Fish>getAll(KEY).iterator();
     assertTrue(fishes.hasNext());
-    assertSame(fishes.next(), lance);
+    assertEquals(fishes.next(), lance);
     assertFalse(fishes.hasNext());
     byte[][] serialized = metadata.serialize();
     assertEquals(2, serialized.length);
     assertEquals(new String(serialized[0], US_ASCII), "test-bin");
     assertArrayEquals(LANCE_BYTES, serialized[1]);
-    assertSame(lance, metadata.get(KEY));
-    // Serialized instance should be cached too
-    assertSame(serialized[0], metadata.serialize()[0]);
-    assertSame(serialized[1], metadata.serialize()[1]);
+    assertEquals(lance, metadata.get(KEY));
+    assertEquals(serialized[0], metadata.serialize()[0]);
+    assertEquals(serialized[1], metadata.serialize()[1]);
   }
 
   @Test
@@ -164,7 +169,7 @@ public class MetadataTest {
     Fish lance = raw.get(KEY);
     assertEquals(lance, new Fish(LANCE));
     // Reading again should return the same parsed instance
-    assertSame(lance, raw.get(KEY));
+    assertEquals(lance, raw.get(KEY));
   }
 
   @Test
@@ -199,7 +204,7 @@ public class MetadataTest {
 
     Iterator<Fish> fishes = h1.<Fish>getAll(KEY).iterator();
     assertTrue(fishes.hasNext());
-    assertSame(fishes.next(), lance);
+    assertEquals(fishes.next(), lance);
     assertFalse(fishes.hasNext());
   }
 
@@ -242,15 +247,27 @@ public class MetadataTest {
     Metadata h = new Metadata();
     h.put(KEY, new Fish("binary"));
     h.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
-    assertEquals("Metadata({test-bin=[Fish(binary)], test=[ascii]})", h.toString());
+    assertEquals("Metadata(test-bin=YmluYXJ5,test=ascii)", h.toString());
 
     Metadata t = new Metadata();
     t.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
-    assertEquals("Metadata({test=[ascii]})", t.toString());
+    assertEquals("Metadata(test=ascii)", t.toString());
 
     t = new Metadata("test".getBytes(US_ASCII), "ascii".getBytes(US_ASCII),
         "test-bin".getBytes(US_ASCII), "binary".getBytes(US_ASCII));
-    assertEquals("Metadata({test=[ascii], test-bin=[[98, 105, 110, 97, 114, 121]]})", t.toString());
+    assertEquals("Metadata(test=ascii,test-bin=YmluYXJ5)", t.toString());
+  }
+
+  @Test
+  public void verifyToString_usingBinary() {
+    Metadata h = new Metadata();
+    h.put(KEY, new Fish("binary"));
+    h.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
+    assertEquals("Metadata(test-bin=YmluYXJ5,test=ascii)", h.toString());
+
+    Metadata t = new Metadata();
+    t.put(Metadata.Key.of("test", Metadata.ASCII_STRING_MARSHALLER), "ascii");
+    assertEquals("Metadata(test=ascii)", t.toString());
   }
 
   @Test
