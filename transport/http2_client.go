@@ -483,7 +483,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if _, ok := err.(StreamError); ok {
+	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}
 }

@@ -1687,6 +1687,79 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	}
 }
 
+// checkTimeoutErrorServer is a gRPC server checks context timeout error in FullDuplexCall().
+// It is only used in TestStreamingRPCTimeoutServerError.
+type checkTimeoutErrorServer struct {
+	t *testing.T
+	testpb.TestServiceServer
+}
+
+func (s checkTimeoutErrorServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			// read done.
+			return nil
+		}
+		if err != nil {
+			if grpc.Code(err) != codes.DeadlineExceeded {
+				s.t.Fatalf("stream.Recv(_) = _, %v, want error code %s", err, codes.DeadlineExceeded)
+			}
+			return err
+		}
+		if err := stream.Send(&testpb.StreamingOutputCallResponse{
+			Payload: &testpb.Payload{
+				Body: []byte{'0'},
+			},
+		}); err != nil {
+			if grpc.Code(err) != codes.DeadlineExceeded {
+				s.t.Fatalf("stream.Send(_) = %v, want error code %s", err, codes.DeadlineExceeded)
+			}
+			return err
+		}
+	}
+}
+
+func TestStreamingRPCTimeoutServerError(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testStreamingRPCTimeoutServerError(t, e)
+	}
+}
+
+// testStreamingRPCTimeoutServerError tests the server side behavior.
+// When context timeout happens on client side, server should get deadline exceeded error.
+func testStreamingRPCTimeoutServerError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(checkTimeoutErrorServer{t: t})
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	req := &testpb.StreamingOutputCallRequest{}
+	duration := 100 * time.Millisecond
+	ctx, _ := context.WithTimeout(context.Background(), duration)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Errorf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+		return
+	}
+	for {
+		err := stream.Send(req)
+		if err != nil {
+			break
+		}
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+
+	// Wait for context timeout on server before closing connection.
+	time.Sleep(duration)
+	te.tearDown()
+}
+
 // concurrentSendServer is a TestServiceServer whose
 // StreamingOutputCall makes ten serial Send calls, sending payloads
 // "0".."9", inclusive.  TestServerStreamingConcurrent verifies they
