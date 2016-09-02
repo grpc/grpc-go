@@ -547,7 +547,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			return err
 		}
 		if err == io.ErrUnexpectedEOF {
-			err = transport.StreamError{Code: codes.Internal, Desc: "io.ErrUnexpectedEOF"}
+			err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
 		}
 		if err != nil {
 			switch err := err.(type) {
@@ -569,8 +569,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 
 		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
 			switch err := err.(type) {
-			case transport.StreamError:
-				if err := t.WriteStatus(stream, err.Code, err.Desc); err != nil {
+			case *rpcError:
+				if err := t.WriteStatus(stream, err.code, err.desc); err != nil {
 					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
 				}
 			default:

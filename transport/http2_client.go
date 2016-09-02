@@ -149,7 +149,7 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	scheme := "http"
 	conn, err := dial(opts.Dialer, ctx, addr)
 	if err != nil {
-		return nil, ConnectionErrorf(true, err, "transport: %v", err)
+		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
@@ -165,7 +165,7 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 			// Credentials handshake errors are typically considered permanent
 			// to avoid retrying on e.g. bad certificates.
 			temp := isTemporary(err)
-			return nil, ConnectionErrorf(temp, err, "transport: %v", err)
+			return nil, connectionErrorf(temp, err, "transport: %v", err)
 		}
 	}
 	ua := primaryUA
@@ -205,11 +205,11 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	n, err := t.conn.Write(clientPreface)
 	if err != nil {
 		t.Close()
-		return nil, ConnectionErrorf(true, err, "transport: %v", err)
+		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	if n != len(clientPreface) {
 		t.Close()
-		return nil, ConnectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
+		return nil, connectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	if initialWindowSize != defaultWindowSize {
 		err = t.framer.writeSettings(true, http2.Setting{
@@ -221,13 +221,13 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	}
 	if err != nil {
 		t.Close()
-		return nil, ConnectionErrorf(true, err, "transport: %v", err)
+		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(initialConnWindowSize - defaultWindowSize); delta > 0 {
 		if err := t.framer.writeWindowUpdate(true, 0, delta); err != nil {
 			t.Close()
-			return nil, ConnectionErrorf(true, err, "transport: %v", err)
+			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
 	}
 	go t.controller()
@@ -295,12 +295,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		pos := strings.LastIndex(callHdr.Method, "/")
 		if pos == -1 {
-			return nil, StreamErrorf(codes.InvalidArgument, "transport: malformed method name: %q", callHdr.Method)
+			return nil, streamErrorf(codes.InvalidArgument, "transport: malformed method name: %q", callHdr.Method)
 		}
 		audience := "https://" + callHdr.Host + port + callHdr.Method[:pos]
 		data, err := c.GetRequestMetadata(ctx, audience)
 		if err != nil {
-			return nil, StreamErrorf(codes.InvalidArgument, "transport: %v", err)
+			return nil, streamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
 		for k, v := range data {
 			authData[k] = v
@@ -437,7 +437,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 		if err != nil {
 			t.notifyError(err)
-			return nil, ConnectionErrorf(true, err, "transport: %v", err)
+			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
 	}
 	t.writableChan <- 0
@@ -483,7 +483,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if _, ok := err.(StreamError); ok {
+	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}
 }
@@ -651,7 +651,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		// invoked.
 		if err := t.framer.writeData(forceFlush, s.id, endStream, p); err != nil {
 			t.notifyError(err)
-			return ConnectionErrorf(true, err, "transport: %v", err)
+			return connectionErrorf(true, err, "transport: %v", err)
 		}
 		if t.framer.adjustNumWriters(-1) == 0 {
 			t.framer.flushWrite()
@@ -699,7 +699,7 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 func (t *http2Client) handleData(f *http2.DataFrame) {
 	size := len(f.Data())
 	if err := t.fc.onData(uint32(size)); err != nil {
-		t.notifyError(ConnectionErrorf(true, err, "%v", err))
+		t.notifyError(connectionErrorf(true, err, "%v", err))
 		return
 	}
 	// Select the right stream to dispatch.
@@ -805,7 +805,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	if t.state == reachable || t.state == draining {
 		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
 			t.mu.Unlock()
-			t.notifyError(ConnectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
+			t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
 			return
 		}
 		select {
@@ -814,7 +814,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			// t.goAway has been closed (i.e.,multiple GoAways).
 			if id < f.LastStreamID {
 				t.mu.Unlock()
-				t.notifyError(ConnectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
+				t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
 				return
 			}
 			t.prevGoAwayID = id
@@ -929,7 +929,7 @@ func (t *http2Client) reader() {
 				t.mu.Unlock()
 				if s != nil {
 					// use error detail to provide better err message
-					handleMalformedHTTP2(s, StreamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.errorDetail()))
+					handleMalformedHTTP2(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.errorDetail()))
 				}
 				continue
 			} else {

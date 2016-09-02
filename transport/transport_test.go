@@ -414,7 +414,7 @@ func TestLargeMessageSuspension(t *testing.T) {
 	}
 	// Write should not be done successfully due to flow control.
 	err = ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false})
-	expectedErr := StreamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
+	expectedErr := streamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
 	if err != expectedErr {
 		t.Fatalf("Write got %v, want %v", err, expectedErr)
 	}

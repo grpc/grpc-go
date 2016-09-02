@@ -152,7 +152,7 @@ func TestToRPCErr(t *testing.T) {
 		// outputs
 		errOut *rpcError
 	}{
-		{transport.StreamErrorf(codes.Unknown, ""), Errorf(codes.Unknown, "").(*rpcError)},
+		{transport.StreamError{codes.Unknown, ""}, Errorf(codes.Unknown, "").(*rpcError)},
 		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc).(*rpcError)},
 	} {
 		err := toRPCErr(test.errIn)
@@ -173,8 +173,8 @@ func TestContextErr(t *testing.T) {
 		// outputs
 		errOut transport.StreamError
 	}{
-		{context.DeadlineExceeded, transport.StreamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)},
-		{context.Canceled, transport.StreamErrorf(codes.Canceled, "%v", context.Canceled)},
+		{context.DeadlineExceeded, transport.StreamError{codes.DeadlineExceeded, context.DeadlineExceeded.Error()}},
+		{context.Canceled, transport.StreamError{codes.Canceled, context.Canceled.Error()}},
 	} {
 		err := transport.ContextErr(test.errIn)
 		if err != test.errOut {
