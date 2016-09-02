@@ -50,13 +50,26 @@ public final class EquivalentAddressGroup {
 
   private final List<SocketAddress> addrs;
 
+  /**
+   * {@link SocketAddress} docs say that the addresses are immutable, so we cache the hashCode.
+   */
+  private final int hashCode;
+
+  /**
+   * List constructor.
+   */
   public EquivalentAddressGroup(List<SocketAddress> addrs) {
     Preconditions.checkArgument(!addrs.isEmpty(), "addrs is empty");
     this.addrs = Collections.unmodifiableList(new ArrayList<SocketAddress>(addrs));
+    hashCode = this.addrs.hashCode();
   }
 
+  /**
+   * Singleton constructor.
+   */
   public EquivalentAddressGroup(SocketAddress addr) {
     this.addrs = Collections.singletonList(addr);
+    hashCode = addrs.hashCode();
   }
 
   /**
@@ -73,7 +86,8 @@ public final class EquivalentAddressGroup {
 
   @Override
   public int hashCode() {
-    return addrs.hashCode();
+    // Avoids creating an iterator on the underlying array list.
+    return hashCode;
   }
 
   @Override
@@ -81,6 +95,16 @@ public final class EquivalentAddressGroup {
     if (!(other instanceof EquivalentAddressGroup)) {
       return false;
     }
-    return addrs.equals(((EquivalentAddressGroup) other).addrs);
+    EquivalentAddressGroup that = (EquivalentAddressGroup) other;
+    if (addrs.size() != that.addrs.size()) {
+      return false;
+    }
+    // Avoids creating an iterator on the underlying array list.
+    for (int i = 0; i < addrs.size(); i++) {
+      if (!addrs.get(i).equals(that.addrs.get(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 }
