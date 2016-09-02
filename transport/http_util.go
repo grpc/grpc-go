@@ -162,7 +162,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	switch f.Name {
 	case "content-type":
 		if !validContentType(f.Value) {
-			d.setErr(StreamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value))
+			d.setErr(streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value))
 			return
 		}
 	case "grpc-encoding":
@@ -170,7 +170,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case "grpc-status":
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
-			d.setErr(StreamErrorf(codes.Internal, "transport: malformed grpc-status: %v", err))
+			d.setErr(streamErrorf(codes.Internal, "transport: malformed grpc-status: %v", err))
 			return
 		}
 		d.statusCode = codes.Code(code)
@@ -181,7 +181,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		var err error
 		d.timeout, err = decodeTimeout(f.Value)
 		if err != nil {
-			d.setErr(StreamErrorf(codes.Internal, "transport: malformed time-out: %v", err))
+			d.setErr(streamErrorf(codes.Internal, "transport: malformed time-out: %v", err))
 			return
 		}
 	case ":path":
