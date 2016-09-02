@@ -909,7 +909,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 	cc := te.clientConn()
 	wantErr := grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded")
 	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !equalErrors(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %d", err, codes.DeadlineExceeded)
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
 	}
 	awaitNewConnLogOutput()
 }
@@ -959,7 +959,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	}
 	wantErr := grpc.Errorf(codes.NotFound, "unknown service")
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !equalErrors(err, wantErr) {
-		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %d", err, codes.NotFound)
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.NotFound)
 	}
 	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
 	out, err = healthCheck(1*time.Second, cc, "grpc.health.v1.Health")
@@ -1212,7 +1212,7 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 	ctx := metadata.NewContext(context.Background(), malformedHTTP2Metadata)
 	if _, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.Internal {
-		t.Fatalf("TestService.UnaryCall(%v, _) = _, %v; want _, %q", ctx, err, codes.Internal)
+		t.Fatalf("TestService.UnaryCall(%v, _) = _, %v; want _, %s", ctx, err, codes.Internal)
 	}
 }
 
@@ -1414,7 +1414,7 @@ func testCancelNoIO(t *testing.T, e env) {
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			break
 		}
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
 	}
 	// If there are any RPCs in flight before the client receives
 	// the max streams setting, let them be expired.
@@ -1463,7 +1463,7 @@ func testNoService(t *testing.T, e env) {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
 	if _, err := stream.Recv(); grpc.Code(err) != codes.Unimplemented {
-		t.Fatalf("stream.Recv() = _, %v, want _, error code %d", err, codes.Unimplemented)
+		t.Fatalf("stream.Recv() = _, %v, want _, error code %s", err, codes.Unimplemented)
 	}
 }
 
@@ -1919,7 +1919,7 @@ func testClientStreamingError(t *testing.T, e env) {
 			continue
 		}
 		if _, err := stream.CloseAndRecv(); grpc.Code(err) != codes.NotFound {
-			t.Fatalf("%v.CloseAndRecv() = %v, want error %d", stream, err, codes.NotFound)
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
 		}
 		break
 	}
@@ -1962,7 +1962,7 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			break
 		}
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
 	}
 }
 
@@ -2002,7 +2002,7 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			break
 		}
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
 	}
 	cancel()
 
@@ -2048,7 +2048,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Unimplemented {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %d", err, codes.Unimplemented)
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %s", err, codes.Unimplemented)
 	}
 	// Streaming RPC
 	stream, err := tc.FullDuplexCall(context.Background())
@@ -2073,7 +2073,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Unimplemented {
-		t.Fatalf("%v.Recv() = %v, want error code %d", stream, err, codes.Unimplemented)
+		t.Fatalf("%v.Recv() = %v, want error code %s", stream, err, codes.Unimplemented)
 	}
 }
 
@@ -2156,7 +2156,7 @@ func testUnaryServerInterceptor(t *testing.T, e env) {
 
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.PermissionDenied {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %d", tc, err, codes.PermissionDenied)
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.PermissionDenied)
 	}
 }
 
@@ -2205,7 +2205,7 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", tc, err)
 	}
 	if _, err := s1.Recv(); grpc.Code(err) != codes.PermissionDenied {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, error code %d", tc, err, codes.PermissionDenied)
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, error code %s", tc, err, codes.PermissionDenied)
 	}
 	s2, err := tc.FullDuplexCall(context.Background())
 	if err != nil {
