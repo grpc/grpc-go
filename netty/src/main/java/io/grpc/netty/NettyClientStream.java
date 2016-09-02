@@ -35,6 +35,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
+import io.grpc.InternalKnownTransport;
+import io.grpc.InternalMethodDescriptor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -56,6 +58,10 @@ import javax.annotation.Nullable;
  * Client stream for a Netty transport.
  */
 abstract class NettyClientStream extends Http2ClientStream implements StreamIdHolder {
+
+  private static final InternalMethodDescriptor methodDescriptorAccessor =
+      new InternalMethodDescriptor(InternalKnownTransport.NETTY);
+
   private final MethodDescriptor<?, ?> method;
   /** {@code null} after start. */
   private Metadata headers;
@@ -94,7 +100,11 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
     super.start(listener);
 
     // Convert the headers into Netty HTTP/2 headers.
-    AsciiString defaultPath = new AsciiString("/" + method.getFullMethodName());
+    AsciiString defaultPath = (AsciiString) methodDescriptorAccessor.geRawMethodName(method);
+    if (defaultPath == null) {
+      defaultPath = new AsciiString("/" + method.getFullMethodName());
+      methodDescriptorAccessor.setRawMethodName(method, defaultPath);
+    }
     headers.removeAll(GrpcUtil.USER_AGENT_KEY);
     Http2Headers http2Headers
         = Utils.convertClientHeaders(headers, scheme, defaultPath, authority, userAgent);

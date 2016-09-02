@@ -34,6 +34,7 @@ package io.grpc;
 import com.google.common.base.Preconditions;
 
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -54,6 +55,17 @@ public class MethodDescriptor<ReqT, RespT> {
   private final Marshaller<ReqT> requestMarshaller;
   private final Marshaller<RespT> responseMarshaller;
   private final boolean idempotent;
+
+  private final AtomicReferenceArray<Object> rawMethodNames =
+      new AtomicReferenceArray<Object>(InternalKnownTransport.values().length);
+
+  final Object getRawMethodName(InternalKnownTransport t) {
+    return rawMethodNames.get(t.ordinal());
+  }
+
+  final void setRawMethodName(InternalKnownTransport t, Object o) {
+    rawMethodNames.lazySet(t.ordinal(), o);
+  }
 
   /**
    * The call type of a method.
@@ -152,10 +164,11 @@ public class MethodDescriptor<ReqT, RespT> {
         type, fullMethodName, requestMarshaller, responseMarshaller, false);
   }
 
-  private MethodDescriptor(MethodType type, String fullMethodName,
-                           Marshaller<ReqT> requestMarshaller,
-                           Marshaller<RespT> responseMarshaller,
-                           boolean idempotent) {
+  private MethodDescriptor(
+      MethodType type, String fullMethodName,
+       Marshaller<ReqT> requestMarshaller,
+       Marshaller<RespT> responseMarshaller,
+       boolean idempotent) {
     this.type = Preconditions.checkNotNull(type, "type");
     this.fullMethodName = Preconditions.checkNotNull(fullMethodName, "fullMethodName");
     this.requestMarshaller = Preconditions.checkNotNull(requestMarshaller, "requestMarshaller");
