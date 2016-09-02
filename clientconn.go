@@ -83,15 +83,17 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	codec    Codec
-	cp       Compressor
-	dc       Decompressor
-	bs       backoffStrategy
-	balancer Balancer
-	block    bool
-	insecure bool
-	timeout  time.Duration
-	copts    transport.ConnectOptions
+	unaryInt  UnaryClientInterceptor
+	streamInt StreamClientInterceptor
+	codec     Codec
+	cp        Compressor
+	dc        Decompressor
+	bs        backoffStrategy
+	balancer  Balancer
+	block     bool
+	insecure  bool
+	timeout   time.Duration
+	copts     transport.ConnectOptions
 }
 
 // DialOption configures how we set up the connection.
@@ -212,6 +214,20 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 func WithUserAgent(s string) DialOption {
 	return func(o *dialOptions) {
 		o.copts.UserAgent = s
+	}
+}
+
+// WithUnaryInterceptor returns a DialOption that specifies the interceptor for unary RPCs.
+func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
+	return func(o *dialOptions) {
+		o.unaryInt = f
+	}
+}
+
+// WithStreamInterceptor returns a DialOption that specifies the interceptor for streaming RPCs.
+func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
+	return func(o *dialOptions) {
+		o.streamInt = f
 	}
 }
 
