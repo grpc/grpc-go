@@ -322,11 +322,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if ok {
 		go cc.lbWatcher()
 	}
-	colonPos := strings.LastIndex(target, ":")
-	if colonPos == -1 {
-		colonPos = len(target)
+	creds := cc.dopts.copts.TransportCredentials
+	if creds != nil && creds.Info().ServerName != "" {
+		cc.authority = creds.Info().ServerName
+	} else {
+		colonPos := strings.LastIndex(target, ":")
+		if colonPos == -1 {
+			colonPos = len(target)
+		}
+		cc.authority = target[:colonPos]
 	}
-	cc.authority = target[:colonPos]
 	return cc, nil
 }
 
