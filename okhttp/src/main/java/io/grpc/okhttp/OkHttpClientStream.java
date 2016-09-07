@@ -139,7 +139,7 @@ class OkHttpClientStream extends Http2ClientStream {
   public void start(ClientStreamListener listener) {
     super.start(listener);
     String defaultPath = "/" + method.getFullMethodName();
-    headers.removeAll(GrpcUtil.USER_AGENT_KEY);
+    headers.discardAll(GrpcUtil.USER_AGENT_KEY);
     List<Header> requestHeaders =
         Headers.createRequestHeaders(headers, defaultPath, authority, userAgent);
     headers = null;

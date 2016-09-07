@@ -272,6 +272,16 @@ public final class Metadata {
   }
 
   /**
+   * Remove all values for the given key without returning them.  This is a minor performance
+   * optimization if you do not need the previous values.
+   */
+  @ExperimentalApi
+  public <T> void discardAll(Key<T> key) {
+    List<MetadataEntry> removed = store.remove(key.name());
+    storeCount -= removed != null ? removed.size() : 0;
+  }
+
+  /**
    * Serialize all the metadata entries.
    *
    * <p>It produces serialized names and values interleaved. result[i*2] are names, while

@@ -238,8 +238,8 @@ public abstract class Http2ClientStream extends AbstractClientStream<Integer> {
    * the application layer.
    */
   private static void stripTransportDetails(Metadata metadata) {
-    metadata.removeAll(HTTP2_STATUS);
-    metadata.removeAll(Status.CODE_KEY);
-    metadata.removeAll(Status.MESSAGE_KEY);
+    metadata.discardAll(HTTP2_STATUS);
+    metadata.discardAll(Status.CODE_KEY);
+    metadata.discardAll(Status.MESSAGE_KEY);
   }
 }

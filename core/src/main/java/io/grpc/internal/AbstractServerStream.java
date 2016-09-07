@@ -145,8 +145,8 @@ public abstract class AbstractServerStream extends AbstractStream2
   }
 
   private void addStatusToTrailers(Metadata trailers, Status status) {
-    trailers.removeAll(Status.CODE_KEY);
-    trailers.removeAll(Status.MESSAGE_KEY);
+    trailers.discardAll(Status.CODE_KEY);
+    trailers.discardAll(Status.MESSAGE_KEY);
     trailers.put(Status.CODE_KEY, status);
     if (status.getDescription() != null) {
       trailers.put(Status.MESSAGE_KEY, status.getDescription());

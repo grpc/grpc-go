@@ -105,7 +105,7 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
       defaultPath = new AsciiString("/" + method.getFullMethodName());
       methodDescriptorAccessor.setRawMethodName(method, defaultPath);
     }
-    headers.removeAll(GrpcUtil.USER_AGENT_KEY);
+    headers.discardAll(GrpcUtil.USER_AGENT_KEY);
     Http2Headers http2Headers
         = Utils.convertClientHeaders(headers, scheme, defaultPath, authority, userAgent);
     headers = null;

@@ -115,6 +115,17 @@ public class MetadataTest {
   }
 
   @Test
+  public void discardAll() {
+    Fish lance = new Fish(LANCE);
+    Metadata metadata = new Metadata();
+
+    metadata.put(KEY, lance);
+    metadata.discardAll(KEY);
+    assertEquals(null, metadata.getAll(KEY));
+    assertEquals(null, metadata.get(KEY));
+  }
+
+  @Test
   public void testGetAllNoRemove() {
     Fish lance = new Fish(LANCE);
     Metadata metadata = new Metadata();

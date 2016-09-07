@@ -140,12 +140,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   @VisibleForTesting
   static void prepareHeaders(Metadata headers, DecompressorRegistry decompressorRegistry,
       Compressor compressor) {
-    headers.removeAll(MESSAGE_ENCODING_KEY);
+    headers.discardAll(MESSAGE_ENCODING_KEY);
     if (compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
     }
 
-    headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
+    headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
     String advertisedEncodings = decompressorRegistry.getRawAdvertisedMessageEncodings();
     if (!advertisedEncodings.isEmpty()) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
@@ -251,7 +251,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
    */
   private static void updateTimeoutHeaders(@Nullable Deadline effectiveDeadline,
       @Nullable Deadline callDeadline, @Nullable Deadline outerCallDeadline, Metadata headers) {
-    headers.removeAll(TIMEOUT_KEY);
+    headers.discardAll(TIMEOUT_KEY);
 
     if (effectiveDeadline == null) {
       return;

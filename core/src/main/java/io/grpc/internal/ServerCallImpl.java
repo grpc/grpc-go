@@ -104,7 +104,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     checkState(!sendHeadersCalled, "sendHeaders has already been called");
     checkState(!closeCalled, "call is closed");
 
-    headers.removeAll(MESSAGE_ENCODING_KEY);
+    headers.discardAll(MESSAGE_ENCODING_KEY);
     if (compressor == null) {
       compressor = Codec.Identity.NONE;
     } else {
@@ -125,7 +125,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
     stream.setCompressor(compressor);
 
-    headers.removeAll(MESSAGE_ACCEPT_ENCODING_KEY);
+    headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
     String advertisedEncodings = decompressorRegistry.getRawAdvertisedMessageEncodings();
     if (!advertisedEncodings.isEmpty()) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
