@@ -34,6 +34,7 @@ package io.grpc.internal;
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 
+import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Status;
 
@@ -49,21 +50,30 @@ public abstract class Http2ClientStream extends AbstractClientStream {
   /**
    * Metadata marshaller for HTTP status lines.
    */
-  private static final Metadata.AsciiMarshaller<Integer> HTTP_STATUS_LINE_MARSHALLER =
-      new Metadata.AsciiMarshaller<Integer>() {
+  private static final InternalMetadata.TrustedAsciiMarshaller<Integer> HTTP_STATUS_MARSHALLER =
+      new InternalMetadata.TrustedAsciiMarshaller<Integer>() {
         @Override
-        public String toAsciiString(Integer value) {
-          return value.toString();
+        public byte[] toAsciiString(Integer value) {
+          throw new UnsupportedOperationException();
         }
 
+        /**
+         * RFC 7231 says status codes are 3 digits long.
+         *
+         * @see: <a href="https://tools.ietf.org/html/rfc7231#section-6">RFC 7231</a>
+         */
         @Override
-        public Integer parseAsciiString(String serialized) {
-          return Integer.parseInt(serialized.split(" ", 2)[0]);
+        public Integer parseAsciiString(byte[] serialized) {
+          if (serialized.length >= 3) {
+            return (serialized[0] - '0') * 100 + (serialized[1] - '0') * 10 + (serialized[2] - '0');
+          }
+          throw new NumberFormatException(
+              "Malformed status code " + new String(serialized, InternalMetadata.US_ASCII));
         }
       };
 
-  private static final Metadata.Key<Integer> HTTP2_STATUS = Metadata.Key.of(":status",
-      HTTP_STATUS_LINE_MARSHALLER);
+  private static final Metadata.Key<Integer> HTTP2_STATUS = InternalMetadata.keyOf(":status",
+      HTTP_STATUS_MARSHALLER);
 
   /** When non-{@code null}, {@link #transportErrorMetadata} must also be non-{@code null}. */
   private Status transportError;

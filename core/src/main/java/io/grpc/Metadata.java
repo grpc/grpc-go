@@ -38,6 +38,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -460,6 +462,10 @@ public final class Metadata {
       return new AsciiKey<T>(name, marshaller);
     }
 
+    static <T> Key<T> of(String name, TrustedAsciiMarshaller<T> marshaller) {
+      return new TrustedAsciiKey<T>(name, marshaller);
+    }
+
     private final String originalName;
 
     private final String name;
@@ -603,7 +609,7 @@ public final class Metadata {
       super(name);
       Preconditions.checkArgument(
           !name.endsWith(BINARY_HEADER_SUFFIX),
-          "ASCII header is named %s. It must not end with %s",
+          "ASCII header is named %s.  Only binary headers may end with %s",
           name, BINARY_HEADER_SUFFIX);
       this.marshaller = Preconditions.checkNotNull(marshaller, "marshaller");
     }
@@ -616,6 +622,32 @@ public final class Metadata {
     @Override
     T parseBytes(byte[] serialized) {
       return marshaller.parseAsciiString(new String(serialized, US_ASCII));
+    }
+  }
+
+  private static final class TrustedAsciiKey<T> extends Key<T> {
+    private final TrustedAsciiMarshaller<T> marshaller;
+
+    /**
+     * Keys have a name and an ASCII marshaller used for serialization.
+     */
+    private TrustedAsciiKey(String name, TrustedAsciiMarshaller<T> marshaller) {
+      super(name);
+      Preconditions.checkArgument(
+          !name.endsWith(BINARY_HEADER_SUFFIX),
+          "ASCII header is named %s.  Only binary headers may end with %s",
+          name, BINARY_HEADER_SUFFIX);
+      this.marshaller = Preconditions.checkNotNull(marshaller, "marshaller");
+    }
+
+    @Override
+    byte[] toBytes(T value) {
+      return marshaller.toAsciiString(value);
+    }
+
+    @Override
+    T parseBytes(byte[] serialized) {
+      return marshaller.parseAsciiString(serialized);
     }
   }
 
