@@ -166,9 +166,9 @@ public class MethodDescriptor<ReqT, RespT> {
 
   private MethodDescriptor(
       MethodType type, String fullMethodName,
-       Marshaller<ReqT> requestMarshaller,
-       Marshaller<RespT> responseMarshaller,
-       boolean idempotent) {
+      Marshaller<ReqT> requestMarshaller,
+      Marshaller<RespT> responseMarshaller,
+      boolean idempotent) {
     this.type = Preconditions.checkNotNull(type, "type");
     this.fullMethodName = Preconditions.checkNotNull(fullMethodName, "fullMethodName");
     this.requestMarshaller = Preconditions.checkNotNull(requestMarshaller, "requestMarshaller");
