@@ -93,6 +93,43 @@ func TestDialContextCancel(t *testing.T) {
 	}
 }
 
+// blockingBalancer mimics the behavior of balancers whose initialization takes a long time.
+// In this test, reading from blockingBalancer.Notify() blocks forever.
+type blockingBalancer struct {
+	ch chan []Address
+}
+
+func newBlockingBalancer() *blockingBalancer {
+	return &blockingBalancer{ch: make(chan []Address)}
+}
+func (b *blockingBalancer) Start(target string) error {
+	return nil
+}
+func (b *blockingBalancer) Up(addr Address) func(error) {
+	return nil
+}
+func (b *blockingBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
+	return Address{}, nil, nil
+}
+func (b *blockingBalancer) Notify() <-chan []Address {
+	return b.ch
+}
+func (b *blockingBalancer) Close() error {
+	close(b.ch)
+	return nil
+}
+
+func TestDialWithBlockingBalancer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dialDone := make(chan struct{})
+	go func() {
+		DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure(), WithBalancer(newBlockingBalancer()))
+		close(dialDone)
+	}()
+	cancel()
+	<-dialDone
+}
+
 func TestCredentialsMisuse(t *testing.T) {
 	tlsCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 	if err != nil {

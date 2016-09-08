@@ -271,30 +271,30 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.bs = DefaultBackoffConfig
 	}
 
-	var (
-		ok    bool
-		addrs []Address
-	)
-	if cc.dopts.balancer == nil {
-		// Connect to target directly if balancer is nil.
-		addrs = append(addrs, Address{Addr: target})
-	} else {
-		if err := cc.dopts.balancer.Start(target); err != nil {
-			return nil, err
-		}
-		ch := cc.dopts.balancer.Notify()
-		if ch == nil {
-			// There is no name resolver installed.
-			addrs = append(addrs, Address{Addr: target})
-		} else {
-			addrs, ok = <-ch
-			if !ok || len(addrs) == 0 {
-				return nil, errNoAddr
-			}
-		}
-	}
+	var ok bool
 	waitC := make(chan error, 1)
 	go func() {
+		var addrs []Address
+		if cc.dopts.balancer == nil {
+			// Connect to target directly if balancer is nil.
+			addrs = append(addrs, Address{Addr: target})
+		} else {
+			if err := cc.dopts.balancer.Start(target); err != nil {
+				waitC <- err
+				return
+			}
+			ch := cc.dopts.balancer.Notify()
+			if ch == nil {
+				// There is no name resolver installed.
+				addrs = append(addrs, Address{Addr: target})
+			} else {
+				addrs, ok = <-ch
+				if !ok || len(addrs) == 0 {
+					waitC <- errNoAddr
+					return
+				}
+			}
+		}
 		for _, a := range addrs {
 			if err := cc.resetAddrConn(a, false, nil); err != nil {
 				waitC <- err
