@@ -54,7 +54,7 @@ var (
 	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
 	serverHost            = flag.String("server_host", "127.0.0.1", "The server host name")
 	serverPort            = flag.Int("server_port", 10000, "The server port number")
-	tlsServerName         = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+	tlsServerName         = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	testCase              = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
