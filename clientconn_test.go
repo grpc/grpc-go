@@ -75,7 +75,7 @@ func TestTLSServerNameOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond))
+	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
