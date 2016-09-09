@@ -139,6 +139,8 @@ public class ProtoLiteUtils {
                 throw new RuntimeException("size inaccurate: " + buf.length + " != " + position);
               }
               cis = CodedInputStream.newInstance(buf);
+            } else if (size == 0) {
+              return defaultInstance;
             }
           }
         } catch (IOException e) {
