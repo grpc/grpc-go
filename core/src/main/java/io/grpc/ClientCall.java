@@ -101,7 +101,7 @@ import javax.annotation.Nullable;
  *           call.halfClose();
  *           return;
  *         }
- *         call.sendMessage(makeNextRequest());
+ *         call.sendMessage(nextRequest);
  *       }
  *     }
  *   }
