@@ -147,6 +147,10 @@ public final class Metadata {
     checkArgument(binaryValues.length % 2 == 0,
         "Odd number of key-value pairs: %s", binaryValues.length);
     for (int i = 0; i < binaryValues.length; i += 2) {
+      // The transport might provide an array with null values at the end.
+      if (binaryValues[i] == null) {
+        break;
+      }
       String name = new String(binaryValues[i], US_ASCII);
       storeAdd(name, new MetadataEntry(name.endsWith(BINARY_HEADER_SUFFIX), binaryValues[i + 1]));
     }

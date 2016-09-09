@@ -62,6 +62,8 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
+import io.grpc.internal.GrpcUtil;
+import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -115,7 +117,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     MockitoAnnotations.initMocks(this);
     lifecycleManager = new ClientTransportLifecycleManager(listener);
 
-    initChannel();
+    initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
     grpcHeaders = new DefaultHttp2Headers()
         .scheme(HTTPS)

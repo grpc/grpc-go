@@ -50,6 +50,7 @@ import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -61,9 +62,7 @@ import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
-import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
-import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
@@ -112,8 +111,7 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        int maxMessageSize) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class);
-    Http2HeadersDecoder headersDecoder = new DefaultHttp2HeadersDecoder(
-        maxHeaderListSize, Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE, true, 32);
+    Http2HeadersDecoder headersDecoder = new GrpcHttp2ServerHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new Http2InboundFrameLogger(
         new DefaultHttp2FrameReader(headersDecoder), frameLogger);
     Http2FrameWriter frameWriter =

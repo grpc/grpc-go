@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
  * Header encoding benchmark.
  */
 @State(Scope.Benchmark)
-public class HeadersBenchmark {
+public class OutboundHeadersBenchmark {
   @Param({"1", "5", "10", "20"})
   public int headerCount;
 

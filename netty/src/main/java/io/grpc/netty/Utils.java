@@ -33,6 +33,8 @@ package io.grpc.netty;
 
 import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
+import static io.grpc.internal.TransportFrameUtil.toHttp2Headers;
+import static io.grpc.internal.TransportFrameUtil.toRawSerializedHeaders;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -42,7 +44,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
-import io.grpc.internal.TransportFrameUtil;
+import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2InboundHeaders;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.Http2Exception;
@@ -88,6 +90,9 @@ class Utils {
   static boolean validateHeaders = false;
 
   public static Metadata convertHeaders(Http2Headers http2Headers) {
+    if (http2Headers instanceof GrpcHttp2InboundHeaders) {
+      return new Metadata(((GrpcHttp2InboundHeaders) http2Headers).namesAndValues());
+    }
     return new Metadata(convertHeadersToArray(http2Headers));
   }
 
@@ -100,7 +105,7 @@ class Utils {
       headerValues[i++] = bytes(entry.getKey());
       headerValues[i++] = bytes(entry.getValue());
     }
-    return TransportFrameUtil.toRawSerializedHeaders(headerValues);
+    return toRawSerializedHeaders(headerValues);
   }
 
   private static byte[] bytes(CharSequence seq) {
@@ -121,8 +126,8 @@ class Utils {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
 
-    return GrpcHttp2Headers.clientRequestHeaders(
-        TransportFrameUtil.toHttp2Headers(headers),
+    return GrpcHttp2OutboundHeaders.clientRequestHeaders(
+        toHttp2Headers(headers),
         authority,
         defaultPath,
         HTTP_METHOD,
@@ -131,10 +136,13 @@ class Utils {
   }
 
   public static Http2Headers convertServerHeaders(Metadata headers) {
-    return GrpcHttp2Headers.serverResponseHeaders(TransportFrameUtil.toHttp2Headers(headers));
+    return GrpcHttp2OutboundHeaders.serverResponseHeaders(toHttp2Headers(headers));
   }
 
   public static Metadata convertTrailers(Http2Headers http2Headers) {
+    if (http2Headers instanceof GrpcHttp2InboundHeaders) {
+      return new Metadata(((GrpcHttp2InboundHeaders) http2Headers).namesAndValues());
+    }
     return new Metadata(convertHeadersToArray(http2Headers));
   }
 
@@ -142,7 +150,7 @@ class Utils {
     if (!headersSent) {
       return convertServerHeaders(trailers);
     }
-    return GrpcHttp2Headers.serverResponseTrailers(TransportFrameUtil.toHttp2Headers(trailers));
+    return GrpcHttp2OutboundHeaders.serverResponseTrailers(toHttp2Headers(trailers));
   }
 
   public static Status statusFromThrowable(Throwable t) {

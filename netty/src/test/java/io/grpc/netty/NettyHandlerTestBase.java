@@ -91,10 +91,10 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   /**
    * Must be called by subclasses to initialize the handler and channel.
    */
-  protected final void initChannel() throws Exception {
+  protected final void initChannel(GrpcHttp2HeadersDecoder headersDecoder) throws Exception {
     content = Unpooled.copiedBuffer("hello world", UTF_8);
     frameWriter = spy(new DefaultHttp2FrameWriter());
-    frameReader = new DefaultHttp2FrameReader();
+    frameReader = new DefaultHttp2FrameReader(headersDecoder);
 
     handler = newHandler();
 

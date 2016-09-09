@@ -58,11 +58,13 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.MessageFramer;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.WritableBuffer;
+import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
@@ -120,7 +122,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         any(Metadata.class)))
         .thenReturn(streamListener);
     when(transportListener.transportReady(any(Attributes.class))).thenReturn(Attributes.EMPTY);
-    initChannel();
+
+    initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
     // Simulate receipt of the connection preface
     channelRead(Http2CodecUtil.connectionPrefaceBuf());

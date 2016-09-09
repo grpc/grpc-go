@@ -41,14 +41,15 @@ import java.util.NoSuchElementException;
 /**
  * A custom implementation of Http2Headers that only includes methods used by gRPC.
  */
-final class GrpcHttp2Headers extends AbstractHttp2Headers {
+final class GrpcHttp2OutboundHeaders extends AbstractHttp2Headers {
 
   private final AsciiString[] normalHeaders;
   private final AsciiString[] preHeaders;
   private static final AsciiString[] EMPTY = new AsciiString[]{};
 
-  static GrpcHttp2Headers clientRequestHeaders(byte[][] serializedMetadata, AsciiString authority,
-      AsciiString path, AsciiString method, AsciiString scheme, AsciiString userAgent) {
+  static GrpcHttp2OutboundHeaders clientRequestHeaders(byte[][] serializedMetadata,
+      AsciiString authority, AsciiString path, AsciiString method, AsciiString scheme,
+      AsciiString userAgent) {
     AsciiString[] preHeaders = new AsciiString[] {
         Http2Headers.PseudoHeaderName.AUTHORITY.value(), authority,
         Http2Headers.PseudoHeaderName.PATH.value(), path,
@@ -58,22 +59,22 @@ final class GrpcHttp2Headers extends AbstractHttp2Headers {
         Utils.TE_HEADER, Utils.TE_TRAILERS,
         Utils.USER_AGENT, userAgent,
     };
-    return new GrpcHttp2Headers(preHeaders, serializedMetadata);
+    return new GrpcHttp2OutboundHeaders(preHeaders, serializedMetadata);
   }
 
-  static GrpcHttp2Headers serverResponseHeaders(byte[][] serializedMetadata) {
+  static GrpcHttp2OutboundHeaders serverResponseHeaders(byte[][] serializedMetadata) {
     AsciiString[] preHeaders = new AsciiString[] {
         Http2Headers.PseudoHeaderName.STATUS.value(), Utils.STATUS_OK,
         Utils.CONTENT_TYPE_HEADER, Utils.CONTENT_TYPE_GRPC,
     };
-    return new GrpcHttp2Headers(preHeaders, serializedMetadata);
+    return new GrpcHttp2OutboundHeaders(preHeaders, serializedMetadata);
   }
 
-  static GrpcHttp2Headers serverResponseTrailers(byte[][] serializedMetadata) {
-    return new GrpcHttp2Headers(EMPTY, serializedMetadata);
+  static GrpcHttp2OutboundHeaders serverResponseTrailers(byte[][] serializedMetadata) {
+    return new GrpcHttp2OutboundHeaders(EMPTY, serializedMetadata);
   }
 
-  private GrpcHttp2Headers(AsciiString[] preHeaders, byte[][] serializedMetadata) {
+  private GrpcHttp2OutboundHeaders(AsciiString[] preHeaders, byte[][] serializedMetadata) {
     normalHeaders = new AsciiString[serializedMetadata.length];
     for (int i = 0; i < normalHeaders.length; i++) {
       normalHeaders[i] = new AsciiString(serializedMetadata[i], false);
