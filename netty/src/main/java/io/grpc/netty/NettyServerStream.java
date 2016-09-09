@@ -166,7 +166,8 @@ class NettyServerStream extends AbstractServerStream {
       super.inboundDataReceived(new NettyReadableBuffer(frame.retain()), endOfStream);
     }
 
-    public Integer id() {
+    @Override
+    public int id() {
       return http2Stream.id();
     }
   }

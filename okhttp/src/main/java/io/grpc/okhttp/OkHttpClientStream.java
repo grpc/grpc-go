@@ -50,7 +50,6 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -76,12 +75,12 @@ class OkHttpClientStream extends Http2ClientStream {
   private final String userAgent;
   private String authority;
   private Object outboundFlowState;
-  private volatile Integer id;
+  private volatile int id = ABSENT_ID;
   @GuardedBy("lock")
   private List<Header> requestHeaders;
   /**
    * Null iff {@link #requestHeaders} is null.  Non-null iff neither {@link #sendCancel} nor
-   * {@link #start(Integer)} have been called.
+   * {@link #start(int)} have been called.
    */
   @GuardedBy("lock")
   private Queue<PendingData> pendingData = new ArrayDeque<PendingData>();
@@ -124,8 +123,7 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @Override
-  @Nullable
-  public Integer id() {
+  public int id() {
     return id;
   }
 
@@ -150,9 +148,9 @@ class OkHttpClientStream extends Http2ClientStream {
   }
 
   @GuardedBy("lock")
-  public void start(Integer id) {
+  public void start(int id) {
     checkNotNull(id, "id");
-    checkState(this.id == null, "the stream has been started with id %s", this.id);
+    checkState(this.id == ABSENT_ID, "the stream has been started with id %s", this.id);
     this.id = id;
 
     if (pendingData != null) {
@@ -238,7 +236,7 @@ class OkHttpClientStream extends Http2ClientStream {
         // Stream is pending start, queue the data.
         pendingData.add(new PendingData(buffer, endOfStream, flush));
       } else {
-        checkState(id() != null, "streamId should be set");
+        checkState(id() != ABSENT_ID, "streamId should be set");
         // If buffer > frameWriter.maxDataLength() the flow-controller will ensure that it is
         // properly chunked.
         outboundFlow.data(endOfStream, id(), buffer, flush);

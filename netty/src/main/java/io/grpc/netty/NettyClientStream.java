@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
@@ -72,7 +73,7 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
   private AsciiString authority;
 
   private Http2Stream http2Stream;
-  private Integer id;
+  private int id;
   private WriteQueue writeQueue;
 
   NettyClientStream(MethodDescriptor<?, ?> method, Metadata headers, Channel channel,
@@ -148,11 +149,12 @@ abstract class NettyClientStream extends Http2ClientStream implements StreamIdHo
   }
 
   @Override
-  public Integer id() {
+  public int id() {
     return id;
   }
 
   public void id(int id) {
+    checkArgument(id != ABSENT_ID, "Can't use absent id");
     this.id = id;
   }
 

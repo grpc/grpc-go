@@ -33,5 +33,8 @@ package io.grpc.netty;
 
 /** Container for stream ids. */
 interface StreamIdHolder {
-  public Integer id();
+  /**
+   * Returns the id or {@link io.grpc.internal.AbstractStream#ABSENT_ID}.
+   */
+  int id();
 }

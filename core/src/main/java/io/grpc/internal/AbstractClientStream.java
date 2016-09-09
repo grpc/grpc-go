@@ -48,7 +48,7 @@ import java.util.logging.Logger;
 /**
  * The abstract base class for {@link ClientStream} implementations.
  */
-public abstract class AbstractClientStream<IdT> extends AbstractStream<IdT>
+public abstract class AbstractClientStream extends AbstractStream
     implements ClientStream {
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());

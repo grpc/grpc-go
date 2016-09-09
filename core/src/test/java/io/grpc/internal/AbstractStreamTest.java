@@ -51,8 +51,6 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.InputStream;
 
-import javax.annotation.Nullable;
-
 @RunWith(JUnit4.class)
 public class AbstractStreamTest {
   @Mock private StreamListener streamListener;
@@ -74,7 +72,7 @@ public class AbstractStreamTest {
 
   @Test
   public void onStreamAllocated_shouldNotifyReady() {
-    AbstractStream<Object> stream = new AbstractStreamBase<Object>(null);
+    AbstractStream stream = new AbstractStreamBase(null);
 
     stream.onStreamAllocated();
 
@@ -83,7 +81,7 @@ public class AbstractStreamTest {
 
   @Test
   public void setMessageCompression() {
-    AbstractStream<?> as = new AbstractStreamBase<Void>(framer, deframer);
+    AbstractStream as = new AbstractStreamBase(framer, deframer);
     as.setMessageCompression(true);
 
     verify(framer).setMessageCompression(true);
@@ -91,7 +89,7 @@ public class AbstractStreamTest {
 
   @Test
   public void validPhaseTransitions() {
-    AbstractStream<Object> stream = new AbstractStreamBase<Object>(null);
+    AbstractStream stream = new AbstractStreamBase(null);
     Multimap<Phase, Phase> validTransitions = ImmutableMultimap.<Phase, Phase>builder()
         .put(Phase.HEADERS, Phase.HEADERS)
         .put(Phase.HEADERS, Phase.MESSAGE)
@@ -120,7 +118,7 @@ public class AbstractStreamTest {
   /**
    * Base class for testing.
    */
-  private class AbstractStreamBase<IdT> extends AbstractStream<IdT> {
+  private class AbstractStreamBase extends AbstractStream {
     private AbstractStreamBase(WritableBufferAllocator bufferAllocator) {
       super(allocator, DEFAULT_MAX_MESSAGE_SIZE);
     }
@@ -135,9 +133,8 @@ public class AbstractStreamTest {
     }
 
     @Override
-    @Nullable
-    public IdT id() {
-      throw new UnsupportedOperationException();
+    public int id() {
+      return ABSENT_ID;
     }
 
     @Override
