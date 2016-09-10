@@ -94,6 +94,27 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   static final long IDLE_TIMEOUT_MILLIS_DISABLE = -1;
 
+  /**
+   * The time after idleTimeoutMillis expires before idleness takes effect. The time before
+   * idleTimeoutMillis expires is part of a fast path for acquiring the load balancer. After
+   * idleTimeoutMillis expires a slow path takes effect with extra synchronization.
+   *
+   * <p>Transports having open streams prevents entering idle mode. However, this creates an
+   * inherent race between acquiring a transport, which can't be done in idle mode, and the RPC
+   * actually being created on that transport, which inhibits idle mode. Thus we reset the idle
+   * timer when acquiring a transport, and impose a minimum idle time (IDLE_MODE_MIN_TIMEOUT_MILLIS)
+   * to make the chances of racing very small. If we do race, then the RPC will spuriously fail
+   * because the transport chosen was shut down.
+   *
+   * <p>For heavy users, resetting the idle timer each RPC becomes highly contended. We instead only
+   * need to reset the timer when it is close to expiring. We do the equivalent by having two
+   * periods: a reduced regular idle time period and the extra time as a grace period. We ignore the
+   * race during the regular idle time period, but any acquisition during the grace period must
+   * reset the timer.
+   */
+  @VisibleForTesting
+  static final long IDLE_GRACE_PERIOD_MILLIS = TimeUnit.SECONDS.toMillis(1);
+
   private static final ClientTransport SHUTDOWN_TRANSPORT =
       new FailingClientTransport(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
 
@@ -115,6 +136,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final SharedResourceHolder.Resource<ScheduledExecutorService> timerService;
   private final Supplier<Stopwatch> stopwatchSupplier;
+  /** The timout before entering idle mode, less {@link #IDLE_GRACE_PERIOD_MILLIS}. */
   private final long idleTimeoutMillis;
   private final CensusContextFactory censusFactory;
 
@@ -135,10 +157,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   // Never be null. Must be modified under lock.
   private NameResolver nameResolver;
 
-  // null iff channel is in idle state
+  /** {@code null} when idle or when in grace idle period. "lock" must be held when modifying. */
+  @Nullable
+  private volatile LoadBalancer<ClientTransport> loadBalancer;
+
+  /** non-{code null} iff channel is in grace idle period. */
   @GuardedBy("lock")
   @Nullable
-  private LoadBalancer<ClientTransport> loadBalancer;
+  private LoadBalancer<ClientTransport> graceLoadBalancer;
 
   /**
    * Maps EquivalentAddressGroups to transports for that server. "lock" must be held when mutating.
@@ -197,9 +223,18 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           // Race detected: this task started before cancelIdleTimer() could cancel it.
           return;
         }
+        if (loadBalancer != null) {
+          // Enter grace period.
+          graceLoadBalancer = loadBalancer;
+          loadBalancer = null;
+          assert idleModeTimer == this;
+          idleModeTimerFuture = scheduledExecutor.schedule(new LogExceptionRunnable(idleModeTimer),
+              IDLE_GRACE_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+          return;
+        }
         // Enter idle mode
-        savedBalancer = loadBalancer;
-        loadBalancer = null;
+        savedBalancer = graceLoadBalancer;
+        graceLoadBalancer = null;
         oldResolver = nameResolver;
         nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
         transportsCopy.addAll(transports.values());
@@ -243,6 +278,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         // the aggregator receives actual uses.
         rescheduleIdleTimer();
       }
+      if (graceLoadBalancer != null) {
+        // Exit grace period; timer already rescheduled above.
+        loadBalancer = graceLoadBalancer;
+        graceLoadBalancer = null;
+      }
       if (loadBalancer != null) {
         return loadBalancer;
       }
@@ -266,6 +306,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
     scheduledExecutor.execute(new NameResolverStartTask());
     return balancer;
+  }
+
+  @VisibleForTesting
+  boolean isInIdleGracePeriod() {
+    synchronized (lock) {
+      return graceLoadBalancer != null;
+    }
   }
 
   // ErrorProne's GuardedByChecker can't figure out that the idleModeTimer is a nested instance of
@@ -312,7 +359,11 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
     public ClientTransport get(CallOptions callOptions) {
-      LoadBalancer<ClientTransport> balancer = exitIdleMode();
+      LoadBalancer<ClientTransport> balancer = loadBalancer;
+      if (balancer == null) {
+        // Current state is either idle or in grace period
+        balancer = exitIdleMode();
+      }
       if (balancer == null) {
         return SHUTDOWN_TRANSPORT;
       }
@@ -347,9 +398,15 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.timerService = timerService;
     this.scheduledExecutor = SharedResourceHolder.get(timerService);
     this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
-    checkArgument(idleTimeoutMillis > 0 || idleTimeoutMillis == IDLE_TIMEOUT_MILLIS_DISABLE,
-        "invalid idleTimeoutMillis %s", idleTimeoutMillis);
-    this.idleTimeoutMillis = idleTimeoutMillis;
+    if (idleTimeoutMillis == IDLE_TIMEOUT_MILLIS_DISABLE) {
+      this.idleTimeoutMillis = idleTimeoutMillis;
+    } else {
+      assert IDLE_GRACE_PERIOD_MILLIS
+          <= AbstractManagedChannelImplBuilder.IDLE_MODE_MIN_TIMEOUT_MILLIS;
+      checkArgument(idleTimeoutMillis >= IDLE_GRACE_PERIOD_MILLIS,
+          "invalid idleTimeoutMillis %s", idleTimeoutMillis);
+      this.idleTimeoutMillis = idleTimeoutMillis - IDLE_GRACE_PERIOD_MILLIS;
+    }
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
     this.userAgent = userAgent;
@@ -435,7 +492,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         delayedTransportsCopy.addAll(delayedTransports);
         oobTransportsCopy.addAll(oobTransports);
       }
-      balancer = loadBalancer;
+      balancer = getCurrentLoadBalancer();
       resolver = nameResolver;
       cancelIdleTimer();
     }
@@ -539,6 +596,15 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     return interceptorChannel.authority();
   }
 
+  /** Returns {@code null} iff channel is in idle state. */
+  @GuardedBy("lock")
+  private LoadBalancer<ClientTransport> getCurrentLoadBalancer() {
+    if (loadBalancer != null) {
+      return loadBalancer;
+    }
+    return graceLoadBalancer;
+  }
+
   private class RealChannel extends Channel {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> newCall(MethodDescriptor<ReqT, RespT> method,
@@ -608,12 +674,12 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         if (shutdown) {
           return SHUTDOWN_TRANSPORT;
         }
-        if (loadBalancer == null) {
+        if (getCurrentLoadBalancer() == null) {
           return IDLE_MODE_TRANSPORT;
         }
         ts = transports.get(addressGroup);
         if (ts == null) {
-          ts = new TransportSet(addressGroup, authority(), userAgent, loadBalancer,
+          ts = new TransportSet(addressGroup, authority(), userAgent, getCurrentLoadBalancer(),
               backoffPolicyProvider, transportFactory, scheduledExecutor, stopwatchSupplier,
               executor, new TransportSet.Callback() {
                 @Override
@@ -775,14 +841,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         if (shutdown) {
           transportSet = null;
           transport = SHUTDOWN_TRANSPORT;
-        } else if (loadBalancer == null) {
+        } else if (getCurrentLoadBalancer() == null) {
           transportSet = null;
           transport = IDLE_MODE_TRANSPORT;
         } else {
           transport = null;
-          transportSet = new TransportSet(addressGroup, authority, userAgent, loadBalancer,
-              backoffPolicyProvider, transportFactory, scheduledExecutor, stopwatchSupplier,
-              executor, new TransportSet.Callback() {
+          transportSet = new TransportSet(addressGroup, authority, userAgent,
+              getCurrentLoadBalancer(), backoffPolicyProvider, transportFactory, scheduledExecutor,
+              stopwatchSupplier, executor, new TransportSet.Callback() {
                 @Override
                 public void onTerminated(TransportSet ts) {
                   synchronized (lock) {

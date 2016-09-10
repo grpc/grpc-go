@@ -41,6 +41,7 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -192,6 +193,65 @@ public class ManagedChannelImplIdlenessTest {
     // Simulate new address resolved
     nameResolverListenerCaptor.getValue().onUpdate(servers, Attributes.EMPTY);
     verify(mockLoadBalancer).handleResolvedAddresses(servers, Attributes.EMPTY);
+  }
+
+  @Test
+  public void newCallResetsGracePeriod() throws Exception {
+    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
+    doAnswer(new Answer<ClientTransport>() {
+        @Override
+        public ClientTransport answer(InvocationOnMock invocation) throws Throwable {
+          return channel.tm.getTransport(addressGroup);
+        }
+      }).when(mockLoadBalancer).pickTransport(any(Attributes.class));
+
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    call.cancel("cleanup", null);
+    executor.runDueTasks();
+
+    timer.runDueTasks();
+    verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), same(channel.tm));
+    verify(mockLoadBalancer).pickTransport(any(Attributes.class));
+
+    // Enter grace period
+    timer.forwardTime(TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS)
+        - ManagedChannelImpl.IDLE_GRACE_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+    assertTrue(channel.isInIdleGracePeriod());
+
+    call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+    assertFalse(channel.isInIdleGracePeriod());
+    call.cancel("cleanup", null);
+    executor.runDueTasks();
+
+    // Load balancer was reused.
+    timer.runDueTasks();
+    verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), same(channel.tm));
+    verify(mockLoadBalancer, times(2)).pickTransport(any(Attributes.class));
+
+    // Now just let time pass to allow the original idle time to be well past expired.
+    timer.forwardTime(IDLE_TIMEOUT_SECONDS - 1, TimeUnit.SECONDS);
+
+    call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata());
+
+    // Load balancer was reused; the idle time period must have been reset.
+    timer.runDueTasks();
+    verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), same(channel.tm));
+    verify(mockLoadBalancer, times(3)).pickTransport(any(Attributes.class));
+  }
+
+  @Test
+  public void shutdownDuringGracePeriodShutdownLb() throws Exception {
+    forceExitIdleMode();
+    verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), same(channel.tm));
+    // Enter grace period
+    timer.forwardTime(TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS)
+        - ManagedChannelImpl.IDLE_GRACE_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+    verify(mockLoadBalancer, never()).shutdown();
+    channel.shutdown();
+    verify(mockLoadBalancer).shutdown();
   }
 
   @Test
