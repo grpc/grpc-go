@@ -69,8 +69,8 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
 
     private final Object lock = new Object();
 
-    @GuardedBy("lock")
-    private EquivalentAddressGroup addresses;
+    /** "lock" must be held when mutating. */
+    private volatile EquivalentAddressGroup addresses;
     @GuardedBy("lock")
     private InterimTransport<T> interimTransport;
     @GuardedBy("lock")
@@ -86,7 +86,10 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public T pickTransport(Attributes affinity) {
-      EquivalentAddressGroup addressesCopy;
+      EquivalentAddressGroup addressesCopy = addresses;
+      if (addressesCopy != null) {
+        return tm.getTransport(addressesCopy);
+      }
       synchronized (lock) {
         if (closed) {
           return tm.createFailingTransport(SHUTDOWN_STATUS);
@@ -157,6 +160,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
           return;
         }
         closed = true;
+        addresses = null;
         savedInterimTransport = interimTransport;
         interimTransport = null;
       }
