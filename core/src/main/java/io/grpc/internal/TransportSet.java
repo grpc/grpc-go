@@ -249,9 +249,14 @@ final class TransportSet implements WithLogId {
           delayedTransport.endBackoff();
           boolean shutdownDelayedTransport = false;
           Runnable runnable = null;
+          // TransportSet as a channel layer class should not call into transport methods while
+          // holding the lock, thus we call hasPendingStreams() outside of the lock.  It will cause
+          // a _benign_ race where the TransportSet may transition to CONNECTING when there is not
+          // pending stream.
+          boolean hasPendingStreams = delayedTransport.hasPendingStreams();
           synchronized (lock) {
             reconnectTask = null;
-            if (delayedTransport.hasPendingStreams()) {
+            if (hasPendingStreams) {
               // Transition directly to CONNECTING
               runnable = startNewTransport(delayedTransport);
             } else {
