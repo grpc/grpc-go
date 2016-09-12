@@ -206,6 +206,11 @@ func (rr *roundRobin) watchAddrUpdates() error {
 }
 
 func (rr *roundRobin) Start(target string) error {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	if rr.done {
+		return ErrClientConnClosing
+	}
 	if rr.r == nil {
 		// If there is no name resolver installed, it is not needed to
 		// do name resolution. In this case, target is added into rr.addrs

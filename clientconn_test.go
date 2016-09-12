@@ -75,7 +75,7 @@ func TestTLSServerNameOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond))
+	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
@@ -91,6 +91,43 @@ func TestDialContextCancel(t *testing.T) {
 	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
 		t.Fatalf("DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
 	}
+}
+
+// blockingBalancer mimics the behavior of balancers whose initialization takes a long time.
+// In this test, reading from blockingBalancer.Notify() blocks forever.
+type blockingBalancer struct {
+	ch chan []Address
+}
+
+func newBlockingBalancer() Balancer {
+	return &blockingBalancer{ch: make(chan []Address)}
+}
+func (b *blockingBalancer) Start(target string) error {
+	return nil
+}
+func (b *blockingBalancer) Up(addr Address) func(error) {
+	return nil
+}
+func (b *blockingBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
+	return Address{}, nil, nil
+}
+func (b *blockingBalancer) Notify() <-chan []Address {
+	return b.ch
+}
+func (b *blockingBalancer) Close() error {
+	close(b.ch)
+	return nil
+}
+
+func TestDialWithBlockingBalancer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dialDone := make(chan struct{})
+	go func() {
+		DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure(), WithBalancer(newBlockingBalancer()))
+		close(dialDone)
+	}()
+	cancel()
+	<-dialDone
 }
 
 func TestCredentialsMisuse(t *testing.T) {
