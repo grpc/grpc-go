@@ -169,7 +169,8 @@ type Stream struct {
 	// nil for client side Stream.
 	st ServerTransport
 	// ctx is the associated context of the stream.
-	ctx    context.Context
+	ctx context.Context
+	// cancel is always nil for client side Stream.
 	cancel context.CancelFunc
 	// done is closed when the final status arrives.
 	done chan struct{}
