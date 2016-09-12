@@ -60,6 +60,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
+import io.grpc.Status;
 import io.grpc.StringMarshaller;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager.OobTransportProvider;
@@ -303,6 +304,10 @@ public class ManagedChannelImplIdlenessTest {
 
     channel.shutdown();
     verify(t1.transport).shutdown();
+    channel.shutdownNow();
+    verify(t0.transport).shutdownNow(any(Status.class));
+    verify(t1.transport).shutdownNow(any(Status.class));
+
     t1.listener.transportTerminated();
     assertFalse(channel.isTerminated());
     t0.listener.transportTerminated();
