@@ -158,10 +158,7 @@ class Utils {
     if (s.getCode() != Status.Code.UNKNOWN) {
       return s;
     }
-    // TODO(ejona): reenable once startup races are resolved; ClosedChannelException is being seen
-    // still. Some tests are asserting UNAVAILABLE and were "working" previously but are now
-    // detecting that our behavior is flaky. See #1330
-    if (false && t instanceof ClosedChannelException) {
+    if (t instanceof ClosedChannelException) {
       // ClosedChannelException is used any time the Netty channel is closed. Proper error
       // processing requires remembering the error that occurred before this one and using it
       // instead.

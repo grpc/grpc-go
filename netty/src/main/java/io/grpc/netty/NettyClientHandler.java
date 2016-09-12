@@ -79,6 +79,7 @@ import io.netty.handler.codec.http2.Http2StreamVisitor;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.logging.LogLevel;
 
+import java.nio.channels.ClosedChannelException;
 import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
@@ -472,7 +473,15 @@ class NettyClientHandler extends AbstractNettyHandler {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
-          finalPing.failed(future.cause());
+          Throwable cause = future.cause();
+          if (cause instanceof ClosedChannelException) {
+            cause = lifecycleManager.getShutdownThrowable();
+            if (cause == null) {
+              cause = Status.UNKNOWN.withDescription("Ping failed but for unknown reason.")
+                  .withCause(future.cause()).asException();
+            }
+          }
+          finalPing.failed(cause);
           if (ping == finalPing) {
             ping = null;
           }

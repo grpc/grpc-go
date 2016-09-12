@@ -174,7 +174,7 @@ public class Http2Ping {
       this.callbacks = null;
     }
     for (Map.Entry<ClientTransport.PingCallback, Executor> entry : callbacks.entrySet()) {
-      doExecute(entry.getValue(), asRunnable(entry.getKey(), failureCause));
+      notifyFailed(entry.getKey(), entry.getValue(), failureCause);
     }
   }
 

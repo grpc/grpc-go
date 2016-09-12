@@ -52,7 +52,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -459,13 +458,7 @@ public abstract class AbstractTransportTest {
     }
     verify(mockPingCallback, timeout(TIMEOUT_MS)).onFailure(throwableCaptor.capture());
     Status status = Status.fromThrowable(throwableCaptor.getValue());
-    // TODO(buchgr): Remove once https://github.com/grpc/grpc-java/issues/1330 is resolved.
-    String stackTrace = "";
-    if (Status.UNAVAILABLE.getCode() != status.getCode()
-        && status.getCause() != null) {
-      stackTrace = Throwables.getStackTraceAsString(status.getCause());
-    }
-    assertCodeEquals(stackTrace, Status.UNAVAILABLE, status);
+    assertCodeEquals(Status.UNAVAILABLE, status);
   }
 
   @Test
