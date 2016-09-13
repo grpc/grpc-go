@@ -252,6 +252,9 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	s.windowHandler = func(n int) {
 		t.updateWindow(s, uint32(n))
 	}
+	// The client side stream context should have exactly the same life cycle with the user provided context.
+	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
+	// So we use the original context here instead of creating a copy.
 	s.ctx = ctx
 	s.dec = &recvBufferReader{
 		ctx:    s.ctx,
