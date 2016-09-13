@@ -2450,6 +2450,12 @@ func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, crede
 func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
+func (c clientAlwaysFailCred) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (c clientAlwaysFailCred) OverrideServerName(s string) error {
+	return nil
+}
 
 func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: true})
@@ -2520,6 +2526,12 @@ func (c *clientTimeoutCreds) ServerHandshake(rawConn net.Conn) (net.Conn, creden
 func (c *clientTimeoutCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
+func (c *clientTimeoutCreds) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (c *clientTimeoutCreds) OverrideServerName(s string) error {
+	return nil
+}
 
 func TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "clientTimeoutCreds", balancer: false})
@@ -2555,6 +2567,12 @@ func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, creden
 }
 func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
+}
+func (c *serverDispatchCred) Clone() credentials.TransportCredentials {
+	return nil
+}
+func (c *serverDispatchCred) OverrideServerName(s string) error {
+	return nil
 }
 func (c *serverDispatchCred) getRawConn() net.Conn {
 	<-c.ready
