@@ -317,6 +317,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       sendResponseHeaders(ctx, (SendResponseHeadersCommand) msg, promise);
     } else if (msg instanceof RequestMessagesCommand) {
       ((RequestMessagesCommand) msg).requestMessages();
+      promise.setSuccess();
     } else if (msg instanceof CancelServerStreamCommand) {
       cancelStream(ctx, (CancelServerStreamCommand) msg, promise);
     } else if (msg instanceof ForcefulCloseCommand) {
