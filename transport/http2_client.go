@@ -252,8 +252,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	s.windowHandler = func(n int) {
 		t.updateWindow(s, uint32(n))
 	}
-	// Make a stream be able to cancel the pending operations by itself.
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.ctx = ctx
 	s.dec = &recvBufferReader{
 		ctx:    s.ctx,
 		goAway: s.goAway,
