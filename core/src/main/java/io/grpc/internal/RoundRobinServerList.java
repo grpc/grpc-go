@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Iterators;
 
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
@@ -44,6 +43,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -62,7 +62,7 @@ public class RoundRobinServerList<T> {
   private RoundRobinServerList(TransportManager<T> tm, List<EquivalentAddressGroup> list) {
     this.tm = tm;
     this.list = list;
-    this.cyclingIter = Iterators.cycle(list);
+    this.cyclingIter = new CycleIterator<EquivalentAddressGroup>(list);
     this.requestDroppingTransport =
       tm.createFailingTransport(Status.UNAVAILABLE.withDescription("Throttled by LB"));
   }
@@ -134,6 +134,38 @@ public class RoundRobinServerList<T> {
     public RoundRobinServerList<T> build() {
       return new RoundRobinServerList<T>(tm,
           Collections.unmodifiableList(new ArrayList<EquivalentAddressGroup>(list)));
+    }
+  }
+
+  private static final class CycleIterator<T> implements Iterator<T> {
+    private final List<T> list;
+    private int index;
+
+    public CycleIterator(List<T> list) {
+      this.list = list;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return !list.isEmpty();
+    }
+
+    @Override
+    public T next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      T val = list.get(index);
+      index++;
+      if (index >= list.size()) {
+        index -= list.size();
+      }
+      return val;
+    }
+
+    @Override
+    public void remove() {
+      throw new UnsupportedOperationException();
     }
   }
 }

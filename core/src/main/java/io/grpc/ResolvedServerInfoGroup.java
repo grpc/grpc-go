@@ -35,7 +35,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.ImmutableList;
 
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -64,7 +63,8 @@ public final class ResolvedServerInfoGroup {
   private ResolvedServerInfoGroup(List<ResolvedServerInfo> resolvedServerInfoList,
       Attributes attributes) {
     checkArgument(!resolvedServerInfoList.isEmpty(), "empty server list");
-    this.resolvedServerInfoList = Collections.unmodifiableList(resolvedServerInfoList);
+    this.resolvedServerInfoList =
+        Collections.unmodifiableList(new ArrayList<ResolvedServerInfo>(resolvedServerInfoList));
     this.attributes = checkNotNull(attributes, "attributes");
   }
 
@@ -148,11 +148,10 @@ public final class ResolvedServerInfoGroup {
   }
 
   public static class Builder {
-    private final ImmutableList.Builder<ResolvedServerInfo> groupBuilder;
+    private final List<ResolvedServerInfo> group = new ArrayList<ResolvedServerInfo>();
     private final Attributes attributes;
 
     public Builder(Attributes attributes) {
-      this.groupBuilder = ImmutableList.builder();
       this.attributes = attributes;
     }
 
@@ -161,17 +160,17 @@ public final class ResolvedServerInfoGroup {
     }
 
     public Builder add(ResolvedServerInfo resolvedServerInfo) {
-      groupBuilder.add(resolvedServerInfo);
+      group.add(resolvedServerInfo);
       return this;
     }
 
     public Builder addAll(Collection<ResolvedServerInfo> resolvedServerInfo) {
-      groupBuilder.addAll(resolvedServerInfo);
+      group.addAll(resolvedServerInfo);
       return this;
     }
 
     public ResolvedServerInfoGroup build() {
-      return new ResolvedServerInfoGroup(groupBuilder.build(), attributes);
+      return new ResolvedServerInfoGroup(group, attributes);
     }
   }
 }
