@@ -149,7 +149,6 @@ class OkHttpClientStream extends Http2ClientStream {
 
   @GuardedBy("lock")
   public void start(int id) {
-    checkNotNull(id, "id");
     checkState(this.id == ABSENT_ID, "the stream has been started with id %s", this.id);
     this.id = id;
 
