@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import static com.google.common.base.Charsets.US_ASCII;
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.MoreObjects;
@@ -39,7 +41,6 @@ import com.google.common.base.Objects;
 import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -237,9 +238,6 @@ public final class Status {
       return valueAscii;
     }
   }
-
-  private static final Charset US_ASCII = Charset.forName("US-ASCII");
-  private static final Charset UTF_8 = Charset.forName("UTF-8");
 
   // Create the canonical list of Status instances indexed by their code values.
   private static final List<Status> STATUS_LIST = buildStatusList();
