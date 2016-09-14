@@ -86,6 +86,7 @@ import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -183,6 +184,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void largeUnary() throws Exception {
+    assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setResponseSize(314159)
         .setResponseType(PayloadType.COMPRESSABLE)
@@ -514,6 +516,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 30000)
   public void veryLargeRequest() throws Exception {
+    assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setPayload(Payload.newBuilder()
             .setType(PayloadType.COMPRESSABLE)
@@ -532,6 +535,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 30000)
   public void veryLargeResponse() throws Exception {
+    assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setResponseSize(unaryPayloadLength())
         .setResponseType(PayloadType.COMPRESSABLE)
@@ -971,5 +975,18 @@ public abstract class AbstractInteropTest {
 
   protected int operationTimeoutMillis() {
     return 5000;
+  }
+
+  /**
+   * Some tests run on memory constrained environments.  Rather than OOM, just give up.  64 is
+   * choosen as a maximum amount of memory a large test would need.
+   */
+  private static void assumeEnoughMemory() {
+    Runtime r = Runtime.getRuntime();
+    long usedMem = r.totalMemory() - r.freeMemory();
+    long actuallyFreeMemory = r.maxMemory() - usedMem;
+    Assume.assumeTrue(
+        actuallyFreeMemory + " is not sufficient to run this test",
+        actuallyFreeMemory >= 64 * 1024 * 1024);
   }
 }
