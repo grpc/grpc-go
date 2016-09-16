@@ -67,7 +67,7 @@ public class HelloJsonServer {
 
   private void start() throws IOException {
     server = ServerBuilder.forPort(port)
-        .addService(bindService(new GreeterImpl()))
+        .addService(new GreeterImpl())
         .build()
         .start();
     logger.info("Server started, listening on " + port);
@@ -114,20 +114,21 @@ public class HelloJsonServer {
       responseObserver.onNext(reply);
       responseObserver.onCompleted();
     }
-  }
 
-  private ServerServiceDefinition bindService(final GreeterImplBase serviceImpl) {
-    return io.grpc.ServerServiceDefinition
-        .builder(GreeterGrpc.getServiceDescriptor())
-        .addMethod(HelloJsonClient.HelloJsonStub.METHOD_SAY_HELLO,
-            asyncUnaryCall(
-              new UnaryMethod<HelloRequest, HelloReply>() {
-                @Override
-                public void invoke(
-                    HelloRequest request, StreamObserver<HelloReply> responseObserver) {
-                  serviceImpl.sayHello(request, responseObserver);
-                }
-              }))
-        .build();
+    @Override
+    public ServerServiceDefinition bindService() {
+      return io.grpc.ServerServiceDefinition
+          .builder(GreeterGrpc.getServiceDescriptor().getName())
+          .addMethod(HelloJsonClient.HelloJsonStub.METHOD_SAY_HELLO,
+              asyncUnaryCall(
+                  new UnaryMethod<HelloRequest, HelloReply>() {
+                    @Override
+                    public void invoke(
+                        HelloRequest request, StreamObserver<HelloReply> responseObserver) {
+                      sayHello(request, responseObserver);
+                    }
+                  }))
+          .build();
+    }
   }
 }
