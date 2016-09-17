@@ -73,4 +73,33 @@ public abstract class ManagedChannel extends Channel {
    * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
    */
   public abstract boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
+
+  /**
+   * Gets the current connectivity state. Note the result may soon become outdated.
+   *
+   * @param requestConnection if {@code true}, the channel will try to make a connection if it is
+   *        currently IDLE
+   *
+   * @throws UnsupportedOperationException if not supported by implementation
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
+  public ConnectivityState getState(boolean requestConnection) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  /**
+   * Registers a one-off callback that will be run if the connectivity state of the channel diverges
+   * from the given {@code source}, which is typically what has just been returned by {@link
+   * #getState}.  If the states are already different, the callback will be called immediately.  The
+   * callback is run in the same executor that runs Call listeners.
+   *
+   * @param source the assumed current state, typically just returned by {@link #getState}
+   * @param callback the one-off callback
+   *
+   * @throws UnsupportedOperationException if not supported by implementation
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
+  public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
 }
