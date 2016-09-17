@@ -75,7 +75,8 @@ public class AbstractManagedChannelImplBuilderTest {
 
     Builder builder = new Builder();
 
-    assertEquals(ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, builder.getIdleTimeoutMillis());
+    assertEquals(AbstractManagedChannelImplBuilder.IDLE_MODE_DEFAULT_TIMEOUT_MILLIS,
+        builder.getIdleTimeoutMillis());
 
     builder.idleTimeout(Long.MAX_VALUE, TimeUnit.DAYS);
     assertEquals(ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, builder.getIdleTimeoutMillis());

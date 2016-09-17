@@ -78,6 +78,12 @@ public abstract class AbstractManagedChannelImplBuilder
   static final long IDLE_MODE_MAX_TIMEOUT_DAYS = 30;
 
   /**
+   * The default idle timeout.
+   */
+  @VisibleForTesting
+  static final long IDLE_MODE_DEFAULT_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(30);
+
+  /**
    * An idle timeout smaller than this would be capped to it.
    */
   @VisibleForTesting
@@ -110,7 +116,7 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private CompressorRegistry compressorRegistry;
 
-  private long idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
+  private long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target, "target");

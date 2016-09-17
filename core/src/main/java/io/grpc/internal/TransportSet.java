@@ -252,41 +252,16 @@ final class TransportSet extends ManagedChannel implements WithLogId {
       public void run() {
         try {
           delayedTransport.endBackoff();
-          boolean shutdownDelayedTransport = false;
           Runnable runnable = null;
-          // TransportSet as a channel layer class should not call into transport methods while
-          // holding the lock, thus we call hasPendingStreams() outside of the lock.  It will cause
-          // a _benign_ race where the TransportSet may transition to CONNECTING when there is not
-          // pending stream.
-          boolean hasPendingStreams = delayedTransport.hasPendingStreams();
           synchronized (lock) {
             reconnectTask = null;
-            if (hasPendingStreams) {
-              if (!shutdown) {
-                stateManager.gotoState(ConnectivityState.CONNECTING);
-              }
-              runnable = startNewTransport(delayedTransport);
-            } else {
-              if (!shutdown) {
-                stateManager.gotoState(ConnectivityState.IDLE);
-              }
-              activeTransport = null;
-              shutdownDelayedTransport = true;
+            if (!shutdown) {
+              stateManager.gotoState(ConnectivityState.CONNECTING);
             }
+            runnable = startNewTransport(delayedTransport);
           }
           if (runnable != null) {
             runnable.run();
-          }
-          if (shutdownDelayedTransport) {
-            delayedTransport.setTransportSupplier(new Supplier<ClientTransport>() {
-              @Override
-              public ClientTransport get() {
-                // This will wrap one DelayedStream in another, but it only happens if we win a
-                // race and can happen to a stream at most once.
-                return obtainActiveTransport();
-              }
-            });
-            delayedTransport.shutdown();
           }
         } catch (Throwable t) {
           log.log(Level.WARNING, "Exception handling end of backoff", t);
