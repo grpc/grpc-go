@@ -324,4 +324,13 @@ public class DelayedClientTransportTest {
     delayedTransport.newStream(method, headers, waitForReadyCallOptions);
     assertEquals(1, delayedTransport.getPendingStreamsCount());
   }
+
+  @Test public void startBackoff_DoNothingIfAlreadyShutDown() {
+    delayedTransport.shutdown();
+
+    final Status cause = Status.UNAVAILABLE.withDescription("some error when connecting");
+    delayedTransport.startBackoff(cause);
+
+    assertFalse(delayedTransport.isInBackoffPeriod());
+  }
 }

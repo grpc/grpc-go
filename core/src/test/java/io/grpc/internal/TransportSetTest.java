@@ -69,6 +69,7 @@ import org.mockito.MockitoAnnotations;
 import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executor;
 
 /**
  * Unit tests for {@link TransportSet}.
@@ -669,6 +670,39 @@ public class TransportSetTest {
     t0.listener.transportInUse(false);
     verify(mockTransportSetCallback, times(++notInUse)).onNotInUse(transportSet);
     verify(mockTransportSetCallback, times(inUse)).onInUse(transportSet);
+  }
+
+  @Test
+  public void scheduleBackoff_DoNotScheduleEndOfBackoffIfAlreadyShutdown() {
+    // Setup
+    final boolean[] startBackoffAndShutdownAreCalled = {false};
+    Executor executor = new Executor() {
+      @Override
+      public void execute(Runnable command) {
+        if (command.getClass().getName().contains("FailTheFailFastPendingStreams")) {
+          // shutdown during startBackoff
+          transportSet.shutdown();
+          startBackoffAndShutdownAreCalled[0] = true;
+        }
+        fakeExecutor.scheduledExecutorService.execute(command);
+      }
+    };
+    SocketAddress addr = mock(SocketAddress.class);
+    addressGroup = new EquivalentAddressGroup(Arrays.asList(addr));
+    transportSet = new TransportSet(addressGroup, authority, userAgent, mockLoadBalancer,
+        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
+        fakeClock.stopwatchSupplier, executor, mockTransportSetCallback);
+
+    // Attempt and fail, scheduleBackoff should be triggered,
+    // and transportSet.shutdown should be triggered by setup
+    transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
+    transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
+    verify(mockTransportSetCallback, times(1)).onAllAddressesFailed();
+    assertTrue(startBackoffAndShutdownAreCalled[0]);
+
+    fakeExecutor.runDueTasks();
+    // verify endOfBackoff not scheduled
+    verify(mockBackoffPolicy1, never()).nextBackoffMillis();
   }
 
   private void createTransportSet(SocketAddress ... addrs) {

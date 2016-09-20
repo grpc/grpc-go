@@ -227,21 +227,14 @@ final class TransportSet implements WithLogId {
    * @param status the causal status when the channel begins transition to
    *     TRANSIENT_FAILURE.
    */
-  @CheckReturnValue
-  @GuardedBy("lock")
-  private Runnable scheduleBackoff(
+  private void scheduleBackoff(
       final DelayedClientTransport delayedTransport, final Status status) {
-    Preconditions.checkState(reconnectTask == null, "previous reconnectTask is not done");
+    // This must be run outside of lock. The TransportSet lock is a channel level lock.
+    // startBackoff() will acquire the delayed transport lock, which is a transport level
+    // lock. Our lock ordering mandates transport lock > channel lock.  Otherwise a deadlock
+    // could happen (https://github.com/grpc/grpc-java/issues/2152).
+    delayedTransport.startBackoff(status);
 
-    if (reconnectPolicy == null) {
-      reconnectPolicy = backoffPolicyProvider.get();
-    }
-    long delayMillis =
-        reconnectPolicy.nextBackoffMillis() - connectingTimer.elapsed(TimeUnit.MILLISECONDS);
-    if (log.isLoggable(Level.FINE)) {
-      log.log(Level.FINE, "[{0}] Scheduling backoff for {1} ms",
-          new Object[]{getLogId(), delayMillis});
-    }
     class EndOfCurrentBackoff implements Runnable {
       @Override
       public void run() {
@@ -285,18 +278,25 @@ final class TransportSet implements WithLogId {
       }
     }
 
-    reconnectTask = scheduledExecutor.schedule(
-        new LogExceptionRunnable(new EndOfCurrentBackoff()), delayMillis, TimeUnit.MILLISECONDS);
-    return new Runnable() {
-      @Override
-      public void run() {
-        // This must be run outside of lock. The TransportSet lock is a channel level lock.
-        // startBackoff() will acquire the delayed transport lock, which is a transport level
-        // lock. Our lock ordering mandates transport lock > channel lock.  Otherwise a deadlock
-        // could happen (https://github.com/grpc/grpc-java/issues/2152).
-        delayedTransport.startBackoff(status);
+    synchronized (lock) {
+      if (shutdown) {
+        return;
       }
-    };
+      if (reconnectPolicy == null) {
+        reconnectPolicy = backoffPolicyProvider.get();
+      }
+      long delayMillis =
+          reconnectPolicy.nextBackoffMillis() - connectingTimer.elapsed(TimeUnit.MILLISECONDS);
+      if (log.isLoggable(Level.FINE)) {
+        log.log(Level.FINE, "[{0}] Scheduling backoff for {1} ms",
+            new Object[]{getLogId(), delayMillis});
+      }
+      Preconditions.checkState(reconnectTask == null, "previous reconnectTask is not done");
+      reconnectTask = scheduledExecutor.schedule(
+          new LogExceptionRunnable(new EndOfCurrentBackoff()),
+          delayMillis,
+          TimeUnit.MILLISECONDS);
+    }
   }
 
   /**
@@ -464,14 +464,16 @@ final class TransportSet implements WithLogId {
           // Continue reconnect if there are still addresses to try.
           if (nextAddressIndex == 0) {
             allAddressesFailed = true;
-            // Initiate backoff
-            // Transition to TRANSIENT_FAILURE
-            runnable = scheduleBackoff(delayedTransport, s);
           } else {
             // Still CONNECTING
             runnable = startNewTransport(delayedTransport);
           }
         }
+      }
+      if (allAddressesFailed) {
+        // Initiate backoff
+        // Transition to TRANSIENT_FAILURE
+        scheduleBackoff(delayedTransport, s);
       }
       if (runnable != null) {
         runnable.run();
