@@ -78,6 +78,18 @@ public class ProtoLiteUtils {
     globalRegistry = checkNotNull(newRegistry, "newRegistry");
   }
 
+  /**
+   * Local cache of buffers to use for parsing.  ThreadLocal used a WeakReference internally, so
+   * these will not be retained.
+   */
+  private static final ThreadLocal<byte[]> bufs = new ThreadLocal<byte[]>() {
+
+    @Override
+    protected byte[] initialValue() {
+      return new byte[4096]; // Picked at random.
+    }
+  };
+
   /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
   public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
     @SuppressWarnings("unchecked")
@@ -129,16 +141,21 @@ public class ProtoLiteUtils {
           if (stream instanceof KnownLength) {
             int size = stream.available();
             if (size > 0 && size <= GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE) {
-              byte[] buf = new byte[size];
+              // Coded Input stream does not escape, so buf does not escape.
+              byte[] buf = bufs.get();
+              if (buf.length < size) {
+                buf = new byte[size];
+                bufs.set(buf);
+              }
               int chunkSize;
               int position = 0;
-              while ((chunkSize = stream.read(buf, position, buf.length - position)) != -1) {
+              while ((chunkSize = stream.read(buf, position, size - position)) != -1) {
                 position += chunkSize;
               }
-              if (buf.length != position) {
-                throw new RuntimeException("size inaccurate: " + buf.length + " != " + position);
+              if (size != position) {
+                throw new RuntimeException("size inaccurate: " + size + " != " + position);
               }
-              cis = CodedInputStream.newInstance(buf);
+              cis = CodedInputStream.newInstance(buf, 0, size);
             } else if (size == 0) {
               return defaultInstance;
             }
