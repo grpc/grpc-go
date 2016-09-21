@@ -271,22 +271,23 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			var err error
 			creds := config.DialCreds
 			if creds == nil {
-				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithBlock(), grpc.WithInsecure())
+				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithInsecure())
 			} else {
-				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithBlock(), grpc.WithTransportCredentials(creds))
+				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithTransportCredentials(creds))
 			}
 			if err != nil {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)
 				return
 			}
-			lbc := lbpb.NewLoadBalancerClient(cc)
-			go func() {
+			go func(cc *grpc.ClientConn) {
+				lbc := lbpb.NewLoadBalancerClient(cc)
 				for {
 					if retry := b.callRemoteBalancer(lbc); !retry {
+						cc.Close()
 						return
 					}
 				}
-			}()
+			}(cc)
 		}
 	}()
 	return nil
