@@ -49,6 +49,8 @@ import io.grpc.internal.GrpcUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 
 /**
  * Utility methods for using protobuf with grpc.
@@ -78,15 +80,11 @@ public class ProtoLiteUtils {
     globalRegistry = checkNotNull(newRegistry, "newRegistry");
   }
 
-  /**
-   * Local cache of buffers to use for parsing.  ThreadLocal used a WeakReference internally, so
-   * these will not be retained.
-   */
-  private static final ThreadLocal<byte[]> bufs = new ThreadLocal<byte[]>() {
+  private static final ThreadLocal<Reference<byte[]>> bufs = new ThreadLocal<Reference<byte[]>>() {
 
     @Override
-    protected byte[] initialValue() {
-      return new byte[4096]; // Picked at random.
+    protected Reference<byte[]> initialValue() {
+      return new WeakReference<byte[]>(new byte[4096]); // Picked at random.
     }
   };
 
@@ -141,11 +139,11 @@ public class ProtoLiteUtils {
           if (stream instanceof KnownLength) {
             int size = stream.available();
             if (size > 0 && size <= GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE) {
-              // Coded Input stream does not escape, so buf does not escape.
-              byte[] buf = bufs.get();
-              if (buf.length < size) {
+              // buf should not be used after this method has returned.
+              byte[] buf = bufs.get().get();
+              if (buf == null || buf.length < size) {
                 buf = new byte[size];
-                bufs.set(buf);
+                bufs.set(new WeakReference<byte[]>(buf));
               }
               int chunkSize;
               int position = 0;
