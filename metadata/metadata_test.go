@@ -36,6 +36,8 @@ package metadata
 import (
 	"reflect"
 	"testing"
+
+	"golang.org/x/net/context"
 )
 
 const binaryValue = string(128)
@@ -104,6 +106,42 @@ func TestPairsMD(t *testing.T) {
 		}
 		if md.Len() != test.size {
 			t.Fatalf("Pairs(%v) generates md of size %d, want %d", test.kv, md.Len(), test.size)
+		}
+	}
+}
+
+func TestCopy(t *testing.T) {
+	const key, val = "key", "val"
+	orig := Pairs(key, val)
+	copy := orig.Copy()
+	if !reflect.DeepEqual(orig, copy) {
+		t.Errorf("copied value not equal to the original, got %v, want %v", copy, orig)
+	}
+	orig[key][0] = "foo"
+	if v := copy[key][0]; v != val {
+		t.Errorf("change in original should not affect copy, got %q, want %q", v, val)
+	}
+}
+
+func TestContext(t *testing.T) {
+	ctx := context.Background()
+	if md, ok := FromContext(ctx); len(md) != 0 || ok {
+		t.Errorf("found (%v, %t), want (%v, %t)", md, ok, nil, false)
+	}
+
+	for _, test := range []struct {
+		add, want MD
+	}{
+		{Pairs("foo", "bar"), Pairs("foo", "bar")},
+		{Pairs("foo", "baz"), Pairs("foo", "bar", "foo", "baz")},
+		{Pairs("zip", "zap"), Pairs("foo", "bar", "foo", "baz", "zip", "zap")},
+	} {
+		ctx = NewContext(ctx, test.add)
+		md, ok := FromContext(ctx)
+		if !ok {
+			t.Errorf("context missing metadata after adding %v", test.add)
+		} else if !reflect.DeepEqual(md, test.want) {
+			t.Errorf("context's metadata is %v, want %v", md, test.want)
 		}
 	}
 }
