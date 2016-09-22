@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,12 +57,15 @@ type testWatcher struct {
 }
 
 func (w *testWatcher) Next() (updates []*naming.Update, err error) {
-	n := <-w.side
-	if n == 0 {
+	n, ok := <-w.side
+	if !ok {
 		return nil, fmt.Errorf("w.side is closed")
 	}
 	for i := 0; i < n; i++ {
-		u := <-w.update
+		u, ok := <-w.update
+		if !ok {
+			break
+		}
 		if u != nil {
 			updates = append(updates, u)
 		}
@@ -158,11 +161,11 @@ func stopBackends(servers []*grpc.Server) {
 	}
 }
 
-func TestGrpcLB(t *testing.T) {
+func TestGRPCLB(t *testing.T) {
 	// Start a backend.
 	beLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("fadjf")
+		t.Fatalf("Failed to listen %v", err)
 	}
 	backends := startBackends(beLis)
 	defer stopBackends(backends)
