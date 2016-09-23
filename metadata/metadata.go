@@ -117,10 +117,13 @@ func (md MD) Len() int {
 
 // Copy returns a copy of md.
 func (md MD) Copy() MD {
-	return join(md)
+	return Join(md)
 }
 
-func join(mds ...MD) MD {
+// Join joins any number of MDs into a single MD.
+// The order of values for each key is determined by the order in which
+// the MDs containing those values are presented to Join.
+func Join(mds ...MD) MD {
 	out := MD{}
 	for _, md := range mds {
 		for k, v := range md {
@@ -134,9 +137,6 @@ type mdKey struct{}
 
 // NewContext creates a new context with md attached.
 func NewContext(ctx context.Context, md MD) context.Context {
-	if old, ok := FromContext(ctx); ok {
-		return context.WithValue(ctx, mdKey{}, join(old, md))
-	}
 	return context.WithValue(ctx, mdKey{}, md)
 }
 

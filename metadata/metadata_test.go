@@ -36,8 +36,6 @@ package metadata
 import (
 	"reflect"
 	"testing"
-
-	"golang.org/x/net/context"
 )
 
 const binaryValue = string(128)
@@ -123,24 +121,18 @@ func TestCopy(t *testing.T) {
 	}
 }
 
-func TestContext(t *testing.T) {
-	ctx := context.Background()
-	if md, ok := FromContext(ctx); len(md) != 0 || ok {
-		t.Errorf("found (%v, %t), want (%v, %t)", md, ok, nil, false)
-	}
-
+func TestJoin(t *testing.T) {
 	for _, test := range []struct {
-		add, want MD
+		mds  []MD
+		want MD
 	}{
-		{Pairs("foo", "bar"), Pairs("foo", "bar")},
-		{Pairs("foo", "baz"), Pairs("foo", "bar", "foo", "baz")},
-		{Pairs("zip", "zap"), Pairs("foo", "bar", "foo", "baz", "zip", "zap")},
+		{[]MD{}, MD{}},
+		{[]MD{Pairs("foo", "bar")}, Pairs("foo", "bar")},
+		{[]MD{Pairs("foo", "bar"), Pairs("foo", "baz")}, Pairs("foo", "bar", "foo", "baz")},
+		{[]MD{Pairs("foo", "bar"), Pairs("foo", "baz"), Pairs("zip", "zap")}, Pairs("foo", "bar", "foo", "baz", "zip", "zap")},
 	} {
-		ctx = NewContext(ctx, test.add)
-		md, ok := FromContext(ctx)
-		if !ok {
-			t.Errorf("context missing metadata after adding %v", test.add)
-		} else if !reflect.DeepEqual(md, test.want) {
+		md := Join(test.mds...)
+		if !reflect.DeepEqual(md, test.want) {
 			t.Errorf("context's metadata is %v, want %v", md, test.want)
 		}
 	}
