@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, Google Inc. All rights reserved.
+ * Copyright 2016, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,29 +31,30 @@
 
 package io.grpc.netty;
 
-import io.grpc.Internal;
-import io.netty.channel.ChannelHandler;
-import io.netty.util.AsciiString;
+import io.grpc.Attributes;
+import io.netty.handler.codec.http2.Http2ConnectionDecoder;
+import io.netty.handler.codec.http2.Http2ConnectionEncoder;
+import io.netty.handler.codec.http2.Http2ConnectionHandler;
+import io.netty.handler.codec.http2.Http2Settings;
 
 /**
- * A class that provides a Netty handler to control protocol negotiation.
+ * gRPC wrapper for {@link Http2ConnectionHandler}.
  */
-@Internal
-public interface ProtocolNegotiator {
-
-  /**
-   * The Netty handler to control the protocol negotiation.
-   */
-  interface Handler extends ChannelHandler {
-    /**
-     * The HTTP/2 scheme to be used when sending {@code HEADERS}.
-     */
-    AsciiString scheme();
+abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler {
+  public GrpcHttp2ConnectionHandler(Http2ConnectionDecoder decoder,
+      Http2ConnectionEncoder encoder,
+      Http2Settings initialSettings) {
+    super(decoder, encoder, initialSettings);
   }
 
   /**
-   * Creates a new handler to control the protocol negotiation. Once the negotiation
-   * has completed successfully, the provided handler is installed.
+   * Triggered on protocol negotiation completion.
+   *
+   * <p>It must me called after negotiation is completed but before given handler is added to the
+   * channel.
+   *
+   * @param attrs arbitrary attributes passed after protocol negotiation (eg. SSLSession).
    */
-  Handler newHandler(GrpcHttp2ConnectionHandler handler);
+  public void handleProtocolNegotiationCompleted(Attributes attrs) {
+  }
 }

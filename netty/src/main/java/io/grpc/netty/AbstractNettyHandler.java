@@ -38,12 +38,10 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import io.grpc.netty.AbstractNettyHandler.FlowControlPinger;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
 import io.netty.handler.codec.http2.Http2ConnectionEncoder;
-import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
@@ -55,7 +53,7 @@ import java.util.concurrent.TimeUnit;
  * Base class for all Netty gRPC handlers. This class standardizes exception handling (always
  * shutdown the connection) as well as sending the initial connection window at startup.
  */
-abstract class AbstractNettyHandler extends Http2ConnectionHandler {
+abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
   private static long GRACEFUL_SHUTDOWN_TIMEOUT = SECONDS.toMillis(5);
   private boolean autoTuneFlowControlOn = false;
   private int initialConnectionWindow;

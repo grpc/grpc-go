@@ -37,6 +37,8 @@ import static io.grpc.netty.GrpcSslContexts.HTTP2_VERSION;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
+import io.grpc.Attributes;
+import io.grpc.Grpc;
 import io.grpc.Internal;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
@@ -53,14 +55,12 @@ import io.netty.handler.codec.http.HttpClientUpgradeHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
-import io.netty.handler.codec.http2.Http2ConnectionHandler;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.AsciiString;
-import io.netty.util.Attribute;
 import io.netty.util.ReferenceCountUtil;
 
 import java.net.URI;
@@ -73,7 +73,6 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLSession;
 
 /**
  * Common {@link ProtocolNegotiator}s used by gRPC.
@@ -91,7 +90,7 @@ public final class ProtocolNegotiators {
   public static ProtocolNegotiator serverPlaintext() {
     return new ProtocolNegotiator() {
       @Override
-      public Handler newHandler(final Http2ConnectionHandler handler) {
+      public Handler newHandler(final GrpcHttp2ConnectionHandler handler) {
         class PlaintextHandler extends ChannelHandlerAdapter implements Handler {
           @Override
           public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -117,7 +116,7 @@ public final class ProtocolNegotiators {
     Preconditions.checkNotNull(sslContext, "sslContext");
     return new ProtocolNegotiator() {
       @Override
-      public Handler newHandler(Http2ConnectionHandler handler) {
+      public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
         return new ServerTlsHandler(sslContext, handler);
       }
     };
@@ -126,10 +125,10 @@ public final class ProtocolNegotiators {
   @VisibleForTesting
   static final class ServerTlsHandler extends ChannelInboundHandlerAdapter
           implements ProtocolNegotiator.Handler {
-    private final ChannelHandler grpcHandler;
+    private final GrpcHttp2ConnectionHandler grpcHandler;
     private final SslContext sslContext;
 
-    ServerTlsHandler(SslContext sslContext, ChannelHandler grpcHandler) {
+    ServerTlsHandler(SslContext sslContext, GrpcHttp2ConnectionHandler grpcHandler) {
       this.sslContext = sslContext;
       this.grpcHandler = grpcHandler;
     }
@@ -153,14 +152,14 @@ public final class ProtocolNegotiators {
         SslHandshakeCompletionEvent handshakeEvent = (SslHandshakeCompletionEvent) evt;
         if (handshakeEvent.isSuccess()) {
           if (HTTP2_VERSION.equals(sslHandler(ctx.pipeline()).applicationProtocol())) {
-            // TODO(lukaszx0) Short term solution. Long term we want to plumb this through
-            // ProtocolNegotiator.Handler and pass the handler into NettyClientHandler and
-            // NettyServerHandler (https://github.com/grpc/grpc-java/issues/1556)
-            Attribute<SSLSession> sslSessionAttr = ctx.channel().attr(Utils.SSL_SESSION_ATTR_KEY);
-
-            sslSessionAttr.set(sslHandler(ctx.pipeline()).engine().getSession());
-            // Successfully negotiated the protocol. Replace this handler with
-            // the GRPC handler.
+            // Successfully negotiated the protocol.
+            // Notify about completion and pass down SSLSession in attributes.
+            grpcHandler.handleProtocolNegotiationCompleted(
+                Attributes.newBuilder()
+                    .set(Grpc.TRANSPORT_ATTR_SSL_SESSION,
+                        sslHandler(ctx.pipeline()).engine().getSession())
+                    .build());
+            // Replace this handler with the GRPC handler.
             ctx.pipeline().replace(this, null, grpcHandler);
           } else {
             fail(ctx, new Exception(
@@ -239,7 +238,7 @@ public final class ProtocolNegotiators {
     }
 
     @Override
-    public Handler newHandler(Http2ConnectionHandler handler) {
+    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
       ChannelHandler sslBootstrap = new ChannelHandlerAdapter() {
         @Override
         public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
@@ -263,7 +262,7 @@ public final class ProtocolNegotiators {
 
   static final class PlaintextUpgradeNegotiator implements ProtocolNegotiator {
     @Override
-    public Handler newHandler(Http2ConnectionHandler handler) {
+    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
       // Register the plaintext upgrader
       Http2ClientUpgradeCodec upgradeCodec = new Http2ClientUpgradeCodec(handler);
       HttpClientCodec httpClientCodec = new HttpClientCodec();
@@ -284,7 +283,7 @@ public final class ProtocolNegotiators {
 
   static final class PlaintextNegotiator implements ProtocolNegotiator {
     @Override
-    public Handler newHandler(Http2ConnectionHandler handler) {
+    public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
       return new BufferUntilChannelActiveHandler(handler);
     }
   }

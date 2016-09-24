@@ -52,7 +52,6 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -87,7 +86,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nullable;
-import javax.net.ssl.SSLSession;
 
 /**
  * Server-side Netty handler for GRPC processing. All event handlers are executed entirely within
@@ -103,6 +101,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   private Throwable connectionError;
   private boolean teWarningLogged;
   private WriteQueue serverWriteQueue;
+  private Attributes protocolNegotationAttrs = Attributes.EMPTY;
 
   static NettyServerHandler newHandler(ServerTransportListener transportListener,
                                        int maxStreams,
@@ -171,21 +170,10 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     serverWriteQueue = new WriteQueue(ctx.channel());
-    attributes = transportListener.transportReady(buildAttributes(ctx.channel()));
+    attributes = transportListener.transportReady(Attributes.newBuilder(protocolNegotationAttrs)
+        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
+        .build());
     super.handlerAdded(ctx);
-  }
-
-  private static Attributes buildAttributes(Channel channel) {
-    // NB(lukaszx0) SSLSession will be set only if SSL handshake was successful
-    SSLSession sslSession = null;
-    if (channel.hasAttr(Utils.SSL_SESSION_ATTR_KEY)) {
-      sslSession = channel.attr(Utils.SSL_SESSION_ATTR_KEY).get();
-    }
-
-    return Attributes.newBuilder()
-        .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, channel.remoteAddress())
-        .set(Grpc.TRANSPORT_ATTR_SSL_SESSION, sslSession)
-        .build();
   }
 
   private void onHeadersRead(ChannelHandlerContext ctx, int streamId, Http2Headers headers)
@@ -275,6 +263,11 @@ class NettyServerHandler extends AbstractNettyHandler {
     // TODO(ejona): Abort the stream by sending headers to help the client with debugging.
     // Delegate to the base class to send a RST_STREAM.
     super.onStreamError(ctx, cause, http2Ex);
+  }
+
+  @Override
+  public void handleProtocolNegotiationCompleted(Attributes attrs) {
+    this.protocolNegotationAttrs = attrs;
   }
 
   /**

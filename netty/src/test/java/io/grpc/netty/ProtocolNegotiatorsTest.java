@@ -71,7 +71,7 @@ import javax.net.ssl.SSLException;
 public class ProtocolNegotiatorsTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
-  private ChannelHandler grpcHandler = mock(ChannelHandler.class);
+  private GrpcHttp2ConnectionHandler grpcHandler = mock(GrpcHttp2ConnectionHandler.class);
 
   private EmbeddedChannel channel = new EmbeddedChannel();
   private ChannelPipeline pipeline = channel.pipeline();
