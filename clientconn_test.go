@@ -102,7 +102,7 @@ type blockingBalancer struct {
 func newBlockingBalancer() Balancer {
 	return &blockingBalancer{ch: make(chan []Address)}
 }
-func (b *blockingBalancer) Start(target string) error {
+func (b *blockingBalancer) Start(target string, config BalancerConfig) error {
 	return nil
 }
 func (b *blockingBalancer) Up(addr Address) func(error) {
