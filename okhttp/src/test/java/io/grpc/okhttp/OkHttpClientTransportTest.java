@@ -1413,7 +1413,8 @@ public class OkHttpClientTransportTest {
   private List<Header> grpcResponseTrailers() {
     return ImmutableList.of(
         new Header(Status.CODE_KEY.name(), "0"),
-        // Adding Content-Type for testing responses with only a single HEADERS frame.
+        // Adding Content-Type and :status for testing responses with only a single HEADERS frame.
+        new Header(":status", "200"),
         CONTENT_TYPE_HEADER);
   }
 

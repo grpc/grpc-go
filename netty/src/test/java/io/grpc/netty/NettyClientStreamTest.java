@@ -288,7 +288,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
     verify(listener).closed(captor.capture(), metadataCaptor.capture());
     Status status = captor.getValue();
-    assertEquals(Status.Code.INTERNAL, status.getCode());
+    assertEquals(Status.Code.UNKNOWN, status.getCode());
     assertTrue(status.getDescription().contains("content-type"));
     assertEquals("application/bad", metadataCaptor.getValue()
         .get(Metadata.Key.of("Content-Type", Metadata.ASCII_STRING_MARSHALLER)));

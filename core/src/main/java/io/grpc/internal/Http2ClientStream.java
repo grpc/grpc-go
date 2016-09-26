@@ -79,7 +79,7 @@ public abstract class Http2ClientStream extends AbstractClientStream {
   private Status transportError;
   private Metadata transportErrorMetadata;
   private Charset errorCharset = Charsets.UTF_8;
-  private boolean contentTypeChecked;
+  private boolean headersReceived;
 
   protected Http2ClientStream(WritableBufferAllocator bufferAllocator, int maxMessageSize,
       StatsTraceContext statsTraceCtx) {
@@ -94,28 +94,37 @@ public abstract class Http2ClientStream extends AbstractClientStream {
   protected void transportHeadersReceived(Metadata headers) {
     Preconditions.checkNotNull(headers, "headers");
     if (transportError != null) {
-      // Already received a transport error so just augment it.
-      transportError = transportError.augmentDescription(headers.toString());
+      // Already received a transport error so just augment it. Something is really, really strange.
+      transportError = transportError.augmentDescription("headers: " + headers);
       return;
     }
-    Status httpStatus = statusFromHttpStatus(headers);
-    if (httpStatus == null) {
-      transportError = Status.INTERNAL.withDescription(
-          "received non-terminal headers with no :status");
-    } else if (!httpStatus.isOk()) {
-      transportError = httpStatus;
-    } else {
-      transportError = checkContentType(headers);
-    }
-    if (transportError != null) {
-      // Note we don't immediately report the transport error, instead we wait for more data on the
-      // stream so we can accumulate more detail into the error before reporting it.
-      transportError = transportError.augmentDescription("\n" + headers);
-      transportErrorMetadata = headers;
-      errorCharset = extractCharset(headers);
-    } else {
+    try {
+      if (headersReceived) {
+        transportError = Status.INTERNAL.withDescription("Received headers twice");
+        return;
+      }
+      Integer httpStatus = headers.get(HTTP2_STATUS);
+      if (httpStatus != null && httpStatus >= 100 && httpStatus < 200) {
+        // Ignore the headers. See RFC 7540 §8.1
+        return;
+      }
+      headersReceived = true;
+
+      transportError = validateInitialMetadata(headers);
+      if (transportError != null) {
+        return;
+      }
+
       stripTransportDetails(headers);
       inboundHeadersReceived(headers);
+    } finally {
+      if (transportError != null) {
+        // Note we don't immediately report the transport error, instead we wait for more data on
+        // the stream so we can accumulate more detail into the error before reporting it.
+        transportError = transportError.augmentDescription("headers: " + headers);
+        transportErrorMetadata = headers;
+        errorCharset = extractCharset(headers);
+      }
     }
   }
 
@@ -162,14 +171,14 @@ public abstract class Http2ClientStream extends AbstractClientStream {
    */
   protected void transportTrailersReceived(Metadata trailers) {
     Preconditions.checkNotNull(trailers, "trailers");
-    if (transportError != null) {
-      // Already received a transport error so just augment it.
-      transportError = transportError.augmentDescription(trailers.toString());
-    } else {
-      transportError = checkContentType(trailers);
-      transportErrorMetadata = trailers;
+    if (transportError == null && !headersReceived) {
+      transportError = validateInitialMetadata(trailers);
+      if (transportError != null) {
+        transportErrorMetadata = trailers;
+      }
     }
     if (transportError != null) {
+      transportError = transportError.augmentDescription("trailers: " + trailers);
       inboundTransportError(transportError, transportErrorMetadata);
       sendCancel(Status.CANCELLED);
     } else {
@@ -179,50 +188,44 @@ public abstract class Http2ClientStream extends AbstractClientStream {
     }
   }
 
-  private static Status statusFromHttpStatus(Metadata metadata) {
-    Integer httpStatus = metadata.get(HTTP2_STATUS);
-    if (httpStatus != null) {
-      Status status = GrpcUtil.httpStatusToGrpcStatus(httpStatus);
-      return status.isOk() ? status
-          : status.augmentDescription("extracted status from HTTP :status " + httpStatus);
-    }
-    return null;
-  }
-
   /**
    * Extract the response status from trailers.
    */
   private Status statusFromTrailers(Metadata trailers) {
     Status status = trailers.get(Status.CODE_KEY);
-    if (status == null) {
-      status = statusFromHttpStatus(trailers);
-      if (status == null || status.isOk()) {
-        status = Status.UNKNOWN.withDescription("missing GRPC status in response");
-      } else {
-        status = status.withDescription(
-            "missing GRPC status, inferred error from HTTP status code");
-      }
+    if (status != null) {
+      return status.withDescription(trailers.get(Status.MESSAGE_KEY));
     }
-    String message = trailers.get(Status.MESSAGE_KEY);
-    if (message != null) {
-      status = status.augmentDescription(message);
+    // No status; something is broken. Try to provide a resonanable error.
+    if (headersReceived) {
+      return Status.UNKNOWN.withDescription("missing GRPC status in response");
     }
-    return status;
+    Integer httpStatus = trailers.get(HTTP2_STATUS);
+    if (httpStatus != null) {
+      status = GrpcUtil.httpStatusToGrpcStatus(httpStatus);
+    } else {
+      status = Status.INTERNAL.withDescription("missing HTTP status code");
+    }
+    return status.augmentDescription(
+        "missing GRPC status, inferred error from HTTP status code");
   }
 
   /**
-   * Inspect the content type field from received headers or trailers and return an error Status if
-   * content type is invalid or not present. Returns null if no error was found.
+   * Inspect initial headers to make sure they conform to HTTP and gRPC, returning a {@code Status}
+   * on failure.
+   *
+   * @return status with description of failure, or {@code null} when valid
    */
   @Nullable
-  private Status checkContentType(Metadata headers) {
-    if (contentTypeChecked) {
-      return null;
+  private Status validateInitialMetadata(Metadata headers) {
+    Integer httpStatus = headers.get(HTTP2_STATUS);
+    if (httpStatus == null) {
+      return Status.INTERNAL.withDescription("Missing HTTP status code");
     }
-    contentTypeChecked = true;
     String contentType = headers.get(GrpcUtil.CONTENT_TYPE_KEY);
     if (!GrpcUtil.isGrpcContentType(contentType)) {
-      return Status.INTERNAL.withDescription("Invalid content-type: " + contentType);
+      return GrpcUtil.httpStatusToGrpcStatus(httpStatus)
+          .augmentDescription("invalid content-type: " + contentType);
     }
     return null;
   }
