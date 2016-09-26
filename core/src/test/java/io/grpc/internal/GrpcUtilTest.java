@@ -201,4 +201,34 @@ public class GrpcUtilTest {
 
     GrpcUtil.checkAuthority("foo@valid");
   }
+
+  @Test
+  public void httpStatusToGrpcStatus_messageContainsHttpStatus() {
+    assertTrue(GrpcUtil.httpStatusToGrpcStatus(500).getDescription().contains("500"));
+  }
+
+  @Test
+  public void httpStatusToGrpcStatus_checkAgainstSpec() {
+    assertEquals(Status.Code.INTERNAL, GrpcUtil.httpStatusToGrpcStatus(400).getCode());
+    assertEquals(Status.Code.UNAUTHENTICATED, GrpcUtil.httpStatusToGrpcStatus(401).getCode());
+    assertEquals(Status.Code.PERMISSION_DENIED, GrpcUtil.httpStatusToGrpcStatus(403).getCode());
+    assertEquals(Status.Code.UNIMPLEMENTED, GrpcUtil.httpStatusToGrpcStatus(404).getCode());
+    assertEquals(Status.Code.UNAVAILABLE, GrpcUtil.httpStatusToGrpcStatus(429).getCode());
+    assertEquals(Status.Code.UNAVAILABLE, GrpcUtil.httpStatusToGrpcStatus(502).getCode());
+    assertEquals(Status.Code.UNAVAILABLE, GrpcUtil.httpStatusToGrpcStatus(503).getCode());
+    assertEquals(Status.Code.UNAVAILABLE, GrpcUtil.httpStatusToGrpcStatus(504).getCode());
+    // Some other code
+    assertEquals(Status.Code.UNKNOWN, GrpcUtil.httpStatusToGrpcStatus(500).getCode());
+
+    // If transport is doing it's job, 1xx should never happen. But it may not do its job.
+    assertEquals(Status.Code.INTERNAL, GrpcUtil.httpStatusToGrpcStatus(100).getCode());
+    assertEquals(Status.Code.INTERNAL, GrpcUtil.httpStatusToGrpcStatus(101).getCode());
+  }
+
+  @Test
+  public void httpStatusToGrpcStatus_neverOk() {
+    for (int i = -1; i < 800; i++) {
+      assertFalse(GrpcUtil.httpStatusToGrpcStatus(i).isOk());
+    }
+  }
 }

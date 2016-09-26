@@ -276,6 +276,7 @@ public class Http2ClientStreamTransportStateTest {
     verify(mockListener, never()).headersRead(any(Metadata.class));
     verify(mockListener).closed(statusCaptor.capture(), same(trailers));
     assertEquals(Code.UNAUTHENTICATED, statusCaptor.getValue().getCode());
+    assertTrue(statusCaptor.getValue().getDescription().contains("401"));
   }
 
   @Test

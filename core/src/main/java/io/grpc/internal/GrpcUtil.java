@@ -163,31 +163,38 @@ public final class GrpcUtil {
   public static final long DEFAULT_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MINUTES.toNanos(2);
 
   /**
-   * Maps HTTP error response status codes to transport codes.
+   * Maps HTTP error response status codes to transport codes, as defined in <a
+   * href="https://github.com/grpc/grpc/blob/master/doc/http-grpc-status-mapping.md">
+   * http-grpc-status-mapping.md</a>. Never returns a status for which {@code status.isOk()} is
+   * {@code true}.
    */
   public static Status httpStatusToGrpcStatus(int httpStatusCode) {
-    // Specific HTTP code handling.
-    switch (httpStatusCode) {
-      case HttpURLConnection.HTTP_UNAUTHORIZED:  // 401
-        return Status.UNAUTHENTICATED;
-      case HttpURLConnection.HTTP_FORBIDDEN:  // 403
-        return Status.PERMISSION_DENIED;
-      default:
-    }
-    // Generic HTTP code handling.
-    if (httpStatusCode < 100) {
-      // 0xx. These don't exist.
-      return Status.UNKNOWN;
-    }
-    if (httpStatusCode < 200) {
+    return httpStatusToGrpcCode(httpStatusCode).toStatus()
+        .withDescription("HTTP status code " + httpStatusCode);
+  }
+
+  private static Status.Code httpStatusToGrpcCode(int httpStatusCode) {
+    if (httpStatusCode >= 100 && httpStatusCode < 200) {
       // 1xx. These headers should have been ignored.
-      return Status.INTERNAL;
+      return Status.Code.INTERNAL;
     }
-    if (httpStatusCode < 300) {
-      // 2xx
-      return Status.UNKNOWN;
+    switch (httpStatusCode) {
+      case HttpURLConnection.HTTP_BAD_REQUEST:  // 400
+        return Status.Code.INTERNAL;
+      case HttpURLConnection.HTTP_UNAUTHORIZED:  // 401
+        return Status.Code.UNAUTHENTICATED;
+      case HttpURLConnection.HTTP_FORBIDDEN:  // 403
+        return Status.Code.PERMISSION_DENIED;
+      case HttpURLConnection.HTTP_NOT_FOUND:  // 404
+        return Status.Code.UNIMPLEMENTED;
+      case 429:  // Too Many Requests
+      case HttpURLConnection.HTTP_BAD_GATEWAY:  // 502
+      case HttpURLConnection.HTTP_UNAVAILABLE:  // 503
+      case HttpURLConnection.HTTP_GATEWAY_TIMEOUT:  // 504
+        return Status.Code.UNAVAILABLE;
+      default:
+        return Status.Code.UNKNOWN;
     }
-    return Status.UNKNOWN;
   }
 
   /**
