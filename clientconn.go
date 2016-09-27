@@ -288,8 +288,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			// Connect to target directly if balancer is nil.
 			addrs = append(addrs, Address{Addr: target})
 		} else {
+			var credsClone credentials.TransportCredentials
+			if creds != nil {
+				credsClone = creds.Clone()
+			}
 			config := BalancerConfig{
-				DialCreds: creds,
+				DialCreds: credsClone,
 			}
 			if err := cc.dopts.balancer.Start(target, config); err != nil {
 				waitC <- err
