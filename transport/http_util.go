@@ -349,7 +349,7 @@ func decodeGrpcMessageUnchecked(msg string) string {
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
 		if c == percentByte && i+2 < lenMsg {
-			parsed, err := strconv.ParseInt(msg[i+1:i+3], 16, 8)
+			parsed, err := strconv.ParseUint(msg[i+1:i+3], 16, 8)
 			if err != nil {
 				buf.WriteByte(c)
 			} else {
