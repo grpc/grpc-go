@@ -38,6 +38,7 @@ import static io.grpc.Status.DEADLINE_EXCEEDED;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -524,7 +525,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
    * Dispatches callbacks onto an application-provided executor and correctly propagates
    * exceptions.
    */
-  private static class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
+  @VisibleForTesting
+  static class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
     private final Executor callExecutor;
     private final Context.CancellableContext context;
     private final ServerStream stream;
@@ -545,7 +547,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       return listener;
     }
 
-    private void setListener(ServerStreamListener listener) {
+    @VisibleForTesting
+    void setListener(ServerStreamListener listener) {
       Preconditions.checkNotNull(listener, "listener must not be null");
       Preconditions.checkState(this.listener == null, "Listener already set");
       this.listener = listener;
@@ -616,7 +619,15 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
-          getListener().onReady();
+          try {
+            getListener().onReady();
+          } catch (RuntimeException e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
+          } catch (Error e) {
+            internalClose(Status.fromThrowable(e), new Metadata());
+            throw e;
+          }
         }
       });
     }

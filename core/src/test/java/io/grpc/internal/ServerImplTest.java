@@ -45,6 +45,7 @@ import static org.mockito.Matchers.isNotNull;
 import static org.mockito.Matchers.notNull;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -77,6 +78,7 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.internal.ServerImpl.JumpToApplicationThreadServerStreamListener;
 import io.grpc.internal.testing.StatsTestUtils;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.util.MutableHandlerRegistry;
@@ -896,6 +898,134 @@ public class ServerImplTest {
 
     verifyNoMoreInteractions(callHandler);
     verifyNoMoreInteractions(fallbackRegistry);
+  }
+
+  @Test
+  public void messageRead_errorCancelsCall() throws Exception {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new AssertionError();
+    doThrow(expectedT).when(mockListener).messageRead(any(InputStream.class));
+    // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
+    listener.messageRead(mock(InputStream.class));
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
+  }
+
+  @Test
+  public void messageRead_runtimeExceptionCancelsCall() throws Exception {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new RuntimeException();
+    doThrow(expectedT).when(mockListener).messageRead(any(InputStream.class));
+    // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
+    listener.messageRead(mock(InputStream.class));
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
+  }
+
+  @Test
+  public void halfClosed_errorCancelsCall() {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new AssertionError();
+    doThrow(expectedT).when(mockListener).halfClosed();
+    listener.halfClosed();
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
+  }
+
+  @Test
+  public void halfClosed_runtimeExceptionCancelsCall() {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new RuntimeException();
+    doThrow(expectedT).when(mockListener).halfClosed();
+    listener.halfClosed();
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
+  }
+
+  @Test
+  public void onReady_errorCancelsCall() {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new AssertionError();
+    doThrow(expectedT).when(mockListener).onReady();
+    listener.onReady();
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
+  }
+
+  @Test
+  public void onReady_runtimeExceptionCancelsCall() {
+    JumpToApplicationThreadServerStreamListener listener
+        = new JumpToApplicationThreadServerStreamListener(
+            executor.getScheduledExecutorService(), stream, Context.ROOT.withCancellation());
+    ServerStreamListener mockListener = mock(ServerStreamListener.class);
+    listener.setListener(mockListener);
+
+    Throwable expectedT = new RuntimeException();
+    doThrow(expectedT).when(mockListener).onReady();
+    listener.onReady();
+    try {
+      executor.runDueTasks();
+      fail("Expected exception");
+    } catch (Throwable t) {
+      assertSame(expectedT, t);
+      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+      assertSame(expectedT, statusCaptor.getValue().getCause());
+    }
   }
 
   private void createAndStartServer(List<ServerTransportFilter> filters) throws IOException {
