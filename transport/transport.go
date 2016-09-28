@@ -169,7 +169,8 @@ type Stream struct {
 	// nil for client side Stream.
 	st ServerTransport
 	// ctx is the associated context of the stream.
-	ctx    context.Context
+	ctx context.Context
+	// cancel is always nil for client side Stream.
 	cancel context.CancelFunc
 	// done is closed when the final status arrives.
 	done chan struct{}
@@ -476,16 +477,16 @@ type ServerTransport interface {
 	Drain()
 }
 
-// StreamErrorf creates an StreamError with the specified error code and description.
-func StreamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
+// streamErrorf creates an StreamError with the specified error code and description.
+func streamErrorf(c codes.Code, format string, a ...interface{}) StreamError {
 	return StreamError{
 		Code: c,
 		Desc: fmt.Sprintf(format, a...),
 	}
 }
 
-// ConnectionErrorf creates an ConnectionError with the specified error description.
-func ConnectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
+// connectionErrorf creates an ConnectionError with the specified error description.
+func connectionErrorf(temp bool, e error, format string, a ...interface{}) ConnectionError {
 	return ConnectionError{
 		Desc: fmt.Sprintf(format, a...),
 		temp: temp,
@@ -522,10 +523,10 @@ func (e ConnectionError) Origin() error {
 
 var (
 	// ErrConnClosing indicates that the transport is closing.
-	ErrConnClosing = ConnectionError{Desc: "transport is closing", temp: true}
+	ErrConnClosing = connectionErrorf(true, nil, "transport is closing")
 	// ErrStreamDrain indicates that the stream is rejected by the server because
 	// the server stops accepting new RPCs.
-	ErrStreamDrain = StreamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
+	ErrStreamDrain = streamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
 )
 
 // StreamError is an error that only affects one stream within a connection.
@@ -542,9 +543,9 @@ func (e StreamError) Error() string {
 func ContextErr(err error) StreamError {
 	switch err {
 	case context.DeadlineExceeded:
-		return StreamErrorf(codes.DeadlineExceeded, "%v", err)
+		return streamErrorf(codes.DeadlineExceeded, "%v", err)
 	case context.Canceled:
-		return StreamErrorf(codes.Canceled, "%v", err)
+		return streamErrorf(codes.Canceled, "%v", err)
 	}
 	panic(fmt.Sprintf("Unexpected error from context packet: %v", err))
 }
