@@ -520,9 +520,9 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	resp := in.GetResponseStatus()
-	if resp != nil && *resp.Code != 0 {
-		return nil, grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
+	status := in.GetResponseStatus()
+	if status != nil && *status.Code != 0 {
+		return nil, grpc.Errorf(codes.Code(*status.Code), *status.Message)
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
@@ -579,9 +579,9 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		if err != nil {
 			return err
 		}
-		resp := in.GetResponseStatus()
-		if resp != nil && *resp.Code != 0 {
-			return grpc.Errorf(codes.Code(*resp.Code), *resp.Message)
+		status := in.GetResponseStatus()
+		if status != nil && *status.Code != 0 {
+			return grpc.Errorf(codes.Code(*status.Code), *status.Message)
 		}
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
