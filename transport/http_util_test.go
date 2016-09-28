@@ -135,6 +135,7 @@ func TestDecodeGrpcMessage(t *testing.T) {
 		{"H%61o", "Hao"},
 		{"H%6", "H%6"},
 		{"%G0", "%G0"},
+		{"%E7%B3%BB%E7%BB%9F", "系统"},
 	} {
 		actual := decodeGrpcMessage(tt.input)
 		if tt.expected != actual {
