@@ -219,6 +219,9 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
   }
 
   public void largeUnary() {
+    if (shouldSkip()) {
+      return;
+    }
     final Messages.SimpleRequest request = new Messages.SimpleRequest();
     request.responseSize = 314159;
     request.responseType = Messages.COMPRESSABLE;
@@ -516,6 +519,9 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
   }
 
   public void veryLargeRequest() throws Exception {
+    if (shouldSkip()) {
+      return;
+    }
     final SimpleRequest request = new SimpleRequest();
     request.payload = new Payload();
     request.payload.type = Messages.COMPRESSABLE;
@@ -531,6 +537,9 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
   }
 
   public void veryLargeResponse() throws Exception {
+    if (shouldSkip()) {
+      return;
+    }
     final SimpleRequest request = new SimpleRequest();
     request.responseSize = unaryPayloadLength();
     request.responseType = Messages.COMPRESSABLE;
@@ -737,5 +746,22 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     void onPreTest();
 
     void onPostTest(String result);
+  }
+
+  /**
+   * Some tests run on memory constrained environments.  Rather than OOM, just give up.  64 is
+   * choosen as a maximum amount of memory a large test would need.
+   */
+  private static boolean shouldSkip() {
+    Runtime r = Runtime.getRuntime();
+    long usedMem = r.totalMemory() - r.freeMemory();
+    long actuallyFreeMemory = r.maxMemory() - usedMem;
+    long wantedFreeMemory = 64 * 1024 * 1024;
+    if (actuallyFreeMemory < wantedFreeMemory) {
+      Log.i(LOG_TAG, "Skipping due to lack of memory.  " + 
+          "Have: " + actuallyFreeMemory + " Want: " + wantedFreeMemory);
+      return true;
+    }
+    return false;
   }
 }
