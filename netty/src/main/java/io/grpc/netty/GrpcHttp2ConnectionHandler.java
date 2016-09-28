@@ -40,7 +40,7 @@ import io.netty.handler.codec.http2.Http2Settings;
 /**
  * gRPC wrapper for {@link Http2ConnectionHandler}.
  */
-abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler {
+public abstract class GrpcHttp2ConnectionHandler extends Http2ConnectionHandler {
   public GrpcHttp2ConnectionHandler(Http2ConnectionDecoder decoder,
       Http2ConnectionEncoder encoder,
       Http2Settings initialSettings) {

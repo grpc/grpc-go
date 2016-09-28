@@ -80,8 +80,8 @@ import java.util.concurrent.Executor;
 @RunWith(JUnit4.class)
 public class TransportSetTest {
 
-  private static final String authority = "fakeauthority";
-  private static final String userAgent = "mosaic";
+  private static final String AUTHORITY = "fakeauthority";
+  private static final String USER_AGENT = "mosaic";
 
   private FakeClock fakeClock;
   private FakeClock fakeExecutor;
@@ -140,7 +140,7 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Fail this one
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -154,12 +154,12 @@ public class TransportSetTest {
     // Transport creation doesn't happen until time is due
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
     fakeClock.forwardMillis(1);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
@@ -172,12 +172,12 @@ public class TransportSetTest {
     // Transport creation doesn't happen until time is due
     fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
     fakeClock.forwardMillis(1);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
     // Let this one succeed
     transports.peek().listener.transportReady();
     assertEquals(ConnectivityState.READY, transportSet.getState(false));
@@ -194,7 +194,7 @@ public class TransportSetTest {
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Final checks for consultations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
@@ -224,7 +224,7 @@ public class TransportSetTest {
         (DelayedClientTransport) transportSet.obtainActiveTransport();
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     delayedTransport1.newStream(method, new Metadata(), waitForReadyCallOptions);
     // Let this one fail without success
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -239,7 +239,7 @@ public class TransportSetTest {
     assertSame(delayedTransport1, delayedTransport2);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, authority, userAgent);
+        .newClientTransport(addr2, AUTHORITY, USER_AGENT);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     // All addresses have failed. Delayed transport will be in back-off interval.
@@ -258,12 +258,12 @@ public class TransportSetTest {
     assertSame(delayedTransport2, delayedTransport3);
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
     fakeClock.forwardMillis(1);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
@@ -277,7 +277,7 @@ public class TransportSetTest {
     assertSame(delayedTransport3, delayedTransport4);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, authority, userAgent);
+        .newClientTransport(addr2, AUTHORITY, USER_AGENT);
     // Fail this one too
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     // All addresses have failed again. Delayed transport will be in back-off interval.
@@ -296,12 +296,12 @@ public class TransportSetTest {
     assertSame(delayedTransport4, delayedTransport5);
     fakeClock.forwardMillis(99);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
     fakeClock.forwardMillis(1);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     // Let it through
     transports.peek().listener.transportReady();
     assertEquals(ConnectivityState.READY, transportSet.getState(false));
@@ -323,7 +323,7 @@ public class TransportSetTest {
     delayedTransport6.newStream(method, headers, waitForReadyCallOptions);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     // Fail the transport
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
@@ -336,7 +336,7 @@ public class TransportSetTest {
     assertSame(delayedTransport6, delayedTransport7);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
     verify(mockTransportFactory, times(++transportsAddr2))
-        .newClientTransport(addr2, authority, userAgent);
+        .newClientTransport(addr2, AUTHORITY, USER_AGENT);
     // Fail this one too
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -355,12 +355,12 @@ public class TransportSetTest {
     assertSame(delayedTransport7, delayedTransport8);
     fakeClock.forwardMillis(9);
     verify(mockTransportFactory, times(transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, transportSet.getState(false));
     fakeClock.forwardMillis(1);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsAddr1))
-        .newClientTransport(addr1, authority, userAgent);
+        .newClientTransport(addr1, AUTHORITY, USER_AGENT);
 
     // Final checks on invocations on back-off policies
     verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
@@ -461,13 +461,13 @@ public class TransportSetTest {
 
     // Won't connect until requested
     verify(mockTransportFactory, times(transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // First attempt
     transportSet.obtainActiveTransport().newStream(method, new Metadata());
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Fail this one
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -477,7 +477,7 @@ public class TransportSetTest {
     fakeClock.forwardMillis(10);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Make this one proceed
     transports.peek().listener.transportReady();
@@ -490,7 +490,7 @@ public class TransportSetTest {
     transportSet.obtainActiveTransport().newStream(method, new Metadata(), waitForReadyCallOptions);
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
     verify(mockTransportFactory, times(++transportsCreated))
-        .newClientTransport(addr, authority, userAgent);
+        .newClientTransport(addr, AUTHORITY, USER_AGENT);
     fakeExecutor.runDueTasks(); // Drain new 'real' stream creation; not important to this test.
   }
 
@@ -502,7 +502,7 @@ public class TransportSetTest {
     // First transport is created immediately
     ClientTransport pick = transportSet.obtainActiveTransport();
     assertEquals(ConnectivityState.CONNECTING, transportSet.getState(false));
-    verify(mockTransportFactory).newClientTransport(addr, authority, userAgent);
+    verify(mockTransportFactory).newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertNotNull(pick);
     // Fail this one
     MockClientTransportInfo transportInfo = transports.poll();
@@ -525,12 +525,12 @@ public class TransportSetTest {
     pick = transportSet.obtainActiveTransport();
     assertNotNull(pick);
     assertTrue(pick instanceof FailingClientTransport);
-    verify(mockTransportFactory).newClientTransport(addr, authority, userAgent);
+    verify(mockTransportFactory).newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Reconnect will eventually happen, even though TransportSet has been shut down
     fakeClock.forwardMillis(10);
     assertEquals(ConnectivityState.SHUTDOWN, transportSet.getState(false));
-    verify(mockTransportFactory, times(2)).newClientTransport(addr, authority, userAgent);
+    verify(mockTransportFactory, times(2)).newClientTransport(addr, AUTHORITY, USER_AGENT);
     // The pending stream will be started on this newly started transport after it's ready.
     // The transport is shut down by TransportSet right after the stream is created.
     transportInfo = transports.poll();
@@ -566,7 +566,7 @@ public class TransportSetTest {
 
     // First transport is created immediately
     ClientTransport pick = transportSet.obtainActiveTransport();
-    verify(mockTransportFactory).newClientTransport(addr, authority, userAgent);
+    verify(mockTransportFactory).newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertNotNull(pick);
     // Fail this one
     MockClientTransportInfo transportInfo = transports.poll();
@@ -627,7 +627,7 @@ public class TransportSetTest {
     assertEquals(ConnectivityState.SHUTDOWN, transportSet.getState(false));
     ClientTransport pick = transportSet.obtainActiveTransport();
     assertNotNull(pick);
-    verify(mockTransportFactory, times(0)).newClientTransport(addr, authority, userAgent);
+    verify(mockTransportFactory, times(0)).newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.SHUTDOWN, transportSet.getState(false));
   }
 
@@ -763,7 +763,7 @@ public class TransportSetTest {
     };
     SocketAddress addr = mock(SocketAddress.class);
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addr));
-    transportSet = new TransportSet(addressGroup, authority, userAgent, mockLoadBalancer,
+    transportSet = new TransportSet(addressGroup, AUTHORITY, USER_AGENT, mockLoadBalancer,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
         fakeClock.stopwatchSupplier, executor, mockTransportSetCallback);
 
@@ -781,7 +781,7 @@ public class TransportSetTest {
 
   private void createTransportSet(SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
-    transportSet = new TransportSet(addressGroup, authority, userAgent, mockLoadBalancer,
+    transportSet = new TransportSet(addressGroup, AUTHORITY, USER_AGENT, mockLoadBalancer,
         mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
         fakeClock.stopwatchSupplier, fakeExecutor.scheduledExecutorService,
         mockTransportSetCallback);
