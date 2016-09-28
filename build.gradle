@@ -62,7 +62,7 @@ subprojects {
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
         guavaVersion = '19.0'
-        protobufVersion = '3.0.0'
+        protobufVersion = '3.0.2'
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {
@@ -154,6 +154,8 @@ subprojects {
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 // swap to ${protobufVersion} after versions align again
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
+                // swap to ${protobufVersion} after versions align again
+                protoc_lite: "com.google.protobuf:protoc-gen-javalite:3.0.0",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.0',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",

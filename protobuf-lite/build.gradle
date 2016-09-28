@@ -42,7 +42,7 @@ protobuf {
       if (project.hasProperty('protoc-gen-javalite')) {
         path = project['protoc-gen-javalite']
       } else {
-        artifact = "com.google.protobuf:protoc-gen-javalite:${protobufVersion}"
+        artifact = libraries.protoc_lite
       }
     }
   }

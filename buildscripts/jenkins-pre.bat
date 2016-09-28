@@ -14,5 +14,5 @@ set ESCWORKSPACE=%WORKSPACE:\=\\%
 
 echo targetArch=x86_32> gradle.properties
 echo failOnWarnings=true>> gradle.properties
-echo vcProtobufLibs=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-3.0.0\\cmake\\build\\Release>> gradle.properties
-echo vcProtobufInclude=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-3.0.0\\cmake\\build\\include>> gradle.properties
+echo vcProtobufLibs=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-%PROTOBUF_VER%\\cmake\\build\\Release>> gradle.properties
+echo vcProtobufInclude=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-%PROTOBUF_VER%\\cmake\\build\\include>> gradle.properties

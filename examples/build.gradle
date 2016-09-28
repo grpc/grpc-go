@@ -35,7 +35,7 @@ protobuf {
     // The version of protoc must match protobuf-java. If you don't depend on
     // protobuf-java directly, you will be transitively depending on the
     // protobuf-java version that grpc depends on.
-    artifact = 'com.google.protobuf:protoc:3.0.0'
+    artifact = 'com.google.protobuf:protoc:3.0.2'
   }
   plugins {
     grpc {
