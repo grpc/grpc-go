@@ -1747,7 +1747,7 @@ func testStreamingRPCTimeoutServerError(t *testing.T, e env) {
 	req := &testpb.StreamingOutputCallRequest{}
 	for duration := 50 * time.Millisecond; ; duration *= 2 {
 		ctx, _ := context.WithTimeout(context.Background(), duration)
-		stream, err := tc.FullDuplexCall(ctx)
+		stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			// Redo test with double timeout.
 			continue
