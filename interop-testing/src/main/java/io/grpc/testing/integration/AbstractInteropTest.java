@@ -40,8 +40,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
@@ -90,6 +88,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.mockito.verification.VerificationMode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -988,5 +988,36 @@ public abstract class AbstractInteropTest {
     Assume.assumeTrue(
         actuallyFreeMemory + " is not sufficient to run this test",
         actuallyFreeMemory >= 64 * 1024 * 1024);
+  }
+
+  /**
+   * Wrapper around {@link Mockito#verify}, to keep log spam down on failure.
+   */
+  private static <T> T verify(T mock, VerificationMode mode) {
+    try {
+      return Mockito.verify(mock, mode);
+    } catch (AssertionError e) {
+      String msg = e.getMessage();
+      if (msg.length() >= 256) {
+        throw new AssertionError(msg.substring(0, 256), e);
+      }
+      throw e;
+    }
+
+  }
+
+  /**
+   * Wrapper around {@link Mockito#verify}, to keep log spam down on failure.
+   */
+  private static void verifyNoMoreInteractions(Object... mocks) {
+    try {
+      Mockito.verifyNoMoreInteractions(mocks);
+    } catch (AssertionError e) {
+      String msg = e.getMessage();
+      if (msg.length() >= 256) {
+        throw new AssertionError(msg.substring(0, 256), e);
+      }
+      throw e;
+    }
   }
 }
