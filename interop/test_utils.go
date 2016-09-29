@@ -475,11 +475,11 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	stream_req := &testpb.StreamingOutputCallRequest{
+	streamReq := &testpb.StreamingOutputCallRequest{
 		ResponseStatus: respStatus,
 	}
-	if err := stream.Send(stream_req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v, want <nil>", stream, stream_req, err)
+	if err := stream.Send(streamReq); err != nil {
+		grpclog.Fatalf("%v.Send(%v) = %v, want <nil>", stream, streamReq, err)
 	}
 	if err := stream.CloseSend(); err != nil {
 		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
