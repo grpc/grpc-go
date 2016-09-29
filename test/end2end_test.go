@@ -134,7 +134,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			return nil, grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
 		}
 		if err := grpc.SendHeader(ctx, md); err != nil {
-			return nil, fmt.Errorf("grpc.SendHeader(_, %v) = %v, want %v", md, err, nil)
+			return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want %v", md, err, nil)
 		}
 		grpc.SetTrailer(ctx, testTrailerMetadata)
 	}
