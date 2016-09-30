@@ -302,10 +302,10 @@ ManagedChannel channel = ManagedChannelBuilder.forTarget("pubsub.googleapis.com"
 GoogleCredentials creds = GoogleCredentials.getApplicationDefault();
 // Down-scope the credential to just the scopes required by the service
 creds = creds.createScoped(Arrays.asList("https://www.googleapis.com/auth/pubsub"));
-// Intercept the channel to bind the credential
-ClientAuthInterceptor interceptor = new ClientAuthInterceptor(creds, someExecutor);
-Channel channel = ClientInterceptors.intercept(channelImpl, interceptor);
-// Create a stub using the channel that has the bound credential
-PublisherGrpc.PublisherBlockingStub publisherStub = PublisherGrpc.newBlockingStub(channel);
+// Create an instance of {@link io.grpc.CallCredentials}
+CallCredentials callCreds = MoreCallCredentials.from(creds);
+// Create a stub with credential
+PublisherGrpc.PublisherBlockingStub publisherStub =
+    PublisherGrpc.newBlockingStub(channel).withCallCredentials(callCreds);
 publisherStub.publish(someMessage);
 ```
