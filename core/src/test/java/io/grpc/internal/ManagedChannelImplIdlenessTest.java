@@ -124,7 +124,7 @@ public class ManagedChannelImplIdlenessTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(timerService.create()).thenReturn(timer.scheduledExecutorService);
+    when(timerService.create()).thenReturn(timer.getScheduledExecutorService());
     when(mockLoadBalancerFactory
         .newLoadBalancer(anyString(), Matchers.<TransportManager<ClientTransport>>any()))
         .thenReturn(mockLoadBalancer);
@@ -136,9 +136,9 @@ public class ManagedChannelImplIdlenessTest {
     channel = new ManagedChannelImpl("fake://target", new FakeBackoffPolicyProvider(),
         mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), timerService, timer.stopwatchSupplier,
+        CompressorRegistry.getDefaultInstance(), timerService, timer.getStopwatchSupplier(),
         TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS),
-        executor.scheduledExecutorService, userAgent,
+        executor.getScheduledExecutorService(), userAgent,
         Collections.<ClientInterceptor>emptyList());
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 

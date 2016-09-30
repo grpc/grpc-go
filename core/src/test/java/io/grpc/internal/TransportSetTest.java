@@ -758,14 +758,14 @@ public class TransportSetTest {
           transportSet.shutdown();
           startBackoffAndShutdownAreCalled[0] = true;
         }
-        fakeExecutor.scheduledExecutorService.execute(command);
+        fakeExecutor.getScheduledExecutorService().execute(command);
       }
     };
     SocketAddress addr = mock(SocketAddress.class);
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addr));
     transportSet = new TransportSet(addressGroup, AUTHORITY, USER_AGENT, mockLoadBalancer,
-        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
-        fakeClock.stopwatchSupplier, executor, mockTransportSetCallback);
+        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
+        fakeClock.getStopwatchSupplier(), executor, mockTransportSetCallback);
 
     // Attempt and fail, scheduleBackoff should be triggered,
     // and transportSet.shutdown should be triggered by setup
@@ -782,8 +782,8 @@ public class TransportSetTest {
   private void createTransportSet(SocketAddress ... addrs) {
     addressGroup = new EquivalentAddressGroup(Arrays.asList(addrs));
     transportSet = new TransportSet(addressGroup, AUTHORITY, USER_AGENT, mockLoadBalancer,
-        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.scheduledExecutorService,
-        fakeClock.stopwatchSupplier, fakeExecutor.scheduledExecutorService,
+        mockBackoffPolicyProvider, mockTransportFactory, fakeClock.getScheduledExecutorService(),
+        fakeClock.getStopwatchSupplier(), fakeExecutor.getScheduledExecutorService(),
         mockTransportSetCallback);
   }
 }

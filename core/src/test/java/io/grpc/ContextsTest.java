@@ -236,7 +236,7 @@ public class ContextsTest {
   public void statusFromCancelled_TimeoutExceptionShouldMapToDeadlineExceeded() {
     FakeClock fakeClock = new FakeClock();
     Context.CancellableContext cancellableContext = Context.current()
-        .withDeadlineAfter(100, TimeUnit.MILLISECONDS, fakeClock.scheduledExecutorService);
+        .withDeadlineAfter(100, TimeUnit.MILLISECONDS, fakeClock.getScheduledExecutorService());
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
     fakeClock.forwardMillis(100);
 

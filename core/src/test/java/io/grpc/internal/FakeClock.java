@@ -57,20 +57,23 @@ import java.util.concurrent.TimeUnit;
  */
 public final class FakeClock {
 
-  public final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
-  final Ticker ticker = new Ticker() {
-      @Override public long read() {
-        return currentTimeNanos;
-      }
-    };
-
-  final Supplier<Stopwatch> stopwatchSupplier = new Supplier<Stopwatch>() {
-      @Override public Stopwatch get() {
-        return Stopwatch.createUnstarted(ticker);
-      }
-    };
-
+  private final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
   private final PriorityQueue<ScheduledTask> tasks = new PriorityQueue<ScheduledTask>();
+
+  private final Ticker ticker =
+      new Ticker() {
+        @Override public long read() {
+          return currentTimeNanos;
+        }
+      };
+
+  private final Supplier<Stopwatch> stopwatchSupplier =
+      new Supplier<Stopwatch>() {
+        @Override public Stopwatch get() {
+          return Stopwatch.createUnstarted(ticker);
+        }
+      };
+
   private long currentTimeNanos;
 
   private class ScheduledTask extends AbstractFuture<Void> implements ScheduledFuture<Void> {
@@ -187,6 +190,21 @@ public final class FakeClock {
     @Override public void execute(Runnable command) {
       schedule(command, 0, TimeUnit.NANOSECONDS);
     }
+  }
+
+  /**
+   * Provides a partially implemented instance of {@link ScheduledExecutorService} that uses the
+   * fake clock ticker for testing.
+   */
+  public ScheduledExecutorService getScheduledExecutorService() {
+    return scheduledExecutorService;
+  }
+
+  /**
+   * Provides a stopwatch instance that uses the fake clock ticker.
+   */
+  public Supplier<Stopwatch> getStopwatchSupplier() {
+    return stopwatchSupplier;
   }
 
   /**

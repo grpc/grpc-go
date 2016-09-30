@@ -82,7 +82,7 @@ public class DnsNameResolverTest {
       new Resource<ScheduledExecutorService>() {
         @Override
         public ScheduledExecutorService create() {
-          return fakeClock.scheduledExecutorService;
+          return fakeClock.getScheduledExecutorService();
         }
 
         @Override
@@ -95,7 +95,7 @@ public class DnsNameResolverTest {
       new Resource<ExecutorService>() {
         @Override
         public ExecutorService create() {
-          return fakeExecutor.scheduledExecutorService;
+          return fakeExecutor.getScheduledExecutorService();
         }
 
         @Override

@@ -159,9 +159,9 @@ public class ManagedChannelImplTest {
     channel = new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
         nameResolverFactory, NAME_RESOLVER_PARAMS, loadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), timerService, timer.stopwatchSupplier,
+        CompressorRegistry.getDefaultInstance(), timerService, timer.getStopwatchSupplier(),
         ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE,
-        executor.scheduledExecutorService, userAgent, interceptors);
+        executor.getScheduledExecutorService(), userAgent, interceptors);
     // Force-exit the initial idle-mode
     channel.exitIdleMode();
     // Will start NameResolver in the scheduled executor
@@ -175,7 +175,7 @@ public class ManagedChannelImplTest {
     when(mockTransportFactory.newClientTransport(
             any(SocketAddress.class), any(String.class), any(String.class)))
         .thenReturn(mockTransport);
-    when(timerService.create()).thenReturn(timer.scheduledExecutorService);
+    when(timerService.create()).thenReturn(timer.getScheduledExecutorService());
   }
 
   @After
@@ -506,7 +506,8 @@ public class ManagedChannelImplTest {
         .thenReturn(mockStream);
     FakeClock callExecutor = new FakeClock();
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    CallOptions options = CallOptions.DEFAULT.withExecutor(callExecutor.scheduledExecutorService);
+    CallOptions options =
+        CallOptions.DEFAULT.withExecutor(callExecutor.getScheduledExecutorService());
 
     ClientCall<String, Integer> call = channel.newCall(method, options);
     call.start(mockCallListener, headers);
@@ -886,7 +887,7 @@ public class ManagedChannelImplTest {
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(Attributes.class);
     ArgumentCaptor<MetadataApplier> applierCaptor = ArgumentCaptor.forClass(MetadataApplier.class);
     verify(creds).applyRequestMetadata(same(method), attrsCaptor.capture(),
-        same(executor.scheduledExecutorService), applierCaptor.capture());
+        same(executor.getScheduledExecutorService()), applierCaptor.capture());
     assertEquals("testValue", testKey.get(credsApplyContexts.poll()));
     assertEquals(authority, attrsCaptor.getValue().get(CallCredentials.ATTR_AUTHORITY));
     assertEquals(SecurityLevel.NONE,
@@ -909,7 +910,7 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, new Metadata());
 
     verify(creds, times(2)).applyRequestMetadata(same(method), attrsCaptor.capture(),
-        same(executor.scheduledExecutorService), applierCaptor.capture());
+        same(executor.getScheduledExecutorService()), applierCaptor.capture());
     assertEquals("testValue", testKey.get(credsApplyContexts.poll()));
     assertEquals(authority, attrsCaptor.getValue().get(CallCredentials.ATTR_AUTHORITY));
     assertEquals(SecurityLevel.NONE,
