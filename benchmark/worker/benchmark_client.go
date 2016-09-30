@@ -37,8 +37,8 @@ import (
 	"math"
 	"runtime"
 	"sync"
-	"time"
 	"syscall"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"

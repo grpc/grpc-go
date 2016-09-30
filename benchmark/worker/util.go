@@ -59,8 +59,8 @@ func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float6
 	var stimeDiffSec = latest.Stime.Sec - first.Stime.Sec
 	var stimeDiffMicro = latest.Stime.Usec - first.Stime.Usec
 
-	var elapsedUserCPU = float64(utimeDiffSec) + float64(utimeDiffMicro) * 1.0e-6
-	var elapsedSystemCPU = float64(stimeDiffSec) + float64(stimeDiffMicro) * 1.0e-6
+	var elapsedUserCPU = float64(utimeDiffSec) + float64(utimeDiffMicro)*1.0e-6
+	var elapsedSystemCPU = float64(stimeDiffSec) + float64(stimeDiffMicro)*1.0e-6
 
 	return elapsedUserCPU, elapsedSystemCPU
 }

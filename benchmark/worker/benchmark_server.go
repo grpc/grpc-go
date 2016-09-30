@@ -38,8 +38,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark"
@@ -56,12 +56,12 @@ var (
 )
 
 type benchmarkServer struct {
-	port             int
-	cores            int
-	closeFunc        func()
-	mu               sync.RWMutex
-	lastResetTime    time.Time
-	rusageLastReset  *syscall.Rusage
+	port            int
+	cores           int
+	closeFunc       func()
+	mu              sync.RWMutex
+	lastResetTime   time.Time
+	rusageLastReset *syscall.Rusage
 }
 
 func printServerConfig(config *testpb.ServerConfig) {
@@ -181,7 +181,7 @@ func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	}
 	return &testpb.ServerStats{
 		TimeElapsed: timeElapsed,
-		TimeUser: elapsedUserCPU,
-		TimeSystem: elapsedSystemCPU,
+		TimeUser:    elapsedUserCPU,
+		TimeSystem:  elapsedSystemCPU,
 	}
 }
