@@ -467,7 +467,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	req := &testpb.SimpleRequest{
 		ResponseStatus: respStatus,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err.Error() != expectedErr.Error() {
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || err.Error() != expectedErr.Error() {
 		grpclog.Fatalf("%v.UnaryCall(_, %v) = _, %v, want _, %v", tc, req, err, expectedErr)
 	}
 	// Test FullDuplexCall.
