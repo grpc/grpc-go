@@ -36,6 +36,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // abs returns the absolute path the given relative file or directory path,
@@ -50,6 +51,18 @@ func abs(rel string) string {
 		log.Fatalf("Error finding google.golang.org/grpc/testdata directory: %v", err)
 	}
 	return filepath.Join(v, rel)
+}
+
+func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float64) {
+	var utimeDiffSec = latest.Utime.Sec - first.Utime.Sec
+	var utimeDiffMicro = latest.Utime.Usec - first.Utime.Usec
+	var stimeDiffSec = latest.Stime.Sec - first.Stime.Sec
+	var stimeDiffMicro = latest.Stime.Usec - first.Stime.Usec
+
+	var elapsedUserCPU = float64(utimeDiffSec) + float64(utimeDiffMicro) * 1.0e-6
+	var elapsedSystemCPU = float64(stimeDiffSec) + float64(stimeDiffMicro) * 1.0e-6
+
+	return elapsedUserCPU, elapsedSystemCPU
 }
 
 func goPackagePath(pkg string) (path string, err error) {

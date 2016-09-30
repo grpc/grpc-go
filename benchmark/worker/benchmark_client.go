@@ -38,6 +38,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"syscall"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -85,6 +86,7 @@ type benchmarkClient struct {
 	lastResetTime     time.Time
 	histogramOptions  stats.HistogramOptions
 	lockingHistograms []lockingHistogram
+	rusageLastReset   *syscall.Rusage
 }
 
 func printClientConfig(config *testpb.ClientConfig) {
@@ -226,6 +228,9 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		return nil, err
 	}
 
+	rusage := new(syscall.Rusage)
+	syscall.Getrusage(syscall.RUSAGE_SELF, rusage)
+
 	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
 	bc := &benchmarkClient{
 		histogramOptions: stats.HistogramOptions{
@@ -236,9 +241,10 @@ func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error)
 		},
 		lockingHistograms: make([]lockingHistogram, rpcCountPerConn*len(conns), rpcCountPerConn*len(conns)),
 
-		stop:          make(chan bool),
-		lastResetTime: time.Now(),
-		closeConns:    closeConns,
+		stop:            make(chan bool),
+		lastResetTime:   time.Now(),
+		closeConns:      closeConns,
+		rusageLastReset: rusage,
 	}
 
 	if err = performRPCs(config, conns, bc); err != nil {
@@ -351,6 +357,11 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 	var timeElapsed float64
 	mergedHistogram := stats.NewHistogram(bc.histogramOptions)
+	timeElapsed = time.Since(bc.lastResetTime).Seconds()
+	latestRusage := new(syscall.Rusage)
+
+	syscall.Getrusage(syscall.RUSAGE_SELF, latestRusage)
+	var elapsedUserCPU, elapsedSystemCPU = cpuTimeDiff(bc.rusageLastReset, latestRusage)
 
 	if reset {
 		// Merging histogram may take some time.
@@ -364,14 +375,13 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 			mergedHistogram.Merge(toMerge[i])
 		}
 
-		timeElapsed = time.Since(bc.lastResetTime).Seconds()
+		bc.rusageLastReset = latestRusage
 		bc.lastResetTime = time.Now()
 	} else {
 		// Merge only, not reset.
 		for i := range bc.lockingHistograms {
 			bc.lockingHistograms[i].mergeInto(mergedHistogram)
 		}
-		timeElapsed = time.Since(bc.lastResetTime).Seconds()
 	}
 
 	b := make([]uint32, len(mergedHistogram.Buckets), len(mergedHistogram.Buckets))
@@ -388,8 +398,8 @@ func (bc *benchmarkClient) getStats(reset bool) *testpb.ClientStats {
 			Count:        float64(mergedHistogram.Count),
 		},
 		TimeElapsed: timeElapsed,
-		TimeUser:    0,
-		TimeSystem:  0,
+		TimeUser:    elapsedUserCPU,
+		TimeSystem:  elapsedSystemCPU,
 	}
 }
 
