@@ -42,6 +42,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -62,14 +63,57 @@ type Codec interface {
 }
 
 // protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
-type protoCodec struct{}
-
-func (protoCodec) Marshal(v interface{}) ([]byte, error) {
-	return proto.Marshal(v.(proto.Message))
+type protoCodec struct {
+	readBuffer      *proto.Buffer
+	writeBuffer     *proto.Buffer
+	lastWriteBuffer []byte
 }
 
-func (protoCodec) Unmarshal(data []byte, v interface{}) error {
-	return proto.Unmarshal(data, v.(proto.Message))
+func NewProtoCodec() *protoCodec {
+	return &protoCodec{
+		readBuffer:      proto.NewBuffer(nil),
+		writeBuffer:     proto.NewBuffer(nil),
+		lastWriteBuffer: make([]byte, 0),
+	}
+}
+
+var bufferPools = make(map[uint]*sync.Pool)
+var poolMu = new(sync.Mutex)
+
+func getCreator(minCap uint) func() interface{} {
+	return func() interface{} {
+		return make([]byte, minCap)
+	}
+}
+
+func (c *protoCodec) updateWriteBuffer(capacity int) {
+	if len(c.lastWriteBuffer) >= capacity {
+		return
+	}
+	c.lastWriteBuffer = make([]byte, capacity)
+	return
+}
+
+func (c *protoCodec) Marshal(v interface{}) ([]byte, error) {
+	var protoMsg = v.(proto.Message)
+	var sizeNeeded = proto.Size(protoMsg)
+	c.updateWriteBuffer(sizeNeeded)
+	c.writeBuffer.SetBuf(c.lastWriteBuffer)
+	c.writeBuffer.Reset()
+	err := c.writeBuffer.Marshal(protoMsg)
+	if err != nil {
+		panic("something went wrong with unmarshaling")
+	}
+	var out = c.writeBuffer.Bytes()
+	c.writeBuffer.SetBuf(nil)
+	return out, err
+}
+
+func (c *protoCodec) Unmarshal(data []byte, v interface{}) error {
+	c.readBuffer.SetBuf(data)
+	err := c.readBuffer.Unmarshal(v.(proto.Message))
+	c.readBuffer.SetBuf(nil)
+	return err
 }
 
 func (protoCodec) String() string {
