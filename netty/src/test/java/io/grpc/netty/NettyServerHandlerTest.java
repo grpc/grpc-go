@@ -298,6 +298,24 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         any(ChannelPromise.class));
   }
 
+  @Test
+  public void headersSupportExtensionContentType() throws Exception {
+    Http2Headers headers = new DefaultHttp2Headers()
+        .method(HTTP_METHOD)
+        .set(CONTENT_TYPE_HEADER, new AsciiString("application/grpc+json", UTF_8))
+        .set(TE_HEADER, TE_TRAILERS)
+        .path(new AsciiString("/foo/bar"));
+    ByteBuf headersFrame = headersFrame(STREAM_ID, headers);
+    channelRead(headersFrame);
+
+    ArgumentCaptor<NettyServerStream> streamCaptor =
+        ArgumentCaptor.forClass(NettyServerStream.class);
+    ArgumentCaptor<String> methodCaptor = ArgumentCaptor.forClass(String.class);
+    verify(transportListener).streamCreated(streamCaptor.capture(), methodCaptor.capture(),
+        any(Metadata.class));
+    stream = streamCaptor.getValue();
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)

@@ -33,7 +33,6 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
@@ -420,7 +419,6 @@ class NettyServerHandler extends AbstractNettyHandler {
       throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
           "Method '%s' is not supported", headers.method());
     }
-    checkHeader(streamId, headers, CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
     // Remove the leading slash of the path and get the fully qualified method name
     CharSequence path = headers.path();
     if (path.charAt(0) != '/') {
