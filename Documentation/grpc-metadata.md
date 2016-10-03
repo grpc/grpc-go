@@ -53,8 +53,8 @@ This happens for both `New` and `Pairs`.
 ### Storing binary data in metadata
 
 In metadata, keys are always strings. But values can be strings or binary data.
-To store binary data value in metadata, simply add "-bin" surfix to the key.
-The values with "-bin" surffixed keys will be encoded when creating the metadata:
+To store binary data value in metadata, simply add "-bin" suffix to the key.
+The values with "-bin" suffixed keys will be encoded when creating the metadata:
 
 ```go
 md := metadata.Pairs(
