@@ -62,7 +62,6 @@ import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager.OobTransportProvider;
 import io.grpc.TransportManager;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
@@ -98,8 +97,8 @@ import java.util.concurrent.TimeUnit;
 public class ManagedChannelImplIdlenessTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
-  private static final String authority = "fakeauthority";
-  private static final String userAgent = "fakeagent";
+  private static final String AUTHORITY = "fakeauthority";
+  private static final String USER_AGENT = "fakeagent";
   private static final long IDLE_TIMEOUT_SECONDS = 30;
   private ManagedChannelImpl channel;
 
@@ -128,7 +127,7 @@ public class ManagedChannelImplIdlenessTest {
     when(mockLoadBalancerFactory
         .newLoadBalancer(anyString(), Matchers.<TransportManager<ClientTransport>>any()))
         .thenReturn(mockLoadBalancer);
-    when(mockNameResolver.getServiceAuthority()).thenReturn(authority);
+    when(mockNameResolver.getServiceAuthority()).thenReturn(AUTHORITY);
     when(mockNameResolverFactory
         .newNameResolver(any(URI.class), any(Attributes.class)))
         .thenReturn(mockNameResolver);
@@ -138,7 +137,7 @@ public class ManagedChannelImplIdlenessTest {
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
         CompressorRegistry.getDefaultInstance(), timerService, timer.getStopwatchSupplier(),
         TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS),
-        executor.getScheduledExecutorService(), userAgent,
+        executor.getScheduledExecutorService(), USER_AGENT,
         Collections.<ClientInterceptor>emptyList());
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
@@ -187,7 +186,7 @@ public class ManagedChannelImplIdlenessTest {
     // LoadBalancer is used right after created.
     verify(mockLoadBalancer).pickTransport(any(Attributes.class));
     verify(mockTransportFactory).newClientTransport(
-        addressGroup.getAddresses().get(0), authority, userAgent);
+        addressGroup.getAddresses().get(0), AUTHORITY, USER_AGENT);
 
     // Simulate new address resolved
     nameResolverListenerCaptor.getValue().onUpdate(servers, Attributes.EMPTY);
@@ -202,13 +201,13 @@ public class ManagedChannelImplIdlenessTest {
     for (EquivalentAddressGroup addressGroup : addressGroupList) {
       channel.tm.getTransport(addressGroup);
       verify(mockTransportFactory).newClientTransport(
-          addressGroup.getAddresses().get(0), authority, userAgent);
+          addressGroup.getAddresses().get(0), AUTHORITY, USER_AGENT);
     }
     ArrayList<MockClientTransportInfo> transports = new ArrayList<MockClientTransportInfo>();
     newTransports.drainTo(transports);
     assertEquals(addressGroupList.size(), transports.size());
 
-    InterimTransport<ClientTransport> interimTransport = channel.tm.createInterimTransport();
+    channel.tm.createInterimTransport();
 
     // Without actually using these transports, will eventually enter idle mode
     walkIntoIdleMode(transports);
@@ -216,7 +215,6 @@ public class ManagedChannelImplIdlenessTest {
 
   @Test
   public void interimTransportHoldsOffIdleness() throws Exception {
-    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
     doAnswer(new Answer<ClientTransport>() {
         @Override
         public ClientTransport answer(InvocationOnMock invocation) throws Throwable {
@@ -321,7 +319,7 @@ public class ManagedChannelImplIdlenessTest {
     assertSame(ManagedChannelImpl.IDLE_MODE_TRANSPORT,
         channel.tm.getTransport(addressGroupList.get(0)));
     OobTransportProvider<ClientTransport> oobProvider =
-        channel.tm.createOobTransportProvider(addressGroupList.get(0), "authority");
+        channel.tm.createOobTransportProvider(addressGroupList.get(0), AUTHORITY);
     assertSame(ManagedChannelImpl.IDLE_MODE_TRANSPORT, oobProvider.get());
     oobProvider.close();
     verify(mockTransportFactory, never()).newClientTransport(

@@ -440,7 +440,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     return Utils.convertTrailers(trailers, true);
   }
 
-  class TransportStateImpl extends NettyClientStream.TransportState {
+  private static class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
       super(handler, maxMessageSize);
     }

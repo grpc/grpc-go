@@ -90,8 +90,8 @@ public class CallCredentialsApplyingTest {
   @Mock
   private SocketAddress address;
 
-  private static final String authority = "testauthority";
-  private static final String userAgent = "testuseragent";
+  private static final String AUTHORITY = "testauthority";
+  private static final String USER_AGENT = "testuseragent";
   private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.of("somekey");
   private static final String ATTR_VALUE = "somevalue";
   private static final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
@@ -112,16 +112,16 @@ public class CallCredentialsApplyingTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     origHeaders.put(ORIG_HEADER_KEY, ORIG_HEADER_VALUE);
-    when(mockTransportFactory.newClientTransport(address, authority, userAgent))
+    when(mockTransportFactory.newClientTransport(address, AUTHORITY, USER_AGENT))
         .thenReturn(mockTransport);
     when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
         .thenReturn(mockStream);
     ClientTransportFactory transportFactory = new CallCredentialsApplyingTransportFactory(
         mockTransportFactory, mockExecutor);
     transport = (ForwardingConnectionClientTransport) transportFactory.newClientTransport(
-        address, authority, userAgent);
+        address, AUTHORITY, USER_AGENT);
     callOptions = CallOptions.DEFAULT.withCallCredentials(mockCreds);
-    verify(mockTransportFactory).newClientTransport(address, authority, userAgent);
+    verify(mockTransportFactory).newClientTransport(address, AUTHORITY, USER_AGENT);
     assertSame(mockTransport, transport.delegate());
   }
 
@@ -137,7 +137,7 @@ public class CallCredentialsApplyingTest {
         any(MetadataApplier.class));
     Attributes attrs = attrsCaptor.getValue();
     assertSame(ATTR_VALUE, attrs.get(ATTR_KEY));
-    assertSame(authority, attrs.get(CallCredentials.ATTR_AUTHORITY));
+    assertSame(AUTHORITY, attrs.get(CallCredentials.ATTR_AUTHORITY));
     assertSame(SecurityLevel.NONE, attrs.get(CallCredentials.ATTR_SECURITY_LEVEL));
   }
 

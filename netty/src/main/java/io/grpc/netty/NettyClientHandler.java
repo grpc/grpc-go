@@ -80,7 +80,6 @@ import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.logging.LogLevel;
 
 import java.nio.channels.ClosedChannelException;
-import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -108,7 +107,6 @@ class NettyClientHandler extends AbstractNettyHandler {
   private final Http2Connection.PropertyKey streamKey;
   private final ClientTransportLifecycleManager lifecycleManager;
   private final Ticker ticker;
-  private final Random random = new Random();
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
 

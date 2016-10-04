@@ -566,7 +566,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     }
   }
 
-  class TransportStateImpl extends NettyClientStream.TransportState {
+  private static class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
       super(handler, maxMessageSize);
     }

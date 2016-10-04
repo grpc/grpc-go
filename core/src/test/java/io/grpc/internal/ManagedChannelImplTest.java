@@ -833,7 +833,6 @@ public class ManagedChannelImplTest {
   @Test
   public void informationPropagatedToNewStreamAndCallCredentials() {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    Metadata headers = new Metadata();
     CallOptions callOptions = CallOptions.DEFAULT.withCallCredentials(creds);
     final Context.Key<String> testKey = Context.key("testing");
     Context ctx = Context.current().withValue(testKey, "testValue");
