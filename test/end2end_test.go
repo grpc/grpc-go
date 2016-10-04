@@ -25,7 +25,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"os"
@@ -46,7 +45,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
@@ -4240,12 +4239,12 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "created by runtime/trace.Start") ||
-			strings.Contains(stack, "created by google3/base/go/log.init") ||
 			strings.Contains(stack, "interestingGoroutines") ||
 			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
 			strings.Contains(stack, "signal.signal_recv") ||
 			strings.Contains(stack, "sigterm.handler") ||
 			strings.Contains(stack, "runtime_mcall") ||
+			strings.Contains(stack, "(*loggingT).flushDaemon") ||
 			strings.Contains(stack, "goroutine in C code") {
 			continue
 		}
@@ -4350,10 +4349,6 @@ func logOutputHasContents(v []byte, wakeup chan<- bool) bool {
 	}
 	fw.wakeup = wakeup
 	return false
-}
-
-func init() {
-	grpclog.SetLogger(log.New(testLogOutput, "", log.LstdFlags))
 }
 
 var verboseLogs = flag.Bool("verbose_logs", false, "show all grpclog output, without filtering")

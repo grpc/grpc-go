@@ -32,26 +32,19 @@ func init() {
 
 type glogger struct{}
 
-func (g *glogger) Fatal(args ...interface{}) {
-	glog.FatalDepth(2, args...)
+func (g *glogger) Print(l grpclog.Severity, args ...interface{}) {
+	switch l {
+	case grpclog.InfoLog:
+		glog.InfoDepth(2, args...)
+	case grpclog.WarningLog:
+		glog.WarningDepth(2, args...)
+	case grpclog.ErrorLog:
+		glog.ErrorDepth(2, args...)
+	case grpclog.FatalLog:
+		glog.FatalDepth(2, args...)
+	}
 }
 
-func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintf(format, args...))
-}
-
-func (g *glogger) Fatalln(args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintln(args...))
-}
-
-func (g *glogger) Print(args ...interface{}) {
-	glog.InfoDepth(2, args...)
-}
-
-func (g *glogger) Printf(format string, args ...interface{}) {
-	glog.InfoDepth(2, fmt.Sprintf(format, args...))
-}
-
-func (g *glogger) Println(args ...interface{}) {
-	glog.InfoDepth(2, fmt.Sprintln(args...))
+func (g *glogger) V(l grpclog.VerboseLevel) bool {
+	return bool(glog.V(glog.Level(l)))
 }
