@@ -48,6 +48,26 @@ import (
 	"google.golang.org/grpc/naming"
 )
 
+// AddressType indicates the address type returned by name resolution.
+type AddressType uint8
+
+const (
+	// Backend indicates the server is a backend server.
+	Backend AddressType = iota
+	// GRPCLB indicates the server is a grpclb load balancer.
+	GRPCLB
+)
+
+// Metadata contains the information the name resolution for grpclb should provide. The
+// name resolver used by grpclb balancer is required to provide this type of metadata in
+// its address updates.
+type Metadata struct {
+	// AddrType is the type of server (grpc load balancer or backend).
+	AddrType AddressType
+	// ServerName is the name of the grpc load balancer. Used for authentication.
+	ServerName string
+}
+
 // Balancer creates a grpclb load balancer.
 func Balancer(r naming.Resolver) grpc.Balancer {
 	return &balancer{
@@ -56,7 +76,8 @@ func Balancer(r naming.Resolver) grpc.Balancer {
 }
 
 type remoteBalancerInfo struct {
-	addr grpc.Address
+	addr string
+	// the server name used for authentication with the remote LB server.
 	name string
 }
 
@@ -95,16 +116,12 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 		bAddr = b.rbs[0]
 	}
 	for _, update := range updates {
-		addr := grpc.Address{
-			Addr:     update.Addr,
-			Metadata: update.Metadata,
-		}
 		switch update.Op {
 		case naming.Add:
 			var exist bool
 			for _, v := range b.rbs {
 				// TODO: Is the same addr with different server name a different balancer?
-				if addr == v.addr {
+				if update.Addr == v.addr {
 					exist = true
 					break
 				}
@@ -112,10 +129,29 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 			if exist {
 				continue
 			}
-			b.rbs = append(b.rbs, remoteBalancerInfo{addr: addr})
+			md, ok := update.Metadata.(*Metadata)
+			if !ok {
+				// TODO: Revisit the handling here and may introduce some fallback mechanism.
+				grpclog.Printf("The name resolution contains unexpected metadata %v", update.Metadata)
+				continue
+			}
+			switch md.AddrType {
+			case Backend:
+				// TODO: Revisit the handling here and may introduce some fallback mechanism.
+				grpclog.Printf("The name resolution does not give grpclb addresses")
+				continue
+			case GRPCLB:
+				b.rbs = append(b.rbs, remoteBalancerInfo{
+					addr: update.Addr,
+					name: md.ServerName,
+				})
+			default:
+				grpclog.Printf("Received unknow address type %d", md.AddrType)
+				continue
+			}
 		case naming.Delete:
 			for i, v := range b.rbs {
-				if addr == v.addr {
+				if update.Addr == v.addr {
 					copy(b.rbs[i:], b.rbs[i+1:])
 					b.rbs = b.rbs[:len(b.rbs)-1]
 					break
@@ -267,16 +303,21 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 				// b is closing.
 				return
 			}
-
 			// Talk to the remote load balancer to get the server list.
 			//
 			// TODO: override the server name in creds using Metadata in addr.
 			var err error
 			creds := config.DialCreds
 			if creds == nil {
-				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithInsecure())
+				cc, err = grpc.Dial(rb.addr, grpc.WithInsecure())
 			} else {
-				cc, err = grpc.Dial(rb.addr.Addr, grpc.WithTransportCredentials(creds))
+				if rb.name != "" {
+					if err := creds.OverrideServerName(rb.name); err != nil {
+						grpclog.Printf("Failed to override the server name in the credentials: %v", err)
+						continue
+					}
+				}
+				cc, err = grpc.Dial(rb.addr, grpc.WithTransportCredentials(creds))
 			}
 			if err != nil {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)

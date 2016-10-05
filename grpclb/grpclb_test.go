@@ -34,7 +34,9 @@
 package grpclb
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -43,8 +45,14 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/naming"
+)
+
+var (
+	lbsn = "bar.com"
+	besn = "foo.com"
 )
 
 type testWatcher struct {
@@ -101,11 +109,54 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 	r.w.update <- &naming.Update{
 		Op:   naming.Add,
 		Addr: r.addr,
+		Metadata: &Metadata{
+			AddrType:   GRPCLB,
+			ServerName: lbsn,
+		},
 	}
 	go func() {
 		<-r.w.readDone
 	}()
 	return r.w, nil
+}
+
+type serverNameCheckCreds struct {
+	t        *testing.T
+	expected string
+	sn       string
+}
+
+func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	if _, err := io.WriteString(rawConn, c.sn); err != nil {
+		c.t.Errorf("Failed to write the server name %s to the client %v", c.sn, err)
+		return nil, nil, err
+	}
+	return rawConn, nil, nil
+}
+func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	b := make([]byte, len(c.expected))
+	if _, err := rawConn.Read(b); err != nil {
+		c.t.Errorf("Failed to read the server name from the server %v", err)
+		return nil, nil, err
+	}
+	if c.expected != string(b) {
+		c.t.Errorf("Read the server name %s want %s", string(b), c.expected)
+		return nil, nil, errors.New("received unexpected server name")
+	}
+	return rawConn, nil, nil
+}
+func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
+	return &serverNameCheckCreds{
+		t:        c.t,
+		expected: c.expected,
+	}
+}
+func (c *serverNameCheckCreds) OverrideServerName(s string) error {
+	c.expected = s
+	return nil
 }
 
 type remoteBalancer struct {
@@ -123,6 +174,7 @@ func newRemoteBalancer(servers *lbpb.ServerList) *remoteBalancer {
 func (b *remoteBalancer) stop() {
 	close(b.done)
 }
+
 func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer) error {
 	resp := &lbpb.LoadBalanceResponse{
 		LoadBalanceResponseType: &lbpb.LoadBalanceResponse_InitialResponse{
@@ -144,9 +196,13 @@ func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer)
 	return nil
 }
 
-func startBackends(lis ...net.Listener) (servers []*grpc.Server) {
+func startBackends(t *testing.T, sn string, lis ...net.Listener) (servers []*grpc.Server) {
 	for _, l := range lis {
-		s := grpc.NewServer()
+		creds := &serverNameCheckCreds{
+			t:  t,
+			sn: sn,
+		}
+		s := grpc.NewServer(grpc.Creds(creds))
 		servers = append(servers, s)
 		go func(s *grpc.Server, l net.Listener) {
 			s.Serve(l)
@@ -167,22 +223,27 @@ func TestGRPCLB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen %v", err)
 	}
-	backends := startBackends(beLis)
+	beAddr := strings.Split(beLis.Addr().String(), ":")
+	bePort, err := strconv.Atoi(beAddr[1])
+	backends := startBackends(t, besn, beLis)
 	defer stopBackends(backends)
+
 	// Start a load balancer.
-	lis, err := net.Listen("tcp", "localhost:0")
+	lbLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to create the listener for the load balancer %v", err)
 	}
-	lb := grpc.NewServer()
-	addr := strings.Split(lis.Addr().String(), ":")
-	port, err := strconv.Atoi(addr[1])
+	lbCreds := &serverNameCheckCreds{
+		t:  t,
+		sn: lbsn,
+	}
+	lb := grpc.NewServer(grpc.Creds(lbCreds))
 	if err != nil {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress: []byte(addr[0]),
-		Port:      int32(port),
+		IpAddress: []byte(beAddr[0]),
+		Port:      int32(bePort),
 	}
 	var bes []*lbpb.Server
 	bes = append(bes, be)
@@ -192,15 +253,19 @@ func TestGRPCLB(t *testing.T) {
 	ls := newRemoteBalancer(sl)
 	lbpb.RegisterLoadBalancerServer(lb, ls)
 	go func() {
-		lb.Serve(lis)
+		lb.Serve(lbLis)
 	}()
 	defer func() {
 		ls.stop()
 		lb.Stop()
 	}()
-	cc, err := grpc.Dial("foo.bar.com", grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lis.Addr().String(),
-	})), grpc.WithInsecure(), grpc.WithBlock())
+	creds := serverNameCheckCreds{
+		t:        t,
+		expected: besn,
+	}
+	cc, err := grpc.Dial(besn, grpc.WithBalancer(Balancer(&testNameResolver{
+		addr: lbLis.Addr().String(),
+	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
