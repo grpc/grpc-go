@@ -41,6 +41,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -121,14 +122,13 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 }
 
 type serverNameCheckCreds struct {
-	t        *testing.T
 	expected string
 	sn       string
 }
 
 func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if _, err := io.WriteString(rawConn, c.sn); err != nil {
-		c.t.Errorf("Failed to write the server name %s to the client %v", c.sn, err)
+		fmt.Printf("Failed to write the server name %s to the client %v", c.sn, err)
 		return nil, nil, err
 	}
 	return rawConn, nil, nil
@@ -136,11 +136,11 @@ func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, cred
 func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	b := make([]byte, len(c.expected))
 	if _, err := rawConn.Read(b); err != nil {
-		c.t.Errorf("Failed to read the server name from the server %v", err)
+		fmt.Printf("Failed to read the server name from the server %v", err)
 		return nil, nil, err
 	}
 	if c.expected != string(b) {
-		c.t.Errorf("Read the server name %s want %s", string(b), c.expected)
+		fmt.Printf("Read the server name %s want %s", string(b), c.expected)
 		return nil, nil, errors.New("received unexpected server name")
 	}
 	return rawConn, nil, nil
@@ -150,7 +150,6 @@ func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
 }
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
 	return &serverNameCheckCreds{
-		t:        c.t,
 		expected: c.expected,
 	}
 }
@@ -199,7 +198,6 @@ func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer)
 func startBackends(t *testing.T, sn string, lis ...net.Listener) (servers []*grpc.Server) {
 	for _, l := range lis {
 		creds := &serverNameCheckCreds{
-			t:  t,
 			sn: sn,
 		}
 		s := grpc.NewServer(grpc.Creds(creds))
@@ -234,7 +232,6 @@ func TestGRPCLB(t *testing.T) {
 		t.Fatalf("Failed to create the listener for the load balancer %v", err)
 	}
 	lbCreds := &serverNameCheckCreds{
-		t:  t,
 		sn: lbsn,
 	}
 	lb := grpc.NewServer(grpc.Creds(lbCreds))
@@ -260,10 +257,10 @@ func TestGRPCLB(t *testing.T) {
 		lb.Stop()
 	}()
 	creds := serverNameCheckCreds{
-		t:        t,
 		expected: besn,
 	}
-	cc, err := grpc.Dial(besn, grpc.WithBalancer(Balancer(&testNameResolver{
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
 		addr: lbLis.Addr().String(),
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
