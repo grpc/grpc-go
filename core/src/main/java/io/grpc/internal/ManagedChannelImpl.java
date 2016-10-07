@@ -35,6 +35,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.census.CensusContextFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
@@ -115,6 +116,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final SharedResourceHolder.Resource<ScheduledExecutorService> timerService;
   private final Supplier<Stopwatch> stopwatchSupplier;
   private final long idleTimeoutMillis;
+  private final CensusContextFactory censusFactory;
 
   /**
    * Executor that runs deadline timers for requests.
@@ -325,7 +327,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       SharedResourceHolder.Resource<ScheduledExecutorService> timerService,
       Supplier<Stopwatch> stopwatchSupplier, long idleTimeoutMillis,
       @Nullable Executor executor, @Nullable String userAgent,
-      List<ClientInterceptor> interceptors) {
+      List<ClientInterceptor> interceptors, CensusContextFactory censusFactory) {
     this.target = checkNotNull(target, "target");
     this.nameResolverFactory = checkNotNull(nameResolverFactory, "nameResolverFactory");
     this.nameResolverParams = checkNotNull(nameResolverParams, "nameResolverParams");
@@ -351,6 +353,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
     this.userAgent = userAgent;
+    this.censusFactory = checkNotNull(censusFactory, "censusFactory");
 
     if (log.isLoggable(Level.INFO)) {
       log.log(Level.INFO, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
@@ -544,10 +547,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       if (executor == null) {
         executor = ManagedChannelImpl.this.executor;
       }
+      StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
+          method.getFullMethodName(), censusFactory, stopwatchSupplier);
       return new ClientCallImpl<ReqT, RespT>(
           method,
           executor,
           callOptions,
+          statsTraceCtx,
           transportProvider,
           scheduledExecutor)
               .setDecompressorRegistry(decompressorRegistry)
@@ -652,7 +658,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     @Override
     public Channel makeChannel(ClientTransport transport) {
       return new SingleTransportChannel(
-          transport, executor, scheduledExecutor, authority());
+          censusFactory, transport, executor, scheduledExecutor, authority(), stopwatchSupplier);
     }
 
     @Override

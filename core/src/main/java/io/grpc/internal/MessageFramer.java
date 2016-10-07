@@ -85,6 +85,7 @@ public class MessageFramer {
   private final OutputStreamAdapter outputStreamAdapter = new OutputStreamAdapter();
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;
+  private final StatsTraceContext statsTraceCtx;
   private boolean closed;
 
   /**
@@ -93,9 +94,11 @@ public class MessageFramer {
    * @param sink the sink used to deliver frames to the transport
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator) {
+  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator,
+      StatsTraceContext statsTraceCtx) {
     this.sink = checkNotNull(sink, "sink");
     this.bufferAllocator = checkNotNull(bufferAllocator, "bufferAllocator");
+    this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
   }
 
   MessageFramer setCompressor(Compressor compressor) {
@@ -142,10 +145,12 @@ public class MessageFramer {
       String err = String.format("Message length inaccurate %s != %s", written, messageLength);
       throw Status.INTERNAL.withDescription(err).asRuntimeException();
     }
+    statsTraceCtx.uncompressedBytesSent(written);
   }
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {
     if (messageLength != -1) {
+      statsTraceCtx.wireBytesSent(messageLength);
       return writeKnownLengthUncompressed(message, messageLength);
     }
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
@@ -220,6 +225,7 @@ public class MessageFramer {
     // Assign the current buffer to the last in the chain so it can be used
     // for future writes or written with end-of-stream=true on close.
     buffer = bufferList.get(bufferList.size() - 1);
+    statsTraceCtx.wireBytesSent(messageLength);
   }
 
   private static int writeToOutputStream(InputStream message, OutputStream outputStream)

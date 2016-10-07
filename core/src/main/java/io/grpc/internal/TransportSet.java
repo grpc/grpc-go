@@ -360,7 +360,7 @@ final class TransportSet extends ManagedChannel implements WithLogId {
   public final <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
-        new SerializingExecutor(appExecutor), callOptions,
+        new SerializingExecutor(appExecutor), callOptions, StatsTraceContext.NOOP,
         new ClientTransportProvider() {
           @Override
           public ClientTransport get(CallOptions callOptions) {

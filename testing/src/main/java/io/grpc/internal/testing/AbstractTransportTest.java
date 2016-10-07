@@ -72,6 +72,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 
 import org.junit.After;
 import org.junit.Before;
@@ -803,7 +804,7 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
   }
 
-  @Test(timeout = 5000)
+  @Test
   public void clientCancelFromWithinMessageRead() throws Exception {
     server.start(serverListener);
     client = newClientTransport(server);
@@ -852,7 +853,7 @@ public abstract class AbstractTransportTest {
     serverStream.flush();
 
     // Block until closedCalled was set.
-    closedCalled.get();
+    closedCalled.get(5, TimeUnit.SECONDS);
 
     serverStream.close(Status.OK, new Metadata());
   }
@@ -1154,6 +1155,11 @@ public abstract class AbstractTransportTest {
 
     public MockServerTransportListener(ServerTransport transport) {
       this.transport = transport;
+    }
+
+    @Override
+    public StatsTraceContext methodDetermined(String method, Metadata headers) {
+      return StatsTraceContext.NOOP;
     }
 
     @Override

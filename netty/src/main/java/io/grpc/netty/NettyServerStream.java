@@ -37,6 +37,7 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -61,8 +62,9 @@ class NettyServerStream extends AbstractServerStream {
   private final WriteQueue writeQueue;
   private final Attributes attributes;
 
-  public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs) {
-    super(new NettyWritableBufferAllocator(channel.alloc()));
+  public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs,
+      StatsTraceContext statsTraceCtx) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
@@ -142,8 +144,9 @@ class NettyServerStream extends AbstractServerStream {
     private final Http2Stream http2Stream;
     private final NettyServerHandler handler;
 
-    public TransportState(NettyServerHandler handler, Http2Stream http2Stream, int maxMessageSize) {
-      super(maxMessageSize);
+    public TransportState(NettyServerHandler handler, Http2Stream http2Stream, int maxMessageSize,
+        StatsTraceContext statsTraceCtx) {
+      super(maxMessageSize, statsTraceCtx);
       this.http2Stream = checkNotNull(http2Stream, "http2Stream");
       this.handler = checkNotNull(handler, "handler");
     }

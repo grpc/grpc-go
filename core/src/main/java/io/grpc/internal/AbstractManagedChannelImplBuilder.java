@@ -34,6 +34,8 @@ package io.grpc.internal;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 
+import com.google.census.Census;
+import com.google.census.CensusContextFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -42,6 +44,7 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
+import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
@@ -117,6 +120,9 @@ public abstract class AbstractManagedChannelImplBuilder
   private CompressorRegistry compressorRegistry;
 
   private long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
+
+  @Nullable
+  private CensusContextFactory censusFactory;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target, "target");
@@ -227,6 +233,16 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
+  /**
+   * Override the default Census implementation.  This is meant to be used in tests.
+   */
+  @VisibleForTesting
+  @Internal
+  public T censusContextFactory(CensusContextFactory censusFactory) {
+    this.censusFactory = censusFactory;
+    return thisT();
+  }
+
   @VisibleForTesting
   final long getIdleTimeoutMillis() {
     return idleTimeoutMillis;
@@ -266,7 +282,9 @@ public abstract class AbstractManagedChannelImplBuilder
         firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
         GrpcUtil.TIMER_SERVICE, GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
-        executor, userAgent, interceptors);
+        executor, userAgent, interceptors,
+        firstNonNull(censusFactory,
+            firstNonNull(Census.getCensusContextFactory(), NoopCensusContextFactory.INSTANCE)));
   }
 
   /**

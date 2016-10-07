@@ -81,9 +81,9 @@ public abstract class Http2ClientStream extends AbstractClientStream {
   private Charset errorCharset = Charsets.UTF_8;
   private boolean contentTypeChecked;
 
-  protected Http2ClientStream(WritableBufferAllocator bufferAllocator,
-                              int maxMessageSize) {
-    super(bufferAllocator, maxMessageSize);
+  protected Http2ClientStream(WritableBufferAllocator bufferAllocator, int maxMessageSize,
+      StatsTraceContext statsTraceCtx) {
+    super(bufferAllocator, maxMessageSize, statsTraceCtx);
   }
 
   /**

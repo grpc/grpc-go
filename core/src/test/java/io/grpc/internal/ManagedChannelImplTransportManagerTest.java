@@ -101,6 +101,12 @@ public class ManagedChannelImplTransportManagerTest {
       new StringMarshaller(), new StringMarshaller());
   private final CallOptions callOptions = CallOptions.DEFAULT.withAuthority("dummy_value");
   private final CallOptions callOptions2 = CallOptions.DEFAULT.withAuthority("dummy_value2");
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
+      method.getFullMethodName(), NoopCensusContextFactory.INSTANCE,
+      GrpcUtil.STOPWATCH_SUPPLIER);
+  private final StatsTraceContext statsTraceCtx2 = StatsTraceContext.newClientContext(
+      method2.getFullMethodName(), NoopCensusContextFactory.INSTANCE,
+      GrpcUtil.STOPWATCH_SUPPLIER);
 
   private ManagedChannelImpl channel;
 
@@ -135,7 +141,8 @@ public class ManagedChannelImplTransportManagerTest {
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
         CompressorRegistry.getDefaultInstance(), GrpcUtil.TIMER_SERVICE,
         GrpcUtil.STOPWATCH_SUPPLIER, ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE,
-        executor, USER_AGENT, Collections.<ClientInterceptor>emptyList());
+        executor, USER_AGENT, Collections.<ClientInterceptor>emptyList(),
+        NoopCensusContextFactory.INSTANCE);
 
     ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
         = ArgumentCaptor.forClass(null);
@@ -195,7 +202,7 @@ public class ManagedChannelImplTransportManagerTest {
     // Subsequent getTransport() will use the next address
     ClientTransport t2 = tm.getTransport(addressGroup);
     assertNotNull(t2);
-    t2.newStream(method, new Metadata(), callOptions);
+    t2.newStream(method, new Metadata(), callOptions, statsTraceCtx);
     // Will keep the previous back-off policy, and not consult back-off policy
     verify(mockTransportFactory, timeout(1000)).newClientTransport(addr2, AUTHORITY, USER_AGENT);
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
@@ -203,8 +210,8 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport rt2 = transportInfo.transport;
     // Make the second transport ready
     transportInfo.listener.transportReady();
-    verify(rt2, timeout(1000)).newStream(same(method), any(Metadata.class),
-        same(callOptions));
+    verify(rt2, timeout(1000)).newStream(
+        same(method), any(Metadata.class), same(callOptions), same(statsTraceCtx));
     verify(mockNameResolver, times(0)).refresh();
     // Disconnect the second transport
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
@@ -213,7 +220,7 @@ public class ManagedChannelImplTransportManagerTest {
 
     // Subsequent getTransport() will use the first address, since last attempt was successful.
     ClientTransport t3 = tm.getTransport(addressGroup);
-    t3.newStream(method2, new Metadata(), callOptions2);
+    t3.newStream(method2, new Metadata(), callOptions2, statsTraceCtx2);
     verify(mockTransportFactory, timeout(1000).times(2))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     // Still no back-off policy creation, because an address succeeded.
@@ -221,8 +228,8 @@ public class ManagedChannelImplTransportManagerTest {
     transportInfo = transports.poll(1, TimeUnit.SECONDS);
     ClientTransport rt3 = transportInfo.transport;
     transportInfo.listener.transportReady();
-    verify(rt3, timeout(1000)).newStream(same(method2), any(Metadata.class),
-        same(callOptions2));
+    verify(rt3, timeout(1000)).newStream(
+        same(method2), any(Metadata.class), same(callOptions2), same(statsTraceCtx2));
 
     verify(rt1, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
     // Back-off policy was never consulted.
@@ -283,7 +290,7 @@ public class ManagedChannelImplTransportManagerTest {
     ClientTransport t4 = tm.getTransport(addressGroup);
     assertNotNull(t4);
     // If backoff's DelayedTransport is still active, this is necessary. Otherwise it would be racy.
-    t4.newStream(method, new Metadata(), CallOptions.DEFAULT.withWaitForReady());
+    t4.newStream(method, new Metadata(), CallOptions.DEFAULT.withWaitForReady(), statsTraceCtx);
     verify(mockTransportFactory, timeout(1000).times(++transportsAddr1))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     // Back-off policy was reset and consulted.

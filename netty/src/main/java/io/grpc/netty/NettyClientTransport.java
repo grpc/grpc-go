@@ -45,6 +45,7 @@ import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.StatsTraceContext;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -116,23 +117,25 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions
-      callOptions) {
+  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers,
+      CallOptions callOptions, StatsTraceContext statsTraceCtx) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
+    Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     return new NettyClientStream(
-        new NettyClientStream.TransportState(handler, maxMessageSize) {
+        new NettyClientStream.TransportState(handler, maxMessageSize, statsTraceCtx) {
           @Override
           protected Status statusFromFailedFuture(ChannelFuture f) {
             return NettyClientTransport.this.statusFromFailedFuture(f);
           }
         },
-        method, headers, channel, authority, negotiationHandler.scheme(), userAgent);
+        method, headers, channel, authority, negotiationHandler.scheme(), userAgent,
+        statsTraceCtx);
   }
 
   @Override
   public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
+    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
   }
 
   @Override

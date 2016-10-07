@@ -138,7 +138,8 @@ public class ManagedChannelImplIdlenessTest {
         CompressorRegistry.getDefaultInstance(), timerService, timer.getStopwatchSupplier(),
         TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS),
         executor.getScheduledExecutorService(), USER_AGENT,
-        Collections.<ClientInterceptor>emptyList());
+        Collections.<ClientInterceptor>emptyList(),
+        NoopCensusContextFactory.INSTANCE);
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
     for (int i = 0; i < 2; i++) {

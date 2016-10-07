@@ -39,7 +39,10 @@ import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
+import com.google.census.CensusContextFactory;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 
 import io.grpc.Attributes;
 import io.grpc.CompressorRegistry;
@@ -90,6 +93,7 @@ public final class ServerImpl extends io.grpc.Server {
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
   private final List<ServerTransportFilter> transportFilters;
+  private final CensusContextFactory censusFactory;
   @GuardedBy("lock") private boolean started;
   @GuardedBy("lock") private boolean shutdown;
   /** non-{@code null} if immediate shutdown has been requested. */
@@ -110,6 +114,7 @@ public final class ServerImpl extends io.grpc.Server {
 
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
+  private final Supplier<Stopwatch> stopwatchSupplier;
 
   /**
    * Construct a server.
@@ -122,7 +127,8 @@ public final class ServerImpl extends io.grpc.Server {
   ServerImpl(Executor executor, InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
       InternalServer transportServer, Context rootContext,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
-      List<ServerTransportFilter> transportFilters) {
+      List<ServerTransportFilter> transportFilters, CensusContextFactory censusFactory,
+      Supplier<Stopwatch> stopwatchSupplier) {
     this.executor = executor;
     this.registry = Preconditions.checkNotNull(registry, "registry");
     this.fallbackRegistry = Preconditions.checkNotNull(fallbackRegistry, "fallbackRegistry");
@@ -134,6 +140,8 @@ public final class ServerImpl extends io.grpc.Server {
     this.compressorRegistry = compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
         new ArrayList<ServerTransportFilter>(transportFilters));
+    this.censusFactory = Preconditions.checkNotNull(censusFactory, "censusFactory");
+    this.stopwatchSupplier = Preconditions.checkNotNull(stopwatchSupplier, "stopwatchSupplier");
   }
 
   /**
@@ -348,9 +356,19 @@ public final class ServerImpl extends io.grpc.Server {
     }
 
     @Override
+    public StatsTraceContext methodDetermined(String methodName, Metadata headers) {
+      return StatsTraceContext.newServerContext(
+          methodName, censusFactory, headers, stopwatchSupplier);
+    }
+
+    @Override
     public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
         final Metadata headers) {
-      final Context.CancellableContext context = createContext(stream, headers);
+
+      final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
+          stream.statsTraceContext(), "statsTraceCtx not present from stream");
+
+      final Context.CancellableContext context = createContext(stream, headers, statsTraceCtx);
       final Executor wrappedExecutor;
       // This is a performance optimization that avoids the synchronization and queuing overhead
       // that comes with SerializingExecutor.
@@ -375,9 +393,13 @@ public final class ServerImpl extends io.grpc.Server {
                 method = fallbackRegistry.lookupMethod(methodName);
               }
               if (method == null) {
-                stream.close(
-                    Status.UNIMPLEMENTED.withDescription("Method not found: " + methodName),
-                    new Metadata());
+                Status status = Status.UNIMPLEMENTED.withDescription(
+                    "Method not found: " + methodName);
+                stream.close(status, new Metadata());
+                // TODO(zhangkun83): this would allow a misbehaving client to blow up the server
+                // in-memory stats storage by sending large number of distinct unimplemented method
+                // names. (https://github.com/grpc/grpc-java/issues/2285)
+                statsTraceCtx.callEnded(status);
                 context.cancel(null);
                 return;
               }
@@ -398,15 +420,19 @@ public final class ServerImpl extends io.grpc.Server {
       return jumpListener;
     }
 
-    private Context.CancellableContext createContext(final ServerStream stream, Metadata headers) {
+    private Context.CancellableContext createContext(
+        final ServerStream stream, Metadata headers, StatsTraceContext statsTraceCtx) {
       Long timeoutNanos = headers.get(TIMEOUT_KEY);
 
+      // TODO(zhangkun83): attach the CensusContext from StatsTraceContext to baseContext
+      Context baseContext = rootContext;
+
       if (timeoutNanos == null) {
-        return rootContext.withCancellation();
+        return baseContext.withCancellation();
       }
 
       Context.CancellableContext context =
-          rootContext.withDeadlineAfter(timeoutNanos, NANOSECONDS, timeoutService);
+          baseContext.withDeadlineAfter(timeoutNanos, NANOSECONDS, timeoutService);
       context.addListener(new Context.CancellationListener() {
         @Override
         public void cancelled(Context context) {
@@ -428,8 +454,8 @@ public final class ServerImpl extends io.grpc.Server {
         Context.CancellableContext context) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
-          stream, methodDef.getMethodDescriptor(), headers, context, decompressorRegistry,
-          compressorRegistry);
+          stream, methodDef.getMethodDescriptor(), headers, context, stream.statsTraceContext(),
+          decompressorRegistry, compressorRegistry);
       ServerCall.Listener<ReqT> listener =
           methodDef.getServerCallHandler().startCall(call, headers);
       if (listener == null) {

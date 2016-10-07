@@ -75,4 +75,9 @@ public interface ServerStream extends Stream {
    * @return Attributes container
    */
   Attributes attributes();
+
+  /**
+   * The context for recording stats and traces for this stream.
+   */
+  StatsTraceContext statsTraceContext();
 }

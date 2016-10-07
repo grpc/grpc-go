@@ -31,6 +31,7 @@
 
 package io.grpc.testing.integration;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -107,6 +108,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())
+        .censusContextFactory(getClientCensusFactory())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
             TestUtils.TEST_SERVER_HOST, getPort()));
     try {
@@ -133,12 +135,14 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     StreamRecorder<Messages.StreamingOutputCallResponse> recorder = StreamRecorder.create();
     StreamObserver<Messages.StreamingOutputCallRequest> requestStream =
         asyncStub.fullDuplexCall(recorder);
-    requestStream.onNext(requestBuilder.build());
+    Messages.StreamingOutputCallRequest request = requestBuilder.build();
+    requestStream.onNext(request);
     recorder.firstValue().get();
     requestStream.onError(new Exception("failed"));
 
     recorder.awaitCompletion();
-    emptyUnary();
+
+    assertEquals(EMPTY, blockingStub.emptyCall(EMPTY));
   }
 
   @Test(timeout = 10000)

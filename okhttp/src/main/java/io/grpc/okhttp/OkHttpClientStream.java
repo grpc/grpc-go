@@ -40,6 +40,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStream;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
@@ -96,8 +97,9 @@ class OkHttpClientStream extends Http2ClientStream {
       Object lock,
       int maxMessageSize,
       String authority,
-      String userAgent) {
-    super(new OkHttpWritableBufferAllocator(), maxMessageSize);
+      String userAgent,
+      StatsTraceContext statsTraceCtx) {
+    super(new OkHttpWritableBufferAllocator(), maxMessageSize, statsTraceCtx);
     this.method = method;
     this.headers = headers;
     this.frameWriter = frameWriter;

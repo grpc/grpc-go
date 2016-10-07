@@ -146,8 +146,8 @@ public abstract class AbstractStream2 implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
-    protected TransportState(int maxMessageSize) {
-      deframer = new MessageDeframer(this, Codec.Identity.NONE, maxMessageSize);
+    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
+      deframer = new MessageDeframer(this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx);
     }
 
     @VisibleForTesting

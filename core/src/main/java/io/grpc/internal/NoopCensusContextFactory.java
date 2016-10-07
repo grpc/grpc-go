@@ -29,41 +29,62 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.testing.integration;
+package io.grpc.internal;
 
-import io.grpc.ManagedChannel;
-import io.grpc.netty.HandlerSettings;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.NettyServerBuilder;
+import com.google.census.CensusContext;
+import com.google.census.CensusContextFactory;
+import com.google.census.MetricMap;
+import com.google.census.TagKey;
+import com.google.census.TagValue;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import java.nio.ByteBuffer;
 
-@RunWith(JUnit4.class)
-public class AutoWindowSizingOnTest extends AbstractInteropTest {
+public final class NoopCensusContextFactory extends CensusContextFactory {
+  private static final ByteBuffer SERIALIZED_BYTES = ByteBuffer.allocate(0).asReadOnlyBuffer();
+  private static final CensusContext DEFAULT_CONTEXT = new NoopCensusContext();
+  private static final CensusContext.Builder BUILDER = new NoopContextBuilder();
 
-  @BeforeClass
-  public static void turnOnAutoWindow() {
-    HandlerSettings.autoWindowOn(true);
-    startStaticServer(
-        NettyServerBuilder.forPort(0)
-            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE));
-  }
+  public static final CensusContextFactory INSTANCE = new NoopCensusContextFactory();
 
-  @AfterClass
-  public static void shutdown() {
-    stopStaticServer();
+  private NoopCensusContextFactory() {
   }
 
   @Override
-  protected ManagedChannel createChannel() {
-    return NettyChannelBuilder.forAddress("localhost", getPort())
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-        .censusContextFactory(getClientCensusFactory())
-        .build();
+  public CensusContext deserialize(ByteBuffer buffer) {
+    return DEFAULT_CONTEXT;
+  }
+
+  @Override
+  public CensusContext getDefault() {
+    return DEFAULT_CONTEXT;
+  }
+
+  private static class NoopCensusContext extends CensusContext {
+    @Override
+    public Builder builder() {
+      return BUILDER;
+    }
+
+    @Override
+    public CensusContext record(MetricMap metrics) {
+      return DEFAULT_CONTEXT;
+    }
+
+    @Override
+    public ByteBuffer serialize() {
+      return SERIALIZED_BYTES;
+    }
+  }
+
+  private static class NoopContextBuilder extends CensusContext.Builder {
+    @Override
+    public CensusContext.Builder set(TagKey key, TagValue value) {
+      return this;
+    }
+
+    @Override
+    public CensusContext build() {
+      return DEFAULT_CONTEXT;
+    }
   }
 }

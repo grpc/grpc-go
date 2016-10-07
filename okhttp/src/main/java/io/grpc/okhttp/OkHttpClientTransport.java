@@ -53,6 +53,7 @@ import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameReader;
@@ -269,18 +270,19 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
-      headers, CallOptions callOptions) {
+  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method,
+      final Metadata headers, CallOptions callOptions, StatsTraceContext statsTraceCtx) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
+    Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
-        outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent);
+        outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent, statsTraceCtx);
   }
 
   @Override
   public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
       headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
+    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
   }
 
   @GuardedBy("lock")

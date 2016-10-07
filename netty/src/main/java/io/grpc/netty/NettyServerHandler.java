@@ -49,6 +49,7 @@ import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -193,14 +194,14 @@ class NettyServerHandler extends AbstractNettyHandler {
       // method.
       Http2Stream http2Stream = requireHttp2Stream(streamId);
 
-      NettyServerStream.TransportState state =
-          new NettyServerStream.TransportState(this, http2Stream, maxMessageSize);
-      NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes);
-
       Metadata metadata = Utils.convertHeaders(headers);
-
-      ServerStreamListener listener =
-          transportListener.streamCreated(stream, method, metadata);
+      StatsTraceContext statsTraceCtx =
+          checkNotNull(transportListener.methodDetermined(method, metadata), "statsTraceCtx");
+      NettyServerStream.TransportState state = new NettyServerStream.TransportState(
+          this, http2Stream, maxMessageSize, statsTraceCtx);
+      NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes,
+          statsTraceCtx);
+      ServerStreamListener listener = transportListener.streamCreated(stream, method, metadata);
       // TODO(ejona): this could be racy since stream could have been used before getting here. All
       // cases appear to be fine, but some are almost only by happenstance and it is difficult to
       // audit. It would be good to improve the API to be less prone to races.

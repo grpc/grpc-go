@@ -120,7 +120,7 @@ public class AbstractStreamTest {
    */
   private class AbstractStreamBase extends AbstractStream {
     private AbstractStreamBase(WritableBufferAllocator bufferAllocator) {
-      super(allocator, DEFAULT_MAX_MESSAGE_SIZE);
+      super(allocator, DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContext.NOOP);
     }
 
     private AbstractStreamBase(MessageFramer framer, MessageDeframer deframer) {

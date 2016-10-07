@@ -51,6 +51,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -125,7 +126,8 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
   @Override
   public synchronized ClientStream newStream(
-      final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
+      final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions,
+      StatsTraceContext clientStatsTraceContext) {
     if (shutdownStatus != null) {
       final Status capturedStatus = shutdownStatus;
       return new NoopClientStream() {
@@ -135,14 +137,15 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
       };
     }
-
-    return new InProcessStream(method, headers).clientStream;
+    StatsTraceContext serverStatsTraceContext = serverTransportListener.methodDetermined(
+        method.getFullMethodName(), headers);
+    return new InProcessStream(method, headers, serverStatsTraceContext).clientStream;
   }
 
   @Override
   public synchronized ClientStream newStream(
       final MethodDescriptor<?, ?> method, final Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
+    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
   }
 
   @Override
@@ -231,13 +234,16 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   private class InProcessStream {
     private final InProcessServerStream serverStream = new InProcessServerStream();
     private final InProcessClientStream clientStream = new InProcessClientStream();
+    private final StatsTraceContext serverStatsTraceContext;
     private final Metadata headers;
-    private MethodDescriptor<?, ?> method;
+    private final MethodDescriptor<?, ?> method;
 
-    private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers) {
+    private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers,
+        StatsTraceContext serverStatsTraceContext) {
       this.method = checkNotNull(method, "method");
       this.headers = checkNotNull(headers, "headers");
-
+      this.serverStatsTraceContext =
+          checkNotNull(serverStatsTraceContext, "serverStatsTraceContext");
     }
 
     // Can be called multiple times due to races on both client and server closing at same time.
@@ -407,6 +413,11 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
       @Override public Attributes attributes() {
         return serverStreamAttributes;
+      }
+
+      @Override
+      public StatsTraceContext statsTraceContext() {
+        return serverStatsTraceContext;
       }
     }
 

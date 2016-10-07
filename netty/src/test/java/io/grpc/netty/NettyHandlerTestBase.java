@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.internal.MessageFramer;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -159,7 +160,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
           compressionFrame.writeBytes(bytebuf);
         }
       }
-    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT));
+    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT), StatsTraceContext.NOOP);
     framer.writePayload(new ByteArrayInputStream(content));
     framer.flush();
     ChannelHandlerContext ctx = newMockContext();

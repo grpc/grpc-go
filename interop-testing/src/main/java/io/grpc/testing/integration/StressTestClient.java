@@ -484,6 +484,12 @@ public class StressTestClient {
         // Fixes https://github.com/grpc/grpc-java/issues/1812
         return Integer.MAX_VALUE;
       }
+
+      @Override
+      protected boolean metricsExpected() {
+        // TODO(zhangkun83): we may want to enable the real Census implementation in stress tests.
+        return false;
+      }
     }
 
     class WeightedTestCaseSelector {

@@ -61,6 +61,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -360,7 +361,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
     stream = new NettyClientStream(new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
         methodDescriptor, new Metadata(), channel, AsciiString.of("localhost"),
-        AsciiString.of("http"), AsciiString.of("agent"));
+        AsciiString.of("http"), AsciiString.of("agent"), StatsTraceContext.NOOP);
     stream.start(listener);
     stream().transportState().setId(STREAM_ID);
     verify(listener, never()).onReady();
@@ -380,7 +381,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
     stream = new NettyClientStream(new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE),
         methodDescriptor, new Metadata(), channel, AsciiString.of("localhost"),
-        AsciiString.of("http"), AsciiString.of("good agent"));
+        AsciiString.of("http"), AsciiString.of("good agent"), StatsTraceContext.NOOP);
     stream.start(listener);
 
     ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
@@ -404,7 +405,8 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     NettyClientStream stream = new NettyClientStream(
         new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE), methodDescriptor, new Metadata(),
-        channel, AsciiString.of("localhost"), AsciiString.of("http"), AsciiString.of("agent"));
+        channel, AsciiString.of("localhost"), AsciiString.of("http"), AsciiString.of("agent"),
+        StatsTraceContext.NOOP);
     stream.start(listener);
     stream.transportState().setId(STREAM_ID);
     stream.transportState().setHttp2Stream(http2Stream);
@@ -442,7 +444,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
   private static class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize);
+      super(handler, maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

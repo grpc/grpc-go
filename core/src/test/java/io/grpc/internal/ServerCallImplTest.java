@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -40,6 +41,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.census.RpcConstants;
+import com.google.census.TagValue;
 import com.google.common.io.CharStreams;
 import com.google.common.util.concurrent.Futures;
 
@@ -53,6 +56,8 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ServerCallImpl.ServerStreamListenerImpl;
+import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
+import io.grpc.internal.testing.CensusTestUtils;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -86,12 +91,18 @@ public class ServerCallImplTest {
   private final MethodDescriptor<Long, Long> method = MethodDescriptor.create(
       MethodType.UNARY, "/service/method", new LongMarshaller(), new LongMarshaller());
 
+  private final Metadata requestHeaders = new Metadata();
+  private final FakeCensusContextFactory censusCtxFactory = new FakeCensusContextFactory();
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.newServerContext(
+      method.getFullMethodName(), censusCtxFactory, requestHeaders, GrpcUtil.STOPWATCH_SUPPLIER);
+
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     context = Context.ROOT.withCancellation();
-    call = new ServerCallImpl<Long, Long>(stream, method, new Metadata(), context,
-        DecompressorRegistry.getDefaultInstance(), CompressorRegistry.getDefaultInstance());
+    call = new ServerCallImpl<Long, Long>(stream, method, requestHeaders, context,
+        statsTraceCtx, DecompressorRegistry.getDefaultInstance(),
+        CompressorRegistry.getDefaultInstance());
   }
 
   @Test
@@ -189,7 +200,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_halfClosed() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
 
     streamListener.halfClosed();
 
@@ -199,7 +211,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_halfClosed_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
     streamListener.halfClosed();
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
@@ -212,31 +225,36 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_closedOk() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
 
     streamListener.closed(Status.OK);
 
     verify(callListener).onComplete();
     assertTrue(context.isCancelled());
     assertNull(context.cancellationCause());
+    checkStats(Status.Code.OK);
   }
 
   @Test
   public void streamListener_closedCancelled() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
 
     streamListener.closed(Status.CANCELLED);
 
     verify(callListener).onCancel();
     assertTrue(context.isCancelled());
     assertNull(context.cancellationCause());
+    checkStats(Status.Code.CANCELLED);
   }
 
   @Test
   public void streamListener_onReady() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
 
     streamListener.onReady();
 
@@ -246,7 +264,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_onReady_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
     streamListener.onReady();
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
@@ -259,7 +278,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_messageRead() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
     streamListener.messageRead(method.streamRequest(1234L));
 
     verify(callListener).onMessage(1234L);
@@ -268,7 +288,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_messageRead_unaryFailsOnMultiple() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
     streamListener.messageRead(method.streamRequest(1234L));
     streamListener.messageRead(method.streamRequest(1234L));
 
@@ -282,7 +303,8 @@ public class ServerCallImplTest {
   @Test
   public void streamListener_messageRead_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
     streamListener.messageRead(method.streamRequest(1234L));
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
@@ -290,6 +312,28 @@ public class ServerCallImplTest {
     streamListener.messageRead(method.streamRequest(1234L));
 
     verify(callListener).onMessage(1234L);
+  }
+
+  private void checkStats(Status.Code statusCode) {
+    CensusTestUtils.MetricsRecord record = censusCtxFactory.pollRecord();
+    assertNotNull(record);
+    TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
+    assertNotNull(statusTag);
+    assertEquals(statusCode.toString(), statusTag.toString());
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
+    // The test doesn't invoke MessageFramer and MessageDeframer which keep the sizes.
+    // Thus the sizes reported to stats would be zero.
+    assertEquals(0,
+        record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_REQUEST_BYTES));
+    assertEquals(0,
+        record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
+    assertEquals(0,
+        record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES));
+    assertEquals(0,
+        record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES));
   }
 
   private static class LongMarshaller implements Marshaller<Long> {

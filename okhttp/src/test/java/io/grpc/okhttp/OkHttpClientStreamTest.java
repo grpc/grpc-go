@@ -44,6 +44,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
 
@@ -84,7 +85,7 @@ public class OkHttpClientStreamTest {
     methodDescriptor = MethodDescriptor.create(
         MethodType.UNARY, "/testService/test", marshaller, marshaller);
     stream = new OkHttpClientStream(methodDescriptor, new Metadata(), frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "userAgent");
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "userAgent", StatsTraceContext.NOOP);
   }
 
   @Test
@@ -140,7 +141,8 @@ public class OkHttpClientStreamTest {
     Metadata metaData = new Metadata();
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application");
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
+        StatsTraceContext.NOOP);
     stream.start(new BaseClientStreamListener());
     stream.start(3);
 
@@ -154,7 +156,8 @@ public class OkHttpClientStreamTest {
     Metadata metaData = new Metadata();
     metaData.put(GrpcUtil.USER_AGENT_KEY, "misbehaving-application");
     stream = new OkHttpClientStream(methodDescriptor, metaData, frameWriter, transport,
-        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application");
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
+        StatsTraceContext.NOOP);
     stream.start(new BaseClientStreamListener());
     stream.start(3);
 

@@ -44,6 +44,7 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.Attributes;
+import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -58,6 +59,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.testing.TestUtils;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -97,6 +99,8 @@ public class NettyClientTransportTest {
 
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
+
   private InetSocketAddress address;
   private String authority;
   private NettyServer server;
@@ -109,6 +113,7 @@ public class NettyClientTransportTest {
 
   @After
   public void teardown() throws Exception {
+    Context.ROOT.attach();
     for (NettyClientTransport transport : transports) {
       transport.shutdown();
     }
@@ -433,6 +438,10 @@ public class NettyClientTransportTest {
     public ServerTransportListener transportCreated(final ServerTransport transport) {
       transports.add((NettyServerTransport) transport);
       return new ServerTransportListener() {
+        @Override
+        public StatsTraceContext methodDetermined(String method, Metadata headers) {
+          return StatsTraceContext.NOOP;
+        }
 
         @Override
         public ServerStreamListener streamCreated(final ServerStream stream, String method,

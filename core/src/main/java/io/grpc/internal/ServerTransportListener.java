@@ -41,6 +41,14 @@ import io.grpc.Metadata;
 public interface ServerTransportListener {
 
   /**
+   * Called when the method name for a new stream has been determined, which happens before the
+   * stream is actually created and {@link #streamCreated} is called.
+   *
+   * @return a context object for recording stats and tracing for the new stream.
+   */
+  StatsTraceContext methodDetermined(String methodName, Metadata headers);
+
+  /**
    * Called when a new stream was created by the remote client.
    *
    * @param stream the newly created stream.

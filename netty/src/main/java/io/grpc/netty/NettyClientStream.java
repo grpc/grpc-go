@@ -45,6 +45,7 @@ import io.grpc.internal.AbstractClientStream2;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -77,8 +78,8 @@ class NettyClientStream extends AbstractClientStream2 {
 
   NettyClientStream(TransportState state, MethodDescriptor<?, ?> method, Metadata headers,
       Channel channel, AsciiString authority, AsciiString scheme,
-      AsciiString userAgent) {
-    super(new NettyWritableBufferAllocator(channel.alloc()));
+      AsciiString userAgent, StatsTraceContext statsTraceCtx) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
     this.state = checkNotNull(state, "transportState");
     this.writeQueue = state.handler.getWriteQueue();
     this.method = checkNotNull(method, "method");
@@ -183,8 +184,9 @@ class NettyClientStream extends AbstractClientStream2 {
     private int id;
     private Http2Stream http2Stream;
 
-    public TransportState(NettyClientHandler handler, int maxMessageSize) {
-      super(maxMessageSize);
+    public TransportState(NettyClientHandler handler, int maxMessageSize,
+        StatsTraceContext statsTraceCtx) {
+      super(maxMessageSize, statsTraceCtx);
       this.handler = checkNotNull(handler, "handler");
     }
 

@@ -257,7 +257,7 @@ public class AbstractClientStreamTest {
    */
   private static class BaseAbstractClientStream extends AbstractClientStream {
     protected BaseAbstractClientStream(WritableBufferAllocator allocator) {
-      super(allocator, DEFAULT_MAX_MESSAGE_SIZE);
+      super(allocator, DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContext.NOOP);
     }
 
     @Override

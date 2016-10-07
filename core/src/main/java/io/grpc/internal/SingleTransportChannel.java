@@ -31,7 +31,10 @@
 
 package io.grpc.internal;
 
+import com.google.census.CensusContextFactory;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -47,10 +50,12 @@ import java.util.concurrent.ScheduledExecutorService;
  */
 final class SingleTransportChannel extends Channel {
 
+  private final CensusContextFactory censusFactory;
   private final ClientTransport transport;
   private final Executor executor;
   private final String authority;
   private final ScheduledExecutorService deadlineCancellationExecutor;
+  private final Supplier<Stopwatch> stopwatchSupplier;
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
@@ -62,20 +67,25 @@ final class SingleTransportChannel extends Channel {
   /**
    * Creates a new channel with a connected transport.
    */
-  public SingleTransportChannel(ClientTransport transport, Executor executor,
-      ScheduledExecutorService deadlineCancellationExecutor, String authority) {
+  public SingleTransportChannel(CensusContextFactory censusFactory, ClientTransport transport,
+      Executor executor, ScheduledExecutorService deadlineCancellationExecutor, String authority,
+      Supplier<Stopwatch> stopwatchSupplier) {
+    this.censusFactory = Preconditions.checkNotNull(censusFactory, "censusFactory");
     this.transport = Preconditions.checkNotNull(transport, "transport");
     this.executor = Preconditions.checkNotNull(executor, "executor");
     this.deadlineCancellationExecutor = Preconditions.checkNotNull(
         deadlineCancellationExecutor, "deadlineCancellationExecutor");
     this.authority = Preconditions.checkNotNull(authority, "authority");
+    this.stopwatchSupplier = Preconditions.checkNotNull(stopwatchSupplier, "stopwatchSupplier");
   }
 
   @Override
   public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
+    StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
+        methodDescriptor.getFullMethodName(), censusFactory, stopwatchSupplier);
     return new ClientCallImpl<RequestT, ResponseT>(methodDescriptor,
-        new SerializingExecutor(executor), callOptions, transportProvider,
+        new SerializingExecutor(executor), callOptions, statsTraceCtx, transportProvider,
         deadlineCancellationExecutor);
   }
 

@@ -456,7 +456,7 @@ public final class GrpcUtil {
   /**
    * The factory of default Stopwatches.
    */
-  static final Supplier<Stopwatch> STOPWATCH_SUPPLIER = new Supplier<Stopwatch>() {
+  public static final Supplier<Stopwatch> STOPWATCH_SUPPLIER = new Supplier<Stopwatch>() {
       @Override
       public Stopwatch get() {
         return Stopwatch.createUnstarted();

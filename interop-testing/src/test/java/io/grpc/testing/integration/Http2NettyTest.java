@@ -92,6 +92,7 @@ public class Http2NettyTest extends AbstractInteropTest {
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
               .sslProvider(SslProvider.OPENSSL)
               .build())
+          .censusContextFactory(getClientCensusFactory())
           .build();
     } catch (Exception ex) {
       throw new RuntimeException(ex);

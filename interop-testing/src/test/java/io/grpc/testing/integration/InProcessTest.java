@@ -58,6 +58,14 @@ public class InProcessTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    return InProcessChannelBuilder.forName(serverName).build();
+    return InProcessChannelBuilder.forName(serverName)
+        .censusContextFactory(getClientCensusFactory()).build();
+  }
+
+  @Override
+  protected boolean metricsExpected() {
+    // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
+    // not counted. (https://github.com/grpc/grpc-java/issues/2284)
+    return false;
   }
 }

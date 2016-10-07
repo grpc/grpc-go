@@ -8,7 +8,8 @@ dependencies {
     compile libraries.guava,
             libraries.errorprone,
             libraries.jsr305,
-            project(':grpc-context')
+            project(':grpc-context'),
+            libraries.census_api
     testCompile project(':grpc-testing')
 }
 

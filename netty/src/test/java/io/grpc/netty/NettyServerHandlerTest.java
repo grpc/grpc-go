@@ -62,6 +62,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -103,6 +104,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Mock
   private ServerStreamListener streamListener;
 
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
+
   private NettyServerStream stream;
 
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
@@ -112,6 +115,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
 
+    when(transportListener.methodDetermined(any(String.class), any(Metadata.class)))
+        .thenReturn(statsTraceCtx);
     when(transportListener.streamCreated(any(ServerStream.class),
         any(String.class),
         any(Metadata.class)))

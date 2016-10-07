@@ -51,6 +51,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.census.CensusContext;
+import com.google.census.RpcConstants;
+import com.google.census.TagValue;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -68,6 +71,8 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
+import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
+import io.grpc.internal.testing.CensusTestUtils;
 
 import org.junit.After;
 import org.junit.Before;
@@ -116,6 +121,14 @@ public class ClientCallImplTest {
       new TestMarshaller<Void>(),
       new TestMarshaller<Void>());
 
+  private final FakeCensusContextFactory censusCtxFactory = new FakeCensusContextFactory();
+  private final CensusContext parentCensusContext = censusCtxFactory.getDefault().with(
+      CensusTestUtils.EXTRA_TAG, new TagValue("extra-tag-value"));
+  private final StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContextForTesting(
+      method.getFullMethodName(), censusCtxFactory, parentCensusContext,
+      fakeClock.getStopwatchSupplier());
+  private final CensusContext censusCtx = censusCtxFactory.contexts.poll();
+
   @Mock private ClientStreamListener streamListener;
   @Mock private ClientTransport clientTransport;
   @Captor private ArgumentCaptor<Status> statusCaptor;
@@ -141,14 +154,38 @@ public class ClientCallImplTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+    assertNotNull(censusCtx);
     when(provider.get(any(CallOptions.class))).thenReturn(transport);
     when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-        any(CallOptions.class))).thenReturn(stream);
+            any(CallOptions.class), any(StatsTraceContext.class))).thenReturn(stream);
   }
 
   @After
   public void tearDown() {
     Context.ROOT.attach();
+  }
+
+  @Test
+  public void statusPropagatedFromStreamToCallListener() {
+    DelayedExecutor executor = new DelayedExecutor();
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        method,
+        executor,
+        CallOptions.DEFAULT,
+        statsTraceCtx,
+        provider,
+        deadlineCancellationExecutor);
+    call.start(callListener, new Metadata());
+    verify(stream).start(listenerArgumentCaptor.capture());
+    final ClientStreamListener streamListener = listenerArgumentCaptor.getValue();
+    streamListener.headersRead(new Metadata());
+    Status status = Status.RESOURCE_EXHAUSTED.withDescription("simulated");
+    streamListener.closed(status , new Metadata());
+    executor.release();
+
+    verify(callListener).onClose(statusArgumentCaptor.capture(), Matchers.isA(Metadata.class));
+    assertThat(statusArgumentCaptor.getValue()).isSameAs(status);
+    assertStatusInStats(status.getCode());
   }
 
   @Test
@@ -158,6 +195,7 @@ public class ClientCallImplTest {
         method,
         executor,
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
     call.start(callListener, new Metadata());
@@ -182,6 +220,7 @@ public class ClientCallImplTest {
     assertThat(statusArgumentCaptor.getValue().getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(statusArgumentCaptor.getValue().getCause()).isSameAs(failure);
     verify(stream).cancel(statusArgumentCaptor.getValue());
+    assertStatusInStats(Status.Code.CANCELLED);
   }
 
   @Test
@@ -191,6 +230,7 @@ public class ClientCallImplTest {
         method,
         executor,
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
     call.start(callListener, new Metadata());
@@ -214,6 +254,7 @@ public class ClientCallImplTest {
     assertThat(statusArgumentCaptor.getValue().getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(statusArgumentCaptor.getValue().getCause()).isSameAs(failure);
     verify(stream).cancel(statusArgumentCaptor.getValue());
+    assertStatusInStats(Status.Code.CANCELLED);
   }
 
   @Test
@@ -223,6 +264,7 @@ public class ClientCallImplTest {
         method,
         executor,
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
     call.start(callListener, new Metadata());
@@ -246,6 +288,7 @@ public class ClientCallImplTest {
     assertThat(statusArgumentCaptor.getValue().getCode()).isEqualTo(Status.Code.CANCELLED);
     assertThat(statusArgumentCaptor.getValue().getCause()).isSameAs(failure);
     verify(stream).cancel(statusArgumentCaptor.getValue());
+    assertStatusInStats(Status.Code.CANCELLED);
   }
 
   @Test
@@ -254,6 +297,7 @@ public class ClientCallImplTest {
         method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -261,7 +305,8 @@ public class ClientCallImplTest {
     call.start(callListener, new Metadata());
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
-    verify(transport).newStream(eq(method), metadataCaptor.capture(), same(CallOptions.DEFAULT));
+    verify(transport).newStream(eq(method), metadataCaptor.capture(), same(CallOptions.DEFAULT),
+        same(statsTraceCtx));
     Metadata actual = metadataCaptor.getValue();
 
     Set<String> acceptedEncodings =
@@ -275,6 +320,7 @@ public class ClientCallImplTest {
         method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT.withAuthority("overridden-authority"),
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -290,6 +336,7 @@ public class ClientCallImplTest {
         method,
         MoreExecutors.directExecutor(),
         callOptions,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
         .setDecompressorRegistry(decompressorRegistry);
@@ -297,7 +344,8 @@ public class ClientCallImplTest {
 
     call.start(callListener, metadata);
 
-    verify(transport).newStream(same(method), same(metadata), same(callOptions));
+    verify(transport).newStream(same(method), same(metadata), same(callOptions),
+        same(statsTraceCtx));
   }
 
   @Test
@@ -307,6 +355,7 @@ public class ClientCallImplTest {
         MoreExecutors.directExecutor(),
         // Don't provide an authority
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -319,7 +368,7 @@ public class ClientCallImplTest {
   public void prepareHeaders_userAgentIgnored() {
     Metadata m = new Metadata();
     m.put(GrpcUtil.USER_AGENT_KEY, "batmobile");
-    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE, statsTraceCtx);
 
     // User Agent is removed and set by the transport
     assertThat(m.get(GrpcUtil.USER_AGENT_KEY)).isNotNull();
@@ -328,7 +377,7 @@ public class ClientCallImplTest {
   @Test
   public void prepareHeaders_ignoreIdentityEncoding() {
     Metadata m = new Metadata();
-    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE, statsTraceCtx);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
   }
@@ -371,7 +420,7 @@ public class ClientCallImplTest {
           }
         }, false); // not advertised
 
-    ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE, statsTraceCtx);
 
     Iterable<String> acceptedEncodings =
         ACCEPT_ENCODING_SPLITER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
@@ -386,10 +435,18 @@ public class ClientCallImplTest {
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
     m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
 
-    ClientCallImpl.prepareHeaders(m, DecompressorRegistry.emptyInstance(), Codec.Identity.NONE);
+    ClientCallImpl.prepareHeaders(m, DecompressorRegistry.emptyInstance(), Codec.Identity.NONE,
+        statsTraceCtx);
 
     assertNull(m.get(GrpcUtil.MESSAGE_ENCODING_KEY));
     assertNull(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+  }
+
+  @Test
+  public void prepareHeaders_censusCtxAdded() {
+    Metadata m = new Metadata();
+    ClientCallImpl.prepareHeaders(m, decompressorRegistry, Codec.Identity.NONE, statsTraceCtx);
+    assertEquals(parentCensusContext, m.get(statsTraceCtx.getCensusHeader()));
   }
 
   @Test
@@ -402,6 +459,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -475,6 +533,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -504,6 +563,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
         .setDecompressorRegistry(decompressorRegistry);
@@ -522,6 +582,7 @@ public class ClientCallImplTest {
     Status status = statusFuture.get(5, TimeUnit.SECONDS);
     assertEquals(Status.Code.CANCELLED, status.getCode());
     assertSame(cause, status.getCause());
+    assertStatusInStats(Status.Code.CANCELLED);
 
     // Following operations should be no-op.
     call.request(1);
@@ -547,6 +608,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         callOptions,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
@@ -554,6 +616,7 @@ public class ClientCallImplTest {
     verify(transport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
     verify(callListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
+    assertStatusInStats(Status.Code.DEADLINE_EXCEEDED);
     verifyZeroInteractions(provider);
   }
 
@@ -568,6 +631,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -595,6 +659,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         callOpts,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -622,6 +687,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         callOpts,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -645,6 +711,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -668,6 +735,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -687,6 +755,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
     call.start(callListener, new Metadata());
@@ -710,6 +779,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
@@ -726,6 +796,7 @@ public class ClientCallImplTest {
         DESCRIPTOR,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
+        statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
     final Exception cause = new Exception();
@@ -751,6 +822,14 @@ public class ClientCallImplTest {
     assertEquals(Status.CANCELLED.getCode(), status.getCode());
     assertEquals("foo", status.getDescription());
     assertSame(cause, status.getCause());
+  }
+
+  private void assertStatusInStats(Status.Code statusCode) {
+    CensusTestUtils.MetricsRecord record = censusCtxFactory.pollRecord();
+    assertNotNull(record);
+    TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
+    assertNotNull(statusTag);
+    assertEquals(statusCode.toString(), statusTag.toString());
   }
 
   private static class TestMarshaller<T> implements Marshaller<T> {

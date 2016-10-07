@@ -151,6 +151,7 @@ subprojects {
                 google_auth_credentials: 'com.google.auth:google-auth-library-credentials:0.4.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.6.0',
+                census_api: 'com.google.census:census-api:0.2.0',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 // swap to ${protobufVersion} after versions align again
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
