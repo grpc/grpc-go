@@ -454,6 +454,41 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 	}
 }
 
+// DoStatusCodeAndMessage checks that the status code is propagated back to the client.
+func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
+	var code int32 = 2
+	msg := "test status message"
+	expectedErr := grpc.Errorf(codes.Code(code), msg)
+	respStatus := &testpb.EchoStatus{
+		Code:    proto.Int32(code),
+		Message: proto.String(msg),
+	}
+	// Test UnaryCall.
+	req := &testpb.SimpleRequest{
+		ResponseStatus: respStatus,
+	}
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || err.Error() != expectedErr.Error() {
+		grpclog.Fatalf("%v.UnaryCall(_, %v) = _, %v, want _, %v", tc, req, err, expectedErr)
+	}
+	// Test FullDuplexCall.
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	streamReq := &testpb.StreamingOutputCallRequest{
+		ResponseStatus: respStatus,
+	}
+	if err := stream.Send(streamReq); err != nil {
+		grpclog.Fatalf("%v.Send(%v) = %v, want <nil>", stream, streamReq, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
+	}
+	if _, err = stream.Recv(); err.Error() != expectedErr.Error() {
+		grpclog.Fatalf("%v.Recv() returned error %v, want %v", stream, err, expectedErr)
+	}
+}
+
 type testServer struct {
 }
 
@@ -485,6 +520,10 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	status := in.GetResponseStatus()
+	if status != nil && *status.Code != 0 {
+		return nil, grpc.Errorf(codes.Code(*status.Code), *status.Message)
+	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
 		return nil, err
@@ -539,6 +578,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		}
 		if err != nil {
 			return err
+		}
+		status := in.GetResponseStatus()
+		if status != nil && *status.Code != 0 {
+			return grpc.Errorf(codes.Code(*status.Code), *status.Message)
 		}
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
