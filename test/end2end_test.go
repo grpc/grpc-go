@@ -74,6 +74,10 @@ var (
 		"key1": []string{"value1"},
 		"key2": []string{"value2"},
 	}
+	testMetadata2 = metadata.MD{
+		"key1": []string{"value12"},
+		"key2": []string{"value22"},
+	}
 	// For trailers:
 	testTrailerMetadata = metadata.MD{
 		"tkey1": []string{"trailerValue1"},
@@ -95,6 +99,8 @@ var raceMode bool // set by race_test.go in race mode
 type testServer struct {
 	security           string // indicate the authentication protocol used by this server.
 	earlyFail          bool   // whether to error out the execution of a service handler prematurely.
+	setAndSendHeader   bool   // whether to call setHeader and sendHeader.
+	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 }
 
@@ -138,8 +144,24 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 		if _, exists := md[":authority"]; !exists {
 			return nil, grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
 		}
-		if err := grpc.SendHeader(ctx, md); err != nil {
-			return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want %v", md, err, nil)
+		if s.setAndSendHeader {
+			if err := grpc.SetHeader(ctx, md); err != nil {
+				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
+			}
+			if err := grpc.SendHeader(ctx, testMetadata2); err != nil {
+				return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", testMetadata2, err)
+			}
+		} else if s.setHeaderOnly {
+			if err := grpc.SetHeader(ctx, md); err != nil {
+				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
+			}
+			if err := grpc.SetHeader(ctx, testMetadata2); err != nil {
+				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", testMetadata2, err)
+			}
+		} else {
+			if err := grpc.SendHeader(ctx, md); err != nil {
+				return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", md, err)
+			}
 		}
 		if err := grpc.SetTrailer(ctx, testTrailerMetadata); err != nil {
 			return nil, grpc.Errorf(grpc.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
@@ -240,8 +262,24 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
 	md, ok := metadata.FromContext(stream.Context())
 	if ok {
-		if err := stream.SendHeader(md); err != nil {
-			return grpc.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+		if s.setAndSendHeader {
+			if err := stream.SetHeader(md); err != nil {
+				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
+			}
+			if err := stream.SendHeader(testMetadata2); err != nil {
+				return grpc.Errorf(grpc.Code(err), "%v.SendHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
+			}
+		} else if s.setHeaderOnly {
+			if err := stream.SetHeader(md); err != nil {
+				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
+			}
+			if err := stream.SetHeader(testMetadata2); err != nil {
+				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
+			}
+		} else {
+			if err := stream.SendHeader(md); err != nil {
+				return grpc.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+			}
 		}
 		stream.SetTrailer(testTrailerMetadata)
 		if s.multipleSetTrailer {
@@ -1275,6 +1313,299 @@ func testMultipleSetTrailerStreamingRPC(t *testing.T, e env) {
 	expectedTrailer := metadata.Join(testTrailerMetadata, testTrailerMetadata2)
 	if !reflect.DeepEqual(trailer, expectedTrailer) {
 		t.Fatalf("Received trailer metadata %v, want %v", trailer, expectedTrailer)
+	}
+}
+
+func TestSetAndSendHeaderUnaryRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testSetAndSendHeaderUnaryRPC(t, e)
+	}
+}
+
+// To test header metadata is sent on SendHeader().
+func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setAndSendHeader: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = 1
+	)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(respSize),
+		Payload:      payload,
+	}
+	var header metadata.MD
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+}
+
+func TestMultipleSetHeaderUnaryRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testMultipleSetHeaderUnaryRPC(t, e)
+	}
+}
+
+// To test header metadata is sent when sending response.
+func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = 1
+	)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(respSize),
+		Payload:      payload,
+	}
+
+	var header metadata.MD
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+}
+
+func TestMultipleSetHeaderUnaryRPCError(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testMultipleSetHeaderUnaryRPCError(t, e)
+	}
+}
+
+// To test header metadata is sent when sending status.
+func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = -1 // Invalid respSize to make RPC fail.
+	)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(respSize),
+		Payload:      payload,
+	}
+	var header metadata.MD
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err == nil {
+		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <non-nil>", ctx, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+}
+
+func TestSetAndSendHeaderStreamingRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testSetAndSendHeaderStreamingRPC(t, e)
+	}
+}
+
+// To test header metadata is sent on SendHeader().
+func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setAndSendHeader: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = 1
+	)
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+	}
+
+	header, err := stream.Header()
+	if err != nil {
+		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+}
+
+func TestMultipleSetHeaderStreamingRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testMultipleSetHeaderStreamingRPC(t, e)
+	}
+}
+
+// To test header metadata is sent when sending response.
+func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = 1
+	)
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: []*testpb.ResponseParameters{
+			{Size: proto.Int32(respSize)},
+		},
+		Payload: payload,
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = %v, want <nil>", stream, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+	}
+
+	header, err := stream.Header()
+	if err != nil {
+		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+
+}
+
+func TestMultipleSetHeaderStreamingRPCError(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testMultipleSetHeaderStreamingRPCError(t, e)
+	}
+}
+
+// To test header metadata is sent when sending status.
+func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	const (
+		argSize  = 1
+		respSize = -1
+	)
+	ctx := metadata.NewContext(context.Background(), testMetadata)
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: []*testpb.ResponseParameters{
+			{Size: proto.Int32(respSize)},
+		},
+		Payload: payload,
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	if _, err := stream.Recv(); err == nil {
+		t.Fatalf("%v.Recv() = %v, want <non-nil>", stream, err)
+	}
+
+	header, err := stream.Header()
+	if err != nil {
+		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
+	}
+	expectedHeader := metadata.Join(testMetadata, testMetadata2)
+	if !reflect.DeepEqual(header, expectedHeader) {
+		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
 }
 

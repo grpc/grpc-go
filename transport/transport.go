@@ -286,9 +286,27 @@ func (s *Stream) StatusDesc() string {
 	return s.statusDesc
 }
 
+// SetHeader sets the header metadata. This can be called multiple times.
+// Server side only.
+func (s *Stream) SetHeader(md metadata.MD) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.headerOk || s.state == streamDone {
+		return ErrIllegalHeaderWrite
+	}
+	if md.Len() == 0 {
+		return nil
+	}
+	s.header = metadata.Join(s.header, md)
+	return nil
+}
+
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
 // by the server. This can be called multiple times. Server side only.
 func (s *Stream) SetTrailer(md metadata.MD) error {
+	if md.Len() == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.trailer = metadata.Join(s.trailer, md)
