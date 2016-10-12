@@ -99,7 +99,6 @@ public class NettyClientTransportTest {
 
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
-  private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
 
   private InetSocketAddress address;
   private String authority;
@@ -347,7 +346,7 @@ public class NettyClientTransportTest {
       stream = transport.newStream(METHOD, headers);
       stream.start(listener);
       stream.request(1);
-      stream.writeMessage(new ByteArrayInputStream(MESSAGE.getBytes()));
+      stream.writeMessage(new ByteArrayInputStream(MESSAGE.getBytes(UTF_8)));
       stream.flush();
     }
 

@@ -61,7 +61,7 @@ import java.io.InputStream;
  */
 @RunWith(JUnit4.class)
 public class AbstractServerStreamTest {
-  private static int MAX_MESSAGE_SIZE = 100;
+  private static final int MAX_MESSAGE_SIZE = 100;
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 

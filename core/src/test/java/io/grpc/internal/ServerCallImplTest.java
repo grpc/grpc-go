@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -44,7 +45,6 @@ import static org.mockito.Mockito.when;
 import com.google.census.RpcConstants;
 import com.google.census.TagValue;
 import com.google.common.io.CharStreams;
-import com.google.common.util.concurrent.Futures;
 
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -74,7 +74,6 @@ import org.mockito.MockitoAnnotations;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.concurrent.Future;
 
 @RunWith(JUnit4.class)
 public class ServerCallImplTest {
@@ -82,8 +81,6 @@ public class ServerCallImplTest {
   @Mock private ServerStream stream;
   @Mock private ServerCall.Listener<Long> callListener;
   @Captor private ArgumentCaptor<Status> statusCaptor;
-
-  private final Future<?> timeout = Futures.immediateCancelledFuture();
 
   private ServerCallImpl<Long, Long> call;
   private Context.CancellableContext context;
@@ -339,13 +336,13 @@ public class ServerCallImplTest {
   private static class LongMarshaller implements Marshaller<Long> {
     @Override
     public InputStream stream(Long value) {
-      return new ByteArrayInputStream(value.toString().getBytes());
+      return new ByteArrayInputStream(value.toString().getBytes(UTF_8));
     }
 
     @Override
     public Long parse(InputStream stream) {
       try {
-        return Long.parseLong(CharStreams.toString(new InputStreamReader(stream)));
+        return Long.parseLong(CharStreams.toString(new InputStreamReader(stream, UTF_8)));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

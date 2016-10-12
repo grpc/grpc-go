@@ -31,6 +31,7 @@
 
 package io.grpc.internal.testing;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.census.CensusContext;
@@ -41,8 +42,6 @@ import com.google.census.MetricName;
 import com.google.census.TagKey;
 import com.google.census.TagValue;
 import com.google.common.collect.ImmutableMap;
-
-import io.grpc.Context;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
@@ -106,8 +105,6 @@ public class CensusTestUtils {
     private BlockingQueue<MetricsRecord> records;
     public final BlockingQueue<FakeCensusContext> contexts =
         new LinkedBlockingQueue<FakeCensusContext>();
-    private static final Context.Key<FakeCensusContext> CONTEXT_KEY =
-        Context.key("fakeCensusContext");
     private final FakeCensusContext defaultContext;
 
     /**
@@ -136,7 +133,7 @@ public class CensusTestUtils {
 
     @Override
     public CensusContext deserialize(ByteBuffer buffer) {
-      String serializedString = new String(buffer.array());
+      String serializedString = new String(buffer.array(), UTF_8);
       if (serializedString.startsWith(EXTRA_TAG_HEADER_VALUE_PREFIX)) {
         return getDefault().with(EXTRA_TAG,
             new TagValue(serializedString.substring(EXTRA_TAG_HEADER_VALUE_PREFIX.length())));
@@ -194,10 +191,10 @@ public class CensusTestUtils {
     public ByteBuffer serialize() {
       TagValue extraTagValue = tags.get(EXTRA_TAG);
       if (extraTagValue == null) {
-        return ByteBuffer.wrap(NO_EXTRA_TAG_HEADER_VALUE_PREFIX.getBytes());
+        return ByteBuffer.wrap(NO_EXTRA_TAG_HEADER_VALUE_PREFIX.getBytes(UTF_8));
       } else {
         return ByteBuffer.wrap(
-            (EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.toString()).getBytes());
+            (EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.toString()).getBytes(UTF_8));
       }
     }
 

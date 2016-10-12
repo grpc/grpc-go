@@ -377,10 +377,10 @@ public final class GrpcUtil {
    */
   public static final Resource<ExecutorService> SHARED_CHANNEL_EXECUTOR =
       new Resource<ExecutorService>() {
-        private static final String name = "grpc-default-executor";
+        private static final String NAME = "grpc-default-executor";
         @Override
         public ExecutorService create() {
-          return Executors.newCachedThreadPool(getThreadFactory(name + "-%d", true));
+          return Executors.newCachedThreadPool(getThreadFactory(NAME + "-%d", true));
         }
 
         @Override
@@ -390,7 +390,7 @@ public final class GrpcUtil {
 
         @Override
         public String toString() {
-          return name;
+          return NAME;
         }
       };
 

@@ -683,7 +683,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     return GrpcUtil.getLogId(this);
   }
 
-  private class NameResolverListenerImpl implements NameResolver.Listener {
+  private static class NameResolverListenerImpl implements NameResolver.Listener {
     final LoadBalancer<ClientTransport> balancer;
 
     NameResolverListenerImpl(LoadBalancer<ClientTransport> balancer) {
