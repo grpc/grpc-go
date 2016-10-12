@@ -855,14 +855,16 @@ func (s *Server) GracefulStop() {
 	if s.conns == nil {
 		return
 	}
-	s.drain = true
 	for lis := range s.lis {
 		lis.Close()
 	}
 	s.lis = nil
 	s.cancel()
-	for c := range s.conns {
-		c.(transport.ServerTransport).Drain()
+	if !s.drain {
+		for c := range s.conns {
+			c.(transport.ServerTransport).Drain()
+		}
+		s.drain = true
 	}
 	for len(s.conns) != 0 {
 		s.cv.Wait()
