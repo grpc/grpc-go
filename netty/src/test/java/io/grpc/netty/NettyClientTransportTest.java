@@ -37,6 +37,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -65,6 +66,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.Http2Exception;
+import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
@@ -234,12 +236,16 @@ public class NettyClientTransportTest {
     serverListener.transports.get(0).channel().pipeline().firstContext().close();
 
     // Now wait for both listeners to be closed.
-    for (Rpc rpc : rpcs) {
+    for (int i = 1; i < rpcs.length; i++) {
       try {
-        rpc.waitForClose();
+        rpcs[i].waitForClose();
         fail("Expected the RPC to fail");
       } catch (ExecutionException e) {
         // Expected.
+        Throwable t = getRootCause(e);
+        // Make sure that the Http2ChannelClosedException got replaced with the real cause of
+        // the shutdown.
+        assertFalse(t instanceof StreamBufferingEncoder.Http2ChannelClosedException);
       }
     }
   }

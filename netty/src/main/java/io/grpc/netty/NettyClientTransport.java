@@ -53,6 +53,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http2.StreamBufferingEncoder.Http2ChannelClosedException;
 import io.netty.util.AsciiString;
 
 import java.net.SocketAddress;
@@ -245,7 +246,11 @@ class NettyClientTransport implements ConnectionClientTransport {
    */
   private Status statusFromFailedFuture(ChannelFuture f) {
     Throwable t = f.cause();
-    if (t instanceof ClosedChannelException) {
+    if (t instanceof ClosedChannelException
+        // Exception thrown by the StreamBufferingEncoder if the channel is closed while there
+        // are still streams buffered. This exception is not helpful. Replace it by the real
+        // cause of the shutdown (if available).
+        || t instanceof Http2ChannelClosedException) {
       Status shutdownStatus = lifecycleManager.getShutdownStatus();
       if (shutdownStatus == null) {
         return Status.UNKNOWN.withDescription("Channel closed but for unknown reason");
