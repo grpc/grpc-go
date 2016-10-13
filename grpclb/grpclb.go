@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 )
 
@@ -184,9 +185,10 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	)
 	for _, s := range servers {
 		// TODO: Support ExpirationInterval
+		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
 		addr := grpc.Address{
-			Addr: fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
-			// TODO: include LoadBalanceToken in the Metadata
+			Addr:     fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
+			Metadata: &md,
 		}
 		sl = append(sl, addrInfo{
 			addr: addr,
