@@ -162,12 +162,17 @@ class NettyClientStream extends AbstractClientStream2 {
     }
 
     @Override
-    public void request(int numMessages) {
+    public void request(final int numMessages) {
       if (channel.eventLoop().inEventLoop()) {
         // Processing data read in the event loop so can call into the deframer immediately
         transportState().requestMessagesFromDeframer(numMessages);
       } else {
-        writeQueue.enqueue(new RequestMessagesCommand(transportState(), numMessages), true);
+        channel.eventLoop().execute(new Runnable() {
+          @Override
+          public void run() {
+            transportState().requestMessagesFromDeframer(numMessages);
+          }
+        });
       }
     }
 

@@ -92,7 +92,12 @@ class NettyServerStream extends AbstractServerStream {
         // Processing data read in the event loop so can call into the deframer immediately
         transportState().requestMessagesFromDeframer(numMessages);
       } else {
-        writeQueue.enqueue(new RequestMessagesCommand(transportState(), numMessages), true);
+        channel.eventLoop().execute(new Runnable() {
+          @Override
+          public void run() {
+            transportState().requestMessagesFromDeframer(numMessages);
+          }
+        });
       }
     }
 

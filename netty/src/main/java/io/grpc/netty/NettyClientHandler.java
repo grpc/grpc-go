@@ -204,8 +204,6 @@ class NettyClientHandler extends AbstractNettyHandler {
       sendGrpcFrame(ctx, (SendGrpcFrameCommand) msg, promise);
     } else if (msg instanceof CancelClientStreamCommand) {
       cancelStream(ctx, (CancelClientStreamCommand) msg, promise);
-    } else if (msg instanceof RequestMessagesCommand) {
-      ((RequestMessagesCommand) msg).requestMessages();
     } else if (msg instanceof SendPingCommand) {
       sendPingFrame(ctx, (SendPingCommand) msg, promise);
     } else if (msg instanceof GracefulCloseCommand) {
