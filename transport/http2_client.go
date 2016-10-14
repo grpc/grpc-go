@@ -46,11 +46,11 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
+	"github.com/TetrationAnalytics/grpc-go/codes"
+	"github.com/TetrationAnalytics/grpc-go/credentials"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	"github.com/TetrationAnalytics/grpc-go/metadata"
+	"github.com/TetrationAnalytics/grpc-go/peer"
 )
 
 // http2Client implements the ClientTransport interface with HTTP2.

@@ -40,16 +40,16 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/benchmark"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"github.com/TetrationAnalytics/grpc-go"
+	"github.com/TetrationAnalytics/grpc-go/benchmark"
+	testpb "github.com/TetrationAnalytics/grpc-go/benchmark/grpc_testing"
+	"github.com/TetrationAnalytics/grpc-go/codes"
+	"github.com/TetrationAnalytics/grpc-go/credentials"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
 )
 
 var (
-	// File path related to google.golang.org/grpc.
+	// File path related to github.com/TetrationAnalytics/grpc-go.
 	certFile = "benchmark/server/testdata/server1.pem"
 	keyFile  = "benchmark/server/testdata/server1.key"
 )

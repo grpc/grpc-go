@@ -46,9 +46,9 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
+	"github.com/TetrationAnalytics/grpc-go/codes"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	"github.com/TetrationAnalytics/grpc-go/metadata"
 )
 
 const (

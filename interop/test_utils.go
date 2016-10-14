@@ -44,11 +44,11 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/grpclog"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/metadata"
+	"github.com/TetrationAnalytics/grpc-go"
+	"github.com/TetrationAnalytics/grpc-go/codes"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	testpb "github.com/TetrationAnalytics/grpc-go/interop/grpc_testing"
+	"github.com/TetrationAnalytics/grpc-go/metadata"
 )
 
 var (

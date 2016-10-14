@@ -41,8 +41,8 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/transport"
+	"github.com/TetrationAnalytics/grpc-go/codes"
+	"github.com/TetrationAnalytics/grpc-go/transport"
 )
 
 // recvResponse receives and parses an RPC response.

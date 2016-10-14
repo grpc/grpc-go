@@ -39,8 +39,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/oauth"
+	"github.com/TetrationAnalytics/grpc-go/credentials"
+	"github.com/TetrationAnalytics/grpc-go/credentials/oauth"
 )
 
 const tlsDir = "testdata/"
