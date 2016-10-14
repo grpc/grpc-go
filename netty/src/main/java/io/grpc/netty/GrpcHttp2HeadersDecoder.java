@@ -349,6 +349,27 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
     public int size() {
       return numHeaders();
     }
+
+    protected static void appendNameAndValue(StringBuilder builder, CharSequence name,
+        CharSequence value, boolean prependSeparator) {
+      if (prependSeparator) {
+        builder.append(", ");
+      }
+      builder.append(name).append(": ").append(value);
+    }
+
+    protected final String namesAndValuesToString() {
+      StringBuilder builder = new StringBuilder();
+      boolean prependSeparator = false;
+      for (int i = 0; i < namesAndValuesIdx; i += 2) {
+        String name = new String(namesAndValues[i], US_ASCII);
+        // If binary headers, the value is base64 encoded.
+        AsciiString value = values[i / 2];
+        appendNameAndValue(builder, name, value, prependSeparator);
+        prependSeparator = true;
+      }
+      return builder.toString();
+    }
   }
 
   /**
@@ -439,7 +460,6 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
       return scheme;
     }
 
-
     /**
      * This method is called in tests only.
      */
@@ -480,6 +500,43 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
       size += super.size();
       return size;
     }
+
+    @Override
+    public String toString() {
+      StringBuilder builder = new StringBuilder(getClass().getSimpleName()).append('[');
+      boolean prependSeparator = false;
+
+      if (path != null) {
+        appendNameAndValue(builder, PATH_HEADER, path, prependSeparator);
+        prependSeparator = true;
+      }
+      if (authority != null) {
+        appendNameAndValue(builder, AUTHORITY_HEADER, authority, prependSeparator);
+        prependSeparator = true;
+      }
+      if (method != null) {
+        appendNameAndValue(builder, METHOD_HEADER, method, prependSeparator);
+        prependSeparator = true;
+      }
+      if (scheme != null) {
+        appendNameAndValue(builder, SCHEME_HEADER, scheme, prependSeparator);
+        prependSeparator = true;
+      }
+      if (te != null) {
+        appendNameAndValue(builder, TE_HEADER, te, prependSeparator);
+      }
+
+      String namesAndValues = namesAndValuesToString();
+
+      if (builder.length() > 0 && namesAndValues.length() > 0) {
+        builder.append(", ");
+      }
+
+      builder.append(namesAndValues);
+      builder.append(']');
+
+      return builder.toString();
+    }
   }
 
   /**
@@ -506,6 +563,13 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
     public CharSequence get(CharSequence csName) {
       AsciiString name = requireAsciiString(csName);
       return get(name);
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder builder = new StringBuilder(getClass().getSimpleName()).append('[');
+      builder.append(namesAndValuesToString()).append(']');
+      return builder.toString();
     }
   }
 }

@@ -33,7 +33,9 @@ package io.grpc.netty;
 
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_HEADER_TABLE_SIZE;
 import static io.netty.util.AsciiString.of;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
@@ -86,6 +88,13 @@ public class GrpcHttp2HeadersDecoderTest {
     assertEquals(headers.get(of(":authority")), decodedHeaders.authority());
     assertEquals(headers.get(of("custom")), decodedHeaders.get(of("custom")));
     assertEquals(headers.size(), decodedHeaders.size());
+
+    String toString = decodedHeaders.toString();
+    assertContainsKeyAndValue(toString, ":scheme", decodedHeaders.scheme());
+    assertContainsKeyAndValue(toString, ":method", decodedHeaders.method());
+    assertContainsKeyAndValue(toString, ":path", decodedHeaders.path());
+    assertContainsKeyAndValue(toString, ":authority", decodedHeaders.authority());
+    assertContainsKeyAndValue(toString, "custom", decodedHeaders.get(of("custom")));
   }
 
   @Test
@@ -103,5 +112,28 @@ public class GrpcHttp2HeadersDecoderTest {
     assertEquals(headers.get(of(":status")), decodedHeaders.get(of(":status")));
     assertEquals(headers.get(of("custom")), decodedHeaders.get(of("custom")));
     assertEquals(headers.size(), decodedHeaders.size());
+
+    String toString = decodedHeaders.toString();
+    assertContainsKeyAndValue(toString, ":status", decodedHeaders.get(of(":status")));
+    assertContainsKeyAndValue(toString, "custom", decodedHeaders.get(of("custom")));
+  }
+
+  @Test
+  public void decode_emptyHeaders() throws Http2Exception {
+    Http2HeadersDecoder decoder = new GrpcHttp2ClientHeadersDecoder(8192);
+    Http2HeadersEncoder encoder =
+        new DefaultHttp2HeadersEncoder(DEFAULT_HEADER_TABLE_SIZE, NEVER_SENSITIVE);
+
+    ByteBuf encodedHeaders = ReferenceCountUtil.releaseLater(Unpooled.buffer());
+    encoder.encodeHeaders(new DefaultHttp2Headers(false), encodedHeaders);
+
+    Http2Headers decodedHeaders = decoder.decodeHeaders(encodedHeaders);
+    assertEquals(0, decodedHeaders.size());
+    assertThat(decodedHeaders.toString(), containsString("[]"));
+  }
+
+  private static void assertContainsKeyAndValue(String str, CharSequence key, CharSequence value) {
+    assertThat(str, containsString(key.toString()));
+    assertThat(str, containsString(value.toString()));
   }
 }
