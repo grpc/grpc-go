@@ -43,9 +43,9 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/transport"
+	"github.com/TetrationAnalytics/grpc-go/credentials"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	"github.com/TetrationAnalytics/grpc-go/transport"
 )
 
 var (

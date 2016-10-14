@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/grpclog"
+	"github.com/TetrationAnalytics/grpc-go"
+	testpb "github.com/TetrationAnalytics/grpc-go/benchmark/grpc_testing"
+	"github.com/TetrationAnalytics/grpc-go/benchmark/stats"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
 )
 
 func runUnary(b *testing.B, maxConcurrentCalls int) {

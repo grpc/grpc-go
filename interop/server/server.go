@@ -38,11 +38,11 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"github.com/TetrationAnalytics/grpc-go"
+	"github.com/TetrationAnalytics/grpc-go/credentials"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	"github.com/TetrationAnalytics/grpc-go/interop"
+	testpb "github.com/TetrationAnalytics/grpc-go/interop/grpc_testing"
 )
 
 var (

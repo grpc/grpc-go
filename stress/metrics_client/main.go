@@ -39,9 +39,9 @@ import (
 	"io"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
-	metricspb "google.golang.org/grpc/stress/grpc_testing"
+	"github.com/TetrationAnalytics/grpc-go"
+	"github.com/TetrationAnalytics/grpc-go/grpclog"
+	metricspb "github.com/TetrationAnalytics/grpc-go/stress/grpc_testing"
 )
 
 var (
