@@ -87,6 +87,8 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
+
+	blockInvalidPrefaceClients bool
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -249,12 +251,16 @@ func (t *http2Server) HandleStreams(handle func(*Stream)) {
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
-	if !ok {
-		grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
-		t.Close()
-		return
+	if ok {
+		t.handleSettings(sf)
+	} else {
+		if t.blockInvalidPrefaceClients {
+			grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
+			t.Close()
+			return
+		}
+		// otherwise, ignore this failure and continue reading the frame.
 	}
-	t.handleSettings(sf)
 
 	for {
 		frame, err := t.framer.readFrame()
