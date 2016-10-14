@@ -107,7 +107,7 @@ type http2Client struct {
 	prevGoAwayID uint32
 }
 
-func dial(fn func(context.Context, string) (net.Conn, error), ctx context.Context, addr string) (net.Conn, error) {
+func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
 	if fn != nil {
 		return fn(ctx, addr)
 	}
@@ -147,7 +147,7 @@ func isTemporary(err error) bool {
 // fails.
 func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
-	conn, err := dial(opts.Dialer, ctx, addr)
+	conn, err := dial(ctx, opts.Dialer, addr)
 	if err != nil {
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
@@ -790,6 +790,9 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
+	if f.IsAck() { // Do nothing.
+		return
+	}
 	pingAck := &ping{ack: true}
 	copy(pingAck.data[:], f.Data[:])
 	t.controlBuf.put(pingAck)
