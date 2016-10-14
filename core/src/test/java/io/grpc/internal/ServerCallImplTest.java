@@ -37,6 +37,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -309,6 +310,20 @@ public class ServerCallImplTest {
     streamListener.messageRead(method.streamRequest(1234L));
 
     verify(callListener).onMessage(1234L);
+  }
+
+  @Test
+  public void streamListener_unexpectedRuntimeException() {
+    ServerStreamListenerImpl<Long> streamListener =
+        new ServerCallImpl.ServerStreamListenerImpl<Long>(
+            call, callListener, context, statsTraceCtx);
+    doThrow(new RuntimeException("unexpected exception"))
+        .when(callListener)
+        .onMessage(any(Long.class));
+
+    thrown.expect(RuntimeException.class);
+    thrown.expectMessage("unexpected exception");
+    streamListener.messageRead(method.streamRequest(1234L));
   }
 
   private void checkStats(Status.Code statusCode) {

@@ -245,12 +245,13 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         try {
           message.close();
         } catch (IOException e) {
+          throw new RuntimeException(e);
+        } finally {
           if (t != null) {
             // TODO(carl-mastrangelo): Maybe log e here.
             Throwables.propagateIfPossible(t);
             throw new RuntimeException(t);
           }
-          throw new RuntimeException(e);
         }
       }
     }
