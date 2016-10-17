@@ -57,6 +57,7 @@ import (
 type http2Client struct {
 	target    string // server name/addr
 	userAgent string
+	md        interface{}
 	conn      net.Conn             // underlying communication channel
 	authInfo  credentials.AuthInfo // auth info about the connection
 	nextID    uint32               // the next stream ID to be used
@@ -145,9 +146,9 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ ClientTransport, err error) {
+func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
-	conn, err := dial(ctx, opts.Dialer, addr)
+	conn, err := dial(ctx, opts.Dialer, addr.Addr)
 	if err != nil {
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
@@ -160,7 +161,7 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
-		conn, authInfo, err = creds.ClientHandshake(ctx, addr, conn)
+		conn, authInfo, err = creds.ClientHandshake(ctx, addr.Addr, conn)
 		if err != nil {
 			// Credentials handshake errors are typically considered permanent
 			// to avoid retrying on e.g. bad certificates.
@@ -174,8 +175,9 @@ func newHTTP2Client(ctx context.Context, addr string, opts ConnectOptions) (_ Cl
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
-		target:    addr,
+		target:    addr.Addr,
 		userAgent: ua,
+		md:        addr.Metadata,
 		conn:      conn,
 		authInfo:  authInfo,
 		// The client initiated stream id is odd starting from 1.
@@ -392,6 +394,16 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		hasMD = true
 		for k, v := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
+			if isReservedHeader(k) {
+				continue
+			}
+			for _, entry := range v {
+				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+			}
+		}
+	}
+	if md, ok := t.md.(*metadata.MD); ok {
+		for k, v := range *md {
 			if isReservedHeader(k) {
 				continue
 			}

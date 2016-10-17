@@ -684,7 +684,11 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		}
 		ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 		connectTime := time.Now()
-		newTransport, err := transport.NewClientTransport(ctx, ac.addr.Addr, ac.dopts.copts)
+		sinfo := transport.TargetInfo{
+			Addr:     ac.addr.Addr,
+			Metadata: ac.addr.Metadata,
+		}
+		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
 		if err != nil {
 			cancel()
 

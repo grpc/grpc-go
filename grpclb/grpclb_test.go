@@ -47,13 +47,16 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	hwpb "google.golang.org/grpc/examples/helloworld/helloworld"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 )
 
 var (
-	lbsn = "bar.com"
-	besn = "foo.com"
+	lbsn    = "bar.com"
+	besn    = "foo.com"
+	lbToken = "iamatoken"
 )
 
 type testWatcher struct {
@@ -195,12 +198,29 @@ func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer)
 	return nil
 }
 
+type helloServer struct {
+}
+
+func (s *helloServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
+	md, ok := metadata.FromContext(ctx)
+	if !ok {
+		return nil, grpc.Errorf(codes.Internal, "failed to receive metadata")
+	}
+	if md == nil || md["lb-token"][0] != lbToken {
+		return nil, grpc.Errorf(codes.Internal, "received unexpected metadata: %v", md)
+	}
+	return &hwpb.HelloReply{
+		Message: "Hello " + in.Name,
+	}, nil
+}
+
 func startBackends(t *testing.T, sn string, lis ...net.Listener) (servers []*grpc.Server) {
 	for _, l := range lis {
 		creds := &serverNameCheckCreds{
 			sn: sn,
 		}
 		s := grpc.NewServer(grpc.Creds(creds))
+		hwpb.RegisterGreeterServer(s, &helloServer{})
 		servers = append(servers, s)
 		go func(s *grpc.Server, l net.Listener) {
 			s.Serve(l)
@@ -239,8 +259,9 @@ func TestGRPCLB(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress: []byte(beAddr[0]),
-		Port:      int32(bePort),
+		IpAddress:        []byte(beAddr[0]),
+		Port:             int32(bePort),
+		LoadBalanceToken: lbToken,
 	}
 	var bes []*lbpb.Server
 	bes = append(bes, be)
@@ -266,12 +287,9 @@ func TestGRPCLB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
-	// Issue an unimplemented RPC and expect codes.Unimplemented.
-	var (
-		req, reply lbpb.Duration
-	)
-	if err := grpc.Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
-		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
+	helloC := hwpb.NewGreeterClient(cc)
+	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
 	}
 	cc.Close()
 }
