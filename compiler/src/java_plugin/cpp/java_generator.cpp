@@ -888,10 +888,17 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   (*vars)["service_name"] = service->name();
   p->Print(
       *vars,
-      "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
+      "private static $ServiceDescriptor$ serviceDescriptor;\n\n");
+
+  p->Print(
+      *vars,
+      "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
   p->Indent();
-  p->Print(*vars,
-           "return new $ServiceDescriptor$(SERVICE_NAME");
+  p->Print("if (serviceDescriptor == null) {\n");
+  p->Indent();
+  p->Print(
+      *vars,
+      "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME");
   p->Indent();
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -903,7 +910,9 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   p->Outdent();
   p->Outdent();
   p->Outdent();
-  p->Print("}\n\n");
+  p->Print("}\n\nreturn serviceDescriptor;\n");
+  p->Outdent();
+  p->Print("}\n");
 }
 
 static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
