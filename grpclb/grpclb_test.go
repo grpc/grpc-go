@@ -293,3 +293,149 @@ func TestGRPCLB(t *testing.T) {
 	}
 	cc.Close()
 }
+
+func TestDropRequest(t *testing.T) {
+	// Start 2 backends.
+	beLis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	beAddr1 := strings.Split(beLis1.Addr().String(), ":")
+	bePort1, err := strconv.Atoi(beAddr1[1])
+
+	beLis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	beAddr2 := strings.Split(beLis2.Addr().String(), ":")
+	bePort2, err := strconv.Atoi(beAddr2[1])
+
+	backends := startBackends(t, besn, beLis1, beLis2)
+	defer stopBackends(backends)
+
+	// Start a load balancer.
+	lbLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create the listener for the load balancer %v", err)
+	}
+	lbCreds := &serverNameCheckCreds{
+		sn: lbsn,
+	}
+	lb := grpc.NewServer(grpc.Creds(lbCreds))
+	if err != nil {
+		t.Fatalf("Failed to generate the port number %v", err)
+	}
+	var bes []*lbpb.Server
+	be := &lbpb.Server{
+		IpAddress:        []byte(beAddr1[0]),
+		Port:             int32(bePort1),
+		LoadBalanceToken: lbToken,
+		DropRequest:      true,
+	}
+	bes = append(bes, be)
+	be = &lbpb.Server{
+		IpAddress:        []byte(beAddr2[0]),
+		Port:             int32(bePort2),
+		LoadBalanceToken: lbToken,
+		DropRequest:      false,
+	}
+	bes = append(bes, be)
+	sl := &lbpb.ServerList{
+		Servers: bes,
+	}
+	ls := newRemoteBalancer(sl)
+	lbpb.RegisterLoadBalancerServer(lb, ls)
+	go func() {
+		lb.Serve(lbLis)
+	}()
+	defer func() {
+		ls.stop()
+		lb.Stop()
+	}()
+	creds := serverNameCheckCreds{
+		expected: besn,
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+		addr: lbLis.Addr().String(),
+	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	// The 1st fail-fast RPC should fail because the 1st backend has DropRequest set to true.
+	helloC := hwpb.NewGreeterClient(cc)
+	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, %s", helloC, err, codes.Unavailable)
+	}
+	// The 2nd fail-fast RPC should succeed since it chooses the non-drop-request backend according
+	// to the round robin policy.
+	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	}
+	// The 3nd non-fail-fast RPC should succeed.
+	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	}
+	cc.Close()
+}
+
+func TestDropRequestFailedNonFailFast(t *testing.T) {
+	// Start a backend.
+	beLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	beAddr := strings.Split(beLis.Addr().String(), ":")
+	bePort, err := strconv.Atoi(beAddr[1])
+	backends := startBackends(t, besn, beLis)
+	defer stopBackends(backends)
+
+	// Start a load balancer.
+	lbLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create the listener for the load balancer %v", err)
+	}
+	lbCreds := &serverNameCheckCreds{
+		sn: lbsn,
+	}
+	lb := grpc.NewServer(grpc.Creds(lbCreds))
+	if err != nil {
+		t.Fatalf("Failed to generate the port number %v", err)
+	}
+	be := &lbpb.Server{
+		IpAddress:        []byte(beAddr[0]),
+		Port:             int32(bePort),
+		LoadBalanceToken: lbToken,
+		DropRequest:      true,
+	}
+	var bes []*lbpb.Server
+	bes = append(bes, be)
+	sl := &lbpb.ServerList{
+		Servers: bes,
+	}
+	ls := newRemoteBalancer(sl)
+	lbpb.RegisterLoadBalancerServer(lb, ls)
+	go func() {
+		lb.Serve(lbLis)
+	}()
+	defer func() {
+		ls.stop()
+		lb.Stop()
+	}()
+	creds := serverNameCheckCreds{
+		expected: besn,
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+		addr: lbLis.Addr().String(),
+	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	helloC := hwpb.NewGreeterClient(cc)
+	ctx, _ = context.WithTimeout(context.Background(), 10*time.Millisecond)
+	if _, err := helloC.SayHello(ctx, &hwpb.HelloRequest{Name: "grpc"}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, %s", helloC, err, codes.DeadlineExceeded)
+	}
+	cc.Close()
+}
