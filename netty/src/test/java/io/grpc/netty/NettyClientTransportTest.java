@@ -284,8 +284,8 @@ public class NettyClientTransportTest {
           + " size limit!");
     } catch (Exception e) {
       Throwable rootCause = getRootCause(e);
-      assertTrue(rootCause.getMessage(),
-          rootCause.getMessage().contains("Header size exceeded max allowed size (1)"));
+      assertTrue(rootCause instanceof StatusException);
+      assertEquals(Status.INTERNAL.getCode(), ((StatusException) rootCause).getStatus().getCode());
     }
   }
 
