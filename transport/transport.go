@@ -21,7 +21,6 @@
 package transport // import "google.golang.org/grpc/transport"
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -109,7 +108,7 @@ type recvBufferReader struct {
 	ctx    context.Context
 	goAway chan struct{}
 	recv   *recvBuffer
-	last   *bytes.Reader // Stores the remaining data in the previous calls.
+	last   []byte // Stores the remaining data in the previous calls.
 	err    error
 }
 
@@ -121,9 +120,11 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		return 0, r.err
 	}
 	defer func() { r.err = err }()
-	if r.last != nil && r.last.Len() > 0 {
+	if r.last != nil && len(r.last) > 0 {
 		// Read remaining data left in last call.
-		return r.last.Read(p)
+		copied := copy(p, r.last)
+		r.last = r.last[copied:]
+		return copied, nil
 	}
 	select {
 	case <-r.ctx.Done():
@@ -136,8 +137,9 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		if m.err != nil {
 			return 0, m.err
 		}
-		r.last = bytes.NewReader(m.data)
-		return r.last.Read(p)
+		copied := copy(p, m.data)
+		r.last = m.data[copied:]
+		return copied, nil
 	}
 }
 
