@@ -8,11 +8,9 @@ RPCs.
 
 ## Enable Server Reflection
 
-### Enable server reflection in gRPC-go servers
-
 gRPC-go Server Reflection is implemented in package [reflection](https://github.com/grpc/grpc-go/tree/master/reflection). To enable server reflection, you need to import this package and register reflection service on your gRPC server.
 
-For example, to enable server reflection in `example/helloworld`, the change needed is:
+For example, to enable server reflection in `example/helloworld`, we need to make the following changes:
 
 ```diff
 --- a/examples/helloworld/greeter_server/main.go
@@ -38,33 +36,34 @@ For example, to enable server reflection in `example/helloworld`, the change nee
 
 We have made this change in `example/helloworld`, and we will use it as an example to show the use of gRPC server reflection and gRPC CLI in this tutorial.
 
-## Test services using Server Reflection
+## gRPC CLI
 
-After enabling Server Reflection in a server application, you can use gRPC CLI
-to test its services. We don't have a gRPC CLI implemented in go, the only available CLI is in c++.
+After enabling Server Reflection in a server application, you can use gRPC CLI to check its services.
+gRPC CLI is only available in c++. Instructions on how to use gRPC CLI can be found at [command_line_tool.md](https://github.com/grpc/grpc/blob/master/doc/command_line_tool.md).
 
-First, we need to build gRPC CLI and setup an example server with Server Reflection enabled.
+To build gRPC CLI:
 
-- Setup an example server
+```sh
+git clone https://github.com/grpc/grpc
+cd grpc
+make grpc_cli
+cd bins/opt # grpc_cli is in directory bins/opt/
+```
 
-  Server Reflection has already been enabled in the helloworld example. We
-  can simply run it with:
+## Use gRPC CLI to check services
 
-  ```sh
-  $ go run examples/helloworld/greeter_server/main.go
-  ```
+First, start the helloworld server in grpc-go directory:
 
-- Build gRPC CLI:
+```sh
+$ cd <grpc-go-directory>
+$ go run examples/helloworld/greeter_server/main.go
+```
 
-  ```sh
-  git clone https://github.com/grpc/grpc
-  cd grpc
-  make grpc_cli
-  cd bins/opt # grpc_cli is in directory bins/opt/
-  ```
+Open a new terminal and make sure you are in the directory where grpc_cli lives:
 
-Instructions on how to use gRPC CLI can be found at
-[command_line_tool.md](https://github.com/grpc/grpc/blob/master/doc/command_line_tool.md), or using `grpc_cli help` command.
+```sh
+$ cd <grpc-cpp-dirctory>/bins/opt
+```
 
 ### List services
 
