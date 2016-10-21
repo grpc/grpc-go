@@ -43,6 +43,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -84,8 +85,10 @@ type remoteBalancerInfo struct {
 
 // addrInfo consists of the information of a backend server.
 type addrInfo struct {
-	addr        grpc.Address
-	connected   bool
+	addr      grpc.Address
+	connected bool
+	// dropRequest indicates whether a particular RPC which chooses this address
+	// should be dropped.
 	dropRequest bool
 }
 
@@ -96,7 +99,7 @@ type balancer struct {
 	w      naming.Watcher
 	addrCh chan []grpc.Address
 	rbs    []remoteBalancerInfo
-	addrs  []addrInfo
+	addrs  []*addrInfo
 	next   int
 	waitCh chan struct{}
 	done   bool
@@ -180,7 +183,7 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	servers := l.GetServers()
 	var (
-		sl    []addrInfo
+		sl    []*addrInfo
 		addrs []grpc.Address
 	)
 	for _, s := range servers {
@@ -190,9 +193,9 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 			Addr:     fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
 			Metadata: &md,
 		}
-		sl = append(sl, addrInfo{
-			addr: addr,
-			// TODO: Support dropRequest feature.
+		sl = append(sl, &addrInfo{
+			addr:        addr,
+			dropRequest: s.DropRequest,
 		})
 		addrs = append(addrs, addr)
 	}
@@ -306,8 +309,6 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 				return
 			}
 			// Talk to the remote load balancer to get the server list.
-			//
-			// TODO: override the server name in creds using Metadata in addr.
 			var err error
 			creds := config.DialCreds
 			if creds == nil {
@@ -364,7 +365,7 @@ func (b *balancer) Up(addr grpc.Address) func(error) {
 			}
 			a.connected = true
 		}
-		if a.connected {
+		if a.connected && !a.dropRequest {
 			cnt++
 		}
 	}
@@ -396,10 +397,18 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 			a := b.addrs[next]
 			next = (next + 1) % len(b.addrs)
 			if a.connected {
-				addr = a.addr
-				b.next = next
-				b.mu.Unlock()
-				return
+				if !a.dropRequest {
+					addr = a.addr
+					b.next = next
+					b.mu.Unlock()
+					return
+				}
+				if !opts.BlockingWait {
+					b.next = next
+					b.mu.Unlock()
+					err = grpc.Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
+					return
+				}
 			}
 			if next == b.next {
 				// Has iterated all the possible address but none is connected.
@@ -410,7 +419,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 	if !opts.BlockingWait {
 		if len(b.addrs) == 0 {
 			b.mu.Unlock()
-			err = fmt.Errorf("there is no address available")
+			err = grpc.Errorf(codes.Unavailable, "there is no address available")
 			return
 		}
 		// Returns the next addr on b.addrs for a failfast RPC.
@@ -449,10 +458,18 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 					a := b.addrs[next]
 					next = (next + 1) % len(b.addrs)
 					if a.connected {
-						addr = a.addr
-						b.next = next
-						b.mu.Unlock()
-						return
+						if !a.dropRequest {
+							addr = a.addr
+							b.next = next
+							b.mu.Unlock()
+							return
+						}
+						if !opts.BlockingWait {
+							b.next = next
+							b.mu.Unlock()
+							err = grpc.Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
+							return
+						}
 					}
 					if next == b.next {
 						// Has iterated all the possible address but none is connected.
