@@ -161,19 +161,24 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	rusage := new(syscall.Rusage)
 	syscall.Getrusage(syscall.RUSAGE_SELF, rusage)
 
-	return &benchmarkServer{port: p, cores: numOfCores, closeFunc: closeFunc, lastResetTime: time.Now(), rusageLastReset: rusage}, nil
+	return &benchmarkServer{
+		port:            p,
+		cores:           numOfCores,
+		closeFunc:       closeFunc,
+		lastResetTime:   time.Now(),
+		rusageLastReset: rusage,
+	}, nil
 }
 
 // getStats returns the stats for benchmark server.
 // It resets lastResetTime if argument reset is true.
 func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
-	// TODO wall time, sys time, user time.
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
 	timeElapsed := time.Since(bs.lastResetTime).Seconds()
 	rusageLatest := new(syscall.Rusage)
 	syscall.Getrusage(syscall.RUSAGE_SELF, rusageLatest)
-	var elapsedUserCPU, elapsedSystemCPU = cpuTimeDiff(bs.rusageLastReset, rusageLatest)
+	elapsedUtime, elapsedStime := cpuTimeDiff(bs.rusageLastReset, rusageLatest)
 
 	if reset {
 		bs.lastResetTime = time.Now()
@@ -181,7 +186,7 @@ func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
 	}
 	return &testpb.ServerStats{
 		TimeElapsed: timeElapsed,
-		TimeUser:    elapsedUserCPU,
-		TimeSystem:  elapsedSystemCPU,
+		TimeUser:    elapsedUtime,
+		TimeSystem:  elapsedStime,
 	}
 }

@@ -54,15 +54,17 @@ func abs(rel string) string {
 }
 
 func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float64) {
-	var utimeDiffSec = latest.Utime.Sec - first.Utime.Sec
-	var utimeDiffMicro = latest.Utime.Usec - first.Utime.Usec
-	var stimeDiffSec = latest.Stime.Sec - first.Stime.Sec
-	var stimeDiffMicro = latest.Stime.Usec - first.Stime.Usec
+	var (
+		utimeDiffs  = latest.Utime.Sec - first.Utime.Sec
+		utimeDiffus = latest.Utime.Usec - first.Utime.Usec
+		stimeDiffs  = latest.Stime.Sec - first.Stime.Sec
+		stimeDiffus = latest.Stime.Usec - first.Stime.Usec
+	)
 
-	var elapsedUserCPU = float64(utimeDiffSec) + float64(utimeDiffMicro)*1.0e-6
-	var elapsedSystemCPU = float64(stimeDiffSec) + float64(stimeDiffMicro)*1.0e-6
+	elapseUtime := float64(utimeDiffs) + float64(utimeDiffus)*1.0e-6
+	elapseStime := float64(stimeDiffs) + float64(stimeDiffus)*1.0e-6
 
-	return elapsedUserCPU, elapsedSystemCPU
+	return elapseUtime, elapseStime
 }
 
 func goPackagePath(pkg string) (path string, err error) {
