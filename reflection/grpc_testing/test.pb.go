@@ -195,7 +195,7 @@ var _SearchService_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor2,
+	Metadata: "test.proto",
 }
 
 func init() { proto.RegisterFile("test.proto", fileDescriptor2) }
