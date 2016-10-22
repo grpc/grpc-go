@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/tap"
 )
 
@@ -233,6 +234,21 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	t.mu.Unlock()
 	s.windowHandler = func(n int) {
 		t.updateWindow(s, uint32(n))
+	}
+	if stats.On() {
+		initStats := &stats.InitStats{
+			Ctx:        s.ctx,
+			Method:     s.method,
+			RemoteAddr: t.conn.RemoteAddr(),
+			LocalAddr:  t.conn.LocalAddr(),
+			Encryption: s.recvCompress,
+		}
+		stats.CallBack()(initStats)
+		incomingHeaderStats := &stats.IncomingHeaderStats{
+			Ctx:        s.ctx,
+			WireLength: int(frame.Header().Length),
+		}
+		stats.CallBack()(incomingHeaderStats)
 	}
 	handle(s)
 	return
@@ -508,8 +524,16 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 		}
 	}
+	bufLen := t.hBuf.Len()
 	if err := t.writeHeaders(s, t.hBuf, false); err != nil {
 		return err
+	}
+	if stats.On() {
+		outgoingHeaderStats := &stats.OutgoingHeaderStats{
+			Ctx:        s.Context(),
+			WireLength: bufLen,
+		}
+		stats.CallBack()(outgoingHeaderStats)
 	}
 	t.writableChan <- 0
 	return nil
@@ -563,9 +587,17 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
 		}
 	}
+	bufLen := t.hBuf.Len()
 	if err := t.writeHeaders(s, t.hBuf, true); err != nil {
 		t.Close()
 		return err
+	}
+	if stats.On() {
+		outgoingTrailerStats := &stats.OutgoingTrailerStats{
+			Ctx:        s.Context(),
+			WireLength: bufLen,
+		}
+		stats.CallBack()(outgoingTrailerStats)
 	}
 	t.closeStream(s)
 	t.writableChan <- 0

@@ -54,6 +54,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/tap"
 	"google.golang.org/grpc/transport"
 )
@@ -550,11 +551,19 @@ func (s *Server) removeConn(c io.Closer) {
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
-	var cbuf *bytes.Buffer
+	var (
+		cbuf                 *bytes.Buffer
+		outgoingPayloadStats *stats.OutgoingPayloadStats
+	)
 	if cp != nil {
 		cbuf = new(bytes.Buffer)
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf)
+	if stats.On() {
+		outgoingPayloadStats = &stats.OutgoingPayloadStats{
+			Ctx: stream.Context(),
+		}
+	}
+	p, err := encode(s.opts.codec, msg, cp, cbuf, outgoingPayloadStats)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -565,7 +574,12 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		// the optimal option.
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
-	return t.Write(stream, p, opts)
+	err = t.Write(stream, p, opts)
+	if outgoingPayloadStats != nil {
+		outgoingPayloadStats.SentTime = time.Now()
+		stats.CallBack()(outgoingPayloadStats)
+	}
+	return err
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
@@ -587,6 +601,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	p := &parser{r: stream}
 	for {
 		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
+		var incomingPayloadStats *stats.IncomingPayloadStats
+		if stats.On() {
+			incomingPayloadStats = &stats.IncomingPayloadStats{
+				Ctx:          stream.Context(),
+				ReceivedTime: time.Now(),
+			}
+		}
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -629,6 +650,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		statusCode := codes.OK
 		statusDesc := ""
 		df := func(v interface{}) error {
+			if incomingPayloadStats != nil {
+				incomingPayloadStats.WireLength = len(req)
+			}
 			if pf == compressionMade {
 				var err error
 				req, err = s.opts.dc.Do(bytes.NewReader(req))
@@ -647,6 +671,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
+			}
+			if incomingPayloadStats != nil {
+				incomingPayloadStats.Data = req
+				incomingPayloadStats.Length = len(req)
+				stats.CallBack()(incomingPayloadStats)
 			}
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)

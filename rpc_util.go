@@ -42,11 +42,13 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
 
@@ -255,15 +257,21 @@ func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err erro
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer) ([]byte, error) {
-	var b []byte
-	var length uint
+func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outgoingPayloadStats *stats.OutgoingPayloadStats) ([]byte, error) {
+	var (
+		b      []byte
+		length uint
+	)
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
 		b, err = c.Marshal(msg)
 		if err != nil {
 			return nil, err
+		}
+		if outgoingPayloadStats != nil {
+			outgoingPayloadStats.Data = b
+			outgoingPayloadStats.Length = len(b)
 		}
 		if cp != nil {
 			if err := cp.Do(cbuf, b); err != nil {
@@ -295,6 +303,10 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer) ([]byte
 	// Copy encoded msg to buf
 	copy(buf[5:], b)
 
+	if outgoingPayloadStats != nil {
+		outgoingPayloadStats.WireLength = len(buf)
+	}
+
 	return buf, nil
 }
 
@@ -311,10 +323,14 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) er
 	return nil
 }
 
-func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxMsgSize int) error {
+func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxMsgSize int, incomingPayloadStats *stats.IncomingPayloadStats) error {
 	pf, d, err := p.recvMsg(maxMsgSize)
 	if err != nil {
 		return err
+	}
+	if incomingPayloadStats != nil {
+		incomingPayloadStats.ReceivedTime = time.Now()
+		incomingPayloadStats.WireLength = len(d)
 	}
 	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
 		return err
@@ -332,6 +348,10 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
+	}
+	if incomingPayloadStats != nil {
+		incomingPayloadStats.Data = d
+		incomingPayloadStats.Length = len(d)
 	}
 	return nil
 }

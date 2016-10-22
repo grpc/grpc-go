@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
 
@@ -296,7 +297,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	out, err := encode(cs.codec, m, cs.cp, cs.cbuf)
+	out, err := encode(cs.codec, m, cs.cp, cs.cbuf, nil)
 	defer func() {
 		if cs.cbuf != nil {
 			cs.cbuf.Reset()
@@ -309,7 +310,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32)
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32, nil)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -328,7 +329,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			return
 		}
 		// Special handling for client streaming rpc.
-		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32)
+		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32, nil)
 		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -482,7 +483,13 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	out, err := encode(ss.codec, m, ss.cp, ss.cbuf)
+	var outgoingPayloadStats *stats.OutgoingPayloadStats
+	if stats.On() {
+		outgoingPayloadStats = &stats.OutgoingPayloadStats{
+			Ctx: ss.s.Context(),
+		}
+	}
+	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outgoingPayloadStats)
 	defer func() {
 		if ss.cbuf != nil {
 			ss.cbuf.Reset()
@@ -494,6 +501,10 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
+	}
+	if outgoingPayloadStats != nil {
+		outgoingPayloadStats.SentTime = time.Now()
+		stats.CallBack()(outgoingPayloadStats)
 	}
 	return nil
 }
@@ -513,7 +524,13 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize); err != nil {
+	var incomingPayloadStats *stats.IncomingPayloadStats
+	if stats.On() {
+		incomingPayloadStats = &stats.IncomingPayloadStats{
+			Ctx: ss.s.Context(),
+		}
+	}
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, incomingPayloadStats); err != nil {
 		if err == io.EOF {
 			return err
 		}
@@ -521,6 +538,9 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
 		}
 		return toRPCErr(err)
+	}
+	if incomingPayloadStats != nil {
+		stats.CallBack()(incomingPayloadStats)
 	}
 	return nil
 }

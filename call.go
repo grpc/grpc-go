@@ -64,7 +64,7 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 	}
 	p := &parser{r: stream}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, nil); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -93,7 +93,7 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 	if compressor != nil {
 		cbuf = new(bytes.Buffer)
 	}
-	outBuf, err := encode(codec, args, compressor, cbuf)
+	outBuf, err := encode(codec, args, compressor, cbuf, nil)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
