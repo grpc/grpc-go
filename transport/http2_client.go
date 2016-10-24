@@ -785,7 +785,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.statusDesc = fmt.Sprintf("stream terminated by RST_STREAM with error code: %d", f.ErrCode)
 	close(s.done)
 	s.mu.Unlock()
-	s.write(recvMsg{err: io.EOF})
+	s.write(recvMsg{err: ErrRSTStream})
 }
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame) {

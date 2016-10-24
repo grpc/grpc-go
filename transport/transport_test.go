@@ -658,7 +658,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	// Server sent a resetStream for s already.
 	code := http2ErrConvTab[http2.ErrCodeFlowControl]
-	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF || s.statusCode != code {
+	if _, err := io.ReadFull(s, make([]byte, 1)); err != ErrRSTStream || s.statusCode != code {
 		t.Fatalf("%v got err %v with statusCode %d, want err <EOF> with statusCode %d", s, err, s.statusCode, code)
 	}
 

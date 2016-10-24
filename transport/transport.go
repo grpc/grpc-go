@@ -543,6 +543,8 @@ var (
 	// ErrStreamDrain indicates that the stream is rejected by the server because
 	// the server stops accepting new RPCs.
 	ErrStreamDrain = streamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
+	// ErrRSTStream indicates the stream is reset by the server.
+	ErrRSTStream = streamErrorf(codes.Internal, "the stream is reset by the server")
 )
 
 // StreamError is an error that only affects one stream within a connection.
