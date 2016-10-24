@@ -92,11 +92,17 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
+
+	getCodec func() interface{}
+}
+
+func (t *http2Server) GetCodec() interface{} {
+	return t.getCodec()
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
+func newHTTP2Server(conn net.Conn, config *ServerConfig, getCodec func() interface{}) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
 	var settings []http2.Setting
@@ -144,6 +150,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		shutdownChan:    make(chan struct{}),
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
+		getCodec:        getCodec,
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -154,10 +161,11 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (close bool) {
 	buf := newRecvBuffer()
 	s := &Stream{
-		id:  frame.Header().StreamID,
-		st:  t,
-		buf: buf,
-		fc:  &inFlow{limit: initialWindowSize},
+		id:    frame.Header().StreamID,
+		st:    t,
+		buf:   buf,
+		fc:    &inFlow{limit: initialWindowSize},
+		codec: t.GetCodec(),
 	}
 
 	var state decodeState

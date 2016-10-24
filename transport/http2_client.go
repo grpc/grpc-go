@@ -109,6 +109,11 @@ type http2Client struct {
 	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
+	getCodec     func() interface{}
+}
+
+func (t *http2Client) GetCodec() interface{} {
+	return t.getCodec()
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -149,7 +154,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (_ ClientTransport, err error) {
+func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, getCodec func() interface{}) (_ ClientTransport, err error) {
 	scheme := "http"
 	conn, err := dial(ctx, opts.Dialer, addr.Addr)
 	if err != nil {
@@ -203,6 +208,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		creds:           opts.PerRPCCredentials,
 		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
+		getCodec:        getCodec,
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -254,6 +260,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		fc:            &inFlow{limit: initialWindowSize},
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
+		codec:         t.GetCodec(),
 	}
 	t.nextID += 2
 	s.windowHandler = func(n int) {
