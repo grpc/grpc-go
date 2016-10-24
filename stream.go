@@ -333,7 +333,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
-		if err == io.EOF {
+		if err == io.EOF || err == transport.ErrRSTStream {
 			if cs.s.StatusCode() == codes.OK {
 				cs.finish(err)
 				return nil
@@ -345,7 +345,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	if _, ok := err.(transport.ConnectionError); !ok {
 		cs.closeTransportStream(err)
 	}
-	if err == io.EOF {
+	if err == io.EOF || err == transport.ErrRSTStream {
 		if cs.s.StatusCode() == codes.OK {
 			// Returns io.EOF to indicate the end of the stream.
 			return
