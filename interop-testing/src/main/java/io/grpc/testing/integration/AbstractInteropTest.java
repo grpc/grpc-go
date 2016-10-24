@@ -843,9 +843,25 @@ public abstract class AbstractInteropTest {
     verifyNoMoreInteractions(responseObserver);
   }
 
-  /** Sends an rpc to an unimplemented method on the server. */
+  /** Sends an rpc to an unimplemented method within TestService. */
   @Test(timeout = 10000)
   public void unimplementedMethod() {
+    try {
+      blockingStub.unimplementedCall(Empty.getDefaultInstance());
+      fail();
+    } catch (StatusRuntimeException e) {
+      assertEquals(Status.UNIMPLEMENTED.getCode(), e.getStatus().getCode());
+    }
+
+    if (metricsExpected()) {
+      assertClientMetrics("grpc.testing.TestService/UnimplementedCall",
+          Status.Code.UNIMPLEMENTED);
+    }
+  }
+
+  /** Sends an rpc to an unimplemented service on the server. */
+  @Test(timeout = 10000)
+  public void unimplementedService() {
     UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
         UnimplementedServiceGrpc.newBlockingStub(channel);
     try {

@@ -26,7 +26,7 @@ public final class Test {
       "\n&io/grpc/testing/integration/test.proto" +
       "\022\014grpc.testing\032\'io/grpc/testing/integrat" +
       "ion/empty.proto\032*io/grpc/testing/integra" +
-      "tion/messages.proto2\273\004\n\013TestService\0225\n\tE" +
+      "tion/messages.proto2\372\004\n\013TestService\0225\n\tE" +
       "mptyCall\022\023.grpc.testing.Empty\032\023.grpc.tes" +
       "ting.Empty\022F\n\tUnaryCall\022\033.grpc.testing.S" +
       "impleRequest\032\034.grpc.testing.SimpleRespon" +
@@ -40,14 +40,15 @@ public final class Test {
       ").grpc.testing.StreamingOutputCallRespon" +
       "se(\0010\001\022i\n\016HalfDuplexCall\022(.grpc.testing." +
       "StreamingOutputCallRequest\032).grpc.testin" +
-      "g.StreamingOutputCallResponse(\0010\0012U\n\024Uni" +
-      "mplementedService\022=\n\021UnimplementedCall\022\023" +
-      ".grpc.testing.Empty\032\023.grpc.testing.Empty",
-      "2\177\n\020ReconnectService\0221\n\005Start\022\023.grpc.tes" +
-      "ting.Empty\032\023.grpc.testing.Empty\0228\n\004Stop\022" +
-      "\023.grpc.testing.Empty\032\033.grpc.testing.Reco" +
-      "nnectInfoB\035\n\033io.grpc.testing.integration" +
-      "b\006proto3"
+      "g.StreamingOutputCallResponse(\0010\001\022=\n\021Uni" +
+      "mplementedCall\022\023.grpc.testing.Empty\032\023.gr" +
+      "pc.testing.Empty2U\n\024UnimplementedService",
+      "\022=\n\021UnimplementedCall\022\023.grpc.testing.Emp" +
+      "ty\032\023.grpc.testing.Empty2\177\n\020ReconnectServ" +
+      "ice\0221\n\005Start\022\023.grpc.testing.Empty\032\023.grpc" +
+      ".testing.Empty\0228\n\004Stop\022\023.grpc.testing.Em" +
+      "pty\032\033.grpc.testing.ReconnectInfoB\035\n\033io.g" +
+      "rpc.testing.integrationb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

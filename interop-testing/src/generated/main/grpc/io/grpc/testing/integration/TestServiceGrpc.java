@@ -85,6 +85,15 @@ public class TestServiceGrpc {
               "grpc.testing.TestService", "HalfDuplexCall"),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallRequest.getDefaultInstance()),
           io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.StreamingOutputCallResponse.getDefaultInstance()));
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
+      com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL =
+      io.grpc.MethodDescriptor.create(
+          io.grpc.MethodDescriptor.MethodType.UNARY,
+          generateFullMethodName(
+              "grpc.testing.TestService", "UnimplementedCall"),
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
+          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
 
   /**
    * Creates a new async stub that supports all call types for the service
@@ -184,6 +193,17 @@ public class TestServiceGrpc {
       return asyncUnimplementedStreamingCall(METHOD_HALF_DUPLEX_CALL, responseObserver);
     }
 
+    /**
+     * <pre>
+     * The test server will not implement this method. It will be used
+     * to test the behavior when clients call unimplemented methods.
+     * </pre>
+     */
+    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_UNIMPLEMENTED_CALL, responseObserver);
+    }
+
     @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
@@ -228,6 +248,13 @@ public class TestServiceGrpc {
                 io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
                 io.grpc.testing.integration.Messages.StreamingOutputCallResponse>(
                   this, METHODID_HALF_DUPLEX_CALL)))
+          .addMethod(
+            METHOD_UNIMPLEMENTED_CALL,
+            asyncUnaryCall(
+              new MethodHandlers<
+                com.google.protobuf.EmptyProtos.Empty,
+                com.google.protobuf.EmptyProtos.Empty>(
+                  this, METHODID_UNIMPLEMENTED_CALL)))
           .build();
     }
   }
@@ -326,6 +353,18 @@ public class TestServiceGrpc {
       return asyncBidiStreamingCall(
           getChannel().newCall(METHOD_HALF_DUPLEX_CALL, getCallOptions()), responseObserver);
     }
+
+    /**
+     * <pre>
+     * The test server will not implement this method. It will be used
+     * to test the behavior when clients call unimplemented methods.
+     * </pre>
+     */
+    public void unimplementedCall(com.google.protobuf.EmptyProtos.Empty request,
+        io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty> responseObserver) {
+      asyncUnaryCall(
+          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -381,6 +420,17 @@ public class TestServiceGrpc {
       return blockingServerStreamingCall(
           getChannel(), METHOD_STREAMING_OUTPUT_CALL, getCallOptions(), request);
     }
+
+    /**
+     * <pre>
+     * The test server will not implement this method. It will be used
+     * to test the behavior when clients call unimplemented methods.
+     * </pre>
+     */
+    public com.google.protobuf.EmptyProtos.Empty unimplementedCall(com.google.protobuf.EmptyProtos.Empty request) {
+      return blockingUnaryCall(
+          getChannel(), METHOD_UNIMPLEMENTED_CALL, getCallOptions(), request);
+    }
   }
 
   /**
@@ -426,14 +476,27 @@ public class TestServiceGrpc {
       return futureUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * The test server will not implement this method. It will be used
+     * to test the behavior when clients call unimplemented methods.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.google.protobuf.EmptyProtos.Empty> unimplementedCall(
+        com.google.protobuf.EmptyProtos.Empty request) {
+      return futureUnaryCall(
+          getChannel().newCall(METHOD_UNIMPLEMENTED_CALL, getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_EMPTY_CALL = 0;
   private static final int METHODID_UNARY_CALL = 1;
   private static final int METHODID_STREAMING_OUTPUT_CALL = 2;
-  private static final int METHODID_STREAMING_INPUT_CALL = 3;
-  private static final int METHODID_FULL_DUPLEX_CALL = 4;
-  private static final int METHODID_HALF_DUPLEX_CALL = 5;
+  private static final int METHODID_UNIMPLEMENTED_CALL = 3;
+  private static final int METHODID_STREAMING_INPUT_CALL = 4;
+  private static final int METHODID_FULL_DUPLEX_CALL = 5;
+  private static final int METHODID_HALF_DUPLEX_CALL = 6;
 
   private static class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -463,6 +526,10 @@ public class TestServiceGrpc {
         case METHODID_STREAMING_OUTPUT_CALL:
           serviceImpl.streamingOutputCall((io.grpc.testing.integration.Messages.StreamingOutputCallRequest) request,
               (io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.StreamingOutputCallResponse>) responseObserver);
+          break;
+        case METHODID_UNIMPLEMENTED_CALL:
+          serviceImpl.unimplementedCall((com.google.protobuf.EmptyProtos.Empty) request,
+              (io.grpc.stub.StreamObserver<com.google.protobuf.EmptyProtos.Empty>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -499,7 +566,8 @@ public class TestServiceGrpc {
           METHOD_STREAMING_OUTPUT_CALL,
           METHOD_STREAMING_INPUT_CALL,
           METHOD_FULL_DUPLEX_CALL,
-          METHOD_HALF_DUPLEX_CALL);
+          METHOD_HALF_DUPLEX_CALL,
+          METHOD_UNIMPLEMENTED_CALL);
     }
 
     return serviceDescriptor;

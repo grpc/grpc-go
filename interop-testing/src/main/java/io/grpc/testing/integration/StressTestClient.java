@@ -452,6 +452,11 @@ public class StressTestClient {
           break;
         }
 
+        case UNIMPLEMENTED_SERVICE: {
+          tester.unimplementedService();
+          break;
+        }
+
         case CANCEL_AFTER_BEGIN: {
           tester.cancelAfterBegin();
           break;

@@ -58,7 +58,8 @@ public class TestCasesTest {
     String[] testCases = {"empty_unary", "large_unary", "client_streaming", "server_streaming",
       "ping_pong", "empty_stream", "compute_engine_creds", "service_account_creds",
       "jwt_token_creds", "oauth2_auth_token", "per_rpc_creds", "unimplemented_method",
-      "cancel_after_begin", "cancel_after_first_response", "timeout_on_sleeping_server"};
+      "unimplemented_service", "cancel_after_begin", "cancel_after_first_response",
+      "timeout_on_sleeping_server"};
 
     assertEquals(testCases.length, TestCases.values().length);
 
