@@ -62,7 +62,7 @@ subprojects {
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
         guavaVersion = '19.0'
-        protobufVersion = '3.0.2'
+        protobufVersion = '3.1.0'
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {

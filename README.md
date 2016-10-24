@@ -82,12 +82,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <artifactId>protobuf-maven-plugin</artifactId>
       <version>0.5.0</version>
       <configuration>
-        <!--
-          The version of protoc must match protobuf-java. If you don't depend on
-          protobuf-java directly, you will be transitively depending on the
-          protobuf-java version that grpc depends on.
-        -->
-        <protocArtifact>com.google.protobuf:protoc:3.0.2:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.1.0:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
         <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.0.1:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
@@ -125,10 +120,7 @@ buildscript {
 
 protobuf {
   protoc {
-    // The version of protoc must match protobuf-java. If you don't depend on
-    // protobuf-java directly, you will be transitively depending on the
-    // protobuf-java version that grpc depends on.
-    artifact = "com.google.protobuf:protoc:3.0.2"
+    artifact = "com.google.protobuf:protoc:3.1.0"
   }
   plugins {
     grpc {
