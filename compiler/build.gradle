@@ -47,6 +47,7 @@ model {
       }
     }
     gcc(Gcc) {
+      target("ppcle_64")
     }
     clang(Clang) {
     }
@@ -59,11 +60,14 @@ model {
     x86_64 {
       architecture "x86_64"
     }
+    ppcle_64 {
+      architecture "ppcle_64"
+    }
   }
 
   components {
     java_plugin(NativeExecutableSpec) {
-      if (arch in ['x86_32', 'x86_64']) {
+      if (arch in ['x86_32', 'x86_64', 'ppcle_64']) {
         // If arch is not within the defined platforms, we do not specify the
         // targetPlatform so that Gradle will choose what is appropriate.
         targetPlatform arch
