@@ -2504,8 +2504,7 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	ctx, _ := context.WithCancel(context.Background())
-	if _, err := tc.StreamingInputCall(ctx); err != nil {
+	if _, err := tc.StreamingInputCall(context.Background()); err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
 	}
 	// Loop until the new max stream setting is effective.
