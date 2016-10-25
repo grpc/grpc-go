@@ -378,8 +378,7 @@ var (
 	unixTLSEnv    = env{name: "unix-tls", network: "unix", security: "tls", balancer: true}
 	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: true}
 	noBalancerEnv = env{name: "no-balancer", network: "tcp", security: "tls", balancer: false}
-	// TODO add handlerEnv back when ServeHTTP is stable.
-	allEnv = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv /*handlerEnv,*/, noBalancerEnv}
+	allEnv        = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv, noBalancerEnv}
 )
 
 var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', 'unix-tls', or 'handler-tls' to only run the tests for that environment. Empty means all.")
