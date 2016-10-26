@@ -403,11 +403,13 @@ class LoadClient {
               @Override
               public void onNext(Messages.SimpleResponse value) {
                 delay(System.nanoTime() - now);
-                requestObserver.get().onNext(simpleRequest);
-                now = System.nanoTime();
                 if (shutdown) {
                   requestObserver.get().onCompleted();
+                  // Must not send another request.
+                  return;
                 }
+                requestObserver.get().onNext(simpleRequest);
+                now = System.nanoTime();
               }
 
               @Override
