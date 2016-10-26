@@ -121,6 +121,20 @@ public abstract class AbstractManagedChannelImplBuilder
 
   private long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
 
+  private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+
+  // Can be overriden by subclasses.
+  @Override
+  public T maxInboundMessageSize(int max) {
+    checkArgument(max >= 0, "negative max");
+    maxInboundMessageSize = max;
+    return thisT();
+  }
+
+  protected final int maxInboundMessageSize() {
+    return maxInboundMessageSize;
+  }
+
   @Nullable
   private CensusContextFactory censusFactory;
 
@@ -200,12 +214,6 @@ public abstract class AbstractManagedChannelImplBuilder
   public final T compressorRegistry(CompressorRegistry registry) {
     this.compressorRegistry = registry;
     return thisT();
-  }
-
-  private T thisT() {
-    @SuppressWarnings("unchecked")
-    T thisT = (T) this;
-    return thisT;
   }
 
   @Override

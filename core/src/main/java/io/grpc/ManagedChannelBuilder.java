@@ -195,7 +195,35 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T idleTimeout(long value, TimeUnit unit);
 
   /**
+   * Sets the maximum message size allowed to be received on the channel. If not called,
+   * defaults to 4 MiB. The default provides protection to clients who haven't considered the
+   * possibility of receiving large messages while trying to be large enough to not be hit in normal
+   * usage.
+   *
+   * <p>This method is advisory, and implementations may decide to not enforce this.  Currently,
+   * the only known transport to not enforce this is {@code InProcessTransport}.
+   *
+   * @param max the maximum number of bytes a single message can be.
+   *
+   * @throws IllegalArgumentException if max is negative.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2307")
+  public T maxInboundMessageSize(int max) {
+    // intentional nop
+    return thisT();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    */
   public abstract ManagedChannel build();
+
+  /**
+   * Returns the correctly typed version of the builder.
+   */
+  protected final T thisT() {
+    @SuppressWarnings("unchecked")
+    T thisT = (T) this;
+    return thisT;
+  }
 }

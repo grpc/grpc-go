@@ -74,7 +74,7 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
         .negotiationType(NegotiationType.PLAINTEXT)
         .channelType(LocalChannel.class)
         .flowControlWindow(65 * 1024)
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .censusContextFactory(getClientCensusFactory())
         .build();
   }

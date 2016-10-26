@@ -31,10 +31,8 @@
 
 package io.grpc.okhttp;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
-import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -119,7 +117,6 @@ public class OkHttpChannelBuilder extends
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
-  private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
   private boolean enableKeepAlive;
   private long keepAliveDelayNanos;
   private long keepAliveTimeoutNanos;
@@ -216,18 +213,6 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
-   * Sets the maximum message size allowed to be received on the channel. If not called,
-   * defaults to 4 MiB. The default provides protection to clients who haven't considered the
-   * possibility of receiving large messages while trying to be large enough to not be hit in normal
-   * usage.
-   */
-  public final OkHttpChannelBuilder maxMessageSize(int maxMessageSize) {
-    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
-    this.maxMessageSize = maxMessageSize;
-    return this;
-  }
-
-  /**
    * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT}.
    */
   @Override
@@ -243,8 +228,8 @@ public class OkHttpChannelBuilder extends
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
     return new OkHttpTransportFactory(transportExecutor,
-        createSocketFactory(), connectionSpec, maxMessageSize, enableKeepAlive, keepAliveDelayNanos,
-        keepAliveTimeoutNanos);
+        createSocketFactory(), connectionSpec, maxInboundMessageSize(), enableKeepAlive,
+        keepAliveDelayNanos, keepAliveTimeoutNanos);
   }
 
   @Override

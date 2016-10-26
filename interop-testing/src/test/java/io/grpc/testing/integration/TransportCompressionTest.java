@@ -149,7 +149,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
   @Override
   protected ManagedChannel createChannel() {
     return NettyChannelBuilder.forAddress("localhost", getPort())
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .decompressorRegistry(decompressors)
         .compressorRegistry(compressors)
         .censusContextFactory(getClientCensusFactory())

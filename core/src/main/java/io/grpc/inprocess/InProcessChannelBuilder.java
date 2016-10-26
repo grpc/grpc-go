@@ -73,6 +73,12 @@ public class InProcessChannelBuilder extends
     super.censusContextFactory(NoopCensusContextFactory.INSTANCE);
   }
 
+  @Override
+  public final InProcessChannelBuilder maxInboundMessageSize(int max) {
+    // TODO(carl-mastrangelo): maybe throw an exception since this not enforced?
+    return super.maxInboundMessageSize(max);
+  }
+
   /**
    * Does nothing.
    */

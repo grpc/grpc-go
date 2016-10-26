@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -71,7 +70,6 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   private EventLoopGroup eventLoopGroup;
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
-  private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
 
   /**
@@ -190,14 +188,13 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   }
 
   /**
-   * Sets the maximum message size allowed to be received on the channel. If not called,
-   * defaults to 4 MiB. The default provides protection to clients who haven't considered the
-   * possibility of receiving large messages while trying to be large enough to not be hit in normal
-   * usage.
+   * Sets the max message size.
+   *
+   * @deprecated Use maxInboundMessageSize instead
    */
+  @Deprecated
   public final NettyChannelBuilder maxMessageSize(int maxMessageSize) {
-    checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
-    this.maxMessageSize = maxMessageSize;
+    maxInboundMessageSize(maxMessageSize);
     return this;
   }
 
@@ -228,7 +225,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(channelType, negotiationType, protocolNegotiator, sslContext,
-        eventLoopGroup, flowControlWindow, maxMessageSize, maxHeaderListSize);
+        eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize);
   }
 
   @Override

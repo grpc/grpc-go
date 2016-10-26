@@ -63,7 +63,7 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
   protected ManagedChannel createChannel() {
     return NettyChannelBuilder.forAddress("localhost", getPort())
         .negotiationType(NegotiationType.PLAINTEXT)
-        .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .censusContextFactory(getClientCensusFactory())
         .build();
   }
