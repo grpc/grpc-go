@@ -94,6 +94,7 @@ public class NettyFlowControlTest {
 
   @BeforeClass
   public static void setUp() {
+    HandlerSettings.enable(true);
     HandlerSettings.autoWindowOn(true);
   }
 

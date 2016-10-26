@@ -47,6 +47,7 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
 
   @BeforeClass
   public static void turnOnAutoWindow() {
+    HandlerSettings.enable(true);
     HandlerSettings.autoWindowOn(true);
     startStaticServer(
         NettyServerBuilder.forPort(0)
