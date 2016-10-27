@@ -38,6 +38,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import javax.annotation.Nullable;
+
 /**
  * Descriptor for a service.
  */
@@ -45,6 +47,7 @@ public final class ServiceDescriptor {
 
   private final String name;
   private final Collection<MethodDescriptor<?, ?>> methods;
+  private Object attachedObject = null;
 
   public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
     this(name, Arrays.asList(methods));
@@ -53,6 +56,17 @@ public final class ServiceDescriptor {
   public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
     this.name = Preconditions.checkNotNull(name, "name");
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
+  }
+
+  public ServiceDescriptor(String name, Object attachedObject, MethodDescriptor<?, ?>... methods) {
+    this(name, methods);
+    this.attachedObject = attachedObject;
+  }
+
+  public ServiceDescriptor(String name, Object attachedObject,
+                           Collection<MethodDescriptor<?, ?>> methods) {
+    this(name, methods);
+    this.attachedObject = attachedObject;
   }
 
   /** Simple name of the service. It is not an absolute path. */
@@ -66,5 +80,14 @@ public final class ServiceDescriptor {
    */
   public Collection<MethodDescriptor<?, ?>> getMethods() {
     return methods;
+  }
+
+  /**
+   * The generated code may attach an object to a service descriptor, such as the proto codegen
+   * attaching a object that allows retrieving the underlying proto object.
+   */
+  @Nullable
+  public Object getAttachedObject() {
+    return attachedObject;
   }
 }

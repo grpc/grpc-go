@@ -884,21 +884,63 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
 static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
                                    map<string, string>* vars,
                                    Printer* p,
-                                   bool generate_nano) {
+                                   ProtoFlavor flavor) {
   (*vars)["service_name"] = service->name();
-  p->Print(
+
+
+  if (flavor == ProtoFlavor::NORMAL) {
+    (*vars)["proto_descriptor_wrapper"] = service->name() + "DescriptorWrapper";
+    (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
+    p->Print(
+        *vars,
+        "public static final class $proto_descriptor_wrapper$ implements $ProtoFileDescriptorWrapper$ {\n");
+    p->Indent();
+    p->Print(*vars, "@$Override$\n");
+    p->Print(
+        *vars,
+        "public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {\n");
+    p->Indent();
+    p->Print(*vars, "return $proto_class_name$.getDescriptor();\n");
+    p->Outdent();
+    p->Print(*vars, "}\n");
+    p->Outdent();
+    p->Print(*vars, "}\n\n");
+
+    p->Print(
+            *vars,
+            "private static $ServiceDescriptor$ serviceDescriptor;\n\n");
+
+    p->Print(
+        *vars,
+        "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
+    p->Indent();
+    p->Print("if (serviceDescriptor == null) {\n");
+    p->Indent();
+    p->Print(
+        *vars,
+        "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME,\n");
+    p->Indent();
+    p->Indent();
+    p->Print(
+        *vars,
+        "new $proto_descriptor_wrapper$()");
+    p->Outdent();
+    p->Outdent();
+  } else {
+    p->Print(
       *vars,
       "private static $ServiceDescriptor$ serviceDescriptor;\n\n");
+    p->Print(
+        *vars,
+        "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
+    p->Indent();
+    p->Print("if (serviceDescriptor == null) {\n");
+    p->Indent();
+    p->Print(
+        *vars,
+        "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME");
+  }
 
-  p->Print(
-      *vars,
-      "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
-  p->Indent();
-  p->Print("if (serviceDescriptor == null) {\n");
-  p->Indent();
-  p->Print(
-      *vars,
-      "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME");
   p->Indent();
   p->Indent();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -1078,7 +1120,7 @@ static void PrintService(const ServiceDescriptor* service,
         "}\n\n");
   }
   PrintMethodHandlerClass(service, vars, p, generate_nano, enable_deprecated);
-  PrintGetServiceDescriptorMethod(service, vars, p, generate_nano);
+  PrintGetServiceDescriptorMethod(service, vars, p, flavor);
   p->Outdent();
   p->Print("}\n");
 }
@@ -1138,6 +1180,8 @@ void GenerateService(const ServiceDescriptor* service,
       "io.grpc.ServerServiceDefinition";
   vars["ServiceDescriptor"] =
       "io.grpc.ServiceDescriptor";
+  vars["ProtoFileDescriptorWrapper"] =
+      "io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";
