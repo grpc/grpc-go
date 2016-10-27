@@ -209,7 +209,7 @@ public class NettyFlowControlTest {
   /**
    * Simple stream observer to measure elapsed time of the call.
    */
-  private class TestStreamObserver implements StreamObserver<StreamingOutputCallResponse> {
+  private static class TestStreamObserver implements StreamObserver<StreamingOutputCallResponse> {
 
     long startRequestNanos;
     long endRequestNanos;
@@ -238,7 +238,6 @@ public class NettyFlowControlTest {
 
     @Override
     public void onCompleted() {
-      long endRequestNanos = System.nanoTime();
       latch.countDown();
     }
 
