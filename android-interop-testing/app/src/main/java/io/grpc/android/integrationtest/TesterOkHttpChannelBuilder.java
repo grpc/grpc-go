@@ -59,8 +59,8 @@ import javax.security.auth.x500.X500Principal;
 class TesterOkHttpChannelBuilder {
   public static ManagedChannel build(String host, int port, @Nullable String serverHostOverride,
       boolean useTls, @Nullable InputStream testCa, @Nullable String androidSocketFactoryTls) {
-    ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port);
-    ((OkHttpChannelBuilder) channelBuilder).maxMessageSize(16 * 1024 * 1024);
+    ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port)
+        .maxInboundMessageSize(16 * 1024 * 1024);
     if (serverHostOverride != null) {
       // Force the hostname to match the cert the server uses.
       channelBuilder.overrideAuthority(serverHostOverride);
