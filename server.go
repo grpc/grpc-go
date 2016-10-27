@@ -196,7 +196,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 	if opts.codec == nil {
 		// Set the default codec.
-		opts.codec = protoCodec{}
+		opts.codec = NewProtoCodec()
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
@@ -685,11 +685,18 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
+	var newCD Codec
+	switch s.opts.codec.(type) {
+	case *protoCodec:
+		newCD = NewProtoCodec()
+	default:
+		newCD = s.opts.codec
+	}
 	ss := &serverStream{
 		t:          t,
 		s:          stream,
 		p:          &parser{r: stream},
-		codec:      s.opts.codec,
+		codec:      newCD,
 		cp:         s.opts.cp,
 		dc:         s.opts.dc,
 		maxMsgSize: s.opts.maxMsgSize,

@@ -179,11 +179,18 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		break
 	}
+	var newCD Codec
+	switch cc.dopts.codec.(type) {
+	case *protoCodec:
+		newCD = NewProtoCodec()
+	default:
+		newCD = cc.dopts.codec
+	}
 	cs := &clientStream{
 		opts:  opts,
 		c:     c,
 		desc:  desc,
-		codec: cc.dopts.codec,
+		codec: newCD,
 		cp:    cc.dopts.cp,
 		dc:    cc.dopts.dc,
 
@@ -305,7 +312,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
-	return cs.t.Write(cs.s, out, &transport.Options{Last: false})
+	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
+	return err
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {

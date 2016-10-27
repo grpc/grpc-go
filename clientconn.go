@@ -265,7 +265,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	// Set defaults.
 	if cc.dopts.codec == nil {
-		cc.dopts.codec = protoCodec{}
+		cc.dopts.codec = NewProtoCodec()
 	}
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
