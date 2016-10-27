@@ -35,6 +35,10 @@ package credentials
 
 import (
 	"testing"
+	"net"
+	"fmt"
+	"golang.org/x/net/context"
+	"crypto/tls"
 )
 
 func TestTLSOverrideServerName(t *testing.T) {
@@ -59,3 +63,43 @@ func TestTLSClone(t *testing.T) {
 		t.Fatalf("Change in clone should not affect the original, c.Info().ServerName = %v, want %v", c.Info().ServerName, expectedServerName)
 	}
 }
+
+func TestTLSClientHandshakeReturnsTLSInfo(t *testing.T) {
+	localPort := ":5050"
+	lis, err := net.Listen("tcp",localPort)
+	if err != nil {
+		t.Fatalf("Failed to start local server. Listener error: %v", err)
+	}
+	c := NewTLS(&tls.Config{InsecureSkipVerify: true, 
+	         Certificates: []tls.Certificate{
+		         tls.Certificate{},
+	         },
+		 CipherSuites: []uint16{
+			 tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		 },
+		 PreferServerCipherSuites: true,
+		 MaxVersion: 0,
+             })
+	go func() {
+		serverRawConn, _ := lis.Accept()
+		serverConn := tls.Server(serverRawConn, c.(*tlsCreds).config)
+		serverErr := serverConn.Handshake()
+		if serverErr != nil {
+			fmt.Println("error on server", serverErr)
+		}
+	}()
+	defer lis.Close()
+	conn, err := net.Dial("tcp", localPort)
+	if err != nil {
+		t.Fatalf("Failed to connect to local server. Error: %v", err)
+	}
+	fmt.Println("conn : ", conn)
+	_, tlsInfo, err := c.ClientHandshake(context.Background(),localPort,conn)
+	if err != nil {
+		t.Fatalf("failed at client handshake. Error: %v", err)
+	}
+	if tlsInfo == nil {
+		t.Fatalf("Failed to recieve auth info from client handshake.")
+	}
+}
+
