@@ -34,11 +34,10 @@
 package credentials
 
 import (
-	"testing"
-	"net"
-	"fmt"
-	"golang.org/x/net/context"
 	"crypto/tls"
+	"golang.org/x/net/context"
+	"net"
+	"testing"
 )
 
 func TestTLSOverrideServerName(t *testing.T) {
@@ -66,40 +65,36 @@ func TestTLSClone(t *testing.T) {
 
 func TestTLSClientHandshakeReturnsTLSInfo(t *testing.T) {
 	localPort := ":5050"
-	lis, err := net.Listen("tcp",localPort)
+	tlsDir := "../test/testdata/"
+	lis, err := net.Listen("tcp", localPort)
 	if err != nil {
 		t.Fatalf("Failed to start local server. Listener error: %v", err)
 	}
-	c := NewTLS(&tls.Config{InsecureSkipVerify: true, 
-	         Certificates: []tls.Certificate{
-		         tls.Certificate{},
-	         },
-		 CipherSuites: []uint16{
-			 tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		 },
-		 PreferServerCipherSuites: true,
-		 MaxVersion: 0,
-             })
+	serverTLS, err := NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
+	if err != nil {
+		t.Fatalf("Failed to create server TLS. Error: %v", err)
+	}
+	var serverAuthInfo AuthInfo
 	go func() {
 		serverRawConn, _ := lis.Accept()
-		serverConn := tls.Server(serverRawConn, c.(*tlsCreds).config)
+		serverConn := tls.Server(serverRawConn, serverTLS.(*tlsCreds).config)
 		serverErr := serverConn.Handshake()
 		if serverErr != nil {
-			fmt.Println("error on server", serverErr)
+			t.Fatalf("Error on server while handshake. Error: %v", serverErr)
 		}
+		serverAuthInfo = TLSInfo{serverConn.ConnectionState()}
 	}()
 	defer lis.Close()
 	conn, err := net.Dial("tcp", localPort)
 	if err != nil {
-		t.Fatalf("Failed to connect to local server. Error: %v", err)
+		t.Fatalf("Client failed to connect to local server. Error: %v", err)
 	}
-	fmt.Println("conn : ", conn)
-	_, tlsInfo, err := c.ClientHandshake(context.Background(),localPort,conn)
+	c := NewTLS(&tls.Config{InsecureSkipVerify: true})
+	_, authInfo, err := c.ClientHandshake(context.Background(), localPort, conn)
 	if err != nil {
-		t.Fatalf("failed at client handshake. Error: %v", err)
+		t.Fatalf("Error on client while handshake. Error: %v", err)
 	}
-	if tlsInfo == nil {
-		t.Fatalf("Failed to recieve auth info from client handshake.")
+	if authInfo.AuthType() != serverAuthInfo.AuthType() {
+		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", localPort, authInfo, serverAuthInfo)
 	}
 }
-
