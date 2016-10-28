@@ -63,7 +63,7 @@ func TestTLSClone(t *testing.T) {
 	}
 }
 
-func TestTLSClientHandshakeReturnsTLSInfo(t *testing.T) {
+func TestTLSClientHandshakeReturnsAuthInfo(t *testing.T) {
 	localPort := ":5050"
 	tlsDir := "../test/testdata/"
 	lis, err := net.Listen("tcp", localPort)
