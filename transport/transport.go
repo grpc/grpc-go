@@ -215,6 +215,9 @@ type Stream struct {
 	codec      interface{}
 }
 
+// GetCodec gets the Codec for this stream. The transport package doesn't know
+// about Codecs, but code in the grpc package needs to get the Codec from
+// the transport.Stream, so this returns interface{} instead of Codec
 func (s *Stream) GetCodec() interface{} {
 	if s.codec == nil {
 		panic("codec unset")
@@ -512,6 +515,9 @@ type ServerTransport interface {
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain()
 
+	// Get the Codec for this transport. Codec isn't available from transport
+	// package, but it needs to be accessible after getting initialized
+	// for the stream, by the connection.
 	GetCodec() interface{}
 }
 

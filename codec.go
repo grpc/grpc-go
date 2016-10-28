@@ -263,19 +263,19 @@ type marshalBufCache struct {
 	cache *ringCache
 }
 
-func (mb *marshalBufCache) marshalBufAlloc() *marshalBuffer {
-	m := mb.cache.pop()
-	if m == nil {
-		m = newMarshalBuffer()
+func (c *marshalBufCache) marshalBufAlloc() *marshalBuffer {
+	mb := c.cache.pop()
+	if mb == nil {
+		mb = newMarshalBuffer()
 	}
-	return m.(*marshalBuffer)
+	return mb.(*marshalBuffer)
 }
 
-func (s *marshalBufCache) marshalBufFree(mp *marshalBuffer) {
-	if mp == nil {
+func (c *marshalBufCache) marshalBufFree(mb *marshalBuffer) {
+	if mb == nil {
 		panic("freeing a nil marshalBuffer")
 	}
-	s.cache.push(mp)
+	c.cache.push(mb)
 }
 
 type bufCache struct {
@@ -283,16 +283,16 @@ type bufCache struct {
 }
 
 func (bc *bufCache) bufAlloc() *proto.Buffer {
-	m := bc.cache.pop()
-	if m == nil {
-		m = &proto.Buffer{}
+	pb := bc.cache.pop()
+	if pb == nil {
+		pb = &proto.Buffer{}
 	}
-	return m.(*proto.Buffer)
+	return pb.(*proto.Buffer)
 }
 
-func (s *bufCache) bufFree(mp *proto.Buffer) {
-	if mp == nil {
+func (bc *bufCache) bufFree(pb *proto.Buffer) {
+	if pb == nil {
 		panic("freeing a nil proto.Buffer")
 	}
-	s.cache.push(mp)
+	bc.cache.push(pb)
 }

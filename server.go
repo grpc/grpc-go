@@ -99,9 +99,9 @@ type Server struct {
 	cancel context.CancelFunc
 	// A CondVar to let GracefulStop() blocks until all the pending RPCs are finished
 	// and all the transport goes away.
-	cv                  *sync.Cond
-	m                   map[string]*service // service name -> service info
-	events              trace.EventLog
+	cv                   *sync.Cond
+	m                    map[string]*service // service name -> service info
+	events               trace.EventLog
 	codecProviderCreator codecProviderCreator
 }
 
@@ -217,10 +217,10 @@ func NewServer(opt ...ServerOption) *Server {
 		codecProviderCreator = newGenericCodecProviderCreator(opts.codec)
 	}
 	s := &Server{
-		lis:                 make(map[net.Listener]bool),
-		opts:                opts,
-		conns:               make(map[io.Closer]bool),
-		m:                   make(map[string]*service),
+		lis:                  make(map[net.Listener]bool),
+		opts:                 opts,
+		conns:                make(map[io.Closer]bool),
+		m:                    make(map[string]*service),
 		codecProviderCreator: codecProviderCreator,
 	}
 	s.cv = sync.NewCond(&s.mu)
