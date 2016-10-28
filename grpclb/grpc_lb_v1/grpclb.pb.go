@@ -517,7 +517,7 @@ var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "grpclb.proto",
 }
 
 func init() { proto.RegisterFile("grpclb.proto", fileDescriptor0) }

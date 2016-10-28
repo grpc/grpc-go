@@ -789,7 +789,7 @@ var _TestService_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "test.proto",
 }
 
 func init() { proto.RegisterFile("test.proto", fileDescriptor0) }

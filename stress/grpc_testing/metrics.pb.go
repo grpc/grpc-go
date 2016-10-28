@@ -335,7 +335,7 @@ var _MetricsService_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "metrics.proto",
 }
 
 func init() { proto.RegisterFile("metrics.proto", fileDescriptor0) }

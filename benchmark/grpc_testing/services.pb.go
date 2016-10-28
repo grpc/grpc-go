@@ -161,7 +161,7 @@ var _BenchmarkService_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor3,
+	Metadata: "services.proto",
 }
 
 // Client API for WorkerService service
@@ -417,7 +417,7 @@ var _WorkerService_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor3,
+	Metadata: "services.proto",
 }
 
 func init() { proto.RegisterFile("services.proto", fileDescriptor3) }

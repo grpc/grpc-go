@@ -153,7 +153,7 @@ var _Health_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: fileDescriptor0,
+	Metadata: "health.proto",
 }
 
 func init() { proto.RegisterFile("health.proto", fileDescriptor0) }

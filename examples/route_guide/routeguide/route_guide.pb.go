@@ -452,7 +452,7 @@ var _RouteGuide_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "route_guide.proto",
 }
 
 func init() { proto.RegisterFile("route_guide.proto", fileDescriptor0) }

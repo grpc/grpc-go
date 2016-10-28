@@ -643,7 +643,7 @@ var _ServerReflection_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "reflection.proto",
 }
 
 func init() { proto.RegisterFile("reflection.proto", fileDescriptor0) }

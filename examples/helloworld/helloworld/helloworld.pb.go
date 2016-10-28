@@ -130,7 +130,7 @@ var _Greeter_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: fileDescriptor0,
+	Metadata: "helloworld.proto",
 }
 
 func init() { proto.RegisterFile("helloworld.proto", fileDescriptor0) }
