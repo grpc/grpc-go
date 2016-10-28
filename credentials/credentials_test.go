@@ -35,9 +35,10 @@ package credentials
 
 import (
 	"crypto/tls"
-	"golang.org/x/net/context"
 	"net"
 	"testing"
+
+	"golang.org/x/net/context"
 )
 
 func TestTLSOverrideServerName(t *testing.T) {
