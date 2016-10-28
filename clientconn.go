@@ -55,6 +55,9 @@ var (
 	// ErrClientConnTimeout indicates that the ClientConn cannot establish the
 	// underlying connections within the specified timeout.
 	ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
+	// ErrTimeoutRequiresBlock indicates that an invalid combination of
+	// timeout/block options has been specified.
+	ErrTimeoutRequiresBlock = errors.New("grpc: timeout options requires block option")
 
 	// errNoTransportSecurity indicates that there is no transport security
 	// being set for ClientConn. Users should either set one or explicitly
@@ -270,6 +273,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
+
+	// Validate combination of options.
+	var emptyDuration time.Duration
+	if cc.dopts.timeout != emptyDuration && !cc.dopts.block {
+		return nil, ErrTimeoutRequiresBlock
+	}
+
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
