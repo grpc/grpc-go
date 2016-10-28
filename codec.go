@@ -31,10 +31,6 @@
  *
  */
 
-/*
-Package transport defines and implements message oriented communication channel
-to complete various transactions (e.g., an RPC).
-*/
 package grpc
 
 import (
@@ -55,11 +51,14 @@ type Codec interface {
 	String() string
 }
 
+// codecProvider is used to provide new streams with a Codec
 type codecProvider interface {
 	// Provides a new stream with a codec to be used for it's lifetime
 	getCodec() Codec
 }
 
+// codecProviderCreator is used to provide transports with codecProviders,
+// in order to set the scopes of their possible pools.
 type codecProviderCreator interface {
 	// Provides a codecProvider to be used by a connection/transport.
 	// This can control the scope of codec pools, e.g. global, per-conn, none
@@ -112,9 +111,9 @@ func (protoCodec) String() string {
 }
 
 // The protoCodec per-stream creators, and per-transport creator "providers"
-// are meant to handle pooling of protoCodec structs and their buffers.
+// are meant to handle pooling of proto.Buffer objects structs and byte slices.
 // The current goal is to keep a pool of buffers per transport connection,
-// to be used on its streams.
+// to be shared by its streams.
 type protoCodecProvider struct {
 	marshalPool   *marshalBufCache
 	unmarshalPool *bufCache
@@ -182,7 +181,7 @@ type genericCodecProviderCreator struct {
 }
 
 func (c genericCodecProviderCreator) onNewTransport() func() interface{} {
-	provider := &genericCodecProvider {
+	provider := &genericCodecProvider{
 		codec: c.codec,
 	}
 
@@ -217,6 +216,7 @@ type ringCache struct {
 	writeIndex uint64
 }
 
+// Note may want to change for more than 300 streams per channel.
 const maxPerRing = 300
 
 // push pushes the object into the buffer if possible.
@@ -273,7 +273,7 @@ func (mb *marshalBufCache) marshalBufAlloc() *marshalBuffer {
 
 func (s *marshalBufCache) marshalBufFree(mp *marshalBuffer) {
 	if mp == nil {
-		panic("invalid")
+		panic("freeing a nil marshalBuffer")
 	}
 	s.cache.push(mp)
 }
@@ -292,7 +292,7 @@ func (bc *bufCache) bufAlloc() *proto.Buffer {
 
 func (s *bufCache) bufFree(mp *proto.Buffer) {
 	if mp == nil {
-		return
+		panic("freeing a nil proto.Buffer")
 	}
 	s.cache.push(mp)
 }

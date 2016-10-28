@@ -102,7 +102,7 @@ type Server struct {
 	cv                  *sync.Cond
 	m                   map[string]*service // service name -> service info
 	events              trace.EventLog
-	codecCreatorCreator codecProviderCreator
+	codecProviderCreator codecProviderCreator
 }
 
 type options struct {
@@ -209,19 +209,19 @@ func NewServer(opt ...ServerOption) *Server {
 	for _, o := range opt {
 		o(&opts)
 	}
-	var codecCreatorCreator codecProviderCreator
+	var codecProviderCreator codecProviderCreator
 	if opts.codec == nil {
 		// Set the default codec.
-		codecCreatorCreator = newProtoCodecProviderCreator()
+		codecProviderCreator = newProtoCodecProviderCreator()
 	} else {
-		codecCreatorCreator = newGenericCodecProviderCreator(opts.codec)
+		codecProviderCreator = newGenericCodecProviderCreator(opts.codec)
 	}
 	s := &Server{
 		lis:                 make(map[net.Listener]bool),
 		opts:                opts,
 		conns:               make(map[io.Closer]bool),
 		m:                   make(map[string]*service),
-		codecCreatorCreator: codecCreatorCreator,
+		codecProviderCreator: codecProviderCreator,
 	}
 	s.cv = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -512,7 +512,7 @@ func (s *Server) serveUsingHandler(conn net.Conn) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	getCodec := s.codecCreatorCreator.onNewTransport()
+	getCodec := s.codecProviderCreator.onNewTransport()
 
 	st, err := transport.NewServerHandlerTransport(w, r, getCodec)
 	if err != nil {
