@@ -76,7 +76,11 @@ func TestTLSClientHandshakeReturnsAuthInfo(t *testing.T) {
 		t.Fatalf("Failed to create server TLS. Error: %v", err)
 	}
 	var serverAuthInfo AuthInfo
+	done := make(chan bool)
 	go func() {
+		defer func() {
+			done <- true
+		}()
 		serverRawConn, _ := lis.Accept()
 		serverConn := tls.Server(serverRawConn, serverTLS.(*tlsCreds).config)
 		serverErr := serverConn.Handshake()
@@ -94,6 +98,10 @@ func TestTLSClientHandshakeReturnsAuthInfo(t *testing.T) {
 	_, authInfo, err := c.ClientHandshake(context.Background(), localPort, conn)
 	if err != nil {
 		t.Fatalf("Error on client while handshake. Error: %v", err)
+	}
+	select {
+	case <-done:
+		// wait until server has populated the serverAuthInfo struct.
 	}
 	if authInfo.AuthType() != serverAuthInfo.AuthType() {
 		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", localPort, authInfo, serverAuthInfo)
