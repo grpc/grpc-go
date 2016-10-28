@@ -262,7 +262,7 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  public static final class BenchmarkServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
+  private static final class BenchmarkServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.benchmarks.proto.Services.getDescriptor();
@@ -274,7 +274,7 @@ public class BenchmarkServiceGrpc {
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new BenchmarkServiceDescriptorWrapper(),
+          new BenchmarkServiceDescriptorSupplier(),
           METHOD_UNARY_CALL,
           METHOD_STREAMING_CALL);
     }

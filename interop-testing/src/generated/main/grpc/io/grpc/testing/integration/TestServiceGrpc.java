@@ -556,7 +556,7 @@ public class TestServiceGrpc {
     }
   }
 
-  public static final class TestServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
+  private static final class TestServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.testing.integration.Test.getDescriptor();
@@ -568,7 +568,7 @@ public class TestServiceGrpc {
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new TestServiceDescriptorWrapper(),
+          new TestServiceDescriptorSupplier(),
           METHOD_EMPTY_CALL,
           METHOD_UNARY_CALL,
           METHOD_STREAMING_OUTPUT_CALL,

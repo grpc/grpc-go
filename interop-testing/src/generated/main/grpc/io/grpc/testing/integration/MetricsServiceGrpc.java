@@ -271,7 +271,7 @@ public class MetricsServiceGrpc {
     }
   }
 
-  public static final class MetricsServiceDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
+  private static final class MetricsServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.testing.integration.Metrics.getDescriptor();
@@ -283,7 +283,7 @@ public class MetricsServiceGrpc {
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new MetricsServiceDescriptorWrapper(),
+          new MetricsServiceDescriptorSupplier(),
           METHOD_GET_ALL_GAUGES,
           METHOD_GET_GAUGE);
     }

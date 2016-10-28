@@ -889,11 +889,11 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
 
 
   if (flavor == ProtoFlavor::NORMAL) {
-    (*vars)["proto_descriptor_wrapper"] = service->name() + "DescriptorWrapper";
+    (*vars)["proto_descriptor_supplier"] = service->name() + "DescriptorSupplier";
     (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
     p->Print(
         *vars,
-        "public static final class $proto_descriptor_wrapper$ implements $ProtoFileDescriptorWrapper$ {\n");
+        "private static final class $proto_descriptor_supplier$ implements $ProtoFileDescriptorSupplier$ {\n");
     p->Indent();
     p->Print(*vars, "@$Override$\n");
     p->Print(
@@ -923,7 +923,7 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
     p->Indent();
     p->Print(
         *vars,
-        "new $proto_descriptor_wrapper$()");
+        "new $proto_descriptor_supplier$()");
     p->Outdent();
     p->Outdent();
   } else {
@@ -1180,8 +1180,8 @@ void GenerateService(const ServiceDescriptor* service,
       "io.grpc.ServerServiceDefinition";
   vars["ServiceDescriptor"] =
       "io.grpc.ServiceDescriptor";
-  vars["ProtoFileDescriptorWrapper"] =
-      "io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper";
+  vars["ProtoFileDescriptorSupplier"] =
+      "io.grpc.protobuf.ProtoFileDescriptorSupplier";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";

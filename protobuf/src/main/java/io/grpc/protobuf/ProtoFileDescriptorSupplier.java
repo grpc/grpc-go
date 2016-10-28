@@ -29,14 +29,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.protobuf.reflection;
+package io.grpc.protobuf;
 
 import com.google.protobuf.Descriptors.FileDescriptor;
 
 /**
- * The generated code implements this interface to provide access to the underlying proto
- * file descriptor.
+ * Provides access to the underlying proto file descriptor.
  */
-public interface ProtoFileDescriptorWrapper {
+public interface ProtoFileDescriptorSupplier {
   FileDescriptor getFileDescriptor();
 }

@@ -47,26 +47,27 @@ public final class ServiceDescriptor {
 
   private final String name;
   private final Collection<MethodDescriptor<?, ?>> methods;
-  private Object attachedObject = null;
+  private final Object marshallerDescriptor;
 
   public ServiceDescriptor(String name, MethodDescriptor<?, ?>... methods) {
-    this(name, Arrays.asList(methods));
+    this(name, null, Arrays.asList(methods));
   }
 
   public ServiceDescriptor(String name, Collection<MethodDescriptor<?, ?>> methods) {
-    this.name = Preconditions.checkNotNull(name, "name");
-    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
+    this(name, null, methods);
   }
 
-  public ServiceDescriptor(String name, Object attachedObject, MethodDescriptor<?, ?>... methods) {
-    this(name, methods);
-    this.attachedObject = attachedObject;
+  public ServiceDescriptor(String name, Object marshallerDescriptor,
+                           MethodDescriptor<?, ?>... methods) {
+    this(name, marshallerDescriptor, Arrays.asList(methods));
   }
 
-  public ServiceDescriptor(String name, Object attachedObject,
+  /** Creates a new ServiceDescriptor. */
+  public ServiceDescriptor(String name, Object marshallerDescriptor,
                            Collection<MethodDescriptor<?, ?>> methods) {
-    this(name, methods);
-    this.attachedObject = attachedObject;
+    this.name = Preconditions.checkNotNull(name, "name");
+    this.marshallerDescriptor = marshallerDescriptor;
+    this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
 
   /** Simple name of the service. It is not an absolute path. */
@@ -83,11 +84,12 @@ public final class ServiceDescriptor {
   }
 
   /**
-   * The generated code may attach an object to a service descriptor, such as the proto codegen
-   * attaching a object that allows retrieving the underlying proto object.
+   * Returns a marshaller-specific object that provides additional information about the service.
+   * For example, when using Protobuf this should generally be a
+   * {@link io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper}, when present.
    */
   @Nullable
-  public Object getAttachedObject() {
-    return attachedObject;
+  public Object getMarshallerDescriptor() {
+    return marshallerDescriptor;
   }
 }

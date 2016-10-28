@@ -193,7 +193,7 @@ public class LoadBalancerGrpc {
     }
   }
 
-  public static final class LoadBalancerDescriptorWrapper implements io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper {
+  private static final class LoadBalancerDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.grpclb.LoadBalancerProto.getDescriptor();
@@ -205,7 +205,7 @@ public class LoadBalancerGrpc {
   public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
     if (serviceDescriptor == null) {
       serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new LoadBalancerDescriptorWrapper(),
+          new LoadBalancerDescriptorSupplier(),
           METHOD_BALANCE_LOAD);
     }
 
