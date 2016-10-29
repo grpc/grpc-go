@@ -99,21 +99,21 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 			return
 		}
 		if v == "weird error" {
-			h.t.WriteStatus(s, codes.Internal, weirdError)
+			h.t.WriteStatus(s, codes.Internal, weirdError, transport.Options{})
 			return
 		}
 		if v == "canceled" {
 			canceled++
-			h.t.WriteStatus(s, codes.Internal, "")
+			h.t.WriteStatus(s, codes.Internal, "", transport.Options{})
 			return
 		}
 		if v == "port" {
-			h.t.WriteStatus(s, codes.Internal, h.port)
+			h.t.WriteStatus(s, codes.Internal, h.port, transport.Options{})
 			return
 		}
 
 		if v != expectedRequest {
-			h.t.WriteStatus(s, codes.Internal, strings.Repeat("A", sizeLargeErr))
+			h.t.WriteStatus(s, codes.Internal, strings.Repeat("A", sizeLargeErr), transport.Options{})
 			return
 		}
 	}
@@ -124,7 +124,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		return
 	}
 	h.t.Write(s, reply, &transport.Options{})
-	h.t.WriteStatus(s, codes.OK, "")
+	h.t.WriteStatus(s, codes.OK, "", transport.Options{})
 }
 
 type server struct {

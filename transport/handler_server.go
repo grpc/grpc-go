@@ -45,6 +45,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -138,7 +139,12 @@ type serverHandlerTransport struct {
 	// writes is a channel of code to run serialized in the
 	// ServeHTTP (HandleStreams) goroutine. The channel is closed
 	// when WriteStatus is called.
-	writes chan func()
+	writes                  chan func()
+	numCompletingUnaryCalls int32
+}
+
+func (ht *serverHandlerTransport) AdjustNumCompletingUnaryCalls(amount int32) int32 {
+	return atomic.AddInt32(&ht.numCompletingUnaryCalls, amount)
 }
 
 func (ht *serverHandlerTransport) Close() error {
@@ -182,7 +188,8 @@ func (ht *serverHandlerTransport) do(fn func()) error {
 	}
 }
 
-func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, statusDesc string) error {
+// Note the "flush" parameter is ignored for this transport
+func (ht *serverHandlerTransport) WriteStatus(s *Stream, statusCode codes.Code, statusDesc string, ignored Options) error {
 	err := ht.do(func() {
 		ht.writeCommonHeaders(s)
 
@@ -250,7 +257,8 @@ func (ht *serverHandlerTransport) Write(s *Stream, data []byte, opts *Options) e
 	})
 }
 
-func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
+// Note the "flush" parameter is ignored for this transport
+func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD, ignored Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
 		h := ht.rw.Header()

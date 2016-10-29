@@ -475,7 +475,10 @@ func (f *framer) writeSettings(forceFlush bool, settings ...http2.Setting) error
 		return err
 	}
 	if forceFlush {
-		return f.writer.Flush()
+		if err := f.writer.Flush(); err != nil {
+			return err
+		}
+		return nil
 	}
 	return nil
 }
