@@ -64,24 +64,28 @@ func TestTLSClone(t *testing.T) {
 	}
 }
 
+const tlsDir = "../test/testdata/"
+
 func TestTLSClientHandshakeReturnsAuthInfo(t *testing.T) {
-	localPort := ":5050"
-	tlsDir := "../test/testdata/"
-	lis, err := net.Listen("tcp", localPort)
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to start local server. Listener error: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
+	defer lis.Close()
 	serverTLS, err := NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
 		t.Fatalf("Failed to create server TLS. Error: %v", err)
 	}
-	var serverAuthInfo AuthInfo
+	var serverAuthInfo TLSInfo
 	done := make(chan bool)
 	go func() {
 		defer func() {
 			done <- true
 		}()
-		serverRawConn, _ := lis.Accept()
+		serverRawConn, err := lis.Accept()
+		if err != nil {
+			t.Fatalf("Server failed to accept connection: %v", err)
+		}
 		serverConn := tls.Server(serverRawConn, serverTLS.(*tlsCreds).config)
 		serverErr := serverConn.Handshake()
 		if serverErr != nil {
@@ -89,32 +93,29 @@ func TestTLSClientHandshakeReturnsAuthInfo(t *testing.T) {
 		}
 		serverAuthInfo = TLSInfo{serverConn.ConnectionState()}
 	}()
-	defer lis.Close()
-	conn, err := net.Dial("tcp", localPort)
+	conn, err := net.Dial("tcp", lis.Addr().String())
 	if err != nil {
 		t.Fatalf("Client failed to connect to local server. Error: %v", err)
 	}
+	defer conn.Close()
 	c := NewTLS(&tls.Config{InsecureSkipVerify: true})
-	_, authInfo, err := c.ClientHandshake(context.Background(), localPort, conn)
+	_, authInfo, err := c.ClientHandshake(context.Background(), lis.Addr().String(), conn)
 	if err != nil {
 		t.Fatalf("Error on client while handshake. Error: %v", err)
 	}
-	select {
-	case <-done:
-		// wait until server has populated the serverAuthInfo struct.
-	}
-	if authInfo.AuthType() != serverAuthInfo.AuthType() {
-		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", localPort, authInfo, serverAuthInfo)
+	// wait until server has populated the serverAuthInfo struct.
+	<-done
+	if authInfo.(TLSInfo).State.Version != serverAuthInfo.State.Version {
+		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lis.Addr().String(), authInfo, serverAuthInfo)
 	}
 }
 
 func TestTLSServerHandshakeReturnsAuthInfo(t *testing.T) {
-	localPort := ":5050"
-	tlsDir := "../test/testdata/"
-	lis, err := net.Listen("tcp", localPort)
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to start local server. Listener error: %v", err)
+		t.Fatalf("Failed to listen: %v", err)
 	}
+	defer lis.Close()
 	serverTLS, err := NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
 		t.Fatalf("Failed to create server TLS. Error: %v", err)
@@ -125,18 +126,21 @@ func TestTLSServerHandshakeReturnsAuthInfo(t *testing.T) {
 		defer func() {
 			done <- true
 		}()
-		serverRawConn, _ := lis.Accept()
+		serverRawConn, err := lis.Accept()
+		if err != nil {
+			t.Fatalf("Server failed to accept connection: %v", err)
+		}
 		var serverErr error
 		_, serverAuthInfo, serverErr = serverTLS.ServerHandshake(serverRawConn)
 		if serverErr != nil {
 			t.Fatalf("Error on server while handshake. Error: %v", serverErr)
 		}
 	}()
-	defer lis.Close()
-	conn, err := net.Dial("tcp", localPort)
+	conn, err := net.Dial("tcp", lis.Addr().String())
 	if err != nil {
 		t.Fatalf("Client failed to connect to local server. Error: %v", err)
 	}
+	defer conn.Close()
 	c := NewTLS(&tls.Config{InsecureSkipVerify: true})
 	clientConn := tls.Client(conn, c.(*tlsCreds).config)
 	err = clientConn.Handshake()
@@ -144,11 +148,9 @@ func TestTLSServerHandshakeReturnsAuthInfo(t *testing.T) {
 		t.Fatalf("Error on client while handshake. Error: %v", err)
 	}
 	authInfo := TLSInfo{clientConn.ConnectionState()}
-	select {
-	case <-done:
-		// wait until server has populated the serverAuthInfo struct.
-	}
-	if authInfo.AuthType() != serverAuthInfo.AuthType() {
+	// wait until server has populated the serverAuthInfo struct.
+	<-done
+	if authInfo.State.Version != serverAuthInfo.(TLSInfo).State.Version {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, authInfo)
 	}
 
