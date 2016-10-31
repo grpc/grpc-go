@@ -40,14 +40,14 @@ package main
 import (
 	"flag"
 	"io"
-	"log"
 	"math/rand"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	pb "google.golang.org/grpc/examples/route_guide/proto"
+	pb "google.golang.org/grpc/examples/route_guide/routeguide"
+	"google.golang.org/grpc/grpclog"
 )
 
 var (
@@ -59,20 +59,20 @@ var (
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
-	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
+	grpclog.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
 	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
-		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		grpclog.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
-	log.Println(feature)
+	grpclog.Println(feature)
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
-	log.Printf("Looking for features within %v", rect)
+	grpclog.Printf("Looking for features within %v", rect)
 	stream, err := client.ListFeatures(context.Background(), rect)
 	if err != nil {
-		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 	}
 	for {
 		feature, err := stream.Recv()
@@ -80,9 +80,9 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+			grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-		log.Println(feature)
+		grpclog.Println(feature)
 	}
 }
 
@@ -95,36 +95,36 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
 	}
-	log.Printf("Traversing %d points.", len(points))
+	grpclog.Printf("Traversing %d points.", len(points))
 	stream, err := client.RecordRoute(context.Background())
 	if err != nil {
-		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		grpclog.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			log.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			grpclog.Fatalf("%v.Send(%v) = %v", stream, point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		grpclog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
-	log.Printf("Route summary: %v", reply)
+	grpclog.Printf("Route summary: %v", reply)
 }
 
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
 func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
-		{&pb.Point{0, 1}, "First message"},
-		{&pb.Point{0, 2}, "Second message"},
-		{&pb.Point{0, 3}, "Third message"},
-		{&pb.Point{0, 1}, "Fourth message"},
-		{&pb.Point{0, 2}, "Fifth message"},
-		{&pb.Point{0, 3}, "Sixth message"},
+		{&pb.Point{Latitude: 0, Longitude: 1}, "First message"},
+		{&pb.Point{Latitude: 0, Longitude: 2}, "Second message"},
+		{&pb.Point{Latitude: 0, Longitude: 3}, "Third message"},
+		{&pb.Point{Latitude: 0, Longitude: 1}, "Fourth message"},
+		{&pb.Point{Latitude: 0, Longitude: 2}, "Fifth message"},
+		{&pb.Point{Latitude: 0, Longitude: 3}, "Sixth message"},
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
-		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		grpclog.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
 	waitc := make(chan struct{})
 	go func() {
@@ -136,14 +136,14 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to receive a note : %v", err)
+				grpclog.Fatalf("Failed to receive a note : %v", err)
 			}
-			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+			grpclog.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			log.Fatalf("Failed to send a note: %v", err)
+			grpclog.Fatalf("Failed to send a note: %v", err)
 		}
 	}
 	stream.CloseSend()
@@ -153,7 +153,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 func randomPoint(r *rand.Rand) *pb.Point {
 	lat := (r.Int31n(180) - 90) * 1e7
 	long := (r.Int31n(360) - 180) * 1e7
-	return &pb.Point{lat, long}
+	return &pb.Point{Latitude: lat, Longitude: long}
 }
 
 func main() {
@@ -164,33 +164,38 @@ func main() {
 		if *serverHostOverride != "" {
 			sn = *serverHostOverride
 		}
-		var creds credentials.TransportAuthenticator
+		var creds credentials.TransportCredentials
 		if *caFile != "" {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				log.Fatalf("Failed to create TLS credentials %v", err)
+				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
 	}
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		grpclog.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)
 
 	// Looking for a valid feature
-	printFeature(client, &pb.Point{409146138, -746188906})
+	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
 
 	// Feature missing.
-	printFeature(client, &pb.Point{0, 0})
+	printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
 
 	// Looking for features between 40, -75 and 42, -73.
-	printFeatures(client, &pb.Rectangle{&pb.Point{400000000, -750000000}, &pb.Point{420000000, -730000000}})
+	printFeatures(client, &pb.Rectangle{
+		Lo: &pb.Point{Latitude: 400000000, Longitude: -750000000},
+		Hi: &pb.Point{Latitude: 420000000, Longitude: -730000000},
+	})
 
 	// RecordRoute
 	runRecordRoute(client)

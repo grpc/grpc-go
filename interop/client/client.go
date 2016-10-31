@@ -35,31 +35,26 @@ package main
 
 import (
 	"flag"
-	"io"
-	"io/ioutil"
-	"log"
 	"net"
 	"strconv"
-	"strings"
 
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/oauth"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/metadata"
 )
 
 var (
 	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile                = flag.String("tls_ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
+	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
 	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
 	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
 	serverHost            = flag.String("server_host", "127.0.0.1", "The server host name")
 	serverPort            = flag.Int("server_port", 10000, "The server port number")
-	tlsServerName         = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+	tlsServerName         = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	testCase              = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
@@ -67,290 +62,20 @@ var (
         client_streaming : request streaming with single response;
         server_streaming : single request with response streaming;
         ping_pong : full-duplex streaming;
+        empty_stream : full-duplex streaming with zero message;
+        timeout_on_sleeping_server: fullduplex streaming on a sleeping server;
         compute_engine_creds: large_unary with compute engine auth;
-	service_account_creds: large_unary with service account auth;
-	cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
-	cancel_after_first_response: cancellation after receiving 1st message from the server.`)
+        service_account_creds: large_unary with service account auth;
+        jwt_token_creds: large_unary with jwt token auth;
+        per_rpc_creds: large_unary with per rpc token;
+        oauth2_auth_token: large_unary with oauth2 token auth;
+        cancel_after_begin: cancellation after metadata has been sent but before payloads are sent;
+        cancel_after_first_response: cancellation after receiving 1st message from the server;
+        status_code_and_message: status code propagated back to client.`)
+
+	// The test CA root cert file
+	testCAFile = "testdata/ca.pem"
 )
-
-var (
-	reqSizes      = []int{27182, 8, 1828, 45904}
-	respSizes     = []int{31415, 9, 2653, 58979}
-	largeReqSize  = 271828
-	largeRespSize = 314159
-)
-
-func newPayload(t testpb.PayloadType, size int) *testpb.Payload {
-	if size < 0 {
-		log.Fatalf("Requested a response with invalid length %d", size)
-	}
-	body := make([]byte, size)
-	switch t {
-	case testpb.PayloadType_COMPRESSABLE:
-	case testpb.PayloadType_UNCOMPRESSABLE:
-		log.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
-	default:
-		log.Fatalf("Unsupported payload type: %d", t)
-	}
-	return &testpb.Payload{
-		Type: t.Enum(),
-		Body: body,
-	}
-}
-
-func doEmptyUnaryCall(tc testpb.TestServiceClient) {
-	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
-	if err != nil {
-		log.Fatal("/TestService/EmptyCall RPC failed: ", err)
-	}
-	if !proto.Equal(&testpb.Empty{}, reply) {
-		log.Fatalf("/TestService/EmptyCall receives %v, want %v", reply, testpb.Empty{})
-	}
-	log.Println("EmptyUnaryCall done")
-}
-
-func doLargeUnaryCall(tc testpb.TestServiceClient) {
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
-	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeRespSize)),
-		Payload:      pl,
-	}
-	reply, err := tc.UnaryCall(context.Background(), req)
-	if err != nil {
-		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
-	}
-	t := reply.GetPayload().GetType()
-	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		log.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
-	}
-	log.Println("LargeUnaryCall done")
-}
-
-func doClientStreaming(tc testpb.TestServiceClient) {
-	stream, err := tc.StreamingInputCall(context.Background())
-	if err != nil {
-		log.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
-	}
-	var sum int
-	for _, s := range reqSizes {
-		pl := newPayload(testpb.PayloadType_COMPRESSABLE, s)
-		req := &testpb.StreamingInputCallRequest{
-			Payload: pl,
-		}
-		if err := stream.Send(req); err != nil {
-			log.Fatalf("%v.Send(%v) = %v", stream, req, err)
-		}
-		sum += s
-		log.Printf("Sent a request of size %d, aggregated size %d", s, sum)
-
-	}
-	reply, err := stream.CloseAndRecv()
-	if err != nil {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
-	}
-	if reply.GetAggregatedPayloadSize() != int32(sum) {
-		log.Fatalf("%v.CloseAndRecv().GetAggregatePayloadSize() = %v; want %v", stream, reply.GetAggregatedPayloadSize(), sum)
-	}
-	log.Println("ClientStreaming done")
-}
-
-func doServerStreaming(tc testpb.TestServiceClient) {
-	respParam := make([]*testpb.ResponseParameters, len(respSizes))
-	for i, s := range respSizes {
-		respParam[i] = &testpb.ResponseParameters{
-			Size: proto.Int32(int32(s)),
-		}
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseParameters: respParam,
-	}
-	stream, err := tc.StreamingOutputCall(context.Background(), req)
-	if err != nil {
-		log.Fatalf("%v.StreamingOutputCall(_) = _, %v", tc, err)
-	}
-	var rpcStatus error
-	var respCnt int
-	var index int
-	for {
-		reply, err := stream.Recv()
-		if err != nil {
-			rpcStatus = err
-			break
-		}
-		t := reply.GetPayload().GetType()
-		if t != testpb.PayloadType_COMPRESSABLE {
-			log.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
-		}
-		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
-			log.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
-		}
-		index++
-		respCnt++
-	}
-	if rpcStatus != io.EOF {
-		log.Fatalf("Failed to finish the server streaming rpc: %v", err)
-	}
-	if respCnt != len(respSizes) {
-		log.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
-	}
-	log.Println("ServerStreaming done")
-}
-
-func doPingPong(tc testpb.TestServiceClient) {
-	stream, err := tc.FullDuplexCall(context.Background())
-	if err != nil {
-		log.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
-	}
-	var index int
-	for index < len(reqSizes) {
-		respParam := []*testpb.ResponseParameters{
-			{
-				Size: proto.Int32(int32(respSizes[index])),
-			},
-		}
-		pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSizes[index])
-		req := &testpb.StreamingOutputCallRequest{
-			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
-			ResponseParameters: respParam,
-			Payload:            pl,
-		}
-		if err := stream.Send(req); err != nil {
-			log.Fatalf("%v.Send(%v) = %v", stream, req, err)
-		}
-		reply, err := stream.Recv()
-		if err != nil {
-			log.Fatalf("%v.Recv() = %v", stream, err)
-		}
-		t := reply.GetPayload().GetType()
-		if t != testpb.PayloadType_COMPRESSABLE {
-			log.Fatalf("Got the reply of type %d, want %d", t, testpb.PayloadType_COMPRESSABLE)
-		}
-		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
-			log.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
-		}
-		index++
-	}
-	if err := stream.CloseSend(); err != nil {
-		log.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
-	}
-	if _, err := stream.Recv(); err != io.EOF {
-		log.Fatalf("%v failed to complele the ping pong test: %v", stream, err)
-	}
-	log.Println("Pingpong done")
-}
-
-func doComputeEngineCreds(tc testpb.TestServiceClient) {
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
-	req := &testpb.SimpleRequest{
-		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize:   proto.Int32(int32(largeRespSize)),
-		Payload:        pl,
-		FillUsername:   proto.Bool(true),
-		FillOauthScope: proto.Bool(true),
-	}
-	reply, err := tc.UnaryCall(context.Background(), req)
-	if err != nil {
-		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
-	}
-	user := reply.GetUsername()
-	scope := reply.GetOauthScope()
-	if user != *defaultServiceAccount {
-		log.Fatalf("Got user name %q, want %q.", user, *defaultServiceAccount)
-	}
-	if !strings.Contains(*oauthScope, scope) {
-		log.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
-	}
-	log.Println("ComputeEngineCreds done")
-}
-
-func getServiceAccountJSONKey() []byte {
-	jsonKey, err := ioutil.ReadFile(*serviceAccountKeyFile)
-	if err != nil {
-		log.Fatalf("Failed to read the service account key file: %v", err)
-	}
-	return jsonKey
-}
-
-func doServiceAccountCreds(tc testpb.TestServiceClient) {
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
-	req := &testpb.SimpleRequest{
-		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize:   proto.Int32(int32(largeRespSize)),
-		Payload:        pl,
-		FillUsername:   proto.Bool(true),
-		FillOauthScope: proto.Bool(true),
-	}
-	reply, err := tc.UnaryCall(context.Background(), req)
-	if err != nil {
-		log.Fatal("/TestService/UnaryCall RPC failed: ", err)
-	}
-	jsonKey := getServiceAccountJSONKey()
-	user := reply.GetUsername()
-	scope := reply.GetOauthScope()
-	if !strings.Contains(string(jsonKey), user) {
-		log.Fatalf("Got user name %q which is NOT a substring of %q.", user, jsonKey)
-	}
-	if !strings.Contains(*oauthScope, scope) {
-		log.Fatalf("Got OAuth scope %q which is NOT a substring of %q.", scope, *oauthScope)
-	}
-	log.Println("ServiceAccountCreds done")
-}
-
-var (
-	testMetadata = metadata.MD{
-		"key1": "value1",
-		"key2": "value2",
-	}
-)
-
-func doCancelAfterBegin(tc testpb.TestServiceClient) {
-	ctx, cancel := context.WithCancel(metadata.NewContext(context.Background(), testMetadata))
-	stream, err := tc.StreamingInputCall(ctx)
-	if err != nil {
-		log.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
-	}
-	cancel()
-	_, err = stream.CloseAndRecv()
-	if grpc.Code(err) != codes.Canceled {
-		log.Fatalf("%v.CloseAndRecv() got error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
-	}
-	log.Println("CancelAfterBegin done")
-}
-
-func doCancelAfterFirstResponse(tc testpb.TestServiceClient) {
-	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := tc.FullDuplexCall(ctx)
-	if err != nil {
-		log.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
-	}
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: proto.Int32(31415),
-		},
-	}
-	pl := newPayload(testpb.PayloadType_COMPRESSABLE, 27182)
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseParameters: respParam,
-		Payload:            pl,
-	}
-	if err := stream.Send(req); err != nil {
-		log.Fatalf("%v.Send(%v) = %v", stream, req, err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		log.Fatalf("%v.Recv() = %v", stream, err)
-	}
-	cancel()
-	if _, err := stream.Recv(); grpc.Code(err) != codes.Canceled {
-		log.Fatalf("%v compleled with error code %d, want %d", stream, grpc.Code(err), codes.Canceled)
-	}
-	log.Println("CancelAfterFirstResponse done")
-}
 
 func main() {
 	flag.Parse()
@@ -361,59 +86,105 @@ func main() {
 		if *tlsServerName != "" {
 			sn = *tlsServerName
 		}
-		var creds credentials.TransportAuthenticator
-		if *caFile != "" {
+		var creds credentials.TransportCredentials
+		if *testCA {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
+			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
 			if err != nil {
-				log.Fatalf("Failed to create TLS credentials %v", err)
+				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 		if *testCase == "compute_engine_creds" {
-			opts = append(opts, grpc.WithPerRPCCredentials(credentials.NewComputeEngine()))
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 		} else if *testCase == "service_account_creds" {
-			jwtCreds, err := credentials.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
+			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
-				log.Fatalf("Failed to create JWT credentials: %v", err)
+				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "jwt_token_creds" {
+			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
+			if err != nil {
+				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
+		} else if *testCase == "oauth2_auth_token" {
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(interop.GetToken(*serviceAccountKeyFile, *oauthScope))))
 		}
+	} else {
+		opts = append(opts, grpc.WithInsecure())
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		log.Fatalf("Fail to dial: %v", err)
+		grpclog.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
 	switch *testCase {
 	case "empty_unary":
-		doEmptyUnaryCall(tc)
+		interop.DoEmptyUnaryCall(tc)
+		grpclog.Println("EmptyUnaryCall done")
 	case "large_unary":
-		doLargeUnaryCall(tc)
+		interop.DoLargeUnaryCall(tc)
+		grpclog.Println("LargeUnaryCall done")
 	case "client_streaming":
-		doClientStreaming(tc)
+		interop.DoClientStreaming(tc)
+		grpclog.Println("ClientStreaming done")
 	case "server_streaming":
-		doServerStreaming(tc)
+		interop.DoServerStreaming(tc)
+		grpclog.Println("ServerStreaming done")
 	case "ping_pong":
-		doPingPong(tc)
+		interop.DoPingPong(tc)
+		grpclog.Println("Pingpong done")
+	case "empty_stream":
+		interop.DoEmptyStream(tc)
+		grpclog.Println("Emptystream done")
+	case "timeout_on_sleeping_server":
+		interop.DoTimeoutOnSleepingServer(tc)
+		grpclog.Println("TimeoutOnSleepingServer done")
 	case "compute_engine_creds":
 		if !*useTLS {
-			log.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
 		}
-		doComputeEngineCreds(tc)
+		interop.DoComputeEngineCreds(tc, *defaultServiceAccount, *oauthScope)
+		grpclog.Println("ComputeEngineCreds done")
 	case "service_account_creds":
 		if !*useTLS {
-			log.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
-		doServiceAccountCreds(tc)
+		interop.DoServiceAccountCreds(tc, *serviceAccountKeyFile, *oauthScope)
+		grpclog.Println("ServiceAccountCreds done")
+	case "jwt_token_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
+		}
+		interop.DoJWTTokenCreds(tc, *serviceAccountKeyFile)
+		grpclog.Println("JWTtokenCreds done")
+	case "per_rpc_creds":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
+		}
+		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
+		grpclog.Println("PerRPCCreds done")
+	case "oauth2_auth_token":
+		if !*useTLS {
+			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
+		}
+		interop.DoOauth2TokenCreds(tc, *serviceAccountKeyFile, *oauthScope)
+		grpclog.Println("Oauth2TokenCreds done")
 	case "cancel_after_begin":
-		doCancelAfterBegin(tc)
+		interop.DoCancelAfterBegin(tc)
+		grpclog.Println("CancelAfterBegin done")
 	case "cancel_after_first_response":
-		doCancelAfterFirstResponse(tc)
+		interop.DoCancelAfterFirstResponse(tc)
+		grpclog.Println("CancelAfterFirstResponse done")
+	case "status_code_and_message":
+		interop.DoStatusCodeAndMessage(tc)
+		grpclog.Println("StatusCodeAndMessage done")
 	default:
-		log.Fatal("Unsupported test case: ", *testCase)
+		grpclog.Fatal("Unsupported test case: ", *testCase)
 	}
 }

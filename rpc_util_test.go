@@ -39,7 +39,6 @@ import (
 	"math"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -49,6 +48,7 @@ import (
 )
 
 func TestSimpleParsing(t *testing.T) {
+	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {
 		// input
 		p []byte
@@ -62,12 +62,14 @@ func TestSimpleParsing(t *testing.T) {
 		{[]byte{0, 0, 0, 0, 1, 'a'}, nil, []byte{'a'}, compressionNone},
 		{[]byte{1, 0}, io.ErrUnexpectedEOF, nil, compressionNone},
 		{[]byte{0, 0, 0, 0, 10, 'a'}, io.ErrUnexpectedEOF, nil, compressionNone},
+		// Check that messages with length >= 2^24 are parsed.
+		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
 		buf := bytes.NewReader(test.p)
-		parser := &parser{buf}
-		pt, b, err := parser.recvMsg()
+		parser := &parser{r: buf}
+		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
-			t.Fatalf("parser{%v}.recvMsg() = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
+			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
 		}
 	}
 }
@@ -76,7 +78,7 @@ func TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
 	b := bytes.NewReader(p)
-	parser := &parser{b}
+	parser := &parser{r: b}
 
 	wantRecvs := []struct {
 		pt   payloadFormat
@@ -87,16 +89,16 @@ func TestMultipleParsing(t *testing.T) {
 		{compressionNone, []byte("d")},
 	}
 	for i, want := range wantRecvs {
-		pt, data, err := parser.recvMsg()
+		pt, data, err := parser.recvMsg(math.MaxInt32)
 		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
-			t.Fatalf("after %d calls, parser{%v}.recvMsg() = %v, %v, %v\nwant %v, %v, <nil>",
+			t.Fatalf("after %d calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, <nil>",
 				i, p, pt, data, err, want.pt, want.data)
 		}
 	}
 
-	pt, data, err := parser.recvMsg()
+	pt, data, err := parser.recvMsg(math.MaxInt32)
 	if err != io.EOF {
-		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg() = %v, %v, %v\nwant _, _, %v",
+		t.Fatalf("after %d recvMsgs calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant _, _, %v",
 			len(wantRecvs), p, pt, data, err, io.EOF)
 	}
 }
@@ -105,16 +107,40 @@ func TestEncode(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		msg proto.Message
-		pt  payloadFormat
+		cp  Compressor
 		// outputs
 		b   []byte
 		err error
 	}{
-		{nil, compressionNone, []byte{0, 0, 0, 0, 0}, nil},
+		{nil, nil, []byte{0, 0, 0, 0, 0}, nil},
 	} {
-		b, err := encode(protoCodec{}, test.msg, test.pt)
+		b, err := encode(protoCodec{}, test.msg, nil, nil)
 		if err != test.err || !bytes.Equal(b, test.b) {
-			t.Fatalf("encode(_, _, %d) = %v, %v\nwant %v, %v", test.pt, b, err, test.b, test.err)
+			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, b, err, test.b, test.err)
+		}
+	}
+}
+
+func TestCompress(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		data []byte
+		cp   Compressor
+		dc   Decompressor
+		// outputs
+		err error
+	}{
+		{make([]byte, 1024), &gzipCompressor{}, &gzipDecompressor{}, nil},
+	} {
+		b := new(bytes.Buffer)
+		if err := test.cp.Do(b, test.data); err != test.err {
+			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
+		}
+		if b.Len() >= len(test.data) {
+			t.Fatalf("The compressor fails to compress data.")
+		}
+		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
+			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
 		}
 	}
 }
@@ -124,13 +150,17 @@ func TestToRPCErr(t *testing.T) {
 		// input
 		errIn error
 		// outputs
-		errOut error
+		errOut *rpcError
 	}{
-		{transport.StreamErrorf(codes.Unknown, ""), Errorf(codes.Unknown, "")},
-		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc)},
+		{transport.StreamError{codes.Unknown, ""}, Errorf(codes.Unknown, "").(*rpcError)},
+		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc).(*rpcError)},
 	} {
 		err := toRPCErr(test.errIn)
-		if err != test.errOut {
+		rpcErr, ok := err.(*rpcError)
+		if !ok {
+			t.Fatalf("toRPCErr{%v} returned type %T, want %T", test.errIn, err, rpcError{})
+		}
+		if *rpcErr != *test.errOut {
 			t.Fatalf("toRPCErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
 		}
 	}
@@ -143,8 +173,8 @@ func TestContextErr(t *testing.T) {
 		// outputs
 		errOut transport.StreamError
 	}{
-		{context.DeadlineExceeded, transport.StreamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)},
-		{context.Canceled, transport.StreamErrorf(codes.Canceled, "%v", context.Canceled)},
+		{context.DeadlineExceeded, transport.StreamError{codes.DeadlineExceeded, context.DeadlineExceeded.Error()}},
+		{context.Canceled, transport.StreamError{codes.Canceled, context.Canceled.Error()}},
 	} {
 		err := transport.ContextErr(test.errIn)
 		if err != test.errOut {
@@ -153,22 +183,15 @@ func TestContextErr(t *testing.T) {
 	}
 }
 
-func TestBackoff(t *testing.T) {
-	for _, test := range []struct {
-		retries   int
-		maxResult time.Duration
-	}{
-		{0, time.Second},
-		{1, time.Duration(1e9 * math.Pow(backoffFactor, 1))},
-		{2, time.Duration(1e9 * math.Pow(backoffFactor, 2))},
-		{3, time.Duration(1e9 * math.Pow(backoffFactor, 3))},
-		{4, time.Duration(1e9 * math.Pow(backoffFactor, 4))},
-		{int(math.Log2(float64(maxDelay)/float64(baseDelay))) + 1, maxDelay},
-	} {
-		delay := backoff(test.retries)
-		if delay < 0 || delay > test.maxResult {
-			t.Errorf("backoff(%d) = %v outside [0, %v]", test.retries, delay, test.maxResult)
-		}
+func TestErrorsWithSameParameters(t *testing.T) {
+	const description = "some description"
+	e1 := Errorf(codes.AlreadyExists, description).(*rpcError)
+	e2 := Errorf(codes.AlreadyExists, description).(*rpcError)
+	if e1 == e2 {
+		t.Fatalf("Error interfaces should not be considered equal - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
+	}
+	if Code(e1) != Code(e2) || ErrorDesc(e1) != ErrorDesc(e2) {
+		t.Fatalf("Expected errors to have same code and description - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
 	}
 }
 
@@ -176,12 +199,12 @@ func TestBackoff(t *testing.T) {
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encoded, _ := encode(protoCodec{}, msg, compressionNone)
+	encoded, _ := encode(protoCodec{}, msg, nil, nil)
 	encodedSz := int64(len(encoded))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(protoCodec{}, msg, compressionNone)
+		encode(protoCodec{}, msg, nil, nil)
 	}
 	b.SetBytes(encodedSz)
 }

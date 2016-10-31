@@ -43,7 +43,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net"
 	"time"
@@ -52,10 +51,11 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 
-	proto "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 
-	pb "google.golang.org/grpc/examples/route_guide/proto"
+	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
 var (
@@ -79,10 +79,10 @@ func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb
 		}
 	}
 	// No feature was found, return an unnamed feature
-	return &pb.Feature{"", point}, nil
+	return &pb.Feature{Location: point}, nil
 }
 
-// ListFeatures lists all features comtained within the given bounding Rectangle.
+// ListFeatures lists all features contained within the given bounding Rectangle.
 func (s *routeGuideServer) ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) error {
 	for _, feature := range s.savedFeatures {
 		if inRange(feature.Location, rect) {
@@ -159,10 +159,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("Failed to load default features: %v", err)
+		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		log.Fatalf("Failed to load default features: %v", err)
+		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
 }
 
@@ -223,17 +223,17 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		grpclog.Fatalf("failed to listen: %v", err)
 	}
-	grpcServer := grpc.NewServer()
-	pb.RegisterRouteGuideServer(grpcServer, newServer())
+	var opts []grpc.ServerOption
 	if *tls {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}
-		grpcServer.Serve(creds.NewListener(lis))
-	} else {
-		grpcServer.Serve(lis)
+		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
+	grpcServer := grpc.NewServer(opts...)
+	pb.RegisterRouteGuideServer(grpcServer, newServer())
+	grpcServer.Serve(lis)
 }

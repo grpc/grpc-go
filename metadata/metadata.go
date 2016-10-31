@@ -46,53 +46,47 @@ const (
 	binHdrSuffix = "-bin"
 )
 
-// grpc-http2 requires ASCII header key and value (more detail can be found in
-// "Requests" subsection in go/grpc-http2).
-func isASCII(s string) bool {
-	for _, c := range s {
-		if c > 127 {
-			return false
-		}
-	}
-	return true
-}
-
 // encodeKeyValue encodes key and value qualified for transmission via gRPC.
 // Transmitting binary headers violates HTTP/2 spec.
 // TODO(zhaoq): Maybe check if k is ASCII also.
 func encodeKeyValue(k, v string) (string, string) {
-	if isASCII(v) {
-		return k, v
+	k = strings.ToLower(k)
+	if strings.HasSuffix(k, binHdrSuffix) {
+		val := base64.StdEncoding.EncodeToString([]byte(v))
+		v = string(val)
 	}
-	key := k + binHdrSuffix
-	val := base64.StdEncoding.EncodeToString([]byte(v))
-	return key, string(val)
+	return k, v
 }
 
 // DecodeKeyValue returns the original key and value corresponding to the
 // encoded data in k, v.
+// If k is a binary header and v contains comma, v is split on comma before decoded,
+// and the decoded v will be joined with comma before returned.
 func DecodeKeyValue(k, v string) (string, string, error) {
 	if !strings.HasSuffix(k, binHdrSuffix) {
 		return k, v, nil
 	}
-	key := k[:len(k)-len(binHdrSuffix)]
-	val, err := base64.StdEncoding.DecodeString(v)
-	if err != nil {
-		return "", "", err
+	vvs := strings.Split(v, ",")
+	for i, vv := range vvs {
+		val, err := base64.StdEncoding.DecodeString(vv)
+		if err != nil {
+			return "", "", err
+		}
+		vvs[i] = string(val)
 	}
-	return key, string(val), nil
+	return k, strings.Join(vvs, ","), nil
 }
 
 // MD is a mapping from metadata keys to values. Users should use the following
 // two convenience functions New and Pairs to generate MD.
-type MD map[string]string
+type MD map[string][]string
 
 // New creates a MD from given key-value map.
 func New(m map[string]string) MD {
 	md := MD{}
 	for k, v := range m {
 		key, val := encodeKeyValue(k, v)
-		md[key] = val
+		md[key] = append(md[key], val)
 	}
 	return md
 }
@@ -111,7 +105,7 @@ func Pairs(kv ...string) MD {
 			continue
 		}
 		key, val := encodeKeyValue(k, s)
-		md[key] = val
+		md[key] = append(md[key], val)
 	}
 	return md
 }
@@ -123,9 +117,18 @@ func (md MD) Len() int {
 
 // Copy returns a copy of md.
 func (md MD) Copy() MD {
+	return Join(md)
+}
+
+// Join joins any number of MDs into a single MD.
+// The order of values for each key is determined by the order in which
+// the MDs containing those values are presented to Join.
+func Join(mds ...MD) MD {
 	out := MD{}
-	for k, v := range md {
-		out[k] = v
+	for _, md := range mds {
+		for k, v := range md {
+			out[k] = append(out[k], v...)
+		}
 	}
 	return out
 }
