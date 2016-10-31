@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -93,16 +94,17 @@ type addrInfo struct {
 }
 
 type balancer struct {
-	r      naming.Resolver
-	mu     sync.Mutex
-	seq    int // a sequence number to make sure addrCh does not get stale addresses.
-	w      naming.Watcher
-	addrCh chan []grpc.Address
-	rbs    []remoteBalancerInfo
-	addrs  []*addrInfo
-	next   int
-	waitCh chan struct{}
-	done   bool
+	r        naming.Resolver
+	mu       sync.Mutex
+	seq      int // a sequence number to make sure addrCh does not get stale addresses.
+	w        naming.Watcher
+	addrCh   chan []grpc.Address
+	rbs      []remoteBalancerInfo
+	addrs    []*addrInfo
+	next     int
+	waitCh   chan struct{}
+	done     bool
+	expTimer *time.Timer
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo) error {
@@ -180,14 +182,36 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 	return nil
 }
 
+func (b *balancer) serverListExpire(seq int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.done || seq < b.seq {
+		return
+	}
+	b.next = 0
+	b.addrs = nil
+	// Ask grpc internals to close the all corresponding connections.
+	b.addrCh <- nil
+}
+
+func convertDuration(d *lbpb.Duration) time.Duration {
+	if d == nil {
+		return 0
+	}
+	return time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanos)*time.Nanosecond
+}
+
 func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
+	if l == nil {
+		return
+	}
 	servers := l.GetServers()
+	expiration := convertDuration(l.GetExpirationInterval())
 	var (
 		sl    []*addrInfo
 		addrs []grpc.Address
 	)
 	for _, s := range servers {
-		// TODO: Support ExpirationInterval
 		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
 		addr := grpc.Address{
 			Addr:     fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
@@ -209,6 +233,15 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 		b.next = 0
 		b.addrs = sl
 		b.addrCh <- addrs
+		if expiration > 0 {
+			expF := func() {
+				b.serverListExpire(seq)
+			}
+			if b.expTimer != nil {
+				b.expTimer.Stop()
+			}
+			b.expTimer = time.AfterFunc(expiration, expF)
+		}
 	}
 	return
 }
@@ -226,8 +259,8 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient) (retry bool) 
 		b.mu.Unlock()
 		return
 	}
-	b.seq++
-	seq := b.seq
+	//b.seq++
+	//seq := b.seq
 	b.mu.Unlock()
 	initReq := &lbpb.LoadBalanceRequest{
 		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
@@ -260,6 +293,10 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient) (retry bool) 
 		if err != nil {
 			break
 		}
+		b.mu.Lock()
+		b.seq++
+		seq := b.seq
+		b.mu.Unlock()
 		if serverList := reply.GetServerList(); serverList != nil {
 			b.processServerList(serverList, seq)
 		}
@@ -497,6 +534,9 @@ func (b *balancer) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.done = true
+	if b.expTimer != nil {
+		b.expTimer.Stop()
+	}
 	if b.waitCh != nil {
 		close(b.waitCh)
 	}
