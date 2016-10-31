@@ -259,8 +259,6 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient) (retry bool) 
 		b.mu.Unlock()
 		return
 	}
-	//b.seq++
-	//seq := b.seq
 	b.mu.Unlock()
 	initReq := &lbpb.LoadBalanceRequest{
 		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
