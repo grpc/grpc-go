@@ -485,9 +485,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}()
 	var outgoingPayloadStats *stats.OutgoingPayloadStats
 	if stats.On() {
-		outgoingPayloadStats = &stats.OutgoingPayloadStats{
-			Ctx: ss.s.Context(),
-		}
+		outgoingPayloadStats = &stats.OutgoingPayloadStats{}
 	}
 	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outgoingPayloadStats)
 	defer func() {
@@ -504,7 +502,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}
 	if outgoingPayloadStats != nil {
 		outgoingPayloadStats.SentTime = time.Now()
-		stats.CallBack()(outgoingPayloadStats)
+		stats.Handle(ss.s.Context(), outgoingPayloadStats)
 	}
 	return nil
 }
@@ -526,9 +524,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	}()
 	var incomingPayloadStats *stats.IncomingPayloadStats
 	if stats.On() {
-		incomingPayloadStats = &stats.IncomingPayloadStats{
-			Ctx: ss.s.Context(),
-		}
+		incomingPayloadStats = &stats.IncomingPayloadStats{}
 	}
 	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, incomingPayloadStats); err != nil {
 		if err == io.EOF {
@@ -540,7 +536,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		return toRPCErr(err)
 	}
 	if incomingPayloadStats != nil {
-		stats.CallBack()(incomingPayloadStats)
+		stats.Handle(ss.s.Context(), incomingPayloadStats)
 	}
 	return nil
 }

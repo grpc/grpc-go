@@ -559,9 +559,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		cbuf = new(bytes.Buffer)
 	}
 	if stats.On() {
-		outgoingPayloadStats = &stats.OutgoingPayloadStats{
-			Ctx: stream.Context(),
-		}
+		outgoingPayloadStats = &stats.OutgoingPayloadStats{}
 	}
 	p, err := encode(s.opts.codec, msg, cp, cbuf, outgoingPayloadStats)
 	if err != nil {
@@ -577,7 +575,8 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	err = t.Write(stream, p, opts)
 	if outgoingPayloadStats != nil {
 		outgoingPayloadStats.SentTime = time.Now()
-		stats.CallBack()(outgoingPayloadStats)
+
+		stats.Handle(stream.Context(), outgoingPayloadStats)
 	}
 	return err
 }
@@ -604,7 +603,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		var incomingPayloadStats *stats.IncomingPayloadStats
 		if stats.On() {
 			incomingPayloadStats = &stats.IncomingPayloadStats{
-				Ctx:          stream.Context(),
+
 				ReceivedTime: time.Now(),
 			}
 		}
@@ -675,7 +674,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if incomingPayloadStats != nil {
 				incomingPayloadStats.Data = req
 				incomingPayloadStats.Length = len(req)
-				stats.CallBack()(incomingPayloadStats)
+				stats.Handle(stream.Context(), incomingPayloadStats)
 			}
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)

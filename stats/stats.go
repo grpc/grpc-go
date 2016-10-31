@@ -52,8 +52,6 @@ type Stats interface {
 
 // InitStats indicates an RPC just started.
 type InitStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// Method is the full RPC method string, i.e., /package.service/method.
@@ -70,8 +68,6 @@ func (s *InitStats) isStats() {}
 
 // IncomingPayloadStats contains the information for a incoming payload.
 type IncomingPayloadStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// Data is the unencrypted message payload.
@@ -88,8 +84,6 @@ func (s *IncomingPayloadStats) isStats() {}
 
 // IncomingHeaderStats indicates a header is received.
 type IncomingHeaderStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
@@ -100,8 +94,6 @@ func (s *IncomingHeaderStats) isStats() {}
 
 // IncomingTrailerStats indicates a trailer is received.
 type IncomingTrailerStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
@@ -112,8 +104,6 @@ func (s *IncomingTrailerStats) isStats() {}
 
 // OutgoingPayloadStats contains the information for a outgoing payload.
 type OutgoingPayloadStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// Data is the unencrypted message payload.
@@ -130,8 +120,6 @@ func (s *OutgoingPayloadStats) isStats() {}
 
 // OutgoingHeaderStats indicates a header is sent.
 type OutgoingHeaderStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
@@ -142,8 +130,6 @@ func (s *OutgoingHeaderStats) isStats() {}
 
 // OutgoingTrailerStats indicates a trailer is sent.
 type OutgoingTrailerStats struct {
-	// Ctx is the context associated with the RPC.
-	Ctx context.Context
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
@@ -153,8 +139,8 @@ type OutgoingTrailerStats struct {
 func (s *OutgoingTrailerStats) isStats() {}
 
 var (
-	on = new(int32)
-	f  func(Stats)
+	on      = new(int32)
+	handler func(context.Context, Stats)
 )
 
 // On indicates whether stats is started.
@@ -162,15 +148,15 @@ func On() bool {
 	return atomic.LoadInt32(on) == 1
 }
 
-// CallBack returns the call back function registered by user to process the stats.
-func CallBack() func(Stats) {
-	return f
+// Handle returns the call back function registered by user to process the stats.
+func Handle(ctx context.Context, s Stats) {
+	handler(ctx, s)
 }
 
-// RegisterCallBack registers the user callback function and starts the stats collection.
-// This callback function will be called to process the stats.
-func RegisterCallBack(cb func(Stats)) {
-	f = cb
+// RegisterHandler registers the user handler function and starts the stats collection.
+// This handler function will be called to process the stats.
+func RegisterHandler(f func(context.Context, Stats)) {
+	handler = f
 	start()
 }
 

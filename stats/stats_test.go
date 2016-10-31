@@ -48,7 +48,7 @@ import (
 )
 
 func TestStartStop(t *testing.T) {
-	stats.RegisterCallBack(nil)
+	stats.RegisterHandler(nil)
 	defer stats.Stop() // Stop stats in the case of the first Fatalf.
 	if stats.On() != true {
 		t.Fatalf("after start.RegisterCallBack(_), stats.On() = false, want true")
@@ -268,17 +268,21 @@ type expectedData struct {
 	outgoing       []*testpb.SimpleResponse
 }
 
-func checkInitStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+type gotData struct {
+	ctx context.Context
+	s   stats.Stats
+}
+
+func checkInitStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.InitStats
 	)
-	if st, ok = s.(*stats.InitStats); !ok {
-		t.Fatalf("got %T, want InitStats", s)
+	if st, ok = d.s.(*stats.InitStats); !ok {
+		t.Fatalf("got %T, want InitStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st IsClient = true, want false")
@@ -294,17 +298,16 @@ func checkInitStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkIncomingHeaderStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkIncomingHeaderStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.IncomingHeaderStats
 	)
-	if st, ok = s.(*stats.IncomingHeaderStats); !ok {
-		t.Fatalf("got %T, want IncomingHeaderStats", s)
+	if st, ok = d.s.(*stats.IncomingHeaderStats); !ok {
+		t.Fatalf("got %T, want IncomingHeaderStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st.IsClient = true, want false")
@@ -315,17 +318,16 @@ func checkIncomingHeaderStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkIncomingPayloadStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkIncomingPayloadStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.IncomingPayloadStats
 	)
-	if st, ok = s.(*stats.IncomingPayloadStats); !ok {
-		t.Fatalf("got %T, want IncomingPayloadStats", s)
+	if st, ok = d.s.(*stats.IncomingPayloadStats); !ok {
+		t.Fatalf("got %T, want IncomingPayloadStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st IsClient = true, want false")
@@ -347,17 +349,16 @@ func checkIncomingPayloadStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkIncomingTrailerStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkIncomingTrailerStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.IncomingTrailerStats
 	)
-	if st, ok = s.(*stats.IncomingTrailerStats); !ok {
-		t.Fatalf("got %T, want IncomingTrailerStats", s)
+	if st, ok = d.s.(*stats.IncomingTrailerStats); !ok {
+		t.Fatalf("got %T, want IncomingTrailerStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st.IsClient = true, want false")
@@ -368,17 +369,16 @@ func checkIncomingTrailerStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkOutgoingHeaderStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkOutgoingHeaderStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutgoingHeaderStats
 	)
-	if st, ok = s.(*stats.OutgoingHeaderStats); !ok {
-		t.Fatalf("got %T, want OutgoingHeaderStats", s)
+	if st, ok = d.s.(*stats.OutgoingHeaderStats); !ok {
+		t.Fatalf("got %T, want OutgoingHeaderStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st IsClient = true, want false")
@@ -389,17 +389,16 @@ func checkOutgoingHeaderStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkOutgoingPayloadStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkOutgoingPayloadStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutgoingPayloadStats
 	)
-	if st, ok = s.(*stats.OutgoingPayloadStats); !ok {
-		t.Fatalf("got %T, want OutgoingPayloadStats", s)
+	if st, ok = d.s.(*stats.OutgoingPayloadStats); !ok {
+		t.Fatalf("got %T, want OutgoingPayloadStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st IsClient = true, want false")
@@ -421,17 +420,16 @@ func checkOutgoingPayloadStats(t *testing.T, s stats.Stats, e *expectedData) {
 	}
 }
 
-func checkOutgoingTrailerStats(t *testing.T, s stats.Stats, e *expectedData) {
-	t.Logf(" - %T", s)
+func checkOutgoingTrailerStats(t *testing.T, d gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutgoingTrailerStats
 	)
-	if st, ok = s.(*stats.OutgoingTrailerStats); !ok {
-		t.Fatalf("got %T, want OutgoingTrailerStats", s)
+	if st, ok = d.s.(*stats.OutgoingTrailerStats); !ok {
+		t.Fatalf("got %T, want OutgoingTrailerStats", d.s)
 	}
-	if st.Ctx == nil {
-		t.Fatalf("st.Ctx = nil, want <non-nil>")
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
 	if st.IsClient {
 		t.Fatalf("st IsClient = true, want false")
@@ -445,12 +443,12 @@ func checkOutgoingTrailerStats(t *testing.T, s stats.Stats, e *expectedData) {
 func TestServerStatsUnaryRPC(t *testing.T) {
 	var (
 		mu  sync.Mutex
-		got []stats.Stats
+		got []gotData
 	)
-	stats.RegisterCallBack(func(s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, s)
+		got = append(got, gotData{ctx, s})
 	})
 
 	te := newTest(t, "")
@@ -467,7 +465,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		outgoing:  []*testpb.SimpleResponse{resp},
 	}
 
-	for i, f := range []func(t *testing.T, s stats.Stats, e *expectedData){
+	for i, f := range []func(t *testing.T, d gotData, e *expectedData){
 		checkInitStats,
 		checkIncomingHeaderStats,
 		checkIncomingPayloadStats,
@@ -486,12 +484,12 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 func TestServerStatsStreamingRPC(t *testing.T) {
 	var (
 		mu  sync.Mutex
-		got []stats.Stats
+		got []gotData
 	)
-	stats.RegisterCallBack(func(s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, s)
+		got = append(got, gotData{ctx, s})
 	})
 
 	te := newTest(t, "gzip")
@@ -510,12 +508,12 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		outgoing:   resps,
 	}
 
-	checkFuncs := []func(t *testing.T, s stats.Stats, e *expectedData){
+	checkFuncs := []func(t *testing.T, d gotData, e *expectedData){
 		checkInitStats,
 		checkIncomingHeaderStats,
 		checkOutgoingHeaderStats,
 	}
-	ioPayFuncs := []func(t *testing.T, s stats.Stats, e *expectedData){
+	ioPayFuncs := []func(t *testing.T, d gotData, e *expectedData){
 		checkIncomingPayloadStats,
 		checkOutgoingPayloadStats,
 	}

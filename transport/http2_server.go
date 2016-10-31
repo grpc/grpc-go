@@ -237,18 +237,16 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if stats.On() {
 		initStats := &stats.InitStats{
-			Ctx:        s.ctx,
 			Method:     s.method,
 			RemoteAddr: t.conn.RemoteAddr(),
 			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: s.recvCompress,
 		}
-		stats.CallBack()(initStats)
+		stats.Handle(s.ctx, initStats)
 		incomingHeaderStats := &stats.IncomingHeaderStats{
-			Ctx:        s.ctx,
 			WireLength: int(frame.Header().Length),
 		}
-		stats.CallBack()(incomingHeaderStats)
+		stats.Handle(s.ctx, incomingHeaderStats)
 	}
 	handle(s)
 	return
@@ -530,10 +528,9 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	if stats.On() {
 		outgoingHeaderStats := &stats.OutgoingHeaderStats{
-			Ctx:        s.Context(),
 			WireLength: bufLen,
 		}
-		stats.CallBack()(outgoingHeaderStats)
+		stats.Handle(s.Context(), outgoingHeaderStats)
 	}
 	t.writableChan <- 0
 	return nil
@@ -594,10 +591,9 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 	}
 	if stats.On() {
 		outgoingTrailerStats := &stats.OutgoingTrailerStats{
-			Ctx:        s.Context(),
 			WireLength: bufLen,
 		}
-		stats.CallBack()(outgoingTrailerStats)
+		stats.Handle(s.Context(), outgoingTrailerStats)
 	}
 	t.closeStream(s)
 	t.writableChan <- 0
