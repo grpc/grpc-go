@@ -36,6 +36,7 @@ package stats_test
 import (
 	"io"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -442,8 +443,13 @@ func checkOutgoingTrailerStats(t *testing.T, s stats.Stats, e *expectedData) {
 }
 
 func TestServerStatsUnaryRPC(t *testing.T) {
-	var got []stats.Stats
+	var (
+		mu  sync.Mutex
+		got []stats.Stats
+	)
 	stats.RegisterCallBack(func(s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
 		got = append(got, s)
 	})
 
@@ -452,6 +458,8 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	defer te.tearDown()
 
 	req, resp := te.doUnaryCall()
+	te.srv.GracefulStop() // Wait for the server to stop.
+
 	expect := &expectedData{
 		method:    "/grpc.testing.TestService/UnaryCall",
 		localAddr: te.srvAddr,
@@ -467,15 +475,22 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		checkOutgoingPayloadStats,
 		checkOutgoingTrailerStats,
 	} {
+		mu.Lock()
 		f(t, got[i], expect)
+		mu.Unlock()
 	}
 
 	stats.Stop()
 }
 
 func TestServerStatsStreamingRPC(t *testing.T) {
-	var got []stats.Stats
+	var (
+		mu  sync.Mutex
+		got []stats.Stats
+	)
 	stats.RegisterCallBack(func(s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
 		got = append(got, s)
 	})
 
@@ -485,6 +500,8 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 
 	count := 5
 	reqs, resps := te.doFullDuplexCallRoundtrip(count)
+	te.srv.GracefulStop() // Wait for the server to stop.
+
 	expect := &expectedData{
 		method:     "/grpc.testing.TestService/FullDuplexCall",
 		localAddr:  te.srvAddr,
@@ -508,7 +525,9 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	checkFuncs = append(checkFuncs, checkOutgoingTrailerStats)
 
 	for i, f := range checkFuncs {
+		mu.Lock()
 		f(t, got[i], expect)
+		mu.Unlock()
 	}
 
 	stats.Stop()

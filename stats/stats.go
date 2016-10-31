@@ -34,13 +34,14 @@
 // Package stats reports stats for gRPC.
 // This package is for monitoring purpose only.
 // All APIs are experimental.
-package stats
+package stats // import "google.golang.org/grpc/stats"
 
 import (
-	"context"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 // Stats contains stats information about RPCs.
