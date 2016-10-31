@@ -190,7 +190,7 @@ func (b *balancer) serverListExpire(seq int) {
 	}
 	b.next = 0
 	b.addrs = nil
-	// Ask grpc internals to close the all corresponding connections.
+	// Ask grpc internals to close all the corresponding connections.
 	b.addrCh <- nil
 }
 
