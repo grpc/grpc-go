@@ -144,6 +144,8 @@ func (s *OutgoingTrailerStats) isStats() {}
 
 // ErrorStats indicates an error happens.
 type ErrorStats struct {
+	// IsClient indicates if this stats is a client stats.
+	IsClient bool
 	// Error is the error just happened. Its type is gRPC error.
 	Error error
 }

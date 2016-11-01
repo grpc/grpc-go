@@ -474,6 +474,9 @@ func checkErrorStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
+	if st.IsClient {
+		t.Fatalf("st IsClient = true, want false")
+	}
 	if grpc.Code(st.Error) != grpc.Code(e.err) || grpc.ErrorDesc(st.Error) != grpc.ErrorDesc(e.err) {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
