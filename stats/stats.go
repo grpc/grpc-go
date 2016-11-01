@@ -48,6 +48,8 @@ import (
 // All stats types in this package implements this interface.
 type Stats interface {
 	isStats()
+	// ClientStats indicates if the stats is a client stats.
+	ClientStats() bool
 }
 
 // IncomingPayloadStats contains the information for a incoming payload.
@@ -67,6 +69,9 @@ type IncomingPayloadStats struct {
 }
 
 func (s *IncomingPayloadStats) isStats() {}
+
+// ClientStats indicates if the stats is a client stats.
+func (s *IncomingPayloadStats) ClientStats() bool { return s.IsClient }
 
 // IncomingHeaderStats indicates a header is received.
 // Method, addresses and Encryption are only valid if IsClient is false.
@@ -88,6 +93,9 @@ type IncomingHeaderStats struct {
 
 func (s *IncomingHeaderStats) isStats() {}
 
+// ClientStats indicates if the stats is a client stats.
+func (s *IncomingHeaderStats) ClientStats() bool { return s.IsClient }
+
 // IncomingTrailerStats indicates a trailer is received.
 type IncomingTrailerStats struct {
 	// IsClient indicates if this stats is a client stats.
@@ -97,6 +105,9 @@ type IncomingTrailerStats struct {
 }
 
 func (s *IncomingTrailerStats) isStats() {}
+
+// ClientStats indicates if the stats is a client stats.
+func (s *IncomingTrailerStats) ClientStats() bool { return s.IsClient }
 
 // OutgoingPayloadStats contains the information for a outgoing payload.
 type OutgoingPayloadStats struct {
@@ -115,6 +126,9 @@ type OutgoingPayloadStats struct {
 }
 
 func (s *OutgoingPayloadStats) isStats() {}
+
+// ClientStats indicates if the stats is a client stats.
+func (s *OutgoingPayloadStats) ClientStats() bool { return s.IsClient }
 
 // OutgoingHeaderStats indicates a header is sent.
 // Method, addresses and Encryption are only valid if IsClient is true.
@@ -136,6 +150,9 @@ type OutgoingHeaderStats struct {
 
 func (s *OutgoingHeaderStats) isStats() {}
 
+// ClientStats indicates if the stats is a client stats.
+func (s *OutgoingHeaderStats) ClientStats() bool { return s.IsClient }
+
 // OutgoingTrailerStats indicates a trailer is sent.
 type OutgoingTrailerStats struct {
 	// IsClient indicates if this stats is a client stats.
@@ -146,6 +163,9 @@ type OutgoingTrailerStats struct {
 
 func (s *OutgoingTrailerStats) isStats() {}
 
+// ClientStats indicates if the stats is a client stats.
+func (s *OutgoingTrailerStats) ClientStats() bool { return s.IsClient }
+
 // ErrorStats indicates an error happens.
 type ErrorStats struct {
 	// IsClient indicates if this stats is a client stats.
@@ -155,6 +175,9 @@ type ErrorStats struct {
 }
 
 func (s *ErrorStats) isStats() {}
+
+// ClientStats indicates if the stats is a client stats.
+func (s *ErrorStats) ClientStats() bool { return s.IsClient }
 
 var (
 	on      = new(int32)
