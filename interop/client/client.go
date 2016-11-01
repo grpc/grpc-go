@@ -49,6 +49,7 @@ import (
 var (
 	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
+	testCACustomFile      = flag.String("use_custom_test_ca", "", "If provided, replaces platform root CAs with custom CA file")
 	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
 	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
 	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
@@ -87,9 +88,13 @@ func main() {
 			sn = *tlsServerName
 		}
 		var creds credentials.TransportCredentials
-		if *testCA {
+		if *testCA || *testCACustomFile != "" {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			if *testCACustomFile != "" {
+				creds, err = credentials.NewClientTLSFromFile(*testCACustomFile, sn)
+			} else {
+				creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			}
 			if err != nil {
 				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}
