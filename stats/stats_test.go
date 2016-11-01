@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -349,10 +350,13 @@ func checkIncomingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("st IsClient = true, want false")
 	}
 	b, err := proto.Marshal(e.incoming[e.expectedInIdx])
-	e.expectedInIdx++
 	if err != nil {
 		t.Fatalf("failed to marshal message: %v", err)
 	}
+	if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.incoming[e.expectedInIdx]) {
+		t.Fatalf("st.Payload = %T, want %T", st.Payload, e.incoming[e.expectedInIdx])
+	}
+	e.expectedInIdx++
 	if string(st.Data) != string(b) {
 		t.Fatalf("st.Data = %v, want %v", st.Data, b)
 	}
@@ -420,10 +424,13 @@ func checkOutgoingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("st IsClient = true, want false")
 	}
 	b, err := proto.Marshal(e.outgoing[e.expectedOutIdx])
-	e.expectedOutIdx++
 	if err != nil {
 		t.Fatalf("failed to marshal message: %v", err)
 	}
+	if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.outgoing[e.expectedOutIdx]) {
+		t.Fatalf("st.Payload = %T, want %T", st.Payload, e.outgoing[e.expectedOutIdx])
+	}
+	e.expectedOutIdx++
 	if string(st.Data) != string(b) {
 		t.Fatalf("st.Data = %v, want %v", st.Data, b)
 	}

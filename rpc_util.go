@@ -270,6 +270,7 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outgoin
 			return nil, err
 		}
 		if outgoingPayloadStats != nil {
+			outgoingPayloadStats.Payload = msg
 			outgoingPayloadStats.Data = b
 			outgoingPayloadStats.Length = len(b)
 		}
@@ -350,6 +351,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
 	if incomingPayloadStats != nil {
+		incomingPayloadStats.Payload = m
 		incomingPayloadStats.Data = d
 		incomingPayloadStats.Length = len(d)
 	}

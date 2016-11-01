@@ -70,6 +70,8 @@ func (s *InitStats) isStats() {}
 type IncomingPayloadStats struct {
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
+	// Payload is the payload with original type.
+	Payload interface{}
 	// Data is the unencrypted message payload.
 	Data []byte
 	// Length is the length of uncompressed data.
@@ -106,6 +108,8 @@ func (s *IncomingTrailerStats) isStats() {}
 type OutgoingPayloadStats struct {
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
+	// Payload is the payload with original type.
+	Payload interface{}
 	// Data is the unencrypted message payload.
 	Data []byte
 	// Length is the length of uncompressed data.

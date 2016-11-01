@@ -681,6 +681,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				return err
 			}
 			if incomingPayloadStats != nil {
+				incomingPayloadStats.Payload = v
 				incomingPayloadStats.Data = req
 				incomingPayloadStats.Length = len(req)
 				stats.Handle(stream.Context(), incomingPayloadStats)
