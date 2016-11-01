@@ -582,6 +582,14 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+	defer func() {
+		if stats.On() && err != nil && err != io.EOF {
+			errorStats := &stats.ErrorStats{
+				Error: toRPCErr(err),
+			}
+			stats.Handle(stream.Context(), errorStats)
+		}
+	}()
 	if trInfo != nil {
 		defer trInfo.tr.Finish()
 		trInfo.firstLine.client = false
@@ -617,14 +625,14 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if err != nil {
 			switch err := err.(type) {
 			case *rpcError:
-				if err := t.WriteStatus(stream, err.code, err.desc); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				if e := t.WriteStatus(stream, err.code, err.desc); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
 			case transport.ConnectionError:
 				// Nothing to do here.
 			case transport.StreamError:
-				if err := t.WriteStatus(stream, err.Code, err.Desc); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				if e := t.WriteStatus(stream, err.Code, err.Desc); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
 			default:
 				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", err, err))
@@ -635,16 +643,17 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
 			switch err := err.(type) {
 			case *rpcError:
-				if err := t.WriteStatus(stream, err.code, err.desc); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				if e := t.WriteStatus(stream, err.code, err.desc); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
+				return err
 			default:
-				if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
+				if e := t.WriteStatus(stream, codes.Internal, err.Error()); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
+				return Errorf(codes.Internal, err.Error())
 
 			}
-			return err
 		}
 		statusCode := codes.OK
 		statusDesc := ""
@@ -659,7 +668,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					if err := t.WriteStatus(stream, codes.Internal, err.Error()); err != nil {
 						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", err)
 					}
-					return err
+					return Errorf(codes.Internal, err.Error())
 				}
 			}
 			if len(req) > s.opts.maxMsgSize {
@@ -696,9 +705,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 			if err := t.WriteStatus(stream, statusCode, statusDesc); err != nil {
 				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", err)
-				return err
 			}
-			return nil
+			return Errorf(statusCode, statusDesc)
 		}
 		if trInfo != nil {
 			trInfo.tr.LazyLog(stringer("OK"), false)
@@ -723,11 +731,23 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
 		}
-		return t.WriteStatus(stream, statusCode, statusDesc)
+		errWrite := t.WriteStatus(stream, statusCode, statusDesc)
+		if statusCode != codes.OK {
+			return Errorf(statusCode, statusDesc)
+		}
+		return errWrite
 	}
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+	defer func() {
+		if stats.On() && err != nil && err != io.EOF {
+			errorStats := &stats.ErrorStats{
+				Error: toRPCErr(err),
+			}
+			stats.Handle(stream.Context(), errorStats)
+		}
+	}()
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
@@ -790,7 +810,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		}
 		ss.mu.Unlock()
 	}
-	return t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
+	errWrite := t.WriteStatus(ss.s, ss.statusCode, ss.statusDesc)
+	if ss.statusCode != codes.OK {
+		return Errorf(ss.statusCode, ss.statusDesc)
+	}
+	return errWrite
 
 }
 
@@ -805,7 +829,14 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.LazyLog(&fmtStringer{"Malformed method name %q", []interface{}{sm}}, true)
 			trInfo.tr.SetError()
 		}
-		if err := t.WriteStatus(stream, codes.InvalidArgument, fmt.Sprintf("malformed method name: %q", stream.Method())); err != nil {
+		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
+		if stats.On() {
+			errorStats := &stats.ErrorStats{
+				Error: Errorf(codes.InvalidArgument, errDesc),
+			}
+			stats.Handle(stream.Context(), errorStats)
+		}
+		if err := t.WriteStatus(stream, codes.InvalidArgument, errDesc); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				trInfo.tr.SetError()
@@ -825,7 +856,14 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.LazyLog(&fmtStringer{"Unknown service %v", []interface{}{service}}, true)
 			trInfo.tr.SetError()
 		}
-		if err := t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown service %v", service)); err != nil {
+		errDesc := fmt.Sprintf("unknown service %v", service)
+		if stats.On() {
+			errorStats := &stats.ErrorStats{
+				Error: Errorf(codes.InvalidArgument, errDesc),
+			}
+			stats.Handle(stream.Context(), errorStats)
+		}
+		if err := t.WriteStatus(stream, codes.Unimplemented, errDesc); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				trInfo.tr.SetError()
@@ -850,7 +888,14 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		trInfo.tr.LazyLog(&fmtStringer{"Unknown method %v", []interface{}{method}}, true)
 		trInfo.tr.SetError()
 	}
-	if err := t.WriteStatus(stream, codes.Unimplemented, fmt.Sprintf("unknown method %v", method)); err != nil {
+	errDesc := fmt.Sprintf("unknown method %v", method)
+	if stats.On() {
+		errorStats := &stats.ErrorStats{
+			Error: Errorf(codes.InvalidArgument, errDesc),
+		}
+		stats.Handle(stream.Context(), errorStats)
+	}
+	if err := t.WriteStatus(stream, codes.Unimplemented, errDesc); err != nil {
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 			trInfo.tr.SetError()

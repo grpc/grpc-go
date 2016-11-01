@@ -138,6 +138,14 @@ type OutgoingTrailerStats struct {
 
 func (s *OutgoingTrailerStats) isStats() {}
 
+// ErrorStats indicates an error happens.
+type ErrorStats struct {
+	// Error is the error just happened. Its type is gRPC error.
+	Error error
+}
+
+func (s *ErrorStats) isStats() {}
+
 var (
 	on      = new(int32)
 	handler func(context.Context, Stats)
