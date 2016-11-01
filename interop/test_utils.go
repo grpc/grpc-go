@@ -482,7 +482,6 @@ func ValidateMetadata(header, trailer metadata.MD) {
 
 // DoCustomMetadata checks that metadata is echoed back to the client
 func DoCustomMetadata(tc testpb.TestServiceClient) {
-
 	// Testing with UnaryCall
 	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	req := &testpb.SimpleRequest{
@@ -578,12 +577,34 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	}
 }
 
+func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
+	var code int32 = 12
+	expectedCode := codes.Code(code)
+	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
+	if grpc.Code(err) != expectedCode {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), expectedCode)
+	}
+}
+
+func DoUnimplementedMethod(tc testpb.TestServiceClient) {
+	var code int32 = 12
+	expectedCode := codes.Code(code)
+	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
+	if grpc.Code(err) != expectedCode {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), expectedCode)
+	}
+}
+
 type testServer struct {
 }
 
 // NewTestServer creates a test server for test service.
 func NewTestServer() testpb.TestServiceServer {
 	return &testServer{}
+}
+
+func (s *testServer) UnimplementedCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	return nil, grpc.Errorf(codes.Code(12), "")  // 12 == UNIMPLEMENTED
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

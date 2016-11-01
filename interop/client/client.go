@@ -73,8 +73,8 @@ var (
         cancel_after_first_response: cancellation after receiving 1st message from the server;
         status_code_and_message: status code propagated back to client;
 	custom_metadata: server will echo custom metadata;
-	unimplemented_method: client attempts to call unimplemented method
-	unimplemented_service: client attemprs to call unimplemented service`)
+	unimplemented_method: client attempts to call unimplemented method;
+	unimplemented_service: client attempts to call unimplemented service`)
 
 	// The test CA root cert file
 	testCAFile = "testdata/ca.pem"
@@ -190,12 +190,12 @@ func main() {
 	case "custom_metadata":
 		interop.DoCustomMetadata(tc)
 		grpclog.Println("CustomMetadata done")
-	// case "unimplemented_method":
-	// 	interop.DoUnimplementedMethod(tc)
-	// 	grpclog.Println("UnimplementedMethod done")
-	// case "unimplemented_service":
-	// 	interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
-	// 	grpclog.Println("UnimplementedService done")
+	case "unimplemented_method":
+		interop.DoUnimplementedMethod(tc)
+		grpclog.Println("UnimplementedMethod done")
+	case "unimplemented_service":
+		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
+		grpclog.Println("UnimplementedService done")
 	default:
 		grpclog.Fatal("Unsupported test case: ", *testCase)
 	}
