@@ -275,20 +275,32 @@ func (te *test) doFullDuplexCallRoundtrip(count int, success bool) ([]*testpb.Si
 }
 
 type expectedData struct {
-	method         string
-	localAddr      string
-	encryption     string
-	expectedInIdx  int
-	incoming       []*testpb.SimpleRequest
-	expectedOutIdx int
-	outgoing       []*testpb.SimpleResponse
-	err            error
+	method     string
+	serverAddr string
+	encryption string
+	reqIdx     int
+	requests   []*testpb.SimpleRequest
+	respIdx    int
+	responses  []*testpb.SimpleResponse
+	err        error
 }
 
 type gotData struct {
-	ctx context.Context
-	s   stats.Stats
+	ctx    context.Context
+	client bool
+	s      stats.Stats
 }
+
+const (
+	inits int = iota
+	inpay
+	inheader
+	intrailer
+	outpay
+	outheader
+	outtrailer
+	errors
+)
 
 func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	var (
@@ -301,21 +313,20 @@ func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st.IsClient = true, want false")
-	}
-	if st.Method != e.method {
-		t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
-	}
-	if st.LocalAddr.String() != e.localAddr {
-		t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.localAddr)
-	}
-	if st.Encryption != e.encryption {
-		t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
-	}
 	// TODO check real length, not just > 0.
 	if st.WireLength <= 0 {
 		t.Fatalf("st.Lenght = 0, want > 0")
+	}
+	if !d.client {
+		if st.Method != e.method {
+			t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
+		}
+		if st.LocalAddr.String() != e.serverAddr {
+			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
+		}
+		if st.Encryption != e.encryption {
+			t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
+		}
 	}
 }
 
@@ -330,22 +341,36 @@ func checkIncomingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st IsClient = true, want false")
-	}
-	b, err := proto.Marshal(e.incoming[e.expectedInIdx])
-	if err != nil {
-		t.Fatalf("failed to marshal message: %v", err)
-	}
-	if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.incoming[e.expectedInIdx]) {
-		t.Fatalf("st.Payload = %T, want %T", st.Payload, e.incoming[e.expectedInIdx])
-	}
-	e.expectedInIdx++
-	if string(st.Data) != string(b) {
-		t.Fatalf("st.Data = %v, want %v", st.Data, b)
-	}
-	if st.Length != len(b) {
-		t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+	if d.client {
+		b, err := proto.Marshal(e.responses[e.respIdx])
+		if err != nil {
+			t.Fatalf("failed to marshal message: %v", err)
+		}
+		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
+			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
+		}
+		e.respIdx++
+		if string(st.Data) != string(b) {
+			t.Fatalf("st.Data = %v, want %v", st.Data, b)
+		}
+		if st.Length != len(b) {
+			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+		}
+	} else {
+		b, err := proto.Marshal(e.requests[e.reqIdx])
+		if err != nil {
+			t.Fatalf("failed to marshal message: %v", err)
+		}
+		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
+			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
+		}
+		e.reqIdx++
+		if string(st.Data) != string(b) {
+			t.Fatalf("st.Data = %v, want %v", st.Data, b)
+		}
+		if st.Length != len(b) {
+			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+		}
 	}
 	// TODO check WireLength and ReceivedTime.
 	if st.ReceivedTime.IsZero() {
@@ -364,9 +389,6 @@ func checkIncomingTrailerStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st.IsClient = true, want false")
-	}
 	// TODO check real length, not just > 0.
 	if st.WireLength <= 0 {
 		t.Fatalf("st.Lenght = 0, want > 0")
@@ -384,12 +406,20 @@ func checkOutgoingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st IsClient = true, want false")
-	}
 	// TODO check real length, not just > 0.
 	if st.WireLength <= 0 {
 		t.Fatalf("st.Lenght = 0, want > 0")
+	}
+	if d.client {
+		if st.Method != e.method {
+			t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
+		}
+		if st.RemoteAddr.String() != e.serverAddr {
+			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
+		}
+		if st.Encryption != e.encryption {
+			t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
+		}
 	}
 }
 
@@ -404,22 +434,36 @@ func checkOutgoingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st IsClient = true, want false")
-	}
-	b, err := proto.Marshal(e.outgoing[e.expectedOutIdx])
-	if err != nil {
-		t.Fatalf("failed to marshal message: %v", err)
-	}
-	if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.outgoing[e.expectedOutIdx]) {
-		t.Fatalf("st.Payload = %T, want %T", st.Payload, e.outgoing[e.expectedOutIdx])
-	}
-	e.expectedOutIdx++
-	if string(st.Data) != string(b) {
-		t.Fatalf("st.Data = %v, want %v", st.Data, b)
-	}
-	if st.Length != len(b) {
-		t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+	if d.client {
+		b, err := proto.Marshal(e.requests[e.reqIdx])
+		if err != nil {
+			t.Fatalf("failed to marshal message: %v", err)
+		}
+		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.requests[e.reqIdx]) {
+			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.requests[e.reqIdx])
+		}
+		e.reqIdx++
+		if string(st.Data) != string(b) {
+			t.Fatalf("st.Data = %v, want %v", st.Data, b)
+		}
+		if st.Length != len(b) {
+			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+		}
+	} else {
+		b, err := proto.Marshal(e.responses[e.respIdx])
+		if err != nil {
+			t.Fatalf("failed to marshal message: %v", err)
+		}
+		if reflect.TypeOf(st.Payload) != reflect.TypeOf(e.responses[e.respIdx]) {
+			t.Fatalf("st.Payload = %T, want %T", st.Payload, e.responses[e.respIdx])
+		}
+		e.respIdx++
+		if string(st.Data) != string(b) {
+			t.Fatalf("st.Data = %v, want %v", st.Data, b)
+		}
+		if st.Length != len(b) {
+			t.Fatalf("st.Lenght = %v, want %v", st.Length, len(b))
+		}
 	}
 	// TODO check WireLength and ReceivedTime.
 	if st.SentTime.IsZero() {
@@ -458,9 +502,6 @@ func checkErrorStats(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
-		t.Fatalf("st IsClient = true, want false")
-	}
 	if grpc.Code(st.Error) != grpc.Code(e.err) || grpc.ErrorDesc(st.Error) != grpc.ErrorDesc(e.err) {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
@@ -474,7 +515,9 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, &gotData{ctx, s})
+		if !s.ClientStats() {
+			got = append(got, &gotData{ctx, false, s})
+		}
 	})
 
 	te := newTest(t, "")
@@ -488,10 +531,10 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:    "/grpc.testing.TestService/UnaryCall",
-		localAddr: te.srvAddr,
-		incoming:  []*testpb.SimpleRequest{req},
-		outgoing:  []*testpb.SimpleResponse{resp},
+		method:     "/grpc.testing.TestService/UnaryCall",
+		serverAddr: te.srvAddr,
+		requests:   []*testpb.SimpleRequest{req},
+		responses:  []*testpb.SimpleResponse{resp},
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -523,7 +566,9 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, &gotData{ctx, s})
+		if !s.ClientStats() {
+			got = append(got, &gotData{ctx, false, s})
+		}
 	})
 
 	te := newTest(t, "")
@@ -537,11 +582,11 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:    "/grpc.testing.TestService/UnaryCall",
-		localAddr: te.srvAddr,
-		incoming:  []*testpb.SimpleRequest{req},
-		outgoing:  []*testpb.SimpleResponse{resp},
-		err:       err,
+		method:     "/grpc.testing.TestService/UnaryCall",
+		serverAddr: te.srvAddr,
+		requests:   []*testpb.SimpleRequest{req},
+		responses:  []*testpb.SimpleResponse{resp},
+		err:        err,
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -573,7 +618,9 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, &gotData{ctx, s})
+		if !s.ClientStats() {
+			got = append(got, &gotData{ctx, false, s})
+		}
 	})
 
 	te := newTest(t, "gzip")
@@ -589,10 +636,10 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 
 	expect := &expectedData{
 		method:     "/grpc.testing.TestService/FullDuplexCall",
-		localAddr:  te.srvAddr,
+		serverAddr: te.srvAddr,
 		encryption: "gzip",
-		incoming:   reqs,
-		outgoing:   resps,
+		requests:   reqs,
+		responses:  resps,
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -629,7 +676,9 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
 		mu.Lock()
 		defer mu.Unlock()
-		got = append(got, &gotData{ctx, s})
+		if !s.ClientStats() {
+			got = append(got, &gotData{ctx, false, s})
+		}
 	})
 
 	te := newTest(t, "gzip")
@@ -645,10 +694,10 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 
 	expect := &expectedData{
 		method:     "/grpc.testing.TestService/FullDuplexCall",
-		localAddr:  te.srvAddr,
+		serverAddr: te.srvAddr,
 		encryption: "gzip",
-		incoming:   reqs,
-		outgoing:   resps,
+		requests:   reqs,
+		responses:  resps,
 		err:        err,
 	}
 
@@ -667,6 +716,338 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	for i, f := range checkFuncs {
 		mu.Lock()
 		f(t, got[i], expect)
+		mu.Unlock()
+	}
+
+	stats.Stop()
+}
+
+type checkFuncWithCount struct {
+	f func(t *testing.T, d *gotData, e *expectedData)
+	c int // expected count
+}
+
+func TestClientStatsUnaryRPC(t *testing.T) {
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.ClientStats() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+
+	te := newTest(t, "")
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	req, resp, err := te.doUnaryCall(true)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	te.srv.GracefulStop() // Wait for the server to stop.
+
+	expect := &expectedData{
+		method:     "/grpc.testing.TestService/UnaryCall",
+		serverAddr: te.srvAddr,
+		requests:   []*testpb.SimpleRequest{req},
+		responses:  []*testpb.SimpleResponse{resp},
+	}
+
+	checkFuncs := map[int]*checkFuncWithCount{
+		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
+		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, 1},
+		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
+		inpay:     &checkFuncWithCount{checkIncomingPayloadStats, 1},
+		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+	}
+
+	var expectLen int
+	for _, v := range checkFuncs {
+		expectLen += v.c
+	}
+	if len(got) != expectLen {
+		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for _, s := range got {
+		mu.Lock()
+		switch s.s.(type) {
+		case *stats.OutgoingHeaderStats:
+			if checkFuncs[outheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outheader].f(t, s, expect)
+			checkFuncs[outheader].c--
+		case *stats.OutgoingPayloadStats:
+			if checkFuncs[outpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outpay].f(t, s, expect)
+			checkFuncs[outpay].c--
+		case *stats.IncomingHeaderStats:
+			if checkFuncs[inheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inheader].f(t, s, expect)
+			checkFuncs[inheader].c--
+		case *stats.IncomingPayloadStats:
+			if checkFuncs[inpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inpay].f(t, s, expect)
+			checkFuncs[inpay].c--
+		case *stats.IncomingTrailerStats:
+			if checkFuncs[intrailer].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[intrailer].f(t, s, expect)
+			checkFuncs[intrailer].c--
+		default:
+			t.Fatalf("unexpected stats: %T", s)
+		}
+		mu.Unlock()
+	}
+
+	stats.Stop()
+}
+
+func TestClientStatsUnaryRPCError(t *testing.T) {
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.ClientStats() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+
+	te := newTest(t, "")
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	req, resp, err := te.doUnaryCall(false)
+	if err == nil {
+		t.Fatalf("got error <nil>; want <non-nil>")
+	}
+	te.srv.GracefulStop() // Wait for the server to stop.
+
+	expect := &expectedData{
+		method:     "/grpc.testing.TestService/UnaryCall",
+		serverAddr: te.srvAddr,
+		requests:   []*testpb.SimpleRequest{req},
+		responses:  []*testpb.SimpleResponse{resp},
+		err:        err,
+	}
+
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkOutgoingHeaderStats,
+		checkOutgoingPayloadStats,
+		checkIncomingHeaderStats,
+		checkIncomingTrailerStats,
+		checkErrorStats,
+	}
+
+	if len(got) != len(checkFuncs) {
+		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	for i, f := range checkFuncs {
+		mu.Lock()
+		f(t, got[i], expect)
+		mu.Unlock()
+	}
+
+	stats.Stop()
+}
+
+func TestClientStatsStreamingRPC(t *testing.T) {
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.ClientStats() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+
+	te := newTest(t, "gzip")
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	count := 5
+	reqs, resps, err := te.doFullDuplexCallRoundtrip(count, true)
+	if err == nil {
+		t.Fatalf(err.Error())
+	}
+	te.srv.GracefulStop() // Wait for the server to stop.
+
+	expect := &expectedData{
+		method:     "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr: te.srvAddr,
+		encryption: "gzip",
+		requests:   reqs,
+		responses:  resps,
+	}
+
+	checkFuncs := map[int]*checkFuncWithCount{
+		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
+		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, count},
+		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
+		inpay:     &checkFuncWithCount{checkIncomingPayloadStats, count},
+		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+	}
+
+	var expectLen int
+	for _, v := range checkFuncs {
+		expectLen += v.c
+	}
+	if len(got) != expectLen {
+		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for _, s := range got {
+		mu.Lock()
+		switch s.s.(type) {
+		case *stats.OutgoingHeaderStats:
+			if checkFuncs[outheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outheader].f(t, s, expect)
+			checkFuncs[outheader].c--
+		case *stats.OutgoingPayloadStats:
+			if checkFuncs[outpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outpay].f(t, s, expect)
+			checkFuncs[outpay].c--
+		case *stats.IncomingHeaderStats:
+			if checkFuncs[inheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inheader].f(t, s, expect)
+			checkFuncs[inheader].c--
+		case *stats.IncomingPayloadStats:
+			if checkFuncs[inpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inpay].f(t, s, expect)
+			checkFuncs[inpay].c--
+		case *stats.IncomingTrailerStats:
+			if checkFuncs[intrailer].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[intrailer].f(t, s, expect)
+			checkFuncs[intrailer].c--
+		default:
+			t.Fatalf("unexpected stats: %T", s)
+		}
+		mu.Unlock()
+	}
+
+	stats.Stop()
+}
+
+func TestClientStatsStreamingRPCError(t *testing.T) {
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
+	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.ClientStats() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+
+	te := newTest(t, "gzip")
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	count := 5
+	reqs, resps, err := te.doFullDuplexCallRoundtrip(count, false)
+	if err == nil {
+		t.Fatalf("got error <nil>; want <non-nil>")
+	}
+	te.srv.GracefulStop() // Wait for the server to stop.
+
+	expect := &expectedData{
+		method:     "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr: te.srvAddr,
+		encryption: "gzip",
+		requests:   reqs,
+		responses:  resps,
+		err:        err,
+	}
+
+	checkFuncs := map[int]*checkFuncWithCount{
+		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
+		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, 1},
+		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
+		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+		errors:    &checkFuncWithCount{checkErrorStats, 1},
+	}
+
+	var expectLen int
+	for _, v := range checkFuncs {
+		expectLen += v.c
+	}
+	if len(got) != expectLen {
+		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for _, s := range got {
+		mu.Lock()
+		switch s.s.(type) {
+		case *stats.OutgoingHeaderStats:
+			if checkFuncs[outheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outheader].f(t, s, expect)
+			checkFuncs[outheader].c--
+		case *stats.OutgoingPayloadStats:
+			if checkFuncs[outpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[outpay].f(t, s, expect)
+			checkFuncs[outpay].c--
+		case *stats.IncomingHeaderStats:
+			if checkFuncs[inheader].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inheader].f(t, s, expect)
+			checkFuncs[inheader].c--
+		case *stats.IncomingPayloadStats:
+			if checkFuncs[inpay].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[inpay].f(t, s, expect)
+			checkFuncs[inpay].c--
+		case *stats.IncomingTrailerStats:
+			if checkFuncs[intrailer].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[intrailer].f(t, s, expect)
+			checkFuncs[intrailer].c--
+		case *stats.ErrorStats:
+			if checkFuncs[errors].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[errors].f(t, s, expect)
+			checkFuncs[errors].c--
+		default:
+			t.Fatalf("unexpected stats: %T", s)
+		}
 		mu.Unlock()
 	}
 

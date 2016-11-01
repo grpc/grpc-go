@@ -42,6 +42,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
 
@@ -63,13 +64,23 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 		return
 	}
 	p := &parser{r: stream}
+	var incomingPayloadStats *stats.IncomingPayloadStats
+	if stats.On() {
+		incomingPayloadStats = &stats.IncomingPayloadStats{
+			IsClient: true,
+		}
+	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, nil); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, incomingPayloadStats); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return
 		}
+	}
+	if err == io.EOF && stream.StatusCode() == codes.OK && incomingPayloadStats != nil {
+		// TODO in the current implementation, incomingTrailerStats is handled before incomingPayloadStats. Fix the order if necessary.
+		stats.Handle(stream.Context(), incomingPayloadStats)
 	}
 	c.trailerMD = stream.Trailer()
 	return nil
@@ -89,15 +100,27 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 			}
 		}
 	}()
-	var cbuf *bytes.Buffer
+	var (
+		cbuf                 *bytes.Buffer
+		outgoingPayloadStats *stats.OutgoingPayloadStats
+	)
 	if compressor != nil {
 		cbuf = new(bytes.Buffer)
 	}
-	outBuf, err := encode(codec, args, compressor, cbuf, nil)
+	if stats.On() {
+		outgoingPayloadStats = &stats.OutgoingPayloadStats{
+			IsClient: true,
+		}
+	}
+	outBuf, err := encode(codec, args, compressor, cbuf, outgoingPayloadStats)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
+	if outgoingPayloadStats != nil {
+		outgoingPayloadStats.SentTime = time.Now()
+		stats.Handle(stream.Context(), outgoingPayloadStats)
+	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.
@@ -118,7 +141,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	return invoke(ctx, method, args, reply, cc, opts...)
 }
 
-func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (err error) {
+func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
@@ -140,25 +163,38 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		c.traceInfo.tr.LazyLog(&c.traceInfo.firstLine, false)
 		// TODO(dsymonds): Arrange for c.traceInfo.firstLine.remoteAddr to be set.
 		defer func() {
-			if err != nil {
-				c.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+			if e != nil {
+				c.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{e}}, true)
 				c.traceInfo.tr.SetError()
 			}
 		}()
 	}
+	var (
+		err    error
+		t      transport.ClientTransport
+		stream *transport.Stream
+		// Record the put handler from Balancer.Get(...). It is called once the
+		// RPC has completed or failed.
+		put func()
+	)
+	defer func() {
+		if e != nil && stats.On() {
+			errorStats := &stats.ErrorStats{
+				IsClient: true,
+				Error:    e,
+			}
+			if stream != nil {
+				stats.Handle(stream.Context(), errorStats)
+			} else {
+				stats.Handle(ctx, errorStats)
+			}
+		}
+	}()
 	topts := &transport.Options{
 		Last:  true,
 		Delay: false,
 	}
 	for {
-		var (
-			err    error
-			t      transport.ClientTransport
-			stream *transport.Stream
-			// Record the put handler from Balancer.Get(...). It is called once the
-			// RPC has completed or failed.
-			put func()
-		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
 			Host:   cc.authority,

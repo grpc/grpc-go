@@ -465,6 +465,11 @@ type ClientTransport interface {
 	// receives the draining signal from the server (e.g., GOAWAY frame in
 	// HTTP/2).
 	GoAway() <-chan struct{}
+
+	// LocalAddr returns the local network address.
+	LocalAddr() net.Addr
+	// RemoteAddr returns the remote network address.
+	RemoteAddr() net.Addr
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport

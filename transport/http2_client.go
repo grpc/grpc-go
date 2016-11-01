@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
 )
 
 // http2Client implements the ClientTransport interface with HTTP2.
@@ -413,6 +414,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	first := true
+	bufLen := t.hBuf.Len()
 	// Sends the headers in a single batch even when they span multiple frames.
 	for !endHeaders {
 		size := t.hBuf.Len()
@@ -446,6 +448,17 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			t.notifyError(err)
 			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
+	}
+	if stats.On() {
+		outgoingHeaderStats := &stats.OutgoingHeaderStats{
+			IsClient:   true,
+			WireLength: bufLen,
+			Method:     callHdr.Method,
+			RemoteAddr: t.RemoteAddr(),
+			LocalAddr:  t.LocalAddr(),
+			Encryption: callHdr.SendCompress,
+		}
+		stats.Handle(s.Context(), outgoingHeaderStats)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -874,6 +887,24 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	endStream := frame.StreamEnded()
+	var isHeader bool
+	defer func() {
+		if stats.On() {
+			if isHeader {
+				incomingHeaderStats := &stats.IncomingHeaderStats{
+					IsClient:   true,
+					WireLength: int(frame.Header().Length),
+				}
+				stats.Handle(s.ctx, incomingHeaderStats)
+			} else {
+				incomingTrailerStats := &stats.IncomingTrailerStats{
+					IsClient:   true,
+					WireLength: int(frame.Header().Length),
+				}
+				stats.Handle(s.ctx, incomingTrailerStats)
+			}
+		}
+	}()
 
 	s.mu.Lock()
 	if !endStream {
@@ -885,6 +916,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 		close(s.headerChan)
 		s.headerDone = true
+		isHeader = true
 	}
 	if !endStream || s.state == streamDone {
 		s.mu.Unlock()
@@ -1069,4 +1101,12 @@ func (t *http2Client) notifyError(err error) {
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 	t.mu.Unlock()
+}
+
+func (t *http2Client) LocalAddr() net.Addr {
+	return t.conn.LocalAddr()
+}
+
+func (t *http2Client) RemoteAddr() net.Addr {
+	return t.conn.RemoteAddr()
 }
