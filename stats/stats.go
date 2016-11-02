@@ -44,18 +44,18 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Stats contains stats information about RPCs.
+// RPCStats contains stats information about RPCs.
 // All stats types in this package implements this interface.
-type Stats interface {
+type RPCStats interface {
 	isStats()
-	// ClientStats indicates if the stats is a client stats.
-	ClientStats() bool
+	// IsClient indicates if the stats is a client stats.
+	IsClient() bool
 }
 
-// IncomingPayloadStats contains the information for a incoming payload.
-type IncomingPayloadStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// InPayload contains the information for a incoming payload.
+type InPayload struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
 	// Data is the unencrypted message payload.
@@ -64,20 +64,20 @@ type IncomingPayloadStats struct {
 	Length int
 	// WireLength is the length of data on wire (compressed, signed, encrypted).
 	WireLength int
-	// ReceivedTime is the time when the payload is received.
-	ReceivedTime time.Time
+	// RecvTime is the time when the payload is received.
+	RecvTime time.Time
 }
 
-func (s *IncomingPayloadStats) isStats() {}
+func (s *InPayload) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *IncomingPayloadStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *InPayload) IsClient() bool { return s.Client }
 
-// IncomingHeaderStats indicates a header is received.
-// Method, addresses and Encryption are only valid if IsClient is false.
-type IncomingHeaderStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// InHeader indicates a header is received.
+// Method, addresses and Encryption are only valid if Client is false.
+type InHeader struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
@@ -91,28 +91,28 @@ type IncomingHeaderStats struct {
 	Encryption string
 }
 
-func (s *IncomingHeaderStats) isStats() {}
+func (s *InHeader) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *IncomingHeaderStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *InHeader) IsClient() bool { return s.Client }
 
-// IncomingTrailerStats indicates a trailer is received.
-type IncomingTrailerStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// InTrailer indicates a trailer is received.
+type InTrailer struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 }
 
-func (s *IncomingTrailerStats) isStats() {}
+func (s *InTrailer) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *IncomingTrailerStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *InTrailer) IsClient() bool { return s.Client }
 
-// OutgoingPayloadStats contains the information for a outgoing payload.
-type OutgoingPayloadStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// OutPayload contains the information for a outgoing payload.
+type OutPayload struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
 	// Data is the unencrypted message payload.
@@ -125,16 +125,16 @@ type OutgoingPayloadStats struct {
 	SentTime time.Time
 }
 
-func (s *OutgoingPayloadStats) isStats() {}
+func (s *OutPayload) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *OutgoingPayloadStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *OutPayload) IsClient() bool { return s.Client }
 
-// OutgoingHeaderStats indicates a header is sent.
-// Method, addresses and Encryption are only valid if IsClient is true.
-type OutgoingHeaderStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// OutHeader indicates a header is sent.
+// Method, addresses and Encryption are only valid if Client is true.
+type OutHeader struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
@@ -148,40 +148,40 @@ type OutgoingHeaderStats struct {
 	Encryption string
 }
 
-func (s *OutgoingHeaderStats) isStats() {}
+func (s *OutHeader) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *OutgoingHeaderStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *OutHeader) IsClient() bool { return s.Client }
 
-// OutgoingTrailerStats indicates a trailer is sent.
-type OutgoingTrailerStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// OutTrailer indicates a trailer is sent.
+type OutTrailer struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 }
 
-func (s *OutgoingTrailerStats) isStats() {}
+func (s *OutTrailer) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *OutgoingTrailerStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *OutTrailer) IsClient() bool { return s.Client }
 
-// ErrorStats indicates an error happens.
-type ErrorStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
+// RPCErr indicates an error happens.
+type RPCErr struct {
+	// Client indicates if this stats is a client stats.
+	Client bool
 	// Error is the error just happened. Its type is gRPC error.
 	Error error
 }
 
-func (s *ErrorStats) isStats() {}
+func (s *RPCErr) isStats() {}
 
-// ClientStats indicates if the stats is a client stats.
-func (s *ErrorStats) ClientStats() bool { return s.IsClient }
+// IsClient indicates if the stats is a client stats.
+func (s *RPCErr) IsClient() bool { return s.Client }
 
 var (
 	on      = new(int32)
-	handler func(context.Context, Stats)
+	handler func(context.Context, RPCStats)
 )
 
 // On indicates whether stats is started.
@@ -190,13 +190,13 @@ func On() bool {
 }
 
 // Handle returns the call back function registered by user to process the stats.
-func Handle(ctx context.Context, s Stats) {
+func Handle(ctx context.Context, s RPCStats) {
 	handler(ctx, s)
 }
 
 // RegisterHandler registers the user handler function and starts the stats collection.
 // This handler function will be called to process the stats.
-func RegisterHandler(f func(context.Context, Stats)) {
+func RegisterHandler(f func(context.Context, RPCStats)) {
 	handler = f
 	start()
 }

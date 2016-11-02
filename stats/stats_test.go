@@ -288,7 +288,7 @@ type expectedData struct {
 type gotData struct {
 	ctx    context.Context
 	client bool
-	s      stats.Stats
+	s      stats.RPCStats
 }
 
 const (
@@ -302,13 +302,13 @@ const (
 	errors
 )
 
-func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
+func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.IncomingHeaderStats
+		st *stats.InHeader
 	)
-	if st, ok = d.s.(*stats.IncomingHeaderStats); !ok {
-		t.Fatalf("got %T, want IncomingHeaderStats", d.s)
+	if st, ok = d.s.(*stats.InHeader); !ok {
+		t.Fatalf("got %T, want InHeader", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
@@ -330,13 +330,13 @@ func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkIncomingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
+func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.IncomingPayloadStats
+		st *stats.InPayload
 	)
-	if st, ok = d.s.(*stats.IncomingPayloadStats); !ok {
-		t.Fatalf("got %T, want IncomingPayloadStats", d.s)
+	if st, ok = d.s.(*stats.InPayload); !ok {
+		t.Fatalf("got %T, want InPayload", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
@@ -373,18 +373,18 @@ func checkIncomingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 		}
 	}
 	// TODO check WireLength and ReceivedTime.
-	if st.ReceivedTime.IsZero() {
-		t.Fatalf("st.ReceivedTime = %v, want <non-zero>", st.ReceivedTime)
+	if st.RecvTime.IsZero() {
+		t.Fatalf("st.ReceivedTime = %v, want <non-zero>", st.RecvTime)
 	}
 }
 
-func checkIncomingTrailerStats(t *testing.T, d *gotData, e *expectedData) {
+func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.IncomingTrailerStats
+		st *stats.InTrailer
 	)
-	if st, ok = d.s.(*stats.IncomingTrailerStats); !ok {
-		t.Fatalf("got %T, want IncomingTrailerStats", d.s)
+	if st, ok = d.s.(*stats.InTrailer); !ok {
+		t.Fatalf("got %T, want InTrailer", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
@@ -395,13 +395,13 @@ func checkIncomingTrailerStats(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutgoingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
+func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.OutgoingHeaderStats
+		st *stats.OutHeader
 	)
-	if st, ok = d.s.(*stats.OutgoingHeaderStats); !ok {
-		t.Fatalf("got %T, want OutgoingHeaderStats", d.s)
+	if st, ok = d.s.(*stats.OutHeader); !ok {
+		t.Fatalf("got %T, want OutHeader", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
@@ -423,13 +423,13 @@ func checkOutgoingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutgoingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
+func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.OutgoingPayloadStats
+		st *stats.OutPayload
 	)
-	if st, ok = d.s.(*stats.OutgoingPayloadStats); !ok {
-		t.Fatalf("got %T, want OutgoingPayloadStats", d.s)
+	if st, ok = d.s.(*stats.OutPayload); !ok {
+		t.Fatalf("got %T, want OutPayload", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
@@ -471,18 +471,18 @@ func checkOutgoingPayloadStats(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutgoingTrailerStats(t *testing.T, d *gotData, e *expectedData) {
+func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.OutgoingTrailerStats
+		st *stats.OutTrailer
 	)
-	if st, ok = d.s.(*stats.OutgoingTrailerStats); !ok {
-		t.Fatalf("got %T, want OutgoingTrailerStats", d.s)
+	if st, ok = d.s.(*stats.OutTrailer); !ok {
+		t.Fatalf("got %T, want OutTrailer", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	if st.IsClient {
+	if st.Client {
 		t.Fatalf("st IsClient = true, want false")
 	}
 	// TODO check real length, not just > 0.
@@ -494,9 +494,9 @@ func checkOutgoingTrailerStats(t *testing.T, d *gotData, e *expectedData) {
 func checkErrorStats(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.ErrorStats
+		st *stats.RPCErr
 	)
-	if st, ok = d.s.(*stats.ErrorStats); !ok {
+	if st, ok = d.s.(*stats.RPCErr); !ok {
 		t.Fatalf("got %T, want ErrorStats", d.s)
 	}
 	if d.ctx == nil {
@@ -512,10 +512,10 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if !s.ClientStats() {
+		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
@@ -538,11 +538,11 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkIncomingHeaderStats,
-		checkIncomingPayloadStats,
-		checkOutgoingHeaderStats,
-		checkOutgoingPayloadStats,
-		checkOutgoingTrailerStats,
+		checkInHeader,
+		checkInPayload,
+		checkOutHeader,
+		checkOutPayload,
+		checkOutTrailer,
 	}
 
 	if len(got) != len(checkFuncs) {
@@ -563,10 +563,10 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if !s.ClientStats() {
+		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
@@ -590,10 +590,10 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkIncomingHeaderStats,
-		checkIncomingPayloadStats,
-		checkOutgoingHeaderStats,
-		checkOutgoingTrailerStats,
+		checkInHeader,
+		checkInPayload,
+		checkOutHeader,
+		checkOutTrailer,
 		checkErrorStats,
 	}
 
@@ -615,10 +615,10 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if !s.ClientStats() {
+		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
@@ -643,17 +643,17 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkIncomingHeaderStats,
-		checkOutgoingHeaderStats,
+		checkInHeader,
+		checkOutHeader,
 	}
 	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkIncomingPayloadStats,
-		checkOutgoingPayloadStats,
+		checkInPayload,
+		checkOutPayload,
 	}
 	for i := 0; i < count; i++ {
 		checkFuncs = append(checkFuncs, ioPayFuncs...)
 	}
-	checkFuncs = append(checkFuncs, checkOutgoingTrailerStats)
+	checkFuncs = append(checkFuncs, checkOutTrailer)
 
 	if len(got) != len(checkFuncs) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
@@ -673,10 +673,10 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if !s.ClientStats() {
+		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
@@ -702,10 +702,10 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkIncomingHeaderStats,
-		checkOutgoingHeaderStats,
-		checkIncomingPayloadStats,
-		checkOutgoingTrailerStats,
+		checkInHeader,
+		checkOutHeader,
+		checkInPayload,
+		checkOutTrailer,
 		checkErrorStats,
 	}
 
@@ -732,10 +732,10 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if s.ClientStats() {
+		if s.IsClient() {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
@@ -758,11 +758,11 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
-		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, 1},
-		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
-		inpay:     &checkFuncWithCount{checkIncomingPayloadStats, 1},
-		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+		outheader: &checkFuncWithCount{checkOutHeader, 1},
+		outpay:    &checkFuncWithCount{checkOutPayload, 1},
+		inheader:  &checkFuncWithCount{checkInHeader, 1},
+		inpay:     &checkFuncWithCount{checkInPayload, 1},
+		intrailer: &checkFuncWithCount{checkInTrailer, 1},
 	}
 
 	var expectLen int
@@ -776,31 +776,31 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
-		case *stats.OutgoingHeaderStats:
+		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outheader].f(t, s, expect)
 			checkFuncs[outheader].c--
-		case *stats.OutgoingPayloadStats:
+		case *stats.OutPayload:
 			if checkFuncs[outpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outpay].f(t, s, expect)
 			checkFuncs[outpay].c--
-		case *stats.IncomingHeaderStats:
+		case *stats.InHeader:
 			if checkFuncs[inheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inheader].f(t, s, expect)
 			checkFuncs[inheader].c--
-		case *stats.IncomingPayloadStats:
+		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
-		case *stats.IncomingTrailerStats:
+		case *stats.InTrailer:
 			if checkFuncs[intrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
@@ -820,10 +820,10 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if s.ClientStats() {
+		if s.IsClient() {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
@@ -847,10 +847,10 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkOutgoingHeaderStats,
-		checkOutgoingPayloadStats,
-		checkIncomingHeaderStats,
-		checkIncomingTrailerStats,
+		checkOutHeader,
+		checkOutPayload,
+		checkInHeader,
+		checkInTrailer,
 		checkErrorStats,
 	}
 
@@ -872,10 +872,10 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if s.ClientStats() {
+		if s.IsClient() {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
@@ -900,11 +900,11 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
-		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, count},
-		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
-		inpay:     &checkFuncWithCount{checkIncomingPayloadStats, count},
-		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+		outheader: &checkFuncWithCount{checkOutHeader, 1},
+		outpay:    &checkFuncWithCount{checkOutPayload, count},
+		inheader:  &checkFuncWithCount{checkInHeader, 1},
+		inpay:     &checkFuncWithCount{checkInPayload, count},
+		intrailer: &checkFuncWithCount{checkInTrailer, 1},
 	}
 
 	var expectLen int
@@ -918,31 +918,31 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
-		case *stats.OutgoingHeaderStats:
+		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outheader].f(t, s, expect)
 			checkFuncs[outheader].c--
-		case *stats.OutgoingPayloadStats:
+		case *stats.OutPayload:
 			if checkFuncs[outpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outpay].f(t, s, expect)
 			checkFuncs[outpay].c--
-		case *stats.IncomingHeaderStats:
+		case *stats.InHeader:
 			if checkFuncs[inheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inheader].f(t, s, expect)
 			checkFuncs[inheader].c--
-		case *stats.IncomingPayloadStats:
+		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
-		case *stats.IncomingTrailerStats:
+		case *stats.InTrailer:
 			if checkFuncs[intrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
@@ -962,10 +962,10 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.Stats) {
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
-		if s.ClientStats() {
+		if s.IsClient() {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
@@ -991,10 +991,10 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutgoingHeaderStats, 1},
-		outpay:    &checkFuncWithCount{checkOutgoingPayloadStats, 1},
-		inheader:  &checkFuncWithCount{checkIncomingHeaderStats, 1},
-		intrailer: &checkFuncWithCount{checkIncomingTrailerStats, 1},
+		outheader: &checkFuncWithCount{checkOutHeader, 1},
+		outpay:    &checkFuncWithCount{checkOutPayload, 1},
+		inheader:  &checkFuncWithCount{checkInHeader, 1},
+		intrailer: &checkFuncWithCount{checkInTrailer, 1},
 		errors:    &checkFuncWithCount{checkErrorStats, 1},
 	}
 
@@ -1009,37 +1009,37 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
-		case *stats.OutgoingHeaderStats:
+		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outheader].f(t, s, expect)
 			checkFuncs[outheader].c--
-		case *stats.OutgoingPayloadStats:
+		case *stats.OutPayload:
 			if checkFuncs[outpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[outpay].f(t, s, expect)
 			checkFuncs[outpay].c--
-		case *stats.IncomingHeaderStats:
+		case *stats.InHeader:
 			if checkFuncs[inheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inheader].f(t, s, expect)
 			checkFuncs[inheader].c--
-		case *stats.IncomingPayloadStats:
+		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
-		case *stats.IncomingTrailerStats:
+		case *stats.InTrailer:
 			if checkFuncs[intrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
 			checkFuncs[intrailer].f(t, s, expect)
 			checkFuncs[intrailer].c--
-		case *stats.ErrorStats:
+		case *stats.RPCErr:
 			if checkFuncs[errors].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}

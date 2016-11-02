@@ -257,7 +257,7 @@ func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err erro
 
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
-func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outgoingPayloadStats *stats.OutgoingPayloadStats) ([]byte, error) {
+func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outStats *stats.OutPayload) ([]byte, error) {
 	var (
 		b      []byte
 		length uint
@@ -269,10 +269,10 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outgoin
 		if err != nil {
 			return nil, err
 		}
-		if outgoingPayloadStats != nil {
-			outgoingPayloadStats.Payload = msg
-			outgoingPayloadStats.Data = b
-			outgoingPayloadStats.Length = len(b)
+		if outStats != nil {
+			outStats.Payload = msg
+			outStats.Data = b
+			outStats.Length = len(b)
 		}
 		if cp != nil {
 			if err := cp.Do(cbuf, b); err != nil {
@@ -304,8 +304,8 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outgoin
 	// Copy encoded msg to buf
 	copy(buf[5:], b)
 
-	if outgoingPayloadStats != nil {
-		outgoingPayloadStats.WireLength = len(buf)
+	if outStats != nil {
+		outStats.WireLength = len(buf)
 	}
 
 	return buf, nil
@@ -324,14 +324,14 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) er
 	return nil
 }
 
-func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxMsgSize int, incomingPayloadStats *stats.IncomingPayloadStats) error {
+func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{}, maxMsgSize int, inStats *stats.InPayload) error {
 	pf, d, err := p.recvMsg(maxMsgSize)
 	if err != nil {
 		return err
 	}
-	if incomingPayloadStats != nil {
-		incomingPayloadStats.ReceivedTime = time.Now()
-		incomingPayloadStats.WireLength = len(d)
+	if inStats != nil {
+		inStats.RecvTime = time.Now()
+		inStats.WireLength = len(d)
 	}
 	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
 		return err
@@ -350,10 +350,10 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	if err := c.Unmarshal(d, m); err != nil {
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
-	if incomingPayloadStats != nil {
-		incomingPayloadStats.Payload = m
-		incomingPayloadStats.Data = d
-		incomingPayloadStats.Length = len(d)
+	if inStats != nil {
+		inStats.Payload = m
+		inStats.Data = d
+		inStats.Length = len(d)
 	}
 	return nil
 }

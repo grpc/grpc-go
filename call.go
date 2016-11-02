@@ -64,23 +64,23 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 		return
 	}
 	p := &parser{r: stream}
-	var incomingPayloadStats *stats.IncomingPayloadStats
+	var inStats *stats.InPayload
 	if stats.On() {
-		incomingPayloadStats = &stats.IncomingPayloadStats{
-			IsClient: true,
+		inStats = &stats.InPayload{
+			Client: true,
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, incomingPayloadStats); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, inStats); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return
 		}
 	}
-	if err == io.EOF && stream.StatusCode() == codes.OK && incomingPayloadStats != nil {
-		// TODO in the current implementation, incomingTrailerStats is handled before incomingPayloadStats. Fix the order if necessary.
-		stats.Handle(stream.Context(), incomingPayloadStats)
+	if err == io.EOF && stream.StatusCode() == codes.OK && inStats != nil {
+		// TODO in the current implementation, inTrailer is handled before inStats. Fix the order if necessary.
+		stats.Handle(stream.Context(), inStats)
 	}
 	c.trailerMD = stream.Trailer()
 	return nil
@@ -101,25 +101,25 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 		}
 	}()
 	var (
-		cbuf                 *bytes.Buffer
-		outgoingPayloadStats *stats.OutgoingPayloadStats
+		cbuf     *bytes.Buffer
+		outStats *stats.OutPayload
 	)
 	if compressor != nil {
 		cbuf = new(bytes.Buffer)
 	}
 	if stats.On() {
-		outgoingPayloadStats = &stats.OutgoingPayloadStats{
-			IsClient: true,
+		outStats = &stats.OutPayload{
+			Client: true,
 		}
 	}
-	outBuf, err := encode(codec, args, compressor, cbuf, outgoingPayloadStats)
+	outBuf, err := encode(codec, args, compressor, cbuf, outStats)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
-	if outgoingPayloadStats != nil {
-		outgoingPayloadStats.SentTime = time.Now()
-		stats.Handle(stream.Context(), outgoingPayloadStats)
+	if outStats != nil {
+		outStats.SentTime = time.Now()
+		stats.Handle(stream.Context(), outStats)
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
@@ -179,9 +179,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	)
 	defer func() {
 		if e != nil && stats.On() {
-			errorStats := &stats.ErrorStats{
-				IsClient: true,
-				Error:    e,
+			errorStats := &stats.RPCErr{
+				Client: true,
+				Error:  e,
 			}
 			if stream != nil {
 				stats.Handle(stream.Context(), errorStats)

@@ -450,15 +450,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 	if stats.On() {
-		outgoingHeaderStats := &stats.OutgoingHeaderStats{
-			IsClient:   true,
+		outHeader := &stats.OutHeader{
+			Client:     true,
 			WireLength: bufLen,
 			Method:     callHdr.Method,
 			RemoteAddr: t.RemoteAddr(),
 			LocalAddr:  t.LocalAddr(),
 			Encryption: callHdr.SendCompress,
 		}
-		stats.Handle(s.Context(), outgoingHeaderStats)
+		stats.Handle(s.Context(), outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -891,17 +891,17 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	defer func() {
 		if stats.On() {
 			if isHeader {
-				incomingHeaderStats := &stats.IncomingHeaderStats{
-					IsClient:   true,
+				inHeader := &stats.InHeader{
+					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.ctx, incomingHeaderStats)
+				stats.Handle(s.ctx, inHeader)
 			} else {
-				incomingTrailerStats := &stats.IncomingTrailerStats{
-					IsClient:   true,
+				inTrailer := &stats.InTrailer{
+					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.ctx, incomingTrailerStats)
+				stats.Handle(s.ctx, inTrailer)
 			}
 		}
 	}()

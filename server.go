@@ -552,16 +552,16 @@ func (s *Server) removeConn(c io.Closer) {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
-		cbuf                 *bytes.Buffer
-		outgoingPayloadStats *stats.OutgoingPayloadStats
+		cbuf     *bytes.Buffer
+		outStats *stats.OutPayload
 	)
 	if cp != nil {
 		cbuf = new(bytes.Buffer)
 	}
 	if stats.On() {
-		outgoingPayloadStats = &stats.OutgoingPayloadStats{}
+		outStats = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outgoingPayloadStats)
+	p, err := encode(s.opts.codec, msg, cp, cbuf, outStats)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -573,10 +573,10 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	err = t.Write(stream, p, opts)
-	if outgoingPayloadStats != nil {
-		outgoingPayloadStats.SentTime = time.Now()
+	if outStats != nil {
+		outStats.SentTime = time.Now()
 
-		stats.Handle(stream.Context(), outgoingPayloadStats)
+		stats.Handle(stream.Context(), outStats)
 	}
 	return err
 }
@@ -584,7 +584,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
 	defer func() {
 		if stats.On() && err != nil && err != io.EOF {
-			errorStats := &stats.ErrorStats{
+			errorStats := &stats.RPCErr{
 				Error: toRPCErr(err),
 			}
 			stats.Handle(stream.Context(), errorStats)
@@ -608,11 +608,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	p := &parser{r: stream}
 	for {
 		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
-		var incomingPayloadStats *stats.IncomingPayloadStats
+		var inStats *stats.InPayload
 		if stats.On() {
-			incomingPayloadStats = &stats.IncomingPayloadStats{
+			inStats = &stats.InPayload{
 
-				ReceivedTime: time.Now(),
+				RecvTime: time.Now(),
 			}
 		}
 		if err == io.EOF {
@@ -658,8 +658,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		statusCode := codes.OK
 		statusDesc := ""
 		df := func(v interface{}) error {
-			if incomingPayloadStats != nil {
-				incomingPayloadStats.WireLength = len(req)
+			if inStats != nil {
+				inStats.WireLength = len(req)
 			}
 			if pf == compressionMade {
 				var err error
@@ -680,11 +680,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
 			}
-			if incomingPayloadStats != nil {
-				incomingPayloadStats.Payload = v
-				incomingPayloadStats.Data = req
-				incomingPayloadStats.Length = len(req)
-				stats.Handle(stream.Context(), incomingPayloadStats)
+			if inStats != nil {
+				inStats.Payload = v
+				inStats.Data = req
+				inStats.Length = len(req)
+				stats.Handle(stream.Context(), inStats)
 			}
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
@@ -743,7 +743,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	defer func() {
 		if stats.On() && err != nil && err != io.EOF {
-			errorStats := &stats.ErrorStats{
+			errorStats := &stats.RPCErr{
 				Error: toRPCErr(err),
 			}
 			stats.Handle(stream.Context(), errorStats)
@@ -832,7 +832,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		}
 		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
 		if stats.On() {
-			errorStats := &stats.ErrorStats{
+			errorStats := &stats.RPCErr{
 				Error: Errorf(codes.InvalidArgument, errDesc),
 			}
 			stats.Handle(stream.Context(), errorStats)
@@ -859,7 +859,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		}
 		errDesc := fmt.Sprintf("unknown service %v", service)
 		if stats.On() {
-			errorStats := &stats.ErrorStats{
+			errorStats := &stats.RPCErr{
 				Error: Errorf(codes.InvalidArgument, errDesc),
 			}
 			stats.Handle(stream.Context(), errorStats)
@@ -891,7 +891,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	}
 	errDesc := fmt.Sprintf("unknown method %v", method)
 	if stats.On() {
-		errorStats := &stats.ErrorStats{
+		errorStats := &stats.RPCErr{
 			Error: Errorf(codes.InvalidArgument, errDesc),
 		}
 		stats.Handle(stream.Context(), errorStats)

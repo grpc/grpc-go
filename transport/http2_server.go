@@ -236,14 +236,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.updateWindow(s, uint32(n))
 	}
 	if stats.On() {
-		incomingHeaderStats := &stats.IncomingHeaderStats{
+		inHeader := &stats.InHeader{
 			Method:     s.method,
 			RemoteAddr: t.conn.RemoteAddr(),
 			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: s.recvCompress,
 			WireLength: int(frame.Header().Length),
 		}
-		stats.Handle(s.ctx, incomingHeaderStats)
+		stats.Handle(s.ctx, inHeader)
 	}
 	handle(s)
 	return
@@ -524,10 +524,10 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 		return err
 	}
 	if stats.On() {
-		outgoingHeaderStats := &stats.OutgoingHeaderStats{
+		outHeader := &stats.OutHeader{
 			WireLength: bufLen,
 		}
-		stats.Handle(s.Context(), outgoingHeaderStats)
+		stats.Handle(s.Context(), outHeader)
 	}
 	t.writableChan <- 0
 	return nil
@@ -587,10 +587,10 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 		return err
 	}
 	if stats.On() {
-		outgoingTrailerStats := &stats.OutgoingTrailerStats{
+		outTrailer := &stats.OutTrailer{
 			WireLength: bufLen,
 		}
-		stats.Handle(s.Context(), outgoingTrailerStats)
+		stats.Handle(s.Context(), outTrailer)
 	}
 	t.closeStream(s)
 	t.writableChan <- 0
