@@ -36,6 +36,7 @@ import com.google.protobuf.Message;
 import com.google.protobuf.Message.Builder;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.util.JsonFormat;
+import com.google.protobuf.util.JsonFormat.Parser;
 import com.google.protobuf.util.JsonFormat.Printer;
 
 import io.grpc.ExperimentalApi;
@@ -78,9 +79,20 @@ public class ProtoUtils {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1786")
   public static <T extends Message> Marshaller<T> jsonMarshaller(final T defaultInstance) {
+    final Parser parser = JsonFormat.parser();
     final Printer printer = JsonFormat.printer();
-    // TODO(carl-mastrangelo): Add support for ExtensionRegistry (TypeRegistry?)
-    final JsonFormat.Parser parser = JsonFormat.parser();
+    return jsonMarshaller(defaultInstance, parser, printer);
+  }
+
+  /**
+   * Create a {@code Marshaller} for json protos of the same type as {@code defaultInstance}.
+   *
+   * <p>This is an unstable API and has not been optimized yet for performance.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1786")
+  public static <T extends Message> Marshaller<T> jsonMarshaller(
+      final T defaultInstance, final Parser parser, final Printer printer) {
+
     final Charset charset = Charset.forName("UTF-8");
 
     return new Marshaller<T>() {
