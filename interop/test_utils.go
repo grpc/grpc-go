@@ -52,11 +52,11 @@ import (
 )
 
 var (
-	reqSizes      = []int{27182, 8, 1828, 45904}
-	respSizes     = []int{31415, 9, 2653, 58979}
-	largeReqSize  = 271828
-	largeRespSize = 314159
-	initialMetadataKey = "x-grpc-test-echo-initial"
+	reqSizes            = []int{27182, 8, 1828, 45904}
+	respSizes           = []int{31415, 9, 2653, 58979}
+	largeReqSize        = 271828
+	largeRespSize       = 314159
+	initialMetadataKey  = "x-grpc-test-echo-initial"
 	trailingMetadataKey = "x-grpc-test-echo-trailing-bin"
 )
 
@@ -457,9 +457,9 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 }
 
 var (
-	initialMetadataValue = "test_initial_metadata_value"
+	initialMetadataValue  = "test_initial_metadata_value"
 	trailingMetadataValue = "\x0a\x0b\x0a\x0b\x0a\x0b"
-	customMetadata = metadata.Pairs(
+	customMetadata        = metadata.Pairs(
 		initialMetadataKey, initialMetadataValue,
 		trailingMetadataKey, trailingMetadataValue,
 	)
@@ -489,7 +489,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 		ResponseSize: proto.Int32(int32(1)),
 		Payload:      pl,
 	}
-	ctx := metadata.NewContext(context.Background(), customMetadata);
+	ctx := metadata.NewContext(context.Background(), customMetadata)
 	var header, trailer metadata.MD
 	reply, err := tc.UnaryCall(
 		ctx,
@@ -586,12 +586,16 @@ func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	}
 }
 
-func DoUnimplementedMethod(tc testpb.TestServiceClient) {
-	var code int32 = 12
-	expectedCode := codes.Code(code)
-	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
-	if grpc.Code(err) != expectedCode {
-		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), expectedCode)
+func DoUnimplementedMethod(serverAddr string) {
+	cc, err := grpc.Dial(serverAddr, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		grpclog.Fatalf("Failed to dial to the backend %v", err)
+	}
+	var (
+		req, reply proto.Message
+	)
+	if err := grpc.Invoke(context.Background(), "/foo/bar", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
 	}
 }
 
@@ -601,10 +605,6 @@ type testServer struct {
 // NewTestServer creates a test server for test service.
 func NewTestServer() testpb.TestServiceServer {
 	return &testServer{}
-}
-
-func (s *testServer) UnimplementedCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-	return nil, grpc.Errorf(codes.Code(12), "")  // 12 == UNIMPLEMENTED
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

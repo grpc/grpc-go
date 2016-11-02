@@ -191,7 +191,7 @@ func main() {
 		interop.DoCustomMetadata(tc)
 		grpclog.Println("CustomMetadata done")
 	case "unimplemented_method":
-		interop.DoUnimplementedMethod(tc)
+		interop.DoUnimplementedMethod(serverAddr)
 		grpclog.Println("UnimplementedMethod done")
 	case "unimplemented_service":
 		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
