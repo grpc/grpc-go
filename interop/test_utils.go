@@ -465,7 +465,7 @@ var (
 	)
 )
 
-func ValidateMetadata(header, trailer metadata.MD) {
+func validateMetadata(header, trailer metadata.MD) {
 	if len(header[initialMetadataKey]) != 1 {
 		grpclog.Fatalf("Expected exactly one header from server. Received %d", len(header[initialMetadataKey]))
 	}
@@ -505,7 +505,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 	if t != testpb.PayloadType_COMPRESSABLE || s != 1 {
 		grpclog.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, 1)
 	}
-	ValidateMetadata(header, trailer)
+	validateMetadata(header, trailer)
 
 	// Testing with FullDuplex
 	stream, err := tc.FullDuplexCall(ctx)
@@ -539,7 +539,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 		grpclog.Fatalf("%v failed to complete the custom metadata test: %v", stream, err)
 	}
 	streamTrailer := stream.Trailer()
-	ValidateMetadata(streamHeader, streamTrailer)
+	validateMetadata(streamHeader, streamTrailer)
 }
 
 // DoStatusCodeAndMessage checks that the status code is propagated back to the client.
@@ -577,6 +577,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	}
 }
 
+// DoUnimplementedService attempts to call a method from an unimplemented service.
 func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	var code int32 = 12
 	expectedCode := codes.Code(code)
@@ -586,6 +587,7 @@ func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
 	}
 }
 
+// DoUnimplementedMethod attempts to call an unimplemented method.
 func DoUnimplementedMethod(serverAddr string) {
 	cc, err := grpc.Dial(serverAddr, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
