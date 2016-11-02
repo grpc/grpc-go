@@ -44,6 +44,7 @@ import (
 	"os"
 
 	"github.com/golang/protobuf/proto"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -74,6 +75,27 @@ func (protoCodec) Unmarshal(data []byte, v interface{}) error {
 
 func (protoCodec) String() string {
 	return "proto"
+}
+
+type flatbuffersInit interface {
+	//Initializes the faltbuffers table or struct from the data
+	Init(data []byte, i flatbuffers.UOffsetT)
+}
+
+// flatCodec is a Codec implementation with flatbuffers.
+type flatCodec struct{}
+
+func (flatCodec) Marshal(v interface{}) ([]byte, error) {
+	return v.(*flatbuffers.Builder).FinishedBytes(), nil
+}
+
+func (flatCodec) Unmarshal(data []byte, v interface{}) error {
+	v.(flatbuffersInit).Init(data, 0)
+	return nil
+}
+
+func (flatCodec) String() string {
+	return "flatbuffers"
 }
 
 // Compressor defines the interface gRPC uses to compress a message.
