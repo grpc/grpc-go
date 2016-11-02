@@ -352,8 +352,12 @@ class LoadClient {
 
     @Override
     public void run() {
-      while (!shutdown) {
+      while (true) {
         maxOutstanding.acquireUninterruptibly();
+        if (shutdown) {
+          maxOutstanding.release();
+          return;
+        }
         stub.unaryCall(simpleRequest, new StreamObserver<Messages.SimpleResponse>() {
           long now = System.nanoTime();
           @Override
@@ -364,8 +368,8 @@ class LoadClient {
           @Override
           public void onError(Throwable t) {
             maxOutstanding.release();
-            log.log(Level.INFO, "Error in AsyncUnary call", t);
-
+            Level level = shutdown ? Level.FINE : Level.INFO;
+            log.log(level, "Error in AsyncUnary call", t);
           }
 
           @Override
@@ -415,7 +419,8 @@ class LoadClient {
               @Override
               public void onError(Throwable t) {
                 maxOutstanding.release();
-                log.log(Level.INFO, "Error in Async Ping-Pong call", t);
+                Level level = shutdown ? Level.FINE : Level.INFO;
+                log.log(level, "Error in Async Ping-Pong call", t);
 
               }
 
@@ -467,13 +472,18 @@ class LoadClient {
 
     @Override
     public void run() {
-      while (!shutdown) {
+      while (true) {
         maxOutstanding.acquireUninterruptibly();
+        if (shutdown) {
+          maxOutstanding.release();
+          return;
+        }
         ClientCalls.asyncUnaryCall(
             channel.newCall(LoadServer.GENERIC_UNARY_METHOD, CallOptions.DEFAULT),
             genericRequest.slice(),
             new StreamObserver<ByteBuf>() {
               long now = System.nanoTime();
+
               @Override
               public void onNext(ByteBuf value) {
 
@@ -482,7 +492,8 @@ class LoadClient {
               @Override
               public void onError(Throwable t) {
                 maxOutstanding.release();
-                log.log(Level.INFO, "Error in Generic Async Unary call", t);
+                Level level = shutdown ? Level.FINE : Level.INFO;
+                log.log(level, "Error in Generic Async Unary call", t);
               }
 
               @Override
@@ -509,8 +520,12 @@ class LoadClient {
 
     @Override
     public void run() {
-      while (!shutdown) {
+      while (true) {
         maxOutstanding.acquireUninterruptibly();
+        if (shutdown) {
+          maxOutstanding.release();
+          return;
+        }
         final ClientCall<ByteBuf, ByteBuf> call =
             channel.newCall(LoadServer.GENERIC_STREAMING_PING_PONG_METHOD, CallOptions.DEFAULT);
         call.start(new ClientCall.Listener<ByteBuf>() {
@@ -519,19 +534,21 @@ class LoadClient {
           @Override
           public void onMessage(ByteBuf message) {
             delay(System.nanoTime() - now);
+            if (shutdown) {
+              call.cancel("Shutting down", null);
+              return;
+            }
             call.request(1);
             call.sendMessage(genericRequest.slice());
             now = System.nanoTime();
-            if (shutdown) {
-              call.cancel("Shutting down", null);
-            }
           }
 
           @Override
           public void onClose(Status status, Metadata trailers) {
             maxOutstanding.release();
+            Level level = shutdown ? Level.FINE : Level.INFO;
             if (!status.isOk() && status.getCode() != Status.Code.CANCELLED) {
-              log.log(Level.INFO, "Error in Generic Async Ping-Pong call", status.getCause());
+              log.log(level, "Error in Generic Async Ping-Pong call", status.getCause());
             }
           }
         }, new Metadata());
