@@ -236,14 +236,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.updateWindow(s, uint32(n))
 	}
 	if stats.On() {
-		initStats := &stats.InitStats{
+		incomingHeaderStats := &stats.IncomingHeaderStats{
 			Method:     s.method,
 			RemoteAddr: t.conn.RemoteAddr(),
 			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: s.recvCompress,
-		}
-		stats.Handle(s.ctx, initStats)
-		incomingHeaderStats := &stats.IncomingHeaderStats{
 			WireLength: int(frame.Header().Length),
 		}
 		stats.Handle(s.ctx, incomingHeaderStats)

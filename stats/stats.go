@@ -50,22 +50,6 @@ type Stats interface {
 	isStats()
 }
 
-// InitStats indicates an RPC just started.
-type InitStats struct {
-	// IsClient indicates if this stats is a client stats.
-	IsClient bool
-	// Method is the full RPC method string, i.e., /package.service/method.
-	Method string
-	// RemoteAddr is the remote address of the corresponding connection.
-	RemoteAddr net.Addr
-	// LocalAddr is the local address of the corresponding connection.
-	LocalAddr net.Addr
-	// Encryption is encrypt method used in the RPC.
-	Encryption string
-}
-
-func (s *InitStats) isStats() {}
-
 // IncomingPayloadStats contains the information for a incoming payload.
 type IncomingPayloadStats struct {
 	// IsClient indicates if this stats is a client stats.
@@ -85,11 +69,21 @@ type IncomingPayloadStats struct {
 func (s *IncomingPayloadStats) isStats() {}
 
 // IncomingHeaderStats indicates a header is received.
+// Method, addresses and Encryption are only valid if IsClient is false.
 type IncomingHeaderStats struct {
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
 	WireLength int
+
+	// Method is the full RPC method string, i.e., /package.service/method.
+	Method string
+	// RemoteAddr is the remote address of the corresponding connection.
+	RemoteAddr net.Addr
+	// LocalAddr is the local address of the corresponding connection.
+	LocalAddr net.Addr
+	// Encryption is encrypt method used in the RPC.
+	Encryption string
 }
 
 func (s *IncomingHeaderStats) isStats() {}
@@ -123,11 +117,21 @@ type OutgoingPayloadStats struct {
 func (s *OutgoingPayloadStats) isStats() {}
 
 // OutgoingHeaderStats indicates a header is sent.
+// Method, addresses and Encryption are only valid if IsClient is true.
 type OutgoingHeaderStats struct {
 	// IsClient indicates if this stats is a client stats.
 	IsClient bool
 	// WireLength is the wire length of header.
 	WireLength int
+
+	// Method is the full RPC method string, i.e., /package.service/method.
+	Method string
+	// RemoteAddr is the remote address of the corresponding connection.
+	RemoteAddr net.Addr
+	// LocalAddr is the local address of the corresponding connection.
+	LocalAddr net.Addr
+	// Encryption is encrypt method used in the RPC.
+	Encryption string
 }
 
 func (s *OutgoingHeaderStats) isStats() {}

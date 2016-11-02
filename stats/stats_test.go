@@ -290,31 +290,6 @@ type gotData struct {
 	s   stats.Stats
 }
 
-func checkInitStats(t *testing.T, d *gotData, e *expectedData) {
-	var (
-		ok bool
-		st *stats.InitStats
-	)
-	if st, ok = d.s.(*stats.InitStats); !ok {
-		t.Fatalf("got %T, want InitStats", d.s)
-	}
-	if d.ctx == nil {
-		t.Fatalf("d.ctx = nil, want <non-nil>")
-	}
-	if st.IsClient {
-		t.Fatalf("st IsClient = true, want false")
-	}
-	if st.Method != e.method {
-		t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
-	}
-	if st.LocalAddr.String() != e.localAddr {
-		t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.localAddr)
-	}
-	if st.Encryption != e.encryption {
-		t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
-	}
-}
-
 func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
@@ -328,6 +303,15 @@ func checkIncomingHeaderStats(t *testing.T, d *gotData, e *expectedData) {
 	}
 	if st.IsClient {
 		t.Fatalf("st.IsClient = true, want false")
+	}
+	if st.Method != e.method {
+		t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
+	}
+	if st.LocalAddr.String() != e.localAddr {
+		t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.localAddr)
+	}
+	if st.Encryption != e.encryption {
+		t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
 	}
 	// TODO check real length, not just > 0.
 	if st.WireLength <= 0 {
@@ -511,7 +495,6 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkInitStats,
 		checkIncomingHeaderStats,
 		checkIncomingPayloadStats,
 		checkOutgoingHeaderStats,
@@ -562,7 +545,6 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkInitStats,
 		checkIncomingHeaderStats,
 		checkIncomingPayloadStats,
 		checkOutgoingHeaderStats,
@@ -614,7 +596,6 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkInitStats,
 		checkIncomingHeaderStats,
 		checkOutgoingHeaderStats,
 	}
@@ -672,7 +653,6 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
-		checkInitStats,
 		checkIncomingHeaderStats,
 		checkOutgoingHeaderStats,
 		checkIncomingPayloadStats,
