@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/grpclog"
 )
 
 // RPCStats contains stats information about RPCs.
@@ -194,19 +195,25 @@ func Handle(ctx context.Context, s RPCStats) {
 	handler(ctx, s)
 }
 
-// RegisterHandler registers the user handler function and starts the stats collection.
+// RegisterHandler registers the user handler function.
+// If another handler was registered before, this new handler will overwrite the old one.
 // This handler function will be called to process the stats.
 func RegisterHandler(f func(context.Context, RPCStats)) {
 	handler = f
-	start()
 }
 
-// start starts the stats collection.
-func start() {
+// Start starts the stats collection.
+// Stats will only be started if handler is not nil.
+func Start() {
+	if handler == nil {
+		grpclog.Println("handler is nil when starting stats. Stats is not started")
+		return
+	}
 	atomic.StoreInt32(on, 1)
 }
 
 // Stop stops the collection of any further stats.
+// Stop won't unregister handler.
 func Stop() {
 	atomic.StoreInt32(on, 0)
 }

@@ -51,13 +51,21 @@ import (
 
 func TestStartStop(t *testing.T) {
 	stats.RegisterHandler(nil)
-	defer stats.Stop() // Stop stats in the case of the first Fatalf.
+	stats.Start()
+	if stats.On() != false {
+		t.Fatalf("stats.Start() with nil handler, stats.On() = true, want false")
+	}
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
+	if stats.On() != false {
+		t.Fatalf("after stats.RegisterHandler(), stats.On() = true, want false")
+	}
+	stats.Start()
 	if stats.On() != true {
-		t.Fatalf("after start.RegisterCallBack(_), stats.On() = false, want true")
+		t.Fatalf("after stats.Start(_), stats.On() = false, want true")
 	}
 	stats.Stop()
 	if stats.On() != false {
-		t.Fatalf("after start.Stop(), stats.On() = false, want true")
+		t.Fatalf("after stats.Stop(), stats.On() = true, want false")
 	}
 }
 
@@ -519,6 +527,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -570,6 +579,7 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -622,6 +632,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -680,6 +691,7 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -739,6 +751,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -827,6 +840,7 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -879,6 +893,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -969,6 +984,7 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.Start()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
