@@ -147,6 +147,8 @@ type OutHeader struct {
 	LocalAddr net.Addr
 	// Encryption is encrypt method used in the RPC.
 	Encryption string
+	// Failfast indicates if this RPC is failfast.
+	FailFast bool
 }
 
 func (s *OutHeader) isStats() {}

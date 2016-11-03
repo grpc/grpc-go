@@ -197,8 +197,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	for {
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
-			Host:   cc.authority,
-			Method: method,
+			Host:     cc.authority,
+			Method:   method,
+			FailFast: c.failFast,
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()

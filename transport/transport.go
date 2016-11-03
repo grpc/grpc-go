@@ -427,6 +427,9 @@ type CallHdr struct {
 	// only a hint. The transport may modify the flush decision
 	// for performance purposes.
 	Flush bool
+
+	// FailFast indicates whether the RPC is failfast.
+	FailFast bool
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport

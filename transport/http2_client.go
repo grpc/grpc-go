@@ -457,6 +457,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			RemoteAddr: t.RemoteAddr(),
 			LocalAddr:  t.LocalAddr(),
 			Encryption: callHdr.SendCompress,
+			FailFast:   callHdr.FailFast,
 		}
 		stats.Handle(s.Context(), outHeader)
 	}
