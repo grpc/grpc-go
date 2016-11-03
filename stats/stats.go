@@ -31,7 +31,7 @@
  *
  */
 
-// Package stats reports stats for gRPC.
+// Package stats is for collecting and reporting various network and RPC stats.
 // This package is for monitoring purpose only.
 // All APIs are experimental.
 package stats // import "google.golang.org/grpc/stats"

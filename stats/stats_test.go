@@ -528,6 +528,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -563,8 +564,6 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		f(t, got[i], expect)
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestServerStatsUnaryRPCError(t *testing.T) {
@@ -580,6 +579,7 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -616,8 +616,6 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 		f(t, got[i], expect)
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestServerStatsStreamingRPC(t *testing.T) {
@@ -633,6 +631,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -675,8 +674,6 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		f(t, got[i], expect)
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestServerStatsStreamingRPCError(t *testing.T) {
@@ -692,6 +689,7 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -730,8 +728,6 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 		f(t, got[i], expect)
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 type checkFuncWithCount struct {
@@ -752,6 +748,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -771,11 +768,11 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutHeader, 1},
-		outpay:    &checkFuncWithCount{checkOutPayload, 1},
-		inheader:  &checkFuncWithCount{checkInHeader, 1},
-		inpay:     &checkFuncWithCount{checkInPayload, 1},
-		intrailer: &checkFuncWithCount{checkInTrailer, 1},
+		outheader: {checkOutHeader, 1},
+		outpay:    {checkOutPayload, 1},
+		inheader:  {checkInHeader, 1},
+		inpay:     {checkInPayload, 1},
+		intrailer: {checkInTrailer, 1},
 	}
 
 	var expectLen int
@@ -824,8 +821,6 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		}
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestClientStatsUnaryRPCError(t *testing.T) {
@@ -841,6 +836,7 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "")
 	te.startServer(&testServer{})
@@ -877,8 +873,6 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 		f(t, got[i], expect)
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestClientStatsStreamingRPC(t *testing.T) {
@@ -894,6 +888,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -915,11 +910,11 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutHeader, 1},
-		outpay:    &checkFuncWithCount{checkOutPayload, count},
-		inheader:  &checkFuncWithCount{checkInHeader, 1},
-		inpay:     &checkFuncWithCount{checkInPayload, count},
-		intrailer: &checkFuncWithCount{checkInTrailer, 1},
+		outheader: {checkOutHeader, 1},
+		outpay:    {checkOutPayload, count},
+		inheader:  {checkInHeader, 1},
+		inpay:     {checkInPayload, count},
+		intrailer: {checkInTrailer, 1},
 	}
 
 	var expectLen int
@@ -968,8 +963,6 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		}
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
 
 func TestClientStatsStreamingRPCError(t *testing.T) {
@@ -985,6 +978,7 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 		}
 	})
 	stats.Start()
+	defer stats.Stop()
 
 	te := newTest(t, "gzip")
 	te.startServer(&testServer{})
@@ -1007,11 +1001,11 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		outheader: &checkFuncWithCount{checkOutHeader, 1},
-		outpay:    &checkFuncWithCount{checkOutPayload, 1},
-		inheader:  &checkFuncWithCount{checkInHeader, 1},
-		intrailer: &checkFuncWithCount{checkInTrailer, 1},
-		errors:    &checkFuncWithCount{checkErrorStats, 1},
+		outheader: {checkOutHeader, 1},
+		outpay:    {checkOutPayload, 1},
+		inheader:  {checkInHeader, 1},
+		intrailer: {checkInTrailer, 1},
+		errors:    {checkErrorStats, 1},
 	}
 
 	var expectLen int
@@ -1066,6 +1060,4 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 		}
 		mu.Unlock()
 	}
-
-	stats.Stop()
 }
