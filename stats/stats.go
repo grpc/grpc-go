@@ -48,7 +48,6 @@ import (
 // RPCStats contains stats information about RPCs.
 // All stats types in this package implements this interface.
 type RPCStats interface {
-	isStats()
 	// IsClient indicates if the stats is a client stats.
 	IsClient() bool
 }
@@ -68,8 +67,6 @@ type InPayload struct {
 	// RecvTime is the time when the payload is received.
 	RecvTime time.Time
 }
-
-func (s *InPayload) isStats() {}
 
 // IsClient indicates if the stats is a client stats.
 func (s *InPayload) IsClient() bool { return s.Client }
@@ -92,8 +89,6 @@ type InHeader struct {
 	Encryption string
 }
 
-func (s *InHeader) isStats() {}
-
 // IsClient indicates if the stats is a client stats.
 func (s *InHeader) IsClient() bool { return s.Client }
 
@@ -104,8 +99,6 @@ type InTrailer struct {
 	// WireLength is the wire length of header.
 	WireLength int
 }
-
-func (s *InTrailer) isStats() {}
 
 // IsClient indicates if the stats is a client stats.
 func (s *InTrailer) IsClient() bool { return s.Client }
@@ -125,8 +118,6 @@ type OutPayload struct {
 	// SentTime is the time when the payload is sent.
 	SentTime time.Time
 }
-
-func (s *OutPayload) isStats() {}
 
 // IsClient indicates if the stats is a client stats.
 func (s *OutPayload) IsClient() bool { return s.Client }
@@ -151,8 +142,6 @@ type OutHeader struct {
 	FailFast bool
 }
 
-func (s *OutHeader) isStats() {}
-
 // IsClient indicates if the stats is a client stats.
 func (s *OutHeader) IsClient() bool { return s.Client }
 
@@ -164,8 +153,6 @@ type OutTrailer struct {
 	WireLength int
 }
 
-func (s *OutTrailer) isStats() {}
-
 // IsClient indicates if the stats is a client stats.
 func (s *OutTrailer) IsClient() bool { return s.Client }
 
@@ -176,8 +163,6 @@ type RPCErr struct {
 	// Error is the error just happened. Its type is gRPC error.
 	Error error
 }
-
-func (s *RPCErr) isStats() {}
 
 // IsClient indicates if the stats is a client stats.
 func (s *RPCErr) IsClient() bool { return s.Client }
