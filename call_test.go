@@ -164,7 +164,10 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		if err != nil {
 			return
 		}
-		st, err := transport.NewServerTransport("http2", conn, maxStreams, nil)
+		config := &transport.ServerConfig{
+			MaxStreams: maxStreams,
+		}
+		st, err := transport.NewServerTransport("http2", conn, config)
 		if err != nil {
 			continue
 		}

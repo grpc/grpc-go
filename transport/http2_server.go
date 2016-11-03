@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/tap"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
@@ -61,6 +62,7 @@ type http2Server struct {
 	conn        net.Conn
 	maxStreamID uint32               // max stream ID ever seen
 	authInfo    credentials.AuthInfo // auth info about the connection
+	inTapHandle tap.ServerInHandle
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by receiving a value on writableChan
 	// and releases it by sending on writableChan.
@@ -91,12 +93,13 @@ type http2Server struct {
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (_ ServerTransport, err error) {
+func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
 	var settings []http2.Setting
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
+	maxStreams := config.MaxStreams
 	if maxStreams == 0 {
 		maxStreams = math.MaxUint32
 	} else {
@@ -122,11 +125,12 @@ func newHTTP2Server(conn net.Conn, maxStreams uint32, authInfo credentials.AuthI
 	var buf bytes.Buffer
 	t := &http2Server{
 		conn:            conn,
-		authInfo:        authInfo,
+		authInfo:        config.AuthInfo,
 		framer:          framer,
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
 		maxStreams:      maxStreams,
+		inTapHandle:     config.InTapHandle,
 		controlBuf:      newRecvBuffer(),
 		fc:              &inFlow{limit: initialConnWindowSize},
 		sendQuotaPool:   newQuotaPool(defaultWindowSize),
@@ -195,6 +199,17 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	s.recvCompress = state.encoding
 	s.method = state.method
+	if t.inTapHandle != nil {
+		var err error
+		info := &tap.Info{
+			FullMethodName: state.method,
+		}
+		s.ctx, err = t.inTapHandle(s.ctx, info)
+		if err != nil {
+			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+			return
+		}
+	}
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
