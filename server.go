@@ -188,6 +188,8 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 	}
 }
 
+// InTapHandle returns a ServerOption that sets the tap handle for all the server
+// transport to be created. Only one can be installed.
 func InTapHandle(h tap.ServerInHandle) ServerOption {
 	return func(o *options) {
 		if o.inTapHandle != nil {
