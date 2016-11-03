@@ -251,11 +251,12 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		}
 
 		// Metadata not valid.
-		enc, ok := meta.([]byte)
+		fileNameForMeta, ok := meta.(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid file descriptor for symbol: %v", name)
 		}
 
+		enc := proto.FileDescriptor(fileNameForMeta)
 		fd, err = s.decodeFileDesc(enc)
 		if err != nil {
 			return nil, err
