@@ -333,8 +333,8 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("st.Lenght = 0, want > 0")
 	}
 	if !d.client {
-		if st.Method != e.method {
-			t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
+		if st.FullMethod != e.method {
+			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.LocalAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
@@ -426,8 +426,8 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("st.Lenght = 0, want > 0")
 	}
 	if d.client {
-		if st.Method != e.method {
-			t.Fatalf("st.Method = %s, want %v", st.Method, e.method)
+		if st.FullMethod != e.method {
+			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)

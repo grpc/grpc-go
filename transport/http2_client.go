@@ -453,7 +453,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		outHeader := &stats.OutHeader{
 			Client:     true,
 			WireLength: bufLen,
-			Method:     callHdr.Method,
+			FullMethod: callHdr.Method,
 			RemoteAddr: t.RemoteAddr(),
 			LocalAddr:  t.LocalAddr(),
 			Encryption: callHdr.SendCompress,

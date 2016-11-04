@@ -237,7 +237,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if stats.On() {
 		inHeader := &stats.InHeader{
-			Method:     s.method,
+			FullMethod: s.method,
 			RemoteAddr: t.conn.RemoteAddr(),
 			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: s.recvCompress,

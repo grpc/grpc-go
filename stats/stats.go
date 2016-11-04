@@ -48,13 +48,13 @@ import (
 // RPCStats contains stats information about RPCs.
 // All stats types in this package implements this interface.
 type RPCStats interface {
-	// IsClient indicates if the stats is a client stats.
+	// IsClient returns true if this RPCStats is from client side.
 	IsClient() bool
 }
 
-// InPayload contains the information for a incoming payload.
+// InPayload contains the information for an incoming payload.
 type InPayload struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this InPayload is from client side.
 	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
@@ -68,19 +68,19 @@ type InPayload struct {
 	RecvTime time.Time
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *InPayload) IsClient() bool { return s.Client }
 
-// InHeader indicates a header is received.
-// Method, addresses and Encryption are only valid if Client is false.
+// InHeader contains stats when a header is received.
+// FullMethod, addresses and Encryption are only valid if Client is false.
 type InHeader struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this InHeader is from client side.
 	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
-	// Method is the full RPC method string, i.e., /package.service/method.
-	Method string
+	// FullMethod is the full RPC method string, i.e., /package.service/method.
+	FullMethod string
 	// RemoteAddr is the remote address of the corresponding connection.
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
@@ -89,23 +89,23 @@ type InHeader struct {
 	Encryption string
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *InHeader) IsClient() bool { return s.Client }
 
-// InTrailer indicates a trailer is received.
+// InTrailer contains stats when a trailer is received.
 type InTrailer struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this InTrailer is from client side.
 	Client bool
-	// WireLength is the wire length of header.
+	// WireLength is the wire length of trailer.
 	WireLength int
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *InTrailer) IsClient() bool { return s.Client }
 
-// OutPayload contains the information for a outgoing payload.
+// OutPayload contains the information for an outgoing payload.
 type OutPayload struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this OutPayload is from client side.
 	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
@@ -119,52 +119,52 @@ type OutPayload struct {
 	SentTime time.Time
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *OutPayload) IsClient() bool { return s.Client }
 
-// OutHeader indicates a header is sent.
-// Method, addresses and Encryption are only valid if Client is true.
+// OutHeader contains stats when a header is sent.
+// FullMethod, addresses, Encryption and FailFast are only valid if Client is true.
 type OutHeader struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this OutHeader is from client side.
 	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
-	// Method is the full RPC method string, i.e., /package.service/method.
-	Method string
+	// FullMethod is the full RPC method string, i.e., /package.service/method.
+	FullMethod string
 	// RemoteAddr is the remote address of the corresponding connection.
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
 	// Encryption is encrypt method used in the RPC.
 	Encryption string
-	// Failfast indicates if this RPC is failfast.
+	// FailFast indicates if this RPC is failfast.
 	FailFast bool
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *OutHeader) IsClient() bool { return s.Client }
 
-// OutTrailer indicates a trailer is sent.
+// OutTrailer contains stats when a trailer is sent.
 type OutTrailer struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this OutTrailer is from client side.
 	Client bool
-	// WireLength is the wire length of header.
+	// WireLength is the wire length of trailer.
 	WireLength int
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *OutTrailer) IsClient() bool { return s.Client }
 
-// RPCErr indicates an error happens.
+// RPCErr contains stats when an error happens.
 type RPCErr struct {
-	// Client indicates if this stats is a client stats.
+	// Client is true if this RPCErr is from client side.
 	Client bool
 	// Error is the error just happened. Its type is gRPC error.
 	Error error
 }
 
-// IsClient indicates if the stats is a client stats.
+// IsClient indicates if this is from client side.
 func (s *RPCErr) IsClient() bool { return s.Client }
 
 var (
