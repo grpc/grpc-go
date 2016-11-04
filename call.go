@@ -50,7 +50,8 @@ import (
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
+// TODO ctx is userCtx, not stream.Context. It is used for stats handling. Change this later if necessary.
+func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
 		if err != nil {
@@ -81,7 +82,7 @@ func recvResponse(dopts dialOptions, t transport.ClientTransport, c *callInfo, s
 	if inPayload != nil && err == io.EOF && stream.StatusCode() == codes.OK {
 		// TODO in the current implementation, inTrailer may be handled before inStats in some cases.
 		// Fix the order if necessary.
-		stats.Handle(stream.Context(), inPayload)
+		stats.Handle(ctx, inPayload)
 	}
 	c.trailerMD = stream.Trailer()
 	return nil
@@ -117,10 +118,12 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
-	err = t.Write(stream, outBuf, opts)
 	if outPayload != nil {
 		outPayload.SentTime = time.Now()
-		stats.Handle(stream.Context(), outPayload)
+	}
+	err = t.Write(stream, outBuf, opts)
+	if outPayload != nil {
+		stats.Handle(ctx, outPayload)
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
@@ -247,7 +250,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		err = recvResponse(cc.dopts, t, &c, stream, reply)
+		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
 				put()

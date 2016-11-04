@@ -552,16 +552,16 @@ func (s *Server) removeConn(c io.Closer) {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
-		cbuf     *bytes.Buffer
-		outStats *stats.OutPayload
+		cbuf       *bytes.Buffer
+		outPayload *stats.OutPayload
 	)
 	if cp != nil {
 		cbuf = new(bytes.Buffer)
 	}
 	if stats.On() {
-		outStats = &stats.OutPayload{}
+		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outStats)
+	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -572,11 +572,12 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		// the optimal option.
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
+	if outPayload != nil {
+		outPayload.SentTime = time.Now()
+	}
 	err = t.Write(stream, p, opts)
-	if outStats != nil {
-		outStats.SentTime = time.Now()
-
-		stats.Handle(stream.Context(), outStats)
+	if outPayload != nil {
+		stats.Handle(stream.Context(), outPayload)
 	}
 	return err
 }

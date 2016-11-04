@@ -213,6 +213,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 		tracing: EnableTracing,
 		trInfo:  trInfo,
+
+		userCtx: ctx,
 	}
 	if cc.dopts.cp != nil {
 		cs.cbuf = new(bytes.Buffer)
@@ -265,6 +267,10 @@ type clientStream struct {
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
 	trInfo traceInfo
+
+	// Keep the user context for stats handling.
+	// All stats handling should use the user context instead of the stream context.
+	userCtx context.Context
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -280,7 +286,7 @@ func (cs *clientStream) Header() (_ metadata.MD, err error) {
 				EndTime: time.Now(),
 				Error:   err,
 			}
-			stats.Handle(cs.s.Context(), end)
+			stats.Handle(cs.userCtx, end)
 		}
 	}()
 	m, err := cs.s.Header()
@@ -311,7 +317,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 				Client: true,
 				Error:  err,
 			}
-			stats.Handle(cs.s.Context(), end)
+			stats.Handle(cs.userCtx, end)
 		}
 	}()
 	defer func() {
@@ -336,13 +342,13 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		err = toRPCErr(err)
 	}()
-	var outStats *stats.OutPayload
+	var outPayload *stats.OutPayload
 	if stats.On() {
-		outStats = &stats.OutPayload{
+		outPayload = &stats.OutPayload{
 			Client: true,
 		}
 	}
-	out, err := encode(cs.codec, m, cs.cp, cs.cbuf, outStats)
+	out, err := encode(cs.codec, m, cs.cp, cs.cbuf, outPayload)
 	defer func() {
 		if cs.cbuf != nil {
 			cs.cbuf.Reset()
@@ -351,10 +357,12 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
+	if outPayload != nil {
+		outPayload.SentTime = time.Now()
+	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
-	if outStats != nil {
-		outStats.SentTime = time.Now()
-		stats.Handle(cs.s.Context(), outStats)
+	if outPayload != nil {
+		stats.Handle(cs.userCtx, outPayload)
 	}
 	return err
 }
@@ -371,7 +379,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 				EndTime: time.Now(),
 				Error:   e,
 			}
-			stats.Handle(cs.s.Context(), end)
+			stats.Handle(cs.userCtx, end)
 		}
 	}()
 	var inStats *stats.InPayload
@@ -396,7 +404,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			cs.mu.Unlock()
 		}
 		if inStats != nil {
-			stats.Handle(cs.s.Context(), inStats)
+			stats.Handle(cs.userCtx, inStats)
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
@@ -557,11 +565,11 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	var outStats *stats.OutPayload
+	var outPayload *stats.OutPayload
 	if stats.On() {
-		outStats = &stats.OutPayload{}
+		outPayload = &stats.OutPayload{}
 	}
-	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outStats)
+	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
 	defer func() {
 		if ss.cbuf != nil {
 			ss.cbuf.Reset()
@@ -571,12 +579,14 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		err = Errorf(codes.Internal, "grpc: %v", err)
 		return err
 	}
+	if outPayload != nil {
+		outPayload.SentTime = time.Now()
+	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
-	if outStats != nil {
-		outStats.SentTime = time.Now()
-		stats.Handle(ss.s.Context(), outStats)
+	if outPayload != nil {
+		stats.Handle(ss.s.Context(), outPayload)
 	}
 	return nil
 }

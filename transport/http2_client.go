@@ -277,6 +277,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if t.authInfo != nil {
 		pr.AuthInfo = t.authInfo
 	}
+	userCtx := ctx
 	ctx = peer.NewContext(ctx, pr)
 	authData := make(map[string]string)
 	for _, c := range t.creds {
@@ -348,6 +349,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, ErrConnClosing
 	}
 	s := t.newStream(ctx, callHdr)
+	s.userCtx = userCtx
 	t.activeStreams[s.id] = s
 
 	// This stream is not counted when applySetings(...) initialize t.streamsQuota.
@@ -459,7 +461,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			Encryption: callHdr.SendCompress,
 			FailFast:   callHdr.FailFast,
 		}
-		stats.Handle(s.Context(), outHeader)
+		stats.Handle(s.userCtx, outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -896,13 +898,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.ctx, inHeader)
+				stats.Handle(s.userCtx, inHeader)
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.ctx, inTrailer)
+				stats.Handle(s.userCtx, inTrailer)
 			}
 		}
 	}()
