@@ -307,7 +307,8 @@ type gotData struct {
 }
 
 const (
-	inits int = iota
+	begin int = iota
+	end
 	inpay
 	inheader
 	intrailer
@@ -316,6 +317,22 @@ const (
 	outtrailer
 	errors
 )
+
+func checkBegin(t *testing.T, d *gotData, e *expectedData) {
+	var (
+		ok bool
+		st *stats.Begin
+	)
+	if st, ok = d.s.(*stats.Begin); !ok {
+		t.Fatalf("got %T, want Begin", d.s)
+	}
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	if st.BeginTime.IsZero() {
+		t.Fatalf("st.BeginTime = %v, want <non-zero>", st.BeginTime)
+	}
+}
 
 func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	var (
@@ -509,16 +526,19 @@ func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkErrorStats(t *testing.T, d *gotData, e *expectedData) {
+func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.RPCErr
+		st *stats.End
 	)
-	if st, ok = d.s.(*stats.RPCErr); !ok {
-		t.Fatalf("got %T, want ErrorStats", d.s)
+	if st, ok = d.s.(*stats.End); !ok {
+		t.Fatalf("got %T, want End", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	if st.EndTime.IsZero() {
+		t.Fatalf("st.EndTime = %v, want <non-zero>", st.EndTime)
 	}
 	if grpc.Code(st.Error) != grpc.Code(e.err) || grpc.ErrorDesc(st.Error) != grpc.ErrorDesc(e.err) {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
@@ -559,10 +579,12 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
+		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 		checkOutPayload,
 		checkOutTrailer,
+		checkEnd,
 	}
 
 	if len(got) != len(checkFuncs) {
@@ -611,10 +633,11 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
+		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 		checkOutTrailer,
-		checkErrorStats,
+		checkEnd,
 	}
 
 	if len(got) != len(checkFuncs) {
@@ -664,6 +687,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
+		checkBegin,
 		checkOutHeader,
 	}
 	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -673,7 +697,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	for i := 0; i < count; i++ {
 		checkFuncs = append(checkFuncs, ioPayFuncs...)
 	}
-	checkFuncs = append(checkFuncs, checkOutTrailer)
+	checkFuncs = append(checkFuncs, checkOutTrailer, checkEnd)
 
 	if len(got) != len(checkFuncs) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
@@ -723,10 +747,11 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
+		checkBegin,
 		checkOutHeader,
 		checkInPayload,
 		checkOutTrailer,
-		checkErrorStats,
+		checkEnd,
 	}
 
 	if len(got) != len(checkFuncs) {
@@ -780,11 +805,13 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		begin:     {checkBegin, 1},
 		outheader: {checkOutHeader, 1},
 		outpay:    {checkOutPayload, 1},
 		inheader:  {checkInHeader, 1},
 		inpay:     {checkInPayload, 1},
 		intrailer: {checkInTrailer, 1},
+		end:       {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -798,6 +825,12 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
+		case *stats.Begin:
+			if checkFuncs[begin].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[begin].f(t, s, expect)
+			checkFuncs[begin].c--
 		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -828,6 +861,12 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			}
 			checkFuncs[intrailer].f(t, s, expect)
 			checkFuncs[intrailer].c--
+		case *stats.End:
+			if checkFuncs[end].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[end].f(t, s, expect)
+			checkFuncs[end].c--
 		default:
 			t.Fatalf("unexpected stats: %T", s)
 		}
@@ -871,11 +910,12 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkBegin,
 		checkOutHeader,
 		checkOutPayload,
 		checkInHeader,
 		checkInTrailer,
-		checkErrorStats,
+		checkEnd,
 	}
 
 	if len(got) != len(checkFuncs) {
@@ -898,6 +938,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {
+			// t.Logf(" == %T %v", s, s.IsClient())
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
@@ -926,11 +967,13 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		begin:     {checkBegin, 1},
 		outheader: {checkOutHeader, 1},
 		outpay:    {checkOutPayload, count},
 		inheader:  {checkInHeader, 1},
 		inpay:     {checkInPayload, count},
 		intrailer: {checkInTrailer, 1},
+		end:       {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -944,6 +987,12 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
+		case *stats.Begin:
+			if checkFuncs[begin].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[begin].f(t, s, expect)
+			checkFuncs[begin].c--
 		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -974,6 +1023,12 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 			}
 			checkFuncs[intrailer].f(t, s, expect)
 			checkFuncs[intrailer].c--
+		case *stats.End:
+			if checkFuncs[end].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[end].f(t, s, expect)
+			checkFuncs[end].c--
 		default:
 			t.Fatalf("unexpected stats: %T", s)
 		}
@@ -1019,11 +1074,12 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		begin:     {checkBegin, 1},
 		outheader: {checkOutHeader, 1},
 		outpay:    {checkOutPayload, 1},
 		inheader:  {checkInHeader, 1},
 		intrailer: {checkInTrailer, 1},
-		errors:    {checkErrorStats, 1},
+		errors:    {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -1037,6 +1093,12 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	for _, s := range got {
 		mu.Lock()
 		switch s.s.(type) {
+		case *stats.Begin:
+			if checkFuncs[begin].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s)
+			}
+			checkFuncs[begin].f(t, s, expect)
+			checkFuncs[begin].c--
 		case *stats.OutHeader:
 			if checkFuncs[outheader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -1067,7 +1129,7 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			}
 			checkFuncs[intrailer].f(t, s, expect)
 			checkFuncs[intrailer].c--
-		case *stats.RPCErr:
+		case *stats.End:
 			if checkFuncs[errors].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}

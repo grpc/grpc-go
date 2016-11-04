@@ -582,12 +582,23 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, md *MethodDesc, trInfo *traceInfo) (err error) {
+	if stats.On() {
+		begin := &stats.Begin{
+			BeginTime: time.Now(),
+		}
+		stats.Handle(stream.Context(), begin)
+	}
 	defer func() {
-		if stats.On() && err != nil && err != io.EOF {
-			errorStats := &stats.RPCErr{
-				Error: toRPCErr(err),
+		if stats.On() {
+			var e error
+			if err != nil && err != io.EOF {
+				e = toRPCErr(err)
 			}
-			stats.Handle(stream.Context(), errorStats)
+			end := &stats.End{
+				EndTime: time.Now(),
+				Error:   e,
+			}
+			stats.Handle(stream.Context(), end)
 		}
 	}()
 	if trInfo != nil {
@@ -741,12 +752,23 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
+	if stats.On() {
+		begin := &stats.Begin{
+			BeginTime: time.Now(),
+		}
+		stats.Handle(stream.Context(), begin)
+	}
 	defer func() {
-		if stats.On() && err != nil && err != io.EOF {
-			errorStats := &stats.RPCErr{
-				Error: toRPCErr(err),
+		if stats.On() {
+			var e error
+			if err != nil && err != io.EOF {
+				e = toRPCErr(err)
 			}
-			stats.Handle(stream.Context(), errorStats)
+			end := &stats.End{
+				EndTime: time.Now(),
+				Error:   e,
+			}
+			stats.Handle(stream.Context(), end)
 		}
 	}()
 	if s.opts.cp != nil {
@@ -831,12 +853,6 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.SetError()
 		}
 		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
-		if stats.On() {
-			errorStats := &stats.RPCErr{
-				Error: Errorf(codes.InvalidArgument, errDesc),
-			}
-			stats.Handle(stream.Context(), errorStats)
-		}
 		if err := t.WriteStatus(stream, codes.InvalidArgument, errDesc); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
@@ -858,12 +874,6 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.SetError()
 		}
 		errDesc := fmt.Sprintf("unknown service %v", service)
-		if stats.On() {
-			errorStats := &stats.RPCErr{
-				Error: Errorf(codes.InvalidArgument, errDesc),
-			}
-			stats.Handle(stream.Context(), errorStats)
-		}
 		if err := t.WriteStatus(stream, codes.Unimplemented, errDesc); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
@@ -890,12 +900,6 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		trInfo.tr.SetError()
 	}
 	errDesc := fmt.Sprintf("unknown method %v", method)
-	if stats.On() {
-		errorStats := &stats.RPCErr{
-			Error: Errorf(codes.InvalidArgument, errDesc),
-		}
-		stats.Handle(stream.Context(), errorStats)
-	}
 	if err := t.WriteStatus(stream, codes.Unimplemented, errDesc); err != nil {
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)

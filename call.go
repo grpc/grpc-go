@@ -169,25 +169,21 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
-	var (
-		err    error
-		t      transport.ClientTransport
-		stream *transport.Stream
-		// Record the put handler from Balancer.Get(...). It is called once the
-		// RPC has completed or failed.
-		put func()
-	)
+	if stats.On() {
+		begin := &stats.Begin{
+			Client:    true,
+			BeginTime: time.Now(),
+		}
+		stats.Handle(ctx, begin)
+	}
 	defer func() {
-		if e != nil && stats.On() {
-			errorStats := &stats.RPCErr{
-				Client: true,
-				Error:  e,
+		if stats.On() {
+			end := &stats.End{
+				Client:  true,
+				EndTime: time.Now(),
+				Error:   e,
 			}
-			if stream != nil {
-				stats.Handle(stream.Context(), errorStats)
-			} else {
-				stats.Handle(ctx, errorStats)
-			}
+			stats.Handle(ctx, end)
 		}
 	}()
 	topts := &transport.Options{
@@ -195,6 +191,14 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		Delay: false,
 	}
 	for {
+		var (
+			err    error
+			t      transport.ClientTransport
+			stream *transport.Stream
+			// Record the put handler from Balancer.Get(...). It is called once the
+			// RPC has completed or failed.
+			put func()
+		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
 			Host:     cc.authority,

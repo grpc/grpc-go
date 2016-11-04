@@ -99,13 +99,21 @@ type ClientStream interface {
 // NewClientStream creates a new Stream for the client side. This is called
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
+	if stats.On() {
+		begin := &stats.Begin{
+			Client:    true,
+			BeginTime: time.Now(),
+		}
+		stats.Handle(ctx, begin)
+	}
 	defer func() {
 		if err != nil && stats.On() {
-			errorStats := &stats.RPCErr{
+			// Only handle end stats if err != nil.
+			end := &stats.End{
 				Client: true,
 				Error:  err,
 			}
-			stats.Handle(ctx, errorStats)
+			stats.Handle(ctx, end)
 		}
 	}()
 	if cc.dopts.streamInt != nil {
@@ -266,11 +274,13 @@ func (cs *clientStream) Context() context.Context {
 func (cs *clientStream) Header() (_ metadata.MD, err error) {
 	defer func() {
 		if err != nil && stats.On() {
-			errorStats := &stats.RPCErr{
-				Client: true,
-				Error:  err,
+			// Only handle end stats if err != nil.
+			end := &stats.End{
+				Client:  true,
+				EndTime: time.Now(),
+				Error:   err,
 			}
-			stats.Handle(cs.s.Context(), errorStats)
+			stats.Handle(cs.s.Context(), end)
 		}
 	}()
 	m, err := cs.s.Header()
@@ -296,11 +306,12 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 	defer func() {
 		if err != nil && stats.On() {
-			errorStats := &stats.RPCErr{
+			// Only handle end stats if err != nil.
+			end := &stats.End{
 				Client: true,
 				Error:  err,
 			}
-			stats.Handle(cs.s.Context(), errorStats)
+			stats.Handle(cs.s.Context(), end)
 		}
 	}()
 	defer func() {
@@ -350,12 +361,17 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
-		if err != nil && err != io.EOF && stats.On() {
-			errorStats := &stats.RPCErr{
-				Client: true,
-				Error:  err,
+		if err != nil && stats.On() {
+			var e error
+			if err != nil && err != io.EOF {
+				e = toRPCErr(err)
 			}
-			stats.Handle(cs.s.Context(), errorStats)
+			end := &stats.End{
+				Client:  true,
+				EndTime: time.Now(),
+				Error:   e,
+			}
+			stats.Handle(cs.s.Context(), end)
 		}
 	}()
 	var inStats *stats.InPayload

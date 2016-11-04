@@ -52,6 +52,17 @@ type RPCStats interface {
 	IsClient() bool
 }
 
+// Begin contains stats when an RPC begins.
+type Begin struct {
+	// Client is true if this Begin is from client side.
+	Client bool
+	// BeginTime is the time when the RPC begins.
+	BeginTime time.Time
+}
+
+// IsClient indicates if this is from client side.
+func (s *Begin) IsClient() bool { return s.Client }
+
 // InPayload contains the information for an incoming payload.
 type InPayload struct {
 	// Client is true if this InPayload is from client side.
@@ -156,16 +167,18 @@ type OutTrailer struct {
 // IsClient indicates if this is from client side.
 func (s *OutTrailer) IsClient() bool { return s.Client }
 
-// RPCErr contains stats when an error happens.
-type RPCErr struct {
-	// Client is true if this RPCErr is from client side.
+// End contains stats when an RPC ends.
+type End struct {
+	// Client is true if this End is from client side.
 	Client bool
+	// EndTime is the time when the RPC ends.
+	EndTime time.Time
 	// Error is the error just happened. Its type is gRPC error.
 	Error error
 }
 
 // IsClient indicates if this is from client side.
-func (s *RPCErr) IsClient() bool { return s.Client }
+func (s *End) IsClient() bool { return s.Client }
 
 var (
 	on      = new(int32)
