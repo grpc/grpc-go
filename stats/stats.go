@@ -187,10 +187,10 @@ var (
 
 // On indicates whether stats is started.
 func On() bool {
-	return atomic.LoadInt32(on) == 1
+	return atomic.CompareAndSwapInt32(on, 1, 1)
 }
 
-// Handle returns the call back function registered by user to process the stats.
+// Handle processes the stats using the call back function registered by user.
 func Handle(ctx context.Context, s RPCStats) {
 	handler(ctx, s)
 }
@@ -202,8 +202,7 @@ func RegisterHandler(f func(context.Context, RPCStats)) {
 	handler = f
 }
 
-// Start starts the stats collection.
-// Stats will only be started if handler is not nil.
+// Start starts the stats collection and reporting if there is a registered stats handle.
 func Start() {
 	if handler == nil {
 		grpclog.Println("handler is nil when starting stats. Stats is not started")
@@ -212,8 +211,8 @@ func Start() {
 	atomic.StoreInt32(on, 1)
 }
 
-// Stop stops the collection of any further stats.
-// Stop won't unregister handler.
+// Stop stops the stats collection and processing.
+// Stop does not unregister handler.
 func Stop() {
 	atomic.StoreInt32(on, 0)
 }
