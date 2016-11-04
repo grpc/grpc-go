@@ -382,13 +382,13 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			stats.Handle(cs.userCtx, end)
 		}
 	}()
-	var inStats *stats.InPayload
+	var inPayload *stats.InPayload
 	if stats.On() {
-		inStats = &stats.InPayload{
+		inPayload = &stats.InPayload{
 			Client: true,
 		}
 	}
-	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32, inStats)
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32, inPayload)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -403,14 +403,14 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			}
 			cs.mu.Unlock()
 		}
-		if inStats != nil {
-			stats.Handle(cs.userCtx, inStats)
+		if inPayload != nil {
+			stats.Handle(cs.userCtx, inPayload)
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
 		}
 		// Special handling for client streaming rpc.
-		// This recv expects EOF or errors, so we don't collect inStats.
+		// This recv expects EOF or errors, so we don't collect inPayload.
 		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, math.MaxInt32, nil)
 		cs.closeTransportStream(err)
 		if err == nil {
@@ -606,11 +606,11 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 	}()
-	var inStats *stats.InPayload
+	var inPayload *stats.InPayload
 	if stats.On() {
-		inStats = &stats.InPayload{}
+		inPayload = &stats.InPayload{}
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, inStats); err != nil {
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, inPayload); err != nil {
 		if err == io.EOF {
 			return err
 		}
@@ -619,8 +619,8 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		}
 		return toRPCErr(err)
 	}
-	if inStats != nil {
-		stats.Handle(ss.s.Context(), inStats)
+	if inPayload != nil {
+		stats.Handle(ss.s.Context(), inPayload)
 	}
 	return nil
 }

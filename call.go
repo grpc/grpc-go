@@ -80,7 +80,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	if inPayload != nil && err == io.EOF && stream.StatusCode() == codes.OK {
-		// TODO in the current implementation, inTrailer may be handled before inStats in some cases.
+		// TODO in the current implementation, inTrailer may be handled before inPayload in some cases.
 		// Fix the order if necessary.
 		stats.Handle(ctx, inPayload)
 	}

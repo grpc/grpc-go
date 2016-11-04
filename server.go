@@ -620,9 +620,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	p := &parser{r: stream}
 	for {
 		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
-		var inStats *stats.InPayload
+		var inPayload *stats.InPayload
 		if stats.On() {
-			inStats = &stats.InPayload{
+			inPayload = &stats.InPayload{
 
 				RecvTime: time.Now(),
 			}
@@ -670,8 +670,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		statusCode := codes.OK
 		statusDesc := ""
 		df := func(v interface{}) error {
-			if inStats != nil {
-				inStats.WireLength = len(req)
+			if inPayload != nil {
+				inPayload.WireLength = len(req)
 			}
 			if pf == compressionMade {
 				var err error
@@ -692,11 +692,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return err
 			}
-			if inStats != nil {
-				inStats.Payload = v
-				inStats.Data = req
-				inStats.Length = len(req)
-				stats.Handle(stream.Context(), inStats)
+			if inPayload != nil {
+				inPayload.Payload = v
+				inPayload.Data = req
+				inPayload.Length = len(req)
+				stats.Handle(stream.Context(), inPayload)
 			}
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
