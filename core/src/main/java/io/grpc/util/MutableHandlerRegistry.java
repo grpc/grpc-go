@@ -31,6 +31,7 @@
 
 package io.grpc.util;
 
+import io.grpc.BindableService;
 import io.grpc.ExperimentalApi;
 import io.grpc.HandlerRegistry;
 import io.grpc.MethodDescriptor;
@@ -55,9 +56,26 @@ public final class MutableHandlerRegistry extends HandlerRegistry {
   private final ConcurrentMap<String, ServerServiceDefinition> services
       = new ConcurrentHashMap<String, ServerServiceDefinition>();
 
+  /**
+   * Registers a service.
+   *
+   * @return the previously registered service with the same service descriptor name if exists,
+   *         otherwise {@code null}.
+   */
   @Nullable
   public ServerServiceDefinition addService(ServerServiceDefinition service) {
     return services.put(service.getServiceDescriptor().getName(), service);
+  }
+
+  /**
+   * Registers a service.
+   *
+   * @return the previously registered service with the same service descriptor name if exists,
+   *         otherwise {@code null}.
+   */
+  @Nullable
+  public ServerServiceDefinition addService(BindableService bindableService) {
+    return addService(bindableService.bindService());
   }
 
   public boolean removeService(ServerServiceDefinition service) {

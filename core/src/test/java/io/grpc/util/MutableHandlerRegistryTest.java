@@ -38,6 +38,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import io.grpc.BindableService;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.MethodDescriptor;
@@ -127,6 +128,22 @@ public class MutableHandlerRegistryTest {
     assertNull(registry.lookupMethod("basic/basic"));
     assertNull(registry.lookupMethod("flow/flow"));
     assertNull(registry.lookupMethod("completely/random"));
+  }
+
+  @Test
+  public void simpleLookupWithBindable() {
+    BindableService bindableService =
+        new BindableService() {
+          @Override
+          public ServerServiceDefinition bindService() {
+            return basicServiceDefinition;
+          }
+        };
+
+    assertNull(registry.addService(bindableService));
+
+    ServerMethodDefinition<?, ?> method = registry.lookupMethod("basic/flow");
+    assertSame(flowMethodDefinition, method);
   }
 
   @Test
