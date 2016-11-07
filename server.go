@@ -618,13 +618,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	p := &parser{r: stream}
 	for {
 		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
-		var inPayload *stats.InPayload
-		if stats.On() {
-			inPayload = &stats.InPayload{
-
-				RecvTime: time.Now(),
-			}
-		}
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
@@ -661,8 +654,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				if e := t.WriteStatus(stream, codes.Internal, err.Error()); e != nil {
 					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
-				return Errorf(codes.Internal, err.Error())
-
+				// TODO checkRecvPayload always return RPC error. Add a return here if necessary.
+			}
+		}
+		var inPayload *stats.InPayload
+		if stats.On() {
+			inPayload = &stats.InPayload{
+				RecvTime: time.Now(),
 			}
 		}
 		statusCode := codes.OK
