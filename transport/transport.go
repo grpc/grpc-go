@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/tap"
 )
 
 // recvMsg represents the received msg from the transport. All transport
@@ -355,10 +356,17 @@ const (
 	draining
 )
 
+// ServerConfig consists of all the configurations to establish a server transport.
+type ServerConfig struct {
+	MaxStreams  uint32
+	AuthInfo    credentials.AuthInfo
+	InTapHandle tap.ServerInHandle
+}
+
 // NewServerTransport creates a ServerTransport with conn or non-nil error
 // if it fails.
-func NewServerTransport(protocol string, conn net.Conn, maxStreams uint32, authInfo credentials.AuthInfo) (ServerTransport, error) {
-	return newHTTP2Server(conn, maxStreams, authInfo)
+func NewServerTransport(protocol string, conn net.Conn, config *ServerConfig) (ServerTransport, error) {
+	return newHTTP2Server(conn, config)
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.

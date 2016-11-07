@@ -54,6 +54,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/tap"
 	"google.golang.org/grpc/transport"
 )
 
@@ -110,6 +111,7 @@ type options struct {
 	maxMsgSize           int
 	unaryInt             UnaryServerInterceptor
 	streamInt            StreamServerInterceptor
+	inTapHandle          tap.ServerInHandle
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
 }
@@ -183,6 +185,17 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 			panic("The stream server interceptor has been set.")
 		}
 		o.streamInt = i
+	}
+}
+
+// InTapHandle returns a ServerOption that sets the tap handle for all the server
+// transport to be created. Only one can be installed.
+func InTapHandle(h tap.ServerInHandle) ServerOption {
+	return func(o *options) {
+		if o.inTapHandle != nil {
+			panic("The tap handle has been set.")
+		}
+		o.inTapHandle = h
 	}
 }
 
@@ -412,17 +425,22 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 	if s.opts.useHandlerImpl {
 		s.serveUsingHandler(conn)
 	} else {
-		s.serveNewHTTP2Transport(conn, authInfo)
+		s.serveHTTP2Transport(conn, authInfo)
 	}
 }
 
-// serveNewHTTP2Transport sets up a new http/2 transport (using the
+// serveHTTP2Transport sets up a http/2 transport (using the
 // gRPC http2 server transport in transport/http2_server.go) and
 // serves streams on it.
 // This is run in its own goroutine (it does network I/O in
 // transport.NewServerTransport).
-func (s *Server) serveNewHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
-	st, err := transport.NewServerTransport("http2", c, s.opts.maxConcurrentStreams, authInfo)
+func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
+	config := &transport.ServerConfig{
+		MaxStreams:  s.opts.maxConcurrentStreams,
+		AuthInfo:    authInfo,
+		InTapHandle: s.opts.inTapHandle,
+	}
+	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
 		s.mu.Lock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
