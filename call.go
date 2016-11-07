@@ -50,7 +50,7 @@ import (
 // On error, it returns the error and indicates whether the call should be retried.
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
-// TODO ctx is userCtx, not stream.Context. It is used for stats handling. Change this later if necessary.
+// TODO ctx is used for stats collection and processing. It is the context passed from the application.
 func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
@@ -118,11 +118,9 @@ func sendRequest(ctx context.Context, codec Codec, compressor Compressor, callHd
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
-	if outPayload != nil {
-		outPayload.SentTime = time.Now()
-	}
 	err = t.Write(stream, outBuf, opts)
-	if outPayload != nil {
+	if err == nil && outPayload != nil {
+		outPayload.SentTime = time.Now()
 		stats.Handle(ctx, outPayload)
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
@@ -177,6 +175,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
+			FailFast:  c.failFast,
 		}
 		stats.Handle(ctx, begin)
 	}
@@ -205,9 +204,8 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
-			Host:     cc.authority,
-			Method:   method,
-			FailFast: c.failFast,
+			Host:   cc.authority,
+			Method: method,
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()

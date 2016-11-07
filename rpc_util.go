@@ -271,6 +271,7 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		}
 		if outPayload != nil {
 			outPayload.Payload = msg
+			// TODO truncate large payload.
 			outPayload.Data = b
 			outPayload.Length = len(b)
 		}
@@ -352,6 +353,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	}
 	if inPayload != nil {
 		inPayload.Payload = m
+		// TODO truncate large payload.
 		inPayload.Data = d
 		inPayload.Length = len(d)
 	}

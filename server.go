@@ -572,11 +572,9 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		// the optimal option.
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
-	if outPayload != nil {
-		outPayload.SentTime = time.Now()
-	}
 	err = t.Write(stream, p, opts)
-	if outPayload != nil {
+	if err == nil && outPayload != nil {
+		outPayload.SentTime = time.Now()
 		stats.Handle(stream.Context(), outPayload)
 	}
 	return err

@@ -53,11 +53,14 @@ type RPCStats interface {
 }
 
 // Begin contains stats when an RPC begins.
+// FailFast are only valid if Client is true.
 type Begin struct {
 	// Client is true if this Begin is from client side.
 	Client bool
 	// BeginTime is the time when the RPC begins.
 	BeginTime time.Time
+	// FailFast indicates if this RPC is failfast.
+	FailFast bool
 }
 
 // IsClient indicates if this is from client side.
@@ -134,7 +137,7 @@ type OutPayload struct {
 func (s *OutPayload) IsClient() bool { return s.Client }
 
 // OutHeader contains stats when a header is sent.
-// FullMethod, addresses, Encryption and FailFast are only valid if Client is true.
+// FullMethod, addresses and Encryption are only valid if Client is true.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
@@ -149,8 +152,6 @@ type OutHeader struct {
 	LocalAddr net.Addr
 	// Encryption is encrypt method used in the RPC.
 	Encryption string
-	// FailFast indicates if this RPC is failfast.
-	FailFast bool
 }
 
 // IsClient indicates if this is from client side.

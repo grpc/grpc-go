@@ -456,10 +456,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			Client:     true,
 			WireLength: bufLen,
 			FullMethod: callHdr.Method,
-			RemoteAddr: t.RemoteAddr(),
-			LocalAddr:  t.LocalAddr(),
+			RemoteAddr: t.conn.RemoteAddr(),
+			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: callHdr.SendCompress,
-			FailFast:   callHdr.FailFast,
 		}
 		stats.Handle(s.userCtx, outHeader)
 	}
@@ -1104,12 +1103,4 @@ func (t *http2Client) notifyError(err error) {
 		grpclog.Printf("transport: http2Client.notifyError got notified that the client transport was broken %v.", err)
 	}
 	t.mu.Unlock()
-}
-
-func (t *http2Client) LocalAddr() net.Addr {
-	return t.conn.LocalAddr()
-}
-
-func (t *http2Client) RemoteAddr() net.Addr {
-	return t.conn.RemoteAddr()
 }

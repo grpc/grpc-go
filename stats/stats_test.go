@@ -332,6 +332,11 @@ func checkBegin(t *testing.T, d *gotData, e *expectedData) {
 	if st.BeginTime.IsZero() {
 		t.Fatalf("st.BeginTime = %v, want <non-zero>", st.BeginTime)
 	}
+	if d.client {
+		if st.FailFast != e.failfast {
+			t.Fatalf("st.FailFast = %v, want %v", st.FailFast, e.failfast)
+		}
+	}
 }
 
 func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
@@ -451,9 +456,6 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.Encryption != e.encryption {
 			t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
-		}
-		if st.FailFast != e.failfast {
-			t.Fatalf("st.FailFast = %v, want %v", st.FailFast, e.failfast)
 		}
 	}
 }

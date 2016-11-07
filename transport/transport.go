@@ -430,9 +430,6 @@ type CallHdr struct {
 	// only a hint. The transport may modify the flush decision
 	// for performance purposes.
 	Flush bool
-
-	// FailFast indicates whether the RPC is failfast.
-	FailFast bool
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport
@@ -471,11 +468,6 @@ type ClientTransport interface {
 	// receives the draining signal from the server (e.g., GOAWAY frame in
 	// HTTP/2).
 	GoAway() <-chan struct{}
-
-	// LocalAddr returns the local network address.
-	LocalAddr() net.Addr
-	// RemoteAddr returns the remote network address.
-	RemoteAddr() net.Addr
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport

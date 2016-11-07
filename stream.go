@@ -99,23 +99,6 @@ type ClientStream interface {
 // NewClientStream creates a new Stream for the client side. This is called
 // by generated code.
 func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
-	if stats.On() {
-		begin := &stats.Begin{
-			Client:    true,
-			BeginTime: time.Now(),
-		}
-		stats.Handle(ctx, begin)
-	}
-	defer func() {
-		if err != nil && stats.On() {
-			// Only handle end stats if err != nil.
-			end := &stats.End{
-				Client: true,
-				Error:  err,
-			}
-			stats.Handle(ctx, end)
-		}
-	}()
 	if cc.dopts.streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
@@ -135,10 +118,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}
 	callHdr := &transport.CallHdr{
-		Host:     cc.authority,
-		Method:   method,
-		Flush:    desc.ServerStreams && desc.ClientStreams,
-		FailFast: c.failFast,
+		Host:   cc.authority,
+		Method: method,
+		Flush:  desc.ServerStreams && desc.ClientStreams,
 	}
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
@@ -162,6 +144,24 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
+	if stats.On() {
+		begin := &stats.Begin{
+			Client:    true,
+			BeginTime: time.Now(),
+			FailFast:  c.failFast,
+		}
+		stats.Handle(ctx, begin)
+	}
+	defer func() {
+		if err != nil && stats.On() {
+			// Only handle end stats if err != nil.
+			end := &stats.End{
+				Client: true,
+				Error:  err,
+			}
+			stats.Handle(ctx, end)
+		}
+	}()
 	gopts := BalancerGetOptions{
 		BlockingWait: !c.failFast,
 	}
@@ -311,8 +311,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		cs.mu.Unlock()
 	}
 	defer func() {
-		if err != nil && stats.On() {
+		if err != nil && err != io.EOF && stats.On() {
 			// Only handle end stats if err != nil.
+			// If err == nil, stats.End will be handled when user calls RecvMsg.
 			end := &stats.End{
 				Client: true,
 				Error:  err,
@@ -357,11 +358,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
-	if outPayload != nil {
-		outPayload.SentTime = time.Now()
-	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
-	if outPayload != nil {
+	if err == nil && outPayload != nil {
+		outPayload.SentTime = time.Now()
 		stats.Handle(cs.userCtx, outPayload)
 	}
 	return err
@@ -579,13 +578,11 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		err = Errorf(codes.Internal, "grpc: %v", err)
 		return err
 	}
-	if outPayload != nil {
-		outPayload.SentTime = time.Now()
-	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 	if outPayload != nil {
+		outPayload.SentTime = time.Now()
 		stats.Handle(ss.s.Context(), outPayload)
 	}
 	return nil
