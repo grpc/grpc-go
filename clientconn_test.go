@@ -34,6 +34,7 @@
 package grpc
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -45,8 +46,12 @@ import (
 
 const tlsDir = "testdata/"
 
+func temporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
+	return nil, &errorWithTemp{true} // Always return temporary error.
+}
+
 func TestDialTimeout(t *testing.T) {
-	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
+	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure(), WithDialer(temporaryErrorDialer))
 	if err == nil {
 		conn.Close()
 	}
@@ -60,7 +65,7 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock())
+	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock(), WithDialer(temporaryErrorDialer))
 	if err == nil {
 		conn.Close()
 	}
@@ -187,4 +192,30 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
 	}
 	conn.Close()
+}
+
+type errorWithTemp struct {
+	temp bool
+}
+
+func (e *errorWithTemp) Error() string {
+	return "non-temprary-error"
+}
+
+func (e *errorWithTemp) Temporary() bool {
+	return e.temp
+}
+
+var nonTemporaryError = &errorWithTemp{false}
+
+func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
+	return nil, nonTemporaryError
+}
+
+func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	_, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock())
+	if err != nonTemporaryError {
+		t.Fatalf("Dial(%q) = %v, want %v", "", err, nonTemporaryError)
+	}
 }
