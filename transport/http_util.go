@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -86,6 +87,24 @@ var (
 		codes.Unavailable:       http2.ErrCodeRefusedStream,
 		codes.ResourceExhausted: http2.ErrCodeEnhanceYourCalm,
 		codes.PermissionDenied:  http2.ErrCodeInadequateSecurity,
+	}
+	httpStatusConvTab = map[int]codes.Code{
+		// 400 Bad Request - INTERNAL
+		400: codes.Internal,
+		// 401 Unauthorized  - UNAUTHENTICATED
+		401: codes.Unauthenticated,
+		// 403 Forbidden - PERMISSION_DENIED
+		403: codes.PermissionDenied,
+		// 404 Not Found - UNIMPLEMENTED
+		404: codes.Unimplemented,
+		// 429 Too Many Requests - UNAVAILABLE
+		429: codes.Unavailable,
+		// 502 Bad Gateway - UNAVAILABLE
+		502: codes.Unavailable,
+		// 503 Service Unavailable - UNAVAILABLE
+		503: codes.Unavailable,
+		// 504 Gateway timeout - UNAVAILABLE
+		504: codes.Unavailable,
 	}
 )
 
@@ -186,6 +205,17 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 	case ":path":
 		d.method = f.Value
+	case ":status":
+		httpStatusCode, err := strconv.Atoi(f.Value)
+		if err != nil {
+			d.setErr(streamErrorf(codes.Internal, "transport: malformed http-status: %v", err))
+			return
+		}
+		if convCode, ok := httpStatusConvTab[httpStatusCode]; ok {
+			d.statusCode = convCode
+			d.statusDesc = http.StatusText(httpStatusCode)
+			d.setErr(streamErrorf(d.statusCode, d.statusDesc, f.Value))
+		}
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
 			if f.Name == "user-agent" {
