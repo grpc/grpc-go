@@ -300,7 +300,8 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		cs.mu.Unlock()
 	}
-	// TODO generate stats.End if err != nil && err != io.EOF.
+	// TODO Investigate how to signal the stats handling party.
+	// generate error stats if err != nil && err != io.EOF?
 	defer func() {
 		if err != nil {
 			cs.finish(err)
@@ -349,14 +350,15 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
 		if err != nil && stats.On() {
-			var e error
-			if err != nil && err != io.EOF {
-				e = toRPCErr(err)
-			}
+			// Only generate End if err != nil.
+			// If err == nil, it's not the last RecvMsg.
+			// The last RecvMsg gets either an RPC error or io.EOF.
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
-				Error:   e,
+			}
+			if err != io.EOF {
+				end.Error = toRPCErr(err)
 			}
 			stats.Handle(cs.statsCtx, end)
 		}

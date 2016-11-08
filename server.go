@@ -589,13 +589,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	defer func() {
 		if stats.On() {
-			var e error
-			if err != nil && err != io.EOF {
-				e = toRPCErr(err)
-			}
 			end := &stats.End{
 				EndTime: time.Now(),
-				Error:   e,
+			}
+			if err != nil && err != io.EOF {
+				end.Error = toRPCErr(err)
 			}
 			stats.Handle(stream.Context(), end)
 		}
@@ -757,13 +755,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 	defer func() {
 		if stats.On() {
-			var e error
-			if err != nil && err != io.EOF {
-				e = toRPCErr(err)
-			}
 			end := &stats.End{
 				EndTime: time.Now(),
-				Error:   e,
+			}
+			if err != nil && err != io.EOF {
+				end.Error = toRPCErr(err)
 			}
 			stats.Handle(stream.Context(), end)
 		}
