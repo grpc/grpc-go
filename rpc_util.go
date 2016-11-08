@@ -331,7 +331,6 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 		return err
 	}
 	if inPayload != nil {
-		inPayload.RecvTime = time.Now()
 		inPayload.WireLength = len(d)
 	}
 	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
@@ -352,6 +351,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
 	if inPayload != nil {
+		inPayload.RecvTime = time.Now()
 		inPayload.Payload = m
 		// TODO truncate large payload.
 		inPayload.Data = d
