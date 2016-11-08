@@ -278,18 +278,7 @@ func (cs *clientStream) Context() context.Context {
 	return cs.s.Context()
 }
 
-func (cs *clientStream) Header() (_ metadata.MD, err error) {
-	defer func() {
-		if err != nil && stats.On() {
-			// Only handle end stats if err != nil.
-			end := &stats.End{
-				Client:  true,
-				EndTime: time.Now(),
-				Error:   err,
-			}
-			stats.Handle(cs.statsCtx, end)
-		}
-	}()
+func (cs *clientStream) Header() (metadata.MD, error) {
 	m, err := cs.s.Header()
 	if err != nil {
 		if _, ok := err.(transport.ConnectionError); !ok {
@@ -311,17 +300,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 		cs.mu.Unlock()
 	}
-	defer func() {
-		if err != nil && err != io.EOF && stats.On() {
-			// Only handle end stats if err != nil.
-			// If err == nil, stats.End will be handled when user calls RecvMsg.
-			end := &stats.End{
-				Client: true,
-				Error:  err,
-			}
-			stats.Handle(cs.statsCtx, end)
-		}
-	}()
+	// TODO generate stats.End if err != nil && err != io.EOF.
 	defer func() {
 		if err != nil {
 			cs.finish(err)
