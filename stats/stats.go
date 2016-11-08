@@ -32,7 +32,7 @@
  */
 
 // Package stats is for collecting and reporting various network and RPC stats.
-// This package is for monitoring purpose only.
+// This package is for monitoring purpose only. All fields are read-only.
 // All APIs are experimental.
 package stats // import "google.golang.org/grpc/stats"
 
@@ -72,7 +72,7 @@ type InPayload struct {
 	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
-	// Data is the unencrypted message payload.
+	// Data is the serialized message payload.
 	Data []byte
 	// Length is the length of uncompressed data.
 	Length int
@@ -99,7 +99,7 @@ type InHeader struct {
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
-	// Encryption is encrypt method used in the RPC.
+	// Encryption is the encryption algorithm used for the RPC.
 	Encryption string
 }
 
@@ -123,7 +123,7 @@ type OutPayload struct {
 	Client bool
 	// Payload is the payload with original type.
 	Payload interface{}
-	// Data is the unencrypted message payload.
+	// Data is the serialized message payload.
 	Data []byte
 	// Length is the length of uncompressed data.
 	Length int
@@ -150,7 +150,7 @@ type OutHeader struct {
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
-	// Encryption is encrypt method used in the RPC.
+	// Encryption is the encryption algorithm used for the RPC.
 	Encryption string
 }
 

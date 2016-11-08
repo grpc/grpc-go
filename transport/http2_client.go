@@ -349,7 +349,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, ErrConnClosing
 	}
 	s := t.newStream(ctx, callHdr)
-	s.userCtx = userCtx
+	s.clientStatsCtx = userCtx
 	t.activeStreams[s.id] = s
 
 	// This stream is not counted when applySetings(...) initialize t.streamsQuota.
@@ -460,7 +460,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			LocalAddr:  t.conn.LocalAddr(),
 			Encryption: callHdr.SendCompress,
 		}
-		stats.Handle(s.userCtx, outHeader)
+		stats.Handle(s.clientStatsCtx, outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -897,13 +897,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.userCtx, inHeader)
+				stats.Handle(s.clientStatsCtx, inHeader)
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.userCtx, inTrailer)
+				stats.Handle(s.clientStatsCtx, inTrailer)
 			}
 		}
 	}()

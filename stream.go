@@ -214,7 +214,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		tracing: EnableTracing,
 		trInfo:  trInfo,
 
-		userCtx: ctx,
+		statsCtx: ctx,
 	}
 	if cc.dopts.cp != nil {
 		cs.cbuf = new(bytes.Buffer)
@@ -268,9 +268,10 @@ type clientStream struct {
 	// and is set to nil when the clientStream's finish method is called.
 	trInfo traceInfo
 
-	// Keep the user context for stats handling.
-	// All stats handling should use the user context instead of the stream context.
-	userCtx context.Context
+	// statsCtx keeps the user context for stats handling.
+	// All stats collection should use the statsCtx (instead of the stream context)
+	// so that all the generated stats for a particular RPC can be associated in the processing phase.
+	statsCtx context.Context
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -286,7 +287,7 @@ func (cs *clientStream) Header() (_ metadata.MD, err error) {
 				EndTime: time.Now(),
 				Error:   err,
 			}
-			stats.Handle(cs.userCtx, end)
+			stats.Handle(cs.statsCtx, end)
 		}
 	}()
 	m, err := cs.s.Header()
@@ -318,7 +319,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 				Client: true,
 				Error:  err,
 			}
-			stats.Handle(cs.userCtx, end)
+			stats.Handle(cs.statsCtx, end)
 		}
 	}()
 	defer func() {
@@ -361,7 +362,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		stats.Handle(cs.userCtx, outPayload)
+		stats.Handle(cs.statsCtx, outPayload)
 	}
 	return err
 }
@@ -378,7 +379,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 				EndTime: time.Now(),
 				Error:   e,
 			}
-			stats.Handle(cs.userCtx, end)
+			stats.Handle(cs.statsCtx, end)
 		}
 	}()
 	var inPayload *stats.InPayload
@@ -403,7 +404,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			cs.mu.Unlock()
 		}
 		if inPayload != nil {
-			stats.Handle(cs.userCtx, inPayload)
+			stats.Handle(cs.statsCtx, inPayload)
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
