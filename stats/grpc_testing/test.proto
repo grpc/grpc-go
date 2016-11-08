@@ -2,12 +2,10 @@ syntax = "proto3";
 
 package grpc.testing;
 
-// Unary request.
 message SimpleRequest {
   int32 id = 2;
 }
 
-// Unary response, as configured by the request.
 message SimpleResponse {
   int32 id = 3;
 }
