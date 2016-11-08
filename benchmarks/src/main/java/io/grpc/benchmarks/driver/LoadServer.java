@@ -60,7 +60,7 @@ import io.netty.buffer.PooledByteBufAllocator;
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.util.List;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
 import java.util.concurrent.ForkJoinWorkerThread;
@@ -165,7 +165,7 @@ final class LoadServer {
     }
   }
 
-  Executor getExecutor(int asyncThreads) {
+  ExecutorService getExecutor(int asyncThreads) {
     // TODO(carl-mastrangelo): This should not be necessary.  I don't know where this should be
     // put.  Move it somewhere else, or remove it if no longer necessary.
     // See: https://github.com/grpc/grpc-java/issues/2119
