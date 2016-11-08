@@ -56,12 +56,14 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	target    string // server name/addr
-	userAgent string
-	md        interface{}
-	conn      net.Conn             // underlying communication channel
-	authInfo  credentials.AuthInfo // auth info about the connection
-	nextID    uint32               // the next stream ID to be used
+	target     string // server name/addr
+	userAgent  string
+	md         interface{}
+	conn       net.Conn // underlying communication channel
+	remoteAddr net.Addr
+	localAddr  net.Addr
+	authInfo   credentials.AuthInfo // auth info about the connection
+	nextID     uint32               // the next stream ID to be used
 
 	// writableChan synchronizes write access to the transport.
 	// A writer acquires the write lock by sending a value on writableChan
@@ -176,11 +178,13 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
-		target:    addr.Addr,
-		userAgent: ua,
-		md:        addr.Metadata,
-		conn:      conn,
-		authInfo:  authInfo,
+		target:     addr.Addr,
+		userAgent:  ua,
+		md:         addr.Metadata,
+		conn:       conn,
+		remoteAddr: conn.RemoteAddr(),
+		localAddr:  conn.LocalAddr(),
+		authInfo:   authInfo,
 		// The client initiated stream id is odd starting from 1.
 		nextID:          1,
 		writableChan:    make(chan int, 1),
@@ -271,7 +275,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
 	pr := &peer.Peer{
-		Addr: t.conn.RemoteAddr(),
+		Addr: t.remoteAddr,
 	}
 	// Attach Auth info if there is any.
 	if t.authInfo != nil {
@@ -456,8 +460,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			Client:     true,
 			WireLength: bufLen,
 			FullMethod: callHdr.Method,
-			RemoteAddr: t.conn.RemoteAddr(),
-			LocalAddr:  t.conn.LocalAddr(),
+			RemoteAddr: t.remoteAddr,
+			LocalAddr:  t.localAddr,
 			Encryption: callHdr.SendCompress,
 		}
 		stats.Handle(s.clientStatsCtx, outHeader)
