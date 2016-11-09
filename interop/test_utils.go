@@ -480,9 +480,9 @@ func validateMetadata(header, trailer metadata.MD) {
 	}
 }
 
-// DoCustomMetadata checks that metadata is echoed back to the client
+// DoCustomMetadata checks that metadata is echoed back to the client.
 func DoCustomMetadata(tc testpb.TestServiceClient) {
-	// Testing with UnaryCall
+	// Testing with UnaryCall.
 	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
@@ -507,7 +507,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 	}
 	validateMetadata(header, trailer)
 
-	// Testing with FullDuplex
+	// Testing with FullDuplex.
 	stream, err := tc.FullDuplexCall(ctx)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -579,24 +579,16 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 
 // DoUnimplementedService attempts to call a method from an unimplemented service.
 func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
-	var code int32 = 12
-	expectedCode := codes.Code(code)
 	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
-	if grpc.Code(err) != expectedCode {
-		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), expectedCode)
+	if grpc.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unimplemented)
 	}
 }
 
 // DoUnimplementedMethod attempts to call an unimplemented method.
-func DoUnimplementedMethod(serverAddr string) {
-	cc, err := grpc.Dial(serverAddr, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		grpclog.Fatalf("Failed to dial to the backend %v", err)
-	}
-	var (
-		req, reply proto.Message
-	)
-	if err := grpc.Invoke(context.Background(), "/foo/bar", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
+func DoUnimplementedMethod(cc *grpc.ClientConn) {
+	var req, reply proto.Message
+	if err := grpc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
 		grpclog.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
 	}
 }
@@ -633,14 +625,15 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	status := in.GetResponseStatus()
-	md, _ := metadata.FromContext(ctx)
-	if initialMetadata, ok := md[initialMetadataKey]; ok {
-		header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
-		grpc.SendHeader(ctx, header)
-	}
-	if trailingMetadata, ok := md[trailingMetadataKey]; ok {
-		trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
-		grpc.SetTrailer(ctx, trailer)
+	if md, ok := metadata.FromContext(ctx); ok {
+		if initialMetadata, ok := md[initialMetadataKey]; ok {
+			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
+			grpc.SendHeader(ctx, header)
+		}
+		if trailingMetadata, ok := md[trailingMetadataKey]; ok {
+			trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
+			grpc.SetTrailer(ctx, trailer)
+		}
 	}
 	if status != nil && *status.Code != 0 {
 		return nil, grpc.Errorf(codes.Code(*status.Code), *status.Message)
@@ -691,14 +684,15 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	md, _ := metadata.FromContext(stream.Context())
-	if initialMetadata, ok := md[initialMetadataKey]; ok {
-		header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
-		stream.SendHeader(header)
-	}
-	if trailingMetadata, ok := md[trailingMetadataKey]; ok {
-		trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
-		stream.SetTrailer(trailer)
+	if md, ok := metadata.FromContext(stream.Context()); ok {
+		if initialMetadata, ok := md[initialMetadataKey]; ok {
+			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
+			stream.SendHeader(header)
+		}
+		if trailingMetadata, ok := md[trailingMetadataKey]; ok {
+			trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
+			stream.SetTrailer(trailer)
+		}
 	}
 	for {
 		in, err := stream.Recv()
