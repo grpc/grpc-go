@@ -76,6 +76,12 @@ public interface ServerStream extends Stream {
    */
   Attributes attributes();
 
+
+  /**
+   * Sets the server stream listener.
+   */
+  void setListener(ServerStreamListener serverStreamListener);
+
   /**
    * The context for recording stats and traces for this stream.
    */

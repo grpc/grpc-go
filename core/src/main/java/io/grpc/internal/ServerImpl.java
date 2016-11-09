@@ -362,8 +362,8 @@ public final class ServerImpl extends io.grpc.Server {
     }
 
     @Override
-    public ServerStreamListener streamCreated(final ServerStream stream, final String methodName,
-        final Metadata headers) {
+    public void streamCreated(
+        final ServerStream stream, final String methodName, final Metadata headers) {
 
       final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
           stream.statsTraceContext(), "statsTraceCtx not present from stream");
@@ -380,6 +380,7 @@ public final class ServerImpl extends io.grpc.Server {
 
       final JumpToApplicationThreadServerStreamListener jumpListener
           = new JumpToApplicationThreadServerStreamListener(wrappedExecutor, stream, context);
+      stream.setListener(jumpListener);
       // Run in wrappedExecutor so jumpListener.setListener() is called before any callbacks
       // are delivered, including any errors. Callbacks can still be triggered, but they will be
       // queued.
@@ -417,7 +418,6 @@ public final class ServerImpl extends io.grpc.Server {
             }
           }
         });
-      return jumpListener;
     }
 
     private Context.CancellableContext createContext(

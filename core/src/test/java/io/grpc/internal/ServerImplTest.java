@@ -143,13 +143,13 @@ public class ServerImplTest {
 
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
+  @Captor
+  private ArgumentCaptor<ServerStreamListener> streamListenerCaptor;
 
   @Mock
   private ServerStream stream;
-
   @Mock
   private ServerCall.Listener<String> callListener;
-
   @Mock
   private ServerCallHandler<String, Integer> callHandler;
 
@@ -346,9 +346,8 @@ public class ServerImplTest {
     StatsTraceContext statsTraceCtx =
         transportListener.methodDetermined("Waiter/nonexist", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/nonexist", requestHeaders);
-    assertNotNull(streamListener);
+    transportListener.streamCreated(stream, "Waiter/nonexist", requestHeaders);
+    verify(stream).setListener(isA(ServerStreamListener.class));
     verify(stream, atLeast(1)).statsTraceContext();
 
     executeBarrier(executor).await();
@@ -407,8 +406,9 @@ public class ServerImplTest {
     assertNotNull(statsTraceCtx);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    verify(stream).setListener(streamListenerCaptor.capture());
+    ServerStreamListener streamListener = streamListenerCaptor.getValue();
     assertNotNull(streamListener);
     verify(stream, atLeast(1)).statsTraceContext();
 
@@ -587,8 +587,9 @@ public class ServerImplTest {
     assertNotNull(statsTraceCtx);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    verify(stream).setListener(streamListenerCaptor.capture());
+    ServerStreamListener streamListener = streamListenerCaptor.getValue();
     assertNotNull(streamListener);
     verify(stream, atLeast(1)).statsTraceContext();
     verifyNoMoreInteractions(stream);
@@ -751,8 +752,9 @@ public class ServerImplTest {
     assertNotNull(statsTraceCtx);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    verify(stream).setListener(streamListenerCaptor.capture());
+    ServerStreamListener streamListener = streamListenerCaptor.getValue();
     assertNotNull(streamListener);
 
     streamListener.onReady();
@@ -807,8 +809,9 @@ public class ServerImplTest {
         transportListener.methodDetermined("Waiter/serve", requestHeaders);
     assertNotNull(statsTraceCtx);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
-    ServerStreamListener streamListener
-        = transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    verify(stream).setListener(streamListenerCaptor.capture());
+    ServerStreamListener streamListener = streamListenerCaptor.getValue();
     assertNotNull(streamListener);
 
     streamListener.onReady();

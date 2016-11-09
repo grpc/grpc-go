@@ -48,9 +48,9 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
 
@@ -99,10 +99,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private static final int STREAM_ID = 3;
 
   @Mock
-  private ServerTransportListener transportListener;
-
-  @Mock
   private ServerStreamListener streamListener;
+
+  private final ServerTransportListener transportListener = spy(new ServerTransportListenerImpl());
 
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
 
@@ -111,17 +110,31 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int maxConcurrentStreams = Integer.MAX_VALUE;
 
+  private class ServerTransportListenerImpl implements ServerTransportListener {
+
+    @Override
+    public StatsTraceContext methodDetermined(String methodName, Metadata headers) {
+      return statsTraceCtx;
+    }
+
+    @Override
+    public void streamCreated(ServerStream stream, String method, Metadata headers) {
+      stream.setListener(streamListener);
+    }
+
+    @Override
+    public Attributes transportReady(Attributes attributes) {
+      return Attributes.EMPTY;
+    }
+
+    @Override
+    public void transportTerminated() {
+    }
+  }
+
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-
-    when(transportListener.methodDetermined(any(String.class), any(Metadata.class)))
-        .thenReturn(statsTraceCtx);
-    when(transportListener.streamCreated(any(ServerStream.class),
-        any(String.class),
-        any(Metadata.class)))
-        .thenReturn(streamListener);
-    when(transportListener.transportReady(any(Attributes.class))).thenReturn(Attributes.EMPTY);
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 

@@ -255,6 +255,11 @@ public class AbstractServerStreamTest {
       return state;
     }
 
+    @Override
+    public void setListener(ServerStreamListener serverStreamListener) {
+      state.setListener(serverStreamListener);
+    }
+
     static class TransportState extends AbstractServerStream.TransportState {
       protected TransportState(int maxMessageSize) {
         super(maxMessageSize, StatsTraceContext.NOOP);

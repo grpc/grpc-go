@@ -1163,11 +1163,10 @@ public abstract class AbstractTransportTest {
     }
 
     @Override
-    public ServerStreamListener streamCreated(ServerStream stream, String method,
-        Metadata headers) {
+    public void streamCreated(ServerStream stream, String method, Metadata headers) {
       ServerStreamListener listener = mock(ServerStreamListener.class);
       streams.add(new StreamCreation(stream, method, headers, listener));
-      return listener;
+      stream.setListener(listener);
     }
 
     @Override

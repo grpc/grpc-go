@@ -40,15 +40,16 @@ import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link InProcess}. */
+/** Unit tests for {@link io.grpc.inprocess}. */
 @RunWith(JUnit4.class)
 public class InProcessTest extends AbstractInteropTest {
-  private static String serverName = "test";
+
+  private static final String SERVER_NAME = "test";
 
   /** Starts the in-process server. */
   @BeforeClass
   public static void startServer() {
-    startStaticServer(InProcessServerBuilder.forName(serverName));
+    startStaticServer(InProcessServerBuilder.forName(SERVER_NAME));
   }
 
   @AfterClass
@@ -58,7 +59,7 @@ public class InProcessTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    return InProcessChannelBuilder.forName(serverName)
+    return InProcessChannelBuilder.forName(SERVER_NAME)
         .censusContextFactory(getClientCensusFactory()).build();
   }
 

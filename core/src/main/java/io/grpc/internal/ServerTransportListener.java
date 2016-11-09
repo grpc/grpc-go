@@ -54,10 +54,8 @@ public interface ServerTransportListener {
    * @param stream the newly created stream.
    * @param method the fully qualified method name being called on the server.
    * @param headers containing metadata for the call.
-   * @return a listener for events on the new stream.
    */
-  ServerStreamListener streamCreated(ServerStream stream, String method,
-      Metadata headers);
+  void streamCreated(ServerStream stream, String method, Metadata headers);
 
   /**
    * The transport has finished all handshakes and is ready to process streams.
