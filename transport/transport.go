@@ -45,7 +45,6 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -168,6 +167,11 @@ type Stream struct {
 	id uint32
 	// nil for client side Stream.
 	st ServerTransport
+	// clientStatsCtx keeps the user context for stats handling.
+	// It's only valid on client side. Server side stats context is same as s.ctx.
+	// All client side stats collection should use the clientStatsCtx (instead of the stream context)
+	// so that all the generated stats for a particular RPC can be associated in the processing phase.
+	clientStatsCtx context.Context
 	// ctx is the associated context of the stream.
 	ctx context.Context
 	// cancel is always nil for client side Stream.
@@ -265,11 +269,6 @@ func (s *Stream) ServerTransport() ServerTransport {
 // Context returns the context of the stream.
 func (s *Stream) Context() context.Context {
 	return s.ctx
-}
-
-// TraceContext recreates the context of s with a trace.Trace.
-func (s *Stream) TraceContext(tr trace.Trace) {
-	s.ctx = trace.NewContext(s.ctx, tr)
 }
 
 // Method returns the method for the stream.
@@ -474,7 +473,7 @@ type ClientTransport interface {
 // Write methods for a given Stream will be called serially.
 type ServerTransport interface {
 	// HandleStreams receives incoming streams using the given handler.
-	HandleStreams(func(*Stream))
+	HandleStreams(func(*Stream), func(context.Context, string) context.Context)
 
 	// WriteHeader sends the header metadata for the given stream.
 	// WriteHeader may not be called on all streams.

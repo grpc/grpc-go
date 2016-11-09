@@ -118,7 +118,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	reply, err := encode(testCodec{}, &expectedResponse, nil, nil)
+	reply, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
 	if err != nil {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
@@ -185,6 +185,8 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		}
 		go st.HandleStreams(func(s *transport.Stream) {
 			go h.handleStream(t, s)
+		}, func(ctx context.Context, method string) context.Context {
+			return ctx
 		})
 	}
 }

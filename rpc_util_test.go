@@ -114,7 +114,7 @@ func TestEncode(t *testing.T) {
 	}{
 		{nil, nil, []byte{0, 0, 0, 0, 0}, nil},
 	} {
-		b, err := encode(protoCodec{}, test.msg, nil, nil)
+		b, err := encode(protoCodec{}, test.msg, nil, nil, nil)
 		if err != test.err || !bytes.Equal(b, test.b) {
 			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, b, err, test.b, test.err)
 		}
@@ -199,12 +199,12 @@ func TestErrorsWithSameParameters(t *testing.T) {
 // bytes.
 func bmEncode(b *testing.B, mSize int) {
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
-	encoded, _ := encode(protoCodec{}, msg, nil, nil)
+	encoded, _ := encode(protoCodec{}, msg, nil, nil, nil)
 	encodedSz := int64(len(encoded))
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encode(protoCodec{}, msg, nil, nil)
+		encode(protoCodec{}, msg, nil, nil, nil)
 	}
 	b.SetBytes(encodedSz)
 }
