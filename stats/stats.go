@@ -86,7 +86,7 @@ type InPayload struct {
 func (s *InPayload) IsClient() bool { return s.Client }
 
 // InHeader contains stats when a header is received.
-// FullMethod, addresses and Encryption are only valid if Client is false.
+// FullMethod, addresses and Compression are only valid if Client is false.
 type InHeader struct {
 	// Client is true if this InHeader is from client side.
 	Client bool
@@ -99,8 +99,8 @@ type InHeader struct {
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
-	// Encryption is the encryption algorithm used for the RPC.
-	Encryption string
+	// Compression is the compression algorithm used for the RPC.
+	Compression string
 }
 
 // IsClient indicates if this is from client side.
@@ -137,7 +137,7 @@ type OutPayload struct {
 func (s *OutPayload) IsClient() bool { return s.Client }
 
 // OutHeader contains stats when a header is sent.
-// FullMethod, addresses and Encryption are only valid if Client is true.
+// FullMethod, addresses and Compression are only valid if Client is true.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
@@ -150,8 +150,8 @@ type OutHeader struct {
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
-	// Encryption is the encryption algorithm used for the RPC.
-	Encryption string
+	// Compression is the compression algorithm used for the RPC.
+	Compression string
 }
 
 // IsClient indicates if this is from client side.

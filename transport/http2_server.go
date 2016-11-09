@@ -242,11 +242,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.ctx = traceCtx(s.ctx, s.method)
 	if stats.On() {
 		inHeader := &stats.InHeader{
-			FullMethod: s.method,
-			RemoteAddr: t.remoteAddr,
-			LocalAddr:  t.localAddr,
-			Encryption: s.recvCompress,
-			WireLength: int(frame.Header().Length),
+			FullMethod:  s.method,
+			RemoteAddr:  t.remoteAddr,
+			LocalAddr:   t.localAddr,
+			Compression: s.recvCompress,
+			WireLength:  int(frame.Header().Length),
 		}
 		stats.Handle(s.ctx, inHeader)
 	}

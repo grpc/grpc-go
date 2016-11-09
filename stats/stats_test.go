@@ -289,15 +289,15 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]*testpb.SimpleRequest
 }
 
 type expectedData struct {
-	method     string
-	serverAddr string
-	encryption string
-	reqIdx     int
-	requests   []*testpb.SimpleRequest
-	respIdx    int
-	responses  []*testpb.SimpleResponse
-	err        error
-	failfast   bool
+	method      string
+	serverAddr  string
+	compression string
+	reqIdx      int
+	requests    []*testpb.SimpleRequest
+	respIdx     int
+	responses   []*testpb.SimpleResponse
+	err         error
+	failfast    bool
 }
 
 type gotData struct {
@@ -360,8 +360,8 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		if st.LocalAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
 		}
-		if st.Encryption != e.encryption {
-			t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
+		if st.Compression != e.compression {
+			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 	}
 }
@@ -453,8 +453,8 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		if st.RemoteAddr.String() != e.serverAddr {
 			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
 		}
-		if st.Encryption != e.encryption {
-			t.Fatalf("st.Encryption = %v, want %v", st.Encryption, e.encryption)
+		if st.Compression != e.compression {
+			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 	}
 }
@@ -691,11 +691,11 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:     "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr: te.srvAddr,
-		encryption: "gzip",
-		requests:   reqs,
-		responses:  resps,
+		method:      "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr:  te.srvAddr,
+		compression: "gzip",
+		requests:    reqs,
+		responses:   resps,
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -756,12 +756,12 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:     "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr: te.srvAddr,
-		encryption: "gzip",
-		requests:   reqs,
-		responses:  resps,
-		err:        err,
+		method:      "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr:  te.srvAddr,
+		compression: "gzip",
+		requests:    reqs,
+		responses:   resps,
+		err:         err,
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
@@ -845,6 +845,12 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 	if len(got) != expectLen {
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for _, s := range got {
@@ -989,12 +995,12 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:     "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr: te.srvAddr,
-		encryption: "gzip",
-		requests:   reqs,
-		responses:  resps,
-		failfast:   failfast,
+		method:      "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr:  te.srvAddr,
+		compression: "gzip",
+		requests:    reqs,
+		responses:   resps,
+		failfast:    failfast,
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
@@ -1013,6 +1019,12 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 	if len(got) != expectLen {
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for _, s := range got {
@@ -1095,13 +1107,13 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	expect := &expectedData{
-		method:     "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr: te.srvAddr,
-		encryption: "gzip",
-		requests:   reqs,
-		responses:  resps,
-		err:        err,
-		failfast:   failfast,
+		method:      "/grpc.testing.TestService/FullDuplexCall",
+		serverAddr:  te.srvAddr,
+		compression: "gzip",
+		requests:    reqs,
+		responses:   resps,
+		err:         err,
+		failfast:    failfast,
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
@@ -1119,6 +1131,12 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 	if len(got) != expectLen {
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for _, s := range got {
