@@ -522,12 +522,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // traceInfo returns a traceInfo and associates it with stream, if tracing is enabled.
 // If tracing is not enabled, it returns nil.
 func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Stream) (trInfo *traceInfo) {
-	if !EnableTracing {
-		return nil
-	}
 	tr, ok := trace.FromContext(stream.Context())
 	if !ok {
-		grpclog.Fatalf("cannot get trace from context while EnableTracing == true")
+		return nil
 	}
 
 	trInfo = &traceInfo{
