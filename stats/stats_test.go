@@ -235,7 +235,7 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	if c.success {
-		req = &testpb.SimpleRequest{Id: 1}
+		req = &testpb.SimpleRequest{Id: errorID + 1}
 	} else {
 		req = &testpb.SimpleRequest{Id: errorID}
 	}
@@ -310,12 +310,11 @@ const (
 	begin int = iota
 	end
 	inpay
-	inheader
-	intrailer
-	outpay
-	outheader
-	outtrailer
-	errors
+	inHeader
+	inTrailer
+	outPayload
+	outHeader
+	outTrailer
 )
 
 func checkBegin(t *testing.T, d *gotData, e *expectedData) {
@@ -807,13 +806,13 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		begin:     {checkBegin, 1},
-		outheader: {checkOutHeader, 1},
-		outpay:    {checkOutPayload, 1},
-		inheader:  {checkInHeader, 1},
-		inpay:     {checkInPayload, 1},
-		intrailer: {checkInTrailer, 1},
-		end:       {checkEnd, 1},
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inpay:      {checkInPayload, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -834,23 +833,23 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			checkFuncs[begin].f(t, s, expect)
 			checkFuncs[begin].c--
 		case *stats.OutHeader:
-			if checkFuncs[outheader].c <= 0 {
+			if checkFuncs[outHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outheader].f(t, s, expect)
-			checkFuncs[outheader].c--
+			checkFuncs[outHeader].f(t, s, expect)
+			checkFuncs[outHeader].c--
 		case *stats.OutPayload:
-			if checkFuncs[outpay].c <= 0 {
+			if checkFuncs[outPayload].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outpay].f(t, s, expect)
-			checkFuncs[outpay].c--
+			checkFuncs[outPayload].f(t, s, expect)
+			checkFuncs[outPayload].c--
 		case *stats.InHeader:
-			if checkFuncs[inheader].c <= 0 {
+			if checkFuncs[inHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[inheader].f(t, s, expect)
-			checkFuncs[inheader].c--
+			checkFuncs[inHeader].f(t, s, expect)
+			checkFuncs[inHeader].c--
 		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -858,11 +857,11 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
 		case *stats.InTrailer:
-			if checkFuncs[intrailer].c <= 0 {
+			if checkFuncs[inTrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[intrailer].f(t, s, expect)
-			checkFuncs[intrailer].c--
+			checkFuncs[inTrailer].f(t, s, expect)
+			checkFuncs[inTrailer].c--
 		case *stats.End:
 			if checkFuncs[end].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -969,13 +968,13 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		begin:     {checkBegin, 1},
-		outheader: {checkOutHeader, 1},
-		outpay:    {checkOutPayload, count},
-		inheader:  {checkInHeader, 1},
-		inpay:     {checkInPayload, count},
-		intrailer: {checkInTrailer, 1},
-		end:       {checkEnd, 1},
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inHeader:   {checkInHeader, 1},
+		inpay:      {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -996,23 +995,23 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 			checkFuncs[begin].f(t, s, expect)
 			checkFuncs[begin].c--
 		case *stats.OutHeader:
-			if checkFuncs[outheader].c <= 0 {
+			if checkFuncs[outHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outheader].f(t, s, expect)
-			checkFuncs[outheader].c--
+			checkFuncs[outHeader].f(t, s, expect)
+			checkFuncs[outHeader].c--
 		case *stats.OutPayload:
-			if checkFuncs[outpay].c <= 0 {
+			if checkFuncs[outPayload].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outpay].f(t, s, expect)
-			checkFuncs[outpay].c--
+			checkFuncs[outPayload].f(t, s, expect)
+			checkFuncs[outPayload].c--
 		case *stats.InHeader:
-			if checkFuncs[inheader].c <= 0 {
+			if checkFuncs[inHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[inheader].f(t, s, expect)
-			checkFuncs[inheader].c--
+			checkFuncs[inHeader].f(t, s, expect)
+			checkFuncs[inHeader].c--
 		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -1020,11 +1019,11 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
 		case *stats.InTrailer:
-			if checkFuncs[intrailer].c <= 0 {
+			if checkFuncs[inTrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[intrailer].f(t, s, expect)
-			checkFuncs[intrailer].c--
+			checkFuncs[inTrailer].f(t, s, expect)
+			checkFuncs[inTrailer].c--
 		case *stats.End:
 			if checkFuncs[end].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -1076,12 +1075,12 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
-		begin:     {checkBegin, 1},
-		outheader: {checkOutHeader, 1},
-		outpay:    {checkOutPayload, 1},
-		inheader:  {checkInHeader, 1},
-		intrailer: {checkInTrailer, 1},
-		errors:    {checkEnd, 1},
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
 	}
 
 	var expectLen int
@@ -1102,23 +1101,23 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			checkFuncs[begin].f(t, s, expect)
 			checkFuncs[begin].c--
 		case *stats.OutHeader:
-			if checkFuncs[outheader].c <= 0 {
+			if checkFuncs[outHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outheader].f(t, s, expect)
-			checkFuncs[outheader].c--
+			checkFuncs[outHeader].f(t, s, expect)
+			checkFuncs[outHeader].c--
 		case *stats.OutPayload:
-			if checkFuncs[outpay].c <= 0 {
+			if checkFuncs[outPayload].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[outpay].f(t, s, expect)
-			checkFuncs[outpay].c--
+			checkFuncs[outPayload].f(t, s, expect)
+			checkFuncs[outPayload].c--
 		case *stats.InHeader:
-			if checkFuncs[inheader].c <= 0 {
+			if checkFuncs[inHeader].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[inheader].f(t, s, expect)
-			checkFuncs[inheader].c--
+			checkFuncs[inHeader].f(t, s, expect)
+			checkFuncs[inHeader].c--
 		case *stats.InPayload:
 			if checkFuncs[inpay].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
@@ -1126,17 +1125,17 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			checkFuncs[inpay].f(t, s, expect)
 			checkFuncs[inpay].c--
 		case *stats.InTrailer:
-			if checkFuncs[intrailer].c <= 0 {
+			if checkFuncs[inTrailer].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[intrailer].f(t, s, expect)
-			checkFuncs[intrailer].c--
+			checkFuncs[inTrailer].f(t, s, expect)
+			checkFuncs[inTrailer].c--
 		case *stats.End:
-			if checkFuncs[errors].c <= 0 {
+			if checkFuncs[end].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s)
 			}
-			checkFuncs[errors].f(t, s, expect)
-			checkFuncs[errors].c--
+			checkFuncs[end].f(t, s, expect)
+			checkFuncs[end].c--
 		default:
 			t.Fatalf("unexpected stats: %T", s)
 		}
