@@ -46,12 +46,15 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
@@ -63,9 +66,13 @@ import javax.net.ssl.SSLException;
 public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
+  private final Map<ChannelOption<?>, Object> channelOptions =
+      new HashMap<ChannelOption<?>, Object>();
+
   private NegotiationType negotiationType = NegotiationType.TLS;
   private ProtocolNegotiator protocolNegotiator;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
+
   @Nullable
   private EventLoopGroup eventLoopGroup;
   private SslContext sslContext;
@@ -119,10 +126,19 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   }
 
   /**
-   * Specify the channel type to use, by default we use {@link NioSocketChannel}.
+   * Specifies the channel type to use, by default we use {@link NioSocketChannel}.
    */
   public final NettyChannelBuilder channelType(Class<? extends Channel> channelType) {
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    return this;
+  }
+
+  /**
+   * Specifies a channel option. As the underlying channel as well as network implementation may
+   * ignore this value applications should consider it a hint.
+   */
+  public final <T> NettyChannelBuilder withOption(ChannelOption<T> option, T value) {
+    channelOptions.put(option, value);
     return this;
   }
 
@@ -190,7 +206,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   /**
    * Sets the max message size.
    *
-   * @deprecated Use maxInboundMessageSize instead
+   * @deprecated Use {@link #maxInboundMessageSize} instead
    */
   @Deprecated
   public final NettyChannelBuilder maxMessageSize(int maxMessageSize) {
@@ -224,7 +240,8 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
   @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(channelType, negotiationType, protocolNegotiator, sslContext,
+    return new NettyTransportFactory(
+        channelType, channelOptions, negotiationType, protocolNegotiator, sslContext,
         eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize);
   }
 
@@ -276,6 +293,7 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   @Internal
   protected static final class NettyTransportFactory implements ClientTransportFactory {
     private final Class<? extends Channel> channelType;
+    private final Map<ChannelOption<?>, ?> channelOptions;
     private final NegotiationType negotiationType;
     private final ProtocolNegotiator protocolNegotiator;
     private final SslContext sslContext;
@@ -287,16 +305,14 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
 
     private boolean closed;
 
-    private NettyTransportFactory(Class<? extends Channel> channelType,
-                                  NegotiationType negotiationType,
-                                  ProtocolNegotiator protocolNegotiator,
-                                  SslContext sslContext,
-                                  EventLoopGroup group,
-                                  int flowControlWindow,
-                                  int maxMessageSize,
-                                  int maxHeaderListSize) {
+    private NettyTransportFactory(
+        Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
+        NegotiationType negotiationType, ProtocolNegotiator protocolNegotiator,
+        SslContext sslContext, EventLoopGroup group, int flowControlWindow, int maxMessageSize,
+        int maxHeaderListSize) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
+      this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
       this.protocolNegotiator = protocolNegotiator;
       this.sslContext = sslContext;
       this.flowControlWindow = flowControlWindow;
@@ -323,13 +339,15 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     }
 
     @Internal  // This is strictly for internal use.  Depend on this at your own peril.
-    public ConnectionClientTransport newClientTransport(SocketAddress serverAddress,
-        String authority, String userAgent, ProtocolNegotiator negotiator) {
+    public ConnectionClientTransport newClientTransport(
+        SocketAddress serverAddress, String authority, String userAgent,
+        ProtocolNegotiator negotiator) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
-      return new NettyClientTransport(serverAddress, channelType, group, negotiator,
-          flowControlWindow, maxMessageSize, maxHeaderListSize, authority, userAgent);
+      return new NettyClientTransport(
+          serverAddress, channelType, channelOptions, group, negotiator, flowControlWindow,
+          maxMessageSize, maxHeaderListSize, authority, userAgent);
     }
 
     @Override

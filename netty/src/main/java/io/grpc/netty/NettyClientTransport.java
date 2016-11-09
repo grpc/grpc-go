@@ -33,6 +33,7 @@ package io.grpc.netty;
 
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Ticker;
 
@@ -51,6 +52,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.StreamBufferingEncoder.Http2ChannelClosedException;
@@ -58,14 +60,15 @@ import io.netty.util.AsciiString;
 
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
+import java.util.Map;
 import java.util.concurrent.Executor;
-
 import javax.annotation.Nullable;
 
 /**
  * A Netty-based {@link ConnectionClientTransport} implementation.
  */
 class NettyClientTransport implements ConnectionClientTransport {
+  private final Map<ChannelOption<?>, ?> channelOptions;
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
@@ -84,14 +87,16 @@ class NettyClientTransport implements ConnectionClientTransport {
   /** Since not thread-safe, may only be used from event loop. */
   private ClientTransportLifecycleManager lifecycleManager;
 
-  NettyClientTransport(SocketAddress address, Class<? extends Channel> channelType,
-                       EventLoopGroup group, ProtocolNegotiator negotiator,
-                       int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-                       String authority, @Nullable String userAgent) {
+  NettyClientTransport(
+      SocketAddress address, Class<? extends Channel> channelType,
+      Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
+      ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
+      int maxHeaderListSize, String authority, @Nullable String userAgent) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
+    this.channelOptions = Preconditions.checkNotNull(channelOptions, "channelOptions");
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
@@ -118,8 +123,9 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers,
-      CallOptions callOptions, StatsTraceContext statsTraceCtx) {
+  public ClientStream newStream(
+      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions,
+      StatsTraceContext statsTraceCtx) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
@@ -139,6 +145,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public Runnable start(Listener transportListener) {
     lifecycleManager = new ClientTransportLifecycleManager(
@@ -155,6 +162,13 @@ class NettyClientTransport implements ConnectionClientTransport {
     if (NioSocketChannel.class.isAssignableFrom(channelType)) {
       b.option(SO_KEEPALIVE, true);
     }
+    for (Map.Entry<ChannelOption<?>, ?> entry : channelOptions.entrySet()) {
+      // Every entry in the map is obtained from
+      // NettyChannelBuilder#withOption(ChannelOption<T> option, T value)
+      // so it is safe to pass the key-value pair to b.option().
+      b.option((ChannelOption<Object>) entry.getKey(), entry.getValue());
+    }
+
     /**
      * We don't use a ChannelInitializer in the client bootstrap because its "initChannel" method
      * is executed in the event loop and we need this handler to be in the pipeline immediately so
@@ -237,6 +251,11 @@ class NettyClientTransport implements ConnectionClientTransport {
     return Attributes.EMPTY;
   }
 
+  @VisibleForTesting
+  Channel channel() {
+    return channel;
+  }
+
   /**
    * Convert ChannelFuture.cause() to a Status, taking into account that all handlers are removed
    * from the pipeline when the channel is closed. Since handlers are removed, you may get an
@@ -261,7 +280,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   private NettyClientHandler newHandler() {
-    return NettyClientHandler.newHandler(lifecycleManager, flowControlWindow, maxHeaderListSize,
-        Ticker.systemTicker());
+    return NettyClientHandler
+        .newHandler(lifecycleManager, flowControlWindow, maxHeaderListSize, Ticker.systemTicker());
   }
 }
