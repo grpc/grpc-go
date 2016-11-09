@@ -45,7 +45,6 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -270,11 +269,6 @@ func (s *Stream) ServerTransport() ServerTransport {
 // Context returns the context of the stream.
 func (s *Stream) Context() context.Context {
 	return s.ctx
-}
-
-// TraceContext recreates the context of s with a trace.Trace.
-func (s *Stream) TraceContext(tr trace.Trace) {
-	s.ctx = trace.NewContext(s.ctx, tr)
 }
 
 // Method returns the method for the stream.
