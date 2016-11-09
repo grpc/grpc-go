@@ -592,6 +592,12 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
 	}
 
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
+	}
+
 	for i, f := range checkFuncs {
 		mu.Lock()
 		f(t, got[i], expect)
@@ -643,6 +649,12 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 
 	if len(got) != len(checkFuncs) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for i, f := range checkFuncs {
@@ -704,6 +716,12 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
 	}
 
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
+	}
+
 	for i, f := range checkFuncs {
 		mu.Lock()
 		f(t, got[i], expect)
@@ -757,6 +775,12 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 
 	if len(got) != len(checkFuncs) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for i, f := range checkFuncs {
@@ -921,6 +945,12 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 
 	if len(got) != len(checkFuncs) {
 		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	for i := 0; i < len(got)-1; i++ {
+		if got[i].ctx != got[i+1].ctx {
+			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+		}
 	}
 
 	for i, f := range checkFuncs {

@@ -467,6 +467,12 @@ func (s *Server) serveStreams(st transport.ServerTransport) {
 			defer wg.Done()
 			s.handleStream(st, stream, s.traceInfo(st, stream))
 		}()
+	}, func(ctx context.Context, method string) context.Context {
+		if !EnableTracing {
+			return ctx
+		}
+		tr := trace.New("grpc.Recv."+methodFamily(method), method)
+		return trace.NewContext(ctx, tr)
 	})
 	wg.Wait()
 }
@@ -519,12 +525,17 @@ func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Strea
 	if !EnableTracing {
 		return nil
 	}
+	tr, ok := trace.FromContext(stream.Context())
+	if !ok {
+		grpclog.Fatalf("cannot get trace from context while EnableTracing == true")
+	}
+
 	trInfo = &traceInfo{
-		tr: trace.New("grpc.Recv."+methodFamily(stream.Method()), stream.Method()),
+		tr: tr,
 	}
 	trInfo.firstLine.client = false
 	trInfo.firstLine.remoteAddr = st.RemoteAddr()
-	stream.TraceContext(trInfo.tr)
+
 	if dl, ok := stream.Context().Deadline(); ok {
 		trInfo.firstLine.deadline = dl.Sub(time.Now())
 	}

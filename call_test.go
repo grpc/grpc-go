@@ -185,6 +185,8 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		}
 		go st.HandleStreams(func(s *transport.Stream) {
 			go h.handleStream(t, s)
+		}, func(ctx context.Context, method string) context.Context {
+			return ctx
 		})
 	}
 }
