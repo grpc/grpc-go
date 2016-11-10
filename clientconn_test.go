@@ -47,7 +47,7 @@ import (
 const tlsDir = "testdata/"
 
 func temporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	return nil, &errorWithTemp{true} // Always return temporary error.
+	return nil, &testErr{true} // Always return temporary error.
 }
 
 func TestDialTimeout(t *testing.T) {
@@ -194,19 +194,19 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 	conn.Close()
 }
 
-type errorWithTemp struct {
+type testErr struct {
 	temp bool
 }
 
-func (e *errorWithTemp) Error() string {
-	return "non-temprary-error"
+func (e *testErr) Error() string {
+	return "test error"
 }
 
-func (e *errorWithTemp) Temporary() bool {
+func (e *testErr) Temporary() bool {
 	return e.temp
 }
 
-var nonTemporaryError = &errorWithTemp{false}
+var nonTemporaryError = &testErr{false}
 
 func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
 	return nil, nonTemporaryError
