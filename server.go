@@ -446,7 +446,7 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		AuthInfo:    authInfo,
 		InTapHandle: s.opts.inTapHandle,
 	}
-	getCodec := s.codecCreatorCreator.onNewTransport()
+	getCodec := s.codecProviderCreator.onNewTransport()
 	st, err := transport.NewServerTransport("http2", c, config, getCodec)
 	if err != nil {
 		s.mu.Lock()

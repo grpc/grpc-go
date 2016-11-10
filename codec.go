@@ -147,7 +147,7 @@ func (c protoCodecProviderCreator) onNewTransport() func() interface{} {
 	return func() interface{} { return provider.getCodec() }
 }
 
-func newProtoCodecProviderCreator() codecProviderCreator {
+func newProtoCodecProviderCreator() *protoCodecProviderCreator {
 	return &protoCodecProviderCreator{}
 }
 
@@ -188,7 +188,7 @@ func (c genericCodecProviderCreator) onNewTransport() func() interface{} {
 	return func() interface{} { return provider.getCodec() }
 }
 
-func newGenericCodecProviderCreator(codec Codec) codecProviderCreator {
+func newGenericCodecProviderCreator(codec Codec) *genericCodecProviderCreator {
 	return &genericCodecProviderCreator{
 		codec: codec,
 	}
