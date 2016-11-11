@@ -830,3 +830,58 @@ func TestIsReservedHeader(t *testing.T) {
 		}
 	}
 }
+
+type httpServerHandler struct{}
+
+func TestHttpToGRPCStatusMapping(t *testing.T){
+	lis, err := net.Listen("tcp","localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	go func () {
+		serverConn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error at server-side while accpeting: %v", err)
+		}
+		framer := http2.NewFramer(serverConn, serverConn)
+		if err = framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Error at server-side while writing settings ack: %v", err)
+		}
+		preface := make([]byte,len(http2.ClientPreface))
+		if _, err = io.ReadFull(serverConn, preface); err != nil {
+			t.Errorf("Error at server-side while reading from conn", err)
+		}
+		fmt.Println("server will wait for headers from client")
+		frame, err := framer.ReadFrame()
+		if err != nil {
+			t. Errorf("Error at server-side while reading frame: %v", err)
+		}
+		fmt.Printf("type of frame : %v\n", frame)
+		frame, err = framer.ReadFrame()
+		if err != nil {
+			t.Errorf("Error at server-side while reading frame: %v", err)
+		}
+		fmt.Printf("type of frame : %v\n", frame)
+		var buf bytes.Buffer
+		hEnc := hpack.NewEncoder(&buf)
+		hEnc.WriteField(hpack.HeaderField{Name: "status", Value: "404"})
+		if err = framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+			t.Errorf("Error at server-side while writting headers: %v", err)
+		}
+		fmt.Println("no error while sending header")
+	}()
+	// create a gRPC client
+	cTransport, err := newHTTP2Client(context.Background(), TargetInfo{ Addr: lis.Addr().String()}, ConnectOptions{})
+	if err != nil {
+		t.Fatalf("Error creating gRPC client: %v", err)
+	}
+	_, err = cTransport.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
+	if err != nil {
+		t.Fatalf("Error while sending headers to server :%v", err)
+	}
+	//streamHeader, err := stream.Header()
+	//if err != nil {
+	//	t.Fatalf("error while retriving stream header %v", err)
+	//}
+	time.Sleep(time.Second*5)
+}

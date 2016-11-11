@@ -90,21 +90,21 @@ var (
 	}
 	httpStatusConvTab = map[int]codes.Code{
 		// 400 Bad Request - INTERNAL
-		400: codes.Internal,
+		http.StatusBadRequest: codes.Internal,
 		// 401 Unauthorized  - UNAUTHENTICATED
-		401: codes.Unauthenticated,
+		http.StatusUnauthorized: codes.Unauthenticated,
 		// 403 Forbidden - PERMISSION_DENIED
-		403: codes.PermissionDenied,
+		http.StatusForbidden: codes.PermissionDenied,
 		// 404 Not Found - UNIMPLEMENTED
-		404: codes.Unimplemented,
+		http.StatusNotFound: codes.Unimplemented,
 		// 429 Too Many Requests - UNAVAILABLE
-		429: codes.Unavailable,
+		http.StatusTooManyRequests: codes.Unavailable,
 		// 502 Bad Gateway - UNAVAILABLE
-		502: codes.Unavailable,
+		http.StatusBadGateway: codes.Unavailable,
 		// 503 Service Unavailable - UNAVAILABLE
-		503: codes.Unavailable,
+		http.StatusServiceUnavailable: codes.Unavailable,
 		// 504 Gateway timeout - UNAVAILABLE
-		504: codes.Unavailable,
+		http.StatusGatewayTimeout: codes.Unavailable,
 	}
 )
 
@@ -505,6 +505,7 @@ func (f *framer) writeSettings(forceFlush bool, settings ...http2.Setting) error
 		return err
 	}
 	if forceFlush {
+		fmt.Println("client wrote settings with flush")
 		return f.writer.Flush()
 	}
 	return nil
