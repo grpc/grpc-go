@@ -153,7 +153,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	scheme := "http"
 	conn, err := dial(ctx, opts.Dialer, addr.Addr)
 	if err != nil {
-		return nil, connectionErrorf(true, err, "transport: %v", err)
+		return nil, connectionErrorf(isTemporary(err), err, "transport: %v", err)
 	}
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
