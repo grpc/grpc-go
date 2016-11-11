@@ -52,10 +52,12 @@ import (
 )
 
 var (
-	reqSizes      = []int{27182, 8, 1828, 45904}
-	respSizes     = []int{31415, 9, 2653, 58979}
-	largeReqSize  = 271828
-	largeRespSize = 314159
+	reqSizes            = []int{27182, 8, 1828, 45904}
+	respSizes           = []int{31415, 9, 2653, 58979}
+	largeReqSize        = 271828
+	largeRespSize       = 314159
+	initialMetadataKey  = "x-grpc-test-echo-initial"
+	trailingMetadataKey = "x-grpc-test-echo-trailing-bin"
 )
 
 func clientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
@@ -454,6 +456,92 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 	}
 }
 
+var (
+	initialMetadataValue  = "test_initial_metadata_value"
+	trailingMetadataValue = "\x0a\x0b\x0a\x0b\x0a\x0b"
+	customMetadata        = metadata.Pairs(
+		initialMetadataKey, initialMetadataValue,
+		trailingMetadataKey, trailingMetadataValue,
+	)
+)
+
+func validateMetadata(header, trailer metadata.MD) {
+	if len(header[initialMetadataKey]) != 1 {
+		grpclog.Fatalf("Expected exactly one header from server. Received %d", len(header[initialMetadataKey]))
+	}
+	if header[initialMetadataKey][0] != initialMetadataValue {
+		grpclog.Fatalf("Got header %s; want %s", header[initialMetadataKey][0], initialMetadataValue)
+	}
+	if len(trailer[trailingMetadataKey]) != 1 {
+		grpclog.Fatalf("Expected exactly one trailer from server. Received %d", len(trailer[trailingMetadataKey]))
+	}
+	if trailer[trailingMetadataKey][0] != trailingMetadataValue {
+		grpclog.Fatalf("Got trailer %s; want %s", trailer[trailingMetadataKey][0], trailingMetadataValue)
+	}
+}
+
+// DoCustomMetadata checks that metadata is echoed back to the client.
+func DoCustomMetadata(tc testpb.TestServiceClient) {
+	// Testing with UnaryCall.
+	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseSize: proto.Int32(int32(1)),
+		Payload:      pl,
+	}
+	ctx := metadata.NewContext(context.Background(), customMetadata)
+	var header, trailer metadata.MD
+	reply, err := tc.UnaryCall(
+		ctx,
+		req,
+		grpc.Header(&header),
+		grpc.Trailer(&trailer),
+	)
+	if err != nil {
+		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
+	}
+	t := reply.GetPayload().GetType()
+	s := len(reply.GetPayload().GetBody())
+	if t != testpb.PayloadType_COMPRESSABLE || s != 1 {
+		grpclog.Fatalf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, 1)
+	}
+	validateMetadata(header, trailer)
+
+	// Testing with FullDuplex.
+	stream, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(1),
+		},
+	}
+	streamReq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            pl,
+	}
+	if err := stream.Send(streamReq); err != nil {
+		grpclog.Fatalf("%v.Send(%v) = %v", stream, streamReq, err)
+	}
+	streamHeader, err := stream.Header()
+	if err != nil {
+		grpclog.Fatalf("%v.Header() = %v", stream, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		grpclog.Fatalf("%v.Recv() = %v", stream, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		grpclog.Fatalf("%v failed to complete the custom metadata test: %v", stream, err)
+	}
+	streamTrailer := stream.Trailer()
+	validateMetadata(streamHeader, streamTrailer)
+}
+
 // DoStatusCodeAndMessage checks that the status code is propagated back to the client.
 func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	var code int32 = 2
@@ -489,6 +577,22 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	}
 }
 
+// DoUnimplementedService attempts to call a method from an unimplemented service.
+func DoUnimplementedService(tc testpb.UnimplementedServiceClient) {
+	_, err := tc.UnimplementedCall(context.Background(), &testpb.Empty{})
+	if grpc.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("%v.UnimplementedCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unimplemented)
+	}
+}
+
+// DoUnimplementedMethod attempts to call an unimplemented method.
+func DoUnimplementedMethod(cc *grpc.ClientConn) {
+	var req, reply proto.Message
+	if err := grpc.Invoke(context.Background(), "/grpc.testing.TestService/UnimplementedCall", req, reply, cc); err == nil || grpc.Code(err) != codes.Unimplemented {
+		grpclog.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want error code %s", err, codes.Unimplemented)
+	}
+}
+
 type testServer struct {
 }
 
@@ -521,6 +625,16 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	status := in.GetResponseStatus()
+	if md, ok := metadata.FromContext(ctx); ok {
+		if initialMetadata, ok := md[initialMetadataKey]; ok {
+			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
+			grpc.SendHeader(ctx, header)
+		}
+		if trailingMetadata, ok := md[trailingMetadataKey]; ok {
+			trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
+			grpc.SetTrailer(ctx, trailer)
+		}
+	}
 	if status != nil && *status.Code != 0 {
 		return nil, grpc.Errorf(codes.Code(*status.Code), *status.Message)
 	}
@@ -570,6 +684,16 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
+	if md, ok := metadata.FromContext(stream.Context()); ok {
+		if initialMetadata, ok := md[initialMetadataKey]; ok {
+			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
+			stream.SendHeader(header)
+		}
+		if trailingMetadata, ok := md[trailingMetadataKey]; ok {
+			trailer := metadata.Pairs(trailingMetadataKey, trailingMetadata[0])
+			stream.SetTrailer(trailer)
+		}
+	}
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
