@@ -67,33 +67,28 @@ type codecProviderCreator interface {
 
 // protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
 type protoCodec struct {
-	marshalPool   *marshalBufCache
+	marshalPool   *bufCache
 	unmarshalPool *bufCache
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	var protoMsg = v.(proto.Message)
 	var sizeNeeded = proto.Size(protoMsg)
-	var currentSlice []byte
 
-	mb := p.marshalPool.marshalBufAlloc()
-	buffer := mb.buffer
+	buffer := p.marshalPool.bufAlloc()
 
-	if mb.lastSlice != nil && sizeNeeded <= len(mb.lastSlice) {
-		currentSlice = mb.lastSlice
-	} else {
-		currentSlice = make([]byte, sizeNeeded)
-	}
-	buffer.SetBuf(currentSlice)
+	newSlice := make([]byte, sizeNeeded)
+
+	buffer.SetBuf(newSlice)
 	buffer.Reset()
 	err := buffer.Marshal(protoMsg)
 	if err != nil {
 		return nil, err
 	}
-	out := buffer.Bytes()
+	out := make([]byte, len(buffer.Bytes()))
+	copy(out, buffer.Bytes())
 	buffer.SetBuf(nil)
-	mb.lastSlice = currentSlice
-	p.marshalPool.marshalBufFree(mb)
+	p.marshalPool.bufFree(buffer)
 	return out, err
 }
 
@@ -115,7 +110,7 @@ func (protoCodec) String() string {
 // The current goal is to keep a pool of buffers per transport connection,
 // to be shared by its streams.
 type protoCodecProvider struct {
-	marshalPool   *marshalBufCache
+	marshalPool   *bufCache
 	unmarshalPool *bufCache
 }
 
@@ -132,7 +127,7 @@ type protoCodecProviderCreator struct {
 // Called when a new connection is made. Sets up the pool to be used by
 // that connection, for its streams
 func (c protoCodecProviderCreator) onNewTransport() func() interface{} {
-	marshalPool := &marshalBufCache{
+	marshalPool := &bufCache{
 		cache: &ringCache{},
 	}
 	unmarshalPool := &bufCache{
@@ -149,19 +144,6 @@ func (c protoCodecProviderCreator) onNewTransport() func() interface{} {
 
 func newProtoCodecProviderCreator() *protoCodecProviderCreator {
 	return &protoCodecProviderCreator{}
-}
-
-// Keeps a buffer used for marshalling, and can also holds on to the last
-// byte slice used for marshalling for reuse
-type marshalBuffer struct {
-	buffer    *proto.Buffer
-	lastSlice []byte
-}
-
-func newMarshalBuffer() *marshalBuffer {
-	return &marshalBuffer{
-		buffer: &proto.Buffer{},
-	}
 }
 
 // generic codec used with user-supplied codec.
@@ -257,25 +239,6 @@ func (s *ringCache) pop() interface{} {
 	atomic.StoreUint64(&s.readIndex, i+1)
 	s.readMu.Unlock()
 	return m
-}
-
-type marshalBufCache struct {
-	cache *ringCache
-}
-
-func (c *marshalBufCache) marshalBufAlloc() *marshalBuffer {
-	mb := c.cache.pop()
-	if mb == nil {
-		mb = newMarshalBuffer()
-	}
-	return mb.(*marshalBuffer)
-}
-
-func (c *marshalBufCache) marshalBufFree(mb *marshalBuffer) {
-	if mb == nil {
-		panic("freeing a nil marshalBuffer")
-	}
-	c.cache.push(mb)
 }
 
 type bufCache struct {

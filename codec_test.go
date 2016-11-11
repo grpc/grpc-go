@@ -46,9 +46,7 @@ func newProtoCodec() Codec {
 	return getCodec().(Codec)
 }
 
-func marshalAndUnmarshal(protoCodec Codec, t *testing.T) {
-	expectedBody := []byte{1, 2, 3}
-
+func marshalAndUnmarshal(protoCodec Codec, expectedBody []byte, t *testing.T) {
 	original := &codec_perf.Buffer{}
 	original.Body = expectedBody
 
@@ -90,13 +88,68 @@ func TestGenericCodecProviderCreatorCreatesTheSameCodecProvided(t *testing.T) {
 }
 
 func TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
-	marshalAndUnmarshal(newProtoCodec(), t)
+	marshalAndUnmarshal(newProtoCodec(), []byte{1, 2, 3}, t)
+}
+
+// This tries to make sure that buffers weren't stomped on
+// between marshals on codecs taking from the same pool.
+func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
+	providerCreator := newProtoCodecProviderCreator()
+	getCodec := providerCreator.onNewTransport()
+	codec1 := getCodec().(Codec)
+	codec2 := getCodec().(Codec)
+
+	expectedBody1 := []byte{1, 2, 3}
+	expectedBody2 := []byte{4, 5, 6}
+
+	proto1 := codec_perf.Buffer{Body: expectedBody1}
+	proto2 := codec_perf.Buffer{Body: expectedBody2}
+
+	var m1, m2 []byte
+	var err error
+
+	if m1, err = codec1.Marshal(&proto1); err != nil {
+		t.Fatalf("protoCodec.Marshal(%v) failed", proto1)
+	}
+
+	if m2, err = codec2.Marshal(&proto2); err != nil {
+		t.Fatalf("protoCodec.Marshal(%v) failed", proto2)
+	}
+
+	if err = codec1.Unmarshal(m1, &proto1); err != nil {
+		t.Fatalf("protoCodec.Unmarshal(%v) failed", m1)
+	}
+
+	if err = codec2.Unmarshal(m2, &proto2); err != nil {
+		t.Fatalf("protoCodec.Unmarshal(%v) failed", m2)
+	}
+
+	b1 := proto1.GetBody()
+	b2 := proto2.GetBody()
+
+	for i, v := range b1 {
+		if expectedBody1[i] != v {
+			t.Fatalf("expected %v at index %v but got %v", i, expectedBody1[i], v)
+		}
+	}
+
+	for i, v := range b2 {
+		if expectedBody2[i] != v {
+			t.Fatalf("expected %v at index %v but got %v", i, expectedBody2[i], v)
+		}
+	}
 }
 
 func TestConcurrentUsageOfProtoCodec(t *testing.T) {
-	numProviderCreators := 5
-	numCodecFuncsPerProvider := 5
-	numCodecsPerGetCodecFunc := 100
+	numProviderCreators := 2
+	numCodecFuncsPerProvider := 2
+	numCodecsPerGetCodecFunc := maxPerRing * 2
+
+	buffers := make([][]byte, 3)
+	buffers[0] = []byte{1, 2}
+	buffers[1] = []byte{4, 5, 6}
+	buffers[2] = []byte{7, 8, 9, 10}
+
 	providerCreators := make([]*protoCodecProviderCreator, numProviderCreators)
 	getCodecFuncs := make([]func() interface{}, numCodecFuncsPerProvider*numProviderCreators)
 	var wg sync.WaitGroup
@@ -121,7 +174,7 @@ func TestConcurrentUsageOfProtoCodec(t *testing.T) {
 			wg.Add(1)
 			go func(codec Codec) {
 				for k := 0; k < maxPerRing*2; k++ {
-					marshalAndUnmarshal(codec, t)
+					marshalAndUnmarshal(codec, buffers[k%len(buffers)], t)
 				}
 				wg.Add(-1)
 			}(codec)
