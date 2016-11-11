@@ -246,7 +246,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
-func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient) (retry bool) {
+func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream, err := lbc.BalanceLoad(ctx, grpc.FailFast(false))
@@ -292,8 +292,12 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient) (retry bool) 
 			break
 		}
 		b.mu.Lock()
+		if b.done || seq < b.seq {
+			b.mu.Unlock()
+			return
+		}
 		b.seq++
-		seq := b.seq
+		seq = b.seq
 		b.mu.Unlock()
 		if serverList := reply.GetServerList(); serverList != nil {
 			b.processServerList(serverList, seq)
@@ -364,7 +368,10 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			go func(cc *grpc.ClientConn) {
 				lbc := lbpb.NewLoadBalancerClient(cc)
 				for {
-					if retry := b.callRemoteBalancer(lbc); !retry {
+					b.mu.Lock()
+					seq := b.seq
+					b.mu.Unlock()
+					if retry := b.callRemoteBalancer(lbc, seq); !retry {
 						cc.Close()
 						return
 					}
