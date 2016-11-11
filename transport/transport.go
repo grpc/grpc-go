@@ -374,6 +374,8 @@ type ConnectOptions struct {
 	UserAgent string
 	// Dialer specifies how to dial a network address.
 	Dialer func(context.Context, string) (net.Conn, error)
+	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
+	FailOnNonTempDialError bool
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.
 	PerRPCCredentials []credentials.PerRPCCredentials
 	// TransportCredentials stores the Authenticator required to setup a client connection.

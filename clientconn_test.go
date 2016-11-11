@@ -46,12 +46,8 @@ import (
 
 const tlsDir = "testdata/"
 
-func temporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	return nil, &testErr{true} // Always return temporary error.
-}
-
 func TestDialTimeout(t *testing.T) {
-	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure(), WithDialer(temporaryErrorDialer))
+	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
 	if err == nil {
 		conn.Close()
 	}
@@ -65,7 +61,7 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock(), WithDialer(temporaryErrorDialer))
+	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithTimeout(time.Millisecond), WithBlock())
 	if err == nil {
 		conn.Close()
 	}
@@ -214,8 +210,12 @@ func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, erro
 
 func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	_, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock())
-	if err != nonTemporaryError {
+	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock(), FailOnNonTempDialError(true)); err != nonTemporaryError {
 		t.Fatalf("Dial(%q) = %v, want %v", "", err, nonTemporaryError)
+	}
+
+	// Without FailOnNonTempDialError, gRPC will retry to connect, and dial should exit with time out error.
+	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock()); err != context.DeadlineExceeded {
+		t.Fatalf("Dial(%q) = %v, want %v", "", err, context.DeadlineExceeded)
 	}
 }

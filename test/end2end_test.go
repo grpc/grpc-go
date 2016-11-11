@@ -996,19 +996,18 @@ func testFailFast(t *testing.T, e env) {
 	// Loop until the server teardown is propagated to the client.
 	for {
 		_, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
-		if grpc.Code(err) == codes.Internal {
+		if grpc.Code(err) == codes.Unavailable {
 			break
 		}
 		fmt.Printf("%v.EmptyCall(_, _) = _, %v", tc, err)
 		time.Sleep(10 * time.Millisecond)
 	}
-	// The client stops reconnecting because dial function returns non-temporary error,
-	// ongoing fail-fast RPCs should fail with code.Internal.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Internal {
-		t.Fatalf("TestService/EmptyCall(_, _, _) = _, %v, want _, error code: %s", err, codes.Internal)
+	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _, _) = _, %v, want _, error code: %s", err, codes.Unavailable)
 	}
-	if _, err := tc.StreamingInputCall(context.Background()); grpc.Code(err) != codes.Internal {
-		t.Fatalf("TestService/StreamingInputCall(_) = _, %v, want _, error code: %s", err, codes.Internal)
+	if _, err := tc.StreamingInputCall(context.Background()); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/StreamingInputCall(_) = _, %v, want _, error code: %s", err, codes.Unavailable)
 	}
 
 	awaitNewConnLogOutput()
