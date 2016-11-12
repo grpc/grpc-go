@@ -200,6 +200,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes,
           statsTraceCtx);
       transportListener.streamCreated(stream, method, metadata);
+      state.onStreamAllocated();
       http2Stream.setProperty(streamKey, state);
 
     } catch (Http2Exception e) {

@@ -237,7 +237,7 @@ public abstract class AbstractStream2 implements Stream {
      * StreamListener#onReady()} handler if appropriate. This must be called from the transport
      * thread, since the listener may be called back directly.
      */
-    protected final void onStreamAllocated() {
+    protected void onStreamAllocated() {
       checkState(listener() != null);
       synchronized (onReadyLock) {
         checkState(!allocated, "Already allocated");

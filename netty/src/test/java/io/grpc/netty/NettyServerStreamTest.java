@@ -298,6 +298,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY,
         statsTraceCtx);
     stream.transportState().setListener(serverListener);
+    state.onStreamAllocated();
     verify(serverListener, atLeastOnce()).onReady();
     verifyNoMoreInteractions(serverListener);
     return stream;
