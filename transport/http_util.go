@@ -505,7 +505,6 @@ func (f *framer) writeSettings(forceFlush bool, settings ...http2.Setting) error
 		return err
 	}
 	if forceFlush {
-		fmt.Println("client wrote settings with flush")
 		return f.writer.Flush()
 	}
 	return nil
