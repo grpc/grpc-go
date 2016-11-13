@@ -219,7 +219,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			Val: uint32(initialWindowSize),
 		})
 	} else {
-		fmt.Println("Client will write an empty settings frame")
 		err = t.framer.writeSettings(true)
 	}
 	if err != nil {
@@ -438,7 +437,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			// and there is header metadata to be sent. Otherwise, there is flushing until
 			// the corresponding data frame is written.
 			err = t.framer.writeHeaders(flush, p)
-			fmt.Println("client sending headers now! flush: ", flush, " err: ", err)
 			first = false
 		} else {
 			// Sends Continuation frames for the leftover headers.
@@ -857,12 +855,10 @@ func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	s, ok := t.getStream(frame)
 	if !ok {
-		fmt.Println("not ok!")
 		return
 	}
 	var state decodeState
 	for _, hf := range frame.Fields {
-		fmt.Println("header field:", hf)
 		state.processHeaderField(hf)
 	}
 	if state.err != nil {
@@ -873,7 +869,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 		s.mu.Unlock()
 		s.write(recvMsg{err: state.err})
-		fmt.Println("wrote this error:", state.err)
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
@@ -936,7 +931,6 @@ func (t *http2Client) reader() {
 		return
 	}
 	t.handleSettings(sf)
-	fmt.Println("Client got a settings frame from the server")
 
 	// loop to keep reading incoming messages on this transport.
 	for {
