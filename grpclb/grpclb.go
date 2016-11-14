@@ -296,7 +296,7 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 			b.mu.Unlock()
 			return
 		}
-		b.seq++
+		b.seq++ // tick when receiving a new list of servers.
 		seq = b.seq
 		b.mu.Unlock()
 		if serverList := reply.GetServerList(); serverList != nil {
@@ -365,12 +365,13 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)
 				return
 			}
+			b.mu.Lock()
+			b.seq++ // tick when get a new balancer address
+			seq := b.seq
+			b.mu.Unlock()
 			go func(cc *grpc.ClientConn) {
 				lbc := lbpb.NewLoadBalancerClient(cc)
 				for {
-					b.mu.Lock()
-					seq := b.seq
-					b.mu.Unlock()
 					if retry := b.callRemoteBalancer(lbc, seq); !retry {
 						cc.Close()
 						return
