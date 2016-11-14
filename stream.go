@@ -145,6 +145,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}()
 	}
 	if stats.On() {
+		ctx = stats.TagRPCCtx(ctx, &stats.RPCContextTagInfo{FullMethodName: method})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),

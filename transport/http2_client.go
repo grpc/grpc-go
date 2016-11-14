@@ -56,6 +56,7 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
+	ctx        context.Context
 	target     string // server name/addr
 	userAgent  string
 	md         interface{}
@@ -181,6 +182,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
+		ctx:        context.Background(),
 		target:     addr.Addr,
 		userAgent:  ua,
 		md:         addr.Metadata,
@@ -242,6 +244,16 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	go t.controller()
 	t.writableChan <- 0
+	if stats.On() {
+		t.ctx = stats.TagConnCtx(t.ctx, &stats.ConnContextTagInfo{
+			RemoteAddr: t.remoteAddr,
+			LocalAddr:  t.localAddr,
+		})
+		connBegin := &stats.ConnBegin{
+			Client: true,
+		}
+		stats.ConnHandle(t.ctx, connBegin)
+	}
 	return t, nil
 }
 
@@ -546,6 +558,12 @@ func (t *http2Client) Close() (err error) {
 		}
 		s.mu.Unlock()
 		s.write(recvMsg{err: ErrConnClosing})
+	}
+	if stats.On() {
+		connEnd := &stats.ConnEnd{
+			Client: true,
+		}
+		stats.ConnHandle(t.ctx, connEnd)
 	}
 	return
 }

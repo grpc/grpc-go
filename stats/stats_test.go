@@ -49,13 +49,36 @@ import (
 	testpb "google.golang.org/grpc/stats/grpc_testing"
 )
 
+func init() {
+	grpc.EnableTracing = false
+}
+
 func TestStartStop(t *testing.T) {
 	stats.RegisterHandler(nil)
+	stats.RegisterConnHandler(nil)
 	stats.Start()
 	if stats.On() != false {
 		t.Fatalf("stats.Start() with nil handler, stats.On() = true, want false")
 	}
+
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
+	stats.RegisterConnHandler(nil)
+	stats.Start()
+	if stats.On() != true {
+		t.Fatalf("stats.Start() with non-nil handler, stats.On() = false, want true")
+	}
+	stats.Stop()
+
+	stats.RegisterHandler(nil)
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
+	stats.Start()
+	if stats.On() != true {
+		t.Fatalf("stats.Start() with non-nil conn handler, stats.On() = false, want true")
+	}
+	stats.Stop()
+
+	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
 	if stats.On() != false {
 		t.Fatalf("after stats.RegisterHandler(), stats.On() = true, want false")
 	}
@@ -63,9 +86,47 @@ func TestStartStop(t *testing.T) {
 	if stats.On() != true {
 		t.Fatalf("after stats.Start(_), stats.On() = false, want true")
 	}
+
 	stats.Stop()
 	if stats.On() != false {
 		t.Fatalf("after stats.Stop(), stats.On() = true, want false")
+	}
+}
+
+type connCtxKey struct{}
+type rpcCtxKey struct{}
+
+func TestTagConnCtx(t *testing.T) {
+	defer stats.RegisterConnCtxTagger(nil)
+	ctx1 := context.Background()
+	stats.RegisterConnCtxTagger(nil)
+	ctx2 := stats.TagConnCtx(ctx1, nil)
+	if ctx2 != ctx1 {
+		t.Fatalf("nil conn ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
+	}
+	stats.RegisterConnCtxTagger(func(ctx context.Context, info *stats.ConnContextTagInfo) context.Context {
+		return context.WithValue(ctx, connCtxKey{}, "connctxvalue")
+	})
+	ctx3 := stats.TagConnCtx(ctx1, nil)
+	if v, ok := ctx3.Value(connCtxKey{}).(string); !ok || v != "connctxvalue" {
+		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, connCtxKey{}, "connctxvalue"))
+	}
+}
+
+func TestTagRPCCtx(t *testing.T) {
+	defer stats.RegisterRPCCtxTagger(nil)
+	ctx1 := context.Background()
+	stats.RegisterRPCCtxTagger(nil)
+	ctx2 := stats.TagRPCCtx(ctx1, nil)
+	if ctx2 != ctx1 {
+		t.Fatalf("nil rpc ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
+	}
+	stats.RegisterRPCCtxTagger(func(ctx context.Context, info *stats.RPCContextTagInfo) context.Context {
+		return context.WithValue(ctx, rpcCtxKey{}, "rpcctxvalue")
+	})
+	ctx3 := stats.TagRPCCtx(ctx1, nil)
+	if v, ok := ctx3.Value(rpcCtxKey{}).(string); !ok || v != "rpcctxvalue" {
+		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, rpcCtxKey{}, "rpcctxvalue"))
 	}
 }
 
@@ -303,7 +364,7 @@ type expectedData struct {
 type gotData struct {
 	ctx    context.Context
 	client bool
-	s      stats.RPCStats
+	s      interface{} // This could be RPCStats or ConnStats.
 }
 
 const (
@@ -315,6 +376,8 @@ const (
 	outPayload
 	outHeader
 	outTrailer
+	connbegin
+	connend
 )
 
 func checkBegin(t *testing.T, d *gotData, e *expectedData) {
@@ -362,6 +425,24 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.Compression != e.compression {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+		}
+
+		if connInfo, ok := d.ctx.Value(connCtxKey{}).(*stats.ConnContextTagInfo); ok {
+			if connInfo.RemoteAddr != st.RemoteAddr {
+				t.Fatalf("connInfo.RemoteAddr = %v, want %v", connInfo.RemoteAddr, st.RemoteAddr)
+			}
+			if connInfo.LocalAddr != st.LocalAddr {
+				t.Fatalf("connInfo.LocalAddr = %v, want %v", connInfo.LocalAddr, st.LocalAddr)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with connCtxKey", d.ctx)
+		}
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCContextTagInfo); ok {
+			if rpcInfo.FullMethodName != st.FullMethod {
+				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with rpcCtxKey", d.ctx)
 		}
 	}
 }
@@ -451,10 +532,18 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
-			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
+			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
 		}
 		if st.Compression != e.compression {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+		}
+
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCContextTagInfo); ok {
+			if rpcInfo.FullMethodName != st.FullMethod {
+				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with rpcCtxKey", d.ctx)
 		}
 	}
 }
@@ -546,14 +635,91 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func TestServerStatsUnaryRPC(t *testing.T) {
-	var got []*gotData
+func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
+	var (
+		ok bool
+		st *stats.ConnBegin
+	)
+	if st, ok = d.s.(*stats.ConnBegin); !ok {
+		t.Fatalf("got %T, want ConnBegin", d.s)
+	}
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	st.IsClient() // TODO remove this.
+}
 
+func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
+	var (
+		ok bool
+		st *stats.ConnEnd
+	)
+	if st, ok = d.s.(*stats.ConnEnd); !ok {
+		t.Fatalf("got %T, want ConnEnd", d.s)
+	}
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	st.IsClient() // TODO remove this.
+}
+
+func tagConnCtx(ctx context.Context, info *stats.ConnContextTagInfo) context.Context {
+	return context.WithValue(ctx, connCtxKey{}, info)
+}
+
+func tagRPCCtx(ctx context.Context, info *stats.RPCContextTagInfo) context.Context {
+	return context.WithValue(ctx, rpcCtxKey{}, info)
+}
+
+func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
+	if len(got) != len(checkFuncs) {
+		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	var (
+		rpcctx  context.Context
+		connctx context.Context
+	)
+	for i := 0; i < len(got); i++ {
+		if _, ok := got[i].s.(stats.RPCStats); ok {
+			if rpcctx != nil && got[i].ctx != rpcctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			rpcctx = got[i].ctx
+		} else {
+			if connctx != nil && got[i].ctx != connctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			connctx = got[i].ctx
+		}
+	}
+
+	for i, f := range checkFuncs {
+		f(t, got[i], expect)
+	}
+}
+
+func TestServerStatsUnaryRPC(t *testing.T) {
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+		mu.Lock()
+		defer mu.Unlock()
 		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !s.IsClient() {
+			got = append(got, &gotData{ctx, false, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -575,6 +741,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkConnBegin,
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -582,30 +749,33 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		checkOutPayload,
 		checkOutTrailer,
 		checkEnd,
+		checkConnEnd,
 	}
 
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	checkServerStats(t, got, expect, checkFuncs)
 }
 
 func TestServerStatsUnaryRPCError(t *testing.T) {
-	var got []*gotData
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+		mu.Lock()
+		defer mu.Unlock()
 		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !s.IsClient() {
+			got = append(got, &gotData{ctx, false, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -628,36 +798,40 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkConnBegin,
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 		checkOutTrailer,
 		checkEnd,
+		checkConnEnd,
 	}
 
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	checkServerStats(t, got, expect, checkFuncs)
 }
 
 func TestServerStatsStreamingRPC(t *testing.T) {
-	var got []*gotData
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+		mu.Lock()
+		defer mu.Unlock()
 		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !s.IsClient() {
+			got = append(got, &gotData{ctx, false, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -681,6 +855,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkConnBegin,
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -692,31 +867,36 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	for i := 0; i < count; i++ {
 		checkFuncs = append(checkFuncs, ioPayFuncs...)
 	}
-	checkFuncs = append(checkFuncs, checkOutTrailer, checkEnd)
+	checkFuncs = append(checkFuncs,
+		checkOutTrailer,
+		checkEnd,
+		checkConnEnd,
+	)
 
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	checkServerStats(t, got, expect, checkFuncs)
 }
 
 func TestServerStatsStreamingRPCError(t *testing.T) {
-	var got []*gotData
-
+	var (
+		mu  sync.Mutex
+		got []*gotData
+	)
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+		mu.Lock()
+		defer mu.Unlock()
 		if !s.IsClient() {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !s.IsClient() {
+			got = append(got, &gotData{ctx, false, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -741,27 +921,17 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkConnBegin,
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 		checkInPayload,
 		checkOutTrailer,
 		checkEnd,
+		checkConnEnd,
 	}
 
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	checkServerStats(t, got, expect, checkFuncs)
 }
 
 type checkFuncWithCount struct {
@@ -778,9 +948,21 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
 	}
 
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+	var (
+		rpcctx  context.Context
+		connctx context.Context
+	)
+	for i := 0; i < len(got); i++ {
+		if _, ok := got[i].s.(stats.RPCStats); ok {
+			if rpcctx != nil && got[i].ctx != rpcctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			rpcctx = got[i].ctx
+		} else {
+			if connctx != nil && got[i].ctx != connctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			connctx = got[i].ctx
 		}
 	}
 
@@ -788,48 +970,60 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		switch s.s.(type) {
 		case *stats.Begin:
 			if checkFuncs[begin].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[begin].f(t, s, expect)
 			checkFuncs[begin].c--
 		case *stats.OutHeader:
 			if checkFuncs[outHeader].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[outHeader].f(t, s, expect)
 			checkFuncs[outHeader].c--
 		case *stats.OutPayload:
 			if checkFuncs[outPayload].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[outPayload].f(t, s, expect)
 			checkFuncs[outPayload].c--
 		case *stats.InHeader:
 			if checkFuncs[inHeader].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inHeader].f(t, s, expect)
 			checkFuncs[inHeader].c--
 		case *stats.InPayload:
 			if checkFuncs[inPayload].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inPayload].f(t, s, expect)
 			checkFuncs[inPayload].c--
 		case *stats.InTrailer:
 			if checkFuncs[inTrailer].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inTrailer].f(t, s, expect)
 			checkFuncs[inTrailer].c--
 		case *stats.End:
 			if checkFuncs[end].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[end].f(t, s, expect)
 			checkFuncs[end].c--
+		case *stats.ConnBegin:
+			if checkFuncs[connbegin].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s.s)
+			}
+			checkFuncs[connbegin].f(t, s, expect)
+			checkFuncs[connbegin].c--
+		case *stats.ConnEnd:
+			if checkFuncs[connend].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s.s)
+			}
+			checkFuncs[connend].f(t, s, expect)
+			checkFuncs[connend].c--
 		default:
-			t.Fatalf("unexpected stats: %T", s)
+			t.Fatalf("unexpected stats: %T", s.s)
 		}
 	}
 }
@@ -846,6 +1040,15 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.IsClient() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -869,6 +1072,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		connbegin:  {checkConnBegin, 1},
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
@@ -876,6 +1080,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		inPayload:  {checkInPayload, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
+		connend:    {checkConnEnd, 1},
 	}
 
 	checkClientStats(t, got, expect, checkFuncs)
@@ -893,6 +1098,15 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.IsClient() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -917,12 +1131,14 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		connbegin:  {checkConnBegin, 1},
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
+		connend:    {checkConnEnd, 1},
 	}
 
 	checkClientStats(t, got, expect, checkFuncs)
@@ -937,10 +1153,18 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {
-			// t.Logf(" == %T %v", s, s.IsClient())
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.IsClient() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -966,6 +1190,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		connbegin:  {checkConnBegin, 1},
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, count},
@@ -973,6 +1198,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		inPayload:  {checkInPayload, count},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
+		connend:    {checkConnEnd, 1},
 	}
 
 	checkClientStats(t, got, expect, checkFuncs)
@@ -990,6 +1216,15 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
+	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
+		mu.Lock()
+		defer mu.Unlock()
+		if s.IsClient() {
+			got = append(got, &gotData{ctx, true, s})
+		}
+	})
+	stats.RegisterConnCtxTagger(tagConnCtx)
+	stats.RegisterRPCCtxTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -1016,12 +1251,14 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 	}
 
 	checkFuncs := map[int]*checkFuncWithCount{
+		connbegin:  {checkConnBegin, 1},
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
+		connend:    {checkConnEnd, 1},
 	}
 
 	checkClientStats(t, got, expect, checkFuncs)
