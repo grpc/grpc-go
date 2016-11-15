@@ -366,8 +366,14 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 				return
 			}
 			b.mu.Lock()
-			b.seq++ // tick when get a new balancer address
+			b.seq++ // tick when getting a new balancer address
 			seq := b.seq
+			b.next = 0
+			if b.addrs != nil {
+				b.addrs = nil
+				// Ask grpc internals to close all the connections.
+				b.addrCh <- nil
+			}
 			b.mu.Unlock()
 			go func(cc *grpc.ClientConn) {
 				lbc := lbpb.NewLoadBalancerClient(cc)
