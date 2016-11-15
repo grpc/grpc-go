@@ -185,6 +185,9 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 func (b *balancer) serverListExpire(seq int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// TODO: gRPC interanls do not clear the connections when the server list is stale.
+	// This means RPCs will keep using the existing server list until b receives new
+	// server list even though the list is expired. Revisit this behavior later.
 	if b.done || seq < b.seq {
 		return
 	}
@@ -369,11 +372,6 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			b.seq++ // tick when getting a new balancer address
 			seq := b.seq
 			b.next = 0
-			if b.addrs != nil {
-				b.addrs = nil
-				// Ask grpc internals to close all the connections.
-				b.addrCh <- nil
-			}
 			b.mu.Unlock()
 			go func(cc *grpc.ClientConn) {
 				lbc := lbpb.NewLoadBalancerClient(cc)
