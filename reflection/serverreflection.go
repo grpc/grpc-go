@@ -119,11 +119,11 @@ func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptor
 func decompress(b []byte) ([]byte, error) {
 	r, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
-		return nil, fmt.Errorf("bad gzipped descriptor: %v\n", err)
+		return nil, fmt.Errorf("bad gzipped descriptor: %v", err)
 	}
 	out, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("bad gzipped descriptor: %v\n", err)
+		return nil, fmt.Errorf("bad gzipped descriptor: %v", err)
 	}
 	return out, nil
 }
@@ -251,11 +251,12 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		}
 
 		// Metadata not valid.
-		enc, ok := meta.([]byte)
+		fileNameForMeta, ok := meta.(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid file descriptor for symbol: %v", name)
 		}
 
+		enc := proto.FileDescriptor(fileNameForMeta)
 		fd, err = s.decodeFileDesc(enc)
 		if err != nil {
 			return nil, err

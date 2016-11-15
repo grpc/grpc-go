@@ -192,6 +192,9 @@ func TestReflectionEnd2end(t *testing.T) {
 
 	c := rpb.NewServerReflectionClient(conn)
 	stream, err := c.ServerReflectionInfo(context.Background())
+	if err != nil {
+		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
+	}
 
 	testFileByFilename(t, stream)
 	testFileByFilenameError(t, stream)

@@ -180,7 +180,7 @@ func (s *server) GetGauge(ctx context.Context, in *metricspb.GaugeRequest) (*met
 	return nil, grpc.Errorf(codes.InvalidArgument, "gauge with name %s not found", in.Name)
 }
 
-// createGauge creates a guage using the given name in metrics server.
+// createGauge creates a gauge using the given name in metrics server.
 func (s *server) createGauge(name string) *gauge {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

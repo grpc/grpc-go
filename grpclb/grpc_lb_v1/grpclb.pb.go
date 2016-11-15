@@ -420,7 +420,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion3
+const _ = grpc.SupportPackageIsVersion4
 
 // Client API for LoadBalancer service
 
@@ -517,7 +517,7 @@ var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "grpclb.proto",
 }
 
 func init() { proto.RegisterFile("grpclb.proto", fileDescriptor0) }
