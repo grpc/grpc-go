@@ -296,12 +296,13 @@ public class RouteGuideServer {
       double lon1 = RouteGuideUtil.getLongitude(start);
       double lon2 = RouteGuideUtil.getLongitude(end);
       int r = 6371000; // metres
-      double φ1 = toRadians(lat1);
-      double φ2 = toRadians(lat2);
-      double Δφ = toRadians(lat2 - lat1);
-      double Δλ = toRadians(lon2 - lon1);
+      double phi1 = toRadians(lat1);
+      double phi2 = toRadians(lat2);
+      double deltaPhi = toRadians(lat2 - lat1);
+      double deltaLambda = toRadians(lon2 - lon1);
 
-      double a = sin(Δφ / 2) * sin(Δφ / 2) + cos(φ1) * cos(φ2) * sin(Δλ / 2) * sin(Δλ / 2);
+      double a = sin(deltaPhi / 2) * sin(deltaPhi / 2)
+          + cos(phi1) * cos(phi2) * sin(deltaLambda / 2) * sin(deltaLambda / 2);
       double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
       return r * c;
