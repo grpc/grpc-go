@@ -44,11 +44,11 @@ import java.util.logging.Logger;
 public class HelloWorldServer {
   private static final Logger logger = Logger.getLogger(HelloWorldServer.class.getName());
 
-  /* The port on which the server should run */
-  private int port = 50051;
   private Server server;
 
   private void start() throws IOException {
+    /* The port on which the server should run */
+    int port = 50051;
     server = ServerBuilder.forPort(port)
         .addService(new GreeterImpl())
         .build()
@@ -89,7 +89,7 @@ public class HelloWorldServer {
     server.blockUntilShutdown();
   }
 
-  private class GreeterImpl extends GreeterGrpc.GreeterImplBase {
+  static class GreeterImpl extends GreeterGrpc.GreeterImplBase {
 
     @Override
     public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {

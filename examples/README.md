@@ -44,3 +44,23 @@ $ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldServer
 $ # In another terminal run the client
 $ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldClient
 ```
+
+Unit test examples
+==============================================
+
+Examples for unit testing gRPC clients and servers are located in [examples/src/test](src/test).
+
+In general, we DO NOT allow overriding the client stub.
+We encourage users to leverage `InProcessTransport` as demonstrated in the examples to
+write unit tests. `InProcessTransport` is light-weight and runs the server
+and client in the same process without any socket/TCP connection.
+
+For testing a gRPC client, create the client with a real stub
+using an
+[InProcessChannel](../core/src/main/java/io/grpc/inprocess/InProcessChannelBuilder.java),
+and test it against an
+[InProcessServer](../core/src/main/java/io/grpc/inprocess/InProcessServerBuilder.java)
+with a mock/fake service implementation.
+
+For testing a gRPC server, create the server as an InProcessServer,
+and test it against a real client stub with an InProcessChannel.

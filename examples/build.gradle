@@ -28,6 +28,9 @@ dependencies {
   compile "io.grpc:grpc-netty:${grpcVersion}"
   compile "io.grpc:grpc-protobuf:${grpcVersion}"
   compile "io.grpc:grpc-stub:${grpcVersion}"
+
+  testCompile "junit:junit:4.11"
+  testCompile "org.mockito:mockito-core:1.9.5"
 }
 
 protobuf {

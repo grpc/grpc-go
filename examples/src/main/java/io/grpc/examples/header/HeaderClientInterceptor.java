@@ -31,6 +31,8 @@
 
 package io.grpc.examples.header;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -49,7 +51,8 @@ public class HeaderClientInterceptor implements ClientInterceptor {
 
   private static final Logger logger = Logger.getLogger(HeaderClientInterceptor.class.getName());
 
-  private static Metadata.Key<String> customHeadKey =
+  @VisibleForTesting
+  static final Metadata.Key<String> CUSTOM_HEADER_KEY =
       Metadata.Key.of("custom_client_header_key", Metadata.ASCII_STRING_MARSHALLER);
 
   @Override
@@ -60,13 +63,13 @@ public class HeaderClientInterceptor implements ClientInterceptor {
       @Override
       public void start(Listener<RespT> responseListener, Metadata headers) {
         /* put custom header */
-        headers.put(customHeadKey, "customRequestValue");
+        headers.put(CUSTOM_HEADER_KEY, "customRequestValue");
         super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
           @Override
           public void onHeaders(Metadata headers) {
             /**
              * if you don't need receive header from server,
-             * you can use {@link io.grpc.stub.MetadataUtils attachHeaders}
+             * you can use {@link io.grpc.stub.MetadataUtils#attachHeaders}
              * directly to send header
              */
             logger.info("header received from server:" + headers);

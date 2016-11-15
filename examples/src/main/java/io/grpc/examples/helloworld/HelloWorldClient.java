@@ -50,11 +50,15 @@ public class HelloWorldClient {
 
   /** Construct client connecting to HelloWorld server at {@code host:port}. */
   public HelloWorldClient(String host, int port) {
-    channel = ManagedChannelBuilder.forAddress(host, port)
+    this(ManagedChannelBuilder.forAddress(host, port)
         // Channels are secure by default (via SSL/TLS). For the example we disable TLS to avoid
         // needing certificates.
-        .usePlaintext(true)
-        .build();
+        .usePlaintext(true));
+  }
+
+  /** Construct client for accessing RouteGuide server using the existing channel. */
+  HelloWorldClient(ManagedChannelBuilder<?> channelBuilder) {
+    channel = channelBuilder.build();
     blockingStub = GreeterGrpc.newBlockingStub(channel);
   }
 

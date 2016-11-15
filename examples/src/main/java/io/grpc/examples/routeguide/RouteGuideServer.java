@@ -188,7 +188,7 @@ public class RouteGuideServer {
         int featureCount;
         int distance;
         Point previous;
-        long startTime = System.nanoTime();
+        final long startTime = System.nanoTime();
 
         @Override
         public void onNext(Point point) {
@@ -295,7 +295,7 @@ public class RouteGuideServer {
       double lat2 = RouteGuideUtil.getLatitude(end);
       double lon1 = RouteGuideUtil.getLongitude(start);
       double lon2 = RouteGuideUtil.getLongitude(end);
-      int r = 6371000; // metres
+      int r = 6371000; // meters
       double phi1 = toRadians(lat1);
       double phi2 = toRadians(lat2);
       double deltaPhi = toRadians(lat2 - lat1);
