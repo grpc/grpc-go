@@ -119,11 +119,11 @@ func (s *serverReflectionServer) decodeFileDesc(enc []byte) (*dpb.FileDescriptor
 func decompress(b []byte) ([]byte, error) {
 	r, err := gzip.NewReader(bytes.NewReader(b))
 	if err != nil {
-		return nil, fmt.Errorf("bad gzipped descriptor: %v\n", err)
+		return nil, fmt.Errorf("bad gzipped descriptor: %v", err)
 	}
 	out, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("bad gzipped descriptor: %v\n", err)
+		return nil, fmt.Errorf("bad gzipped descriptor: %v", err)
 	}
 	return out, nil
 }
