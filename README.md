@@ -66,7 +66,9 @@ For protobuf-based codegen, you can put your proto files in the `src/main/proto`
 and `src/test/proto` directories along with an appropriate plugin.
 
 For protobuf-based codegen integrated with the Maven build system, you can use
-[protobuf-maven-plugin][]:
+[protobuf-maven-plugin][] (Eclipse and NetBeans users should also look at
+`os-maven-plugin`'s
+[IDE documentation](https://github.com/trustin/os-maven-plugin#issues-with-eclipse-m2e-or-other-ides)):
 ```xml
 <build>
   <extensions>
