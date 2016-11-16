@@ -67,15 +67,15 @@ func TestTLSClone(t *testing.T) {
 
 const tlsDir = "../test/testdata/"
 
-type serverHandshake func(net.Conn, *tls.ConnectionState) error
+type serverHandshake func(net.Conn) (tls.ConnectionState, error)
 
 func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
-	var serverConnState tls.ConnectionState
-	done := make(chan error, 1)
-	lisAddr := launchServer(t, &serverConnState, tlsServerHandshake, done)
+	done := make(chan tls.ConnectionState, 1)
+	lisAddr := launchServer(t, tlsServerHandshake, done)
 	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
-	// wait until server has populated the serverAuthInfo struct or failed.
-	if err := <-done; err != nil {
+	// wait until server sends serverConnState or fails.
+	serverConnState := <-done
+	if isEqualState(serverConnState, tls.ConnectionState{}) {
 		return
 	}
 	if !isEqualState(clientConnState, serverConnState) {
@@ -84,12 +84,12 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 }
 
 func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
-	var serverConnState tls.ConnectionState
-	done := make(chan error, 1)
-	lisAddr := launchServer(t, &serverConnState, gRPCServerHandshake, done)
+	done := make(chan tls.ConnectionState, 1)
+	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientConnState := clientHandle(t, tlsClientHandshake, lisAddr)
-	// wait until server has populated the serverAuthInfo struct or failed.
-	if err := <-done; err != nil {
+	// wait until server sends serverConnState or fails.
+	serverConnState := <-done
+	if isEqualState(serverConnState, tls.ConnectionState{}) {
 		return
 	}
 	if !isEqualState(clientConnState, serverConnState) {
@@ -98,12 +98,12 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 }
 
 func TestServerAndClientHandshake(t *testing.T) {
-	var serverConnState tls.ConnectionState
-	done := make(chan error, 1)
-	lisAddr := launchServer(t, &serverConnState, gRPCServerHandshake, done)
+	done := make(chan tls.ConnectionState, 1)
+	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
-	// wait until server has populated the serverAuthInfo struct or failed.
-	if err := <-done; err != nil {
+	// wait until server sends serverConnState or fails.
+	serverConnState := <-done
+	if isEqualState(serverConnState, tls.ConnectionState{}) {
 		return
 	}
 	if !isEqualState(clientConnState, serverConnState) {
@@ -121,28 +121,28 @@ func isEqualState(state1, state2 tls.ConnectionState) bool {
 	return false
 }
 
-func launchServer(t *testing.T, serverConnState *tls.ConnectionState, hs serverHandshake, done chan error) string {
+func launchServer(t *testing.T, hs serverHandshake, done chan tls.ConnectionState) string {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	go serverHandle(t, hs, serverConnState, done, lis)
+	go serverHandle(t, hs, done, lis)
 	return lis.Addr().String()
 }
 
-// Is run in a seperate go routine.
-func serverHandle(t *testing.T, hs func(net.Conn, *tls.ConnectionState) error, serverConnState *tls.ConnectionState, done chan error, lis net.Listener) {
+// Is run in a seperate goroutine.
+func serverHandle(t *testing.T, hs serverHandshake, done chan tls.ConnectionState, lis net.Listener) {
 	defer lis.Close()
-	var err error
+	var serverConnState tls.ConnectionState
 	defer func() {
-		done <- err
+		done <- serverConnState
 	}()
 	serverRawConn, err := lis.Accept()
 	if err != nil {
 		t.Errorf("Server failed to accept connection: %v", err)
 		return
 	}
-	err = hs(serverRawConn, serverConnState)
+	serverConnState, err = hs(serverRawConn)
 	if err != nil {
 		t.Errorf("Error at server-side while handshake. Error: %v", err)
 		return
@@ -163,17 +163,17 @@ func clientHandle(t *testing.T, hs func(net.Conn, string) (tls.ConnectionState, 
 }
 
 // Server handshake implementation in gRPC.
-func gRPCServerHandshake(conn net.Conn, serverConnState *tls.ConnectionState) error {
+func gRPCServerHandshake(conn net.Conn) (tls.ConnectionState, error) {
 	serverTLS, err := NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
-		return err
+		return tls.ConnectionState{}, err
 	}
 	_, serverAuthInfo, err := serverTLS.ServerHandshake(conn)
 	if err != nil {
-		return err
+		return tls.ConnectionState{}, err
 	}
-	*serverConnState = serverAuthInfo.(TLSInfo).State
-	return nil
+	serverConnState := serverAuthInfo.(TLSInfo).State
+	return serverConnState, nil
 }
 
 // Client handshake implementation in gRPC.
@@ -186,19 +186,19 @@ func gRPCClientHandshake(conn net.Conn, lisAddr string) (tls.ConnectionState, er
 	return authInfo.(TLSInfo).State, nil
 }
 
-func tlsServerHandshake(conn net.Conn, serverConnState *tls.ConnectionState) error {
+func tlsServerHandshake(conn net.Conn) (tls.ConnectionState, error) {
 	cert, err := tls.LoadX509KeyPair(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
-		return err
+		return tls.ConnectionState{}, err
 	}
 	serverTLSConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 	serverConn := tls.Server(conn, serverTLSConfig)
 	err = serverConn.Handshake()
 	if err != nil {
-		return err
+		return tls.ConnectionState{}, err
 	}
-	*serverConnState = serverConn.ConnectionState()
-	return nil
+	serverConnState := serverConn.ConnectionState()
+	return serverConnState, nil
 }
 
 func tlsClientHandshake(conn net.Conn, _ string) (tls.ConnectionState, error) {
