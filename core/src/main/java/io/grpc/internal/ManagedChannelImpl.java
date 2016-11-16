@@ -197,8 +197,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
         @Override
         @GuardedBy("lock")
-        void handleInUse() {
-          exitIdleMode();
+        Runnable handleInUse() {
+          return exitIdleMode();
         }
 
         @GuardedBy("lock")
@@ -262,38 +262,52 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   /**
    * Make the channel exit idle mode, if it's in it. Return a LoadBalancer that can be used for
    * making new requests. Return null if the channel is shutdown.
-   *
-   * <p>May be called under the lock.
    */
   @VisibleForTesting
-  LoadBalancer<ClientTransport> exitIdleMode() {
+  LoadBalancer<ClientTransport> exitIdleModeAndGetLb() {
+    Runnable runnable;
+    LoadBalancer<ClientTransport> balancer;
+    synchronized (lock) {
+      runnable = exitIdleMode();
+      balancer = loadBalancer;
+    }
+    if (runnable != null) {
+      runnable.run();
+    }
+    return balancer;
+  }
+
+  /**
+   * Make the channel exit idle mode, if it's in it. If the returned runnable is non-{@code null},
+   * then it should be executed by the caller after releasing {@code lock}.
+   */
+  @GuardedBy("lock")
+  private Runnable exitIdleMode() {
     final LoadBalancer<ClientTransport> balancer;
     final NameResolver resolver;
-    synchronized (lock) {
-      if (shutdown) {
-        return null;
-      }
-      if (inUseStateAggregator.isInUse()) {
-        cancelIdleTimer();
-      } else {
-        // exitIdleMode() may be called outside of inUseStateAggregator, which may still in
-        // "not-in-use" state. If it's the case, we start the timer which will be soon cancelled if
-        // the aggregator receives actual uses.
-        rescheduleIdleTimer();
-      }
-      if (graceLoadBalancer != null) {
-        // Exit grace period; timer already rescheduled above.
-        loadBalancer = graceLoadBalancer;
-        graceLoadBalancer = null;
-      }
-      if (loadBalancer != null) {
-        return loadBalancer;
-      }
-      log.log(Level.FINE, "[{0}] Exiting idle mode", getLogId());
-      balancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
-      this.loadBalancer = balancer;
-      resolver = this.nameResolver;
+    if (shutdown) {
+      return null;
     }
+    if (inUseStateAggregator.isInUse()) {
+      cancelIdleTimer();
+    } else {
+      // exitIdleMode() may be called outside of inUseStateAggregator, which may still in
+      // "not-in-use" state. If it's the case, we start the timer which will be soon cancelled if
+      // the aggregator receives actual uses.
+      rescheduleIdleTimer();
+    }
+    if (graceLoadBalancer != null) {
+      // Exit grace period; timer already rescheduled above.
+      loadBalancer = graceLoadBalancer;
+      graceLoadBalancer = null;
+    }
+    if (loadBalancer != null) {
+      return null;
+    }
+    log.log(Level.FINE, "[{0}] Exiting idle mode", getLogId());
+    balancer = loadBalancerFactory.newLoadBalancer(nameResolver.getServiceAuthority(), tm);
+    this.loadBalancer = balancer;
+    resolver = this.nameResolver;
     class NameResolverStartTask implements Runnable {
       @Override
       public void run() {
@@ -308,8 +322,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       }
     }
 
-    scheduledExecutor.execute(new NameResolverStartTask());
-    return balancer;
+    return new NameResolverStartTask();
   }
 
   @VisibleForTesting
@@ -366,7 +379,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       LoadBalancer<ClientTransport> balancer = loadBalancer;
       if (balancer == null) {
         // Current state is either idle or in grace period
-        balancer = exitIdleMode();
+        balancer = exitIdleModeAndGetLb();
       }
       if (balancer == null) {
         return SHUTDOWN_TRANSPORT;
@@ -709,13 +722,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
                 }
 
                 @Override
-                public void onInUse(TransportSet ts) {
-                  inUseStateAggregator.updateObjectInUse(ts, true);
+                public Runnable onInUse(TransportSet ts) {
+                  return inUseStateAggregator.updateObjectInUse(ts, true);
                 }
 
                 @Override
                 public void onNotInUse(TransportSet ts) {
-                  inUseStateAggregator.updateObjectInUse(ts, false);
+                  Runnable r = inUseStateAggregator.updateObjectInUse(ts, false);
+                  assert r == null;
                 }
               });
           if (log.isLoggable(Level.FINE)) {
@@ -806,13 +820,17 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
               delayedTransports.remove(delayedTransport);
               maybeTerminateChannel();
             }
-            inUseStateAggregator.updateObjectInUse(delayedTransport, false);
+            Runnable r = inUseStateAggregator.updateObjectInUse(delayedTransport, false);
+            assert r == null;
           }
 
           @Override public void transportReady() {}
 
           @Override public void transportInUse(boolean inUse) {
-            inUseStateAggregator.updateObjectInUse(delayedTransport, inUse);
+            Runnable r = inUseStateAggregator.updateObjectInUse(delayedTransport, inUse);
+            if (r != null) {
+              r.run();
+            }
           }
         });
       boolean savedShutdown;

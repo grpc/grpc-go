@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import java.util.HashSet;
 
+import javax.annotation.CheckReturnValue;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -44,15 +45,18 @@ abstract class InUseStateAggregator<T> {
   private final HashSet<T> inUseObjects = new HashSet<T>();
 
   /**
-   * Update the in-use state of an object. Initially no object is in use.
+   * Update the in-use state of an object. Initially no object is in use. When the return value is
+   * non-{@code null}, the caller should execute the runnable after releasing locks.
    */
-  final void updateObjectInUse(T object, boolean inUse) {
+  @CheckReturnValue
+  final Runnable updateObjectInUse(T object, boolean inUse) {
+    Runnable runnable = null;
     synchronized (getLock()) {
       int origSize = inUseObjects.size();
       if (inUse) {
         inUseObjects.add(object);
         if (origSize == 0) {
-          handleInUse();
+          runnable = handleInUse();
         }
       } else {
         boolean removed = inUseObjects.remove(object);
@@ -61,8 +65,10 @@ abstract class InUseStateAggregator<T> {
         }
       }
     }
+    return runnable;
   }
 
+  @CheckReturnValue
   final boolean isInUse() {
     synchronized (getLock()) {
       return !inUseObjects.isEmpty();
@@ -73,12 +79,13 @@ abstract class InUseStateAggregator<T> {
 
   /**
    * Called when the aggregated in-use state has changed to true, which means at least one object is
-   * in use.
+   * in use. When the return value is non-{@code null}, then the runnable will be executed by the
+   * caller of {@link #updateObjectInUse} after releasing locks.
    *
    * <p>This method is called under the lock returned by {@link #getLock}.
    */
   @GuardedBy("getLock()")
-  abstract void handleInUse();
+  abstract Runnable handleInUse();
 
   /**
    * Called when the aggregated in-use state has changed to false, which means no object is in use.

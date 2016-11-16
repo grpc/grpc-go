@@ -404,9 +404,7 @@ public class ManagedChannelImplIdlenessTest {
   }
 
   private void forceExitIdleMode() {
-    channel.exitIdleMode();
-    // NameResolver is started in the scheduled executor
-    timer.runDueTasks();
+    channel.exitIdleModeAndGetLb();
   }
 
   private ClientTransport channelTmGetTransportUnwrapped(EquivalentAddressGroup addressGroup) {

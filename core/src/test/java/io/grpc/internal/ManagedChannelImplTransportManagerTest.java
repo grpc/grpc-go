@@ -147,7 +147,7 @@ public class ManagedChannelImplTransportManagerTest {
     ArgumentCaptor<TransportManager<ClientTransport>> tmCaptor
         = ArgumentCaptor.forClass(null);
     // Force Channel to exit the initial idleness to get NameResolver and LoadBalancer created.
-    channel.exitIdleMode();
+    channel.exitIdleModeAndGetLb();
     verify(mockNameResolverFactory).newNameResolver(any(URI.class), any(Attributes.class));
     verify(mockLoadBalancerFactory).newLoadBalancer(anyString(), tmCaptor.capture());
     tm = tmCaptor.getValue();
