@@ -167,10 +167,10 @@ type remoteBalancer struct {
 	done      chan struct{}
 }
 
-func newRemoteBalancer(sls []*lbpb.ServerList, internals []time.Duration) *remoteBalancer {
+func newRemoteBalancer(sls []*lbpb.ServerList, intervals []time.Duration) *remoteBalancer {
 	return &remoteBalancer{
 		sls:       sls,
-		intervals: internals,
+		intervals: intervals,
 		done:      make(chan struct{}),
 	}
 }

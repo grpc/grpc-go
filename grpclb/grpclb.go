@@ -236,14 +236,14 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 		b.next = 0
 		b.addrs = sl
 		b.addrCh <- addrs
+		if b.expTimer != nil {
+			b.expTimer.Stop()
+			b.expTimer = nil
+		}
 		if expiration > 0 {
-			expF := func() {
+			b.expTimer = time.AfterFunc(expiration, func() {
 				b.serverListExpire(seq)
-			}
-			if b.expTimer != nil {
-				b.expTimer.Stop()
-			}
-			b.expTimer = time.AfterFunc(expiration, expF)
+			})
 		}
 	}
 	return
