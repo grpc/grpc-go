@@ -109,7 +109,7 @@ public class HelloworldActivity extends ActionBarActivity {
                 PrintWriter pw = new PrintWriter(sw);
                 e.printStackTrace(pw);
                 pw.flush();
-                return "Failed... : " + System.lineSeparator() + sw;
+                return String.format("Failed... : %n%s", sw);
             }
         }
 
