@@ -74,9 +74,9 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	lisAddr := launchServer(t, tlsServerHandshake, done)
 	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState := <-done
-	if isEqualState(serverConnState, tls.ConnectionState{}) {
-		return
+	serverConnState, ok := <-done
+	if !ok {
+		t.Fatalf("Error at server-side")
 	}
 	if !isEqualState(clientConnState, serverConnState) {
 		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr, clientConnState, serverConnState)
@@ -88,9 +88,9 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientConnState := clientHandle(t, tlsClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState := <-done
-	if isEqualState(serverConnState, tls.ConnectionState{}) {
-		return
+	serverConnState, ok := <-done
+	if !ok {
+		t.Fatalf("Error at server-side")
 	}
 	if !isEqualState(clientConnState, serverConnState) {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverConnState, clientConnState)
@@ -102,9 +102,9 @@ func TestServerAndClientHandshake(t *testing.T) {
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState := <-done
-	if isEqualState(serverConnState, tls.ConnectionState{}) {
-		return
+	serverConnState, ok := <-done
+	if !ok {
+		t.Fatalf("Error at server-side")
 	}
 	if !isEqualState(clientConnState, serverConnState) {
 		t.Fatalf("Connection states returened by server: %v and client: %v aren't same", serverConnState, clientConnState)
@@ -133,20 +133,19 @@ func launchServer(t *testing.T, hs serverHandshake, done chan tls.ConnectionStat
 // Is run in a seperate goroutine.
 func serverHandle(t *testing.T, hs serverHandshake, done chan tls.ConnectionState, lis net.Listener) {
 	defer lis.Close()
-	var serverConnState tls.ConnectionState
-	defer func() {
-		done <- serverConnState
-	}()
 	serverRawConn, err := lis.Accept()
 	if err != nil {
 		t.Errorf("Server failed to accept connection: %v", err)
+		close(done)
 		return
 	}
-	serverConnState, err = hs(serverRawConn)
+	serverConnState, err := hs(serverRawConn)
 	if err != nil {
-		t.Errorf("Error at server-side while handshake. Error: %v", err)
+		t.Errorf("Server failed while handshake. Error: %v", err)
+		close(done)
 		return
 	}
+	done <- serverConnState
 }
 
 func clientHandle(t *testing.T, hs func(net.Conn, string) (tls.ConnectionState, error), lisAddr string) tls.ConnectionState {
