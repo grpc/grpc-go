@@ -182,7 +182,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
-		ctx:        context.Background(),
+		ctx:        ctx,
 		target:     addr.Addr,
 		userAgent:  ua,
 		md:         addr.Metadata,
@@ -245,14 +245,14 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	go t.controller()
 	t.writableChan <- 0
 	if stats.On() {
-		t.ctx = stats.TagConnCtx(t.ctx, &stats.ConnContextTagInfo{
+		t.ctx = stats.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
 			LocalAddr:  t.localAddr,
 		})
 		connBegin := &stats.ConnBegin{
 			Client: true,
 		}
-		stats.ConnHandle(t.ctx, connBegin)
+		stats.HandleConn(t.ctx, connBegin)
 	}
 	return t, nil
 }
@@ -563,7 +563,7 @@ func (t *http2Client) Close() (err error) {
 		connEnd := &stats.ConnEnd{
 			Client: true,
 		}
-		stats.ConnHandle(t.ctx, connEnd)
+		stats.HandleConn(t.ctx, connEnd)
 	}
 	return
 }

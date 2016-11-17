@@ -148,12 +148,12 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		streamSendQuota: defaultWindowSize,
 	}
 	if stats.On() {
-		t.ctx = stats.TagConnCtx(t.ctx, &stats.ConnContextTagInfo{
+		t.ctx = stats.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
 			LocalAddr:  t.localAddr,
 		})
 		connBegin := &stats.ConnBegin{}
-		stats.ConnHandle(t.ctx, connBegin)
+		stats.HandleConn(t.ctx, connBegin)
 	}
 	go t.controller()
 	t.writableChan <- 0
@@ -251,7 +251,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	s.ctx = traceCtx(s.ctx, s.method)
 	if stats.On() {
-		s.ctx = stats.TagRPCCtx(s.ctx, &stats.RPCContextTagInfo{FullMethodName: s.method})
+		s.ctx = stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
 		inHeader := &stats.InHeader{
 			FullMethod:  s.method,
 			RemoteAddr:  t.remoteAddr,
@@ -796,7 +796,7 @@ func (t *http2Server) Close() (err error) {
 	}
 	if stats.On() {
 		connEnd := &stats.ConnEnd{}
-		stats.ConnHandle(t.ctx, connEnd)
+		stats.HandleConn(t.ctx, connEnd)
 	}
 	return
 }

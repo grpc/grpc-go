@@ -200,7 +200,7 @@ type ConnStats interface {
 	IsClient() bool
 }
 
-// ConnBegin contains stats when an RPC begins.
+// ConnBegin contains the stats of a connection when it is established.
 type ConnBegin struct {
 	// Client is true if this ConnBegin is from client side.
 	Client bool
@@ -211,7 +211,7 @@ func (s *ConnBegin) IsClient() bool { return s.Client }
 
 func (s *ConnBegin) isConnStats() {}
 
-// ConnEnd contains stats when an RPC ends.
+// ConnEnd contains the stats of a connection when it ends.
 type ConnEnd struct {
 	// Client is true if this ConnEnd is from client side.
 	Client bool

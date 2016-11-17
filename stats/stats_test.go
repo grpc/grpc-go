@@ -57,14 +57,14 @@ func TestStartStop(t *testing.T) {
 	stats.RegisterHandler(nil)
 	stats.RegisterConnHandler(nil)
 	stats.Start()
-	if stats.On() != false {
+	if stats.On() {
 		t.Fatalf("stats.Start() with nil handler, stats.On() = true, want false")
 	}
 
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
 	stats.RegisterConnHandler(nil)
 	stats.Start()
-	if stats.On() != true {
+	if !stats.On() {
 		t.Fatalf("stats.Start() with non-nil handler, stats.On() = false, want true")
 	}
 	stats.Stop()
@@ -72,23 +72,23 @@ func TestStartStop(t *testing.T) {
 	stats.RegisterHandler(nil)
 	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
 	stats.Start()
-	if stats.On() != true {
+	if !stats.On() {
 		t.Fatalf("stats.Start() with non-nil conn handler, stats.On() = false, want true")
 	}
 	stats.Stop()
 
 	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
 	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
-	if stats.On() != false {
+	if stats.On() {
 		t.Fatalf("after stats.RegisterHandler(), stats.On() = true, want false")
 	}
 	stats.Start()
-	if stats.On() != true {
+	if !stats.On() {
 		t.Fatalf("after stats.Start(_), stats.On() = false, want true")
 	}
 
 	stats.Stop()
-	if stats.On() != false {
+	if stats.On() {
 		t.Fatalf("after stats.Stop(), stats.On() = true, want false")
 	}
 }
@@ -97,34 +97,34 @@ type connCtxKey struct{}
 type rpcCtxKey struct{}
 
 func TestTagConnCtx(t *testing.T) {
-	defer stats.RegisterConnCtxTagger(nil)
+	defer stats.RegisterConnTagger(nil)
 	ctx1 := context.Background()
-	stats.RegisterConnCtxTagger(nil)
-	ctx2 := stats.TagConnCtx(ctx1, nil)
+	stats.RegisterConnTagger(nil)
+	ctx2 := stats.TagConn(ctx1, nil)
 	if ctx2 != ctx1 {
 		t.Fatalf("nil conn ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
 	}
-	stats.RegisterConnCtxTagger(func(ctx context.Context, info *stats.ConnContextTagInfo) context.Context {
+	stats.RegisterConnTagger(func(ctx context.Context, info *stats.ConnTagInfo) context.Context {
 		return context.WithValue(ctx, connCtxKey{}, "connctxvalue")
 	})
-	ctx3 := stats.TagConnCtx(ctx1, nil)
+	ctx3 := stats.TagConn(ctx1, nil)
 	if v, ok := ctx3.Value(connCtxKey{}).(string); !ok || v != "connctxvalue" {
 		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, connCtxKey{}, "connctxvalue"))
 	}
 }
 
 func TestTagRPCCtx(t *testing.T) {
-	defer stats.RegisterRPCCtxTagger(nil)
+	defer stats.RegisterRPCTagger(nil)
 	ctx1 := context.Background()
-	stats.RegisterRPCCtxTagger(nil)
-	ctx2 := stats.TagRPCCtx(ctx1, nil)
+	stats.RegisterRPCTagger(nil)
+	ctx2 := stats.TagRPC(ctx1, nil)
 	if ctx2 != ctx1 {
 		t.Fatalf("nil rpc ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
 	}
-	stats.RegisterRPCCtxTagger(func(ctx context.Context, info *stats.RPCContextTagInfo) context.Context {
+	stats.RegisterRPCTagger(func(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 		return context.WithValue(ctx, rpcCtxKey{}, "rpcctxvalue")
 	})
-	ctx3 := stats.TagRPCCtx(ctx1, nil)
+	ctx3 := stats.TagRPC(ctx1, nil)
 	if v, ok := ctx3.Value(rpcCtxKey{}).(string); !ok || v != "rpcctxvalue" {
 		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, rpcCtxKey{}, "rpcctxvalue"))
 	}
@@ -303,10 +303,6 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 	ctx := metadata.NewContext(context.Background(), testMetadata)
 
 	resp, err = tc.UnaryCall(ctx, req, grpc.FailFast(c.failfast))
-	if err != nil {
-		return req, resp, err
-	}
-
 	return req, resp, err
 }
 
@@ -427,7 +423,7 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 
-		if connInfo, ok := d.ctx.Value(connCtxKey{}).(*stats.ConnContextTagInfo); ok {
+		if connInfo, ok := d.ctx.Value(connCtxKey{}).(*stats.ConnTagInfo); ok {
 			if connInfo.RemoteAddr != st.RemoteAddr {
 				t.Fatalf("connInfo.RemoteAddr = %v, want %v", connInfo.RemoteAddr, st.RemoteAddr)
 			}
@@ -437,7 +433,7 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		} else {
 			t.Fatalf("got context %v, want one with connCtxKey", d.ctx)
 		}
-		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCContextTagInfo); ok {
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo); ok {
 			if rpcInfo.FullMethodName != st.FullMethod {
 				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
 			}
@@ -538,7 +534,7 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
 		}
 
-		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCContextTagInfo); ok {
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo); ok {
 			if rpcInfo.FullMethodName != st.FullMethod {
 				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
 			}
@@ -663,11 +659,11 @@ func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
 	st.IsClient() // TODO remove this.
 }
 
-func tagConnCtx(ctx context.Context, info *stats.ConnContextTagInfo) context.Context {
+func tagConnCtx(ctx context.Context, info *stats.ConnTagInfo) context.Context {
 	return context.WithValue(ctx, connCtxKey{}, info)
 }
 
-func tagRPCCtx(ctx context.Context, info *stats.RPCContextTagInfo) context.Context {
+func tagRPCCtx(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	return context.WithValue(ctx, rpcCtxKey{}, info)
 }
 
@@ -718,8 +714,8 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -774,8 +770,8 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -830,8 +826,8 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -895,8 +891,8 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, false, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -1047,8 +1043,8 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -1105,8 +1101,8 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -1163,8 +1159,8 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 
@@ -1223,8 +1219,8 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 			got = append(got, &gotData{ctx, true, s})
 		}
 	})
-	stats.RegisterConnCtxTagger(tagConnCtx)
-	stats.RegisterRPCCtxTagger(tagRPCCtx)
+	stats.RegisterConnTagger(tagConnCtx)
+	stats.RegisterRPCTagger(tagRPCCtx)
 	stats.Start()
 	defer stats.Stop()
 

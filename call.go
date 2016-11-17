@@ -172,7 +172,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}()
 	}
 	if stats.On() {
-		ctx = stats.TagRPCCtx(ctx, &stats.RPCContextTagInfo{FullMethodName: method})
+		ctx = stats.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
