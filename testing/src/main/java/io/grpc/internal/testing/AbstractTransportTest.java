@@ -1150,7 +1150,6 @@ public abstract class AbstractTransportTest {
   private static class MockServerTransportListener implements ServerTransportListener {
     public final ServerTransport transport;
     public final BlockingQueue<StreamCreation> streams = new LinkedBlockingQueue<StreamCreation>();
-    private final SettableFuture<?> ready = SettableFuture.create();
     private final SettableFuture<?> terminated = SettableFuture.create();
 
     public MockServerTransportListener(ServerTransport transport) {

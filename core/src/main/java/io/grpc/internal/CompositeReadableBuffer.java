@@ -215,7 +215,7 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
    * A simple read operation to perform on a single {@link ReadableBuffer}. All state management for
    * the buffers is done by {@link CompositeReadableBuffer#execute(ReadOperation, int)}.
    */
-  private abstract class ReadOperation {
+  private abstract static class ReadOperation {
     /**
      * Only used by {@link CompositeReadableBuffer#readUnsignedByte()}.
      */

@@ -93,7 +93,7 @@ final class LoadServer {
           new ByteBufOutputMarshaller(),
           new ByteBufOutputMarshaller());
 
-  private static final Logger LOG = Logger.getLogger(LoadServer.class.getName());
+  private static final Logger log = Logger.getLogger(LoadServer.class.getName());
 
   private final Server server;
   private final BenchmarkServiceImpl benchmarkService;
@@ -105,7 +105,7 @@ final class LoadServer {
   private long lastMarkCpuTime;
 
   LoadServer(Control.ServerConfig config) throws Exception {
-    LOG.log(Level.INFO, "Server Config \n" + config.toString());
+    log.log(Level.INFO, "Server Config \n" + config.toString());
     port = config.getPort() ==  0 ? Utils.pickUnusedPort() : config.getPort();
     ServerBuilder<?> serverBuilder = ServerBuilder.forPort(port);
     int asyncThreads = config.getAsyncServerThreads() == 0

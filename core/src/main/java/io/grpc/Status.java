@@ -635,7 +635,7 @@ public final class Status {
     public String parseAsciiString(byte[] value) {
       for (int i = 0; i < value.length; i++) {
         byte b = value[i];
-        if (b < ' ' || b >= '~' || b == '%' && i + 2 < value.length) {
+        if (b < ' ' || b >= '~' || (b == '%' && i + 2 < value.length)) {
           return parseAsciiStringSlow(value);
         }
       }

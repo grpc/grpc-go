@@ -421,17 +421,6 @@ class NettyServerHandler extends AbstractNettyHandler {
     return path.subSequence(1, path.length()).toString();
   }
 
-  private static void checkHeader(int streamId,
-                                  Http2Headers headers,
-                                  CharSequence header,
-                                  CharSequence expectedValue) throws Http2Exception {
-    if (!expectedValue.equals(headers.get(header))) {
-      throw Http2Exception.streamError(streamId, Http2Error.REFUSED_STREAM,
-          "Header '%s'='%s', while '%s' is expected", header, headers.get(header), expectedValue);
-    }
-  }
-
-
   /**
    * Returns the server stream associated to the given HTTP/2 stream object.
    */

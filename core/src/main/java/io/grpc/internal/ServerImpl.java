@@ -368,7 +368,7 @@ public final class ServerImpl extends io.grpc.Server {
       final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
           stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
-      final Context.CancellableContext context = createContext(stream, headers, statsTraceCtx);
+      final Context.CancellableContext context = createContext(stream, headers);
       final Executor wrappedExecutor;
       // This is a performance optimization that avoids the synchronization and queuing overhead
       // that comes with SerializingExecutor.
@@ -421,7 +421,7 @@ public final class ServerImpl extends io.grpc.Server {
     }
 
     private Context.CancellableContext createContext(
-        final ServerStream stream, Metadata headers, StatsTraceContext statsTraceCtx) {
+        final ServerStream stream, Metadata headers) {
       Long timeoutNanos = headers.get(TIMEOUT_KEY);
 
       // TODO(zhangkun83): attach the CensusContext from StatsTraceContext to baseContext

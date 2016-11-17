@@ -32,8 +32,8 @@
 package io.grpc;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
@@ -79,8 +79,8 @@ public class ResolvedServerInfoTest {
         Attributes.newBuilder().set(FOO, "bar").build());
 
     // sanity checks that they're not same instances
-    assertFalse(server1.getAddress() == server2.getAddress());
-    assertFalse(server1.getAttributes() == server2.getAttributes());
+    assertNotSame(server1.getAddress(), server2.getAddress());
+    assertNotSame(server1.getAttributes(), server2.getAttributes());
 
     assertEquals(server1, server2);
     assertEquals(server1.hashCode(), server2.hashCode()); // hash code must be consistent

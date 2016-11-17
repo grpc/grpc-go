@@ -110,7 +110,7 @@ public abstract class ManagedChannelProvider {
   @VisibleForTesting
   static ManagedChannelProvider create(Class<?> rawClass) {
     try {
-      return rawClass.asSubclass(ManagedChannelProvider.class).newInstance();
+      return rawClass.asSubclass(ManagedChannelProvider.class).getConstructor().newInstance();
     } catch (Throwable t) {
       throw new ServiceConfigurationError(
           "Provider " + rawClass.getName() + " could not be instantiated: " + t, t);

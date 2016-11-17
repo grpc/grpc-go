@@ -113,7 +113,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
   @VisibleForTesting
   static NameResolverProvider create(Class<?> rawClass) {
     try {
-      return rawClass.asSubclass(NameResolverProvider.class).newInstance();
+      return rawClass.asSubclass(NameResolverProvider.class).getConstructor().newInstance();
     } catch (Throwable t) {
       throw new ServiceConfigurationError(
           "Provider " + rawClass.getName() + " could not be instantiated: " + t, t);
