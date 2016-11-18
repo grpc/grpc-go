@@ -23,7 +23,7 @@ var DefaultKParams = Params{
 	KNoStream: false,
 }
 
-// MU is a mutex to protect Enabled variable
+// Mu is a mutex to protect Enabled variable
 var Mu = sync.Mutex{}
 
 // Enabled is a knob used to turn keepalive on or off
