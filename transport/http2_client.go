@@ -103,7 +103,7 @@ type http2Client struct {
 	// activity counter
 	activity *uint64
 	// keepalive parameters
-	kParams keepalive.KeepaliveParams
+	keepaliveParams keepalive.Params
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -186,6 +186,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
+	kp := keepalive.DefaultKParams
+	if opts.KParams != (keepalive.Params{}) {
+		kp = opts.KParams
+	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		target:     addr.Addr,
@@ -213,7 +217,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		creds:           opts.PerRPCCredentials,
 		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
-		kParams:         opts.KParams,
+		keepaliveParams: kp,
 		activity:        new(uint64),
 	}
 	// Start the reader goroutine for incoming message. Each transport has
@@ -1069,15 +1073,17 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 func (t *http2Client) controller() {
 	// Activity value seen by timer
 	ta := atomic.LoadUint64(t.activity)
-	timer := time.NewTimer(t.kParams.Ktime)
+	timer := time.NewTimer(t.keepaliveParams.Ktime)
+	keepalive.Mu.Lock()
 	if !keepalive.Enabled {
 		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
 			<-timer.C
 		}
 	}
+	keepalive.Mu.Unlock()
 	isPingSent := false
-	kPing := &ping{data: [8]byte{}}
+	keepalivePing := &ping{data: [8]byte{}}
 	for {
 		select {
 		case i := <-t.controlBuf.get():
@@ -1114,15 +1120,15 @@ func (t *http2Client) controller() {
 			t.mu.Unlock()
 			// Global activity value.
 			ga := atomic.LoadUint64(t.activity)
-			if ga > ta || (!t.kParams.KNoStream && ns < 1) {
-				timer.Reset(t.kParams.Ktime)
+			if ga > ta || (!t.keepaliveParams.KNoStream && ns < 1) {
+				timer.Reset(t.keepaliveParams.Ktime)
 				isPingSent = false
 			} else {
 				if !isPingSent {
 					// send ping
-					t.controlBuf.put(kPing)
+					t.controlBuf.put(keepalivePing)
 					isPingSent = true
-					timer.Reset(t.kParams.Ktimeout)
+					timer.Reset(t.keepaliveParams.Ktimeout)
 				} else {
 					t.Close()
 					continue

@@ -305,9 +305,11 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
+	keepalive.Mu.Lock()
 	keepalive.Enabled = true
+	keepalive.Mu.Unlock()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
 		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
 		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
 		KNoStream: true,                   // run keepalive even with no RPCs
@@ -329,9 +331,11 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
+	keepalive.Mu.Lock()
 	keepalive.Enabled = true
+	keepalive.Mu.Unlock()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
 		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
 		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
 		KNoStream: false,                  // don't run keepalive even with no RPCs
@@ -353,9 +357,11 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+	keepalive.Mu.Lock()
 	keepalive.Enabled = true
+	keepalive.Mu.Unlock()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
 		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
 		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
 		KNoStream: false,                  // don't run keepalive even with no RPCs
@@ -382,8 +388,10 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
+	keepalive.Mu.Lock()
 	keepalive.Enabled = true
-	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KParams: keepalive.KeepaliveParams{
+	keepalive.Mu.Unlock()
+	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KParams: keepalive.Params{
 		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
 		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
 		KNoStream: true,                   // don't run keepalive even with no RPCs

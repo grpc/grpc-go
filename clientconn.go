@@ -232,7 +232,7 @@ func WithUserAgent(s string) DialOption {
 }
 
 // WithKeepaliveParams returns a DialOption that specifies a user agent string for all the RPCs.
-func WithKeepaliveParams(k keepalive.KeepaliveParams) DialOption {
+func WithKeepaliveParams(k keepalive.Params) DialOption {
 	return func(o *dialOptions) {
 		o.copts.KParams = k
 	}
@@ -285,9 +285,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Set defaults.
-	if cc.dopts.copts.KParams == (keepalive.KeepaliveParams{}) {
-		cc.dopts.copts.KParams = keepalive.DefaultKParams
-	}
 	if cc.dopts.codec == nil {
 		cc.dopts.codec = protoCodec{}
 	}

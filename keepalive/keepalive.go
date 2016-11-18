@@ -1,10 +1,12 @@
 package keepalive
 
 import (
+	"math"
+	"sync"
 	"time"
 )
 
-type KeepaliveParams struct {
+type Params struct {
 	// After a duration of this time the client pings the server to see if the transport is still alive.
 	Ktime time.Duration
 	// After having pinged fot keepalive check, the client waits for a duration of keepalive_timeout before closing the transport.
@@ -13,10 +15,13 @@ type KeepaliveParams struct {
 	KNoStream bool
 }
 
-var DefaultKParams KeepaliveParams = KeepaliveParams{
-	Ktime:     time.Duration(290 * 365 * 24 * 60 * 60 * 1000 * 1000 * 1000), // default to infinite
-	Ktimeout:  time.Duration(20 * 1000 * 1000 * 1000),                       // default to 20 seconds
+var DefaultKParams Params = Params{
+	Ktime:     time.Duration(math.MaxInt64),           // default to infinite
+	Ktimeout:  time.Duration(20 * 1000 * 1000 * 1000), // default to 20 seconds
 	KNoStream: false,
 }
+
+// Mutex to protect Enabled variable
+var Mu sync.Mutex = sync.Mutex{}
 
 var Enabled = false

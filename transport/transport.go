@@ -382,7 +382,7 @@ type ConnectOptions struct {
 	// TransportCredentials stores the Authenticator required to setup a client connection.
 	TransportCredentials credentials.TransportCredentials
 	// Keepalive parameters
-	KParams keepalive.KeepaliveParams
+	KParams keepalive.Params
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
