@@ -41,6 +41,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -99,6 +100,11 @@ type http2Client struct {
 
 	creds []credentials.PerRPCCredentials
 
+	// activity counter
+	activity *uint64
+	// keepalive parameters
+	kParams keepalive.KeepaliveParams
+
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
@@ -110,15 +116,6 @@ type http2Client struct {
 	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
-
-	// lastRecv counts whenever a frame is recieved
-	lastRecv int64
-
-	// lastSent counts whenever a frame is sent
-	lastSent int64
-
-	// keepalive parameters
-	kParams keepalive.KeepaliveParams
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -217,6 +214,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
 		kParams:         opts.KParams,
+		activity:        new(uint64),
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -701,8 +699,8 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			break
 		}
 	}
-	// update last send
-	t.lastSent++
+	// activity++
+	atomic.AddUint64(t.activity, 1)
 	if !opts.Last {
 		return nil
 	}
@@ -843,8 +841,8 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 	pingAck := &ping{ack: true}
 	copy(pingAck.data[:], f.Data[:])
 	t.controlBuf.put(pingAck)
-	// Update last sent
-	t.lastSent++
+	// activity++
+	atomic.AddUint64(t.activity, 1)
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
@@ -991,8 +989,8 @@ func (t *http2Client) reader() {
 	// loop to keep reading incoming messages on this transport.
 	for {
 		frame, err := t.framer.readFrame()
-		// update lastRecv counter
-		t.lastRecv++
+		// activity++
+		atomic.AddUint64(t.activity, 1)
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
 			// http2.StreamError. This can happen only if the server's response
@@ -1069,11 +1067,11 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // controller running in a separate goroutine takes charge of sending control
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Client) controller() {
-	tRCounter := t.lastRecv
-	tSCounter := t.lastSent
+	// Activity value seen by timer
+	ta := atomic.LoadUint64(t.activity)
 	timer := time.NewTimer(t.kParams.Ktime)
 	if !keepalive.Enabled {
-		// prevent the timer from firing, ever
+		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
 			<-timer.C
 		}
@@ -1110,7 +1108,12 @@ func (t *http2Client) controller() {
 				return
 			}
 		case <-timer.C:
-			if t.lastRecv > tRCounter || t.lastSent > tSCounter || (!t.kParams.KNoStream && len(t.activeStreams) < 1) {
+			t.mu.Lock()
+			ns := len(t.activeStreams)
+			t.mu.Unlock()
+			// Global activity value.
+			ga := atomic.LoadUint64(t.activity)
+			if ga > ta || (!t.kParams.KNoStream && ns < 1) {
 				timer.Reset(t.kParams.Ktime)
 				isPingSent = false
 			} else {
@@ -1124,8 +1127,8 @@ func (t *http2Client) controller() {
 					continue
 				}
 			}
-			tRCounter = t.lastRecv
-			tSCounter = t.lastSent
+			// Update timer activity counter.
+			ta = ga
 		case <-t.shutdownChan:
 			return
 		}
