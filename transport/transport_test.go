@@ -49,6 +49,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 )
 
 type server struct {
@@ -251,6 +252,10 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
+	return setUpWithOptions(t, port, maxStreams, ht, ConnectOptions{})
+}
+
+func setUpWithOptions(t *testing.T, port int, maxStreams uint32, ht hType, copts ConnectOptions) (*server, ClientTransport) {
 	server := &server{startedErr: make(chan error, 1)}
 	go server.start(t, port, maxStreams, ht)
 	server.wait(t, 2*time.Second)
@@ -262,11 +267,138 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, Client
 	target := TargetInfo{
 		Addr: addr,
 	}
-	ct, connErr = NewClientTransport(context.Background(), target, ConnectOptions{})
+	ct, connErr = NewClientTransport(context.Background(), target, copts)
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
 	return server, ct
+}
+
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) *http2Client {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	// launch a non responsive server
+	go func() {
+		defer lis.Close()
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error at server-side while accepting: %v", err)
+			close(done)
+			return
+		}
+		done <- conn
+	}()
+	tr, err := newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	cT := tr.(*http2Client)
+	// Assert client transport is healthy
+	cT.mu.Lock()
+	defer cT.mu.Unlock()
+	if cT.state != reachable {
+		t.Fatalf("Client transport not healthy")
+	}
+	return cT
+}
+
+func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
+	keepalive.Enabled = true
+	done := make(chan net.Conn, 1)
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
+		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
+		KNoStream: true,                   // run keepalive even with no RPCs
+	}}, done)
+	defer cT.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("Server didn't return connection object")
+	}
+	defer conn.Close()
+	// Sleep for keepalive to close the connection
+	time.Sleep(4 * time.Second)
+	// Assert that the connection was closed
+	cT.mu.Lock()
+	defer cT.mu.Unlock()
+	if cT.state == reachable {
+		t.Fatalf("Test Failed: Expected client transport to have closed.")
+	}
+}
+
+func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
+	keepalive.Enabled = true
+	done := make(chan net.Conn, 1)
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
+		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
+		KNoStream: false,                  // don't run keepalive even with no RPCs
+	}}, done)
+	defer cT.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("server didn't reutrn connection object")
+	}
+	defer conn.Close()
+	// Give keepalive some time
+	time.Sleep(4 * time.Second)
+	// Assert that connections is still healthy
+	cT.mu.Lock()
+	defer cT.mu.Unlock()
+	if cT.state != reachable {
+		t.Fatalf("Test failed: Expected client transport to be healthy.")
+	}
+}
+
+func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+	keepalive.Enabled = true
+	done := make(chan net.Conn, 1)
+	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.KeepaliveParams{
+		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
+		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
+		KNoStream: false,                  // don't run keepalive even with no RPCs
+	}}, done)
+	defer cT.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("Server didn't return connection object")
+	}
+	defer conn.Close()
+	// create a stream
+	_, err := cT.NewStream(context.Background(), &CallHdr{})
+	if err != nil {
+		t.Fatalf("Failed to create a new stream: %v", err)
+	}
+	// Give keepalive some time
+	time.Sleep(4 * time.Second)
+	// Asser that transport was closed
+	cT.mu.Lock()
+	defer cT.mu.Unlock()
+	if cT.state == reachable {
+		t.Fatalf("Test failed: Expected client transport to have closed.")
+	}
+}
+
+func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
+	keepalive.Enabled = true
+	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KParams: keepalive.KeepaliveParams{
+		Ktime:     2 * 1000 * 1000 * 1000, // keepalive time = 2 sec
+		Ktimeout:  1 * 1000 * 1000 * 1000, // keepalive timeout = 1 sec
+		KNoStream: true,                   // don't run keepalive even with no RPCs
+	}})
+	defer s.stop()
+	defer tr.Close()
+	// Give keep alive some time
+	time.Sleep(4 * time.Second)
+	// Assert that transport is healthy
+	cT := tr.(*http2Client)
+	cT.mu.Lock()
+	defer cT.mu.Unlock()
+	if cT.state != reachable {
+		t.Fatalf("Test failed: Expected client transport to be healthy.")
+	}
 }
 
 func TestClientSendAndReceive(t *testing.T) {

@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/transport"
 )
 
@@ -230,6 +231,13 @@ func WithUserAgent(s string) DialOption {
 	}
 }
 
+// WithKeepaliveParams returns a DialOption that specifies a user agent string for all the RPCs.
+func WithKeepaliveParams(k keepalive.KeepaliveParams) DialOption {
+	return func(o *dialOptions) {
+		o.copts.KParams = k
+	}
+}
+
 // WithUnaryInterceptor returns a DialOption that specifies the interceptor for unary RPCs.
 func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 	return func(o *dialOptions) {
@@ -277,6 +285,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Set defaults.
+	if cc.dopts.copts.KParams == (keepalive.KeepaliveParams{}) {
+		cc.dopts.copts.KParams = keepalive.DefaultKParams
+	}
 	if cc.dopts.codec == nil {
 		cc.dopts.codec = protoCodec{}
 	}
