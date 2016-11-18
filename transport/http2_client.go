@@ -1077,6 +1077,7 @@ func (t *http2Client) controller() {
 		}
 	}
 	isPingSent := false
+	kPing := &ping{data: [8]byte{}}
 	for {
 		select {
 		case i := <-t.controlBuf.get():
@@ -1119,7 +1120,7 @@ func (t *http2Client) controller() {
 			} else {
 				if !isPingSent {
 					// send ping
-					t.framer.writePing(true, false, [8]byte{})
+					t.controlBuf.put(kPing)
 					isPingSent = true
 					timer.Reset(t.kParams.Ktimeout)
 				} else {
