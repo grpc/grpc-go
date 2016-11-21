@@ -101,7 +101,7 @@ type http2Client struct {
 	creds []credentials.PerRPCCredentials
 
 	// activity counter
-	activity *uint64
+	activity uint64 // accessed atomically
 	// keepalive parameters
 	keepaliveParams keepalive.Params
 
@@ -218,7 +218,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
 		keepaliveParams: kp,
-		activity:        new(uint64),
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -704,7 +703,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		}
 	}
 	// activity++
-	atomic.AddUint64(t.activity, 1)
+	atomic.AddUint64(&t.activity, 1)
 	if !opts.Last {
 		return nil
 	}
@@ -846,7 +845,7 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 	copy(pingAck.data[:], f.Data[:])
 	t.controlBuf.put(pingAck)
 	// activity++
-	atomic.AddUint64(t.activity, 1)
+	atomic.AddUint64(&t.activity, 1)
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
@@ -994,7 +993,7 @@ func (t *http2Client) reader() {
 	for {
 		frame, err := t.framer.readFrame()
 		// activity++
-		atomic.AddUint64(t.activity, 1)
+		atomic.AddUint64(&t.activity, 1)
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
 			// http2.StreamError. This can happen only if the server's response
@@ -1072,16 +1071,14 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Client) controller() {
 	// Activity value seen by timer
-	ta := atomic.LoadUint64(t.activity)
-	timer := time.NewTimer(t.keepaliveParams.Ktime)
-	keepalive.Mu.Lock()
-	if !keepalive.Enabled {
+	ta := atomic.LoadUint64(&t.activity)
+	timer := time.NewTimer(t.keepaliveParams.Time)
+	if !keepalive.Enabled() {
 		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
 			<-timer.C
 		}
 	}
-	keepalive.Mu.Unlock()
 	isPingSent := false
 	keepalivePing := &ping{data: [8]byte{}}
 	for {
@@ -1119,16 +1116,16 @@ func (t *http2Client) controller() {
 			ns := len(t.activeStreams)
 			t.mu.Unlock()
 			// Global activity value.
-			ga := atomic.LoadUint64(t.activity)
-			if ga > ta || (!t.keepaliveParams.KNoStream && ns < 1) {
-				timer.Reset(t.keepaliveParams.Ktime)
+			ga := atomic.LoadUint64(&t.activity)
+			if ga > ta || (!t.keepaliveParams.PermitNoStream && ns < 1) {
+				timer.Reset(t.keepaliveParams.Time)
 				isPingSent = false
 			} else {
 				if !isPingSent {
 					// send ping
 					t.controlBuf.put(keepalivePing)
 					isPingSent = true
-					timer.Reset(t.keepaliveParams.Ktimeout)
+					timer.Reset(t.keepaliveParams.Timeout)
 				} else {
 					t.Close()
 					continue
