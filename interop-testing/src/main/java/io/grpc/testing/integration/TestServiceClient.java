@@ -166,7 +166,8 @@ public class TestServiceClient {
           + "\n    Valid options:"
           + validTestCasesHelpText()
           + "\n  --use_tls=true|false        Whether to use TLS. Default " + c.useTls
-          + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Default " + c.useTestCa
+          + "\n  --use_test_ca=true|false    Whether to trust our fake CA. Requires --use_tls=true "
+          + "\n                              to have effect. Default " + c.useTestCa
           + "\n  --use_okhttp=true|false     Whether to use OkHttp instead of Netty. Default "
             + c.useOkHttp
           + "\n  --default_service_account   Email of GCE default service account. Default "

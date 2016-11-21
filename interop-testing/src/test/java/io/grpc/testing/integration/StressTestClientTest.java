@@ -90,7 +90,10 @@ public class StressTestClientTest {
         "--test_duration_secs=20",
         "--num_channels_per_server=10",
         "--num_stubs_per_channel=5",
-        "--metrics_port=9090"
+        "--metrics_port=9090",
+        "--server_host_override=foo.test.google.fr",
+        "--use_tls=true",
+        "--use_test_ca=true"
     });
 
     List<InetSocketAddress> addresses = Arrays.asList(new InetSocketAddress("localhost", 8080),
@@ -103,6 +106,9 @@ public class StressTestClientTest {
         new TestCaseWeightPair(TestCases.SERVER_STREAMING, 30));
     assertEquals(testCases, client.testCaseWeightPairs());
 
+    assertEquals("foo.test.google.fr", client.serverHostOverride());
+    assertTrue(client.useTls());
+    assertTrue(client.useTestCa());
     assertEquals(20, client.durationSecs());
     assertEquals(10, client.channelsPerServer());
     assertEquals(5, client.stubsPerChannel());

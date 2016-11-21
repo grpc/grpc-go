@@ -49,17 +49,24 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
+import io.grpc.testing.TestUtils;
+
+import io.netty.handler.ssl.SslContext;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -109,6 +116,10 @@ public class StressTestClient {
   private List<InetSocketAddress> addresses =
       singletonList(new InetSocketAddress("localhost", 8080));
   private List<TestCaseWeightPair> testCaseWeightPairs = new ArrayList<TestCaseWeightPair>();
+
+  private String serverHostOverride;
+  private boolean useTls = false;
+  private boolean useTestCa = false;
   private int durationSecs = -1;
   private int channelsPerServer = 1;
   private int stubsPerChannel = 1;
@@ -152,6 +163,12 @@ public class StressTestClient {
       if ("server_addresses".equals(key)) {
         addresses = parseServerAddresses(value);
         usage = addresses.isEmpty();
+      } else if ("server_host_override".equals(key)) {
+        serverHostOverride = value;
+      } else if ("use_tls".equals(key)) {
+        useTls = Boolean.parseBoolean(value);
+      } else if ("use_test_ca".equals(key)) {
+        useTestCa = Boolean.parseBoolean(value);
       } else if ("test_cases".equals(key)) {
         testCaseWeightPairs = parseTestCases(value);
       } else if ("test_duration_secs".equals(key)) {
@@ -168,11 +185,14 @@ public class StressTestClient {
         break;
       }
     }
+
     if (usage) {
       StressTestClient c = new StressTestClient();
       System.err.println(
           "Usage: [ARGS...]"
               + "\n"
+              + "\n  --server_host_override=HOST    Claimed identification expected of server."
+              + "\n                                 Defaults to server host"
               + "\n  --server_addresses=<name_1>:<port_1>,<name_2>:<port_2>...<name_N>:<port_N>"
               + "\n    Default: " + serverAddressesToString(c.addresses)
               + "\n  --test_cases=<testcase_1:w_1>,<testcase_2:w_2>...<testcase_n:w_n>"
@@ -180,6 +200,10 @@ public class StressTestClient {
               + " testcase is run."
               + "\n    Valid Testcases:"
               + validTestCasesHelpText()
+              + "\n  --use_tls=true|false           Whether to use TLS. Default: " + c.useTls
+              + "\n  --use_test_ca=true|false       Whether to trust our fake CA. Requires"
+              + " --use_tls=true"
+              + "\n                                 to have effect. Default: " + c.useTestCa
               + "\n  --test_duration_secs=SECONDS   '-1' for no limit. Default: " + c.durationSecs
               + "\n  --num_channels_per_server=INT  Number of connections to each server address."
               + " Default: " + c.channelsPerServer
@@ -278,13 +302,23 @@ public class StressTestClient {
     return metricsServer.getPort();
   }
 
-  private static List<InetSocketAddress> parseServerAddresses(String addressesStr) {
+  private List<InetSocketAddress> parseServerAddresses(String addressesStr) {
     List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
 
     for (List<String> namePort : parseCommaSeparatedTuples(addressesStr)) {
+      InetAddress address;
       String name = namePort.get(0);
       int port = Integer.valueOf(namePort.get(1));
-      addresses.add(new InetSocketAddress(name, port));
+      try {
+        address = InetAddress.getByName(name);
+        if (serverHostOverride != null) {
+          // Force the hostname to match the cert the server uses.
+          address = InetAddress.getByAddress(serverHostOverride, address.getAddress());
+        }
+      } catch (UnknownHostException ex) {
+        throw new RuntimeException(ex);
+      }
+      addresses.add(new InetSocketAddress(address, port));
     }
 
     return addresses;
@@ -316,9 +350,19 @@ public class StressTestClient {
     return tuples;
   }
 
-  private static ManagedChannel createChannel(InetSocketAddress address) {
-    return ManagedChannelBuilder.forAddress(address.getHostName(), address.getPort())
-        .usePlaintext(true)
+  private ManagedChannel createChannel(InetSocketAddress address) {
+    SslContext sslContext = null;
+    if (useTestCa) {
+      try {
+        sslContext = GrpcSslContexts.forClient().trustManager(
+            TestUtils.loadCert("ca.pem")).build();
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+    }
+    return NettyChannelBuilder.forAddress(address)
+        .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
+        .sslContext(sslContext)
         .build();
   }
 
@@ -583,6 +627,21 @@ public class StressTestClient {
   @VisibleForTesting
   List<InetSocketAddress> addresses() {
     return Collections.unmodifiableList(addresses);
+  }
+
+  @VisibleForTesting
+  String serverHostOverride() {
+    return serverHostOverride;
+  }
+
+  @VisibleForTesting
+  boolean useTls() {
+    return useTls;
+  }
+
+  @VisibleForTesting
+  boolean useTestCa() {
+    return useTestCa;
   }
 
   @VisibleForTesting
