@@ -35,7 +35,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -72,7 +71,7 @@ public class HelloWorldClientTest {
     String uniqueServerName = "fake server for " + getClass();
     fakeServer = InProcessServerBuilder
         .forName(uniqueServerName).directExecutor().addService(serviceImpl).build().start();
-    ManagedChannelBuilder channelBuilder =
+    InProcessChannelBuilder channelBuilder =
         InProcessChannelBuilder.forName(uniqueServerName).directExecutor();
     client = new HelloWorldClient(channelBuilder);
   }
