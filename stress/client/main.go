@@ -47,6 +47,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -60,6 +61,12 @@ var (
 	numChannelsPerServer = flag.Int("num_channels_per_server", 1, "Number of channels (i.e connections) to each server")
 	numStubsPerChannel   = flag.Int("num_stubs_per_channel", 1, "Number of client stubs per each connection to server")
 	metricsPort          = flag.Int("metrics_port", 8081, "The port at which the stress client exposes QPS metrics")
+	useTLS               = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	testCA               = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
+	tlsServerName        = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+
+	// The test CA root cert file
+	testCAFile = "testdata/ca.pem"
 )
 
 // testCaseWithWeight contains the test case type and its weight.
@@ -242,7 +249,7 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 	grpclog.Printf("server_addresses: %s", *serverAddresses)
 	grpclog.Printf("test_cases: %s", *testCases)
-	grpclog.Printf("test_duration-secs: %d", *testDurationSecs)
+	grpclog.Printf("test_duration_secs: %d", *testDurationSecs)
 	grpclog.Printf("num_channels_per_server: %d", *numChannelsPerServer)
 	grpclog.Printf("num_stubs_per_channel: %d", *numStubsPerChannel)
 	grpclog.Printf("metrics_port: %d", *metricsPort)
@@ -255,6 +262,30 @@ func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 	for i, test := range tests {
 		grpclog.Printf("%d. %v\n", i+1, test)
 	}
+}
+
+func getChannel(address string, useTLS, testCA bool, tlsServerName string) (*grpc.ClientConn, error) {
+	var opts []grpc.DialOption
+	if useTLS {
+		var sn string
+		if tlsServerName != "" {
+			sn = tlsServerName
+		}
+		var creds credentials.TransportCredentials
+		if testCA {
+			var err error
+			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			if err != nil {
+				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+			}
+		} else {
+			creds = credentials.NewClientTLSFromCert(nil, sn)
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		opts = append(opts, grpc.WithInsecure())
+	}
+	return grpc.Dial(address, opts...)
 }
 
 func main() {
@@ -271,7 +302,7 @@ func main() {
 
 	for serverIndex, address := range addresses {
 		for connIndex := 0; connIndex < *numChannelsPerServer; connIndex++ {
-			conn, err := grpc.Dial(address, grpc.WithInsecure())
+			conn, err := getChannel(address, *useTLS, *testCA, *tlsServerName)
 			if err != nil {
 				grpclog.Fatalf("Fail to dial: %v", err)
 			}
