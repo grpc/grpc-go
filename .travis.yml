@@ -45,8 +45,6 @@ os:
 notifications:
   email: false
 
-# Caching does not work for public repositories with OS X:
-# https://github.com/travis-ci/travis-ci/issues/4011
 cache:
   directories:
     - /tmp/protobuf-${PROTOBUF_VERSION}
