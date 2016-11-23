@@ -142,6 +142,7 @@ public class StressTestClient {
   @VisibleForTesting
   void parseArgs(String[] args) {
     boolean usage = false;
+    String serverAddresses = "";
     for (String arg : args) {
       if (!arg.startsWith("--")) {
         System.err.println("All arguments must start with '--': " + arg);
@@ -161,8 +162,8 @@ public class StressTestClient {
       }
       String value = parts[1];
       if ("server_addresses".equals(key)) {
-        addresses = parseServerAddresses(value);
-        usage = addresses.isEmpty();
+        // May need to apply server host overrides to the addresses, so delay processing
+        serverAddresses = value;
       } else if ("server_host_override".equals(key)) {
         serverHostOverride = value;
       } else if ("use_tls".equals(key)) {
@@ -184,6 +185,11 @@ public class StressTestClient {
         usage = true;
         break;
       }
+    }
+
+    if (!usage && !serverAddresses.isEmpty()) {
+      addresses = parseServerAddresses(serverAddresses);
+      usage = addresses.isEmpty();
     }
 
     if (usage) {

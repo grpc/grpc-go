@@ -115,6 +115,17 @@ public class StressTestClientTest {
     assertEquals(9090, client.metricsPort());
   }
 
+  @Test
+  public void serverHostOverrideShouldBeApplied() {
+    StressTestClient client = new StressTestClient();
+    client.parseArgs(new String[] {
+        "--server_addresses=localhost:8080",
+        "--server_host_override=foo.test.google.fr",
+    });
+
+    assertEquals("foo.test.google.fr", client.addresses().get(0).getHostName());
+  }
+
   @Test(timeout = 5000)
   public void gaugesShouldBeExported() throws Exception {
 
