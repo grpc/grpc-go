@@ -305,7 +305,7 @@ public class RouteGuideServer {
           + cos(phi1) * cos(phi2) * sin(deltaLambda / 2) * sin(deltaLambda / 2);
       double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
-      return (int) r * c;
+      return (int) (r * c);
     }
   }
 }
