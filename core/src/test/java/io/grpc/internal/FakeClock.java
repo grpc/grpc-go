@@ -76,9 +76,9 @@ public final class FakeClock {
 
   private long currentTimeNanos;
 
-  private class ScheduledTask extends AbstractFuture<Void> implements ScheduledFuture<Void> {
-    final Runnable command;
-    final long dueTimeNanos;
+  public class ScheduledTask extends AbstractFuture<Void> implements ScheduledFuture<Void> {
+    public final Runnable command;
+    public final long dueTimeNanos;
 
     ScheduledTask(long dueTimeNanos, Runnable command) {
       this.dueTimeNanos = dueTimeNanos;

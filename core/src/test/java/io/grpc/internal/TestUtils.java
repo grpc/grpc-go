@@ -46,6 +46,7 @@ import org.mockito.stubbing.Answer;
 import java.net.SocketAddress;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import javax.annotation.Nullable;
 
 /**
  * Common utility methods for tests.
@@ -78,6 +79,11 @@ final class TestUtils {
    */
   static BlockingQueue<MockClientTransportInfo> captureTransports(
       ClientTransportFactory mockTransportFactory) {
+    return captureTransports(mockTransportFactory, null);
+  }
+
+  static BlockingQueue<MockClientTransportInfo> captureTransports(
+      ClientTransportFactory mockTransportFactory, @Nullable final Runnable startRunnable) {
     final BlockingQueue<MockClientTransportInfo> captor =
         new LinkedBlockingQueue<MockClientTransportInfo>();
 
@@ -89,12 +95,12 @@ final class TestUtils {
                 any(CallOptions.class), any(StatsTraceContext.class)))
             .thenReturn(mock(ClientStream.class));
         // Save the listener
-        doAnswer(new Answer<Void>() {
+        doAnswer(new Answer<Runnable>() {
           @Override
-          public Void answer(InvocationOnMock invocation) throws Throwable {
+          public Runnable answer(InvocationOnMock invocation) throws Throwable {
             captor.add(new MockClientTransportInfo(
                 mockTransport, (ManagedClientTransport.Listener) invocation.getArguments()[0]));
-            return null;
+            return startRunnable;
           }
         }).when(mockTransport).start(any(ManagedClientTransport.Listener.class));
         return mockTransport;
