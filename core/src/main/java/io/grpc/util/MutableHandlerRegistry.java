@@ -38,6 +38,9 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -80,6 +83,15 @@ public final class MutableHandlerRegistry extends HandlerRegistry {
 
   public boolean removeService(ServerServiceDefinition service) {
     return services.remove(service.getServiceDescriptor().getName(), service);
+  }
+
+  /**
+   *  Note: This does not necessarily return a consistent view of the map.
+   */
+  @Override
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public List<ServerServiceDefinition> getServices() {
+    return Collections.unmodifiableList(new ArrayList<ServerServiceDefinition>(services.values()));
   }
 
   /**

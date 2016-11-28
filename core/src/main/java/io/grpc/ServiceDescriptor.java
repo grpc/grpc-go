@@ -86,7 +86,7 @@ public final class ServiceDescriptor {
   /**
    * Returns a marshaller-specific object that provides additional information about the service.
    * For example, when using Protobuf this should generally be a
-   * {@link io.grpc.protobuf.reflection.ProtoFileDescriptorWrapper}, when present.
+   * {@link io.grpc.protobuf.ProtoFileDescriptorSupplier}, when present.
    */
   @Nullable
   public Object getMarshallerDescriptor() {

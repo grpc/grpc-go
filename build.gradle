@@ -131,9 +131,9 @@ subprojects {
             }
           }
 
-          compileJava {
+          [compileJava, compileTestJava].each() {
             // Protobuf-generated code produces some warnings.
-            options.compilerArgs += ["-Xlint:-cast"]
+            it.options.compilerArgs += ["-Xlint:-cast"]
           }
         }
 

@@ -31,6 +31,9 @@
 
 package io.grpc;
 
+import java.util.Collections;
+import java.util.List;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -40,6 +43,15 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/933")
 public abstract class HandlerRegistry {
+
+  /**
+   * Returns the {@link ServerServiceDefinition}s provided by the registry, or an empty list if not
+   * supported by the implementation.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public List<ServerServiceDefinition> getServices() {
+    return Collections.emptyList();
+  }
 
   /**
    * Lookup a {@link ServerMethodDefinition} by its fully-qualified name.

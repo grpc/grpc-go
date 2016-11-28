@@ -45,12 +45,15 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
+import io.grpc.InternalNotifyOnServerBuild;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 import javax.annotation.Nullable;
@@ -64,6 +67,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
         extends ServerBuilder<T> {
 
   private static final HandlerRegistry EMPTY_FALLBACK_REGISTRY = new HandlerRegistry() {
+      @Override
+      public List<ServerServiceDefinition> getServices() {
+        return Collections.emptyList();
+      }
 
       @Override
       public ServerMethodDefinition<?, ?> lookupMethod(String methodName,
@@ -77,6 +84,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   private final ArrayList<ServerTransportFilter> transportFilters =
       new ArrayList<ServerTransportFilter>();
+
+  private final List<InternalNotifyOnServerBuild> notifyOnBuildList =
+      new ArrayList<InternalNotifyOnServerBuild>();
 
   @Nullable
   private HandlerRegistry fallbackRegistry;
@@ -112,6 +122,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Override
   public final T addService(BindableService bindableService) {
+    if (bindableService instanceof InternalNotifyOnServerBuild) {
+      notifyOnBuildList.add((InternalNotifyOnServerBuild) bindableService);
+    }
     return addService(bindableService.bindService());
   }
 
@@ -152,7 +165,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Override
   public ServerImpl build() {
     io.grpc.internal.InternalServer transportServer = buildTransportServer();
-    return new ServerImpl(executor, registryBuilder.build(),
+    ServerImpl server = new ServerImpl(executor, registryBuilder.build(),
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
@@ -160,6 +173,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
         firstNonNull(censusFactory,
             firstNonNull(Census.getCensusContextFactory(), NoopCensusContextFactory.INSTANCE)),
         GrpcUtil.STOPWATCH_SUPPLIER);
+    for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
+      notifyTarget.notifyOnBuild(server);
+    }
+    return server;
   }
 
   /**

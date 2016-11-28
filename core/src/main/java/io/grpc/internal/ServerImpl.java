@@ -52,6 +52,7 @@ import io.grpc.HandlerRegistry;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerMethodDefinition;
+import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
 import io.grpc.Status;
 
@@ -173,6 +174,22 @@ public final class ServerImpl extends io.grpc.Server {
       checkState(started, "Not started");
       checkState(!terminated, "Already terminated");
       return transportServer.getPort();
+    }
+  }
+
+  @Override
+  public List<ServerServiceDefinition> getServices() {
+    List<ServerServiceDefinition> fallbackServices = fallbackRegistry.getServices();
+    if (fallbackServices.isEmpty()) {
+      return registry.getServices();
+    } else {
+      List<ServerServiceDefinition> registryServices = registry.getServices();
+      int servicesCount = registryServices.size() + fallbackServices.size();
+      List<ServerServiceDefinition> services =
+          new ArrayList<ServerServiceDefinition>(servicesCount);
+      services.addAll(registryServices);
+      services.addAll(fallbackServices);
+      return Collections.unmodifiableList(services);
     }
   }
 

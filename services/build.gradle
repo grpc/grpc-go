@@ -17,6 +17,7 @@ description = "gRPC: Services"
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
+    testCompile project(':grpc-testing')
 }
 
 configureProtoCompilation()

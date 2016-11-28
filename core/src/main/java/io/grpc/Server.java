@@ -32,6 +32,8 @@
 package io.grpc;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -61,6 +63,15 @@ public abstract class Server {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1780")
   public int getPort() {
     return -1;
+  }
+
+  /**
+   * Returns the services registered with the server, or an empty list if not supported by the
+   * implementation.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public List<ServerServiceDefinition> getServices() {
+    return Collections.emptyList();
   }
 
   /**
