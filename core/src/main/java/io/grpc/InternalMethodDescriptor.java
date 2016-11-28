@@ -46,10 +46,10 @@ public final class InternalMethodDescriptor {
   }
 
   public Object geRawMethodName(MethodDescriptor<?, ?> md) {
-    return md.getRawMethodName(transport);
+    return md.getRawMethodName(transport.ordinal());
   }
 
   public void setRawMethodName(MethodDescriptor<?, ?> md, Object o) {
-    md.setRawMethodName(transport, o);
+    md.setRawMethodName(transport.ordinal(), o);
   }
 }

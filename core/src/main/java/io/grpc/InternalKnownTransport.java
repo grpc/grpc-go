@@ -33,6 +33,8 @@ package io.grpc;
 
 /**
  * All known transports.
+ *
+ * <p>Make sure to update MethodDescriptor.rawMethodNames if this is changed.
  */
 @Internal
 public enum InternalKnownTransport {

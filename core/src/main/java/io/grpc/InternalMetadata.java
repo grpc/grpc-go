@@ -46,27 +46,11 @@ public final class InternalMetadata {
   /**
    * A specialized plain ASCII marshaller. Both input and output are assumed to be valid header
    * ASCII.
+   *
+   * <p>Extended here to break the dependency.
    */
   @Internal
-  public interface TrustedAsciiMarshaller<T> {
-    /**
-     * Serialize a metadata value to a ASCII string that contains only the characters listed in the
-     * class comment of {@link io.grpc.Metadata.AsciiMarshaller}. Otherwise the output may be
-     * considered invalid and discarded by the transport, or the call may fail.
-     *
-     * @param value to serialize
-     * @return serialized version of value, or null if value cannot be transmitted.
-     */
-    byte[] toAsciiString(T value);
-
-    /**
-     * Parse a serialized metadata value from an ASCII string.
-     *
-     * @param serialized value of metadata to parse
-     * @return a parsed instance of type T
-     */
-    T parseAsciiString(byte[] serialized);
-  }
+  public interface TrustedAsciiMarshaller<T> extends Metadata.TrustedAsciiMarshaller<T> {}
 
   /**
    * Copy of StandardCharsets, which is only available on Java 1.7 and above.
@@ -78,7 +62,6 @@ public final class InternalMetadata {
   public static <T> Key<T> keyOf(String name, TrustedAsciiMarshaller<T> marshaller) {
     return Metadata.Key.of(name, marshaller);
   }
-
 
   @Internal
   public static Metadata newMetadata(byte[]... binaryValues) {

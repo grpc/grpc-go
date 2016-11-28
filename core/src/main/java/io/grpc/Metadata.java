@@ -39,8 +39,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.io.BaseEncoding;
 
-import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -784,5 +782,29 @@ public final class Metadata {
     T parseBytes(byte[] serialized) {
       return marshaller.parseAsciiString(serialized);
     }
+  }
+
+  /**
+   * A specialized plain ASCII marshaller. Both input and output are assumed to be valid header
+   * ASCII.
+   */
+  interface TrustedAsciiMarshaller<T> {
+    /**
+     * Serialize a metadata value to a ASCII string that contains only the characters listed in the
+     * class comment of {@link io.grpc.Metadata.AsciiMarshaller}. Otherwise the output may be
+     * considered invalid and discarded by the transport, or the call may fail.
+     *
+     * @param value to serialize
+     * @return serialized version of value, or null if value cannot be transmitted.
+     */
+    byte[] toAsciiString(T value);
+
+    /**
+     * Parse a serialized metadata value from an ASCII string.
+     *
+     * @param serialized value of metadata to parse
+     * @return a parsed instance of type T
+     */
+    T parseAsciiString(byte[] serialized);
   }
 }
