@@ -37,6 +37,8 @@ Package glogger defines glog-based logging for grpc.
 package glogger
 
 import (
+	"fmt"
+
 	"github.com/golang/glog"
 	"google.golang.org/grpc/grpclog"
 )
@@ -48,25 +50,25 @@ func init() {
 type glogger struct{}
 
 func (g *glogger) Fatal(args ...interface{}) {
-	glog.Fatal(args...)
+	glog.FatalDepth(2, args...)
 }
 
 func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(format, args...)
+	glog.FatalDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) Fatalln(args ...interface{}) {
-	glog.Fatalln(args...)
+	glog.FatalDepth(2, fmt.Sprintln(args...))
 }
 
 func (g *glogger) Print(args ...interface{}) {
-	glog.Info(args...)
+	glog.InfoDepth(2, args...)
 }
 
 func (g *glogger) Printf(format string, args ...interface{}) {
-	glog.Infof(format, args...)
+	glog.InfoDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) Println(args ...interface{}) {
-	glog.Infoln(args...)
+	glog.InfoDepth(2, fmt.Sprintln(args...))
 }
