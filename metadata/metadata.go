@@ -46,11 +46,14 @@ const (
 	binHdrSuffix = "-bin"
 )
 
+// encodeKey canonicalizes a key value qualified for transmission via gRPC.
+// TODO(zhaoq): Maybe check if k is ASCII also.
+func encodeKey(k string) string { return strings.ToLower(k) }
+
 // encodeKeyValue encodes key and value qualified for transmission via gRPC.
 // Transmitting binary headers violates HTTP/2 spec.
-// TODO(zhaoq): Maybe check if k is ASCII also.
 func encodeKeyValue(k, v string) (string, string) {
-	k = strings.ToLower(k)
+	k = encodeKey(k)
 	if strings.HasSuffix(k, binHdrSuffix) {
 		val := base64.StdEncoding.EncodeToString([]byte(v))
 		v = string(val)
@@ -89,6 +92,12 @@ func New(m map[string]string) MD {
 		md[key] = append(md[key], val)
 	}
 	return md
+}
+
+// Vals retrieves the values for the given metadata key
+func (md MD) Vals(k string) ([]string, bool) {
+	vals, ok := md[encodeKey(k)]
+	return vals, ok
 }
 
 // Pairs returns an MD formed by the mapping of key, value ...
