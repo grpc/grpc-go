@@ -96,7 +96,7 @@ checkDependencies ()
   echo "Checking dependencies of $1"
   if [[ "$OS" == windows ]]; then
     dump_cmd='objdump -x '"$1"' | fgrep "DLL Name"'
-    white_list="KERNEL32\.dll\|msvcrt\.dll"
+    white_list="KERNEL32\.dll\|msvcrt\.dll\|USER32\.dll"
   elif [[ "$OS" == linux ]]; then
     dump_cmd='ldd '"$1"
     if [[ "$ARCH" == x86_32 ]]; then
