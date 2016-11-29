@@ -143,22 +143,32 @@ public class FakeClockTest {
     FakeClock fakeClock = new FakeClock();
     ScheduledExecutorService scheduledExecutorService = fakeClock.getScheduledExecutorService();
 
+    scheduledExecutorService.schedule(newRunnable(), 200L, TimeUnit.MILLISECONDS);
     scheduledExecutorService.execute(newRunnable());
     scheduledExecutorService.schedule(newRunnable(), 0L, TimeUnit.MILLISECONDS);
+    scheduledExecutorService.schedule(newRunnable(), 80L, TimeUnit.MILLISECONDS);
+    scheduledExecutorService.schedule(newRunnable(), 90L, TimeUnit.MILLISECONDS);
     scheduledExecutorService.schedule(newRunnable(), 100L, TimeUnit.MILLISECONDS);
-    scheduledExecutorService.schedule(newRunnable(), 200L, TimeUnit.MILLISECONDS);
+    scheduledExecutorService.schedule(newRunnable(), 110L, TimeUnit.MILLISECONDS);
+    scheduledExecutorService.schedule(newRunnable(), 120L, TimeUnit.MILLISECONDS);
 
-    assertEquals(4, fakeClock.numPendingTasks());
+
+    assertEquals(8, fakeClock.numPendingTasks());
     assertEquals(2, fakeClock.getDueTasks().size());
 
     fakeClock.runDueTasks();
 
-    assertEquals(2, fakeClock.numPendingTasks());
+    assertEquals(6, fakeClock.numPendingTasks());
     assertEquals(0, fakeClock.getDueTasks().size());
 
-    fakeClock.forwardMillis(100L);
+    fakeClock.forwardMillis(90L);
 
-    assertEquals(1, fakeClock.numPendingTasks());
+    assertEquals(4, fakeClock.numPendingTasks());
+    assertEquals(0, fakeClock.getDueTasks().size());
+
+    fakeClock.forwardMillis(20L);
+
+    assertEquals(2, fakeClock.numPendingTasks());
     assertEquals(0, fakeClock.getDueTasks().size());
   }
 

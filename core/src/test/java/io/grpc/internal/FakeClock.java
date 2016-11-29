@@ -39,10 +39,10 @@ import com.google.common.util.concurrent.AbstractFuture;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.Future;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -58,7 +58,9 @@ import java.util.concurrent.TimeUnit;
 public final class FakeClock {
 
   private final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
-  private final PriorityQueue<ScheduledTask> tasks = new PriorityQueue<ScheduledTask>();
+
+  private final PriorityBlockingQueue<ScheduledTask> tasks =
+      new PriorityBlockingQueue<ScheduledTask>();
 
   private final Ticker ticker =
       new Ticker() {
@@ -219,10 +221,11 @@ public final class FakeClock {
       if (task == null || task.dueTimeNanos > currentTimeNanos) {
         break;
       }
-      task = tasks.poll();
-      task.command.run();
-      task.complete();
-      count++;
+      if (tasks.remove(task)) {
+        task.command.run();
+        task.complete();
+        count++;
+      }
     }
     return count;
   }
@@ -234,7 +237,7 @@ public final class FakeClock {
     ArrayList<ScheduledTask> result = new ArrayList<ScheduledTask>();
     for (ScheduledTask task : tasks) {
       if (task.dueTimeNanos > currentTimeNanos) {
-        break;
+        continue;
       }
       result.add(task);
     }
