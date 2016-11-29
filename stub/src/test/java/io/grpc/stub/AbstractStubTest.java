@@ -31,18 +31,29 @@
 
 package io.grpc.stub;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
+
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 @RunWith(JUnit4.class)
 public class AbstractStubTest {
 
   @Mock
   Channel channel;
+
+  @Before
+  public void setup() {
+    MockitoAnnotations.initMocks(this);
+  }
 
   @Test(expected = NullPointerException.class)
   public void channelMustNotBeNull() {
@@ -55,8 +66,19 @@ public class AbstractStubTest {
   }
 
   @Test(expected = NullPointerException.class)
-  public void callOptionsAndChannelMustNotBeNull() {
-    new NoopStub(null, null);
+  public void channelMustNotBeNull2() {
+    new NoopStub(null, CallOptions.DEFAULT);
+  }
+
+  @Test()
+  public void withWaitForReady() {
+    NoopStub stub = new NoopStub(channel);
+    CallOptions callOptions = stub.getCallOptions();
+    assertFalse(callOptions.isWaitForReady());
+
+    stub = stub.withWaitForReady();
+    callOptions = stub.getCallOptions();
+    assertTrue(callOptions.isWaitForReady());
   }
 
   class NoopStub extends AbstractStub<NoopStub> {
