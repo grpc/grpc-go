@@ -253,6 +253,9 @@ func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 	grpclog.Printf("num_channels_per_server: %d", *numChannelsPerServer)
 	grpclog.Printf("num_stubs_per_channel: %d", *numStubsPerChannel)
 	grpclog.Printf("metrics_port: %d", *metricsPort)
+	grpclog.Printf("use_tls: %t", *useTLS)
+	grpclog.Printf("use_test_ca: %t", *testCA)
+	grpclog.Printf("server_host_override: %s", *tlsServerName)
 
 	grpclog.Println("addresses:")
 	for i, addr := range addresses {
@@ -264,7 +267,7 @@ func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 	}
 }
 
-func getChannel(address string, useTLS, testCA bool, tlsServerName string) (*grpc.ClientConn, error) {
+func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if useTLS {
 		var sn string
@@ -302,7 +305,7 @@ func main() {
 
 	for serverIndex, address := range addresses {
 		for connIndex := 0; connIndex < *numChannelsPerServer; connIndex++ {
-			conn, err := getChannel(address, *useTLS, *testCA, *tlsServerName)
+			conn, err := newConn(address, *useTLS, *testCA, *tlsServerName)
 			if err != nil {
 				grpclog.Fatalf("Fail to dial: %v", err)
 			}
