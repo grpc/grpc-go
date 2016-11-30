@@ -78,7 +78,8 @@ type http2Client struct {
 	errorChan chan struct{}
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
-	goAway chan struct{}
+	goAway    chan struct{}
+	frameChan chan error
 
 	framer *framer
 	hBuf   *bytes.Buffer  // the buffer for HPACK encoding
@@ -194,6 +195,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		shutdownChan:    make(chan struct{}),
 		errorChan:       make(chan struct{}),
 		goAway:          make(chan struct{}),
+		frameChan:       make(chan error),
 		framer:          newFramer(conn),
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
@@ -242,6 +244,26 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	go t.controller()
 	t.writableChan <- 0
+
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	s1, err := t.NewStream(context.Background(), callHdr)
+	if err != nil {
+		return nil, err
+	}
+	err = t.Write(s1, []byte("ping"), &Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	// check if frameChan succeeded
+	err = <-t.frameChan
+	if err != nil {
+		return nil, connectionErrorf(true, err, "transport: %v", err)
+	}
+
 	return t, nil
 }
 
@@ -964,14 +986,18 @@ func (t *http2Client) reader() {
 	frame, err := t.framer.readFrame()
 	if err != nil {
 		t.notifyError(err)
+		t.frameChan <- err
 		return
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		t.notifyError(err)
+		t.frameChan <- err
 		return
 	}
 	t.handleSettings(sf)
+	// readFrame succeeded, close channel and continue
+	close(t.frameChan)
 
 	// loop to keep reading incoming messages on this transport.
 	for {
