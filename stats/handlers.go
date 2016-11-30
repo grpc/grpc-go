@@ -52,7 +52,7 @@ type ConnTagInfo struct {
 
 // RPCTagInfo defines the relevant information needed by RPC context tagger.
 type RPCTagInfo struct {
-	// FullMethodName is the string of gRPC method (in the format of /package.service/method).
+	// FullMethodName is the RPC method in the format of /package.service/method.
 	FullMethodName string
 }
 
@@ -64,7 +64,7 @@ var (
 	rpcTagger   func(context.Context, *RPCTagInfo) context.Context
 )
 
-// HandleRPC processes the RPC stats using the call back function registered by user.
+// HandleRPC processes the RPC stats using the rpc handler registered by the user.
 func HandleRPC(ctx context.Context, s RPCStats) {
 	if rpcHandler == nil {
 		return
@@ -72,8 +72,8 @@ func HandleRPC(ctx context.Context, s RPCStats) {
 	rpcHandler(ctx, s)
 }
 
-// RegisterRPCHandler registers the user handler function for rpc stats.
-// If another handler was registered before, this new handler will overwrite the old one.
+// RegisterRPCHandler registers the user handler function for RPC stats processing.
+// It should be called only once. The later call will overwrite the former value if it is called multiple times.
 // This handler function will be called to process the rpc stats.
 func RegisterRPCHandler(f func(context.Context, RPCStats)) {
 	rpcHandler = f
@@ -88,7 +88,7 @@ func HandleConn(ctx context.Context, s ConnStats) {
 }
 
 // RegisterConnHandler registers the user handler function for conn stats.
-// If another handler was registered before, this new handler will overwrite the old one.
+// It should be called only once. The later call will overwrite the former value if it is called multiple times.
 // This handler function will be called to process the conn stats.
 func RegisterConnHandler(f func(context.Context, ConnStats)) {
 	connHandler = f
@@ -108,14 +108,14 @@ func TagConn(ctx context.Context, info *ConnTagInfo) context.Context {
 // For conn stats handling, the context used in connHandler for this
 // connection will be derived from the context returned.
 // For RPC stats handling,
-//  - On server side, the context used in rpcHandler for all RPCs using this
+//  - On server side, the context used in rpcHandler for all RPCs on this
 // connection will be derived from the context returned.
 //  - On client side, the context is not derived from the context returned.
 func RegisterConnTagger(t func(context.Context, *ConnTagInfo) context.Context) {
 	connTagger = t
 }
 
-// TagRPC calls user registered RPC context tagger.
+// TagRPC calls the user registered RPC context tagger.
 func TagRPC(ctx context.Context, info *RPCTagInfo) context.Context {
 	if rpcTagger == nil {
 		return ctx
@@ -131,7 +131,7 @@ func RegisterRPCTagger(t func(context.Context, *RPCTagInfo) context.Context) {
 	rpcTagger = t
 }
 
-// Start starts the stats collection and reporting if there is a registered stats handle.
+// Start starts the stats collection and processing if there is a registered stats handle.
 func Start() {
 	if rpcHandler == nil && connHandler == nil {
 		grpclog.Println("rpcHandler and connHandler are both nil when starting stats. Stats is not started")
@@ -141,12 +141,12 @@ func Start() {
 }
 
 // Stop stops the stats collection and processing.
-// Stop does not unregister handlers.
+// Stop does not unregister the handlers.
 func Stop() {
 	atomic.StoreInt32(on, 0)
 }
 
-// On indicates whether stats is started.
+// On indicates whether the stats collection and processing is on.
 func On() bool {
 	return atomic.CompareAndSwapInt32(on, 1, 1)
 }
