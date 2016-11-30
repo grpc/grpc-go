@@ -626,19 +626,14 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 			return nil
 		}
 		size := http2MaxFrameLen
-		s.sendQuotaPool.add(0)
 		// Wait until the stream has some quota to send the data.
 		sq, err := wait(s.ctx, nil, nil, t.shutdownChan, s.sendQuotaPool.acquire())
 		if err != nil {
 			return err
 		}
-		t.sendQuotaPool.add(0)
 		// Wait until the transport has some quota to send the data.
 		tq, err := wait(s.ctx, nil, nil, t.shutdownChan, t.sendQuotaPool.acquire())
 		if err != nil {
-			if _, ok := err.(StreamError); ok {
-				t.sendQuotaPool.cancel()
-			}
 			return err
 		}
 		if sq < size {
@@ -706,7 +701,7 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			for _, stream := range t.activeStreams {
-				stream.sendQuotaPool.reset(int(s.Val - t.streamSendQuota))
+				stream.sendQuotaPool.add(int(s.Val - t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
 		}
