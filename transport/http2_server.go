@@ -259,7 +259,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			Compression: s.recvCompress,
 			WireLength:  int(frame.Header().Length),
 		}
-		stats.Handle(s.ctx, inHeader)
+		stats.HandleRPC(s.ctx, inHeader)
 	}
 	handle(s)
 	return
@@ -544,7 +544,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 		outHeader := &stats.OutHeader{
 			WireLength: bufLen,
 		}
-		stats.Handle(s.Context(), outHeader)
+		stats.HandleRPC(s.Context(), outHeader)
 	}
 	t.writableChan <- 0
 	return nil
@@ -607,7 +607,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 		outTrailer := &stats.OutTrailer{
 			WireLength: bufLen,
 		}
-		stats.Handle(s.Context(), outTrailer)
+		stats.HandleRPC(s.Context(), outTrailer)
 	}
 	t.closeStream(s)
 	t.writableChan <- 0

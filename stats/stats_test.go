@@ -54,14 +54,14 @@ func init() {
 }
 
 func TestStartStop(t *testing.T) {
-	stats.RegisterHandler(nil)
+	stats.RegisterRPCHandler(nil)
 	stats.RegisterConnHandler(nil)
 	stats.Start()
 	if stats.On() {
 		t.Fatalf("stats.Start() with nil handler, stats.On() = true, want false")
 	}
 
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {})
 	stats.RegisterConnHandler(nil)
 	stats.Start()
 	if !stats.On() {
@@ -69,7 +69,7 @@ func TestStartStop(t *testing.T) {
 	}
 	stats.Stop()
 
-	stats.RegisterHandler(nil)
+	stats.RegisterRPCHandler(nil)
 	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
 	stats.Start()
 	if !stats.On() {
@@ -77,10 +77,10 @@ func TestStartStop(t *testing.T) {
 	}
 	stats.Stop()
 
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {})
 	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {})
 	if stats.On() {
-		t.Fatalf("after stats.RegisterHandler(), stats.On() = true, want false")
+		t.Fatalf("after stats.RegisterRPCHandler(), stats.On() = true, want false")
 	}
 	stats.Start()
 	if !stats.On() {
@@ -700,7 +700,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if !s.IsClient() {
@@ -756,7 +756,7 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if !s.IsClient() {
@@ -812,7 +812,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if !s.IsClient() {
@@ -877,7 +877,7 @@ func TestServerStatsStreamingRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if !s.IsClient() {
@@ -1029,7 +1029,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {
@@ -1087,7 +1087,7 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {
@@ -1145,7 +1145,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {
@@ -1205,7 +1205,7 @@ func TestClientStatsStreamingRPCError(t *testing.T) {
 		mu  sync.Mutex
 		got []*gotData
 	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
+	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
 		mu.Lock()
 		defer mu.Unlock()
 		if s.IsClient() {

@@ -479,7 +479,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 		}
-		stats.Handle(s.clientStatsCtx, outHeader)
+		stats.HandleRPC(s.clientStatsCtx, outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -922,13 +922,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.clientStatsCtx, inHeader)
+				stats.HandleRPC(s.clientStatsCtx, inHeader)
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.clientStatsCtx, inTrailer)
+				stats.HandleRPC(s.clientStatsCtx, inTrailer)
 			}
 		}
 	}()

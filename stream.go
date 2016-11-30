@@ -151,7 +151,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
-		stats.Handle(ctx, begin)
+		stats.HandleRPC(ctx, begin)
 	}
 	defer func() {
 		if err != nil && stats.On() {
@@ -160,7 +160,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				Client: true,
 				Error:  err,
 			}
-			stats.Handle(ctx, end)
+			stats.HandleRPC(ctx, end)
 		}
 	}()
 	gopts := BalancerGetOptions{
@@ -343,7 +343,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		stats.Handle(cs.statsCtx, outPayload)
+		stats.HandleRPC(cs.statsCtx, outPayload)
 	}
 	return err
 }
@@ -361,7 +361,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			if err != io.EOF {
 				end.Error = toRPCErr(err)
 			}
-			stats.Handle(cs.statsCtx, end)
+			stats.HandleRPC(cs.statsCtx, end)
 		}
 	}()
 	var inPayload *stats.InPayload
@@ -386,7 +386,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			cs.mu.Unlock()
 		}
 		if inPayload != nil {
-			stats.Handle(cs.statsCtx, inPayload)
+			stats.HandleRPC(cs.statsCtx, inPayload)
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
@@ -566,7 +566,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	}
 	if outPayload != nil {
 		outPayload.SentTime = time.Now()
-		stats.Handle(ss.s.Context(), outPayload)
+		stats.HandleRPC(ss.s.Context(), outPayload)
 	}
 	return nil
 }
@@ -600,7 +600,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		return toRPCErr(err)
 	}
 	if inPayload != nil {
-		stats.Handle(ss.s.Context(), inPayload)
+		stats.HandleRPC(ss.s.Context(), inPayload)
 	}
 	return nil
 }
