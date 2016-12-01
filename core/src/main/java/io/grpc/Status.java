@@ -38,7 +38,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 
-import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
+import io.grpc.Metadata.TrustedAsciiMarshaller;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -384,7 +384,7 @@ public final class Status {
    * sequence.  After the input header bytes are converted into UTF-8 bytes, the new byte array is
    * reinterpretted back as a string.
    */
-  private static final InternalMetadata.TrustedAsciiMarshaller<String> STATUS_MESSAGE_MARSHALLER =
+  private static final TrustedAsciiMarshaller<String> STATUS_MESSAGE_MARSHALLER =
       new StatusMessageMarshaller();
 
   /**
