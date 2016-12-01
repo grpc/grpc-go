@@ -34,7 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
@@ -112,7 +112,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     } else {
       if (messageAcceptEncoding != null) {
         List<String> acceptedEncodingsList =
-            ACCEPT_ENCODING_SPLITER.splitToList(messageAcceptEncoding);
+            ACCEPT_ENCODING_SPLITTER.splitToList(messageAcceptEncoding);
         if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
           // resort to using no compression.
           compressor = Codec.Identity.NONE;

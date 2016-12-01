@@ -148,9 +148,9 @@ public final class GrpcUtil {
    */
   public static final int DEFAULT_MAX_HEADER_LIST_SIZE = 8192;
 
-  public static final Splitter ACCEPT_ENCODING_SPLITER = Splitter.on(',').trimResults();
+  public static final Splitter ACCEPT_ENCODING_SPLITTER = Splitter.on(',').trimResults();
 
-  private static final String IMPLEMENTATION_VERION = getImplementationVersion();
+  private static final String IMPLEMENTATION_VERSION = getImplementationVersion();
 
   /**
    * The default delay in nanos before we send a keepalive.
@@ -336,7 +336,7 @@ public final class GrpcUtil {
     }
     builder.append("grpc-java-");
     builder.append(transportName);
-    builder.append(IMPLEMENTATION_VERION);
+    builder.append(IMPLEMENTATION_VERSION);
     return builder.toString();
   }
 

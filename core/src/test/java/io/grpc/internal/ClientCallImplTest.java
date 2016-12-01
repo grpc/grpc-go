@@ -32,7 +32,7 @@
 package io.grpc.internal;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITER;
+import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -423,7 +423,7 @@ public class ClientCallImplTest {
     ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE, statsTraceCtx);
 
     Iterable<String> acceptedEncodings =
-        ACCEPT_ENCODING_SPLITER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+        ACCEPT_ENCODING_SPLITTER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
 
     // Order may be different, since decoder priorities have not yet been implemented.
     assertEquals(ImmutableSet.of("b", "a"), ImmutableSet.copyOf(acceptedEncodings));
