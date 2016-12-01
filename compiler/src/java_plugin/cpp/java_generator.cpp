@@ -134,7 +134,7 @@ static void GrpcSplitStringToIteratorUsing(const string& full,
 static void GrpcSplitStringUsing(const string& full,
                              const char* delim,
                              vector<string>* result) {
-  back_insert_iterator< vector<string> > it(*result);
+  std::back_insert_iterator< vector<string> > it(*result);
   GrpcSplitStringToIteratorUsing(full, delim, it);
 }
 
