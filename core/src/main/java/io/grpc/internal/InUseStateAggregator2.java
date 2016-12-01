@@ -75,8 +75,6 @@ abstract class InUseStateAggregator2<T> {
 
   /**
    * Called when the aggregated in-use state has changed to false, which means no object is in use.
-   *
-   * <p>This method is called under the lock returned by {@link #getLock}.
    */
   abstract void handleNotInUse();
 }

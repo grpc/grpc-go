@@ -447,7 +447,6 @@ final class InternalSubchannel implements WithLogId {
         log.log(Level.FINE, "[{0}] {1} for {2} is terminated",
             new Object[] {getLogId(), transport.getLogId(), address});
       }
-      boolean terminated = false;
       handleTransportInUseState(transport, false);
       synchronized (lock) {
         transports.remove(transport);
