@@ -56,6 +56,7 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
+	ctx        context.Context
 	target     string // server name/addr
 	userAgent  string
 	md         interface{}
@@ -181,6 +182,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
+		ctx:        ctx,
 		target:     addr.Addr,
 		userAgent:  ua,
 		md:         addr.Metadata,
@@ -242,6 +244,16 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	go t.controller()
 	t.writableChan <- 0
+	if stats.On() {
+		t.ctx = stats.TagConn(t.ctx, &stats.ConnTagInfo{
+			RemoteAddr: t.remoteAddr,
+			LocalAddr:  t.localAddr,
+		})
+		connBegin := &stats.ConnBegin{
+			Client: true,
+		}
+		stats.HandleConn(t.ctx, connBegin)
+	}
 	return t, nil
 }
 
@@ -467,7 +479,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 		}
-		stats.Handle(s.clientStatsCtx, outHeader)
+		stats.HandleRPC(s.clientStatsCtx, outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -546,6 +558,12 @@ func (t *http2Client) Close() (err error) {
 		}
 		s.mu.Unlock()
 		s.write(recvMsg{err: ErrConnClosing})
+	}
+	if stats.On() {
+		connEnd := &stats.ConnEnd{
+			Client: true,
+		}
+		stats.HandleConn(t.ctx, connEnd)
 	}
 	return
 }
@@ -904,13 +922,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.clientStatsCtx, inHeader)
+				stats.HandleRPC(s.clientStatsCtx, inHeader)
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				stats.Handle(s.clientStatsCtx, inTrailer)
+				stats.HandleRPC(s.clientStatsCtx, inTrailer)
 			}
 		}
 	}()
