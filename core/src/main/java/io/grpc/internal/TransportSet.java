@@ -73,6 +73,7 @@ final class TransportSet extends ManagedChannel implements WithLogId {
 
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private final Object lock = new Object();
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final EquivalentAddressGroup addressGroup;
   private final String authority;
   private final String userAgent;
@@ -352,8 +353,8 @@ final class TransportSet extends ManagedChannel implements WithLogId {
   }
 
   @Override
-  public String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return logId;
   }
 
   @Override

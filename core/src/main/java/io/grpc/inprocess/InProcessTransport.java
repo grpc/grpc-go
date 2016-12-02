@@ -44,7 +44,7 @@ import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ConnectionClientTransport;
-import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.LogId;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.NoopClientStream;
 import io.grpc.internal.ServerStream;
@@ -71,6 +71,7 @@ import javax.annotation.concurrent.ThreadSafe;
 class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   private static final Logger log = Logger.getLogger(InProcessTransport.class.getName());
 
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final String name;
   private ServerTransportListener serverTransportListener;
   private Attributes serverStreamAttributes;
@@ -203,8 +204,8 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   }
 
   @Override
-  public String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return logId;
   }
 
   @Override

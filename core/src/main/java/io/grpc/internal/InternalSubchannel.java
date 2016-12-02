@@ -72,7 +72,9 @@ import javax.annotation.concurrent.ThreadSafe;
 final class InternalSubchannel implements WithLogId {
   private static final Logger log = Logger.getLogger(InternalSubchannel.class.getName());
 
+
   private final Object lock = new Object();
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final EquivalentAddressGroup addressGroup;
   private final String authority;
   private final String userAgent;
@@ -119,12 +121,12 @@ final class InternalSubchannel implements WithLogId {
    * also be present.
    */
   @GuardedBy("lock")
-  private final Collection<ManagedClientTransport> transports =
-      new ArrayList<ManagedClientTransport>();
+  private final Collection<ConnectionClientTransport> transports =
+      new ArrayList<ConnectionClientTransport>();
 
   // Must only be used from channelExecutor
-  private final InUseStateAggregator2<ManagedClientTransport> inUseStateAggregator =
-      new InUseStateAggregator2<ManagedClientTransport>() {
+  private final InUseStateAggregator2<ConnectionClientTransport> inUseStateAggregator =
+      new InUseStateAggregator2<ConnectionClientTransport>() {
         @Override
         void handleInUse() {
           callback.onInUse(InternalSubchannel.this);
@@ -329,7 +331,7 @@ final class InternalSubchannel implements WithLogId {
   }
 
   private void handleTransportInUseState(
-      final ManagedClientTransport transport, final boolean inUse) {
+      final ConnectionClientTransport transport, final boolean inUse) {
     channelExecutor.execute(new Runnable() {
         @Override
         public void run() {
@@ -358,8 +360,8 @@ final class InternalSubchannel implements WithLogId {
   }
 
   @Override
-  public String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return logId;
   }
 
   @VisibleForTesting
@@ -371,10 +373,10 @@ final class InternalSubchannel implements WithLogId {
 
   /** Listener for real transports. */
   private class TransportListener implements ManagedClientTransport.Listener {
-    final ManagedClientTransport transport;
+    final ConnectionClientTransport transport;
     final SocketAddress address;
 
-    TransportListener(ManagedClientTransport transport, SocketAddress address) {
+    TransportListener(ConnectionClientTransport transport, SocketAddress address) {
       this.transport = transport;
       this.address = address;
     }

@@ -130,6 +130,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final Executor executor;
   private final boolean usingSharedExecutor;
   private final Object lock = new Object();
+  private final LogId logId = LogId.allocate(getClass().getName());
 
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
@@ -745,8 +746,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   };
 
   @Override
-  public String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return logId;
   }
 
   private static class NameResolverListenerImpl implements NameResolver.Listener {

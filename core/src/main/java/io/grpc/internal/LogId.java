@@ -31,61 +31,39 @@
 
 package io.grpc.internal;
 
-import io.grpc.Attributes;
-import io.grpc.CallOptions;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.Status;
+import java.util.concurrent.atomic.AtomicLong;
 
-import java.util.concurrent.Executor;
+/**
+ * A loggable ID, unique for the duration of the program.
+ */
+public final class LogId {
+  private static final AtomicLong idAlloc = new AtomicLong();
 
-abstract class ForwardingConnectionClientTransport implements ConnectionClientTransport {
-  @Override
-  public Runnable start(Listener listener) {
-    return delegate().start(listener);
+  /**
+   * @param tag a loggable tag associated with this ID.
+   */
+  public static LogId allocate(String tag) {
+    return new LogId(tag, idAlloc.incrementAndGet());
   }
 
-  @Override
-  public void shutdown() {
-    delegate().shutdown();
+  private final String tag;
+  private final long id;
+
+  private LogId(String tag, long id) {
+    this.tag = tag;
+    this.id = id;
   }
 
-  @Override
-  public void shutdownNow(Status status) {
-    delegate().shutdownNow(status);
+  public long getId() {
+    return id;
   }
 
-  @Override
-  public ClientStream newStream(
-      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions,
-      StatsTraceContext statsTraceCtx) {
-    return delegate().newStream(method, headers, callOptions, statsTraceCtx);
-  }
-
-  @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return delegate().newStream(method, headers);
-  }
-
-  @Override
-  public void ping(PingCallback callback, Executor executor) {
-    delegate().ping(callback, executor);
-  }
-
-  @Override
-  public LogId getLogId() {
-    return delegate().getLogId();
-  }
-
-  @Override
-  public Attributes getAttrs() {
-    return delegate().getAttrs();
+  public String getTag() {
+    return tag;
   }
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "[" + delegate().toString() + "]";
+    return tag + "-" + id;
   }
-
-  protected abstract ConnectionClientTransport delegate();
 }

@@ -422,7 +422,7 @@ public class InternalSubchannelTest {
     // No scheduled tasks that would ever try to reconnect ...
     assertEquals(0, fakeClock.numPendingTasks());
     assertEquals(0, fakeExecutor.numPendingTasks());
-    
+
     // ... until it's requested.
     internalSubchannel.obtainActiveTransport();
     assertExactCallbackInvokes("onStateChange:CONNECTING");
@@ -434,7 +434,7 @@ public class InternalSubchannelTest {
   public void shutdownWhenReady() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
     createInternalSubchannel(addr);
-    
+
     internalSubchannel.obtainActiveTransport();
     MockClientTransportInfo transportInfo = transports.poll();
     transportInfo.listener.transportReady();
@@ -528,7 +528,7 @@ public class InternalSubchannelTest {
   public void shutdownNow() throws Exception {
     SocketAddress addr = mock(SocketAddress.class);
     createInternalSubchannel(addr);
-    
+
     internalSubchannel.obtainActiveTransport();
     MockClientTransportInfo t1 = transports.poll();
     t1.listener.transportReady();
@@ -565,8 +565,8 @@ public class InternalSubchannelTest {
   @Test
   public void logId() {
     createInternalSubchannel(mock(SocketAddress.class));
-    assertEquals("InternalSubchannel@" + Integer.toHexString(internalSubchannel.hashCode()),
-        internalSubchannel.getLogId());
+
+    assertNotNull(internalSubchannel.getLogId());
   }
 
   @Test

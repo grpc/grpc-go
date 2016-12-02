@@ -43,5 +43,5 @@ public interface WithLogId {
    * <p>The subclasses of this interface usually want to include the log ID in their {@link
    * #toString} results.
    */
-  String getLogId();
+  LogId getLogId();
 }

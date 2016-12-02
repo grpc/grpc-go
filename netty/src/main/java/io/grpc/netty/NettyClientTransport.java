@@ -46,6 +46,7 @@ import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -62,12 +63,14 @@ import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
 import java.util.concurrent.Executor;
+
 import javax.annotation.Nullable;
 
 /**
  * A Netty-based {@link ConnectionClientTransport} implementation.
  */
 class NettyClientTransport implements ConnectionClientTransport {
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final Map<ChannelOption<?>, ?> channelOptions;
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
@@ -241,8 +244,8 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return logId;
   }
 
   @Override

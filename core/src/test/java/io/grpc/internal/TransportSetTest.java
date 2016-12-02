@@ -690,8 +690,8 @@ public class TransportSetTest {
   @Test
   public void logId() {
     createTransportSet(mock(SocketAddress.class));
-    assertEquals("TransportSet@" + Integer.toHexString(transportSet.hashCode()),
-        transportSet.getLogId());
+
+    assertNotNull(transportSet.getLogId());
   }
 
   @Test

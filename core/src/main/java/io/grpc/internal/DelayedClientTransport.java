@@ -63,6 +63,9 @@ import javax.annotation.concurrent.GuardedBy;
  * streams are transferred to the given transport, thus this transport won't own any stream.
  */
 class DelayedClientTransport implements ManagedClientTransport {
+
+  private final LogId lodId = LogId.allocate(getClass().getName());
+
   private final Object lock = new Object();
 
   private final Executor streamCreationExecutor;
@@ -455,9 +458,10 @@ class DelayedClientTransport implements ManagedClientTransport {
     }
   }
 
+  // TODO(carl-mastrangelo): remove this once the Subchannel change is in.
   @Override
-  public final String getLogId() {
-    return GrpcUtil.getLogId(this);
+  public LogId getLogId() {
+    return lodId;
   }
 
   @VisibleForTesting
