@@ -94,10 +94,10 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 			"ping_pong",
 			"empty_stream",
 			"timeout_on_sleeping_server",
-      "cancel_after_begin",
-      "cancel_after_first_response",
-      "status_code_and_message",
-      "custom_metadata":
+			"cancel_after_begin",
+			"cancel_after_first_response",
+			"status_code_and_message",
+			"custom_metadata":
 		default:
 			panic(fmt.Sprintf("unknown test type: %s", testCase[0]))
 		}
