@@ -121,7 +121,8 @@ public final class ServerServiceDefinition {
       MethodDescriptor<ReqT, RespT> method = def.getMethodDescriptor();
       checkArgument(
           serviceName.equals(MethodDescriptor.extractFullServiceName(method.getFullMethodName())),
-          "Service name mismatch. Expected service name: '%s'. Actual method name: '%s'.",
+          "Method name should be prefixed with service name and separated with '/'. "
+                  + "Expected service name: '%s'. Actual fully qualifed method name: '%s'.",
           serviceName, method.getFullMethodName());
       String name = method.getFullMethodName();
       checkState(!methods.containsKey(name), "Method by same name already registered: %s", name);
