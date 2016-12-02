@@ -91,7 +91,13 @@ func parseTestCases(testCaseString string) []testCaseWithWeight {
 			"large_unary",
 			"client_streaming",
 			"server_streaming",
-			"empty_stream":
+			"ping_pong",
+			"empty_stream",
+			"timeout_on_sleeping_server",
+			"cancel_after_begin",
+			"cancel_after_first_response",
+			"status_code_and_message",
+			"custom_metadata":
 		default:
 			panic(fmt.Sprintf("unknown test type: %s", testCase[0]))
 		}
@@ -231,8 +237,20 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 				interop.DoClientStreaming(client)
 			case "server_streaming":
 				interop.DoServerStreaming(client)
+			case "ping_pong":
+				interop.DoPingPong(client)
 			case "empty_stream":
 				interop.DoEmptyStream(client)
+			case "timeout_on_sleeping_server":
+				interop.DoTimeoutOnSleepingServer(client)
+			case "cancel_after_begin":
+				interop.DoCancelAfterBegin(client)
+			case "cancel_after_first_response":
+				interop.DoCancelAfterFirstResponse(client)
+			case "status_code_and_message":
+				interop.DoStatusCodeAndMessage(client)
+			case "custom_metadata":
+				interop.DoCustomMetadata(client)
 			}
 			done <- true
 		}()
