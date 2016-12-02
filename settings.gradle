@@ -8,6 +8,7 @@ include ":grpc-protobuf"
 include ":grpc-protobuf-lite"
 include ":grpc-protobuf-nano"
 include ":grpc-netty"
+include ":grpc-netty-shaded"
 include ":grpc-grpclb"
 include ":grpc-testing"
 include ":grpc-testing-proto"
@@ -27,6 +28,7 @@ project(':grpc-protobuf').projectDir = "$rootDir/protobuf" as File
 project(':grpc-protobuf-lite').projectDir = "$rootDir/protobuf-lite" as File
 project(':grpc-protobuf-nano').projectDir = "$rootDir/protobuf-nano" as File
 project(':grpc-netty').projectDir = "$rootDir/netty" as File
+project(':grpc-netty-shaded').projectDir = "$rootDir/netty/shaded" as File
 project(':grpc-grpclb').projectDir = "$rootDir/grpclb" as File
 project(':grpc-testing').projectDir = "$rootDir/testing" as File
 project(':grpc-testing-proto').projectDir = "$rootDir/testing-proto" as File
