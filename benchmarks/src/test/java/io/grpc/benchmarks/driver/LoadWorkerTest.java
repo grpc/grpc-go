@@ -34,11 +34,11 @@ package io.grpc.benchmarks.driver;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import io.grpc.ManagedChannel;
 import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.Stats;
 import io.grpc.benchmarks.proto.WorkerServiceGrpc;
-import io.grpc.internal.ManagedChannelImpl;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
@@ -65,7 +65,7 @@ public class LoadWorkerTest {
       .build();
 
   private LoadWorker worker;
-  private ManagedChannelImpl channel;
+  private ManagedChannel channel;
   private WorkerServiceGrpc.WorkerServiceStub workerServiceStub;
   private LinkedBlockingQueue<Stats.ClientStats> marksQueue;
 

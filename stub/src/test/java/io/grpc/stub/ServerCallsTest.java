@@ -40,6 +40,7 @@ import static org.junit.Assert.fail;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -49,7 +50,6 @@ import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.internal.ManagedChannelImpl;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -332,7 +332,7 @@ public class ServerCallsTest {
         .build();
     long tag = System.nanoTime();
     InProcessServerBuilder.forName("go-with-the-flow" + tag).addService(service).build().start();
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
+    ManagedChannel channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
     final CountDownLatch latch = new CountDownLatch(1);
