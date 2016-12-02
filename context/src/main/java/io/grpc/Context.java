@@ -49,11 +49,15 @@ import java.util.logging.Logger;
  *   <li>Local and distributed tracing information.</li>
  * </ul>
  *
- * <p>Context objects make their state available by being attached to the executing thread using
- * a {@link ThreadLocal}. The context object bound to a thread is considered {@link #current()}.
- * Context objects are immutable and inherit state from their parent. To add or overwrite the
- * current state a new context object must be created and then attached to the thread replacing the
- * previously bound context. For example:
+ * <p>A Context object can be {@link #attach attached} to the {@link Storage}, which effectively
+ * forms a <b>scope</b> for the context.  The scope is bound to the current thread.  Within a scope,
+ * its Context is accessible even across API boundaries, through {@link #current}.  The scope is
+ * later exited by {@link #detach detaching} the Context.
+ *
+ * <p>Context objects are immutable and inherit state from their parent. To add or overwrite the
+ * current state a new context object must be created and then attached, replacing the previously
+ * bound context. For example:
+ *
  * <pre>
  *   Context withCredential = Context.current().withValue(CRED_KEY, cred);
  *   executorService.execute(withCredential.wrap(new Runnable() {
@@ -61,18 +65,16 @@ import java.util.logging.Logger;
  *        readUserRecords(userId, CRED_KEY.get());
  *     }
  *   }));
-
  * </pre>
  *
- *
- * <p>Contexts are also used to represent a scoped unit of work. When the unit of work is
- * done the context can be cancelled. This cancellation will also cascade to all descendant
- * contexts. You can add a {@link CancellationListener} to a context to be notified when it or
- * one of its ancestors has been cancelled. Cancellation does not release the state stored by
- * a context and it's perfectly valid to {@link #attach()} an already cancelled context to a
- * thread to make it current. To cancel a context (and its descendants) you first create a
- * {@link CancellableContext} and when you need to signal cancellation call
- * {@link CancellableContext#cancel} or {@link CancellableContext#detachAndCancel}. For example:
+ * <p>Contexts are also used to represent a scoped unit of work. When the unit of work is done the
+ * context can be cancelled. This cancellation will also cascade to all descendant contexts. You can
+ * add a {@link CancellationListener} to a context to be notified when it or one of its ancestors
+ * has been cancelled. Cancellation does not release the state stored by a context and it's
+ * perfectly valid to {@link #attach()} an already cancelled context to make it current. To cancel a
+ * context (and its descendants) you first create a {@link CancellableContext} and when you need to
+ * signal cancellation call {@link CancellableContext#cancel} or {@link
+ * CancellableContext#detachAndCancel}. For example:
  * <pre>
  *   CancellableContext withCancellation = Context.current().withCancellation();
  *   try {
@@ -110,20 +112,42 @@ public class Context {
   private static final Key<Deadline> DEADLINE_KEY = new Key<Deadline>("deadline");
 
   /**
-   * The logical root context which is {@link #current()} if no other context is bound. This context
+   * The logical root context which is the ultimate ancestor of all contexts. This context
    * is not cancellable and so will not cascade cancellation or retain listeners.
+   *
+   * <p>Never assume this is the default context for new threads, because {@link Storage} may define
+   * a default context that is different from ROOT.
    */
   public static final Context ROOT = new Context(null);
 
-  /**
-   * Currently bound context.
-   */
-  private static final ThreadLocal<Context> localContext = new ThreadLocal<Context>() {
-    @Override
-    protected Context initialValue() {
-      return ROOT;
+  private static Storage storage;
+
+  private static synchronized Storage initializeStorage() {
+    if (storage != null) {
+      return storage;
     }
-  };
+    try {
+      Class<?> clazz = Class.forName("io.grpc.ContextStorageOverride");
+      storage = (Storage) clazz.newInstance();
+      return storage;
+    } catch (ClassNotFoundException e) {
+      log.log(Level.FINE, "Storage override doesn't exist. Using default.", e);
+    } catch (InstantiationException e) {
+      throw new RuntimeException("Failed to initialize Storage implementation", e);
+    } catch (IllegalAccessException e) {
+      throw new RuntimeException("Failed to initialize Storage implementation", e);
+    }
+    storage = new ThreadLocalContextStorage();
+    return storage;
+  }
+
+  // For testing
+  static Storage storage() {
+    if (storage == null) {
+      return initializeStorage();
+    }
+    return storage;
+  }
 
   /**
    * Create a {@link Key} with the given debug name. Multiple different keys may have the same name;
@@ -142,15 +166,14 @@ public class Context {
   }
 
   /**
-   * Return the context associated with the current thread, will never return {@code null} as
-   * the {@link #ROOT} context is implicitly associated with all threads.
+   * Return the context associated with the current scope, will never return {@code null}.
    *
    * <p>Will never return {@link CancellableContext} even if one is attached, instead a
    * {@link Context} is returned with the same properties and lifetime. This is to avoid
    * code stealing the ability to cancel arbitrarily.
    */
   public static Context current() {
-    Context current = localContext.get();
+    Context current = storage().current();
     if (current == null) {
       return ROOT;
     }
@@ -324,34 +347,29 @@ public class Context {
   }
 
   /**
-   * Attach this context to the thread and make it {@link #current}, the previously current context
-   * is returned. It is allowed to attach contexts where {@link #isCancelled()} is {@code true}.
+   * Attach this context, thus enter a new scope within which this context is {@link #current}.  The
+   * previously current context is returned. It is allowed to attach contexts where {@link
+   * #isCancelled()} is {@code true}.
    *
    * <p>Instead of using {@link #attach()} & {@link #detach(Context)} most use-cases are better
-   * served by using the {@link #run(Runnable)} or {@link #call(java.util.concurrent.Callable)}
-   * to execute work immediately within a context. If work needs to be done in other threads
-   * it is recommended to use the 'wrap' methods or to use a propagating executor.
+   * served by using the {@link #run(Runnable)} or {@link #call(java.util.concurrent.Callable)} to
+   * execute work immediately within a context's scope. If work needs to be done in other threads it
+   * is recommended to use the 'wrap' methods or to use a propagating executor.
    */
   public Context attach() {
     Context previous = current();
-    localContext.set(this);
+    storage().attach(this);
     return previous;
   }
 
   /**
-   * Detach the current context from the thread and attach the provided replacement. If this
-   * context is not {@link #current()} a SEVERE message will be logged but the context to attach
-   * will still be bound.
+   * Detach the current context and attach the provided replacement which should be the context of
+   * the outer scope, thus exit the current scope.  If this context is not {@link #current()} a
+   * SEVERE message will be logged but the context to attach will still be bound.
    */
   public void detach(Context toAttach) {
     checkNotNull(toAttach, "toAttach");
-    if (toAttach.attach() != this) {
-      // Log a severe message instead of throwing an exception as the context to attach is assumed
-      // to be the correct one and the unbalanced state represents a coding mistake in a lower
-      // layer in the stack that cannot be recovered from here.
-      log.log(Level.SEVERE, "Context was not attached when detaching",
-          new Throwable().fillInStackTrace());
-    }
+    storage().detach(this, toAttach);
   }
 
   // Visible for testing
@@ -709,7 +727,7 @@ public class Context {
     }
 
     /**
-     * Cancel this context and detach it as the current context from the thread.
+     * Cancel this context and detach it as the current context.
      *
      * @param toAttach context to make current.
      * @param cause of cancellation, can be {@code null}.
@@ -798,7 +816,41 @@ public class Context {
   }
 
   /**
-   * Stores listener & executor pair.
+   * Defines the mechanisms for attaching and detaching the "current" context.
+   *
+   * <p>The default implementation will put the current context in a {@link ThreadLocal}.  If an
+   * alternative implementation named {@code io.grpc.ContextStorageOverride} exists in the
+   * classpath, it will be used instead of the default implementation.
+   *
+   * <p>This API is <a href="https://github.com/grpc/grpc-java/issues/2462">experimental</a> and
+   * subject to change.
+   */
+  public abstract static class Storage {
+    /**
+     * Implements {@link io.grpc.Context#attach}.
+     *
+     * @param toAttach the context to be attached
+     */
+    public abstract void attach(Context toAttach);
+
+    /**
+     * Implements {@link io.grpc.Context#detach}
+     *
+     * @param toDetach the context to be detached. Should be, or be equivalent to, the current
+     *        context of the current scope
+     * @param toRestore the context to be the current.  Should be, or be equivalent to, the context
+     *        of the outer scope
+     */
+    public abstract void detach(Context toDetach, Context toRestore);
+
+    /**
+     * Implements {@link io.grpc.Context#current}.  Returns the context of the current scope.
+     */
+    public abstract Context current();
+  }
+
+  /**
+   * Stores listener and executor pair.
    */
   private class ExecutableListener implements Runnable {
     private final Executor executor;

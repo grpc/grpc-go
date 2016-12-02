@@ -109,21 +109,19 @@ public class ContextTest {
   }
 
   @Test
-  public void rootIsInitialContext() {
-    assertNotNull(Context.ROOT);
-    assertTrue(Context.ROOT.isCurrent());
-  }
-
-  @Test
-  public void rootIsAlwaysBound() throws Exception {
-    final SettableFuture<Boolean> rootIsBound = SettableFuture.create();
+  public void defaultContext() throws Exception {
+    final SettableFuture<Context> contextOfNewThread = SettableFuture.create();
+    Context contextOfThisThread = Context.ROOT.withValue(PET, "dog");
+    contextOfThisThread.attach();
     new Thread(new Runnable() {
       @Override
       public void run() {
-        rootIsBound.set(Context.current() == Context.ROOT);
+        contextOfNewThread.set(Context.current());
       }
-    }).start();
-    assertTrue(rootIsBound.get(5, TimeUnit.SECONDS));
+      }).start();
+    assertNotNull(contextOfNewThread.get(5, TimeUnit.SECONDS));
+    assertNotSame(contextOfThisThread, contextOfNewThread.get());
+    assertSame(contextOfThisThread, Context.current());
   }
 
   @Test
@@ -186,7 +184,7 @@ public class ContextTest {
       public void close() throws SecurityException {
       }
     };
-    Logger logger = Logger.getLogger(Context.class.getName());
+    Logger logger = Logger.getLogger(Context.storage().getClass().getName());
     try {
       logger.addHandler(handler);
       Context initial = Context.current();
