@@ -145,6 +145,13 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
+	sc, ok := cc.getMethodConfig(method)
+	if ok {
+		c.failFast = !sc.WaitForReady
+		if sc.Timeout > 0 {
+			ctx, _ = context.WithTimeout(ctx, sc.Timeout)
+		}
+	}
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)
@@ -210,6 +217,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
+
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
 		}

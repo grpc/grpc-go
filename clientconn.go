@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/transport"
 )
 
@@ -89,10 +90,12 @@ type dialOptions struct {
 	cp        Compressor
 	dc        Decompressor
 	bs        backoffStrategy
+	nr        naming.Resolver
 	balancer  Balancer
 	block     bool
 	insecure  bool
 	timeout   time.Duration
+	sc        <-chan ServiceConfig
 	copts     transport.ConnectOptions
 }
 
@@ -126,6 +129,13 @@ func WithDecompressor(dc Decompressor) DialOption {
 func WithBalancer(b Balancer) DialOption {
 	return func(o *dialOptions) {
 		o.balancer = b
+	}
+}
+
+// WithServiceConfig returns a DialOption which has a channel to read the service configuration.
+func WithServiceConfig(c <-chan ServiceConfig) DialOption {
+	return func(o *dialOptions) {
+		o.sc = c
 	}
 }
 
@@ -275,7 +285,19 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
-
+	if cc.dopts.sc != nil {
+		// Wait for the initial service config and start a watcher for
+		// its following updates.
+		select {
+		case sc, ok := <-cc.dopts.sc:
+			if ok {
+				cc.sc = sc
+				go cc.scWatcher()
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	// Set defaults.
 	if cc.dopts.codec == nil {
 		cc.dopts.codec = protoCodec{}
@@ -298,9 +320,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	go func() {
 		var addrs []Address
 		if cc.dopts.balancer == nil {
-			// Connect to target directly if balancer is nil.
-			addrs = append(addrs, Address{Addr: target})
-		} else {
+			if cc.sc.LB != nil {
+				cc.dopts.balancer = cc.sc.LB
+			} else {
+				// Connect to target directly if balancer is nil.
+				addrs = append(addrs, Address{Addr: target})
+			}
+		}
+		if cc.dopts.balancer != nil {
 			var credsClone credentials.TransportCredentials
 			if creds != nil {
 				credsClone = creds.Clone()
@@ -346,6 +373,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	case <-timeoutCh:
 		return nil, ErrClientConnTimeout
 	}
+
 	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
 	// The lbWatcher goroutine will not be created.
 	if ok {
@@ -397,6 +425,7 @@ type ClientConn struct {
 	dopts     dialOptions
 
 	mu    sync.RWMutex
+	sc    ServiceConfig
 	conns map[Address]*addrConn
 }
 
@@ -431,6 +460,24 @@ func (cc *ClientConn) lbWatcher() {
 		}
 		for _, c := range del {
 			c.tearDown(errConnDrain)
+		}
+	}
+}
+
+func (cc *ClientConn) scWatcher() {
+	for {
+		select {
+		case sc, ok := <-cc.dopts.sc:
+			if !ok {
+				return
+			}
+			cc.mu.Lock()
+			// TODO: load balance policy runtime change is ignored.
+			// We may revist this decision in the future.
+			cc.sc = sc
+			cc.mu.Unlock()
+		case <-cc.ctx.Done():
+			return
 		}
 	}
 }
@@ -520,6 +567,14 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 		}()
 	}
 	return nil
+}
+
+// TODO: Avoid the locking here.
+func (cc *ClientConn) getMethodConfig(method string) (m MethodConfig, ok bool) {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	m, ok = cc.sc.Methods[method]
+	return
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {

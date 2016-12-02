@@ -428,6 +428,7 @@ type test struct {
 	streamClientInt   grpc.StreamClientInterceptor
 	unaryServerInt    grpc.UnaryServerInterceptor
 	streamServerInt   grpc.StreamServerInterceptor
+	sc                <-chan grpc.ServiceConfig
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -450,7 +451,9 @@ func (te *test) tearDown() {
 		te.restoreLogs()
 		te.restoreLogs = nil
 	}
-	te.srv.Stop()
+	if te.srv != nil {
+		te.srv.Stop()
+	}
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -545,6 +548,10 @@ func (te *test) clientConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithDialer(te.e.dialer),
 		grpc.WithUserAgent(te.userAgent),
+	}
+
+	if te.sc != nil {
+		opts = append(opts, grpc.WithServiceConfig(te.sc))
 	}
 
 	if te.clientCompression {
@@ -1011,6 +1018,79 @@ func testFailFast(t *testing.T, e env) {
 	}
 
 	awaitNewConnLogOutput()
+}
+
+func TestServiceConfig(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServiceConfig(t, e)
+	}
+}
+
+func testServiceConfig(t *testing.T, e env) {
+	te := newTest(t, e)
+	ch := make(chan grpc.ServiceConfig)
+	te.sc = ch
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	defer te.tearDown()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mc := grpc.MethodConfig{
+			WaitForReady: true,
+			Timeout:      time.Millisecond,
+		}
+		m := make(map[string]grpc.MethodConfig)
+		m["/grpc.testing.TestService/EmptyCall"] = mc
+		m["/grpc.testing.TestService/FullDuplexCall"] = mc
+		sc := grpc.ServiceConfig{
+			Methods: m,
+		}
+		ch <- sc
+	}()
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+	wg.Wait()
+	// Generate a service config update.
+	mc := grpc.MethodConfig{
+		WaitForReady: false,
+	}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+	// Loop until the new update becomes effective.
+	for {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+			continue
+		}
+		break
+	}
+	// The following RPCs are expected to become fail-fast.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	}
+	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.Unavailable)
+	}
 }
 
 func TestTap(t *testing.T) {
