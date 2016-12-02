@@ -40,6 +40,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
+import com.google.errorprone.annotations.ForOverride;
 
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
@@ -469,23 +470,27 @@ final class InternalSubchannel implements WithLogId {
      * Called when the subchannel is terminated, which means it's shut down and all transports
      * have been terminated.
      */
-    public void onTerminated(InternalSubchannel is) { }
+    @ForOverride
+    void onTerminated(InternalSubchannel is) { }
 
     /**
      * Called when the subchannel's connectivity state has changed.
      */
-    public void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) { }
+    @ForOverride
+    void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) { }
 
     /**
      * Called when the subchannel's in-use state has changed to true, which means at least one
      * transport is in use.
      */
-    public void onInUse(InternalSubchannel is) { }
+    @ForOverride
+    void onInUse(InternalSubchannel is) { }
 
     /**
      * Called when the subchannel's in-use state has changed to false, which means no transport is
      * in use.
      */
-    public void onNotInUse(InternalSubchannel is) { }
+    @ForOverride
+    void onNotInUse(InternalSubchannel is) { }
   }
 }
