@@ -320,11 +320,14 @@ public class MessageFramer {
 
   /** OutputStream whose write()s are passed to the framer. */
   private class OutputStreamAdapter extends OutputStream {
-    private final byte[] singleByte = new byte[1];
-
+    /**
+     * This is slow, don't call it.  If you care about write overhead, use a BufferedOutputStream.
+     * Better yet, you can use your own single byte buffer and call
+     * {@link #write(byte[], int, int)}.
+     */
     @Override
     public void write(int b) {
-      singleByte[0] = (byte) b;
+      byte[] singleByte = new byte[]{(byte)b};
       write(singleByte, 0, 1);
     }
 
@@ -344,7 +347,7 @@ public class MessageFramer {
 
     /**
      * This is slow, don't call it.  If you care about write overhead, use a BufferedOutputStream.
-     * Better yet, you can use your own single byte buffer and called
+     * Better yet, you can use your own single byte buffer and call
      * {@link #write(byte[], int, int)}.
      */
     @Override
