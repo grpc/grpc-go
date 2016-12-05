@@ -557,7 +557,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	req := &testpb.SimpleRequest{
 		ResponseStatus: respStatus,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || err.Error() != expectedErr.Error() {
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || err.Error() != expectedErr.Error() || grpc.ErrorDesc(err) != grpc.ErrorDesc(expectedErr) {
 		grpclog.Fatalf("%v.UnaryCall(_, %v) = _, %v, want _, %v", tc, req, err, expectedErr)
 	}
 	// Test FullDuplexCall.
@@ -574,7 +574,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	if err := stream.CloseSend(); err != nil {
 		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
 	}
-	if _, err = stream.Recv(); err.Error() != expectedErr.Error() {
+	if _, err = stream.Recv(); err.Error() != expectedErr.Error() || grpc.ErrorDesc(err) != grpc.ErrorDesc(expectedErr) {
 		grpclog.Fatalf("%v.Recv() returned error %v, want %v", stream, err, expectedErr)
 	}
 }
