@@ -34,7 +34,6 @@
 package grpc
 
 import (
-	"sync"
 	"testing"
 
 	"google.golang.org/grpc/test/codec_perf"
