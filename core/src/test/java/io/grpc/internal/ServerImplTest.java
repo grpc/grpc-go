@@ -77,8 +77,8 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
 import io.grpc.internal.testing.CensusTestUtils;
+import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
 import io.grpc.util.MutableHandlerRegistry;
 
 import org.junit.After;
@@ -953,6 +953,11 @@ public class ServerImplTest {
     @Override
     public void shutdownNow(Status status) {
       listener.transportTerminated();
+    }
+
+    @Override
+    public LogId getLogId() {
+      throw new UnsupportedOperationException();
     }
   }
 }

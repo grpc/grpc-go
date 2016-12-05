@@ -34,6 +34,7 @@ package io.grpc.netty;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
+import io.grpc.internal.LogId;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.Channel;
@@ -50,6 +51,7 @@ import java.util.logging.Logger;
 class NettyServerTransport implements ServerTransport {
   private static final Logger log = Logger.getLogger(NettyServerTransport.class.getName());
 
+  private final LogId logId = LogId.allocate(getClass().getName());
   private final Channel channel;
   private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreams;
@@ -101,6 +103,11 @@ class NettyServerTransport implements ServerTransport {
     if (channel.isOpen()) {
       channel.writeAndFlush(new ForcefulCloseCommand(reason));
     }
+  }
+
+  @Override
+  public LogId getLogId() {
+    return logId;
   }
 
   /**

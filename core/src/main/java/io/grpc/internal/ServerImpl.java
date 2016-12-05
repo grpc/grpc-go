@@ -84,9 +84,10 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Starting the server starts the underlying transport for servicing requests. Stopping the
  * server stops servicing new requests and waits for all connections to terminate.
  */
-public final class ServerImpl extends io.grpc.Server {
+public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
+  private final LogId logId = LogId.allocate(getClass().getName());
   /** Executor for application processing. Safe to read after {@link #start()}. */
   private Executor executor;
   /** Safe to read after {@link #start()}. */
@@ -481,6 +482,11 @@ public final class ServerImpl extends io.grpc.Server {
       }
       return call.newServerStreamListener(listener);
     }
+  }
+
+  @Override
+  public LogId getLogId() {
+    return logId;
   }
 
   private static class NoopListener implements ServerStreamListener {

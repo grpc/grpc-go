@@ -34,7 +34,7 @@ package io.grpc.internal;
 import io.grpc.Status;
 
 /** An inbound connection. */
-public interface ServerTransport {
+public interface ServerTransport extends WithLogId {
   /**
    * Initiates an orderly shutdown of the transport. Existing streams continue, but new streams will
    * eventually begin failing. New streams "eventually" begin failing because shutdown may need to
