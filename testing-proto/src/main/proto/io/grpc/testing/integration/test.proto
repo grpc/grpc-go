@@ -1,4 +1,3 @@
-
 // Copyright 2015, Google Inc.
 // All rights reserved.
 //
@@ -80,7 +79,7 @@ service TestService {
 // that case.
 service UnimplementedService {
   // A call that no server should implement
-  rpc UnimplementedCall(grpc.testing.Empty) returns(grpc.testing.Empty);  
+  rpc UnimplementedCall(grpc.testing.Empty) returns(grpc.testing.Empty);
 }
 
 // A service used to control reconnect server.
