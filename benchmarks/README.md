@@ -19,7 +19,7 @@ The `C++` counterpart can be found at https://github.com/grpc/grpc/tree/master/t
 
 ## Visualizing the Latency Distribution
 
-The QPS client comes with the option `--dump_histogram=FILE`, if set it serializes the histogram to `FILE` which can then be used with a plotter to visualize the latency distribution. The histogram is stored in the file format of [HdrHistogram](http://hdrhistogram.org/). That way it can be plotted very easily using a browser based tool like http://hdrhistogram.github.io/HdrHistogram/plotFiles.html. Simply upload the generated file and it will generate a beautiful graph for you. It also allows you to plot two or more histograms on the same surface in order two easily compare latency distributions.
+The QPS client comes with the option `--save_histogram=FILE`, if set it serializes the histogram to `FILE` which can then be used with a plotter to visualize the latency distribution. The histogram is stored in the file format of [HdrHistogram](http://hdrhistogram.org/). That way it can be plotted very easily using a browser based tool like http://hdrhistogram.github.io/HdrHistogram/plotFiles.html. Simply upload the generated file and it will generate a beautiful graph for you. It also allows you to plot two or more histograms on the same surface in order two easily compare latency distributions.
 
 ## JVM Options
 
