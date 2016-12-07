@@ -98,25 +98,25 @@ public class InternalSubchannelTest {
   private final InternalSubchannel.Callback mockInternalSubchannelCallback =
       new InternalSubchannel.Callback() {
         @Override
-        public void onTerminated(InternalSubchannel is) {
+        protected void onTerminated(InternalSubchannel is) {
           assertSame(internalSubchannel, is);
           callbackInvokes.add("onTerminated");
         }
 
         @Override
-        public void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) {
+        protected void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) {
           assertSame(internalSubchannel, is);
           callbackInvokes.add("onStateChange:" + newState);
         }
 
         @Override
-        public void onInUse(InternalSubchannel is) {
+        protected void onInUse(InternalSubchannel is) {
           assertSame(internalSubchannel, is);
           callbackInvokes.add("onInUse");
         }
 
         @Override
-        public void onNotInUse(InternalSubchannel is) {
+        protected void onNotInUse(InternalSubchannel is) {
           assertSame(internalSubchannel, is);
           callbackInvokes.add("onNotInUse");
         }
