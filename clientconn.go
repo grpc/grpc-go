@@ -292,7 +292,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		case sc, ok := <-cc.dopts.sc:
 			if ok {
 				cc.sc = sc
-				go cc.scWatcher()
 			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -378,6 +377,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// The lbWatcher goroutine will not be created.
 	if ok {
 		go cc.lbWatcher()
+	}
+
+	if cc.dopts.sc != nil {
+		go cc.scWatcher()
 	}
 	return cc, nil
 }
