@@ -211,6 +211,7 @@ public final class Metadata {
    *
    * @return the parsed metadata entry or null if there are none.
    */
+  @Nullable
   public <T> T get(Key<T> key) {
     for (int i = size - 1; i >= 0; i--) {
       if (bytesEqual(key.asciiName(), name(i))) {
