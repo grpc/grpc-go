@@ -128,13 +128,11 @@ public class Context {
     }
     try {
       Class<?> clazz = Class.forName("io.grpc.ContextStorageOverride");
-      storage = (Storage) clazz.newInstance();
+      storage = (Storage) clazz.getConstructor().newInstance();
       return storage;
     } catch (ClassNotFoundException e) {
       log.log(Level.FINE, "Storage override doesn't exist. Using default.", e);
-    } catch (InstantiationException e) {
-      throw new RuntimeException("Failed to initialize Storage implementation", e);
-    } catch (IllegalAccessException e) {
+    } catch (Exception e) {
       throw new RuntimeException("Failed to initialize Storage implementation", e);
     }
     storage = new ThreadLocalContextStorage();
