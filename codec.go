@@ -58,8 +58,7 @@ type protoCodec struct {
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	var protoMsg = v.(proto.Message)
 	var sizeNeeded = proto.Size(protoMsg)
-	var token = globalBufCacheToken
-	globalBufCacheToken++
+	var token = atomic.AddUint32(&globalBufCacheToken, 1)
 
 	buffer := globalBufAlloc(token)
 
@@ -79,8 +78,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
-	var token = globalBufCacheToken
-	globalBufCacheToken++
+	var token = atomic.AddUint32(&globalBufCacheToken, 1)
 	buffer := globalBufAlloc(token)
 	buffer.SetBuf(data)
 	err := buffer.Unmarshal(v.(proto.Message))
@@ -94,27 +92,27 @@ func (protoCodec) String() string {
 }
 
 var (
-	poolSize            = 64
-	globalBufCacheToken = 0
+	poolSize            = uint32(64)
+	globalBufCacheToken = uint32(0)
 	bufCachePool        = newBufCacheArray(poolSize)
 )
 
-func newBufCacheArray(amount int) []*bufCache {
+func newBufCacheArray(amount uint32) []*bufCache {
 	out := make([]*bufCache, amount)
 
-	for i := 0; i < amount; i++ {
+	for i := uint32(0); i < amount; i++ {
 		out[i] = &bufCache{cache: &ringCache{}}
 	}
 
 	return out
 }
 
-func globalBufAlloc(token int) *proto.Buffer {
+func globalBufAlloc(token uint32) *proto.Buffer {
 	index := token % poolSize
 	return bufCachePool[index].bufAlloc()
 }
 
-func globalBufFree(buf *proto.Buffer, token int) {
+func globalBufFree(buf *proto.Buffer, token uint32) {
 	index := token % poolSize
 	bufCachePool[index].bufFree(buf)
 }
