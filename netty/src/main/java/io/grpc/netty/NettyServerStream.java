@@ -37,7 +37,6 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
-import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
@@ -85,11 +84,6 @@ class NettyServerStream extends AbstractServerStream {
   @Override
   public Attributes attributes() {
     return attributes;
-  }
-
-  @Override
-  public void setListener(ServerStreamListener serverStreamListener) {
-    state.setListener(serverStreamListener);
   }
 
   private class Sink implements AbstractServerStream.Sink {

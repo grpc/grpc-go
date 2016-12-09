@@ -170,6 +170,11 @@ public abstract class AbstractServerStream extends AbstractStream2
   }
 
   @Override
+  public final void setListener(ServerStreamListener serverStreamListener) {
+    transportState().setListener(serverStreamListener);
+  }
+
+  @Override
   public StatsTraceContext statsTraceContext() {
     return statsTraceCtx;
   }
