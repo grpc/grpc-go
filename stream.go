@@ -112,8 +112,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		put func()
 	)
 	c := defaultCallInfo
-	sc, ok := cc.getMethodConfig(method)
-	if ok {
+	if sc, ok := cc.getMethodConfig(method); ok {
 		c.failFast = !sc.WaitForReady
 		if sc.Timeout > 0 {
 			ctx, _ = context.WithTimeout(ctx, sc.Timeout)

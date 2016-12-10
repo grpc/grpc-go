@@ -45,7 +45,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/naming"
 	"google.golang.org/grpc/transport"
 )
 
@@ -90,7 +89,6 @@ type dialOptions struct {
 	cp        Compressor
 	dc        Decompressor
 	bs        backoffStrategy
-	nr        naming.Resolver
 	balancer  Balancer
 	block     bool
 	insecure  bool

@@ -472,7 +472,7 @@ func convertCode(err error) codes.Code {
 	return codes.Unknown
 }
 
-// MethodConfig defines the configuration recommended by the service provides for a
+// MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
 // This is EXPERIMENTAL and subject to change.
 type MethodConfig struct {
@@ -483,7 +483,7 @@ type MethodConfig struct {
 	// Timeout is the default timeout for RPCs sent to this method. The actual
 	// deadline used will be the minimum of the value specified here and the value
 	// set by the application via the gRPC client API.  If either one is not set,
-	// then the other will be used.  If neither is set, then the request has no deadline.
+	// then the other will be used.  If neither is set, then the RPC has no deadline.
 	Timeout time.Duration
 	// MaxReqSize is the maximum allowed payload size for an individual request in a
 	// stream (client->server) in bytes. The size which is measured is the serialized,
@@ -495,12 +495,12 @@ type MethodConfig struct {
 	MaxReqSize uint64
 	// MaxRespSize is the maximum allowed payload size for an individual response in a
 	// stream (server->client) in bytes.
-	// TODO: support his.
+	// TODO: support this.
 	MaxRespSize uint64
 }
 
-// ServiceConfig contains parameters for how clients that connect to the service should
-// behave.
+// ServiceConfig is provided by the service provider and contains parameters for how
+// clients that connect to the service should behave.
 // This is EXPERIMENTAL and subject to change.
 type ServiceConfig struct {
 	// LB is the load balancer the service providers recommends. The balancer specified
