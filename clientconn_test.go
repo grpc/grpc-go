@@ -50,8 +50,8 @@ func TestDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != ErrClientConnTimeout {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
 	}
 }
 
@@ -64,8 +64,8 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != ErrClientConnTimeout {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
 	}
 }
 

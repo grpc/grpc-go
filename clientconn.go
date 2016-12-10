@@ -269,7 +269,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
-	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	defer func() {
 		select {
 		case <-ctx.Done():
@@ -284,6 +283,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 
 	for _, opt := range opts {
 		opt(&cc.dopts)
+	}
+	if cc.dopts.timeout > 0 {
+		cc.ctx, cc.cancel = context.WithTimeout(context.Background(), cc.dopts.timeout)
+	} else {
+		cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	}
 	if cc.dopts.sc != nil {
 		// Wait for the initial service config and start a watcher for
@@ -358,10 +362,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		close(waitC)
 	}()
-	var timeoutCh <-chan time.Time
-	if cc.dopts.timeout > 0 {
-		timeoutCh = time.After(cc.dopts.timeout)
-	}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -369,8 +369,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		if err != nil {
 			return nil, err
 		}
-	case <-timeoutCh:
-		return nil, ErrClientConnTimeout
 	}
 
 	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
