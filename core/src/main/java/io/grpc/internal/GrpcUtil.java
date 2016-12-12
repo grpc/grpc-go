@@ -41,6 +41,8 @@ import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import io.grpc.LoadBalancer2.PickResult;
+import io.grpc.LoadBalancer2.Subchannel;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
@@ -533,6 +535,27 @@ public final class GrpcUtil {
           throw new IllegalArgumentException(String.format("Invalid timeout unit: %s", unit));
       }
     }
+  }
+
+  /**
+   * Returns a transport out of a PickResult, or {@code null} if the result is "buffer".
+   */
+  @Nullable
+  static ClientTransport getTransportFromPickResult(PickResult result, boolean isWaitForReady) {
+    ClientTransport transport;
+    Subchannel subchannel = result.getSubchannel();
+    if (subchannel != null) {
+      transport = ((SubchannelImpl) subchannel).obtainActiveTransport();
+    } else {
+      transport = null;
+    }
+    if (transport != null) {
+      return transport;
+    }
+    if (!result.getStatus().isOk() && !isWaitForReady) {
+      return new FailingClientTransport(result.getStatus());
+    }
+    return null;
   }
 
   private GrpcUtil() {}
