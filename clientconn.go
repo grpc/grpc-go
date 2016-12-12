@@ -286,7 +286,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		opt(&cc.dopts)
 	}
 	if cc.dopts.timeout > 0 {
-		ctx, _ = context.WithTimeout(ctx, cc.dopts.timeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
+		defer cancel()
 	}
 	if cc.dopts.sc != nil {
 		// Wait for the initial service config and start a watcher for
