@@ -33,6 +33,9 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
@@ -55,6 +58,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
@@ -78,6 +82,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
+  private boolean enableKeepAlive;
+  private long keepAliveDelayNanos;
+  private long keepAliveTimeoutNanos;
 
   /**
    * Creates a new builder with the given server address. This factory method is primarily intended
@@ -238,11 +245,38 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     return this;
   }
 
+
+  /**
+   * Enable keepalive with default delay and timeout.
+   */
+  public final NettyChannelBuilder enableKeepAlive(boolean enable) {
+    enableKeepAlive = enable;
+    if (enable) {
+      keepAliveDelayNanos = DEFAULT_KEEPALIVE_DELAY_NANOS;
+      keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+    }
+    return this;
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   */
+  public final NettyChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
+    enableKeepAlive = enable;
+    if (enable) {
+      keepAliveDelayNanos = delayUnit.toNanos(keepAliveDelay);
+      keepAliveTimeoutNanos = timeoutUnit.toNanos(keepAliveTimeout);
+    }
+    return this;
+  }
+
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(
         channelType, channelOptions, negotiationType, protocolNegotiator, sslContext,
-        eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize);
+        eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize,
+        enableKeepAlive, keepAliveDelayNanos, keepAliveTimeoutNanos);
   }
 
   @Override
@@ -302,6 +336,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
+    private boolean enableKeepAlive;
+    private long keepAliveDelayNanos;
+    private long keepAliveTimeoutNanos;
 
     private boolean closed;
 
@@ -309,7 +346,8 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
         NegotiationType negotiationType, ProtocolNegotiator protocolNegotiator,
         SslContext sslContext, EventLoopGroup group, int flowControlWindow, int maxMessageSize,
-        int maxHeaderListSize) {
+        int maxHeaderListSize, boolean enableKeepAlive, long keepAliveDelayNanos,
+        long keepAliveTimeoutNanos) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
@@ -318,6 +356,9 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
       this.maxHeaderListSize = maxHeaderListSize;
+      this.enableKeepAlive = enableKeepAlive;
+      this.keepAliveDelayNanos = keepAliveDelayNanos;
+      this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
         // The group was unspecified, using the shared group.
@@ -345,9 +386,13 @@ public class NettyChannelBuilder extends AbstractManagedChannelImplBuilder<Netty
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
-      return new NettyClientTransport(
+      NettyClientTransport transport = new NettyClientTransport(
           serverAddress, channelType, channelOptions, group, negotiator, flowControlWindow,
           maxMessageSize, maxHeaderListSize, authority, userAgent);
+      if (enableKeepAlive) {
+        transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
+      }
+      return transport;
     }
 
     @Override

@@ -45,6 +45,7 @@ import io.grpc.StatusException;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -84,6 +85,8 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 /**
  * Client-side Netty handler for GRPC processing. All event handlers are executed entirely within
  * the context of the Netty Channel thread.
@@ -106,30 +109,28 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   private final Http2Connection.PropertyKey streamKey;
   private final ClientTransportLifecycleManager lifecycleManager;
+  private final KeepAliveManager keepAliveManager;
   private final Ticker ticker;
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
 
   static NettyClientHandler newHandler(ClientTransportLifecycleManager lifecycleManager,
-                                       int flowControlWindow, int maxHeaderListSize,
-                                       Ticker ticker) {
+      @Nullable KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
+      Ticker ticker) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ClientHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     Http2Connection connection = new DefaultHttp2Connection(false);
 
-    return newHandler(
-        connection, frameReader, frameWriter, lifecycleManager, flowControlWindow, ticker);
+    return newHandler(connection, frameReader, frameWriter, lifecycleManager, keepAliveManager,
+        flowControlWindow, ticker);
   }
 
   @VisibleForTesting
-  static NettyClientHandler newHandler(Http2Connection connection,
-                                       Http2FrameReader frameReader,
-                                       Http2FrameWriter frameWriter,
-                                       ClientTransportLifecycleManager lifecycleManager,
-                                       int flowControlWindow,
-                                       Ticker ticker) {
+  static NettyClientHandler newHandler(Http2Connection connection, Http2FrameReader frameReader,
+      Http2FrameWriter frameWriter, ClientTransportLifecycleManager lifecycleManager,
+      KeepAliveManager keepAliveManager, int flowControlWindow, Ticker ticker) {
     Preconditions.checkNotNull(connection, "connection");
     Preconditions.checkNotNull(frameReader, "frameReader");
     Preconditions.checkNotNull(lifecycleManager, "lifecycleManager");
@@ -155,15 +156,16 @@ class NettyClientHandler extends AbstractNettyHandler {
     settings.initialWindowSize(flowControlWindow);
     settings.maxConcurrentStreams(0);
 
-    return new NettyClientHandler(decoder, encoder, settings, lifecycleManager, ticker);
+    return new NettyClientHandler(decoder, encoder, settings, lifecycleManager, keepAliveManager,
+        ticker);
   }
 
-  private NettyClientHandler(Http2ConnectionDecoder decoder,
-                             StreamBufferingEncoder encoder, Http2Settings settings,
-                             ClientTransportLifecycleManager lifecycleManager,
-                             Ticker ticker) {
+  private NettyClientHandler(Http2ConnectionDecoder decoder, StreamBufferingEncoder encoder,
+      Http2Settings settings, ClientTransportLifecycleManager lifecycleManager,
+      KeepAliveManager keepAliveManager, Ticker ticker) {
     super(decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
+    this.keepAliveManager = keepAliveManager;
     this.ticker = ticker;
 
     // Set the frame listener on the decoder.
@@ -187,6 +189,22 @@ class NettyClientHandler extends AbstractNettyHandler {
       public void onStreamRemoved(Http2Stream stream) {
         if (connection().numActiveStreams() == 0) {
           NettyClientHandler.this.lifecycleManager.notifyInUse(false);
+        }
+      }
+
+      @Override
+      public void onStreamActive(Http2Stream stream) {
+        if (NettyClientHandler.this.keepAliveManager != null
+            && connection().numActiveStreams() == 1) {
+          NettyClientHandler.this.keepAliveManager.onTransportActive();
+        }
+      }
+
+      @Override
+      public void onStreamClosed(Http2Stream stream) {
+        if (NettyClientHandler.this.keepAliveManager != null
+            && connection().numActiveStreams() == 0) {
+          NettyClientHandler.this.keepAliveManager.onTransportIdle();
         }
       }
     });
@@ -239,6 +257,9 @@ class NettyClientHandler extends AbstractNettyHandler {
   private void onHeadersRead(int streamId, Http2Headers headers, boolean endStream) {
     NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
     stream.transportHeadersReceived(headers, endStream);
+    if (keepAliveManager != null) {
+      keepAliveManager.onDataReceived();
+    }
   }
 
   /**
@@ -248,6 +269,9 @@ class NettyClientHandler extends AbstractNettyHandler {
     flowControlPing().onDataRead(data.readableBytes(), padding);
     NettyClientStream.TransportState stream = clientStream(requireHttp2Stream(streamId));
     stream.transportDataReceived(data, endOfStream);
+    if (keepAliveManager != null) {
+      keepAliveManager.onDataReceived();
+    }
   }
 
 
@@ -260,6 +284,9 @@ class NettyClientHandler extends AbstractNettyHandler {
       Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
           .augmentDescription("Received Rst Stream");
       stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+      if (keepAliveManager != null) {
+        keepAliveManager.onDataReceived();
+      }
     }
   }
 
@@ -296,6 +323,9 @@ class NettyClientHandler extends AbstractNettyHandler {
     } finally {
       // Close any open streams
       super.channelInactive(ctx);
+      if (keepAliveManager != null) {
+        keepAliveManager.onTransportShutdown();
+      }
     }
   }
 
@@ -635,6 +665,16 @@ class NettyClientHandler extends AbstractNettyHandler {
         }
       } else {
         logger.warning("Received unexpected ping ack. No ping outstanding");
+      }
+      if (keepAliveManager != null) {
+        keepAliveManager.onDataReceived();
+      }
+    }
+
+    @Override
+    public void onPingRead(ChannelHandlerContext ctx, ByteBuf data) throws Http2Exception {
+      if (keepAliveManager != null) {
+        keepAliveManager.onDataReceived();
       }
     }
   }

@@ -51,9 +51,13 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.base.Ticker;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -64,6 +68,7 @@ import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -85,7 +90,9 @@ import io.netty.util.AsciiString;
 
 import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -93,6 +100,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.io.InputStream;
+import java.util.List;
 
 /**
  * Tests for {@link NettyClientHandler}.
@@ -105,7 +113,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int streamId = 3;
   private ClientTransportLifecycleManager lifecycleManager;
+  private KeepAliveManager mockKeepAliveManager = null;
+  private List<String> setKeepaliveManagerFor = ImmutableList.of("cancelShouldSucceed",
+      "sendFrameShouldSucceed", "channelShutdownShouldCancelBufferedStreams",
+      "createIncrementsIdsForActualAndBufferdStreams", "dataPingAckIsRecognized");
 
+  @Rule
+  public TestName testNameRule = new TestName();
   @Mock
   private NettyClientTransport.Listener listener;
   @Mock
@@ -118,6 +132,11 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
     lifecycleManager = new ClientTransportLifecycleManager(listener);
+    // This mocks the keepalive manager only for there's in which we verify it. For other tests
+    // it'll be null which will be testing if we behave correctly when it's not present.
+    if (setKeepaliveManagerFor.contains(testNameRule.getMethodName())) {
+      mockKeepAliveManager = mock(KeepAliveManager.class);
+    }
 
     initChannel(new GrpcHttp2ClientHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
     streamTransportState = new TransportStateImpl(handler(), DEFAULT_MAX_MESSAGE_SIZE);
@@ -166,6 +185,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
 
     verifyWrite().writeRstStream(eq(ctx()), eq(3), eq(Http2Error.CANCEL.code()),
         any(ChannelPromise.class));
+    verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
+    verify(mockKeepAliveManager, times(1)).onTransportIdle(); // onStreamClosed
+    verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
   @Test
@@ -232,6 +254,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertTrue(future.isSuccess());
     verifyWrite().writeData(eq(ctx()), eq(3), eq(content()), eq(0), eq(true),
         any(ChannelPromise.class));
+    verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
+    verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
   @Test
@@ -343,6 +367,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     handler().channelInactive(ctx());
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
+    verify(mockKeepAliveManager, times(1)).onTransportShutdown(); // channelInactive
+    verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
   @Test
@@ -385,6 +411,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     streamTransportState.setListener(streamListener);
     enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     assertEquals(7, streamTransportState.id());
+
+    verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
+    verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
   @Test
@@ -486,6 +515,14 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     assertEquals(1, callback.invocationCount);
   }
 
+  @Override
+  public void dataPingAckIsRecognized() throws Exception {
+    super.dataPingAckIsRecognized();
+    verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
+    verify(mockKeepAliveManager, times(2)).onDataReceived(); // onDataRead, onPingAckRead
+    verifyNoMoreInteractions(mockKeepAliveManager);
+  }
+
   @Test
   public void exceptionCaughtShouldCloseConnection() throws Exception {
     handler().exceptionCaught(ctx(), new RuntimeException("fake exception"));
@@ -536,7 +573,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     };
 
     return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
-        lifecycleManager, flowControlWindow, ticker);
+        lifecycleManager, mockKeepAliveManager, flowControlWindow, ticker);
   }
 
   @Override

@@ -46,6 +46,7 @@ import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
 import io.netty.bootstrap.Bootstrap;
@@ -81,6 +82,10 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
+  private KeepAliveManager keepAliveManager;
+  private boolean enableKeepAlive;
+  private long keepAliveDelayNanos;
+  private long keepAliveTimeoutNanos;
 
   private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
@@ -105,6 +110,15 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.maxHeaderListSize = maxHeaderListSize;
     this.authority = new AsciiString(authority);
     this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   */
+  void enableKeepAlive(boolean enable, long keepAliveDelayNanos, long keepAliveTimeoutNanos) {
+    enableKeepAlive = enable;
+    this.keepAliveDelayNanos = keepAliveDelayNanos;
+    this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
   }
 
   @Override
@@ -153,6 +167,11 @@ class NettyClientTransport implements ConnectionClientTransport {
   public Runnable start(Listener transportListener) {
     lifecycleManager = new ClientTransportLifecycleManager(
         Preconditions.checkNotNull(transportListener, "listener"));
+
+    if (enableKeepAlive) {
+      keepAliveManager = new KeepAliveManager(this, channel.eventLoop(), keepAliveDelayNanos,
+          keepAliveTimeoutNanos);
+    }
 
     handler = newHandler();
     HandlerSettings.setAutoWindow(handler);
@@ -283,7 +302,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   private NettyClientHandler newHandler() {
-    return NettyClientHandler
-        .newHandler(lifecycleManager, flowControlWindow, maxHeaderListSize, Ticker.systemTicker());
+    return NettyClientHandler.newHandler(lifecycleManager, keepAliveManager, flowControlWindow,
+        maxHeaderListSize, Ticker.systemTicker());
   }
 }
