@@ -270,6 +270,15 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	for _, opt := range opts {
+		opt(&cc.dopts)
+	}
+	if cc.dopts.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
+		defer cancel()
+	}
+
 	defer func() {
 		select {
 		case <-ctx.Done():
@@ -282,14 +291,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
-	for _, opt := range opts {
-		opt(&cc.dopts)
-	}
-	if cc.dopts.timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
-		defer cancel()
-	}
 	if cc.dopts.sc != nil {
 		// Wait for the initial service config and start a watcher for
 		// its following updates.
