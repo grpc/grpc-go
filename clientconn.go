@@ -54,6 +54,8 @@ var (
 	ErrClientConnClosing = errors.New("grpc: the client connection is closing")
 	// ErrClientConnTimeout indicates that the ClientConn cannot establish the
 	// underlying connections within the specified timeout.
+	// DEPRECATED: Please use context.DeadlineExceeded instead. This error will be
+	// removed in Q1 2017.
 	ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
 	// errNoTransportSecurity indicates that there is no transport security
@@ -267,6 +269,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		target: target,
 		conns:  make(map[Address]*addrConn),
 	}
+	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 	defer func() {
 		select {
 		case <-ctx.Done():
@@ -283,9 +286,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		opt(&cc.dopts)
 	}
 	if cc.dopts.timeout > 0 {
-		cc.ctx, cc.cancel = context.WithTimeout(context.Background(), cc.dopts.timeout)
-	} else {
-		cc.ctx, cc.cancel = context.WithCancel(context.Background())
+		ctx, _ = context.WithTimeout(ctx, cc.dopts.timeout)
 	}
 	if cc.dopts.sc != nil {
 		// Wait for the initial service config and start a watcher for
