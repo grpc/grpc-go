@@ -2423,32 +2423,35 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
-		var index int
-		for index < len(reqSizes) {
-			respParam := []*testpb.ResponseParameters{
-				{
-					Size: proto.Int32(int32(respSizes[index])),
-				},
-			}
+		err = func() error {
+			for index := 0; index < len(reqSizes); index++ {
+				respParam := []*testpb.ResponseParameters{
+					{
+						Size: proto.Int32(int32(respSizes[index])),
+					},
+				}
 
-			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
-			if err != nil {
-				t.Fatal(err)
-			}
+				payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+				if err != nil {
+					return err
+				}
 
-			req := &testpb.StreamingOutputCallRequest{
-				ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
-				ResponseParameters: respParam,
-				Payload:            payload,
+				req := &testpb.StreamingOutputCallRequest{
+					ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+					ResponseParameters: respParam,
+					Payload:            payload,
+				}
+				if err := stream.Send(req); err != nil {
+					return fmt.Errorf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+				}
 			}
-			if err := stream.Send(req); err != nil {
-				t.Errorf("%v.Send(%v) = %v, want <nil>", stream, req, err)
-				return
-			}
-			index++
-		}
+			return nil
+		}()
 		// Tell the server we're done sending args.
 		stream.CloseSend()
+		if err != nil {
+			t.Error(err)
+		}
 	}()
 	for {
 		if _, err := stream.Recv(); err != nil {
@@ -2844,7 +2847,8 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 			defer wg.Done()
 			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 314)
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			req := &testpb.SimpleRequest{
 				ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
