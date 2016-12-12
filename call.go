@@ -148,7 +148,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	if sc, ok := cc.getMethodConfig(method); ok {
 		c.failFast = !sc.WaitForReady
 		if sc.Timeout > 0 {
-			ctx, _ = context.WithTimeout(ctx, sc.Timeout)
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, sc.Timeout)
+			defer cancel()
 		}
 	}
 	for _, o := range opts {
