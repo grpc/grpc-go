@@ -690,139 +690,137 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	p := &parser{r: stream}
-	for { // TODO: delete
-		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
+	pf, req, err := p.recvMsg(s.opts.maxMsgSize)
+	if err == io.EOF {
+		// The entire stream is done (for unary RPC only).
+		return err
+	}
+	if err == io.ErrUnexpectedEOF {
+		err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
+	}
+	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, st); e != nil {
+				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+			}
+		} else {
+			switch st := err.(type) {
+			case transport.ConnectionError:
+				// Nothing to do here.
+			case transport.StreamError:
+				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+				}
+			default:
+				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
+			}
+		}
+		return err
+	}
+
+	if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
+		if st, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, st); e != nil {
+				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+			}
+			return err
+		}
+		if e := t.WriteStatus(stream, status.New(codes.Internal, err.Error())); e != nil {
+			grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+		}
+
+		// TODO checkRecvPayload always return RPC error. Add a return here if necessary.
+	}
+	var inPayload *stats.InPayload
+	if sh != nil {
+		inPayload = &stats.InPayload{
+			RecvTime: time.Now(),
+		}
+	}
+	df := func(v interface{}) error {
+		if inPayload != nil {
+			inPayload.WireLength = len(req)
+		}
+		if pf == compressionMade {
+			var err error
+			req, err = s.opts.dc.Do(bytes.NewReader(req))
+			if err != nil {
+				return Errorf(codes.Internal, err.Error())
+			}
+		}
+		if len(req) > s.opts.maxMsgSize {
+			// TODO: Revisit the error code. Currently keep it consistent with
+			// java implementation.
+			return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
+		}
+		if err := s.opts.codec.Unmarshal(req, v); err != nil {
+			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
+		}
+		if inPayload != nil {
+			inPayload.Payload = v
+			inPayload.Data = req
+			inPayload.Length = len(req)
+			sh.HandleRPC(stream.Context(), inPayload)
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
+		}
+		return nil
+	}
+	reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
+	if appErr != nil {
+		appStatus, ok := status.FromError(appErr)
+		if !ok {
+			// Convert appErr if it is not a grpc status error.
+			appErr = status.Error(convertCode(appErr), appErr.Error())
+			appStatus, _ = status.FromError(appErr)
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
+			trInfo.tr.SetError()
+		}
+		if e := t.WriteStatus(stream, appStatus); e != nil {
+			grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+		}
+		return appErr
+	}
+	if trInfo != nil {
+		trInfo.tr.LazyLog(stringer("OK"), false)
+	}
+	opts := &transport.Options{
+		Last:  true,
+		Delay: false,
+	}
+	if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
 		}
-		if err == io.ErrUnexpectedEOF {
-			err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
-		}
-		if err != nil {
-			if st, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, st); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
-			} else {
-				switch st := err.(type) {
-				case transport.ConnectionError:
-					// Nothing to do here.
-				case transport.StreamError:
-					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-					}
-				default:
-					panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
-				}
-			}
-			return err
-		}
-
-		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
-			if st, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, st); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
-				return err
-			}
-			if e := t.WriteStatus(stream, status.New(codes.Internal, err.Error())); e != nil {
-				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-			}
-
-			// TODO checkRecvPayload always return RPC error. Add a return here if necessary.
-		}
-		var inPayload *stats.InPayload
-		if sh != nil {
-			inPayload = &stats.InPayload{
-				RecvTime: time.Now(),
-			}
-		}
-		df := func(v interface{}) error {
-			if inPayload != nil {
-				inPayload.WireLength = len(req)
-			}
-			if pf == compressionMade {
-				var err error
-				req, err = s.opts.dc.Do(bytes.NewReader(req))
-				if err != nil {
-					return Errorf(codes.Internal, err.Error())
-				}
-			}
-			if len(req) > s.opts.maxMsgSize {
-				// TODO: Revisit the error code. Currently keep it consistent with
-				// java implementation.
-				return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
-			}
-			if err := s.opts.codec.Unmarshal(req, v); err != nil {
-				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
-			}
-			if inPayload != nil {
-				inPayload.Payload = v
-				inPayload.Data = req
-				inPayload.Length = len(req)
-				sh.HandleRPC(stream.Context(), inPayload)
-			}
-			if trInfo != nil {
-				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
-			}
-			return nil
-		}
-		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
-		if appErr != nil {
-			appStatus, ok := status.FromError(appErr)
-			if !ok {
-				// Convert appErr if it is not a grpc status error.
-				appErr = status.Error(convertCode(appErr), appErr.Error())
-				appStatus, _ = status.FromError(appErr)
-			}
-			if trInfo != nil {
-				trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
-				trInfo.tr.SetError()
-			}
-			if e := t.WriteStatus(stream, appStatus); e != nil {
+		if s, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, s); e != nil {
 				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
 			}
-			return appErr
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(stringer("OK"), false)
-		}
-		opts := &transport.Options{
-			Last:  true,
-			Delay: false,
-		}
-		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
-			if err == io.EOF {
-				// The entire stream is done (for unary RPC only).
-				return err
-			}
-			if s, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, s); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+		} else {
+			switch st := err.(type) {
+			case transport.ConnectionError:
+				// Nothing to do here.
+			case transport.StreamError:
+				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
-			} else {
-				switch st := err.(type) {
-				case transport.ConnectionError:
-					// Nothing to do here.
-				case transport.StreamError:
-					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-					}
-				default:
-					panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
-				}
+			default:
+				panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
 			}
-			return err
 		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
-		}
-		// TODO: Should we be logging if writing status failed here, like above?
-		// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
-		// error or allow the stats handler to see it?
-		return t.WriteStatus(stream, status.New(codes.OK, ""))
+		return err
 	}
+	if trInfo != nil {
+		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
+	}
+	// TODO: Should we be logging if writing status failed here, like above?
+	// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
+	// error or allow the stats handler to see it?
+	return t.WriteStatus(stream, status.New(codes.OK, ""))
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
