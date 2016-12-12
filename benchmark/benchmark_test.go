@@ -82,11 +82,11 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
+		stream, err := tc.StreamingCall(context.Background())
+		if err != nil {
+			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		}
 		go func() {
-			stream, err := tc.StreamingCall(context.Background())
-			if err != nil {
-				b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
-			}
 			for range ch {
 				start := time.Now()
 				streamCaller(stream)
