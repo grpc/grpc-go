@@ -95,7 +95,7 @@ type dialOptions struct {
 	block     bool
 	insecure  bool
 	timeout   time.Duration
-	sc        <-chan ServiceConfig
+	scChan    <-chan ServiceConfig
 	copts     transport.ConnectOptions
 }
 
@@ -135,7 +135,7 @@ func WithBalancer(b Balancer) DialOption {
 // WithServiceConfig returns a DialOption which has a channel to read the service configuration.
 func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	return func(o *dialOptions) {
-		o.sc = c
+		o.scChan = c
 	}
 }
 
@@ -291,11 +291,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
-	if cc.dopts.sc != nil {
-		// Wait for the initial service config and start a watcher for
-		// its following updates.
+	if cc.dopts.scChan != nil {
+		// Wait for the initial service config.
 		select {
-		case sc, ok := <-cc.dopts.sc:
+		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = sc
 			}
@@ -324,15 +323,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	waitC := make(chan error, 1)
 	go func() {
 		var addrs []Address
-		if cc.dopts.balancer == nil {
-			if cc.sc.LB != nil {
-				cc.dopts.balancer = cc.sc.LB
-			} else {
-				// Connect to target directly if balancer is nil.
-				addrs = append(addrs, Address{Addr: target})
-			}
+		if cc.dopts.balancer == nil && cc.sc.LB != nil {
+			cc.dopts.balancer = cc.sc.LB
 		}
-		if cc.dopts.balancer != nil {
+		if cc.dopts.balancer == nil {
+			// Connect to target directly if balancer is nil.
+			addrs = append(addrs, Address{Addr: target})
+		} else {
 			var credsClone credentials.TransportCredentials
 			if creds != nil {
 				credsClone = creds.Clone()
@@ -379,7 +376,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.lbWatcher()
 	}
 
-	if cc.dopts.sc != nil {
+	if cc.dopts.scChan != nil {
 		go cc.scWatcher()
 	}
 	return cc, nil
@@ -470,7 +467,7 @@ func (cc *ClientConn) lbWatcher() {
 func (cc *ClientConn) scWatcher() {
 	for {
 		select {
-		case sc, ok := <-cc.dopts.sc:
+		case sc, ok := <-cc.dopts.scChan:
 			if !ok {
 				return
 			}
