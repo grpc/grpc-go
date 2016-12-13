@@ -1,5 +1,7 @@
 # Mocking Service for gRPC
 
+Example code: examples/helloworld/mock
+
 ## Why?
 
 To test client-side logic without the overhead of connecting to a real server. Mocking enables users to write light-weight unit tests to check functionalities on client-side without invoking RPC calls to a server. 
@@ -86,33 +88,33 @@ mockGreeterClient.EXPECT().SayHello(
 ).Return(&helloworld.HelloReply{Message: “Mocked RPC”},nil) 
 ```
 
-gomock.Any() indicates the mocked instance that the parameter can have any value or type. We can indicate specific values for built-in types with gomock.Eq().
+gomock.Any() indicates that the parameter can have any value or type. We can indicate specific values for built-in types with gomock.Eq().
 However, if the test code needs to specify the parameter to have a proto message type, we can replace gomock.Any() with an instance of a struct that implements gomock.Matcher interface.
 
 ```Go
 type rpcMsg struct {
-        msg proto.Message
+    msg proto.Message
 }
 
 func (r *rpcMsg) Matches(msg interface{}) bool {
-        m, ok := msg.(proto.Message)
-        if !ok {
-                return false
-        }
-        return proto.Equal(m, r.msg)
+    m, ok := msg.(proto.Message)
+    if !ok {
+        return false
+    }
+    return proto.Equal(m, r.msg)
 }
 
 func (r *rpcMsg) String() string {
-        return fmt.Sprintf("is %s", r.msg)
+    return fmt.Sprintf("is %s", r.msg)
 }
 
 ...
 
 req := &helloworld.HelloRequest{Name: "unit_test"}
-        mockGreeterClient.EXPECT().SayHello(
-                gomock.Any(),
-                &rpcMsg{msg: req},
-        ).Return(&helloworld.HelloReply{Message: "Mocked Interface"}, nil)
+mockGreeterClient.EXPECT().SayHello(
+    gomock.Any(),
+    &rpcMsg{msg: req},
+).Return(&helloworld.HelloReply{Message: "Mocked Interface"}, nil)
 ```
 
 
