@@ -331,6 +331,15 @@ public class Context {
   }
 
   /**
+   * Create a new context with the given key value set. The new context will cascade cancellation
+   * from its parent.
+   */
+  public <V1, V2, V3, V4> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2,
+      Key<V3> k3, V3 v3, Key<V4> k4, V4 v4) {
+    return new Context(this, new Object[][]{{k1, v1}, {k2, v2}, {k3, v3}, {k4, v4}});
+  }
+
+  /**
    * Create a new context which propagates the values of this context but does not cascade its
    * cancellation.
    */

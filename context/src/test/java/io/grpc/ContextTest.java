@@ -78,6 +78,7 @@ public class ContextTest {
   private static final Context.Key<String> FOOD = Context.keyWithDefault("food", "lasagna");
   private static final Context.Key<String> COLOR = Context.key("color");
   private static final Context.Key<Object> FAVORITE = Context.key("favorite");
+  private static final Context.Key<Integer> LUCKY = Context.key("lucky");
 
   private Context listenerNotifedContext;
   private CountDownLatch deadlineLatch = new CountDownLatch(1);
@@ -242,6 +243,23 @@ public class ContextTest {
     assertEquals("cheese", FOOD.get());
     assertEquals("blue", COLOR.get());
     assertEquals(fav, FAVORITE.get());
+
+    base.attach();
+  }
+
+  @Test
+  public void withValuesFour() {
+    Object fav = new Object();
+    Context base = Context.current().withValues(PET, "dog", COLOR, "blue");
+    Context child = base.withValues(PET, "cat", FOOD, "cheese", FAVORITE, fav, LUCKY, 7);
+
+    child.attach();
+
+    assertEquals("cat", PET.get());
+    assertEquals("cheese", FOOD.get());
+    assertEquals("blue", COLOR.get());
+    assertEquals(fav, FAVORITE.get());
+    assertEquals(7, (int) LUCKY.get());
 
     base.attach();
   }
