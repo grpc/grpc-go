@@ -33,10 +33,10 @@ package io.grpc.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
 import static org.mockito.Mockito.mock;
 
 import io.grpc.internal.ClientTransportFactory;
+import io.grpc.netty.InternalNettyChannelBuilder.OverrideAuthorityChecker;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.handler.ssl.SslContext;
 
@@ -59,13 +59,13 @@ public class NettyChannelBuilderTest {
 
   @Test
   public void overrideAllowsInvalidAuthority() {
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){}) {
+    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
+    InternalNettyChannelBuilder.overrideAuthorityChecker(builder, new OverrideAuthorityChecker() {
       @Override
-      protected String checkAuthority(String authority) {
+      public String checkAuthority(String authority) {
         return authority;
       }
-    };
-
+    });
     ClientTransportFactory factory = builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
