@@ -115,4 +115,5 @@ req := &helloworld.HelloRequest{Name: "unit_test"}
         ).Return(&helloworld.HelloReply{Message: "Mocked Interface"}, nil)
 ```
 
-This document is a brief introduction to how gRPC services can be mocked using Gomock.
+
+
