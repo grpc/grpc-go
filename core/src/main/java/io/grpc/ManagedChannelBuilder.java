@@ -73,7 +73,6 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443"}</li>
    * </ul>
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1773")
   public static ManagedChannelBuilder<?> forTarget(String target) {
     return ManagedChannelProvider.provider().builderForTarget(target);
   }
