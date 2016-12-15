@@ -53,6 +53,7 @@ import io.grpc.reflection.v1alpha.ServerReflectionGrpc;
 import io.grpc.reflection.v1alpha.ServerReflectionRequest;
 import io.grpc.reflection.v1alpha.ServerReflectionResponse;
 import io.grpc.reflection.v1alpha.ServiceResponse;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
 import java.util.HashMap;
@@ -88,18 +89,30 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
   @Override
   public StreamObserver<ServerReflectionRequest> serverReflectionInfo(
       final StreamObserver<ServerReflectionResponse> responseObserver) {
-    return new ProtoReflectionStreamObserver(responseObserver);
+    final ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver =
+        (ServerCallStreamObserver<ServerReflectionResponse>) responseObserver;
+    ProtoReflectionStreamObserver requestObserver =
+        new ProtoReflectionStreamObserver(serverCallStreamObserver);
+    serverCallStreamObserver.setOnReadyHandler(requestObserver);
+    serverCallStreamObserver.disableAutoInboundFlowControl();
+    serverCallStreamObserver.request(1);
+    return requestObserver;
   }
 
-  private class ProtoReflectionStreamObserver implements StreamObserver<ServerReflectionRequest> {
-    private final StreamObserver<ServerReflectionResponse> responseObserver;
+  private class ProtoReflectionStreamObserver implements Runnable,
+      StreamObserver<ServerReflectionRequest> {
+    private final ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver;
     private Set<String> serviceNames;
     private Map<String, FileDescriptor> fileDescriptorsByName;
     private Map<String, FileDescriptor> fileDescriptorsBySymbol;
     private Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber;
 
-    ProtoReflectionStreamObserver(StreamObserver<ServerReflectionResponse> responseObserver) {
-      this.responseObserver = responseObserver;
+    private boolean closeAfterSend = false;
+    private ServerReflectionRequest request;
+
+    ProtoReflectionStreamObserver(
+        ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver) {
+      this.serverCallStreamObserver = serverCallStreamObserver;
     }
 
     private void processExtension(FieldDescriptor extension, FileDescriptor fd) {
@@ -201,44 +214,69 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
     }
 
     @Override
+    public void run() {
+      if (request != null) {
+        handleReflectionRequest();
+      }
+    }
+
+    @Override
     public void onNext(ServerReflectionRequest request) {
-      initFileDescriptorMaps();
-      switch (request.getMessageRequestCase()) {
-        case FILE_BY_FILENAME:
-          getFileByName(request);
-          return;
-        case FILE_CONTAINING_SYMBOL:
-          getFileContainingSymbol(request);
-          return;
-        case FILE_CONTAINING_EXTENSION:
-          getFileByExtension(request);
-          return;
-        case ALL_EXTENSION_NUMBERS_OF_TYPE:
-          getAllExtensions(request);
-          return;
-        case LIST_SERVICES:
-          listServices(request);
-          return;
-        default:
-          sendErrorResponse(request, Status.UNIMPLEMENTED, "");
+      Preconditions.checkState(this.request == null);
+      this.request = request;
+      handleReflectionRequest();
+    }
+
+    private void handleReflectionRequest() {
+      if (serverCallStreamObserver.isReady()) {
+        initFileDescriptorMaps();
+        switch (request.getMessageRequestCase()) {
+          case FILE_BY_FILENAME:
+            getFileByName(request);
+            break;
+          case FILE_CONTAINING_SYMBOL:
+            getFileContainingSymbol(request);
+            break;
+          case FILE_CONTAINING_EXTENSION:
+            getFileByExtension(request);
+            break;
+          case ALL_EXTENSION_NUMBERS_OF_TYPE:
+            getAllExtensions(request);
+            break;
+          case LIST_SERVICES:
+            listServices(request);
+            break;
+          default:
+            sendErrorResponse(request, Status.UNIMPLEMENTED, "");
+        }
+        request = null;
+        if (closeAfterSend) {
+          serverCallStreamObserver.onCompleted();
+        } else {
+          serverCallStreamObserver.request(1);
+        }
       }
     }
 
     @Override
     public void onCompleted() {
-      responseObserver.onCompleted();
+      if (request != null) {
+        closeAfterSend = true;
+      } else {
+        serverCallStreamObserver.onCompleted();
+      }
     }
 
     @Override
     public void onError(Throwable cause) {
-      responseObserver.onError(cause);
+      serverCallStreamObserver.onError(cause);
     }
 
     private void getFileByName(ServerReflectionRequest request) {
       String name = request.getFileByFilename();
       FileDescriptor fd = fileDescriptorsByName.get(name);
       if (fd != null) {
-        responseObserver.onNext(createServerReflectionResponse(request, fd));
+        serverCallStreamObserver.onNext(createServerReflectionResponse(request, fd));
       } else {
         sendErrorResponse(request, Status.NOT_FOUND, "File not found.");
       }
@@ -248,7 +286,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       String symbol = request.getFileContainingSymbol();
       if (fileDescriptorsBySymbol.containsKey(symbol)) {
         FileDescriptor fd = fileDescriptorsBySymbol.get(symbol);
-        responseObserver.onNext(createServerReflectionResponse(request, fd));
+        serverCallStreamObserver.onNext(createServerReflectionResponse(request, fd));
         return;
       }
       sendErrorResponse(request, Status.NOT_FOUND, "Symbol not found.");
@@ -262,7 +300,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
           && fileDescriptorsByExtensionAndNumber
           .get(containingType)
           .containsKey(extensionNumber)) {
-        responseObserver.onNext(
+        serverCallStreamObserver.onNext(
             createServerReflectionResponse(
                 request,
                 fileDescriptorsByExtensionAndNumber.get(containingType).get(extensionNumber)));
@@ -279,7 +317,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         for (int extensionNumber : fileDescriptorsByExtensionAndNumber.get(type).keySet()) {
           builder.addExtensionNumber(extensionNumber);
         }
-        responseObserver.onNext(
+        serverCallStreamObserver.onNext(
             ServerReflectionResponse.newBuilder()
                 .setValidHost(request.getHost())
                 .setOriginalRequest(request)
@@ -295,7 +333,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       for (String serviceName : serviceNames) {
         builder.addService(ServiceResponse.newBuilder().setName(serviceName));
       }
-      responseObserver.onNext(
+      serverCallStreamObserver.onNext(
           ServerReflectionResponse.newBuilder()
               .setValidHost(request.getHost())
               .setOriginalRequest(request)
@@ -314,7 +352,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
                       .setErrorCode(status.getCode().value())
                       .setErrorMessage(message))
               .build();
-      responseObserver.onNext(response);
+      serverCallStreamObserver.onNext(response);
     }
 
     private ServerReflectionResponse createServerReflectionResponse(

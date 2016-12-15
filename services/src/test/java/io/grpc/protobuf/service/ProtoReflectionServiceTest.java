@@ -32,12 +32,17 @@
 package io.grpc.protobuf.service;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.protobuf.ByteString;
 
+import io.grpc.ManagedChannel;
+import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.internal.ServerImpl;
 import io.grpc.reflection.testing.DynamicServiceGrpc;
 import io.grpc.reflection.testing.ReflectableServiceGrpc;
 import io.grpc.reflection.testing.ReflectionTestDepthThreeProto;
@@ -46,46 +51,70 @@ import io.grpc.reflection.testing.ReflectionTestDepthTwoProto;
 import io.grpc.reflection.testing.ReflectionTestProto;
 import io.grpc.reflection.v1alpha.ExtensionRequest;
 import io.grpc.reflection.v1alpha.FileDescriptorResponse;
+import io.grpc.reflection.v1alpha.ServerReflectionGrpc;
 import io.grpc.reflection.v1alpha.ServerReflectionRequest;
 import io.grpc.reflection.v1alpha.ServerReflectionResponse;
 import io.grpc.reflection.v1alpha.ServiceResponse;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
 import io.grpc.util.MutableHandlerRegistry;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tests for {@link ProtoReflectionService}.
  */
 @RunWith(JUnit4.class)
 public class ProtoReflectionServiceTest {
-
   private static final String TEST_HOST = "localhost";
-
   private MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
-
   private ProtoReflectionService reflectionService;
-
-  private ServerImpl server;
+  private Server server;
+  private ManagedChannel channel;
+  private ServerReflectionGrpc.ServerReflectionStub stub;
 
   @Before
-  public void setUp() throws IOException {
+  public void setUp() throws Exception {
     reflectionService = new ProtoReflectionService();
     server = InProcessServerBuilder.forName("proto-reflection-test")
+        .directExecutor()
         .addService(reflectionService)
         .addService(new ReflectableServiceGrpc.ReflectableServiceImplBase() {})
         .fallbackHandlerRegistry(handlerRegistry)
+        .build()
+        .start();
+    channel = InProcessChannelBuilder.forName("proto-reflection-test")
+        .directExecutor()
         .build();
+    stub = ServerReflectionGrpc.newStub(channel);
+
+    // TODO(ericgribkoff) Remove after fix for https://github.com/grpc/grpc-java/issues/2444 is
+    // merged.
+    doNoOpCall();
+  }
+
+  @After
+  public void tearDown() {
+    if (server != null) {
+      server.shutdownNow();
+    }
+    if (channel != null) {
+      channel.shutdownNow();
+    }
   }
 
   @Test
@@ -142,9 +171,10 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
+
     assertEquals(goldenResponse, responseObserver.firstValue().get());
   }
 
@@ -166,7 +196,7 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
 
@@ -198,7 +228,7 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
@@ -226,7 +256,7 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
 
@@ -264,7 +294,7 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
@@ -282,7 +312,7 @@ public class ProtoReflectionServiceTest {
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
     Set<Integer> extensionNumberResponseSet =
@@ -295,18 +325,142 @@ public class ProtoReflectionServiceTest {
     assertEquals(goldenResponse, extensionNumberResponseSet);
   }
 
+  @Test
+  public void flowControl() throws Exception {
+    FlowControlClientResponseObserver clientResponseObserver =
+        new FlowControlClientResponseObserver();
+    ClientCallStreamObserver<ServerReflectionRequest> requestObserver =
+        (ClientCallStreamObserver<ServerReflectionRequest>)
+            stub.serverReflectionInfo(clientResponseObserver);
+
+    // ClientCalls.startCall() calls request(1) initially, so we should get an immediate response.
+    requestObserver.onNext(flowControlRequest);
+    assertEquals(1, clientResponseObserver.getResponses().size());
+    assertEquals(flowControlGoldenResponse, clientResponseObserver.getResponses().get(0));
+
+    // Verify we don't receive an additional response until we request it.
+    requestObserver.onNext(flowControlRequest);
+    assertEquals(1, clientResponseObserver.getResponses().size());
+
+    requestObserver.request(1);
+    assertEquals(2, clientResponseObserver.getResponses().size());
+    assertEquals(flowControlGoldenResponse, clientResponseObserver.getResponses().get(1));
+
+    requestObserver.onCompleted();
+    assertTrue(clientResponseObserver.onCompleteCalled());
+  }
+
+  @Test
+  public void flowControlOnCompleteWithPendingRequest() throws Exception {
+    FlowControlClientResponseObserver clientResponseObserver =
+        new FlowControlClientResponseObserver();
+    ClientCallStreamObserver<ServerReflectionRequest> requestObserver =
+        (ClientCallStreamObserver<ServerReflectionRequest>)
+            stub.serverReflectionInfo(clientResponseObserver);
+
+    // ClientCalls.startCall() calls request(1) initially, so make additional request.
+    requestObserver.onNext(flowControlRequest);
+    requestObserver.onNext(flowControlRequest);
+    requestObserver.onCompleted();
+    assertEquals(1, clientResponseObserver.getResponses().size());
+    assertFalse(clientResponseObserver.onCompleteCalled());
+
+    requestObserver.request(1);
+    assertTrue(clientResponseObserver.onCompleteCalled());
+    assertEquals(2, clientResponseObserver.getResponses().size());
+    assertEquals(flowControlGoldenResponse, clientResponseObserver.getResponses().get(1));
+  }
+
+  private final ServerReflectionRequest flowControlRequest =
+      ServerReflectionRequest.newBuilder()
+          .setHost(TEST_HOST)
+          .setFileByFilename("io/grpc/reflection/testing/reflection_test_depth_three.proto")
+          .build();
+  private final ServerReflectionResponse flowControlGoldenResponse =
+      ServerReflectionResponse.newBuilder()
+          .setValidHost(TEST_HOST)
+          .setOriginalRequest(flowControlRequest)
+          .setFileDescriptorResponse(
+              FileDescriptorResponse.newBuilder()
+                  .addFileDescriptorProto(
+                      ReflectionTestDepthThreeProto.getDescriptor().toProto().toByteString())
+                  .build())
+          .build();
+
+  private static class FlowControlClientResponseObserver implements
+      ClientResponseObserver<ServerReflectionRequest, ServerReflectionResponse> {
+    private final List<ServerReflectionResponse> responses =
+        new ArrayList<ServerReflectionResponse>();
+    private boolean onCompleteCalled = false;
+
+    @Override
+    public void beforeStart(
+        final ClientCallStreamObserver<ServerReflectionRequest> requestStream) {
+      requestStream.disableAutoInboundFlowControl();
+    }
+
+    @Override
+    public void onNext(ServerReflectionResponse value) {
+      responses.add(value);
+    }
+
+    @Override
+    public void onError(Throwable t) {
+      fail("onError called");
+    }
+
+    @Override
+    public void onCompleted() {
+      onCompleteCalled = true;
+    }
+
+    public List<ServerReflectionResponse> getResponses() {
+      return responses;
+    }
+
+    public boolean onCompleteCalled() {
+      return onCompleteCalled;
+    }
+  }
 
   private void assertServiceResponseEquals(Set<ServiceResponse> goldenResponse) throws Exception {
     ServerReflectionRequest request =
         ServerReflectionRequest.newBuilder().setHost(TEST_HOST).setListServices("services").build();
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
-        reflectionService.serverReflectionInfo(responseObserver);
+        stub.serverReflectionInfo(responseObserver);
     requestObserver.onNext(request);
     requestObserver.onCompleted();
     List<ServiceResponse> response =
         responseObserver.firstValue().get().getListServicesResponse().getServiceList();
     assertEquals(goldenResponse.size(), response.size());
     assertEquals(goldenResponse, new HashSet<ServiceResponse>(response));
+  }
+
+  // TODO(ericgribkoff) Remove after fix for https://github.com/grpc/grpc-java/issues/2444 is
+  // merged.
+  private void doNoOpCall() throws Exception {
+    final CountDownLatch latch = new CountDownLatch(1);
+    ServerReflectionRequest request =
+        ServerReflectionRequest.newBuilder().setHost(TEST_HOST).setListServices("services").build();
+    StreamObserver<ServerReflectionRequest> requestObserver =
+        stub.serverReflectionInfo(new StreamObserver<ServerReflectionResponse>() {
+          @Override
+          public void onNext(ServerReflectionResponse value) {
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            latch.countDown();
+          }
+
+          @Override
+          public void onCompleted() {
+            latch.countDown();
+          }
+        });
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+    assertTrue(latch.await(5, TimeUnit.SECONDS));
   }
 }
