@@ -211,9 +211,9 @@ final class DelayedClientTransport2 implements ManagedClientTransport {
   }
 
   /**
-   * Prevents creating any new streams until {@link #setTransport} is called. Buffered streams are
-   * not failed, so if {@link #shutdown} is called when {@link #setTransport} has not been called,
-   * you still need to call {@link #setTransport} to make this transport terminated.
+   * Prevents creating any new streams.  Buffered streams are not failed and may still proceed
+   * when {@link #reprocess} is called.  The delayed transport will be terminated when there is no
+   * more buffered streams.
    */
   @Override
   public final void shutdown() {
@@ -275,8 +275,7 @@ final class DelayedClientTransport2 implements ManagedClientTransport {
    * streams will be served by the latest picker (if a same picker is given more than once, they are
    * considered different pickers) as soon as possible.
    *
-   * <p>This method <strong>must not</strong> be called concurrently, with itself or with {@link
-   * #setTransportSupplier}/{@link #setTransport}.
+   * <p>This method <strong>must not</strong> be called concurrently with itself.
    */
   final void reprocess(SubchannelPicker picker) {
     ArrayList<PendingStream> toProcess;
