@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	proto "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/examples/helloworld/helloworld"
+	helloworld "google.golang.org/grpc/examples/helloworld/helloworld"
 	hwmock "google.golang.org/grpc/examples/helloworld/mock/mock_helloworld"
 )
 
