@@ -34,6 +34,7 @@ package io.grpc;
 import static com.google.common.base.Charsets.US_ASCII;
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Throwables.getStackTraceAsString;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
@@ -563,7 +564,7 @@ public final class Status {
     return MoreObjects.toStringHelper(this)
         .add("code", code.name())
         .add("description", description)
-        .add("cause", cause)
+        .add("cause", cause != null ? getStackTraceAsString(cause) : cause)
         .toString();
   }
 
