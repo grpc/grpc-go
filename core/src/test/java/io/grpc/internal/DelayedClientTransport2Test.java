@@ -37,10 +37,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -66,8 +68,13 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Unit tests for {@link DelayedClientTransport2}.
@@ -98,6 +105,7 @@ public class DelayedClientTransport2Test {
 
   private final Metadata headers = new Metadata();
   private final Metadata headers2 = new Metadata();
+  private final Metadata headers3 = new Metadata();
 
   private final CallOptions callOptions = CallOptions.DEFAULT.withAuthority("dummy_value");
   private final CallOptions callOptions2 = CallOptions.DEFAULT.withAuthority("dummy_value2");
@@ -110,8 +118,8 @@ public class DelayedClientTransport2Test {
 
   private final FakeClock fakeExecutor = new FakeClock();
 
-  private final DelayedClientTransport2 delayedTransport =
-      new DelayedClientTransport2(fakeExecutor.getScheduledExecutorService());
+  private final DelayedClientTransport2 delayedTransport = new DelayedClientTransport2(
+      fakeExecutor.getScheduledExecutorService(), new ChannelExecutor());
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
@@ -461,5 +469,100 @@ public class DelayedClientTransport2Test {
     verify(picker).pickSubchannel(CallOptions.DEFAULT.getAffinity(), headers);
     verify(subchannel).obtainActiveTransport();
     assertSame(mockRealStream, stream);
+  }
+
+  @Test
+  public void reprocess_newStreamRacesWithReprocess() throws Exception {
+    final CyclicBarrier barrier = new CyclicBarrier(2);
+    // In both phases, we only expect the first pickSubchannel() call to block on the barrier.
+    final AtomicBoolean nextPickShouldWait = new AtomicBoolean(true);
+    ///////// Phase 1: reprocess() twice with the same picker
+    SubchannelPicker picker = mock(SubchannelPicker.class);
+
+    doAnswer(new Answer<PickResult>() {
+        @Override
+        public PickResult answer(InvocationOnMock invocation) throws Throwable {
+          if (nextPickShouldWait.compareAndSet(true, false)) {
+            try {
+              barrier.await();
+              return PickResult.withNoResult();
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
+          }
+          return PickResult.withNoResult();
+        }
+      }).when(picker).pickSubchannel(any(Attributes.class), any(Metadata.class));
+
+    // Because there is no pending stream yet, it will do nothing but save the picker.
+    delayedTransport.reprocess(picker);
+    verify(picker, never()).pickSubchannel(any(Attributes.class), any(Metadata.class));
+
+    Thread sideThread = new Thread("sideThread") {
+        @Override
+        public void run() {
+          // Will call pickSubchannel and wait on barrier
+          delayedTransport.newStream(method, headers, callOptions, statsTraceCtx);
+        }
+      };
+    sideThread.start();
+
+    // Is called from sideThread
+    verify(picker, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers);
+
+    // Because stream has not been buffered (it's still stuck in newStream()), this will do nothing,
+    // but incrementing the picker version.
+    delayedTransport.reprocess(picker);
+    verify(picker).pickSubchannel(callOptions.getAffinity(), headers);
+
+    // Now let the stuck newStream() through
+    barrier.await(5, TimeUnit.SECONDS);
+
+    sideThread.join(5000);
+    assertFalse("sideThread should've exited", sideThread.isAlive());
+    // newStream() detects that there has been a new picker while it's stuck, thus will pick again.
+    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
+
+    barrier.reset();
+    nextPickShouldWait.set(true);
+
+    ////////// Phase 2: reprocess() with a different picker
+    // Create the second stream
+    Thread sideThread2 = new Thread("sideThread2") {
+        @Override
+        public void run() {
+          // Will call pickSubchannel and wait on barrier
+          delayedTransport.newStream(method, headers2, callOptions, statsTraceCtx);
+        }
+      };
+    sideThread2.start();
+    // The second stream will see the first picker
+    verify(picker, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers2);
+    // While the first stream won't use the first picker any more.
+    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
+
+    // Now use a different picker
+    SubchannelPicker picker2 = mock(SubchannelPicker.class);
+    when(picker2.pickSubchannel(any(Attributes.class), any(Metadata.class)))
+        .thenReturn(PickResult.withNoResult());
+    delayedTransport.reprocess(picker2);
+    // The pending first stream uses the new picker
+    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers);
+    // The second stream is still pending in creation, doesn't use the new picker.
+    verify(picker2, never()).pickSubchannel(callOptions.getAffinity(), headers2);
+
+    // Now let the second stream finish creation
+    barrier.await(5, TimeUnit.SECONDS);
+
+    sideThread2.join(5000);
+    assertFalse("sideThread2 should've exited", sideThread2.isAlive());
+    // The second stream should see the new picker
+    verify(picker2, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers2);
+
+    // Wrapping up
+    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker).pickSubchannel(callOptions.getAffinity(), headers2);
+    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers2);
   }
 }
