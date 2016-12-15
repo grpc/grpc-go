@@ -74,7 +74,6 @@ public final class NettyChannelBuilder
       new HashMap<ChannelOption<?>, Object>();
 
   private NegotiationType negotiationType = NegotiationType.TLS;
-  private ProtocolNegotiator protocolNegotiator;
   private OverrideAuthorityChecker authorityChecker;
   private Class<? extends Channel> channelType = NioSocketChannel.class;
 
@@ -112,15 +111,15 @@ public final class NettyChannelBuilder
     return new NettyChannelBuilder(target);
   }
 
-  protected NettyChannelBuilder(String host, int port) {
+  NettyChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
-  protected NettyChannelBuilder(String target) {
+  NettyChannelBuilder(String target) {
     super(target);
   }
 
-  protected NettyChannelBuilder(SocketAddress address) {
+  NettyChannelBuilder(SocketAddress address) {
     super(address, getAuthorityFromAddress(address));
   }
 
@@ -262,7 +261,7 @@ public final class NettyChannelBuilder
   @Override
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(
-        channelType, channelOptions, negotiationType, protocolNegotiator, sslContext,
+        channelType, channelOptions, negotiationType, null /* protocolNegotiator */, sslContext,
         eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize,
         enableKeepAlive, keepAliveDelayNanos, keepAliveTimeoutNanos);
   }
