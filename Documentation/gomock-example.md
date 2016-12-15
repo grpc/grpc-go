@@ -1,6 +1,6 @@
 # Mocking Service for gRPC
 
-Example code: examples/helloworld/mock
+[Example code](https://github.com/grpc/grpc-go/tree/master/examples/helloworld/mock)
 
 ## Why?
 
@@ -85,7 +85,7 @@ This mocked object can be programmed to expect calls to its methods and return p
 mockGreeterClient.EXPECT().SayHello(
     gomock.Any(), // expect any value for first parameter
     gomock.Any(), // expect any value for second parameter
-).Return(&helloworld.HelloReply{Message: “Mocked RPC”},nil) 
+).Return(&helloworld.HelloReply{Message: “Mocked RPC”}, nil) 
 ```
 
 gomock.Any() indicates that the parameter can have any value or type. We can indicate specific values for built-in types with gomock.Eq().
