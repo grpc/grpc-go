@@ -74,7 +74,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private Compressor compressor;
 
   ServerCallImpl(ServerStream stream, MethodDescriptor<ReqT, RespT> method,
-      Metadata inboundHeaders, Context.CancellableContext context, StatsTraceContext statsTraceCtx, 
+      Metadata inboundHeaders, Context.CancellableContext context, StatsTraceContext statsTraceCtx,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry) {
     this.stream = stream;
     this.method = method;
@@ -249,7 +249,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         } finally {
           if (t != null) {
             // TODO(carl-mastrangelo): Maybe log e here.
-            Throwables.propagateIfPossible(t);
+            Throwables.throwIfUnchecked(t);
             throw new RuntimeException(t);
           }
         }

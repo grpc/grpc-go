@@ -58,7 +58,7 @@ public final class LogExceptionRunnable implements Runnable {
       task.run();
     } catch (Throwable t) {
       log.log(Level.SEVERE, "Exception while executing runnable " + task, t);
-      Throwables.propagateIfPossible(t);
+      Throwables.throwIfUnchecked(t);
       throw new AssertionError(t);
     }
   }
