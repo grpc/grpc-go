@@ -32,7 +32,8 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
-
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
 
@@ -85,6 +86,8 @@ public final class NettyChannelBuilder
   private boolean enableKeepAlive;
   private long keepAliveDelayNanos;
   private long keepAliveTimeoutNanos;
+  private TransportCreationParamsFilterFactory dynamicParamsFactory =
+      DynamicNettyTransportParams.FACTORY;
 
   /**
    * Creates a new builder with the given server address. This factory method is primarily intended
@@ -260,10 +263,9 @@ public final class NettyChannelBuilder
 
   @Override
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(
-        channelType, channelOptions, negotiationType, null /* protocolNegotiator */, sslContext,
-        eventLoopGroup, flowControlWindow, maxInboundMessageSize(), maxHeaderListSize,
-        enableKeepAlive, keepAliveDelayNanos, keepAliveTimeoutNanos);
+    return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
+        negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
+        maxHeaderListSize, enableKeepAlive, keepAliveDelayNanos, keepAliveTimeoutNanos);
   }
 
   @Override
@@ -324,36 +326,99 @@ public final class NettyChannelBuilder
     return super.checkAuthority(authority);
   }
 
+  void setDynamicParamsFactory(TransportCreationParamsFilterFactory factory) {
+    this.dynamicParamsFactory = checkNotNull(factory, "factory");
+  }
+
+  interface TransportCreationParamsFilterFactory {
+    TransportCreationParamsFilter create(
+        SocketAddress targetServerAddress, String authority, String userAgent);
+  }
+
+  interface TransportCreationParamsFilter {
+    SocketAddress getTargetServerAddress();
+
+    String getAuthority();
+
+    @Nullable String getUserAgent();
+
+    ProtocolNegotiator getProtocolNegotiator(
+        NegotiationType negotiationType, SslContext sslContext);
+  }
+
+  private static final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
+    private static final TransportCreationParamsFilterFactory FACTORY =
+        new TransportCreationParamsFilterFactory() {
+
+      @Override
+      public TransportCreationParamsFilter create(
+          SocketAddress targetServerAddress, String authority, String userAgent) {
+        return new DynamicNettyTransportParams(targetServerAddress, authority, userAgent);
+      }
+    };
+
+    private final SocketAddress targetServerAddress;
+    private final String authority;
+    @Nullable private final String userAgent;
+
+    private DynamicNettyTransportParams(
+        SocketAddress targetServerAddress, String authority, String userAgent) {
+      this.targetServerAddress = targetServerAddress;
+      this.authority = authority;
+      this.userAgent = userAgent;
+    }
+
+    @Override
+    public SocketAddress getTargetServerAddress() {
+      return targetServerAddress;
+    }
+
+    @Override
+    public String getAuthority() {
+      return authority;
+    }
+
+    @Override
+    public String getUserAgent() {
+      return userAgent;
+    }
+
+    @Override
+    public ProtocolNegotiator getProtocolNegotiator(
+        NegotiationType negotiationType, SslContext sslContext) {
+      return createProtocolNegotiator(authority, negotiationType, sslContext);
+    }
+  }
+
   /**
    * Creates Netty transports. Exposed for internal use, as it should be private.
    */
-  static class NettyTransportFactory implements ClientTransportFactory {
+  private static final class NettyTransportFactory implements ClientTransportFactory {
+    private final TransportCreationParamsFilterFactory dynamicParams;
     private final Class<? extends Channel> channelType;
     private final Map<ChannelOption<?>, ?> channelOptions;
     private final NegotiationType negotiationType;
-    private final ProtocolNegotiator protocolNegotiator;
     private final SslContext sslContext;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
-    private boolean enableKeepAlive;
-    private long keepAliveDelayNanos;
-    private long keepAliveTimeoutNanos;
+    private final boolean enableKeepAlive;
+    private final long keepAliveDelayNanos;
+    private final long keepAliveTimeoutNanos;
 
     private boolean closed;
 
-    private NettyTransportFactory(
+    NettyTransportFactory(TransportCreationParamsFilterFactory dynamicParams,
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
-        NegotiationType negotiationType, ProtocolNegotiator protocolNegotiator,
-        SslContext sslContext, EventLoopGroup group, int flowControlWindow, int maxMessageSize,
-        int maxHeaderListSize, boolean enableKeepAlive, long keepAliveDelayNanos,
-        long keepAliveTimeoutNanos) {
+        NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
+        int flowControlWindow, int maxMessageSize, int maxHeaderListSize, boolean enableKeepAlive,
+        long keepAliveDelayNanos, long keepAliveTimeoutNanos) {
+      this.dynamicParams = dynamicParams;
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
-      this.protocolNegotiator = protocolNegotiator;
       this.sslContext = sslContext;
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
@@ -373,23 +438,15 @@ public final class NettyChannelBuilder
     @Override
     public ConnectionClientTransport newClientTransport(
         SocketAddress serverAddress, String authority, @Nullable String userAgent) {
-      if (closed) {
-        throw new IllegalStateException("The transport factory is closed.");
-      }
-      ProtocolNegotiator negotiator = protocolNegotiator != null ? protocolNegotiator :
-          createProtocolNegotiator(authority, negotiationType, sslContext);
-      return newClientTransport(serverAddress, authority, userAgent, negotiator);
-    }
+      checkState(!closed, "The transport factory is closed.");
 
-    ConnectionClientTransport newClientTransport(
-        SocketAddress serverAddress, String authority, String userAgent,
-        ProtocolNegotiator negotiator) {
-      if (closed) {
-        throw new IllegalStateException("The transport factory is closed.");
-      }
+      TransportCreationParamsFilter dparams =
+          dynamicParams.create(serverAddress, authority, userAgent);
+
       NettyClientTransport transport = new NettyClientTransport(
-          serverAddress, channelType, channelOptions, group, negotiator, flowControlWindow,
-          maxMessageSize, maxHeaderListSize, authority, userAgent);
+          dparams.getTargetServerAddress(), channelType, channelOptions, group,
+          dparams.getProtocolNegotiator(negotiationType, sslContext), flowControlWindow,
+          maxMessageSize, maxHeaderListSize, dparams.getAuthority(), dparams.getUserAgent());
       if (enableKeepAlive) {
         transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
       }

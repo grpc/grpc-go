@@ -32,9 +32,6 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
-import io.grpc.internal.ClientTransportFactory;
-import io.grpc.internal.ConnectionClientTransport;
-import io.grpc.netty.NettyChannelBuilder.NettyTransportFactory;
 
 import java.net.SocketAddress;
 
@@ -57,14 +54,26 @@ public final class InternalNettyChannelBuilder {
   }
 
   /**
-   * Creates a custom client transport that allows overriding the protocol negotiator.
+   * Interface to create netty dynamic parameters.
    */
-  public static ConnectionClientTransport newClientTransport(
-      ClientTransportFactory transportFactory, SocketAddress serverAddress, String authority,
-      String userAgent, ProtocolNegotiator negotiator) {
-    // Casting to avoid making {@link NettyTransportFactory} public.
-    return ((NettyTransportFactory) transportFactory)
-        .newClientTransport(serverAddress, authority, userAgent, negotiator);
+  public interface TransportCreationParamsFilterFactory
+      extends NettyChannelBuilder.TransportCreationParamsFilterFactory {
+    @Override
+    TransportCreationParamsFilter create(
+        SocketAddress targetServerAddress, String authority, String userAgent);
+  }
+
+  /**
+   * {@link TransportCreationParamsFilter} are those that may depend on late-known information about
+   * a client transport.  This interface can be used to dynamically alter params based on the
+   * params of {@code ClientTransportFactory#newClientTransport}.
+   */
+  public interface TransportCreationParamsFilter
+      extends NettyChannelBuilder.TransportCreationParamsFilter {}
+
+  public static void setDynamicTransportParamsFactory(
+      NettyChannelBuilder builder, TransportCreationParamsFilterFactory factory) {
+    builder.setDynamicParamsFactory(factory);
   }
 
   private InternalNettyChannelBuilder() {}
