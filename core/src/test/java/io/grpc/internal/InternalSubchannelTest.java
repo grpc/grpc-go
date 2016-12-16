@@ -85,8 +85,7 @@ public class InternalSubchannelTest {
   private final FakeClock fakeClock = new FakeClock();
   // For channelExecutor
   private final FakeClock fakeExecutor = new FakeClock();
-  private final SerializingExecutor channelExecutor =
-      new SerializingExecutor(fakeExecutor.getScheduledExecutorService());
+  private final ChannelExecutor channelExecutor = new ChannelExecutor();
 
   @Mock private BackoffPolicy mockBackoffPolicy1;
   @Mock private BackoffPolicy mockBackoffPolicy2;
@@ -678,10 +677,7 @@ public class InternalSubchannelTest {
   }
 
   private void assertExactCallbackInvokes(String ... expectedInvokes) {
-    // Make sure all callbacks are to run from channelExecutor only.
-    assertEquals(0, callbackInvokes.size());
-
-    while (fakeExecutor.runDueTasks() > 0) {}
+    assertEquals(0, channelExecutor.numPendingTasks());
     assertEquals(Arrays.asList(expectedInvokes), callbackInvokes);
     callbackInvokes.clear();
   }
