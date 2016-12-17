@@ -100,6 +100,18 @@ class WriteQueue {
   }
 
   /**
+   * Enqueue the runnable. It is not safe for another thread to queue an Runnable directly to the
+   * event loop, because it will be out-of-order with writes. This method allows the Runnable to be
+   * processed in-order with writes.
+   */
+  void enqueue(Runnable runnable, boolean flush) {
+    queue.add(new RunnableCommand(runnable));
+    if (flush) {
+      scheduleFlush();
+    }
+  }
+
+  /**
    * Process the queue of commands and dispatch them to the stream. This method is only
    * called in the event loop
    */
@@ -109,7 +121,7 @@ class WriteQueue {
       int i = 0;
       boolean flushedOnce = false;
       while ((cmd = queue.poll()) != null) {
-        channel.write(cmd, cmd.promise());
+        cmd.run(channel);
         if (++i == DEQUE_CHUNK_SIZE) {
           i = 0;
           // Flush each chunk so we are releasing buffers periodically. In theory this loop
@@ -132,6 +144,29 @@ class WriteQueue {
     }
   }
 
+  private static class RunnableCommand implements QueuedCommand {
+    private final Runnable runnable;
+
+    public RunnableCommand(Runnable runnable) {
+      this.runnable = runnable;
+    }
+
+    @Override
+    public final void promise(ChannelPromise promise) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public final ChannelPromise promise() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public final void run(Channel channel) {
+      runnable.run();
+    }
+  }
+
   abstract static class AbstractQueuedCommand implements QueuedCommand {
 
     private ChannelPromise promise;
@@ -144,6 +179,11 @@ class WriteQueue {
     @Override
     public final ChannelPromise promise() {
       return promise;
+    }
+
+    @Override
+    public final void run(Channel channel) {
+      channel.write(this, promise);
     }
   }
 
@@ -160,5 +200,7 @@ class WriteQueue {
      * Sets the promise.
      */
     void promise(ChannelPromise promise);
+
+    void run(Channel channel);
   }
 }

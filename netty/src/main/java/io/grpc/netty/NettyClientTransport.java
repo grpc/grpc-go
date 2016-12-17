@@ -230,15 +230,6 @@ class NettyClientTransport implements ConnectionClientTransport {
         }
       }
     });
-    // Handle transport shutdown when the channel is closed.
-    channel.closeFuture().addListener(new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        // Typically we should have noticed shutdown before this point.
-        lifecycleManager.notifyTerminated(
-            Status.INTERNAL.withDescription("Connection closed with unknown cause"));
-      }
-    });
 
     if (keepAliveManager != null) {
       keepAliveManager.onTransportStarted();
@@ -260,10 +251,19 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public void shutdownNow(Status reason) {
+  public void shutdownNow(final Status reason) {
     // Notifying of termination is automatically done when the channel closes.
     if (channel != null && channel.isOpen()) {
-      handler.getWriteQueue().enqueue(new ForcefulCloseCommand(reason), true);
+      handler.getWriteQueue().enqueue(new Runnable() {
+        @Override
+        public void run() {
+          lifecycleManager.notifyShutdown(reason);
+          // Call close() directly since negotiation may not have completed, such that a write would
+          // be queued.
+          channel.close();
+          channel.write(new ForcefulCloseCommand(reason));
+        }
+      }, true);
     }
   }
 

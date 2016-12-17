@@ -19,6 +19,7 @@ package io.grpc.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.DefaultByteBufHolder;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelPromise;
 
 /**
@@ -113,5 +114,10 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
   @Override
   public void promise(ChannelPromise promise) {
     this.promise = promise;
+  }
+
+  @Override
+  public final void run(Channel channel) {
+    channel.write(this, promise);
   }
 }

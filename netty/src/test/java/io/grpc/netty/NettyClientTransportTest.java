@@ -30,6 +30,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -67,6 +68,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
+import io.netty.util.AsciiString;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -93,6 +95,7 @@ import org.mockito.MockitoAnnotations;
  */
 @RunWith(JUnit4.class)
 public class NettyClientTransportTest {
+  private static final SslContext SSL_CONTEXT = createSslContext();
 
   @Mock
   private ManagedClientTransport.Listener clientTransportListener;
@@ -104,6 +107,8 @@ public class NettyClientTransportTest {
     // Throwing is useless in this method, because Netty doesn't propagate the exception
     @Override public void run() {}
   };
+
+  private ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(SSL_CONTEXT);
 
   private InetSocketAddress address;
   private String authority;
@@ -234,6 +239,83 @@ public class NettyClientTransportTest {
     // Wait for the RPCs to complete.
     for (Rpc rpc : rpcs) {
       rpc.waitForResponse();
+    }
+  }
+
+  @Test
+  public void negotiationFailurePropagatesToStatus() throws Exception {
+    negotiator = ProtocolNegotiators.serverPlaintext();
+    startServer();
+
+    final NoopProtocolNegotiator negotiator = new NoopProtocolNegotiator();
+    final NettyClientTransport transport = newTransport(negotiator);
+    callMeMaybe(transport.start(clientTransportListener));
+    final Status failureStatus = Status.UNAVAILABLE.withDescription("oh noes!");
+    transport.channel().eventLoop().execute(new Runnable() {
+      @Override
+      public void run() {
+        negotiator.handler.fail(transport.channel().pipeline().context(negotiator.handler),
+            failureStatus.asRuntimeException());
+      }
+    });
+
+    Rpc rpc = new Rpc(transport).halfClose();
+    try {
+      rpc.waitForClose();
+      fail("expected exception");
+    } catch (ExecutionException ex) {
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
+    }
+  }
+
+  @Test
+  public void channelExceptionDuringNegotiatonPropagatesToStatus() throws Exception {
+    negotiator = ProtocolNegotiators.serverPlaintext();
+    startServer();
+
+    NoopProtocolNegotiator negotiator = new NoopProtocolNegotiator();
+    NettyClientTransport transport = newTransport(negotiator);
+    callMeMaybe(transport.start(clientTransportListener));
+    final Status failureStatus = Status.UNAVAILABLE.withDescription("oh noes!");
+    transport.channel().pipeline().fireExceptionCaught(failureStatus.asRuntimeException());
+
+    Rpc rpc = new Rpc(transport).halfClose();
+    try {
+      rpc.waitForClose();
+      fail("expected exception");
+    } catch (ExecutionException ex) {
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
+    }
+  }
+
+  @Test
+  public void handlerExceptionDuringNegotiatonPropagatesToStatus() throws Exception {
+    negotiator = ProtocolNegotiators.serverPlaintext();
+    startServer();
+
+    final NoopProtocolNegotiator negotiator = new NoopProtocolNegotiator();
+    final NettyClientTransport transport = newTransport(negotiator);
+    callMeMaybe(transport.start(clientTransportListener));
+    final Status failureStatus = Status.UNAVAILABLE.withDescription("oh noes!");
+    transport.channel().eventLoop().execute(new Runnable() {
+      @Override
+      public void run() {
+        try {
+          negotiator.handler.exceptionCaught(
+              transport.channel().pipeline().context(negotiator.handler),
+              failureStatus.asRuntimeException());
+        } catch (Exception ex) {
+          throw new RuntimeException(ex);
+        }
+      }
+    });
+
+    Rpc rpc = new Rpc(transport).halfClose();
+    try {
+      rpc.waitForClose();
+      fail("expected exception");
+    } catch (ExecutionException ex) {
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
     }
   }
 
@@ -470,11 +552,6 @@ public class NettyClientTransportTest {
   }
 
   private void startServer(int maxStreamsPerConnection, int maxHeaderListSize) throws IOException {
-    File serverCert = TestUtils.loadCert("server1.pem");
-    File key = TestUtils.loadCert("server1.key");
-    SslContext serverContext = GrpcSslContexts.forServer(serverCert, key)
-        .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
-    ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(serverContext);
     server = new NettyServer(
         TestUtils.testServerAddress(0),
         NioServerSocketChannel.class, group, group, negotiator,
@@ -491,6 +568,17 @@ public class NettyClientTransportTest {
   private void callMeMaybe(Runnable r) {
     if (r != null) {
       r.run();
+    }
+  }
+
+  private static SslContext createSslContext() {
+    try {
+      File serverCert = TestUtils.loadCert("server1.pem");
+      File key = TestUtils.loadCert("server1.key");
+      return GrpcSslContexts.forServer(serverCert, key)
+          .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE).build();
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
     }
   }
 
@@ -648,6 +736,27 @@ public class NettyClientTransportTest {
       } catch (IOException ex) {
         throw new RuntimeException(ex);
       }
+    }
+  }
+
+  private static class NoopHandler extends ProtocolNegotiators.AbstractBufferingHandler
+      implements ProtocolNegotiator.Handler {
+    public NoopHandler(GrpcHttp2ConnectionHandler grpcHandler) {
+      super(grpcHandler);
+    }
+
+    @Override
+    public AsciiString scheme() {
+      return Utils.HTTP;
+    }
+  }
+
+  private static class NoopProtocolNegotiator implements ProtocolNegotiator {
+    NoopHandler handler;
+
+    @Override
+    public Handler newHandler(final GrpcHttp2ConnectionHandler grpcHandler) {
+      return handler = new NoopHandler(grpcHandler);
     }
   }
 }

@@ -130,7 +130,13 @@ class NettyClientStream extends AbstractClientStream {
         public void operationComplete(ChannelFuture future) throws Exception {
           if (!future.isSuccess()) {
             // Stream creation failed. Close the stream if not already closed.
-            Status s = transportState().statusFromFailedFuture(future);
+            // When the channel is shutdown, the lifecycle manager has a better view of the failure,
+            // especially before negotiation completes (because the negotiator commonly doesn't
+            // receive the execeptionCaught because NettyClientHandler does not propagate it).
+            Status s = transportState().handler.getLifecycleManager().getShutdownStatus();
+            if (s == null) {
+              s = transportState().statusFromFailedFuture(future);
+            }
             transportState().transportReportStatus(s, true, new Metadata());
           }
         }
