@@ -1,5 +1,5 @@
 /*
- *
+
  * Copyright 2014, Google Inc.
  * All rights reserved.
  *
@@ -99,9 +99,10 @@ type Server struct {
 	cancel context.CancelFunc
 	// A CondVar to let GracefulStop() blocks until all the pending RPCs are finished
 	// and all the transport goes away.
-	cv     *sync.Cond
-	m      map[string]*service // service name -> service info
-	events trace.EventLog
+	cv                   *sync.Cond
+	m                    map[string]*service // service name -> service info
+	events               trace.EventLog
+	codecProviderCreator codecProviderCreator
 }
 
 type options struct {
@@ -208,15 +209,19 @@ func NewServer(opt ...ServerOption) *Server {
 	for _, o := range opt {
 		o(&opts)
 	}
+	var codecProviderCreator codecProviderCreator
 	if opts.codec == nil {
 		// Set the default codec.
-		opts.codec = protoCodec{}
+		codecProviderCreator = newProtoCodecProviderCreator()
+	} else {
+		codecProviderCreator = newGenericCodecProviderCreator(opts.codec)
 	}
 	s := &Server{
-		lis:   make(map[net.Listener]bool),
-		opts:  opts,
-		conns: make(map[io.Closer]bool),
-		m:     make(map[string]*service),
+		lis:                  make(map[net.Listener]bool),
+		opts:                 opts,
+		conns:                make(map[io.Closer]bool),
+		m:                    make(map[string]*service),
+		codecProviderCreator: codecProviderCreator,
 	}
 	s.cv = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -442,7 +447,8 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		AuthInfo:    authInfo,
 		InTapHandle: s.opts.inTapHandle,
 	}
-	st, err := transport.NewServerTransport("http2", c, config)
+	getCodec := s.codecProviderCreator.onNewTransport()
+	st, err := transport.NewServerTransport("http2", c, config, getCodec)
 	if err != nil {
 		s.mu.Lock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
@@ -507,7 +513,9 @@ func (s *Server) serveUsingHandler(conn net.Conn) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	st, err := transport.NewServerHandlerTransport(w, r)
+	getCodec := s.codecProviderCreator.onNewTransport()
+
+	st, err := transport.NewServerHandlerTransport(w, r, getCodec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -570,7 +578,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if stats.On() {
 		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	p, err := encode(stream.GetCodec().(Codec), msg, cp, cbuf, outPayload)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -692,7 +700,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				statusCode = codes.Internal
 				statusDesc = fmt.Sprintf("grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
 			}
-			if err := s.opts.codec.Unmarshal(req, v); err != nil {
+			if err := stream.GetCodec().(Codec).Unmarshal(req, v); err != nil {
 				return err
 			}
 			if inPayload != nil {
@@ -780,7 +788,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		t:          t,
 		s:          stream,
 		p:          &parser{r: stream},
-		codec:      s.opts.codec,
 		cp:         s.opts.cp,
 		dc:         s.opts.dc,
 		maxMsgSize: s.opts.maxMsgSize,
