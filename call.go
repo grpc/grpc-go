@@ -145,11 +145,11 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	if sc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !sc.WaitForReady
-		if sc.Timeout > 0 {
+	if mc, ok := cc.getMethodConfig(method); ok {
+		c.failFast = !mc.WaitForReady
+		if mc.Timeout > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, sc.Timeout)
+			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
 			defer cancel()
 		}
 	}

@@ -113,10 +113,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cancel context.CancelFunc
 	)
 	c := defaultCallInfo
-	if sc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !sc.WaitForReady
-		if sc.Timeout > 0 {
-			ctx, cancel = context.WithTimeout(ctx, sc.Timeout)
+	if mc, ok := cc.getMethodConfig(method); ok {
+		c.failFast = !mc.WaitForReady
+		if mc.Timeout > 0 {
+			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
 		}
 	}
 	for _, o := range opts {
