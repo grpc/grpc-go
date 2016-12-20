@@ -23,7 +23,7 @@ startScripts.enabled = false
 run.enabled = false
 
 jmh {
-    jmhVersion = '1.14'
+    jmhVersion = '1.17.3'
     warmupIterations = 10
     iterations = 10
     fork = 1
