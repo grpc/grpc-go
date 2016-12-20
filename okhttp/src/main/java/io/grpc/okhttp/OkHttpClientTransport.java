@@ -754,7 +754,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         // nothing, otherwise, we finish all streams since it's a real IO issue.
         startGoAway(0, ErrorCode.INTERNAL_ERROR,
             Status.UNAVAILABLE.withDescription("End of stream or IOException"));
-      } catch (Exception t) {
+      } catch (Throwable t) {
         // TODO(madongfly): Send the exception message to the server.
         startGoAway(0, ErrorCode.PROTOCOL_ERROR, Status.UNAVAILABLE.withCause(t));
       } finally {
