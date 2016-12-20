@@ -68,10 +68,18 @@ task stresstest_client(type: CreateStartScripts) {
     defaultJvmOpts = ["-verbose:gc", "-XX:+PrintFlagsFinal"]
 }
 
+task http2_client(type: CreateStartScripts) {
+    mainClassName = "io.grpc.testing.integration.Http2Client"
+    applicationName = "http2-client"
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + configurations.runtime
+}
+
 applicationDistribution.into("bin") {
     from(test_client)
     from(test_server)
     from(reconnect_test_client)
     from(stresstest_client)
+    from(http2_client)
     fileMode = 0755
 }
