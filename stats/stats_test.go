@@ -57,40 +57,6 @@ func init() {
 type connCtxKey struct{}
 type rpcCtxKey struct{}
 
-func TestTagConnCtx(t *testing.T) {
-	defer stats.RegisterConnTagger(nil)
-	ctx1 := context.Background()
-	stats.RegisterConnTagger(nil)
-	ctx2 := stats.TagConn(ctx1, nil)
-	if ctx2 != ctx1 {
-		t.Fatalf("nil conn ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
-	}
-	stats.RegisterConnTagger(func(ctx context.Context, info *stats.ConnTagInfo) context.Context {
-		return context.WithValue(ctx, connCtxKey{}, "connctxvalue")
-	})
-	ctx3 := stats.TagConn(ctx1, nil)
-	if v, ok := ctx3.Value(connCtxKey{}).(string); !ok || v != "connctxvalue" {
-		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, connCtxKey{}, "connctxvalue"))
-	}
-}
-
-func TestTagRPCCtx(t *testing.T) {
-	defer stats.RegisterRPCTagger(nil)
-	ctx1 := context.Background()
-	stats.RegisterRPCTagger(nil)
-	ctx2 := stats.TagRPC(ctx1, nil)
-	if ctx2 != ctx1 {
-		t.Fatalf("nil rpc ctx tagger should not modify context, got %v; want %v", ctx2, ctx1)
-	}
-	stats.RegisterRPCTagger(func(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-		return context.WithValue(ctx, rpcCtxKey{}, "rpcctxvalue")
-	})
-	ctx3 := stats.TagRPC(ctx1, nil)
-	if v, ok := ctx3.Value(rpcCtxKey{}).(string); !ok || v != "rpcctxvalue" {
-		t.Fatalf("got context %v; want %v", ctx3, context.WithValue(ctx1, rpcCtxKey{}, "rpcctxvalue"))
-	}
-}
-
 var (
 	// For headers:
 	testMetadata = metadata.MD{
@@ -158,8 +124,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
-	t        *testing.T
-	compress string
+	t                  *testing.T
+	compress           string
+	clientStatsHandler stats.Handler
+	serverStatsHandler stats.Handler
 
 	testServer testpb.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
@@ -184,8 +152,13 @@ type testConfig struct {
 // newTest returns a new test using the provided testing.T and
 // environment.  It is returned with default values. Tests should
 // modify it before calling its startServer and clientConn methods.
-func newTest(t *testing.T, tc *testConfig) *test {
-	te := &test{t: t, compress: tc.compress}
+func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *test {
+	te := &test{
+		t:                  t,
+		compress:           tc.compress,
+		clientStatsHandler: ch,
+		serverStatsHandler: sh,
+	}
 	return te
 }
 
@@ -203,6 +176,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
 		)
+	}
+	if te.serverStatsHandler != nil {
+		opts = append(opts, grpc.StatsHandler(te.serverStatsHandler))
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
@@ -229,6 +205,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
+	}
+	if te.clientStatsHandler != nil {
+		opts = append(opts, grpc.WithStatsHandler(te.clientStatsHandler))
 	}
 
 	var err error
@@ -617,12 +596,30 @@ func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
 	st.IsClient() // TODO remove this.
 }
 
-func tagConnCtx(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+type statshandler struct {
+	mu      sync.Mutex
+	gotRPC  []*gotData
+	gotConn []*gotData
+}
+
+func (h *statshandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
 	return context.WithValue(ctx, connCtxKey{}, info)
 }
 
-func tagRPCCtx(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	return context.WithValue(ctx, rpcCtxKey{}, info)
+}
+
+func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
+}
+
+func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
 }
 
 func checkConnStats(t *testing.T, got []*gotData) {
@@ -662,30 +659,8 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 }
 
 func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
-	var (
-		mu      sync.Mutex
-		gotRPC  []*gotData
-		gotConn []*gotData
-	)
-	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if !s.IsClient() {
-			gotRPC = append(gotRPC, &gotData{ctx, false, s})
-		}
-	})
-	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if !s.IsClient() {
-			gotConn = append(gotConn, &gotData{ctx, false, s})
-		}
-	})
-	stats.RegisterConnTagger(tagConnCtx)
-	stats.RegisterRPCTagger(tagRPCCtx)
-	stats.Start()
-
-	te := newTest(t, tc)
+	h := &statshandler{}
+	te := newTest(t, tc, nil, h)
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
@@ -709,22 +684,22 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	te.srv.GracefulStop() // Wait for the server to stop.
 
 	for {
-		mu.Lock()
-		if len(gotRPC) >= len(checkFuncs) {
-			mu.Unlock()
+		h.mu.Lock()
+		if len(h.gotRPC) >= len(checkFuncs) {
+			h.mu.Unlock()
 			break
 		}
-		mu.Unlock()
+		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	for {
-		mu.Lock()
-		if _, ok := gotConn[len(gotConn)-1].s.(*stats.ConnEnd); ok {
-			mu.Unlock()
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
 			break
 		}
-		mu.Unlock()
+		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
 
@@ -741,8 +716,8 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		expect.method = "/grpc.testing.TestService/FullDuplexCall"
 	}
 
-	checkConnStats(t, gotConn)
-	checkServerStats(t, gotRPC, expect, checkFuncs)
+	checkConnStats(t, h.gotConn)
+	checkServerStats(t, h.gotRPC, expect, checkFuncs)
 }
 
 func TestServerStatsUnaryRPC(t *testing.T) {
@@ -891,30 +866,8 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 }
 
 func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
-	var (
-		mu      sync.Mutex
-		gotRPC  []*gotData
-		gotConn []*gotData
-	)
-	stats.RegisterRPCHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			gotRPC = append(gotRPC, &gotData{ctx, true, s})
-		}
-	})
-	stats.RegisterConnHandler(func(ctx context.Context, s stats.ConnStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			gotConn = append(gotConn, &gotData{ctx, true, s})
-		}
-	})
-	stats.RegisterConnTagger(tagConnCtx)
-	stats.RegisterRPCTagger(tagRPCCtx)
-	stats.Start()
-
-	te := newTest(t, tc)
+	h := &statshandler{}
+	te := newTest(t, tc, h, nil)
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
@@ -942,22 +895,22 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		lenRPCStats += v.c
 	}
 	for {
-		mu.Lock()
-		if len(gotRPC) >= lenRPCStats {
-			mu.Unlock()
+		h.mu.Lock()
+		if len(h.gotRPC) >= lenRPCStats {
+			h.mu.Unlock()
 			break
 		}
-		mu.Unlock()
+		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	for {
-		mu.Lock()
-		if _, ok := gotConn[len(gotConn)-1].s.(*stats.ConnEnd); ok {
-			mu.Unlock()
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
 			break
 		}
-		mu.Unlock()
+		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
 
@@ -975,8 +928,8 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		expect.method = "/grpc.testing.TestService/FullDuplexCall"
 	}
 
-	checkConnStats(t, gotConn)
-	checkClientStats(t, gotRPC, expect, checkFuncs)
+	checkConnStats(t, h.gotConn)
+	checkClientStats(t, h.gotRPC, expect, checkFuncs)
 }
 
 func TestClientStatsUnaryRPC(t *testing.T) {
