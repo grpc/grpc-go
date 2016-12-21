@@ -1,7 +1,8 @@
 description = "gRPC: Netty"
 dependencies {
     compile project(':grpc-core'),
-            libraries.netty
+            libraries.netty,
+            libraries.netty_proxy_handler
 
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output,

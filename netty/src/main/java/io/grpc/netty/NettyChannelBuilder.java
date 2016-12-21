@@ -291,6 +291,25 @@ public final class NettyChannelBuilder
       String authority,
       NegotiationType negotiationType,
       SslContext sslContext) {
+    ProtocolNegotiator negotiator =
+        createProtocolNegotiatorByType(authority, negotiationType, sslContext);
+    String proxy = System.getenv("GRPC_PROXY_EXP");
+    if (proxy != null) {
+      String[] parts = proxy.split(":", 2);
+      int port = 80;
+      if (parts.length > 1) {
+        port = Integer.parseInt(parts[1]);
+      }
+      InetSocketAddress proxyAddress = new InetSocketAddress(parts[0], port);
+      negotiator = ProtocolNegotiators.httpProxy(proxyAddress, null, null, negotiator);
+    }
+    return negotiator;
+  }
+
+  private static ProtocolNegotiator createProtocolNegotiatorByType(
+      String authority,
+      NegotiationType negotiationType,
+      SslContext sslContext) {
     switch (negotiationType) {
       case PLAINTEXT:
         return ProtocolNegotiators.plaintext();

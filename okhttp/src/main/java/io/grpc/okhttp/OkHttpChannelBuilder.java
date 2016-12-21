@@ -311,9 +311,20 @@ public class OkHttpChannelBuilder extends
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
+      InetSocketAddress proxyAddress = null;
+      String proxy = System.getenv("GRPC_PROXY_EXP");
+      if (proxy != null) {
+        String[] parts = proxy.split(":", 2);
+        int port = 80;
+        if (parts.length > 1) {
+          port = Integer.parseInt(parts[1]);
+        }
+        proxyAddress = new InetSocketAddress(parts[0], port);
+      }
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       OkHttpClientTransport transport = new OkHttpClientTransport(inetSocketAddr, authority,
-          userAgent, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize);
+          userAgent, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize,
+          proxyAddress, null, null);
       if (enableKeepAlive) {
         transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
       }

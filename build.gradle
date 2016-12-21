@@ -163,6 +163,7 @@ subprojects {
 
                 netty: 'io.netty:netty-codec-http2:[4.1.7.Final]',
                 netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.7.Final' + epoll_suffix,
+                netty_proxy_handler: 'io.netty:netty-handler-proxy:4.1.7.Final',
                 netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork25',
 
                 // Test dependencies.

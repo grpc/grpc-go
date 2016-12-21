@@ -90,6 +90,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -191,7 +192,8 @@ public class OkHttpClientTransportTest {
     InetSocketAddress address = InetSocketAddress.createUnresolved("hostname", 31415);
     clientTransport = new OkHttpClientTransport(
         address, "hostname", null /* agent */, executor, null,
-        Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE);
+        Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE,
+        null, null, null);
     String s = clientTransport.toString();
     assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
     assertTrue("Unexpected: " + s, s.contains(address.toString()));
@@ -1334,7 +1336,10 @@ public class OkHttpClientTransportTest {
         executor,
         null,
         ConnectionSpec.CLEARTEXT,
-        DEFAULT_MAX_MESSAGE_SIZE);
+        DEFAULT_MAX_MESSAGE_SIZE,
+        null,
+        null,
+        null);
 
     String host = clientTransport.getOverridenHost();
     int port = clientTransport.getOverridenPort();
@@ -1352,7 +1357,10 @@ public class OkHttpClientTransportTest {
         executor,
         null,
         ConnectionSpec.CLEARTEXT,
-        DEFAULT_MAX_MESSAGE_SIZE);
+        DEFAULT_MAX_MESSAGE_SIZE,
+        null,
+        null,
+        null);
 
     ManagedClientTransport.Listener listener = mock(ManagedClientTransport.Listener.class);
     clientTransport.start(listener);
@@ -1366,6 +1374,131 @@ public class OkHttpClientTransportTest {
     clientTransport.newStream(method, new Metadata()).start(streamListener);
     streamListener.waitUntilStreamClosed();
     assertEquals(Status.UNAVAILABLE.getCode(), streamListener.status.getCode());
+  }
+
+  @Test
+  public void proxy_200() throws Exception {
+    ServerSocket serverSocket = new ServerSocket(0);
+    clientTransport = new OkHttpClientTransport(
+        InetSocketAddress.createUnresolved("theservice", 80),
+        "authority",
+        "userAgent",
+        executor,
+        null,
+        ConnectionSpec.CLEARTEXT,
+        DEFAULT_MAX_MESSAGE_SIZE,
+        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
+        null,
+        null);
+    clientTransport.start(transportListener);
+
+    Socket sock = serverSocket.accept();
+    serverSocket.close();
+
+    BufferedReader reader = new BufferedReader(new InputStreamReader(sock.getInputStream(), UTF_8));
+    assertEquals("CONNECT theservice:80 HTTP/1.1", reader.readLine());
+    assertEquals("Host: theservice:80", reader.readLine());
+    while (!"".equals(reader.readLine())) {}
+
+    sock.getOutputStream().write("HTTP/1.1 200 OK\r\nServer: test\r\n\r\n".getBytes(UTF_8));
+    sock.getOutputStream().flush();
+
+    assertEquals("PRI * HTTP/2.0", reader.readLine());
+    assertEquals("", reader.readLine());
+    assertEquals("SM", reader.readLine());
+    assertEquals("", reader.readLine());
+
+    // Empty SETTINGS
+    sock.getOutputStream().write(new byte[] {0, 0, 0, 0, 0x4, 0});
+    // GOAWAY
+    sock.getOutputStream().write(new byte[] {
+        0, 0, 0, 8, 0x7, 0,
+        0, 0, 0, 0, // last stream id
+        0, 0, 0, 0, // error code
+    });
+    sock.getOutputStream().flush();
+
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(isA(Status.class));
+    while (sock.getInputStream().read() != -1) {}
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+    sock.close();
+  }
+
+  @Test
+  public void proxy_500() throws Exception {
+    ServerSocket serverSocket = new ServerSocket(0);
+    clientTransport = new OkHttpClientTransport(
+        InetSocketAddress.createUnresolved("theservice", 80),
+        "authority",
+        "userAgent",
+        executor,
+        null,
+        ConnectionSpec.CLEARTEXT,
+        DEFAULT_MAX_MESSAGE_SIZE,
+        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
+        null,
+        null);
+    clientTransport.start(transportListener);
+
+    Socket sock = serverSocket.accept();
+    serverSocket.close();
+
+    BufferedReader reader = new BufferedReader(new InputStreamReader(sock.getInputStream(), UTF_8));
+    assertEquals("CONNECT theservice:80 HTTP/1.1", reader.readLine());
+    assertEquals("Host: theservice:80", reader.readLine());
+    while (!"".equals(reader.readLine())) {}
+
+    final String errorText = "text describing error";
+    sock.getOutputStream().write("HTTP/1.1 500 OH NO\r\n\r\n".getBytes(UTF_8));
+    sock.getOutputStream().write(errorText.getBytes(UTF_8));
+    sock.getOutputStream().flush();
+    sock.shutdownOutput();
+
+    assertEquals(-1, sock.getInputStream().read());
+
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
+    Status error = captor.getValue();
+    assertTrue("Status didn't contain error code: " + captor.getValue(),
+        error.getDescription().contains("500"));
+    assertTrue("Status didn't contain error description: " + captor.getValue(),
+        error.getDescription().contains("OH NO"));
+    assertTrue("Status didn't contain error text: " + captor.getValue(),
+        error.getDescription().contains(errorText));
+    assertEquals("Not UNAVAILABLE: " + captor.getValue(),
+        Status.UNAVAILABLE.getCode(), error.getCode());
+    sock.close();
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+  }
+
+  @Test
+  public void proxy_immediateServerClose() throws Exception {
+    ServerSocket serverSocket = new ServerSocket(0);
+    clientTransport = new OkHttpClientTransport(
+        InetSocketAddress.createUnresolved("theservice", 80),
+        "authority",
+        "userAgent",
+        executor,
+        null,
+        ConnectionSpec.CLEARTEXT,
+        DEFAULT_MAX_MESSAGE_SIZE,
+        (InetSocketAddress) serverSocket.getLocalSocketAddress(),
+        null,
+        null);
+    clientTransport.start(transportListener);
+
+    Socket sock = serverSocket.accept();
+    serverSocket.close();
+    sock.close();
+
+    ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
+    verify(transportListener, timeout(TIME_OUT_MS)).transportShutdown(captor.capture());
+    Status error = captor.getValue();
+    assertTrue("Status didn't contain proxy: " + captor.getValue(),
+        error.getDescription().contains("proxy"));
+    assertEquals("Not UNAVAILABLE: " + captor.getValue(),
+        Status.UNAVAILABLE.getCode(), error.getCode());
+    verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
   }
 
   private int activeStreamCount() {

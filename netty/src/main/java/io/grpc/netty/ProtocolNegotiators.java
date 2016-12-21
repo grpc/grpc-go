@@ -45,6 +45,7 @@ import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
@@ -54,6 +55,9 @@ import io.netty.handler.codec.http.HttpClientUpgradeHandler;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
+import io.netty.handler.proxy.HttpProxyHandler;
+import io.netty.handler.proxy.ProxyConnectionEvent;
+import io.netty.handler.proxy.ProxyHandler;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.OpenSslEngine;
 import io.netty.handler.ssl.SslContext;
@@ -61,6 +65,7 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -186,6 +191,73 @@ public final class ProtocolNegotiators {
     @Override
     public AsciiString scheme() {
       return Utils.HTTPS;
+    }
+  }
+
+  /**
+   * Returns a {@link ProtocolNegotiator} that does HTTP CONNECT proxy negotiation.
+   */
+  public static ProtocolNegotiator httpProxy(final SocketAddress proxyAddress,
+      final @Nullable String proxyUsername, final @Nullable String proxyPassword,
+      final ProtocolNegotiator negotiator) {
+    Preconditions.checkNotNull(proxyAddress, "proxyAddress");
+    Preconditions.checkNotNull(negotiator, "negotiator");
+    class ProxyNegotiator implements ProtocolNegotiator {
+      @Override
+      public Handler newHandler(GrpcHttp2ConnectionHandler http2Handler) {
+        HttpProxyHandler proxyHandler;
+        if (proxyUsername == null || proxyPassword == null) {
+          proxyHandler = new HttpProxyHandler(proxyAddress);
+        } else {
+          proxyHandler = new HttpProxyHandler(proxyAddress, proxyUsername, proxyPassword);
+        }
+        return new BufferUntilProxyTunnelledHandler(
+            proxyHandler, negotiator.newHandler(http2Handler));
+      }
+    }
+
+    return new ProxyNegotiator();
+  }
+
+  /**
+   * Buffers all writes until the HTTP CONNECT tunnel is established.
+   */
+  static final class BufferUntilProxyTunnelledHandler extends AbstractBufferingHandler
+      implements ProtocolNegotiator.Handler {
+    private final ProtocolNegotiator.Handler originalHandler;
+
+    public BufferUntilProxyTunnelledHandler(
+        ProxyHandler proxyHandler, ProtocolNegotiator.Handler handler) {
+      super(proxyHandler, handler);
+      this.originalHandler = handler;
+    }
+
+
+    @Override
+    public AsciiString scheme() {
+      return originalHandler.scheme();
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+      if (evt instanceof ProxyConnectionEvent) {
+        writeBufferedAndRemove(ctx);
+      }
+      super.userEventTriggered(ctx, evt);
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+      fail(ctx, unavailableException("Connection broken while trying to CONNECT through proxy"));
+      super.channelInactive(ctx);
+    }
+
+    @Override
+    public void close(ChannelHandlerContext ctx, ChannelPromise future) throws Exception {
+      if (ctx.channel().isActive()) { // This may be a notification that the socket was closed
+        fail(ctx, unavailableException("Channel closed while trying to CONNECT through proxy"));
+      }
+      super.close(ctx, future);
     }
   }
 
@@ -366,10 +438,22 @@ public final class ProtocolNegotiators {
        * lifetime and we only want to configure it once.
        */
       if (handlers != null) {
-        ctx.pipeline().addFirst(handlers);
+        for (ChannelHandler handler : handlers) {
+          ctx.pipeline().addBefore(ctx.name(), null, handler);
+        }
+        ChannelHandler handler0 = handlers[0];
+        ChannelHandlerContext handler0Ctx = ctx.pipeline().context(handlers[0]);
         handlers = null;
+        if (handler0Ctx != null) { // The handler may have removed itself immediately
+          if (handler0 instanceof ChannelInboundHandler) {
+            ((ChannelInboundHandler) handler0).channelRegistered(handler0Ctx);
+          } else {
+            handler0Ctx.fireChannelRegistered();
+          }
+        }
+      } else {
+        super.channelRegistered(ctx);
       }
-      super.channelRegistered(ctx);
     }
 
     @Override
@@ -424,7 +508,10 @@ public final class ProtocolNegotiators {
 
     @Override
     public void close(ChannelHandlerContext ctx, ChannelPromise future) throws Exception {
-      fail(ctx, unavailableException("Channel closed while performing protocol negotiation"));
+      if (ctx.channel().isActive()) { // This may be a notification that the socket was closed
+        fail(ctx, unavailableException("Channel closed while performing protocol negotiation"));
+      }
+      super.close(ctx, future);
     }
 
     protected final void fail(ChannelHandlerContext ctx, Throwable cause) {
