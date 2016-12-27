@@ -47,6 +47,10 @@ public class Util {
 
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
       ProtoUtils.keyForProto(Messages.SimpleContext.getDefaultInstance());
+  public static final Metadata.Key<String> ECHO_INITIAL_METADATA_KEY
+      = Metadata.Key.of("x-grpc-test-echo-initial", Metadata.ASCII_STRING_MARSHALLER);
+  public static final Metadata.Key<byte[]> ECHO_TRAILING_METADATA_KEY
+      = Metadata.Key.of("x-grpc-test-echo-trailing-bin", Metadata.BINARY_BYTE_MARSHALLER);
 
   /** Assert that two messages are equal, producing a useful message if not. */
   public static void assertEquals(MessageLite expected, MessageLite actual) {

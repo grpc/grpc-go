@@ -263,6 +263,11 @@ public class TestServiceClient {
         break;
       }
 
+      case CUSTOM_METADATA: {
+        tester.customMetadata();
+        break;
+      }
+
       case UNIMPLEMENTED_METHOD: {
         tester.unimplementedMethod();
         break;

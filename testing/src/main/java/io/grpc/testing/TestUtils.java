@@ -105,6 +105,60 @@ public class TestUtils {
   }
 
   /**
+   * Echoes request headers with the specified key(s) from a client into response headers only.
+   */
+  public static ServerInterceptor echoRequestMetadataInHeaders(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          final Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendHeaders(Metadata responseHeaders) {
+            responseHeaders.merge(requestHeaders, keySet);
+            super.sendHeaders(responseHeaders);
+          }
+
+          @Override
+          public void close(Status status, Metadata trailers) {
+            super.close(status, trailers);
+          }
+        }, requestHeaders);
+      }
+    };
+  }
+
+  /**
+   * Echoes request headers with the specified key(s) from a client into response trailers only.
+   */
+  public static ServerInterceptor echoRequestMetadataInTrailers(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          final Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendHeaders(Metadata responseHeaders) {
+            super.sendHeaders(responseHeaders);
+          }
+
+          @Override
+          public void close(Status status, Metadata trailers) {
+            trailers.merge(requestHeaders, keySet);
+            super.close(status, trailers);
+          }
+        }, requestHeaders);
+      }
+    };
+  }
+
+  /**
    * Capture the request headers from a client. Useful for testing metadata propagation without
    * requiring that it be symmetric on client and server, as with
    * {@link #echoRequestHeadersInterceptor}.

@@ -143,6 +143,8 @@ public abstract class AbstractInteropTest {
         .add(TestUtils.recordServerCallInterceptor(serverCallCapture))
         .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
         .add(TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY))
+        .add(TestUtils.echoRequestMetadataInHeaders(Util.ECHO_INITIAL_METADATA_KEY))
+        .add(TestUtils.echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY))
         .add(interceptors)
         .build();
 
@@ -841,6 +843,85 @@ public abstract class AbstractInteropTest {
     requestObserver.onCompleted();
     verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
     verifyNoMoreInteractions(responseObserver);
+  }
+
+  @Test(timeout = 10000)
+  public void customMetadata() throws Exception {
+    final int responseSize = 314159;
+    final int requestSize = 271828;
+    final SimpleRequest request = SimpleRequest.newBuilder()
+        .setResponseSize(responseSize)
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setPayload(Payload.newBuilder()
+            .setBody(ByteString.copyFrom(new byte[requestSize])))
+        .build();
+    final StreamingOutputCallRequest streamingRequest = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(responseSize))
+        .setResponseType(PayloadType.COMPRESSABLE)
+        .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[requestSize])))
+        .build();
+    final SimpleResponse goldenResponse = SimpleResponse.newBuilder()
+        .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[responseSize])))
+        .build();
+    final StreamingOutputCallResponse goldenStreamingResponse =
+        StreamingOutputCallResponse.newBuilder()
+            .setPayload(Payload.newBuilder()
+            .setType(PayloadType.COMPRESSABLE)
+            .setBody(ByteString.copyFrom(new byte[responseSize])))
+        .build();
+    final byte[] trailingBytes =
+        {(byte) 0xa, (byte) 0xb, (byte) 0xa, (byte) 0xb, (byte) 0xa, (byte) 0xb};
+
+    // Test UnaryCall
+    Metadata metadata = new Metadata();
+    metadata.put(Util.ECHO_INITIAL_METADATA_KEY, "test_initial_metadata_value");
+    metadata.put(Util.ECHO_TRAILING_METADATA_KEY, trailingBytes);
+    TestServiceGrpc.TestServiceBlockingStub blockingStub = TestServiceGrpc.newBlockingStub(channel);
+    blockingStub = MetadataUtils.attachHeaders(blockingStub, metadata);
+    AtomicReference<Metadata> headersCapture = new AtomicReference<Metadata>();
+    AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
+    blockingStub = MetadataUtils.captureMetadata(blockingStub, headersCapture, trailersCapture);
+    SimpleResponse response = blockingStub.unaryCall(request);
+
+    assertEquals(goldenResponse, response);
+    assertEquals("test_initial_metadata_value",
+        headersCapture.get().get(Util.ECHO_INITIAL_METADATA_KEY));
+    assertTrue(
+        Arrays.equals(trailingBytes, trailersCapture.get().get(Util.ECHO_TRAILING_METADATA_KEY)));
+    if (metricsExpected()) {
+      assertMetrics("grpc.testing.TestService/UnaryCall", Status.Code.OK,
+          Collections.singleton(request), Collections.singleton(goldenResponse));
+    }
+
+    // Test FullDuplexCall
+    metadata = new Metadata();
+    metadata.put(Util.ECHO_INITIAL_METADATA_KEY, "test_initial_metadata_value");
+    metadata.put(Util.ECHO_TRAILING_METADATA_KEY, trailingBytes);
+    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    stub = MetadataUtils.attachHeaders(stub, metadata);
+    headersCapture = new AtomicReference<Metadata>();
+    trailersCapture = new AtomicReference<Metadata>();
+    stub = MetadataUtils.captureMetadata(stub, headersCapture, trailersCapture);
+
+    StreamRecorder<Messages.StreamingOutputCallResponse> recorder = StreamRecorder.create();
+    StreamObserver<Messages.StreamingOutputCallRequest> requestStream =
+        stub.fullDuplexCall(recorder);
+    requestStream.onNext(streamingRequest);
+    requestStream.onCompleted();
+    recorder.awaitCompletion();
+
+    assertSuccess(recorder);
+    assertEquals(goldenStreamingResponse, recorder.firstValue().get());
+    assertEquals("test_initial_metadata_value",
+        headersCapture.get().get(Util.ECHO_INITIAL_METADATA_KEY));
+    assertTrue(
+        Arrays.equals(trailingBytes, trailersCapture.get().get(Util.ECHO_TRAILING_METADATA_KEY)));
+    if (metricsExpected()) {
+      assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.OK,
+          Collections.singleton(streamingRequest), Collections.singleton(goldenStreamingResponse));
+    }
   }
 
   /** Sends an rpc to an unimplemented method within TestService. */

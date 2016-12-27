@@ -146,7 +146,9 @@ public class TestServiceServer {
         .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .addService(ServerInterceptors.intercept(
             new TestServiceImpl(executor),
-            TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY)))
+            TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY),
+            TestUtils.echoRequestMetadataInHeaders(Util.ECHO_INITIAL_METADATA_KEY),
+            TestUtils.echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY)))
         .build().start();
   }
 
