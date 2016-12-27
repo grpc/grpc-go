@@ -230,27 +230,27 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 			test := selector.getNextTest()
 			switch test {
 			case "empty_unary":
-				interop.DoEmptyUnaryCall(client)
+				interop.DoEmptyUnaryCall(client, grpc.FailFast(false))
 			case "large_unary":
-				interop.DoLargeUnaryCall(client)
+				interop.DoLargeUnaryCall(client, grpc.FailFast(false))
 			case "client_streaming":
-				interop.DoClientStreaming(client)
+				interop.DoClientStreaming(client, grpc.FailFast(false))
 			case "server_streaming":
-				interop.DoServerStreaming(client)
+				interop.DoServerStreaming(client, grpc.FailFast(false))
 			case "ping_pong":
-				interop.DoPingPong(client)
+				interop.DoPingPong(client, grpc.FailFast(false))
 			case "empty_stream":
-				interop.DoEmptyStream(client)
+				interop.DoEmptyStream(client, grpc.FailFast(false))
 			case "timeout_on_sleeping_server":
-				interop.DoTimeoutOnSleepingServer(client)
+				interop.DoTimeoutOnSleepingServer(client, grpc.FailFast(false))
 			case "cancel_after_begin":
-				interop.DoCancelAfterBegin(client)
+				interop.DoCancelAfterBegin(client, grpc.FailFast(false))
 			case "cancel_after_first_response":
-				interop.DoCancelAfterFirstResponse(client)
+				interop.DoCancelAfterFirstResponse(client, grpc.FailFast(false))
 			case "status_code_and_message":
-				interop.DoStatusCodeAndMessage(client)
+				interop.DoStatusCodeAndMessage(client, grpc.FailFast(false))
 			case "custom_metadata":
-				interop.DoCustomMetadata(client)
+				interop.DoCustomMetadata(client, grpc.FailFast(false))
 			}
 			done <- true
 		}()
@@ -348,3 +348,4 @@ func main() {
 	grpclog.Printf(" ===== ALL DONE ===== ")
 
 }
+
