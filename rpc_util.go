@@ -265,7 +265,16 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		sizeLen    = 4
 	)
 
-	var buf = make([]byte, payloadLen+sizeLen+len(b))
+	// The full grpc message needs a 5 byte header in front of the payload.
+	// Doing an append/copy instead of a make/copy allows taking advantage
+	// of possibly remaining capacity in b.
+	// For example, protoCodec marshalls onto a slice that's 5 bytes longer than
+	// it needs so that this append doesn't have to create a new slice.
+	var buf = append(b, 0, 0, 0, 0, 0)
+
+	if int(length) != copy(buf[5:], b[:]) {
+		panic("copied incorrect number of message payload bytes")
+	}
 
 	// Write payload format
 	if cp == nil {
@@ -276,7 +285,6 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	// Write length of b into buf
 	binary.BigEndian.PutUint32(buf[1:], uint32(length))
 	// Copy encoded msg to buf
-	copy(buf[5:], b)
 
 	if outPayload != nil {
 		outPayload.WireLength = len(buf)
