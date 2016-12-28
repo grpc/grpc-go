@@ -56,10 +56,14 @@ type protoCodec struct {
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+	const (
+		protoSizeFieldLength = 4
+	)
+
 	var protoMsg = v.(proto.Message)
 	// adding 4 to proto.Size avoids an extra allocation when appending the 4 byte length
 	// field in 'proto.Buffer.enc_len_thing'
-	var sizeNeeded = proto.Size(protoMsg) + 4
+	var sizeNeeded = proto.Size(protoMsg) + protoSizeFieldLength
 	var token = atomic.AddUint32(&globalBufCacheToken, 1)
 
 	buffer := globalBufAlloc(token)
