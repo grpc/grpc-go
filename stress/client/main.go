@@ -225,41 +225,38 @@ func performRPCs(gauge *gauge, conn *grpc.ClientConn, selector *weightedRandomTe
 	var numCalls int64
 	startTime := time.Now()
 	for {
-		done := make(chan bool, 1)
-		go func() {
-			test := selector.getNextTest()
-			switch test {
-			case "empty_unary":
-				interop.DoEmptyUnaryCall(client)
-			case "large_unary":
-				interop.DoLargeUnaryCall(client)
-			case "client_streaming":
-				interop.DoClientStreaming(client)
-			case "server_streaming":
-				interop.DoServerStreaming(client)
-			case "ping_pong":
-				interop.DoPingPong(client)
-			case "empty_stream":
-				interop.DoEmptyStream(client)
-			case "timeout_on_sleeping_server":
-				interop.DoTimeoutOnSleepingServer(client)
-			case "cancel_after_begin":
-				interop.DoCancelAfterBegin(client)
-			case "cancel_after_first_response":
-				interop.DoCancelAfterFirstResponse(client)
-			case "status_code_and_message":
-				interop.DoStatusCodeAndMessage(client)
-			case "custom_metadata":
-				interop.DoCustomMetadata(client)
-			}
-			done <- true
-		}()
+		test := selector.getNextTest()
+		switch test {
+		case "empty_unary":
+			interop.DoEmptyUnaryCall(client, grpc.FailFast(false))
+		case "large_unary":
+			interop.DoLargeUnaryCall(client, grpc.FailFast(false))
+		case "client_streaming":
+			interop.DoClientStreaming(client, grpc.FailFast(false))
+		case "server_streaming":
+			interop.DoServerStreaming(client, grpc.FailFast(false))
+		case "ping_pong":
+			interop.DoPingPong(client, grpc.FailFast(false))
+		case "empty_stream":
+			interop.DoEmptyStream(client, grpc.FailFast(false))
+		case "timeout_on_sleeping_server":
+			interop.DoTimeoutOnSleepingServer(client, grpc.FailFast(false))
+		case "cancel_after_begin":
+			interop.DoCancelAfterBegin(client, grpc.FailFast(false))
+		case "cancel_after_first_response":
+			interop.DoCancelAfterFirstResponse(client, grpc.FailFast(false))
+		case "status_code_and_message":
+			interop.DoStatusCodeAndMessage(client, grpc.FailFast(false))
+		case "custom_metadata":
+			interop.DoCustomMetadata(client, grpc.FailFast(false))
+		}
+		numCalls++
+		gauge.set(int64(float64(numCalls) / time.Since(startTime).Seconds()))
+
 		select {
 		case <-stop:
 			return
-		case <-done:
-			numCalls++
-			gauge.set(int64(float64(numCalls) / time.Since(startTime).Seconds()))
+		default:
 		}
 	}
 }
