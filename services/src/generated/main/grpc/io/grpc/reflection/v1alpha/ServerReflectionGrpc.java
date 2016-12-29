@@ -75,7 +75,7 @@ public class ServerReflectionGrpc {
       return asyncUnimplementedStreamingCall(METHOD_SERVER_REFLECTION_INFO, responseObserver);
     }
 
-    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
             METHOD_SERVER_REFLECTION_INFO,

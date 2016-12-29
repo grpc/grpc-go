@@ -82,7 +82,7 @@ public class UnimplementedServiceGrpc {
       asyncUnimplementedUnaryCall(METHOD_UNIMPLEMENTED_CALL, responseObserver);
     }
 
-    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
             METHOD_UNIMPLEMENTED_CALL,

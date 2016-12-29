@@ -747,7 +747,7 @@ static void PrintStub(
     p->Print("\n");
     p->Print(
         *vars,
-        "@$Override$ public $ServerServiceDefinition$ bindService() {\n");
+        "@$Override$ public final $ServerServiceDefinition$ bindService() {\n");
     (*vars)["instance"] = "this";
     PrintBindServiceMethodBody(service, vars, p, generate_nano);
     p->Print("}\n");

@@ -33,11 +33,11 @@ package io.grpc.examples.advanced;
 
 import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 
+import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.examples.helloworld.GreeterGrpc;
-import io.grpc.examples.helloworld.GreeterGrpc.GreeterImplBase;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloWorldServer;
@@ -106,10 +106,9 @@ public class HelloJsonServer {
     server.blockUntilShutdown();
   }
 
-  private static class GreeterImpl extends GreeterImplBase {
+  private static class GreeterImpl implements BindableService {
 
-    @Override
-    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
+    private void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
       HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
       responseObserver.onNext(reply);
       responseObserver.onCompleted();

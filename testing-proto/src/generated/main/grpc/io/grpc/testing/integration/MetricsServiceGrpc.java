@@ -94,7 +94,7 @@ public class MetricsServiceGrpc {
       asyncUnimplementedUnaryCall(METHOD_GET_GAUGE, responseObserver);
     }
 
-    @java.lang.Override public io.grpc.ServerServiceDefinition bindService() {
+    @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
             METHOD_GET_ALL_GAUGES,
