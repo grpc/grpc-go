@@ -905,44 +905,40 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
     p->Print(*vars, "}\n");
     p->Outdent();
     p->Print(*vars, "}\n\n");
-
-    p->Print(
-            *vars,
-            "private static $ServiceDescriptor$ serviceDescriptor;\n\n");
-
-    p->Print(
-        *vars,
-        "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
-    p->Indent();
-    p->Print("if (serviceDescriptor == null) {\n");
-    p->Indent();
-    p->Print(
-        *vars,
-        "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME,\n");
-    p->Indent();
-    p->Indent();
-    p->Print(
-        *vars,
-        "new $proto_descriptor_supplier$()");
-    p->Outdent();
-    p->Outdent();
-  } else {
-    p->Print(
-      *vars,
-      "private static $ServiceDescriptor$ serviceDescriptor;\n\n");
-    p->Print(
-        *vars,
-        "public static synchronized $ServiceDescriptor$ getServiceDescriptor() {\n");
-    p->Indent();
-    p->Print("if (serviceDescriptor == null) {\n");
-    p->Indent();
-    p->Print(
-        *vars,
-        "serviceDescriptor = new $ServiceDescriptor$(SERVICE_NAME");
   }
 
+  p->Print(
+      *vars,
+      "private static volatile $ServiceDescriptor$ serviceDescriptor;\n\n");
+
+  p->Print(
+      *vars,
+      "public static $ServiceDescriptor$ getServiceDescriptor() {\n");
+  p->Indent();
+  p->Print(
+      *vars,
+      "$ServiceDescriptor$ result = serviceDescriptor;\n");
+  p->Print("if (result == null) {\n");
+  p->Indent();
+  p->Print(
+      *vars,
+      "synchronized ($service_class_name$.class) {\n");
+  p->Indent();
+  p->Print("result = serviceDescriptor;\n");
+  p->Print("if (result == null) {\n");
+  p->Indent();
+
+  p->Print(
+      *vars,
+      "serviceDescriptor = result = new $ServiceDescriptor$(\n");
   p->Indent();
   p->Indent();
+  p->Print("SERVICE_NAME");
+  if (flavor == ProtoFlavor::NORMAL) {
+    p->Print(
+        *vars,
+        ",\nnew $proto_descriptor_supplier$()");
+  }
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
@@ -951,8 +947,14 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   p->Print(");\n");
   p->Outdent();
   p->Outdent();
+
   p->Outdent();
-  p->Print("}\n\nreturn serviceDescriptor;\n");
+  p->Print("}\n");
+  p->Outdent();
+  p->Print("}\n");
+  p->Outdent();
+  p->Print("}\n");
+  p->Print("return result;\n");
   p->Outdent();
   p->Print("}\n");
 }

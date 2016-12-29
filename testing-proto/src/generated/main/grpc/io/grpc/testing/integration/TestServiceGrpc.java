@@ -563,21 +563,27 @@ public class TestServiceGrpc {
     }
   }
 
-  private static io.grpc.ServiceDescriptor serviceDescriptor;
+  private static volatile io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
-    if (serviceDescriptor == null) {
-      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new TestServiceDescriptorSupplier(),
-          METHOD_EMPTY_CALL,
-          METHOD_UNARY_CALL,
-          METHOD_STREAMING_OUTPUT_CALL,
-          METHOD_STREAMING_INPUT_CALL,
-          METHOD_FULL_DUPLEX_CALL,
-          METHOD_HALF_DUPLEX_CALL,
-          METHOD_UNIMPLEMENTED_CALL);
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    io.grpc.ServiceDescriptor result = serviceDescriptor;
+    if (result == null) {
+      synchronized (TestServiceGrpc.class) {
+        result = serviceDescriptor;
+        if (result == null) {
+          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
+              SERVICE_NAME,
+              new TestServiceDescriptorSupplier(),
+              METHOD_EMPTY_CALL,
+              METHOD_UNARY_CALL,
+              METHOD_STREAMING_OUTPUT_CALL,
+              METHOD_STREAMING_INPUT_CALL,
+              METHOD_FULL_DUPLEX_CALL,
+              METHOD_HALF_DUPLEX_CALL,
+              METHOD_UNIMPLEMENTED_CALL);
+        }
+      }
     }
-
-    return serviceDescriptor;
+    return result;
   }
 }

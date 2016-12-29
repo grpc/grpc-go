@@ -202,15 +202,21 @@ public class ServerReflectionGrpc {
     }
   }
 
-  private static io.grpc.ServiceDescriptor serviceDescriptor;
+  private static volatile io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
-    if (serviceDescriptor == null) {
-      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new ServerReflectionDescriptorSupplier(),
-          METHOD_SERVER_REFLECTION_INFO);
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    io.grpc.ServiceDescriptor result = serviceDescriptor;
+    if (result == null) {
+      synchronized (ServerReflectionGrpc.class) {
+        result = serviceDescriptor;
+        if (result == null) {
+          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
+              SERVICE_NAME,
+              new ServerReflectionDescriptorSupplier(),
+              METHOD_SERVER_REFLECTION_INFO);
+        }
+      }
     }
-
-    return serviceDescriptor;
+    return result;
   }
 }

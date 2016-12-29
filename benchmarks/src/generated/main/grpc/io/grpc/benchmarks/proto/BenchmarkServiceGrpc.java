@@ -269,16 +269,22 @@ public class BenchmarkServiceGrpc {
     }
   }
 
-  private static io.grpc.ServiceDescriptor serviceDescriptor;
+  private static volatile io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
-    if (serviceDescriptor == null) {
-      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new BenchmarkServiceDescriptorSupplier(),
-          METHOD_UNARY_CALL,
-          METHOD_STREAMING_CALL);
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    io.grpc.ServiceDescriptor result = serviceDescriptor;
+    if (result == null) {
+      synchronized (BenchmarkServiceGrpc.class) {
+        result = serviceDescriptor;
+        if (result == null) {
+          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
+              SERVICE_NAME,
+              new BenchmarkServiceDescriptorSupplier(),
+              METHOD_UNARY_CALL,
+              METHOD_STREAMING_CALL);
+        }
+      }
     }
-
-    return serviceDescriptor;
+    return result;
   }
 }

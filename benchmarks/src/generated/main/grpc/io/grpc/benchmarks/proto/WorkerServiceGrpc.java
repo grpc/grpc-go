@@ -387,18 +387,24 @@ public class WorkerServiceGrpc {
     }
   }
 
-  private static io.grpc.ServiceDescriptor serviceDescriptor;
+  private static volatile io.grpc.ServiceDescriptor serviceDescriptor;
 
-  public static synchronized io.grpc.ServiceDescriptor getServiceDescriptor() {
-    if (serviceDescriptor == null) {
-      serviceDescriptor = new io.grpc.ServiceDescriptor(SERVICE_NAME,
-          new WorkerServiceDescriptorSupplier(),
-          METHOD_RUN_SERVER,
-          METHOD_RUN_CLIENT,
-          METHOD_CORE_COUNT,
-          METHOD_QUIT_WORKER);
+  public static io.grpc.ServiceDescriptor getServiceDescriptor() {
+    io.grpc.ServiceDescriptor result = serviceDescriptor;
+    if (result == null) {
+      synchronized (WorkerServiceGrpc.class) {
+        result = serviceDescriptor;
+        if (result == null) {
+          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
+              SERVICE_NAME,
+              new WorkerServiceDescriptorSupplier(),
+              METHOD_RUN_SERVER,
+              METHOD_RUN_CLIENT,
+              METHOD_CORE_COUNT,
+              METHOD_QUIT_WORKER);
+        }
+      }
     }
-
-    return serviceDescriptor;
+    return result;
   }
 }
