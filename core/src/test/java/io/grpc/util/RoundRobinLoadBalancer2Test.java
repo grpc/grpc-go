@@ -88,15 +88,13 @@ public class RoundRobinLoadBalancer2Test {
   private RoundRobinLoadBalancer loadBalancer;
   private Map<ResolvedServerInfoGroup, EquivalentAddressGroup> servers = Maps.newHashMap();
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Maps.newLinkedHashMap();
-  private static Attributes.Key<String> MAJOR_KEY = Attributes.Key.of("major-key");
+  private static final Attributes.Key<String> MAJOR_KEY = Attributes.Key.of("major-key");
   private Attributes affinity = Attributes.newBuilder().set(MAJOR_KEY, "I got the keys").build();
 
   @Captor
   private ArgumentCaptor<Picker> pickerCaptor;
   @Captor
   private ArgumentCaptor<EquivalentAddressGroup> eagCaptor;
-  @Captor
-  private ArgumentCaptor<Attributes> attrsCaptor;
   @Mock
   private Helper mockHelper;
   @Mock

@@ -112,6 +112,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -1450,10 +1451,15 @@ public class OkHttpClientTransportTest {
   }
 
   private static class MockFrameReader implements FrameReader {
-    CountDownLatch closed = new CountDownLatch(1);
-    boolean throwExceptionForNextFrame;
-    boolean returnFalseInNextFrame;
-    boolean throwErrorForNextFrame;
+    final CountDownLatch closed = new CountDownLatch(1);
+
+    enum Result {
+      THROW_EXCEPTION,
+      RETURN_FALSE,
+      THROW_ERROR
+    }
+
+    final LinkedBlockingQueue<Result> nextResults = new LinkedBlockingQueue<Result>();
 
     @Override
     public void close() throws IOException {
@@ -1472,41 +1478,36 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public synchronized boolean nextFrame(Handler handler) throws IOException {
-      if (throwErrorForNextFrame) {
-        throw new Error(ERROR_MESSAGE);
-      }
-      if (throwExceptionForNextFrame) {
-        throw new IOException(NETWORK_ISSUE_MESSAGE);
-      }
-      if (returnFalseInNextFrame) {
-        return false;
-      }
+    public boolean nextFrame(Handler handler) throws IOException {
+      Result result;
       try {
-        wait();
+        result = nextResults.take();
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IOException(e);
       }
-      if (throwExceptionForNextFrame) {
-        throw new IOException(NETWORK_ISSUE_MESSAGE);
+      switch (result) {
+        case THROW_EXCEPTION:
+          throw new IOException(NETWORK_ISSUE_MESSAGE);
+        case RETURN_FALSE:
+          return false;
+        case THROW_ERROR:
+          throw new Error(ERROR_MESSAGE);
+        default:
+          throw new UnsupportedOperationException("unimplemented: " + result);
       }
-      return !returnFalseInNextFrame;
     }
 
-    synchronized void throwIoExceptionForNextFrame() {
-      throwExceptionForNextFrame = true;
-      notifyAll();
+    void throwIoExceptionForNextFrame() {
+      nextResults.add(Result.THROW_EXCEPTION);
     }
 
-    synchronized void throwErrorForNextFrame() {
-      throwErrorForNextFrame = true;
-      notifyAll();
+    void throwErrorForNextFrame() {
+      nextResults.add(Result.THROW_ERROR);
     }
 
-    synchronized void nextFrameAtEndOfStream() {
-      returnFalseInNextFrame = true;
-      notifyAll();
+    void nextFrameAtEndOfStream() {
+      nextResults.add(Result.RETURN_FALSE);
     }
 
     @Override
@@ -1574,7 +1575,7 @@ public class OkHttpClientTransportTest {
         try {
           message.close();
         } catch (IOException e) {
-          throw new RuntimeException(e);
+          // Ignore
         }
       }
     }

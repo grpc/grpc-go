@@ -72,7 +72,7 @@ public class PickFirstLoadBalancer2Test {
   private List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
   private List<SocketAddress> socketAddresses = Lists.newArrayList();
 
-  private static Attributes.Key<String> FOO = Attributes.Key.of("foo");
+  private static final Attributes.Key<String> FOO = Attributes.Key.of("foo");
   private Attributes affinity = Attributes.newBuilder().set(FOO, "bar").build();
 
   @Captor
