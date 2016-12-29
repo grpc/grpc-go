@@ -31,6 +31,8 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.LinkedList;
@@ -97,7 +99,7 @@ final class ChannelExecutor {
    */
   ChannelExecutor executeLater(Runnable runnable) {
     synchronized (lock) {
-      queue.add(runnable);
+      queue.add(checkNotNull(runnable, "runnable is null"));
     }
     return this;
   }
