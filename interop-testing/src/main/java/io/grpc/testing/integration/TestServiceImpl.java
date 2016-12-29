@@ -31,6 +31,7 @@
 
 package io.grpc.testing.integration;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Queues;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
@@ -55,6 +56,7 @@ import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Implementation of the business logic for the TestService. Uses an executor to schedule chunks
@@ -131,6 +133,14 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
           .setType(compressable ? PayloadType.COMPRESSABLE : PayloadType.UNCOMPRESSABLE)
           .setBody(payload);
     }
+
+    if (req.hasResponseStatus()) {
+      obs.onError(Status.fromCodeValue(req.getResponseStatus().getCode())
+          .withDescription(req.getResponseStatus().getMessage())
+          .asRuntimeException());
+      return;
+    }
+
     responseObserver.onNext(responseBuilder.build());
     responseObserver.onCompleted();
   }
@@ -186,13 +196,22 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     return new StreamObserver<StreamingOutputCallRequest>() {
       @Override
       public void onNext(StreamingOutputCallRequest request) {
+        if (request.hasResponseStatus()) {
+          dispatcher.cancel();
+          responseObserver.onError(Status.fromCodeValue(request.getResponseStatus().getCode())
+              .withDescription(request.getResponseStatus().getMessage())
+              .asRuntimeException());
+          return;
+        }
         dispatcher.enqueue(toChunkQueue(request));
       }
 
       @Override
       public void onCompleted() {
-        // Tell the dispatcher that all input has been received.
-        dispatcher.completeInput();
+        if (!dispatcher.isCancelled()) {
+          // Tell the dispatcher that all input has been received.
+          dispatcher.completeInput();
+        }
       }
 
       @Override
@@ -239,6 +258,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     private final Queue<Chunk> chunks;
     private final StreamObserver<StreamingOutputCallResponse> responseStream;
     private boolean scheduled;
+    @GuardedBy("this") private boolean cancelled;
     private Throwable failure;
     private Runnable dispatchTask = new Runnable() {
       @Override
@@ -296,10 +316,26 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     }
 
     /**
+     * Allows the service to cancel the remaining responses.
+     */
+    public synchronized void cancel() {
+      Preconditions.checkState(!cancelled, "Dispatcher already cancelled");
+      chunks.clear();
+      cancelled = true;
+    }
+
+    public synchronized boolean isCancelled() {
+      return cancelled;
+    }
+
+    /**
      * Dispatches the current response chunk to the client. This is only called by the executor. At
      * any time, a given dispatch task should only be registered with the executor once.
      */
     private synchronized void dispatchChunk() {
+      if (cancelled) {
+        return;
+      }
       try {
         // Pop off the next chunk and send it to the client.
         Chunk chunk = chunks.remove();
