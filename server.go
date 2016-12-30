@@ -1299,6 +1299,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 		if trInfo != nil {
 			trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 			trInfo.tr.SetError()
+
 	s.opts.unknownHandler(t, stream, trace)
 }
 
