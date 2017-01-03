@@ -854,7 +854,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		}
 		// Read the preface sent by client
 		if _, err = io.ReadFull(serverConn, make([]byte, len(http2.ClientPreface))); err != nil {
-			t.Errorf("Error at server-side while reading from conn", err)
+			t.Errorf("Error at server-side while reading from conn: %v", err)
 		}
 		framer := http2.NewFramer(serverConn, serverConn)
 		if err = framer.WriteSettingsAck(); err != nil {
