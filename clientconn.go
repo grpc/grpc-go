@@ -103,6 +103,13 @@ type dialOptions struct {
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+// WithTOSCallback returns a DialOption which provides tranpsort a mechanism to retrieve tos
+func WithTOSCallback( f func(net.Conn) int) DialOption {
+	return func(o *dialOptions) {
+		o.copts.GetTOS = f
+	}
+}
+
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
 func WithCodec(c Codec) DialOption {
 	return func(o *dialOptions) {

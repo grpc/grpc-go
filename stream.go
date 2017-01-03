@@ -287,6 +287,16 @@ type clientStream struct {
 	statsHandler stats.Handler
 }
 
+func (cs *clientStream) GetTOS() int {
+	if ct, ok := cs.t.(interface{
+		GetTOS() int
+	}); ok {
+		return ct.GetTOS()
+	}
+	// otherwise return the default value for TOS
+	return transport.DefaultTOS
+}
+
 func (cs *clientStream) Context() context.Context {
 	return cs.s.Context()
 }
