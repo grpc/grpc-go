@@ -34,6 +34,7 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -856,7 +857,9 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		if _, err = io.ReadFull(serverConn, make([]byte, len(http2.ClientPreface))); err != nil {
 			t.Errorf("Error at server-side while reading from conn: %v", err)
 		}
-		framer := http2.NewFramer(serverConn, serverConn)
+		reader := bufio.NewReaderSize(serverConn, http2IOBufSize)
+		writer := bufio.NewWriterSize(serverConn, http2IOBufSize)
+		framer := http2.NewFramer(writer, reader)
 		if err = framer.WriteSettingsAck(); err != nil {
 			t.Errorf("Error at server-side while writing settings ack: %v", err)
 		}
@@ -878,6 +881,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		if err = framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
 			t.Errorf("Error at server-side while writting headers: %v", err)
 		}
+		writer.Flush()
 	}()
 	// Create a gRPC client.
 	cTransport, err := newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{})

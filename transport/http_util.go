@@ -88,24 +88,6 @@ var (
 		codes.ResourceExhausted: http2.ErrCodeEnhanceYourCalm,
 		codes.PermissionDenied:  http2.ErrCodeInadequateSecurity,
 	}
-	httpStatusConvTab = map[int]codes.Code{
-		// 400 Bad Request - INTERNAL
-		http.StatusBadRequest: codes.Internal,
-		// 401 Unauthorized  - UNAUTHENTICATED
-		http.StatusUnauthorized: codes.Unauthenticated,
-		// 403 Forbidden - PERMISSION_DENIED
-		http.StatusForbidden: codes.PermissionDenied,
-		// 404 Not Found - UNIMPLEMENTED
-		http.StatusNotFound: codes.Unimplemented,
-		// 429 Too Many Requests - UNAVAILABLE
-		http.StatusTooManyRequests: codes.Unavailable,
-		// 502 Bad Gateway - UNAVAILABLE
-		http.StatusBadGateway: codes.Unavailable,
-		// 503 Service Unavailable - UNAVAILABLE
-		http.StatusServiceUnavailable: codes.Unavailable,
-		// 504 Gateway timeout - UNAVAILABLE
-		http.StatusGatewayTimeout: codes.Unavailable,
-	}
 )
 
 // Records the states during HPACK decoding. Must be reset once the
@@ -114,6 +96,13 @@ type decodeState struct {
 	err error // first error encountered decoding
 
 	encoding string
+	// records if grpc-status field exists
+	statusExists bool
+	// records if status filed (http status) exists
+	hstatusExists bool
+	// http status code
+	hstatus int
+	hstatusDesc string
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.
 	statusCode codes.Code
@@ -187,6 +176,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":
+		statusExists = true
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
 			d.setErr(streamErrorf(codes.Internal, "transport: malformed grpc-status: %v", err))
@@ -206,16 +196,13 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case ":path":
 		d.method = f.Value
 	case ":status":
-		httpStatusCode, err := strconv.Atoi(f.Value)
+		hstatusExists = true
+		hcode, err := strconv.Atoi(f.Value)
 		if err != nil {
 			d.setErr(streamErrorf(codes.Internal, "transport: malformed http-status: %v", err))
 			return
 		}
-		if convCode, ok := httpStatusConvTab[httpStatusCode]; ok {
-			d.statusCode = convCode
-			d.statusDesc = http.StatusText(httpStatusCode)
-			d.setErr(streamErrorf(d.statusCode, d.statusDesc, f.Value))
-		}
+		d.hstatusCode = hcode
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
 			if f.Name == "user-agent" {
