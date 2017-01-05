@@ -240,7 +240,8 @@ func DoEmptyStream(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 
 // DoTimeoutOnSleepingServer performs an RPC on a sleep server which causes RPC timeout.
 func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOption) {
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		if grpc.Code(err) == codes.DeadlineExceeded {
