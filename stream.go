@@ -112,17 +112,16 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		put    func()
 		cancel context.CancelFunc
 	)
-	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
+	var mc *MethodConfig
+	if mcfg, ok := cc.getMethodConfig(method); ok {
+		mc = &mcfg
 		if mc.Timeout > 0 {
 			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
 		}
 	}
-	for _, o := range opts {
-		if err := o.before(&c); err != nil {
-			return nil, toRPCErr(err)
-		}
+	eco, err := GetEffectiveCallOptions(mc, opts...)
+	if err != nil {
+		return nil, err
 	}
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
@@ -156,7 +155,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
-			FailFast:  c.failFast,
+			FailFast:  eco.FailFast,
 		}
 		stats.HandleRPC(ctx, begin)
 	}
@@ -171,7 +170,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 	}()
 	gopts := BalancerGetOptions{
-		BlockingWait: !c.failFast,
+		BlockingWait: !eco.FailFast,
 	}
 	for {
 		t, put, err = cc.getTransport(ctx, gopts)
@@ -181,7 +180,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				return nil, err
 			}
 			if err == errConnClosing || err == errConnUnavailable {
-				if c.failFast {
+				if eco.FailFast {
 					return nil, Errorf(codes.Unavailable, "%v", err)
 				}
 				continue
@@ -197,7 +196,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
+				if eco.FailFast {
 					return nil, toRPCErr(err)
 				}
 				continue
@@ -207,8 +206,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		break
 	}
 	cs := &clientStream{
-		opts:   opts,
-		c:      c,
+		eco:    eco,
 		desc:   desc,
 		codec:  cc.dopts.codec,
 		cp:     cc.dopts.cp,
@@ -257,8 +255,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	opts   []CallOption
-	c      callInfo
+	eco    EffectiveCallOptions
 	t      transport.ClientTransport
 	s      *transport.Stream
 	p      *parser
@@ -465,9 +462,6 @@ func (cs *clientStream) finish(err error) {
 	}()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	for _, o := range cs.opts {
-		o.after(&cs.c)
-	}
 	if cs.put != nil {
 		cs.put()
 		cs.put = nil
