@@ -232,13 +232,33 @@ func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err erro
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, error) {
 	var (
-		b      []byte
-		length uint
+		b        []byte
+		length   uint
+		header   []byte
+		startBuf []byte
 	)
+	const (
+		payloadLen     = 1
+		sizeLen        = 4
+		totalHeaderLen = 5
+	)
+
+	if sc, ok := c.(sliceSuppliedCodec); ok && msg != nil {
+		sizeNeeded := sc.ComputeSizeNeeded(msg)
+		startBuf = make([]byte, payloadLen+sizeLen+sizeNeeded)
+	} else {
+		startBuf = make([]byte, payloadLen+sizeLen)
+	}
+	header = startBuf[:totalHeaderLen]
+
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
-		b, err = c.Marshal(msg)
+		if sc, ok := c.(sliceSuppliedCodec); ok {
+			b, err = sc.MarshalUseSlice(msg, startBuf[totalHeaderLen:])
+		} else {
+			b, err = c.Marshal(msg)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -260,21 +280,9 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
 	}
 
-	const (
-		payloadLen = 1
-		sizeLen    = 4
-	)
-
-	// The full grpc message needs a 5 byte header in front of the payload.
-	// Doing an append/copy instead of a make/copy allows taking advantage
-	// of possibly remaining capacity in b.
-	// For example, protoCodec marshalls onto a slice that's 5 bytes longer than
-	// it needs so that this append doesn't have to create a new slice.
-	var buf = append(b, 0, 0, 0, 0, 0)
-
-	if int(length) != copy(buf[5:], b[:]) {
-		panic("copied incorrect number of message payload bytes")
-	}
+	// If Codec is a sliceSuppliedCodec, it's possible for the header to have enough
+	// remaining capacity to avoid a realloc. Otherwise this should realloc/copy.
+	var buf = append(header, b...)
 
 	// Write payload format
 	if cp == nil {
@@ -284,7 +292,6 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	}
 	// Write length of b into buf
 	binary.BigEndian.PutUint32(buf[1:], uint32(length))
-	// Copy encoded msg to buf
 
 	if outPayload != nil {
 		outPayload.WireLength = len(buf)

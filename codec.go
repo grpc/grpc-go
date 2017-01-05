@@ -50,29 +50,39 @@ type Codec interface {
 	String() string
 }
 
+type sliceSuppliedCodec interface {
+	ComputeSizeNeeded(v interface{}) int
+	MarshalUseSlice(v interface{}, marshalTo []byte) ([]byte, error)
+}
+
 // protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
 type protoCodec struct {
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+	var sizeNeeded = p.ComputeSizeNeeded(v)
+	newSlice := make([]byte, sizeNeeded)
+	return p.MarshalUseSlice(v, newSlice)
+}
+
+func (p protoCodec) ComputeSizeNeeded(v interface{}) int {
 	const (
 		protoSizeFieldLength = 4
-		grpcHeaderLength     = 5
 	)
 
 	var protoMsg = v.(proto.Message)
 
-	// Two Additions to "proto.Size" are made here. Adding 4 to proto.Size avoids an
-	// extra allocation when appending the 4 byte length field in 'proto.Buffer.enc_len_thing'
-	// Adding 5 more bytes for the header field leaves room to prepend the
-	// grpc message header without another copy/alloc of the marshalled slice.
-	var sizeNeeded = proto.Size(protoMsg) + protoSizeFieldLength + grpcHeaderLength
+	// Adding 4 to proto.Size avoids a realloc when appending the 4 byte
+	// length field in 'proto.Buffer.enc_len_thing'
+	var sizeNeeded = proto.Size(protoMsg) + protoSizeFieldLength
+	return sizeNeeded
+}
 
+func (p protoCodec) MarshalUseSlice(v interface{}, marshalTo []byte) ([]byte, error) {
+	var protoMsg = v.(proto.Message)
 	buffer := globalBufAlloc()
 
-	newSlice := make([]byte, sizeNeeded)
-
-	buffer.SetBuf(newSlice)
+	buffer.SetBuf(marshalTo)
 	buffer.Reset()
 	err := buffer.Marshal(protoMsg)
 	if err != nil {
@@ -81,7 +91,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	out := buffer.Bytes()
 	buffer.SetBuf(nil)
 	globalBufFree(buffer)
-	return out, err
+	return out, nil
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
