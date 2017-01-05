@@ -43,18 +43,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.google.census.RpcConstants;
 import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
+import com.google.instrumentation.stats.RpcConstants;
 
 import io.grpc.Codec;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.internal.MessageDeframer.Listener;
 import io.grpc.internal.MessageDeframer.SizeEnforcingInputStream;
-import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
-import io.grpc.internal.testing.CensusTestUtils.MetricsRecord;
+import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
+import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -81,11 +81,11 @@ public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private Listener listener = mock(Listener.class);
-  private final FakeCensusContextFactory censusCtxFactory = new FakeCensusContextFactory();
+  private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
   // MessageFramerTest tests with a server-side StatsTraceContext, so here we test with a
   // client-side StatsTraceContext.
   private StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
-      "service/method", censusCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+      "service/method", statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
 
   private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
       DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
@@ -393,7 +393,7 @@ public class MessageDeframerTest {
 
   private void checkStats(long wireBytesReceived, long uncompressedBytesReceived) {
     statsTraceCtx.callEnded(Status.OK);
-    MetricsRecord record = censusCtxFactory.pollRecord();
+    MetricsRecord record = statsCtxFactory.pollRecord();
     assertEquals(0, record.getMetricAsLongOrFail(
             RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertEquals(0, record.getMetricAsLongOrFail(

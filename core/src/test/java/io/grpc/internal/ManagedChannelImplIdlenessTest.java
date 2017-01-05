@@ -140,7 +140,7 @@ public class ManagedChannelImplIdlenessTest {
         TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS),
         executor.getScheduledExecutorService(), USER_AGENT,
         Collections.<ClientInterceptor>emptyList(),
-        NoopCensusContextFactory.INSTANCE);
+        NoopStatsContextFactory.INSTANCE);
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
     for (int i = 0; i < 2; i++) {

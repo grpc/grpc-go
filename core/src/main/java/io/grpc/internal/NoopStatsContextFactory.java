@@ -31,59 +31,59 @@
 
 package io.grpc.internal;
 
-import com.google.census.CensusContext;
-import com.google.census.CensusContextFactory;
-import com.google.census.MetricMap;
-import com.google.census.TagKey;
-import com.google.census.TagValue;
+import com.google.instrumentation.stats.MeasurementMap;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
+import com.google.instrumentation.stats.TagKey;
+import com.google.instrumentation.stats.TagValue;
 
-import java.nio.ByteBuffer;
+import java.io.InputStream;
+import java.io.OutputStream;
 
-public final class NoopCensusContextFactory extends CensusContextFactory {
-  private static final byte[] SERIALIZED_BYTES = new byte[0];
-  private static final CensusContext DEFAULT_CONTEXT = new NoopCensusContext();
-  private static final CensusContext.Builder BUILDER = new NoopContextBuilder();
+public final class NoopStatsContextFactory extends StatsContextFactory {
+  private static final StatsContext DEFAULT_CONTEXT = new NoopStatsContext();
+  private static final StatsContext.Builder BUILDER = new NoopContextBuilder();
 
-  public static final CensusContextFactory INSTANCE = new NoopCensusContextFactory();
+  public static final StatsContextFactory INSTANCE = new NoopStatsContextFactory();
 
-  private NoopCensusContextFactory() {
+  private NoopStatsContextFactory() {
   }
 
   @Override
-  public CensusContext deserialize(ByteBuffer buffer) {
+  public StatsContext deserialize(InputStream is) {
     return DEFAULT_CONTEXT;
   }
 
   @Override
-  public CensusContext getDefault() {
+  public StatsContext getDefault() {
     return DEFAULT_CONTEXT;
   }
 
-  private static class NoopCensusContext extends CensusContext {
+  private static class NoopStatsContext extends StatsContext {
     @Override
     public Builder builder() {
       return BUILDER;
     }
 
     @Override
-    public CensusContext record(MetricMap metrics) {
+    public StatsContext record(MeasurementMap metrics) {
       return DEFAULT_CONTEXT;
     }
 
     @Override
-    public ByteBuffer serialize() {
-      return ByteBuffer.wrap(SERIALIZED_BYTES).asReadOnlyBuffer();
+    public void serialize(OutputStream os) {
+      return;
     }
   }
 
-  private static class NoopContextBuilder extends CensusContext.Builder {
+  private static class NoopContextBuilder extends StatsContext.Builder {
     @Override
-    public CensusContext.Builder set(TagKey key, TagValue value) {
+    public StatsContext.Builder set(TagKey key, TagValue value) {
       return this;
     }
 
     @Override
-    public CensusContext build() {
+    public StatsContext build() {
       return DEFAULT_CONTEXT;
     }
   }

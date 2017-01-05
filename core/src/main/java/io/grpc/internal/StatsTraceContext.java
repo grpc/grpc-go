@@ -31,21 +31,23 @@
 
 package io.grpc.internal;
 
-import com.google.census.CensusContext;
-import com.google.census.CensusContextFactory;
-import com.google.census.MetricMap;
-import com.google.census.MetricName;
-import com.google.census.RpcConstants;
-import com.google.census.TagKey;
-import com.google.census.TagValue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
+import com.google.instrumentation.stats.MeasurementDescriptor;
+import com.google.instrumentation.stats.MeasurementMap;
+import com.google.instrumentation.stats.RpcConstants;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
+import com.google.instrumentation.stats.TagKey;
+import com.google.instrumentation.stats.TagValue;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,107 +63,113 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings("NonAtomicVolatileUpdate")
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = StatsTraceContext.newClientContext(
-      "noopservice/noopmethod", NoopCensusContextFactory.INSTANCE,
+      "noopservice/noopmethod", NoopStatsContextFactory.INSTANCE,
       GrpcUtil.STOPWATCH_SUPPLIER);
 
   private enum Side {
     CLIENT, SERVER
   }
 
-  private final CensusContext censusCtx;
+  private final StatsContext statsCtx;
   private final Stopwatch stopwatch;
   private final Side side;
-  private final Metadata.Key<CensusContext> censusHeader;
+  private final Metadata.Key<StatsContext> statsHeader;
   private volatile long wireBytesSent;
   private volatile long wireBytesReceived;
   private volatile long uncompressedBytesSent;
   private volatile long uncompressedBytesReceived;
   private final AtomicBoolean callEnded = new AtomicBoolean(false);
 
-  private StatsTraceContext(Side side, String fullMethodName, CensusContext parentCtx,
-      Supplier<Stopwatch> stopwatchSupplier, Metadata.Key<CensusContext> censusHeader) {
+  private StatsTraceContext(Side side, String fullMethodName, StatsContext parentCtx,
+      Supplier<Stopwatch> stopwatchSupplier, Metadata.Key<StatsContext> statsHeader) {
     this.side = side;
     TagKey methodTagKey =
         side == Side.CLIENT ? RpcConstants.RPC_CLIENT_METHOD : RpcConstants.RPC_SERVER_METHOD;
     // TODO(carl-mastrangelo): maybe cache TagValue in MethodDescriptor
-    this.censusCtx = parentCtx.with(methodTagKey, new TagValue(fullMethodName));
+    this.statsCtx = parentCtx.with(methodTagKey, TagValue.create(fullMethodName));
     this.stopwatch = stopwatchSupplier.get().start();
-    this.censusHeader = censusHeader;
+    this.statsHeader = statsHeader;
   }
 
   /**
-   * Creates a {@code StatsTraceContext} for an outgoing RPC, using the current CensusContext.
+   * Creates a {@code StatsTraceContext} for an outgoing RPC, using the current StatsContext.
    *
    * <p>The current time is used as the start time of the RPC.
    */
   public static StatsTraceContext newClientContext(String methodName,
-      CensusContextFactory censusFactory, Supplier<Stopwatch> stopwatchSupplier) {
+      StatsContextFactory statsFactory, Supplier<Stopwatch> stopwatchSupplier) {
     return new StatsTraceContext(Side.CLIENT, methodName,
-        // TODO(zhangkun83): use the CensusContext out of the current Context
-        censusFactory.getDefault(),
-        stopwatchSupplier, createCensusHeader(censusFactory));
+        // TODO(zhangkun83): use the StatsContext out of the current Context
+        statsFactory.getDefault(),
+        stopwatchSupplier, createStatsHeader(statsFactory));
   }
 
   @VisibleForTesting
   static StatsTraceContext newClientContextForTesting(String methodName,
-      CensusContextFactory censusFactory, CensusContext parent,
+      StatsContextFactory statsFactory, StatsContext parent,
       Supplier<Stopwatch> stopwatchSupplier) {
     return new StatsTraceContext(Side.CLIENT, methodName, parent, stopwatchSupplier,
-        createCensusHeader(censusFactory));
+        createStatsHeader(statsFactory));
   }
 
   /**
-   * Creates a {@code StatsTraceContext} for an incoming RPC, using the CensusContext deserialized
+   * Creates a {@code StatsTraceContext} for an incoming RPC, using the StatsContext deserialized
    * from the headers.
    *
    * <p>The current time is used as the start time of the RPC.
    */
   public static StatsTraceContext newServerContext(String methodName,
-      CensusContextFactory censusFactory, Metadata headers,
+      StatsContextFactory statsFactory, Metadata headers,
       Supplier<Stopwatch> stopwatchSupplier) {
-    Metadata.Key<CensusContext> censusHeader = createCensusHeader(censusFactory);
-    CensusContext parentCtx = headers.get(censusHeader);
+    Metadata.Key<StatsContext> statsHeader = createStatsHeader(statsFactory);
+    StatsContext parentCtx = headers.get(statsHeader);
     if (parentCtx == null) {
-      parentCtx = censusFactory.getDefault();
+      parentCtx = statsFactory.getDefault();
     }
     return new StatsTraceContext(Side.SERVER, methodName, parentCtx, stopwatchSupplier,
-        censusHeader);
+        statsHeader);
   }
 
   /**
    * Propagate the context to the outgoing headers.
    */
   void propagateToHeaders(Metadata headers) {
-    headers.discardAll(censusHeader);
-    headers.put(censusHeader, censusCtx);
+    headers.discardAll(statsHeader);
+    headers.put(statsHeader, statsCtx);
   }
 
-  Metadata.Key<CensusContext> getCensusHeader() {
-    return censusHeader;
-  }
-
-  @VisibleForTesting
-  CensusContext getCensusContext() {
-    return censusCtx;
+  Metadata.Key<StatsContext> getStatsHeader() {
+    return statsHeader;
   }
 
   @VisibleForTesting
-  static Metadata.Key<CensusContext> createCensusHeader(
-      final CensusContextFactory censusCtxFactory) {
-    return Metadata.Key.of("grpc-census-bin", new Metadata.BinaryMarshaller<CensusContext>() {
+  StatsContext getStatsContext() {
+    return statsCtx;
+  }
+
+  @VisibleForTesting
+  static Metadata.Key<StatsContext> createStatsHeader(final StatsContextFactory statsCtxFactory) {
+    return Metadata.Key.of("grpc-census-bin", new Metadata.BinaryMarshaller<StatsContext>() {
         @Override
-        public byte[] toBytes(CensusContext context) {
-          ByteBuffer buffer = context.serialize();
+        public byte[] toBytes(StatsContext context) {
           // TODO(carl-mastrangelo): currently we only make sure the correctness. We may need to
           // optimize out the allocation and copy in the future.
-          byte[] bytes = new byte[buffer.remaining()];
-          buffer.get(bytes);
-          return bytes;
+          ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+          try {
+            context.serialize(buffer);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+          return buffer.toByteArray();
         }
 
         @Override
-        public CensusContext parseBytes(byte[] serialized) {
-          return censusCtxFactory.deserialize(ByteBuffer.wrap(serialized));
+        public StatsContext parseBytes(byte[] serialized) {
+          try {
+            return statsCtxFactory.deserialize(new ByteArrayInputStream(serialized));
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
         }
       });
   }
@@ -209,11 +217,11 @@ public final class StatsTraceContext {
       return;
     }
     stopwatch.stop();
-    MetricName latencyMetric;
-    MetricName wireBytesSentMetric;
-    MetricName wireBytesReceivedMetric;
-    MetricName uncompressedBytesSentMetric;
-    MetricName uncompressedBytesReceivedMetric;
+    MeasurementDescriptor latencyMetric;
+    MeasurementDescriptor wireBytesSentMetric;
+    MeasurementDescriptor wireBytesReceivedMetric;
+    MeasurementDescriptor uncompressedBytesSentMetric;
+    MeasurementDescriptor uncompressedBytesReceivedMetric;
     if (side == Side.CLIENT) {
       latencyMetric = RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY;
       wireBytesSentMetric = RpcConstants.RPC_CLIENT_REQUEST_BYTES;
@@ -227,9 +235,9 @@ public final class StatsTraceContext {
       uncompressedBytesSentMetric = RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES;
       uncompressedBytesReceivedMetric = RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES;
     }
-    censusCtx
-        .with(RpcConstants.RPC_STATUS, new TagValue(status.getCode().toString()))
-        .record(MetricMap.builder()
+    statsCtx
+        .with(RpcConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
+        .record(MeasurementMap.builder()
             .put(latencyMetric, stopwatch.elapsed(TimeUnit.MILLISECONDS))
             .put(wireBytesSentMetric, wireBytesSent)
             .put(wireBytesReceivedMetric, wireBytesReceived)

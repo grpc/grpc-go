@@ -9,7 +9,7 @@ dependencies {
             libraries.errorprone,
             libraries.jsr305,
             project(':grpc-context'),
-            libraries.census_api
+            libraries.instrumentation_api
     testCompile project(':grpc-testing')
 }
 

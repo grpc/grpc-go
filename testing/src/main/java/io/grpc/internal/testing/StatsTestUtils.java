@@ -34,31 +34,34 @@ package io.grpc.internal.testing;
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.census.CensusContext;
-import com.google.census.CensusContextFactory;
-import com.google.census.Metric;
-import com.google.census.MetricMap;
-import com.google.census.MetricName;
-import com.google.census.TagKey;
-import com.google.census.TagValue;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.ByteStreams;
+import com.google.instrumentation.stats.MeasurementDescriptor;
+import com.google.instrumentation.stats.MeasurementMap;
+import com.google.instrumentation.stats.MeasurementValue;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
+import com.google.instrumentation.stats.TagKey;
+import com.google.instrumentation.stats.TagValue;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
-public class CensusTestUtils {
-  private CensusTestUtils() {
+public class StatsTestUtils {
+  private StatsTestUtils() {
   }
 
   public static class MetricsRecord {
     public final ImmutableMap<TagKey, TagValue> tags;
-    public final MetricMap metrics;
+    public final MeasurementMap metrics;
 
-    private MetricsRecord(ImmutableMap<TagKey, TagValue> tags, MetricMap metrics) {
+    private MetricsRecord(ImmutableMap<TagKey, TagValue> tags, MeasurementMap metrics) {
       this.tags = tags;
       this.metrics = metrics;
     }
@@ -67,9 +70,9 @@ public class CensusTestUtils {
      * Returns the value of a metric, or {@code null} if not found.
      */
     @Nullable
-    public Double getMetric(MetricName metricName) {
-      for (Metric m : metrics) {
-        if (m.getName().equals(metricName)) {
+    public Double getMetric(MeasurementDescriptor metricName) {
+      for (MeasurementValue m : metrics) {
+        if (m.getMeasurement().equals(metricName)) {
           return m.getValue();
         }
       }
@@ -79,7 +82,7 @@ public class CensusTestUtils {
     /**
      * Returns the value of a metric converted to long, or throw if not found.
      */
-    public long getMetricAsLongOrFail(MetricName metricName) {
+    public long getMetricAsLongOrFail(MeasurementDescriptor metricName) {
       Double doubleValue = getMetric(metricName);
       checkNotNull(doubleValue, "Metric not found: %s", metricName.toString());
       long longValue = (long) (Math.abs(doubleValue) + 0.0001);
@@ -90,36 +93,36 @@ public class CensusTestUtils {
     }
   }
 
-  public static final TagKey EXTRA_TAG = new TagKey("/rpc/test/extratag");
+  public static final TagKey EXTRA_TAG = TagKey.create("/rpc/test/extratag");
 
   private static final String EXTRA_TAG_HEADER_VALUE_PREFIX = "extratag:";
   private static final String NO_EXTRA_TAG_HEADER_VALUE_PREFIX = "noextratag";
 
   /**
-   * A factory that makes fake {@link CensusContext}s and saves the created contexts to be
+   * A factory that makes fake {@link StatsContext}s and saves the created contexts to be
    * accessible from {@link #pollContextOrFail}.  The contexts it has created would save metrics
    * records to be accessible from {@link #pollRecord()} and {@link #pollRecord(long, TimeUnit)},
    * until {@link #rolloverRecords} is called.
    */
-  public static final class FakeCensusContextFactory extends CensusContextFactory {
+  public static final class FakeStatsContextFactory extends StatsContextFactory {
     private BlockingQueue<MetricsRecord> records;
-    public final BlockingQueue<FakeCensusContext> contexts =
-        new LinkedBlockingQueue<FakeCensusContext>();
-    private final FakeCensusContext defaultContext;
+    public final BlockingQueue<FakeStatsContext> contexts =
+        new LinkedBlockingQueue<FakeStatsContext>();
+    private final FakeStatsContext defaultContext;
 
     /**
      * Constructor.
      */
-    public FakeCensusContextFactory() {
+    public FakeStatsContextFactory() {
       rolloverRecords();
-      defaultContext = new FakeCensusContext(ImmutableMap.<TagKey, TagValue>of(), this);
+      defaultContext = new FakeStatsContext(ImmutableMap.<TagKey, TagValue>of(), this);
       // The records on the default context is not visible from pollRecord(), just like it's
       // not visible from pollContextOrFail() either.
       rolloverRecords();
     }
 
-    public CensusContext pollContextOrFail() {
-      CensusContext cc = contexts.poll();
+    public StatsContext pollContextOrFail() {
+      StatsContext cc = contexts.poll();
       return checkNotNull(cc);
     }
 
@@ -132,11 +135,16 @@ public class CensusTestUtils {
     }
 
     @Override
-    public CensusContext deserialize(ByteBuffer buffer) {
-      String serializedString = new String(buffer.array(), UTF_8);
+    public StatsContext deserialize(InputStream buffer) {
+      String serializedString;
+      try {
+        serializedString = new String(ByteStreams.toByteArray(buffer), UTF_8);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
       if (serializedString.startsWith(EXTRA_TAG_HEADER_VALUE_PREFIX)) {
         return getDefault().with(EXTRA_TAG,
-            new TagValue(serializedString.substring(EXTRA_TAG_HEADER_VALUE_PREFIX.length())));
+            TagValue.create(serializedString.substring(EXTRA_TAG_HEADER_VALUE_PREFIX.length())));
       } else if (serializedString.startsWith(NO_EXTRA_TAG_HEADER_VALUE_PREFIX)) {
         return getDefault();
       } else {
@@ -145,7 +153,7 @@ public class CensusTestUtils {
     }
 
     @Override
-    public FakeCensusContext getDefault() {
+    public FakeStatsContext getDefault() {
       return defaultContext;
     }
 
@@ -164,13 +172,13 @@ public class CensusTestUtils {
     }
   }
 
-  public static class FakeCensusContext extends CensusContext {
+  public static class FakeStatsContext extends StatsContext {
     private final ImmutableMap<TagKey, TagValue> tags;
-    private final FakeCensusContextFactory factory;
+    private final FakeStatsContextFactory factory;
     private final BlockingQueue<MetricsRecord> recordSink;
 
-    private FakeCensusContext(ImmutableMap<TagKey, TagValue> tags,
-        FakeCensusContextFactory factory) {
+    private FakeStatsContext(ImmutableMap<TagKey, TagValue> tags,
+        FakeStatsContextFactory factory) {
       this.tags = tags;
       this.factory = factory;
       this.recordSink = factory.getCurrentRecordSink();
@@ -178,23 +186,26 @@ public class CensusTestUtils {
 
     @Override
     public Builder builder() {
-      return new FakeCensusContextBuilder(this);
+      return new FakeStatsContextBuilder(this);
     }
 
     @Override
-    public CensusContext record(MetricMap metrics) {
+    public StatsContext record(MeasurementMap metrics) {
       recordSink.add(new MetricsRecord(tags, metrics));
       return this;
     }
 
     @Override
-    public ByteBuffer serialize() {
+    public void serialize(OutputStream os) {
       TagValue extraTagValue = tags.get(EXTRA_TAG);
-      if (extraTagValue == null) {
-        return ByteBuffer.wrap(NO_EXTRA_TAG_HEADER_VALUE_PREFIX.getBytes(UTF_8));
-      } else {
-        return ByteBuffer.wrap(
-            (EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.toString()).getBytes(UTF_8));
+      try {
+        if (extraTagValue == null) {
+          os.write(NO_EXTRA_TAG_HEADER_VALUE_PREFIX.getBytes(UTF_8));
+        } else {
+          os.write((EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.toString()).getBytes(UTF_8));
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
     }
 
@@ -205,10 +216,10 @@ public class CensusTestUtils {
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof FakeCensusContext)) {
+      if (!(other instanceof FakeStatsContext)) {
         return false;
       }
-      FakeCensusContext otherCtx = (FakeCensusContext) other;
+      FakeStatsContext otherCtx = (FakeStatsContext) other;
       return tags.equals(otherCtx.tags);
     }
 
@@ -218,24 +229,24 @@ public class CensusTestUtils {
     }
   }
 
-  private static class FakeCensusContextBuilder extends CensusContext.Builder {
+  private static class FakeStatsContextBuilder extends StatsContext.Builder {
     private final ImmutableMap.Builder<TagKey, TagValue> tagsBuilder = ImmutableMap.builder();
-    private final FakeCensusContext base;
+    private final FakeStatsContext base;
 
-    private FakeCensusContextBuilder(FakeCensusContext base) {
+    private FakeStatsContextBuilder(FakeStatsContext base) {
       this.base = base;
       tagsBuilder.putAll(base.tags);
     }
 
     @Override
-    public CensusContext.Builder set(TagKey key, TagValue value) {
+    public StatsContext.Builder set(TagKey key, TagValue value) {
       tagsBuilder.put(key, value);
       return this;
     }
 
     @Override
-    public CensusContext build() {
-      FakeCensusContext context = new FakeCensusContext(tagsBuilder.build(), base.factory);
+    public StatsContext build() {
+      FakeStatsContext context = new FakeStatsContext(tagsBuilder.build(), base.factory);
       base.factory.contexts.add(context);
       return context;
     }

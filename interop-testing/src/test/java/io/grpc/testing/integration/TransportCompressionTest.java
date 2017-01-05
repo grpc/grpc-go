@@ -152,7 +152,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .decompressorRegistry(decompressors)
         .compressorRegistry(compressors)
-        .censusContextFactory(getClientCensusFactory())
+        .statsContextFactory(getClientStatsFactory())
         .intercept(new ClientInterceptor() {
           @Override
           public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(

@@ -52,12 +52,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.census.CensusContext;
-import com.google.census.RpcConstants;
-import com.google.census.TagValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.instrumentation.stats.RpcConstants;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.TagValue;
 
 import io.grpc.Attributes;
 import io.grpc.Compressor;
@@ -77,8 +77,8 @@ import io.grpc.ServerTransportFilter;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.internal.testing.CensusTestUtils;
-import io.grpc.internal.testing.CensusTestUtils.FakeCensusContextFactory;
+import io.grpc.internal.testing.StatsTestUtils;
+import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.util.MutableHandlerRegistry;
 
 import org.junit.After;
@@ -119,7 +119,7 @@ public class ServerImplTest {
       Context.ROOT.withValue(SERVER_ONLY, "yes").withCancellation();
   private static final ImmutableList<ServerTransportFilter> NO_FILTERS = ImmutableList.of();
 
-  private final FakeCensusContextFactory censusCtxFactory = new FakeCensusContextFactory();
+  private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
   private final CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance();
@@ -138,7 +138,7 @@ public class ServerImplTest {
   private MutableHandlerRegistry fallbackRegistry = new MutableHandlerRegistry();
   private SimpleServer transportServer = new SimpleServer();
   private ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-      SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+      SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
       GrpcUtil.STOPWATCH_SUPPLIER);
 
   @Captor
@@ -174,7 +174,7 @@ public class ServerImplTest {
       public void shutdown() {}
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     server.shutdown();
@@ -193,7 +193,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.shutdown();
     assertTrue(server.isShutdown());
@@ -203,7 +203,7 @@ public class ServerImplTest {
   @Test
   public void startStopImmediateWithChildTransport() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
@@ -228,7 +228,7 @@ public class ServerImplTest {
   @Test
   public void startShutdownNowImmediateWithChildTransport() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
@@ -256,7 +256,7 @@ public class ServerImplTest {
   @Test
   public void shutdownNowAfterShutdown() throws IOException {
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
@@ -291,7 +291,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     class DelayedShutdownServerTransport extends SimpleServerTransport {
@@ -329,7 +329,7 @@ public class ServerImplTest {
 
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry,
         new FailingStartupServer(), SERVER_CONTEXT, decompressorRegistry, compressorRegistry,
-        NO_FILTERS, censusCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+        NO_FILTERS, statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
     try {
       server.start();
       fail("expected exception");
@@ -356,7 +356,7 @@ public class ServerImplTest {
     assertEquals(Status.Code.UNIMPLEMENTED, status.getCode());
     assertEquals("Method not found: Waiter/nonexist", status.getDescription());
 
-    CensusTestUtils.MetricsRecord record = censusCtxFactory.pollRecord();
+    StatsTestUtils.MetricsRecord record = statsCtxFactory.pollRecord();
     assertNotNull(record);
     TagValue methodTag = record.tags.get(RpcConstants.RPC_SERVER_METHOD);
     assertNotNull(methodTag);
@@ -370,8 +370,8 @@ public class ServerImplTest {
   public void basicExchangeSuccessful() throws Exception {
     final Metadata.Key<String> metadataKey
         = Metadata.Key.of("inception", Metadata.ASCII_STRING_MARSHALLER);
-    final Metadata.Key<CensusContext> censusHeaderKey
-        = StatsTraceContext.createCensusHeader(censusCtxFactory);
+    final Metadata.Key<StatsContext> statsHeaderKey
+        = StatsTraceContext.createStatsHeader(statsCtxFactory);
     final AtomicReference<ServerCall<String, Integer>> callReference
         = new AtomicReference<ServerCall<String, Integer>>();
     MethodDescriptor<String, Integer> method = MethodDescriptor.create(
@@ -398,9 +398,9 @@ public class ServerImplTest {
 
     Metadata requestHeaders = new Metadata();
     requestHeaders.put(metadataKey, "value");
-    CensusContext censusContextOnClient = censusCtxFactory.getDefault().with(
-        CensusTestUtils.EXTRA_TAG, new TagValue("extraTagValue"));
-    requestHeaders.put(censusHeaderKey, censusContextOnClient);
+    StatsContext statsContextOnClient = statsCtxFactory.getDefault().with(
+        StatsTestUtils.EXTRA_TAG, TagValue.create("extraTagValue"));
+    requestHeaders.put(statsHeaderKey, statsContextOnClient);
     StatsTraceContext statsTraceCtx =
         transportListener.methodDetermined("Waiter/serve", requestHeaders);
     assertNotNull(statsTraceCtx);
@@ -456,7 +456,7 @@ public class ServerImplTest {
     verifyNoMoreInteractions(callListener);
 
     // Check stats
-    CensusTestUtils.MetricsRecord record = censusCtxFactory.pollRecord();
+    StatsTestUtils.MetricsRecord record = statsCtxFactory.pollRecord();
     assertNotNull(record);
     TagValue methodTag = record.tags.get(RpcConstants.RPC_SERVER_METHOD);
     assertNotNull(methodTag);
@@ -464,7 +464,7 @@ public class ServerImplTest {
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertNotNull(statusTag);
     assertEquals(Status.Code.OK.toString(), statusTag.toString());
-    TagValue extraTag = record.tags.get(CensusTestUtils.EXTRA_TAG);
+    TagValue extraTag = record.tags.get(StatsTestUtils.EXTRA_TAG);
     assertNotNull(extraTag);
     assertEquals("extraTagValue", extraTag.toString());
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
@@ -542,7 +542,7 @@ public class ServerImplTest {
 
     ServerImpl server = new ServerImpl(MoreExecutors.directExecutor(), registry, fallbackRegistry,
         transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry,
-        ImmutableList.of(filter1, filter2), censusCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+        ImmutableList.of(filter1, filter2), statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     ServerTransportListener transportListener
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
@@ -623,7 +623,7 @@ public class ServerImplTest {
 
     transportServer = new MaybeDeadlockingServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     new Thread() {
@@ -829,7 +829,7 @@ public class ServerImplTest {
       }
     };
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
 
@@ -840,7 +840,7 @@ public class ServerImplTest {
   public void getPortBeforeStartedFails() {
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     thrown.expect(IllegalStateException.class);
     thrown.expectMessage("started");
@@ -851,7 +851,7 @@ public class ServerImplTest {
   public void getPortAfterTerminationFails() throws Exception {
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
     server.shutdown();
@@ -872,7 +872,7 @@ public class ServerImplTest {
         .build();
     transportServer = new SimpleServer();
     ServerImpl server = new ServerImpl(executor, registry, fallbackRegistry, transportServer,
-        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, censusCtxFactory,
+        SERVER_CONTEXT, decompressorRegistry, compressorRegistry, NO_FILTERS, statsCtxFactory,
         GrpcUtil.STOPWATCH_SUPPLIER);
     server.start();
 

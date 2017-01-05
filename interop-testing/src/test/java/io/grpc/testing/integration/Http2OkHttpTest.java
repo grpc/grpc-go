@@ -108,7 +108,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))
             .tlsVersions(ConnectionSpec.MODERN_TLS.tlsVersions().toArray(new TlsVersion[0]))
             .build())
-        .censusContextFactory(getClientCensusFactory())
+        .statsContextFactory(getClientStatsFactory())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
             TestUtils.TEST_SERVER_HOST, getPort()));
     try {

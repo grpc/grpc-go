@@ -106,7 +106,7 @@ public class CallCredentialsApplyingTest {
 
   private final Metadata origHeaders = new Metadata();
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
-      method.getFullMethodName(), NoopCensusContextFactory.INSTANCE, GrpcUtil.STOPWATCH_SUPPLIER);
+      method.getFullMethodName(), NoopStatsContextFactory.INSTANCE, GrpcUtil.STOPWATCH_SUPPLIER);
   private ForwardingConnectionClientTransport transport;
   private CallOptions callOptions;
 

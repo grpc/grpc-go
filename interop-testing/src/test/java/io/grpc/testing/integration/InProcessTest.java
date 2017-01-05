@@ -60,7 +60,7 @@ public class InProcessTest extends AbstractInteropTest {
   @Override
   protected ManagedChannel createChannel() {
     return InProcessChannelBuilder.forName(SERVER_NAME)
-        .censusContextFactory(getClientCensusFactory()).build();
+        .statsContextFactory(getClientStatsFactory()).build();
   }
 
   @Override

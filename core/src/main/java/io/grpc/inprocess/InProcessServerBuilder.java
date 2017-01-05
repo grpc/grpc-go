@@ -31,13 +31,13 @@
 
 package io.grpc.inprocess;
 
-import com.google.census.CensusContextFactory;
 import com.google.common.base.Preconditions;
+import com.google.instrumentation.stats.StatsContextFactory;
 
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractServerImplBuilder;
-import io.grpc.internal.NoopCensusContextFactory;
+import io.grpc.internal.NoopStatsContextFactory;
 
 import java.io.File;
 
@@ -65,9 +65,9 @@ public final class InProcessServerBuilder
   private InProcessServerBuilder(String name) {
     this.name = Preconditions.checkNotNull(name, "name");
     // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
-    // not counted.  Therefore, we disable Census for now.
+    // not counted.  Therefore, we disable stats for now.
     // (https://github.com/grpc/grpc-java/issues/2284)
-    super.censusContextFactory(NoopCensusContextFactory.INSTANCE);
+    super.statsContextFactory(NoopStatsContextFactory.INSTANCE);
   }
 
   @Override
@@ -82,9 +82,9 @@ public final class InProcessServerBuilder
 
   @Internal
   @Override
-  public InProcessServerBuilder censusContextFactory(CensusContextFactory censusFactory) {
+  public InProcessServerBuilder statsContextFactory(StatsContextFactory statsFactory) {
     // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
-    // not counted.  Census is disabled by using a NOOP Census factory in the constructor, and here
+    // not counted.  Stats is disabled by using a NOOP stats factory in the constructor, and here
     // we prevent the user from overriding it.
     // (https://github.com/grpc/grpc-java/issues/2284)
     return this;

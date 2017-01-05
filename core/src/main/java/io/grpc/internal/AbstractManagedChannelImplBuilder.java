@@ -34,11 +34,11 @@ package io.grpc.internal;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.google.census.Census;
-import com.google.census.CensusContextFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.instrumentation.stats.Stats;
+import com.google.instrumentation.stats.StatsContextFactory;
 
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
@@ -136,7 +136,7 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Nullable
-  private CensusContextFactory censusFactory;
+  private StatsContextFactory statsFactory;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target, "target");
@@ -242,12 +242,12 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
-   * Override the default Census implementation.  This is meant to be used in tests.
+   * Override the default stats implementation.  This is meant to be used in tests.
    */
   @VisibleForTesting
   @Internal
-  public T censusContextFactory(CensusContextFactory censusFactory) {
-    this.censusFactory = censusFactory;
+  public T statsContextFactory(StatsContextFactory statsFactory) {
+    this.statsFactory = statsFactory;
     return thisT();
   }
 
@@ -291,8 +291,8 @@ public abstract class AbstractManagedChannelImplBuilder
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
         GrpcUtil.TIMER_SERVICE, GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
         executor, userAgent, interceptors,
-        firstNonNull(censusFactory,
-            firstNonNull(Census.getCensusContextFactory(), NoopCensusContextFactory.INSTANCE)));
+        firstNonNull(statsFactory,
+            firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
   }
 
   /**
