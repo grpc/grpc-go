@@ -335,6 +335,13 @@ $ git checkout -b bump-readme master
 $ git cherry-pick v$MAJOR.$MINOR.$PATCH^
 ```
 
+Update version referenced by tutorials
+--------------------------------------
+
+Update the `grpc_java_release_tag` in
+[\_data/config.yml](https://github.com/grpc/grpc.github.io/blob/master/_data/config.yml)
+of the grpc.github.io repository.
+
 Notify the Community
 --------------------
 Finally, document and publicize the release.
