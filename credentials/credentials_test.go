@@ -71,7 +71,9 @@ type serverHandshake func(net.Conn) (AuthInfo, error)
 
 func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
-	lisAddr := launchServer(t, tlsServerHandshake, done)
+	lis := launchServer(t, tlsServerHandshake, done)
+	defer lis.Close()
+	lisAddr := lis.Addr().String()
 	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
 	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
@@ -85,8 +87,9 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 
 func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
-	lisAddr := launchServer(t, gRPCServerHandshake, done)
-	clientAuthInfo := clientHandle(t, tlsClientHandshake, lisAddr)
+	lis := launchServer(t, gRPCServerHandshake, done)
+	defer lis.Close()
+	clientAuthInfo := clientHandle(t, tlsClientHandshake, lis.Addr().String())
 	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
 	if !ok {
@@ -99,8 +102,9 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 
 func TestServerAndClientHandshake(t *testing.T) {
 	done := make(chan AuthInfo, 1)
-	lisAddr := launchServer(t, gRPCServerHandshake, done)
-	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
+	lis := launchServer(t, gRPCServerHandshake, done)
+	defer lis.Close()
+	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lis.Addr().String())
 	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
 	if !ok {
@@ -131,18 +135,17 @@ func compare(a1, a2 AuthInfo) bool {
 	}
 }
 
-func launchServer(t *testing.T, hs serverHandshake, done chan AuthInfo) string {
+func launchServer(t *testing.T, hs serverHandshake, done chan AuthInfo) net.Listener {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	go serverHandle(t, hs, done, lis)
-	return lis.Addr().String()
+	return lis
 }
 
 // Is run in a seperate goroutine.
 func serverHandle(t *testing.T, hs serverHandshake, done chan AuthInfo, lis net.Listener) {
-	defer lis.Close()
 	serverRawConn, err := lis.Accept()
 	if err != nil {
 		t.Errorf("Server failed to accept connection: %v", err)
