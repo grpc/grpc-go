@@ -39,6 +39,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -862,15 +863,15 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		state.processHeaderField(hf)
 	}
 	// if grpc status doesn't exist
-	if !state.gstatusExists {
+	if !state.statusExists {
 		if !state.hstatusExists {
 			state.setErr(streamErrorf(codes.Internal, "Malformed http header"))
-		} else if state.hstatus != http.StatusOK {
-			gcode, ok := httpStatusConvTab[state.hstatus]
+		} else if state.hstatusCode != http.StatusOK {
+			gcode, ok := httpStatusConvTab[state.hstatusCode]
 			if !ok {
 				gcode = codes.Unknown
 			}
-			state.setErr(streamErrorf(gcode,http.StatusText(state.hstatus)))
+			state.setErr(streamErrorf(gcode, http.StatusText(state.hstatusCode)))
 		} else {
 			// set state.statusCode to UNKNOWN
 			state.statusCode = codes.Unknown
@@ -887,7 +888,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		// Something wrong. Stops reading even when there is remaining.
 		return
 	}
-
 
 	endStream := frame.StreamEnded()
 

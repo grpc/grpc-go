@@ -39,7 +39,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -101,8 +100,7 @@ type decodeState struct {
 	// records if status filed (http status) exists
 	hstatusExists bool
 	// http status code
-	hstatus int
-	hstatusDesc string
+	hstatusCode int
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.
 	statusCode codes.Code
@@ -176,7 +174,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":
-		statusExists = true
+		d.statusExists = true
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
 			d.setErr(streamErrorf(codes.Internal, "transport: malformed grpc-status: %v", err))
@@ -196,7 +194,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case ":path":
 		d.method = f.Value
 	case ":status":
-		hstatusExists = true
+		d.hstatusExists = true
 		hcode, err := strconv.Atoi(f.Value)
 		if err != nil {
 			d.setErr(streamErrorf(codes.Internal, "transport: malformed http-status: %v", err))
