@@ -844,31 +844,35 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	done := make(chan error, 1)
+	// launch an HTTP server to send back header with httpStatus
 	go func() {
 		var err error
 		defer func() {
 			done <- err
 		}()
-		serverConn, err := lis.Accept()
+		conn, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Error at server-side while accpeting: %v", err)
+			return
 		}
 		// Read the preface sent by client
-		if _, err = io.ReadFull(serverConn, make([]byte, len(http2.ClientPreface))); err != nil {
+		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
 			t.Errorf("Error at server-side while reading from conn: %v", err)
+			return
 		}
-		reader := bufio.NewReaderSize(serverConn, http2IOBufSize)
-		writer := bufio.NewWriterSize(serverConn, http2IOBufSize)
+		reader := bufio.NewReaderSize(conn, http2IOBufSize)
+		writer := bufio.NewWriterSize(conn, http2IOBufSize)
 		framer := http2.NewFramer(writer, reader)
 		if err = framer.WriteSettingsAck(); err != nil {
 			t.Errorf("Error at server-side while writing settings ack: %v", err)
+			return
 		}
 		// Read frames until a header is received.
 		for {
 			frame, err := framer.ReadFrame()
 			if err != nil {
 				t.Errorf("Error at server-side while reading frame: %v", err)
-				break
+				return
 			}
 			if _, ok := frame.(*http2.HeadersFrame); ok {
 				break
@@ -876,35 +880,35 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		}
 		//By now a stream with ID 1 will be active on client thus we can send http status headers on that stream
 		var buf bytes.Buffer
-		hEnc := hpack.NewEncoder(&buf)
-		hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
+		henc := hpack.NewEncoder(&buf)
+		henc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
 		if err = framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
 			t.Errorf("Error at server-side while writting headers: %v", err)
+			return
 		}
 		writer.Flush()
 	}()
 	// Create a gRPC client.
-	cTransport, err := newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{})
+	tr, err := newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{})
 	if err != nil {
 		t.Fatalf("Error creating gRPC client: %v", err)
 	}
 	// Create a stream on this transport. This will also send headers to the server.
-	stream, err := cTransport.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
+	stream, err := tr.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
 	if err != nil {
-		t.Fatalf("Error while sending headers to server :%v", err)
+		t.Fatalf("Error creating stream on client transport :%v", err)
 	}
 	// wait for the server to send header with http status or fail.
 	if err = <-done; err != nil {
 		// error already printed out once
-		t.Fatalf("")
+		return
 	}
 	want := "code = " + fmt.Sprint(uint32(httpStatusConvTab[httpStatus]))
 	if _, err = stream.Read([]byte{}); err == nil {
 		t.Fatalf("Strean err is nil, want err with code: %s", want)
-	} else {
-		errString := err.Error()
-		if !strings.Contains(errString, want) {
-			t.Fatalf("Stream error code not what expected. Stream error: %s, want error with code: %s", errString, want)
-		}
+	}
+	got := err.Error()
+	if !strings.Contains(got, want) {
+		t.Fatalf("Stream error code not what expected. Stream error: %s, want error with code: %s", got, want)
 	}
 }

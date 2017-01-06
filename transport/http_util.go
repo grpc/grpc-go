@@ -97,7 +97,7 @@ type decodeState struct {
 	encoding string
 	// records if grpc-status field exists
 	statusExists bool
-	// records if status filed (http status) exists
+	// records if status field (http status) exists
 	hstatusExists bool
 	// http status code
 	hstatusCode int

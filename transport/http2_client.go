@@ -864,6 +864,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	// if grpc status doesn't exist
 	if !state.statusExists {
+		// check if http status exists
 		if !state.hstatusExists {
 			state.setErr(streamErrorf(codes.Internal, "Malformed http header"))
 		} else if state.hstatusCode != http.StatusOK {
@@ -874,6 +875,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			state.setErr(streamErrorf(gcode, http.StatusText(state.hstatusCode)))
 		} else {
 			// set state.statusCode to UNKNOWN
+			// If this is the first header this status will be ignored.
+			// If this is the second header a missing grpc-status puts state to be UNKNOWN
 			state.statusCode = codes.Unknown
 		}
 	}
