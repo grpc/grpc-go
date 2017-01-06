@@ -73,53 +73,53 @@ type serverHandshake func(net.Conn) (AuthInfo, error)
 func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, tlsServerHandshake, done)
-	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
+	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState, ok := <-done
+	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqualState(clientConnState, serverConnState) {
-		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr, clientConnState, serverConnState)
+	if !isEqual(clientAuthInfo, serverAuthInfo) {
+		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr, clientAuthInfo, serverAuthInfo)
 	}
 }
 
 func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
-	clientConnState := clientHandle(t, tlsClientHandshake, lisAddr)
+	clientAuthInfo := clientHandle(t, tlsClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState, ok := <-done
+	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqualState(clientConnState, serverConnState) {
-		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverConnState, clientConnState)
+	if !isEqual(clientAuthInfo, serverAuthInfo) {
+		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, clientAuthInfo)
 	}
 }
 
 func TestServerAndClientHandshake(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
-	clientConnState := clientHandle(t, gRPCClientHandshake, lisAddr)
+	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
 	// wait until server sends serverConnState or fails.
-	serverConnState, ok := <-done
+	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqualState(clientConnState, serverConnState) {
-		t.Fatalf("Connection states returened by server: %v and client: %v aren't same", serverConnState, clientConnState)
+	if !isEqual(clientAuthInfo, serverAuthInfo) {
+		t.Fatalf("Connection states returened by server: %v and client: %v aren't same", serverAuthInfo, clientAuthInfo)
 	}
 }
 
-func isEqualState(s1, s2 AuthInfo) bool {
-	if reflect.TypeOf(s1) != reflect.TypeOf(s2) {
+func isEqual(a1, a2 AuthInfo) bool {
+	if reflect.TypeOf(a1) != reflect.TypeOf(a2) {
 		return false
 	}
-	switch s1.(type) {
+	switch a1.(type) {
 	case TLSInfo:
-		state1 := s1.(TLSInfo).State
-		state2 := s2.(TLSInfo).State
+		state1 := a1.(TLSInfo).State
+		state2 := a2.(TLSInfo).State
 		if state1.Version == state2.Version &&
 			state1.HandshakeComplete == state2.HandshakeComplete &&
 			state1.CipherSuite == state2.CipherSuite &&
@@ -150,13 +150,13 @@ func serverHandle(t *testing.T, hs serverHandshake, done chan AuthInfo, lis net.
 		close(done)
 		return
 	}
-	serverConnState, err := hs(serverRawConn)
+	serverAuthInfo, err := hs(serverRawConn)
 	if err != nil {
 		t.Errorf("Server failed while handshake. Error: %v", err)
 		close(done)
 		return
 	}
-	done <- serverConnState
+	done <- serverAuthInfo
 }
 
 func clientHandle(t *testing.T, hs func(net.Conn, string) (AuthInfo, error), lisAddr string) AuthInfo {
@@ -165,11 +165,11 @@ func clientHandle(t *testing.T, hs func(net.Conn, string) (AuthInfo, error), lis
 		t.Fatalf("Client failed to connect to %s. Error: %v", lisAddr, err)
 	}
 	defer conn.Close()
-	clientConnState, err := hs(conn, lisAddr)
+	clientAuthInfo, err := hs(conn, lisAddr)
 	if err != nil {
 		t.Fatalf("Error on client while handshake. Error: %v", err)
 	}
-	return clientConnState
+	return clientAuthInfo
 }
 
 // Server handshake implementation in gRPC.
