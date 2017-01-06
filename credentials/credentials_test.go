@@ -74,7 +74,7 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, tlsServerHandshake, done)
 	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
-	// wait until server sends serverConnState or fails.
+	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
@@ -88,7 +88,7 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientAuthInfo := clientHandle(t, tlsClientHandshake, lisAddr)
-	// wait until server sends serverConnState or fails.
+	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
@@ -102,13 +102,13 @@ func TestServerAndClientHandshake(t *testing.T) {
 	done := make(chan AuthInfo, 1)
 	lisAddr := launchServer(t, gRPCServerHandshake, done)
 	clientAuthInfo := clientHandle(t, gRPCClientHandshake, lisAddr)
-	// wait until server sends serverConnState or fails.
+	// wait until server sends serverAuthInfo or fails.
 	serverAuthInfo, ok := <-done
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
 	if !compare(clientAuthInfo, serverAuthInfo) {
-		t.Fatalf("Connection states returened by server: %v and client: %v aren't same", serverAuthInfo, clientAuthInfo)
+		t.Fatalf("AuthInfo returned by server: %v and client: %v aren't same", serverAuthInfo, clientAuthInfo)
 	}
 }
 
