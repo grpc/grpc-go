@@ -178,11 +178,11 @@ func clientHandle(t *testing.T, hs func(net.Conn, string) (AuthInfo, error), lis
 func gRPCServerHandshake(conn net.Conn) (AuthInfo, error) {
 	serverTLS, err := NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	_, serverAuthInfo, err := serverTLS.ServerHandshake(conn)
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	return serverAuthInfo, nil
 }
@@ -192,7 +192,7 @@ func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 	clientTLS := NewTLS(&tls.Config{InsecureSkipVerify: true})
 	_, authInfo, err := clientTLS.ClientHandshake(context.Background(), lisAddr, conn)
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	return authInfo, nil
 }
@@ -200,13 +200,13 @@ func gRPCClientHandshake(conn net.Conn, lisAddr string) (AuthInfo, error) {
 func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
 	cert, err := tls.LoadX509KeyPair(tlsDir+"server1.pem", tlsDir+"server1.key")
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	serverTLSConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 	serverConn := tls.Server(conn, serverTLSConfig)
 	err = serverConn.Handshake()
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	return TLSInfo{State: serverConn.ConnectionState()}, nil
 }
@@ -216,7 +216,7 @@ func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
 	clientConn := tls.Client(conn, clientTLSConfig)
 	err := clientConn.Handshake()
 	if err != nil {
-		return TLSInfo{}, err
+		return nil, err
 	}
 	return TLSInfo{State: clientConn.ConnectionState()}, nil
 }
