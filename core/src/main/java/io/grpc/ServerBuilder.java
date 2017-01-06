@@ -93,7 +93,9 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
    * be executed.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2132")
-  public abstract T addTransportFilter(ServerTransportFilter filter);
+  public T addTransportFilter(ServerTransportFilter filter) {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Sets a fallback handler registry that will be looked up in if a method is not found in the
