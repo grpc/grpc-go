@@ -454,8 +454,8 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
     } finally {
       try {
         inputStream.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      } catch (IOException ignorable) {
+        // ignore
       }
     }
     return buffer;

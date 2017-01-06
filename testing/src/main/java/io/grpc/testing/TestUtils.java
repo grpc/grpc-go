@@ -31,6 +31,8 @@
 
 package io.grpc.testing;
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
@@ -43,9 +45,10 @@ import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -256,7 +259,8 @@ public class TestUtils {
     File tmpFile = File.createTempFile(name, "");
     tmpFile.deleteOnExit();
 
-    BufferedWriter writer = new BufferedWriter(new FileWriter(tmpFile));
+    BufferedWriter writer =
+        new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmpFile), UTF_8));
     try {
       int b;
       while ((b = in.read()) != -1) {

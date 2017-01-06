@@ -301,7 +301,6 @@ public class GrpclbLoadBalancer2Test {
 
     // Recover with a subsequent success
     List<ResolvedServerInfoGroup> resolvedServers = createResolvedServerInfoGroupList(false);
-    EquivalentAddressGroup eag = resolvedServers.get(0).toEquivalentAddressGroup();
 
     Attributes resolutionAttrs = Attributes.newBuilder().set(RESOLUTION_ATTR, "yeah").build();
     deliverResolvedAddresses(resolvedServers, resolutionAttrs);
@@ -406,6 +405,7 @@ public class GrpclbLoadBalancer2Test {
     inOrder.verify(helper).updatePicker(pickerCaptor.capture());
     ErrorPicker errorPicker = (ErrorPicker) pickerCaptor.getValue();
     assertSame(error, errorPicker.result.getStatus());
+    assertFalse(oobChannel.isShutdown());
 
     // Simulate receiving LB response
     List<InetSocketAddress> backends = Arrays.asList(
@@ -446,8 +446,6 @@ public class GrpclbLoadBalancer2Test {
     Attributes pickFirstResolutionAttrs = Attributes.newBuilder()
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.PICK_FIRST).build();
     verify(pickFirstBalancerFactory, never()).newLoadBalancer(any(Helper.class));
-    verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
-    StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
     assertEquals(1, lbRequestObservers.size());
     StreamObserver<LoadBalanceRequest> lbRequestObserver = lbRequestObservers.poll();
 

@@ -279,7 +279,7 @@ class GrpclbLoadBalancer2 extends LoadBalancer2 implements WithLogId {
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
-            .setName(helper.getAuthority()).build())
+            .setName(serviceName).build())
         .build();
     lbRequestWriter.onNext(initRequest);
   }
