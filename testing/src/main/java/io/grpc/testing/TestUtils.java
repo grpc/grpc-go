@@ -31,8 +31,6 @@
 
 package io.grpc.testing;
 
-import static com.google.common.base.Charsets.UTF_8;
-
 import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
@@ -42,13 +40,13 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStreamWriter;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -255,19 +253,20 @@ public class TestUtils {
    * @param name  name of a file in src/main/resources/certs.
    */
   public static File loadCert(String name) throws IOException {
-    InputStream in = TestUtils.class.getResourceAsStream("/certs/" + name);
+    InputStream in = new BufferedInputStream(TestUtils.class.getResourceAsStream("/certs/" + name));
     File tmpFile = File.createTempFile(name, "");
     tmpFile.deleteOnExit();
 
-    BufferedWriter writer =
-        new BufferedWriter(new OutputStreamWriter(new FileOutputStream(tmpFile), UTF_8));
+    OutputStream os = new BufferedOutputStream(new FileOutputStream(tmpFile));
     try {
       int b;
       while ((b = in.read()) != -1) {
-        writer.write(b);
+        os.write(b);
       }
+      os.flush();
     } finally {
-      writer.close();
+      in.close();
+      os.close();
     }
 
     return tmpFile;
