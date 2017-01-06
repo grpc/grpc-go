@@ -36,7 +36,6 @@ package credentials
 import (
 	"crypto/tls"
 	"net"
-	"reflect"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -113,11 +112,11 @@ func TestServerAndClientHandshake(t *testing.T) {
 }
 
 func compare(a1, a2 AuthInfo) bool {
-	if reflect.TypeOf(a1) != reflect.TypeOf(a2) {
+	if a1.AuthType() != a2.AuthType() {
 		return false
 	}
-	switch a1.(type) {
-	case TLSInfo:
+	switch a1.AuthType() {
+	case "tls":
 		state1 := a1.(TLSInfo).State
 		state2 := a2.(TLSInfo).State
 		if state1.Version == state2.Version &&
