@@ -69,6 +69,16 @@ public abstract class AbstractClientStream extends AbstractStream
   }
 
   @Override
+  public void setMaxInboundMessageSize(int maxSize) {
+    setMaxInboundMessageSizeProtected(maxSize);
+  }
+
+  @Override
+  public void setMaxOutboundMessageSize(int maxSize) {
+    setMaxOutboundMessageSizeProtected(maxSize);
+  }
+
+  @Override
   protected final ClientStreamListener listener() {
     return listener;
   }

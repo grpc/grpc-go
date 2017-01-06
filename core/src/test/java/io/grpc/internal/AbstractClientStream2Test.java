@@ -254,6 +254,12 @@ public class AbstractClientStream2Test {
 
     @Override
     public void setAuthority(String authority) {}
+
+    @Override
+    public void setMaxInboundMessageSize(int maxSize) {}
+
+    @Override
+    public void setMaxOutboundMessageSize(int maxSize) {}
   }
 
   private static class BaseSink implements AbstractClientStream2.Sink {

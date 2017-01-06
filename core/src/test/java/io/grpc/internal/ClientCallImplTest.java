@@ -824,6 +824,25 @@ public class ClientCallImplTest {
     assertSame(cause, status.getCause());
   }
 
+  @Test
+  public void startAddsMaxSize() {
+    CallOptions callOptions =
+        CallOptions.DEFAULT.withMaxInboundMessageSize(1).withMaxOutboundMessageSize(2);
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR,
+        new SerializingExecutor(Executors.newSingleThreadExecutor()),
+        callOptions,
+        statsTraceCtx,
+        provider,
+        deadlineCancellationExecutor)
+            .setDecompressorRegistry(decompressorRegistry);
+
+    call.start(callListener, new Metadata());
+
+    verify(stream).setMaxInboundMessageSize(1);
+    verify(stream).setMaxOutboundMessageSize(2);
+  }
+
   private void assertStatusInStats(Status.Code statusCode) {
     StatsTestUtils.MetricsRecord record = statsCtxFactory.pollRecord();
     assertNotNull(record);

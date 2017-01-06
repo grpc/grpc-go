@@ -229,6 +229,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (callOptions.getAuthority() != null) {
       stream.setAuthority(callOptions.getAuthority());
     }
+    if (callOptions.getMaxInboundMessageSize() != null) {
+      stream.setMaxInboundMessageSize(callOptions.getMaxInboundMessageSize());
+    }
+    if (callOptions.getMaxOutboundMessageSize() != null) {
+      stream.setMaxOutboundMessageSize(callOptions.getMaxOutboundMessageSize());
+    }
     stream.setCompressor(compressor);
     stream.start(new ClientStreamListenerImpl(observer));
 

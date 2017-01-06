@@ -40,6 +40,7 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 import io.grpc.Deadline;
 import io.grpc.ExperimentalApi;
+import io.grpc.ManagedChannelBuilder;
 
 import java.util.concurrent.TimeUnit;
 
@@ -188,5 +189,23 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1915")
   public final S withWaitForReady() {
     return build(channel, callOptions.withWaitForReady());
+  }
+
+  /**
+   * Returns a new stub that limits the maximum acceptable message size from a remote peer.
+   *
+   * <p>If unset, the {@link ManagedChannelBuilder#maxInboundMessageSize(int)} limit is used.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2563")
+  public final S withMaxInboundMessageSize(int maxSize) {
+    return build(channel, callOptions.withMaxInboundMessageSize(maxSize));
+  }
+
+  /**
+   * Returns a new stub that limits the maximum acceptable message size to send a remote peer.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2563")
+  public final S withMaxOutboundMessageSize(int maxSize) {
+    return build(channel, callOptions.withMaxOutboundMessageSize(maxSize));
   }
 }

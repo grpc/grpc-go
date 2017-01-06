@@ -574,6 +574,12 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
       @Override
       public void setDecompressor(Decompressor decompressor) {}
+
+      @Override
+      public void setMaxInboundMessageSize(int maxSize) {}
+
+      @Override
+      public void setMaxOutboundMessageSize(int maxSize) {}
     }
   }
 

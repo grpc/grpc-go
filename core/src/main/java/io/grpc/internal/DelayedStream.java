@@ -72,6 +72,34 @@ class DelayedStream implements ClientStream {
   @GuardedBy("this")
   private DelayedStreamListener delayedListener;
 
+  @Override
+  public void setMaxInboundMessageSize(final int maxSize) {
+    if (passThrough) {
+      realStream.setMaxInboundMessageSize(maxSize);
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.setMaxInboundMessageSize(maxSize);
+        }
+      });
+    }
+  }
+
+  @Override
+  public void setMaxOutboundMessageSize(final int maxSize) {
+    if (passThrough) {
+      realStream.setMaxOutboundMessageSize(maxSize);
+    } else {
+      delayOrExecute(new Runnable() {
+        @Override
+        public void run() {
+          realStream.setMaxOutboundMessageSize(maxSize);
+        }
+      });
+    }
+  }
+
   /**
    * Transfers all pending and future requests and mutations to the given stream.
    *

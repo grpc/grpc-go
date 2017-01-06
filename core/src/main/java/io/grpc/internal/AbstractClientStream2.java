@@ -99,6 +99,16 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
   }
 
+  @Override
+  public void setMaxOutboundMessageSize(int maxSize) {
+    framer.setMaxOutboundMessageSize(maxSize);
+  }
+
+  @Override
+  public void setMaxInboundMessageSize(int maxSize) {
+    transportState().setMaxInboundMessageSize(maxSize);
+  }
+
   /** {@inheritDoc} */
   @Override
   protected abstract TransportState transportState();

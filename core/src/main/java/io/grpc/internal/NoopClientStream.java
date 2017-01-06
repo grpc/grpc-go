@@ -79,4 +79,10 @@ public class NoopClientStream implements ClientStream {
 
   @Override
   public void setDecompressor(Decompressor decompressor) {}
+
+  @Override
+  public void setMaxInboundMessageSize(int maxSize) {}
+
+  @Override
+  public void setMaxOutboundMessageSize(int maxSize) {}
 }

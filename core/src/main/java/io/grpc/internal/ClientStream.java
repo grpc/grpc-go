@@ -74,4 +74,14 @@ public interface ClientStream extends Stream {
    * @param listener non-{@code null} listener of stream events
    */
   void start(ClientStreamListener listener);
+
+  /**
+   * Sets the max size accepted from the remote endpoint.
+   */
+  void setMaxInboundMessageSize(int maxSize);
+
+  /**
+   * Sets the max size sent to the remote endpoint.
+   */
+  void setMaxOutboundMessageSize(int maxSize);
 }

@@ -31,6 +31,7 @@
 
 package io.grpc.testing.integration;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -41,6 +42,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 
+import com.google.api.client.repackaged.com.google.common.base.Throwables;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
 import com.google.auth.oauth2.GoogleCredentials;
@@ -785,6 +787,74 @@ public abstract class AbstractInteropTest {
     }
   }
 
+  @Test(timeout = 10000)
+  public void maxInboundSize_exact() {
+    StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
+        .build();
+    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+        .withMaxInboundMessageSize(size);
+
+    stub.streamingOutputCall(request).next();
+  }
+
+  @Test(timeout = 10000)
+  public void maxInboundSize_tooBig() {
+    StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
+        .build();
+    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+        .withMaxInboundMessageSize(size - 1);
+
+    try {
+      stub.streamingOutputCall(request).next();
+      fail();
+    } catch (StatusRuntimeException ex) {
+      Status s = ex.getStatus();
+      assertThat(s.getCode()).named(s.toString()).isEqualTo(Status.Code.INTERNAL);
+      assertThat(Throwables.getStackTraceAsString(ex)).contains("exceeds maximum");
+    }
+  }
+
+  @Test(timeout = 10000)
+  public void maxOutboundSize_exact() {
+    // warm up the channel and JVM
+    blockingStub.emptyCall(Empty.getDefaultInstance());
+
+    // set at least one field to ensure the size is non-zero.
+    StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
+        .build();
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+        .withMaxOutboundMessageSize(request.getSerializedSize());
+
+    stub.streamingOutputCall(request).next();
+  }
+
+  @Test(timeout = 10000)
+  public void maxOutboundSize_tooBig() {
+    // warm up the channel and JVM
+    blockingStub.emptyCall(Empty.getDefaultInstance());
+    // set at least one field to ensure the size is non-zero.
+    StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
+        .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
+        .build();
+    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
+        .withMaxOutboundMessageSize(request.getSerializedSize() - 1);
+    try {
+      stub.streamingOutputCall(request).next();
+      fail();
+    } catch (StatusRuntimeException ex) {
+      Status s = ex.getStatus();
+      assertThat(s.getCode()).named(s.toString()).isEqualTo(Status.Code.CANCELLED);
+      assertThat(Throwables.getStackTraceAsString(ex)).contains("message too large");
+    }
+  }
+
   protected int unaryPayloadLength() {
     // 10MiB.
     return 10485760;
@@ -955,7 +1025,7 @@ public abstract class AbstractInteropTest {
     // Test FullDuplexCall
     @SuppressWarnings("unchecked")
     StreamObserver<StreamingOutputCallResponse> responseObserver =
-        (StreamObserver<StreamingOutputCallResponse>) mock(StreamObserver.class);
+        mock(StreamObserver.class);
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(streamingRequest);

@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static java.lang.Math.min;
 
 import com.google.common.io.ByteStreams;
@@ -58,6 +59,9 @@ import javax.annotation.Nullable;
  * MessageFramer.Sink}.
  */
 public class MessageFramer {
+
+  private static final int NO_MAX_OUTBOUND_MESSAGE_SIZE = -1;
+
   /**
    * Sink implemented by the transport layer to receive frames and forward them to their
    * destination.
@@ -79,6 +83,8 @@ public class MessageFramer {
   private static final byte COMPRESSED = 1;
 
   private final Sink sink;
+  // effectively final.  Can only be set once.
+  private int maxOutboundMessageSize = NO_MAX_OUTBOUND_MESSAGE_SIZE;
   private WritableBuffer buffer;
   private Compressor compressor = Codec.Identity.NONE;
   private boolean messageCompression = true;
@@ -109,6 +115,11 @@ public class MessageFramer {
   MessageFramer setMessageCompression(boolean enable) {
     messageCompression = enable;
     return this;
+  }
+
+  void setMaxOutboundMessageSize(int maxSize) {
+    checkState(maxOutboundMessageSize == NO_MAX_OUTBOUND_MESSAGE_SIZE, "max size already set");
+    maxOutboundMessageSize = maxSize;
   }
 
   /**
@@ -155,6 +166,12 @@ public class MessageFramer {
     }
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
     int written = writeToOutputStream(message, bufferChain);
+    if (maxOutboundMessageSize >= 0 && written > maxOutboundMessageSize) {
+      throw Status.INTERNAL
+          .withDescription(
+              String.format("message too large %d > %d", written , maxOutboundMessageSize))
+          .asRuntimeException();
+    }
     writeBufferChain(bufferChain, false);
     return written;
   }
@@ -168,6 +185,12 @@ public class MessageFramer {
       written = writeToOutputStream(message, compressingStream);
     } finally {
       compressingStream.close();
+    }
+    if (maxOutboundMessageSize >= 0 && written > maxOutboundMessageSize) {
+      throw Status.CANCELLED
+          .withDescription(
+              String.format("message too large %d > %d", written , maxOutboundMessageSize))
+          .asRuntimeException();
     }
 
     writeBufferChain(bufferChain, true);
@@ -186,6 +209,12 @@ public class MessageFramer {
    */
   private int writeKnownLengthUncompressed(InputStream message, int messageLength)
       throws IOException {
+    if (maxOutboundMessageSize >= 0 && messageLength > maxOutboundMessageSize) {
+      throw Status.CANCELLED
+          .withDescription(
+              String.format("message too large %d > %d", messageLength , maxOutboundMessageSize))
+          .asRuntimeException();
+    }
     ByteBuffer header = ByteBuffer.wrap(headerScratch);
     header.put(UNCOMPRESSED);
     header.putInt(messageLength);
