@@ -79,7 +79,7 @@ func TestClientHandshakeReturnsAuthInfo(t *testing.T) {
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqual(clientAuthInfo, serverAuthInfo) {
+	if !compare(clientAuthInfo, serverAuthInfo) {
 		t.Fatalf("c.ClientHandshake(_, %v, _) = %v, want %v.", lisAddr, clientAuthInfo, serverAuthInfo)
 	}
 }
@@ -93,7 +93,7 @@ func TestServerHandshakeReturnsAuthInfo(t *testing.T) {
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqual(clientAuthInfo, serverAuthInfo) {
+	if !compare(clientAuthInfo, serverAuthInfo) {
 		t.Fatalf("ServerHandshake(_) = %v, want %v.", serverAuthInfo, clientAuthInfo)
 	}
 }
@@ -107,12 +107,12 @@ func TestServerAndClientHandshake(t *testing.T) {
 	if !ok {
 		t.Fatalf("Error at server-side")
 	}
-	if !isEqual(clientAuthInfo, serverAuthInfo) {
+	if !compare(clientAuthInfo, serverAuthInfo) {
 		t.Fatalf("Connection states returened by server: %v and client: %v aren't same", serverAuthInfo, clientAuthInfo)
 	}
 }
 
-func isEqual(a1, a2 AuthInfo) bool {
+func compare(a1, a2 AuthInfo) bool {
 	if reflect.TypeOf(a1) != reflect.TypeOf(a2) {
 		return false
 	}
