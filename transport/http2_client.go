@@ -103,7 +103,7 @@ type http2Client struct {
 	// activity counter
 	activity uint64 // accessed atomically
 	// keepalive parameters
-	keepaliveParams keepalive.Params
+	kp keepalive.Params
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -186,9 +186,9 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
-	kp := keepalive.DefaultKParams
-	if opts.KParams != (keepalive.Params{}) {
-		kp = opts.KParams
+	kp := keepalive.DefaultParams
+	if opts.KeepaliveParams != (keepalive.Params{}) {
+		kp = opts.KeepaliveParams
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -217,7 +217,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		creds:           opts.PerRPCCredentials,
 		maxStreams:      math.MaxInt32,
 		streamSendQuota: defaultWindowSize,
-		keepaliveParams: kp,
+		kp:              kp,
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -844,8 +844,6 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 	pingAck := &ping{ack: true}
 	copy(pingAck.data[:], f.Data[:])
 	t.controlBuf.put(pingAck)
-	// activity++
-	atomic.AddUint64(&t.activity, 1)
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
@@ -1070,9 +1068,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // controller running in a separate goroutine takes charge of sending control
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Client) controller() {
-	// Activity value seen by timer
-	ta := atomic.LoadUint64(&t.activity)
-	timer := time.NewTimer(t.keepaliveParams.Time)
+	timer := time.NewTimer(t.kp.Time)
 	if !keepalive.Enabled() {
 		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
@@ -1115,24 +1111,22 @@ func (t *http2Client) controller() {
 			t.mu.Lock()
 			ns := len(t.activeStreams)
 			t.mu.Unlock()
-			// Global activity value.
-			ga := atomic.LoadUint64(&t.activity)
-			if ga > ta || (!t.keepaliveParams.PermitNoStream && ns < 1) {
-				timer.Reset(t.keepaliveParams.Time)
+			// Get the activity counter value and reset it.
+			a := atomic.SwapUint64(&t.activity, 0)
+			if a > 0 || (!t.kp.PermitWithoutStream && ns < 1) {
+				timer.Reset(t.kp.Time)
 				isPingSent = false
 			} else {
 				if !isPingSent {
 					// send ping
 					t.controlBuf.put(keepalivePing)
 					isPingSent = true
-					timer.Reset(t.keepaliveParams.Timeout)
+					timer.Reset(t.kp.Timeout)
 				} else {
 					t.Close()
 					continue
 				}
 			}
-			// Update timer activity counter.
-			ta = ga
 		case <-t.shutdownChan:
 			return
 		}

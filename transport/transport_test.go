@@ -274,7 +274,7 @@ func setUpWithOptions(t *testing.T, port int, maxStreams uint32, ht hType, copts
 	return server, ct
 }
 
-func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) *http2Client {
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) ClientTransport {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
@@ -290,30 +290,23 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		}
 		done <- conn
 	}()
-	tr, err := newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
+	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	cT := tr.(*http2Client)
-	// Assert client transport is healthy
-	cT.mu.Lock()
-	defer cT.mu.Unlock()
-	if cT.state != reachable {
-		t.Fatalf("Client transport not healthy")
-	}
-	return cT
+	return tr
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 	keepalive.Enable()
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
-		Time:           2 * time.Second, // keepalive time = 2 sec
-		Timeout:        1 * time.Second, // keepalive timeout = 1 sec
-		PermitNoStream: true,            // run keepalive even with no RPCs
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+		Time:                2 * time.Second, // keepalive time = 2 sec
+		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
+		PermitWithoutStream: true,            // run keepalive even with no RPCs
 	}}, done)
-	defer cT.Close()
+	defer tr.Close()
 	conn, ok := <-done
 	if !ok {
 		t.Fatalf("Server didn't return connection object")
@@ -322,9 +315,10 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 	// Sleep for keepalive to close the connection
 	time.Sleep(4 * time.Second)
 	// Assert that the connection was closed
-	cT.mu.Lock()
-	defer cT.mu.Unlock()
-	if cT.state == reachable {
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
 		t.Fatalf("Test Failed: Expected client transport to have closed.")
 	}
 }
@@ -333,12 +327,12 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 	keepalive.Enable()
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
-		Time:           2 * time.Second, // keepalive time = 2 sec
-		Timeout:        1 * time.Second, // keepalive timeout = 1 sec
-		PermitNoStream: false,           // don't run keepalive even with no RPCs
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+		Time:                2 * time.Second, // keepalive time = 2 sec
+		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
+		PermitWithoutStream: false,           // don't run keepalive even with no RPCs
 	}}, done)
-	defer cT.Close()
+	defer tr.Close()
 	conn, ok := <-done
 	if !ok {
 		t.Fatalf("server didn't reutrn connection object")
@@ -347,9 +341,10 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 	// Give keepalive some time
 	time.Sleep(4 * time.Second)
 	// Assert that connections is still healthy
-	cT.mu.Lock()
-	defer cT.mu.Unlock()
-	if cT.state != reachable {
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
 		t.Fatalf("Test failed: Expected client transport to be healthy.")
 	}
 }
@@ -358,28 +353,29 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	keepalive.Enable()
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	cT := setUpWithNoPingServer(t, ConnectOptions{KParams: keepalive.Params{
-		Time:           2 * time.Second, // keepalive time = 2 sec
-		Timeout:        1 * time.Second, // keepalive timeout = 1 sec
-		PermitNoStream: false,           // don't run keepalive even with no RPCs
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+		Time:                2 * time.Second, // keepalive time = 2 sec
+		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
+		PermitWithoutStream: false,           // don't run keepalive even with no RPCs
 	}}, done)
-	defer cT.Close()
+	defer tr.Close()
 	conn, ok := <-done
 	if !ok {
 		t.Fatalf("Server didn't return connection object")
 	}
 	defer conn.Close()
 	// create a stream
-	_, err := cT.NewStream(context.Background(), &CallHdr{})
+	_, err := tr.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create a new stream: %v", err)
 	}
 	// Give keepalive some time
 	time.Sleep(4 * time.Second)
 	// Asser that transport was closed
-	cT.mu.Lock()
-	defer cT.mu.Unlock()
-	if cT.state == reachable {
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
 		t.Fatalf("Test failed: Expected client transport to have closed.")
 	}
 }
@@ -387,20 +383,20 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	keepalive.Enable()
 	defer keepalive.Disable()
-	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KParams: keepalive.Params{
-		Time:           2 * time.Second, // keepalive time = 2 sec
-		Timeout:        1 * time.Second, // keepalive timeout = 1 sec
-		PermitNoStream: true,            // don't run keepalive even with no RPCs
+	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KeepaliveParams: keepalive.Params{
+		Time:                2 * time.Second, // keepalive time = 2 sec
+		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
+		PermitWithoutStream: true,            // don't run keepalive even with no RPCs
 	}})
 	defer s.stop()
 	defer tr.Close()
 	// Give keep alive some time
 	time.Sleep(4 * time.Second)
 	// Assert that transport is healthy
-	cT := tr.(*http2Client)
-	cT.mu.Lock()
-	defer cT.mu.Unlock()
-	if cT.state != reachable {
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
 		t.Fatalf("Test failed: Expected client transport to be healthy.")
 	}
 }

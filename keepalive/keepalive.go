@@ -13,11 +13,11 @@ type Params struct {
 	// After having pinged fot keepalive check, the client waits for a duration of keepalive_timeout before closing the transport.
 	Timeout time.Duration
 	//If true, client runs keepalive checks even with no active RPCs.
-	PermitNoStream bool
+	PermitWithoutStream bool
 }
 
-// DefaultKParams contains default values for keepalive parameters
-var DefaultKParams = Params{
+// DefaultParams contains default values for keepalive parameters
+var DefaultParams = Params{
 	Time:    time.Duration(math.MaxInt64), // default to infinite
 	Timeout: time.Duration(20 * time.Second),
 }
