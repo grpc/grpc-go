@@ -279,7 +279,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	// launch a non responsive server
+	// Launch a non responsive server.
 	go func() {
 		defer lis.Close()
 		conn, err := lis.Accept()
@@ -302,9 +302,9 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
 	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
-		Time:                2 * time.Second, // keepalive time = 2 sec
-		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
-		PermitWithoutStream: true,            // run keepalive even with no RPCs
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
 	}}, done)
 	defer tr.Close()
 	conn, ok := <-done
@@ -312,9 +312,9 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 		t.Fatalf("Server didn't return connection object")
 	}
 	defer conn.Close()
-	// Sleep for keepalive to close the connection
+	// Sleep for keepalive to close the connection.
 	time.Sleep(4 * time.Second)
-	// Assert that the connection was closed
+	// Assert that the connection was closed.
 	ct := tr.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
@@ -328,9 +328,9 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
 	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
-		Time:                2 * time.Second, // keepalive time = 2 sec
-		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
-		PermitWithoutStream: false,           // don't run keepalive even with no RPCs
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: false,           // Don't run keepalive even with no RPCs.
 	}}, done)
 	defer tr.Close()
 	conn, ok := <-done
@@ -338,9 +338,9 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 		t.Fatalf("server didn't reutrn connection object")
 	}
 	defer conn.Close()
-	// Give keepalive some time
+	// Give keepalive some time.
 	time.Sleep(4 * time.Second)
-	// Assert that connections is still healthy
+	// Assert that connections is still healthy.
 	ct := tr.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
@@ -354,9 +354,9 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
 	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
-		Time:                2 * time.Second, // keepalive time = 2 sec
-		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
-		PermitWithoutStream: false,           // don't run keepalive even with no RPCs
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: false,           // Don't run keepalive even with no RPCs.
 	}}, done)
 	defer tr.Close()
 	conn, ok := <-done
@@ -364,14 +364,14 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 		t.Fatalf("Server didn't return connection object")
 	}
 	defer conn.Close()
-	// create a stream
+	// Create a stream.
 	_, err := tr.NewStream(context.Background(), &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create a new stream: %v", err)
 	}
-	// Give keepalive some time
+	// Give keepalive some time.
 	time.Sleep(4 * time.Second)
-	// Asser that transport was closed
+	// Assert that transport was closed.
 	ct := tr.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
@@ -384,15 +384,15 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	keepalive.Enable()
 	defer keepalive.Disable()
 	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KeepaliveParams: keepalive.Params{
-		Time:                2 * time.Second, // keepalive time = 2 sec
-		Timeout:             1 * time.Second, // keepalive timeout = 1 sec
-		PermitWithoutStream: true,            // don't run keepalive even with no RPCs
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: true,            // Don't run keepalive even with no RPCs.
 	}})
 	defer s.stop()
 	defer tr.Close()
-	// Give keep alive some time
+	// Give keep alive some time.
 	time.Sleep(4 * time.Second)
-	// Assert that transport is healthy
+	// Assert that transport is healthy.
 	ct := tr.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()

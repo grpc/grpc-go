@@ -100,9 +100,9 @@ type http2Client struct {
 
 	creds []credentials.PerRPCCredentials
 
-	// activity counter
-	activity uint64 // accessed atomically
-	// keepalive parameters
+	// Counter to keep track of activity(reading and writing on transport).
+	activity uint64 // accessed atomically.
+	// keepalive parameters.
 	kp keepalive.Params
 
 	mu            sync.Mutex     // guard the following variables
@@ -702,7 +702,6 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			break
 		}
 	}
-	// activity++
 	atomic.AddUint64(&t.activity, 1)
 	if !opts.Last {
 		return nil
@@ -990,7 +989,6 @@ func (t *http2Client) reader() {
 	// loop to keep reading incoming messages on this transport.
 	for {
 		frame, err := t.framer.readFrame()
-		// activity++
 		atomic.AddUint64(&t.activity, 1)
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
@@ -1118,7 +1116,7 @@ func (t *http2Client) controller() {
 				isPingSent = false
 			} else {
 				if !isPingSent {
-					// send ping
+					// Send ping.
 					t.controlBuf.put(keepalivePing)
 					isPingSent = true
 					timer.Reset(t.kp.Timeout)

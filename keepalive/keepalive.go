@@ -16,33 +16,33 @@ type Params struct {
 	PermitWithoutStream bool
 }
 
-// DefaultParams contains default values for keepalive parameters
+// DefaultParams contains default values for keepalive parameters.
 var DefaultParams = Params{
-	Time:    time.Duration(math.MaxInt64), // default to infinite
+	Time:    time.Duration(math.MaxInt64), // default to infinite.
 	Timeout: time.Duration(20 * time.Second),
 }
 
-// mu is a mutex to protect Enabled variable
+// mu is a mutex to protect Enabled variable.
 var mu = sync.Mutex{}
 
-// enable is a knob used to turn keepalive on or off
+// enable is a knob used to turn keepalive on or off.
 var enable = false
 
-// Enabled exposes the value of enable variable
+// Enabled exposes the value of enable variable.
 func Enabled() bool {
 	mu.Lock()
 	defer mu.Unlock()
 	return enable
 }
 
-// Enable can be called to enable keepalives
+// Enable can be called to enable keepalives.
 func Enable() {
 	mu.Lock()
 	defer mu.Unlock()
 	enable = true
 }
 
-// Disable can be called to disable keepalive
+// Disable can be called to disable keepalive.
 func Disable() {
 	mu.Lock()
 	defer mu.Unlock()

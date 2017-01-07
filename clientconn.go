@@ -231,7 +231,7 @@ func WithUserAgent(s string) DialOption {
 	}
 }
 
-// WithKeepaliveParams returns a DialOption that specifies a user agent string for all the RPCs.
+// WithKeepaliveParams returns a DialOption that specifies keepalive paramaters for the client transport.
 func WithKeepaliveParams(k keepalive.Params) DialOption {
 	return func(o *dialOptions) {
 		o.copts.KeepaliveParams = k

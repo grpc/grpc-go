@@ -381,7 +381,7 @@ type ConnectOptions struct {
 	PerRPCCredentials []credentials.PerRPCCredentials
 	// TransportCredentials stores the Authenticator required to setup a client connection.
 	TransportCredentials credentials.TransportCredentials
-	// Keepalive parameters
+	// KeepaliveParams stores the keepalive parameters.
 	KeepaliveParams keepalive.Params
 }
 
