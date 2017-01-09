@@ -380,7 +380,6 @@ public class AsyncClient {
         throw new CancellationException();
       }
 
-      done = true;
       return histogram;
     }
 
