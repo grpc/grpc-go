@@ -32,12 +32,10 @@
 package io.grpc.testing;
 
 import io.grpc.ExperimentalApi;
-import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
-import io.grpc.Status;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -57,11 +55,8 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLContext;
@@ -77,92 +72,7 @@ public class TestUtils {
   public static final String TEST_SERVER_HOST = "foo.test.google.fr";
 
   /**
-   * Echo the request headers from a client into response headers and trailers. Useful for
-   * testing end-to-end metadata propagation.
-   */
-  public static ServerInterceptor echoRequestHeadersInterceptor(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
-    return new ServerInterceptor() {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
-          final Metadata requestHeaders,
-          ServerCallHandler<ReqT, RespT> next) {
-        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
-              @Override
-              public void sendHeaders(Metadata responseHeaders) {
-                responseHeaders.merge(requestHeaders, keySet);
-                super.sendHeaders(responseHeaders);
-              }
-
-              @Override
-              public void close(Status status, Metadata trailers) {
-                trailers.merge(requestHeaders, keySet);
-                super.close(status, trailers);
-              }
-            }, requestHeaders);
-      }
-    };
-  }
-
-  /**
-   * Echoes request headers with the specified key(s) from a client into response headers only.
-   */
-  public static ServerInterceptor echoRequestMetadataInHeaders(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
-    return new ServerInterceptor() {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
-          final Metadata requestHeaders,
-          ServerCallHandler<ReqT, RespT> next) {
-        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
-          @Override
-          public void sendHeaders(Metadata responseHeaders) {
-            responseHeaders.merge(requestHeaders, keySet);
-            super.sendHeaders(responseHeaders);
-          }
-
-          @Override
-          public void close(Status status, Metadata trailers) {
-            super.close(status, trailers);
-          }
-        }, requestHeaders);
-      }
-    };
-  }
-
-  /**
-   * Echoes request headers with the specified key(s) from a client into response trailers only.
-   */
-  public static ServerInterceptor echoRequestMetadataInTrailers(final Metadata.Key<?>... keys) {
-    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
-    return new ServerInterceptor() {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
-          final Metadata requestHeaders,
-          ServerCallHandler<ReqT, RespT> next) {
-        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
-          @Override
-          public void sendHeaders(Metadata responseHeaders) {
-            super.sendHeaders(responseHeaders);
-          }
-
-          @Override
-          public void close(Status status, Metadata trailers) {
-            trailers.merge(requestHeaders, keySet);
-            super.close(status, trailers);
-          }
-        }, requestHeaders);
-      }
-    };
-  }
-
-  /**
-   * Capture the request headers from a client. Useful for testing metadata propagation without
-   * requiring that it be symmetric on client and server, as with
-   * {@link #echoRequestHeadersInterceptor}.
+   * Capture the request headers from a client. Useful for testing metadata propagation.
    */
   public static ServerInterceptor recordRequestHeadersInterceptor(
       final AtomicReference<Metadata> headersCapture) {

@@ -36,6 +36,11 @@ import com.google.common.collect.Queues;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
 
+import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.stub.ServerCallStreamObserver;
@@ -51,9 +56,13 @@ import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.GuardedBy;
@@ -495,5 +504,96 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
       begin = end % dataBuffer.size();
     }
     return payload;
+  }
+
+  /** Returns interceptors necessary for full service implementation. */
+  public static List<ServerInterceptor> interceptors() {
+    return Arrays.asList(
+        echoRequestHeadersInterceptor(Util.METADATA_KEY),
+        echoRequestMetadataInHeaders(Util.ECHO_INITIAL_METADATA_KEY),
+        echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY));
+  }
+
+  /**
+   * Echo the request headers from a client into response headers and trailers. Useful for
+   * testing end-to-end metadata propagation.
+   */
+  private static ServerInterceptor echoRequestHeadersInterceptor(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          final Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+              @Override
+              public void sendHeaders(Metadata responseHeaders) {
+                responseHeaders.merge(requestHeaders, keySet);
+                super.sendHeaders(responseHeaders);
+              }
+
+              @Override
+              public void close(Status status, Metadata trailers) {
+                trailers.merge(requestHeaders, keySet);
+                super.close(status, trailers);
+              }
+            }, requestHeaders);
+      }
+    };
+  }
+
+  /**
+   * Echoes request headers with the specified key(s) from a client into response headers only.
+   */
+  private static ServerInterceptor echoRequestMetadataInHeaders(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          final Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendHeaders(Metadata responseHeaders) {
+            responseHeaders.merge(requestHeaders, keySet);
+            super.sendHeaders(responseHeaders);
+          }
+
+          @Override
+          public void close(Status status, Metadata trailers) {
+            super.close(status, trailers);
+          }
+        }, requestHeaders);
+      }
+    };
+  }
+
+  /**
+   * Echoes request headers with the specified key(s) from a client into response trailers only.
+   */
+  private static ServerInterceptor echoRequestMetadataInTrailers(final Metadata.Key<?>... keys) {
+    final Set<Metadata.Key<?>> keySet = new HashSet<Metadata.Key<?>>(Arrays.asList(keys));
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          final Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        return next.startCall(new SimpleForwardingServerCall<ReqT, RespT>(call) {
+          @Override
+          public void sendHeaders(Metadata responseHeaders) {
+            super.sendHeaders(responseHeaders);
+          }
+
+          @Override
+          public void close(Status status, Metadata trailers) {
+            trailers.merge(requestHeaders, keySet);
+            super.close(status, trailers);
+          }
+        }, requestHeaders);
+      }
+    };
   }
 }

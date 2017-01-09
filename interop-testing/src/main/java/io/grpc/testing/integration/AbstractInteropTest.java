@@ -145,9 +145,7 @@ public abstract class AbstractInteropTest {
     List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
         .add(TestUtils.recordServerCallInterceptor(serverCallCapture))
         .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
-        .add(TestUtils.echoRequestHeadersInterceptor(Util.METADATA_KEY))
-        .add(TestUtils.echoRequestMetadataInHeaders(Util.ECHO_INITIAL_METADATA_KEY))
-        .add(TestUtils.echoRequestMetadataInTrailers(Util.ECHO_TRAILING_METADATA_KEY))
+        .addAll(TestServiceImpl.interceptors())
         .add(interceptors)
         .build();
 
