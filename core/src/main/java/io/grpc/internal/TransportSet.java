@@ -41,6 +41,7 @@ import io.grpc.ConnectivityState;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
@@ -364,7 +365,7 @@ final class TransportSet extends ManagedChannel implements WithLogId {
         new SerializingExecutor(appExecutor), callOptions, StatsTraceContext.NOOP,
         new ClientTransportProvider() {
           @Override
-          public ClientTransport get(CallOptions callOptions) {
+          public ClientTransport get(CallOptions callOptions, Metadata headers) {
             return obtainActiveTransport();
           }
         },

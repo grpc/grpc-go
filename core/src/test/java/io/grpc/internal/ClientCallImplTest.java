@@ -155,7 +155,7 @@ public class ClientCallImplTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     assertNotNull(statsCtx);
-    when(provider.get(any(CallOptions.class))).thenReturn(transport);
+    when(provider.get(any(CallOptions.class), any(Metadata.class))).thenReturn(transport);
     when(transport.newStream(any(MethodDescriptor.class), any(Metadata.class),
             any(CallOptions.class), any(StatsTraceContext.class))).thenReturn(stream);
   }

@@ -127,7 +127,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     /**
      * Returns a transport for a new call.
      */
-    ClientTransport get(CallOptions callOptions);
+    ClientTransport get(CallOptions callOptions, Metadata headers);
   }
 
   ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
@@ -215,7 +215,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (!deadlineExceeded) {
       updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
           context.getDeadline(), headers);
-      ClientTransport transport = clientTransportProvider.get(callOptions);
+      ClientTransport transport = clientTransportProvider.get(callOptions, headers);
       Context origContext = context.attach();
       try {
         stream = transport.newStream(method, headers, callOptions, statsTraceCtx);

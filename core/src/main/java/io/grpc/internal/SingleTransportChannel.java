@@ -39,6 +39,7 @@ import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
 
@@ -59,7 +60,7 @@ final class SingleTransportChannel extends Channel {
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ClientTransport get(CallOptions callOptions) {
+    public ClientTransport get(CallOptions callOptions, Metadata headers) {
       return transport;
     }
   };

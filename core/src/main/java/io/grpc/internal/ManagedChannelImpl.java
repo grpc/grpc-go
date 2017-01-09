@@ -51,6 +51,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfoGroup;
@@ -359,7 +360,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ClientTransport get(CallOptions callOptions) {
+    public ClientTransport get(CallOptions callOptions, Metadata headers) {
       LoadBalancer<ClientTransport> balancer = loadBalancer;
       if (balancer == null) {
         // Current state is either idle or in grace period
