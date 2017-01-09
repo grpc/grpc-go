@@ -486,11 +486,11 @@ type MethodConfig struct {
 	// then the other will be used.  If neither is set, then the RPC has no deadline.
 	Timeout time.Duration
 	// MaxReqSize is the maximum allowed payload size for an individual request in a
-	// stream (client->server) in bytes. The size which is measured is the serialized,
-	// uncompressed payload in bytes. The actual value used is the minumum of the value
-	// specified here and the value set by the application via the gRPC client API. If
-	// either one is not set, then the other will be used.  If neither is set, then the
-	// built-in default is used.
+	// stream (client->server) in bytes. The size which is measured is the serialized
+	// payload after per-message compression (but before stream compression) in bytes.
+	// The actual value used is the minumum of the value specified here and the value set
+	// by the application via the gRPC client API. If either one is not set, then the other
+	// will be used.  If neither is set, then the built-in default is used.
 	// TODO: support this.
 	MaxReqSize uint64
 	// MaxRespSize is the maximum allowed payload size for an individual response in a
