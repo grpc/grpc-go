@@ -31,6 +31,7 @@
 
 package io.grpc.okhttp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import io.grpc.okhttp.internal.ConnectionSpec;
@@ -42,7 +43,6 @@ import java.net.Socket;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -53,9 +53,13 @@ import javax.net.ssl.SSLSocketFactory;
  */
 final class OkHttpTlsUpgrader {
 
-  private static final String HTTP2_PROTOCOL_NAME = "h2";
-  private static final List<Protocol> TLS_PROTOCOLS =
-      Collections.unmodifiableList(Arrays.<Protocol>asList(Protocol.HTTP_2));
+  /*
+   * List of ALPN/NPN protocols in order of preference. GRPC_EXP requires that
+   * HTTP_2 be present and that GRPC_EXP should be preferenced over HTTP_2.
+   */
+  @VisibleForTesting
+  static final List<Protocol> TLS_PROTOCOLS =
+      Collections.unmodifiableList(Arrays.<Protocol>asList(Protocol.GRPC_EXP, Protocol.HTTP_2));
 
   /**
    * Upgrades given Socket to be a SSLSocket.
@@ -73,8 +77,10 @@ final class OkHttpTlsUpgrader {
     spec.apply(sslSocket, false);
     String negotiatedProtocol = OkHttpProtocolNegotiator.get().negotiate(
         sslSocket, host, spec.supportsTlsExtensions() ? TLS_PROTOCOLS : null);
-    Preconditions.checkState(HTTP2_PROTOCOL_NAME.equals(negotiatedProtocol),
-        "Only \"h2\" is supported, but negotiated protocol is %s", negotiatedProtocol);
+    Preconditions.checkState(
+        TLS_PROTOCOLS.contains(Protocol.get(negotiatedProtocol)),
+        "Only " + TLS_PROTOCOLS + " are supported, but negotiated protocol is %s",
+        negotiatedProtocol);
 
     if (!OkHostnameVerifier.INSTANCE.verify(host, sslSocket.getSession())) {
       throw new SSLPeerUnverifiedException("Cannot verify hostname: " + host);

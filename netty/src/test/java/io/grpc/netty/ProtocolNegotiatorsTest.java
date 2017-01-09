@@ -171,11 +171,34 @@ public class ProtocolNegotiatorsTest {
   }
 
   @Test
-  public void tlsHandler_userEventTriggeredSslEvent_supportedProtocol() throws Exception {
+  public void tlsHandler_userEventTriggeredSslEvent_supportedProtocolH2() throws Exception {
     SslHandler goodSslHandler = new SslHandler(engine, false) {
       @Override
       public String applicationProtocol() {
         return "h2";
+      }
+    };
+
+    ChannelHandler handler = new ServerTlsHandler(sslContext, grpcHandler);
+    pipeline.addLast(handler);
+
+    pipeline.replace(SslHandler.class, null, goodSslHandler);
+    channelHandlerCtx = pipeline.context(handler);
+    Object sslEvent = SslHandshakeCompletionEvent.SUCCESS;
+
+    pipeline.fireUserEventTriggered(sslEvent);
+
+    assertTrue(channel.isOpen());
+    ChannelHandlerContext grpcHandlerCtx = pipeline.context(grpcHandler);
+    assertNotNull(grpcHandlerCtx);
+  }
+
+  @Test
+  public void tlsHandler_userEventTriggeredSslEvent_supportedProtocolGrpcExp() throws Exception {
+    SslHandler goodSslHandler = new SslHandler(engine, false) {
+      @Override
+      public String applicationProtocol() {
+        return "grpc-exp";
       }
     };
 

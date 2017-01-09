@@ -70,7 +70,16 @@ public enum Protocol {
    * , present in Java 8+ and Android 5+. Servers that enforce this may send an
    * exception message including the string {@code INADEQUATE_SECURITY}.
    */
-  HTTP_2("h2");
+  HTTP_2("h2"),
+
+  /**
+   * The experimental "grpc-exp" string identifies gRPC (and by implication
+   * HTTP/2) when used over TLS. This indicates to the server that the client
+   * will only send gRPC traffic on the h2 connection and is negotiated in
+   * preference to h2 when the client and server support it, but is not
+   * standardized. Support for this may be removed at any time.
+   */
+  GRPC_EXP("grpc-exp");
 
   private final String protocol;
 
@@ -87,6 +96,7 @@ public enum Protocol {
     if (protocol.equals(HTTP_1_0.protocol)) return HTTP_1_0;
     if (protocol.equals(HTTP_1_1.protocol)) return HTTP_1_1;
     if (protocol.equals(HTTP_2.protocol)) return HTTP_2;
+    if (protocol.equals(GRPC_EXP.protocol)) return GRPC_EXP;
     if (protocol.equals(SPDY_3.protocol)) return SPDY_3;
     throw new IOException("Unexpected protocol: " + protocol);
   }

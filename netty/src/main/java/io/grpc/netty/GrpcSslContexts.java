@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Collections.singletonList;
 
 import io.grpc.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
@@ -47,6 +46,9 @@ import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Utility for configuring SslContext for gRPC.
@@ -55,8 +57,25 @@ import java.io.File;
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
 
+  /*
+   * The experimental "grpc-exp" string identifies gRPC (and by implication
+   * HTTP/2) when used over TLS. This indicates to the server that the client
+   * will only send gRPC traffic on the h2 connection and is negotiated in
+   * preference to h2 when the client and server support it, but is not
+   * standardized. Support for this may be removed at any time.
+   */
+  private static final String GRPC_EXP_VERSION = "grpc-exp";
+
   // The "h2" string identifies HTTP/2 when used over TLS
-  static final String HTTP2_VERSION = "h2";
+  private static final String HTTP2_VERSION = "h2";
+
+  /*
+   * List of ALPN/NPN protocols in order of preference. GRPC_EXP_VERSION
+   * requires that HTTP2_VERSION be present and that GRPC_EXP_VERSION should be
+   * preferenced over HTTP2_VERSION.
+   */
+  static final List<String> NEXT_PROTOCOL_VERSIONS =
+      Collections.unmodifiableList(Arrays.asList(GRPC_EXP_VERSION, HTTP2_VERSION));
 
   /*
    * These configs use ACCEPT due to limited support in OpenSSL.  Actual protocol enforcement is
@@ -66,19 +85,19 @@ public class GrpcSslContexts {
       Protocol.ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      singletonList(HTTP2_VERSION));
+      NEXT_PROTOCOL_VERSIONS);
 
   private static ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
       Protocol.NPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      singletonList(HTTP2_VERSION));
+      NEXT_PROTOCOL_VERSIONS);
 
   private static ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
       Protocol.NPN_AND_ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
-      singletonList(HTTP2_VERSION));
+      NEXT_PROTOCOL_VERSIONS);
 
   /**
    * Creates a SslContextBuilder with ciphers and APN appropriate for gRPC.
@@ -172,9 +191,10 @@ public class GrpcSslContexts {
     checkArgument(alpnNegotiator != null, "ALPN must be configured");
     checkArgument(alpnNegotiator.protocols() != null && !alpnNegotiator.protocols().isEmpty(),
         "ALPN must be enabled and list HTTP/2 as a supported protocol.");
-    if (!alpnNegotiator.protocols().contains(HTTP2_VERSION)) {
-      throw new IllegalArgumentException("This ALPN config does not support HTTP/2. Expected '"
-          + HTTP2_VERSION + "', but got " + alpnNegotiator.protocols() + '.');
-    }
+    checkArgument(
+        alpnNegotiator.protocols().contains(HTTP2_VERSION),
+        "This ALPN config does not support HTTP/2. Expected %s, but got %s'.",
+        HTTP2_VERSION,
+        alpnNegotiator.protocols());
   }
 }

@@ -179,6 +179,26 @@ public class OkHttpProtocolNegotiatorTest {
   }
 
   @Test
+  public void negotiate_preferGrpcExp() throws Exception {
+    // This test doesn't actually verify that grpc-exp is preferred, since the
+    // mocking of getSelectedProtocol() causes the protocol list to be ignored.
+    // The main usefulness of the test is for future changes to
+    // OkHttpProtocolNegotiator, where we can catch any change that would affect
+    // grpc-exp preference.
+    when(platform.getSelectedProtocol(Mockito.<SSLSocket>any())).thenReturn("grpc-exp");
+    OkHttpProtocolNegotiator negotiator = new OkHttpProtocolNegotiator(platform);
+
+    String actual =
+        negotiator.negotiate(sock, "hostname",
+                ImmutableList.of(Protocol.GRPC_EXP, Protocol.HTTP_2));
+
+    assertEquals("grpc-exp", actual);
+    verify(sock).startHandshake();
+    verify(platform).getSelectedProtocol(sock);
+    verify(platform).afterHandshake(sock);
+  }
+
+  @Test
   public void pickTlsExtensionType_securityProvider() throws Exception {
     assertNotNull(Security.getProvider(fakeSecurityProvider.getName()));
 
