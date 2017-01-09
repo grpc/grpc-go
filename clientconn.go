@@ -223,7 +223,8 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 	}
 }
 
-// WithStatsHandler returns a DialOption that specifies the stats handler for the ClientConn.
+// WithStatsHandler returns a DialOption that specifies the stats handler
+// for all the RPCs and underlying network connections in this ClientConn.
 func WithStatsHandler(h stats.Handler) DialOption {
 	return func(o *dialOptions) {
 		o.copts.StatsHandler = h

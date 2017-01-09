@@ -54,11 +54,10 @@ type RPCTagInfo struct {
 	FullMethodName string
 }
 
-// Handler defines the interface for the stats handler.
+// Handler defines the interface for the related stats handling (e.g., RPCs, connections).
 type Handler interface {
 	// TagRPC can attach some information to the given context.
-	// The context used in HandleRPC for this RPC will be derived from the
-	// context returned.
+	// The returned context is used in the rest lifetime of the RPC.
 	TagRPC(context.Context, *RPCTagInfo) context.Context
 	// HandleRPC processes the RPC stats.
 	HandleRPC(context.Context, RPCStats)
