@@ -214,8 +214,7 @@ func tlsServerHandshake(conn net.Conn) (AuthInfo, error) {
 func tlsClientHandshake(conn net.Conn, _ string) (AuthInfo, error) {
 	clientTLSConfig := &tls.Config{InsecureSkipVerify: true}
 	clientConn := tls.Client(conn, clientTLSConfig)
-	err := clientConn.Handshake()
-	if err != nil {
+	if err := clientConn.Handshake(); err != nil {
 		return nil, err
 	}
 	return TLSInfo{State: clientConn.ConnectionState()}, nil
