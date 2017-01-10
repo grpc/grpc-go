@@ -147,6 +147,7 @@ func launchServer(t *testing.T, hs serverHandshake, done chan AuthInfo) net.List
 // Is run in a seperate goroutine.
 func serverHandle(t *testing.T, hs serverHandshake, done chan AuthInfo, lis net.Listener) {
 	serverRawConn, err := lis.Accept()
+	defer serverRawConn.Close()
 	if err != nil {
 		t.Errorf("Server failed to accept connection: %v", err)
 		close(done)
