@@ -31,14 +31,10 @@
 
 package io.grpc.stub;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.verify;
@@ -98,26 +94,6 @@ public class StubConfigTest {
     assertEquals(deadline, reconfiguredStub.getCallOptions().getDeadline());
     // Default config unchanged
     assertNull(stub.getCallOptions().getDeadline());
-  }
-
-  @Test
-  @Deprecated
-  public void testConfigureDeadlineNanoTime() {
-    long deadline = System.nanoTime() + SECONDS.toNanos(1);
-    // Create a default stub
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel);
-    assertNull(stub.getCallOptions().getDeadlineNanoTime());
-    // Warm up JVM
-    stub.withDeadlineNanoTime(deadline);
-    // Reconfigure it
-    TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
-    // New altered config
-    assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
-    long maxDelta = MILLISECONDS.toNanos(10);
-    long actualDelta = Math.abs(reconfiguredStub.getCallOptions().getDeadlineNanoTime() - deadline);
-    assertTrue(maxDelta + " < " + actualDelta, maxDelta >= actualDelta);
-    // Default config unchanged
-    assertNull(stub.getCallOptions().getDeadlineNanoTime());
   }
 
   @Test

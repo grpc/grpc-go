@@ -137,44 +137,11 @@ public final class CallOptions {
   }
 
   /**
-   * Returns a new {@code CallOptions} with the given absolute deadline in nanoseconds in the clock
-   * as per {@link System#nanoTime()}.
-   *
-   * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
-   * recommended way of setting a new deadline,
-   *
-   * @param deadlineNanoTime the deadline in the clock as per {@link System#nanoTime()}.
-   *                         {@code null} for unsetting the deadline.
-   * @deprecated  Use {@link #withDeadline(Deadline)} instead.
-   */
-  @Deprecated
-  public CallOptions withDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
-    Deadline deadline = deadlineNanoTime != null
-        ? Deadline.after(deadlineNanoTime - System.nanoTime(), TimeUnit.NANOSECONDS)
-        : null;
-    return withDeadline(deadline);
-  }
-
-  /**
    * Returns a new {@code CallOptions} with a deadline that is after the given {@code duration} from
    * now.
    */
   public CallOptions withDeadlineAfter(long duration, TimeUnit unit) {
     return withDeadline(Deadline.after(duration, unit));
-  }
-
-  /**
-   * Returns the deadline in nanoseconds in the clock as per {@link System#nanoTime()}. {@code null}
-   * if the deadline is not set.
-   *
-   * @deprecated  Use {@link #getDeadline()} instead.
-   */
-  @Deprecated
-  public Long getDeadlineNanoTime() {
-    if (getDeadline() == null) {
-      return null;
-    }
-    return System.nanoTime() + getDeadline().timeRemaining(TimeUnit.NANOSECONDS);
   }
 
   /**

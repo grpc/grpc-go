@@ -113,21 +113,6 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   }
 
   /**
-   * Returns a new stub with an absolute deadline in nanoseconds in the clock as per {@link
-   * System#nanoTime()}.
-   *
-   * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
-   * recommended way of setting a new deadline,
-   *
-   * @param deadlineNanoTime nanoseconds in the clock as per {@link System#nanoTime()}
-   * @deprecated  Use {@link #withDeadline(Deadline)} instead.
-   */
-  @Deprecated
-  public final S withDeadlineNanoTime(@Nullable Long deadlineNanoTime) {
-    return build(channel, callOptions.withDeadlineNanoTime(deadlineNanoTime));
-  }
-
-  /**
    * Returns a new stub with a deadline that is after the given {@code duration} from now.
    *
    * @see CallOptions#withDeadlineAfter
