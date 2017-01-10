@@ -46,7 +46,6 @@ import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Payloads;
 import io.grpc.benchmarks.proto.Stats;
-import io.grpc.internal.ManagedChannelImpl;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import io.netty.buffer.ByteBuf;
@@ -96,7 +95,7 @@ class LoadClient {
     log.log(Level.INFO, "Client Config \n" + config.toString());
     this.config = config;
     // Create the channels
-    channels = new ManagedChannelImpl[config.getClientChannels()];
+    channels = new ManagedChannel[config.getClientChannels()];
     for (int i = 0; i < config.getClientChannels(); i++) {
       channels[i] =
           Utils.newClientChannel(
