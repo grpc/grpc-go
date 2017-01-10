@@ -131,7 +131,14 @@ public class Context {
       Class<?> clazz = Class.forName("io.grpc.override.ContextStorageOverride");
       newStorage = (Storage) clazz.getConstructor().newInstance();
     } catch (ClassNotFoundException e) {
-      log.log(Level.FINE, "Storage override doesn't exist. Using default.", e);
+      if (log.isLoggable(Level.FINE)) {
+        // Avoid writing to logger because custom log handlers may try to use Context, which is
+        // problemantic (e.g., NullPointerException) because the Context class has not done loading
+        // at this point.  The caveat is that in environments stderr may be disabled, thus this
+        // message would go nowhere.
+        System.err.println("io.grpc.Context: Storage override doesn't exist. Using default.");
+        e.printStackTrace();
+      }
       newStorage = new ThreadLocalContextStorage();
     } catch (Exception e) {
       error = e;
