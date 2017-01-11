@@ -443,7 +443,7 @@ public final class Metadata {
     }
     int remaining = cap() - len();
     if (isEmpty() || remaining < other.len()) {
-      expand(len() + other.len() - remaining);
+      expand(len() + other.len());
     }
     System.arraycopy(other.namesAndValues, 0, namesAndValues, len(), other.len());
     size += other.size;

@@ -209,6 +209,21 @@ public class MetadataTest {
   }
 
   @Test
+  public void mergeExpands() {
+    Fish lance = new Fish(LANCE);
+    Metadata h1 = new Metadata();
+    h1.put(KEY, lance);
+
+    Metadata h2 = new Metadata();
+    h2.put(KEY, lance);
+    h2.put(KEY, lance);
+    h2.put(KEY, lance);
+    h2.put(KEY, lance);
+
+    h1.merge(h2);
+  }
+
+  @Test
   public void integerMarshallerIsDecimal() {
     assertEquals("12345678", Metadata.INTEGER_MARSHALLER.toAsciiString(12345678));
   }
