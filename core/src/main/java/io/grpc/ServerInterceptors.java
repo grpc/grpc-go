@@ -43,7 +43,7 @@ import java.util.List;
 /**
  * Utility methods for working with {@link ServerInterceptor}s.
  */
-public class ServerInterceptors {
+public final class ServerInterceptors {
   // Prevent instantiation
   private ServerInterceptors() {}
 

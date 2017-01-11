@@ -147,7 +147,7 @@ public final class ResolvedServerInfoGroup {
     return "[servers=" + resolvedServerInfoList + ", attrs=" + attributes + "]";
   }
 
-  public static class Builder {
+  public static final class Builder {
     private final List<ResolvedServerInfo> group = new ArrayList<ResolvedServerInfo>();
     private final Attributes attributes;
 
