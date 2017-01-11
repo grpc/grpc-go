@@ -280,6 +280,7 @@ public class MethodDescriptor<ReqT, RespT> {
   /**
    * Returns the marshaller for the request type. Allows introspection of the request marshaller.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2592")
   public Marshaller<ReqT> getRequestMarshaller() {
     return requestMarshaller;
   }
@@ -287,6 +288,7 @@ public class MethodDescriptor<ReqT, RespT> {
   /**
    * Returns the marshaller for the response type. Allows introspection of the response marshaller.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2592")
   public Marshaller<RespT> getResponseMarshaller() {
     return responseMarshaller;
   }
