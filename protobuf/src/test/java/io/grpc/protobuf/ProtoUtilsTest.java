@@ -36,7 +36,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
-import com.google.protobuf.MessageLite;
 import com.google.protobuf.Type;
 
 import io.grpc.MethodDescriptor.Marshaller;
@@ -60,16 +59,6 @@ public class ProtoUtilsTest {
   @Test
   public void testRoundtrip() throws Exception {
     Marshaller<Type> marshaller = ProtoUtils.marshaller(Type.getDefaultInstance());
-    InputStream is = marshaller.stream(proto);
-    is = new ByteArrayInputStream(ByteStreams.toByteArray(is));
-    assertEquals(proto, marshaller.parse(is));
-  }
-
-  @Test
-  @Deprecated
-  public void testRoundtripLite() throws Exception {
-    Marshaller<MessageLite> marshaller
-        = ProtoUtils.marshaller((MessageLite) Type.getDefaultInstance());
     InputStream is = marshaller.stream(proto);
     is = new ByteArrayInputStream(ByteStreams.toByteArray(is));
     assertEquals(proto, marshaller.parse(is));

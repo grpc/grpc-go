@@ -34,7 +34,6 @@ package io.grpc.protobuf;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.Message.Builder;
-import com.google.protobuf.MessageLite;
 import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.util.JsonFormat.Parser;
 import com.google.protobuf.util.JsonFormat.Printer;
@@ -56,16 +55,6 @@ import java.nio.charset.Charset;
  * Utility methods for using protobuf with grpc.
  */
 public class ProtoUtils {
-
-  /**
-   * Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}.
-   *
-   * @deprecated Use ProtoLiteUtils.marshaller() or Message-based marshaller() instead
-   */
-  @Deprecated
-  public static <T extends MessageLite> Marshaller<T> marshaller(final T defaultInstance) {
-    return ProtoLiteUtils.marshaller(defaultInstance);
-  }
 
   /** Create a {@code Marshaller} for protos of the same type as {@code defaultInstance}. */
   public static <T extends Message> Marshaller<T> marshaller(final T defaultInstance) {
