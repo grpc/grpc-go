@@ -272,15 +272,14 @@ Negotiated client certificates are available in the SSLSession, which is found i
 public final static Context.Key<SSLSession> SSL_SESSION_CONTEXT = Context.key("SSLSession");
 
 @Override
-public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(MethodDescriptor<ReqT, RespT> method,
-    ServerCall<RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<RespT> call, 
+    Metadata headers, ServerCallHandler<ReqT, RespT> next) {
     SSLSession sslSession = call.attributes().get(ServerCall.SSL_SESSION_KEY);
     if (sslSession == null) {
-        return next.startCall(method, call, headers)
+        return next.startCall(call, headers)
     }
     return Contexts.interceptCall(
-        Context.current().withValue(SSL_SESSION_CONTEXT, clientContext),
-        method, call, headers, next);
+        Context.current().withValue(SSL_SESSION_CONTEXT, clientContext), call, headers, next);
 }
 ```
 
