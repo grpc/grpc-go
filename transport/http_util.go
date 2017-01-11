@@ -95,11 +95,11 @@ type decodeState struct {
 	err error // first error encountered decoding
 
 	encoding string
-	// records if grpc-status field exists
+	// Records if grpc-status field exists.
 	statusExists bool
-	// records if status field (http status) exists
+	// Records if status field (http status) exists.
 	hstatusExists bool
-	// http status code
+	// http status code.
 	hstatusCode int
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.

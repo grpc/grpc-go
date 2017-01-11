@@ -844,7 +844,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	done := make(chan error, 1)
-	// launch an HTTP server to send back header with httpStatus
+	// Launch an HTTP server to send back header with httpStatus.
 	go func() {
 		var err error
 		defer func() {
@@ -855,7 +855,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 			t.Errorf("Error at server-side while accpeting: %v", err)
 			return
 		}
-		// Read the preface sent by client
+		// Read the preface sent by client.
 		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
 			t.Errorf("Error at server-side while reading from conn: %v", err)
 			return
@@ -878,7 +878,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 				break
 			}
 		}
-		//By now a stream with ID 1 will be active on client thus we can send http status headers on that stream
+		// By now a stream with ID 1 will be active on client thus we can send http status headers on that stream.
 		var buf bytes.Buffer
 		henc := hpack.NewEncoder(&buf)
 		henc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
@@ -900,7 +900,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 	}
 	// wait for the server to send header with http status or fail.
 	if err = <-done; err != nil {
-		// error already printed out once
+		// Error already printed out once.
 		return
 	}
 	want := "code = " + fmt.Sprint(uint32(httpStatusConvTab[httpStatus]))
