@@ -220,7 +220,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Returns the correctly typed version of the builder.
    */
-  protected final T thisT() {
+  private T thisT() {
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
     return thisT;

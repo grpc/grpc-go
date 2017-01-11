@@ -422,4 +422,13 @@ public abstract class AbstractManagedChannelImplBuilder
       return DIRECT_ADDRESS_SCHEME;
     }
   }
+
+  /**
+   * Returns the correctly typed version of the builder.
+   */
+  private T thisT() {
+    @SuppressWarnings("unchecked")
+    T thisT = (T) this;
+    return thisT;
+  }
 }
