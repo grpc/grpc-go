@@ -20,7 +20,6 @@
 package grpclog // import "google.golang.org/grpc/grpclog"
 
 import (
-	"fmt"
 	"log"
 	"os"
 )
@@ -56,6 +55,10 @@ type Logger interface {
 	// Print logs args. Arguments are handled in the manner of fmt.Print.
 	// l specifies the logging severity for this Print().
 	Print(l Severity, args ...interface{})
+	// Println logs args. Arguments are handled in the manner of fmt.Println.
+	Println(l Severity, args ...interface{})
+	// Printf logs args. Arguments are handled in the manner of fmt.Printf.
+	Printf(l Severity, format string, args ...interface{})
 	// V reports whether verbosity level l is at least the requested verbose level.
 	V(l VerboseLevel) bool
 }
@@ -93,6 +96,24 @@ func (g *loggerT) Print(l Severity, args ...interface{}) {
 	}
 }
 
+func (g *loggerT) Println(l Severity, args ...interface{}) {
+	switch l {
+	case InfoLog, WarningLog, ErrorLog:
+		g.m[l].Println(args...)
+	case FatalLog:
+		g.m[InfoLog].Fatalln(args...)
+	}
+}
+
+func (g *loggerT) Printf(l Severity, format string, args ...interface{}) {
+	switch l {
+	case InfoLog, WarningLog, ErrorLog:
+		g.m[l].Printf(format, args...)
+	case FatalLog:
+		g.m[InfoLog].Fatalf(format, args...)
+	}
+}
+
 func (g *loggerT) V(l VerboseLevel) bool {
 	// Returns true for all verbose level.
 	// TODO support verbose level in the default logger.
@@ -113,12 +134,12 @@ func Info(args ...interface{}) {
 
 // Infof logs to the INFO log. Arguments are handled in the manner of fmt.Printf.
 func Infof(format string, args ...interface{}) {
-	logger.Print(InfoLog, fmt.Sprintf(format, args...))
+	logger.Printf(InfoLog, format, args...)
 }
 
 // Infoln logs to the INFO log. Arguments are handled in the manner of fmt.Println.
 func Infoln(args ...interface{}) {
-	logger.Print(InfoLog, fmt.Sprintln(args...))
+	logger.Println(InfoLog, args...)
 }
 
 // Warning logs to the WARNING log.
@@ -128,12 +149,12 @@ func Warning(args ...interface{}) {
 
 // Warningf logs to the WARNING log. Arguments are handled in the manner of fmt.Printf.
 func Warningf(format string, args ...interface{}) {
-	logger.Print(WarningLog, fmt.Sprintf(format, args...))
+	logger.Printf(WarningLog, format, args...)
 }
 
 // Warningln logs to the WARNING log. Arguments are handled in the manner of fmt.Println.
 func Warningln(args ...interface{}) {
-	logger.Print(WarningLog, fmt.Sprintln(args...))
+	logger.Println(WarningLog, args...)
 }
 
 // Error logs to the ERROR log.
@@ -143,12 +164,12 @@ func Error(args ...interface{}) {
 
 // Errorf logs to the ERROR log. Arguments are handled in the manner of fmt.Printf.
 func Errorf(format string, args ...interface{}) {
-	logger.Print(ErrorLog, fmt.Sprintf(format, args...))
+	logger.Printf(ErrorLog, format, args...)
 }
 
 // Errorln logs to the ERROR log. Arguments are handled in the manner of fmt.Println.
 func Errorln(args ...interface{}) {
-	logger.Print(ErrorLog, fmt.Sprintln(args...))
+	logger.Println(ErrorLog, args...)
 }
 
 // Fatal is equivalent to Info() followed by a call to os.Exit() with a non-zero exit code.
@@ -158,12 +179,12 @@ func Fatal(args ...interface{}) {
 
 // Fatalf is equivalent to Infof() followed by a call to os.Exit() with a non-zero exit code.
 func Fatalf(format string, args ...interface{}) {
-	logger.Print(FatalLog, fmt.Sprintf(format, args...))
+	logger.Printf(FatalLog, format, args...)
 }
 
 // Fatalln is equivalent to Infoln() followed by a call to os.Exit()) with a non-zero exit code.
 func Fatalln(args ...interface{}) {
-	logger.Print(FatalLog, fmt.Sprintln(args...))
+	logger.Println(FatalLog, args...)
 }
 
 // Print prints to the logger. Arguments are handled in the manner of fmt.Print.
@@ -175,11 +196,11 @@ func Print(args ...interface{}) {
 // Printf prints to the logger. Arguments are handled in the manner of fmt.Printf.
 // Printf is deprecated, please use Infof.
 func Printf(format string, args ...interface{}) {
-	logger.Print(InfoLog, fmt.Sprintf(format, args...))
+	logger.Printf(InfoLog, format, args...)
 }
 
 // Println prints to the logger. Arguments are handled in the manner of fmt.Println.
 // Println is deprecated, please use Infoln.
 func Println(args ...interface{}) {
-	logger.Print(InfoLog, fmt.Sprintln(args...))
+	logger.Println(InfoLog, args...)
 }

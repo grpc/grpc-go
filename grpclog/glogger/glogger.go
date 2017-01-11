@@ -45,6 +45,32 @@ func (g *glogger) Print(l grpclog.Severity, args ...interface{}) {
 	}
 }
 
+func (g *glogger) Println(l grpclog.Severity, args ...interface{}) {
+	switch l {
+	case grpclog.InfoLog:
+		glog.InfoDepth(2, fmt.Sprintln(args...))
+	case grpclog.WarningLog:
+		glog.WarningDepth(2, fmt.Sprintln(args...))
+	case grpclog.ErrorLog:
+		glog.ErrorDepth(2, fmt.Sprintln(args...))
+	case grpclog.FatalLog:
+		glog.FatalDepth(2, fmt.Sprintln(args...))
+	}
+}
+
+func (g *glogger) Printf(l grpclog.Severity, format string, args ...interface{}) {
+	switch l {
+	case grpclog.InfoLog:
+		glog.InfoDepth(2, fmt.Sprintf(format, args...))
+	case grpclog.WarningLog:
+		glog.WarningDepth(2, fmt.Sprintf(format, args...))
+	case grpclog.ErrorLog:
+		glog.ErrorDepth(2, fmt.Sprintf(format, args...))
+	case grpclog.FatalLog:
+		glog.FatalDepth(2, fmt.Sprintf(format, args...))
+	}
+}
+
 func (g *glogger) V(l grpclog.VerboseLevel) bool {
 	return bool(glog.V(glog.Level(l)))
 }
