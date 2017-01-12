@@ -42,7 +42,6 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 import io.grpc.internal.FakeClock;
 import io.grpc.testing.NoopServerCall;
@@ -65,8 +64,6 @@ public class ContextsTest {
   private static Context.Key<Object> contextKey = Context.key("key");
   /** For use in comparing context by reference. */
   private Context uniqueContext = Context.ROOT.withValue(contextKey, new Object());
-  @SuppressWarnings("unchecked")
-  private MethodDescriptor<Object, Object> method = mock(MethodDescriptor.class);
   @SuppressWarnings("unchecked")
   private ServerCall<Object, Object> call = new NoopServerCall<Object, Object>();
   private Metadata headers = new Metadata();
@@ -108,7 +105,6 @@ public class ContextsTest {
           @Override
           public ServerCall.Listener<Object> startCall(
               ServerCall<Object, Object> call, Metadata headers) {
-            assertSame(ContextsTest.this.method, method);
             assertSame(ContextsTest.this.call, call);
             assertSame(ContextsTest.this.headers, headers);
             assertSame(uniqueContext, Context.current());

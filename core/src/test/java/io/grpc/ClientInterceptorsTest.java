@@ -51,6 +51,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.ClientInterceptors.CheckedForwardingClientCall;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
+import io.grpc.testing.TestMethodDescriptors;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -74,8 +75,7 @@ public class ClientInterceptorsTest {
 
   private BaseClientCall call = new BaseClientCall();
 
-  @Mock
-  private MethodDescriptor<String, Integer> method;
+  private final MethodDescriptor<Void, Void> method = TestMethodDescriptors.noopMethod();
 
   /**
    * Sets up mocks.
@@ -270,8 +270,8 @@ public class ClientInterceptorsTest {
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
-    ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
+    ClientCall.Listener<Void> listener = mock(ClientCall.Listener.class);
+    ClientCall<Void, Void> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     // start() on the intercepted call will eventually reach the call created by the real channel
     interceptedCall.start(listener, new Metadata());
     // The headers passed to the real channel call will contain the information inserted by the
@@ -306,8 +306,8 @@ public class ClientInterceptorsTest {
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
-    ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
+    ClientCall.Listener<Void> listener = mock(ClientCall.Listener.class);
+    ClientCall<Void, Void> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     interceptedCall.start(listener, new Metadata());
     // Capture the underlying call listener that will receive headers from the transport.
 
@@ -330,16 +330,16 @@ public class ClientInterceptorsTest {
       }
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
+    ClientCall<Void, Void> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     assertNotSame(call, interceptedCall);
     @SuppressWarnings("unchecked")
-    ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
+    ClientCall.Listener<Void> listener = mock(ClientCall.Listener.class);
     Metadata headers = new Metadata();
     interceptedCall.start(listener, headers);
     assertSame(listener, call.listener);
     assertSame(headers, call.headers);
-    interceptedCall.sendMessage("request");
-    assertThat(call.messages).containsExactly("request");
+    interceptedCall.sendMessage(null /*request*/);
+    assertThat(call.messages).containsExactly((Void) null /*request*/);
     interceptedCall.halfClose();
     assertTrue(call.halfClosed);
     interceptedCall.request(1);
@@ -368,11 +368,11 @@ public class ClientInterceptorsTest {
     };
     Channel intercepted = ClientInterceptors.intercept(channel, interceptor);
     @SuppressWarnings("unchecked")
-    ClientCall.Listener<Integer> listener = mock(ClientCall.Listener.class);
-    ClientCall<String, Integer> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
+    ClientCall.Listener<Void> listener = mock(ClientCall.Listener.class);
+    ClientCall<Void, Void> interceptedCall = intercepted.newCall(method, CallOptions.DEFAULT);
     assertNotSame(call, interceptedCall);
     interceptedCall.start(listener, new Metadata());
-    interceptedCall.sendMessage("request");
+    interceptedCall.sendMessage(null /*request*/);
     interceptedCall.halfClose();
     interceptedCall.request(1);
     call.done = true;

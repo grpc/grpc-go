@@ -84,6 +84,7 @@ import io.grpc.okhttp.internal.framed.FrameWriter;
 import io.grpc.okhttp.internal.framed.Header;
 import io.grpc.okhttp.internal.framed.HeadersMode;
 import io.grpc.okhttp.internal.framed.Settings;
+import io.grpc.testing.TestMethodDescriptors;
 
 import okio.Buffer;
 
@@ -133,8 +134,9 @@ public class OkHttpClientTransportTest {
 
   @Mock
   private FrameWriter frameWriter;
-  @Mock
-  MethodDescriptor<?, ?> method;
+
+  private MethodDescriptor<Void, Void> method = TestMethodDescriptors.noopMethod();
+
   @Mock
   private ManagedClientTransport.Listener transportListener;
   private OkHttpClientTransport clientTransport;
@@ -149,8 +151,6 @@ public class OkHttpClientTransportTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     executor = Executors.newCachedThreadPool();
-    when(method.getFullMethodName()).thenReturn("fakemethod");
-    when(method.getType()).thenReturn(MethodType.UNARY);
     when(frameWriter.maxDataLength()).thenReturn(Integer.MAX_VALUE);
     frameReader = new MockFrameReader();
   }
@@ -441,7 +441,7 @@ public class OkHttpClientTransportTest {
             GrpcUtil.getGrpcUserAgent("okhttp", null));
     List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
             new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
-            new Header(Header.TARGET_PATH, "/fakemethod"),
+            new Header(Header.TARGET_PATH, "/" + method.getFullMethodName()),
             userAgentHeader, CONTENT_TYPE_HEADER, TE_HEADER);
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(eq(false), eq(false), eq(3), eq(0), eq(expectedHeaders));
@@ -457,7 +457,7 @@ public class OkHttpClientTransportTest {
     stream.start(listener);
     List<Header> expectedHeaders = Arrays.asList(SCHEME_HEADER, METHOD_HEADER,
         new Header(Header.TARGET_AUTHORITY, "notarealauthority:80"),
-        new Header(Header.TARGET_PATH, "/fakemethod"),
+        new Header(Header.TARGET_PATH, "/" + method.getFullMethodName()),
         new Header(GrpcUtil.USER_AGENT_KEY.name(),
             GrpcUtil.getGrpcUserAgent("okhttp", "fakeUserAgent")),
         CONTENT_TYPE_HEADER, TE_HEADER);
@@ -967,21 +967,33 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void serverStreamingHeadersShouldNotBeFlushed() throws Exception {
-    when(method.getType()).thenReturn(MethodType.SERVER_STREAMING);
+    method = MethodDescriptor.create(
+        MethodType.SERVER_STREAMING,
+        method.getFullMethodName(),
+        TestMethodDescriptors.noopMarshaller(),
+        TestMethodDescriptors.noopMarshaller());
     shouldHeadersBeFlushed(false);
     shutdownAndVerify();
   }
 
   @Test
   public void clientStreamingHeadersShouldBeFlushed() throws Exception {
-    when(method.getType()).thenReturn(MethodType.CLIENT_STREAMING);
+    method = MethodDescriptor.create(
+        MethodType.CLIENT_STREAMING,
+        method.getFullMethodName(),
+        TestMethodDescriptors.noopMarshaller(),
+        TestMethodDescriptors.noopMarshaller());
     shouldHeadersBeFlushed(true);
     shutdownAndVerify();
   }
 
   @Test
   public void duplexStreamingHeadersShouldNotBeFlushed() throws Exception {
-    when(method.getType()).thenReturn(MethodType.BIDI_STREAMING);
+    method = MethodDescriptor.create(
+        MethodType.BIDI_STREAMING,
+        method.getFullMethodName(),
+        TestMethodDescriptors.noopMarshaller(),
+        TestMethodDescriptors.noopMarshaller());
     shouldHeadersBeFlushed(true);
     shutdownAndVerify();
   }
