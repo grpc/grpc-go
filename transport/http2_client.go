@@ -863,7 +863,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		state.processHeaderField(hf)
 	}
 	// If grpc status doesn't exist.
-	if !state.statusExists {
+	// However if there was an error processing header, no need to check this condition.
+	if state.err == nil && !state.statusExists {
 		// Check if http status exists.
 		if !state.hstatusExists {
 			state.setErr(streamErrorf(codes.Internal, "Malformed http header"))
