@@ -852,7 +852,7 @@ func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 }
 
-// decodeHeader reads header fields from a header frame and returns decodeState or error.
+// decodeHeader reads header fields from a header frame and returns decodeState.
 func decodeHeader(frame *http2.MetaHeadersFrame) decodeState {
 	var d decodeState
 	for _, hf := range frame.Fields {
