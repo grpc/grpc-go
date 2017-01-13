@@ -31,6 +31,9 @@
 
 package io.grpc.internal;
 
+import javax.annotation.concurrent.ThreadSafe;
+
+@ThreadSafe
 public interface ObjectPool<T> {
   /**
    * Get an object from the pool.

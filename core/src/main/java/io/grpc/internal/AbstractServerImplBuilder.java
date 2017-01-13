@@ -165,7 +165,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Override
   public ServerImpl build() {
     io.grpc.internal.InternalServer transportServer = buildTransportServer();
-    ServerImpl server = new ServerImpl(executor, registryBuilder.build(),
+    ServerImpl server = new ServerImpl(getExecutorPool(),
+        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE), registryBuilder.build(),
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
@@ -177,6 +178,24 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       notifyTarget.notifyOnBuild(server);
     }
     return server;
+  }
+
+  private ObjectPool<? extends Executor> getExecutorPool() {
+    final Executor savedExecutor = executor;
+    if (savedExecutor == null) {
+      return SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
+    }
+    return new ObjectPool<Executor>() {
+      @Override
+      public Executor getObject() {
+        return savedExecutor;
+      }
+
+      @Override
+      public Executor returnObject(Object object) {
+        return null;
+      }
+    };
   }
 
   /**
