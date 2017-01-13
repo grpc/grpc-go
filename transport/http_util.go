@@ -39,7 +39,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -98,7 +97,7 @@ type decodeState struct {
 	encoding string
 	// hstatusExists records if status field (http status) exists.
 	hstatusExists bool
-	// http status code.
+	// hstatusCode records http status code from the header.
 	hstatusCode int
 	// statusExists records if grpc-status field exists.
 	statusExists bool
@@ -163,37 +162,6 @@ func validContentType(t string) bool {
 		return false
 	}
 	return true
-}
-
-// decodeHeader reads header fields from a header frame and sets decodeState.
-func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) {
-	for _, hf := range frame.Fields {
-		d.processHeaderField(hf)
-	}
-	if d.err != nil {
-		return
-	}
-	// If grpc status doesn't exist.
-	if !d.statusExists {
-		// If http status doesn't exist.
-		if !d.hstatusExists {
-			d.setErr(streamErrorf(codes.Internal, "Malformed http header"))
-			return
-		}
-		if d.hstatusCode != http.StatusOK {
-			gcode, ok := httpStatusConvTab[d.hstatusCode]
-			if !ok {
-				gcode = codes.Unknown
-			}
-			d.setErr(streamErrorf(gcode, http.StatusText(d.hstatusCode)))
-			return
-		}
-		// Set state.statusCode to UNKNOWN.
-		// If this is the first header this status will be ignored.
-		// If this is the second header a missing grpc-status puts state to be UNKNOWN.
-		d.statusCode = codes.Unknown
-	}
-
 }
 
 func (d *decodeState) processHeaderField(f hpack.HeaderField) {
