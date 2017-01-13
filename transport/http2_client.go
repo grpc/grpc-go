@@ -39,7 +39,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -859,28 +858,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	var state decodeState
-	for _, hf := range frame.Fields {
-		state.processHeaderField(hf)
-	}
-	// If grpc status doesn't exist.
-	// However if there was an error processing header, no need to check this condition.
-	if state.err == nil && !state.statusExists {
-		// Check if http status exists.
-		if !state.hstatusExists {
-			state.setErr(streamErrorf(codes.Internal, "Malformed http header"))
-		} else if state.hstatusCode != http.StatusOK {
-			gcode, ok := httpStatusConvTab[state.hstatusCode]
-			if !ok {
-				gcode = codes.Unknown
-			}
-			state.setErr(streamErrorf(gcode, http.StatusText(state.hstatusCode)))
-		} else {
-			// Set state.statusCode to UNKNOWN.
-			// If this is the first header this status will be ignored.
-			// If this is the second header a missing grpc-status puts state to be UNKNOWN.
-			state.statusCode = codes.Unknown
-		}
-	}
+	state.decodeHeader(frame)
 	if state.err != nil {
 		s.mu.Lock()
 		if !s.headerDone {

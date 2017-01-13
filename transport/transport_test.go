@@ -882,7 +882,7 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 		var buf bytes.Buffer
 		henc := hpack.NewEncoder(&buf)
 		henc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
-		if err = framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		if err = framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndStream: true, EndHeaders: true}); err != nil {
 			t.Errorf("Error at server-side while writting headers: %v", err)
 			return
 		}
