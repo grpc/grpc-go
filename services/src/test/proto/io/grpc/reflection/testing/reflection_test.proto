@@ -48,7 +48,3 @@ extend ThirdLevelType {
 service ReflectableService {
   rpc Method (Request) returns (Reply) {}
 }
-
-service DynamicService {
-  rpc Method (Request) returns (Reply) {}
-}

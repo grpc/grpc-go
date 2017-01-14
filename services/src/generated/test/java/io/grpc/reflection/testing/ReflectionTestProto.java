@@ -42,12 +42,10 @@ public final class ReflectionTestProto {
       "ing/reflection_test_depth_two_alternate." +
       "proto2b\n\022ReflectableService\022L\n\006Method\022 ." +
       "grpc.reflection.testing.Request\032\036.grpc.r" +
-      "eflection.testing.Reply\"\0002^\n\016DynamicServ" +
-      "ice\022L\n\006Method\022 .grpc.reflection.testing." +
-      "Request\032\036.grpc.reflection.testing.Reply\"",
-      "\000:4\n\003bar\022\'.grpc.reflection.testing.Third" +
-      "LevelType\030d \001(\005B3\n\032io.grpc.reflection.te" +
-      "stingB\023ReflectionTestProtoP\001"
+      "eflection.testing.Reply\"\000:4\n\003bar\022\'.grpc." +
+      "reflection.testing.ThirdLevelType\030d \001(\005B" +
+      "3\n\032io.grpc.reflection.testingB\023Reflectio",
+      "nTestProtoP\001"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {

@@ -27,26 +27,27 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// Part of the service definition designed to test the ProtoReflectionService.
-
 syntax = "proto2";
-
-import public "io/grpc/reflection/testing/reflection_test_depth_three.proto";
 
 option java_multiple_files = true;
 option java_package = "io.grpc.reflection.testing";
-option java_outer_classname = "ReflectionTestDepthTwoProto";
+option java_outer_classname = "DynamicReflectionTestDepthTwoProto";
 
 package grpc.reflection.testing;
 
-message Request {
+message DynamicRequest {
   optional string message = 1;
 }
 
-message Reply {
+message DynamicReply {
   optional string message = 1;
 }
 
-extend ThirdLevelType {
-  optional EmptyMessage nested_extension = 101;
+message TypeWithExtensions {
+  optional string message = 1;
+  extensions 200 to 299;
+}
+
+extend TypeWithExtensions {
+  optional int32 extension = 200;
 }

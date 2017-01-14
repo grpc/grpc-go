@@ -142,11 +142,11 @@ public  final class NestedTypeOuter extends
         com.google.protobuf.MessageOrBuilder {
 
       /**
-       * <code>required int32 ival = 1;</code>
+       * <code>optional int32 ival = 1;</code>
        */
       boolean hasIval();
       /**
-       * <code>required int32 ival = 1;</code>
+       * <code>optional int32 ival = 1;</code>
        */
       int getIval();
     }
@@ -226,13 +226,13 @@ public  final class NestedTypeOuter extends
       public static final int IVAL_FIELD_NUMBER = 1;
       private int ival_;
       /**
-       * <code>required int32 ival = 1;</code>
+       * <code>optional int32 ival = 1;</code>
        */
       public boolean hasIval() {
         return ((bitField0_ & 0x00000001) == 0x00000001);
       }
       /**
-       * <code>required int32 ival = 1;</code>
+       * <code>optional int32 ival = 1;</code>
        */
       public int getIval() {
         return ival_;
@@ -244,10 +244,6 @@ public  final class NestedTypeOuter extends
         if (isInitialized == 1) return true;
         if (isInitialized == 0) return false;
 
-        if (!hasIval()) {
-          memoizedIsInitialized = 0;
-          return false;
-        }
         memoizedIsInitialized = 1;
         return true;
       }
@@ -505,9 +501,6 @@ public  final class NestedTypeOuter extends
         }
 
         public final boolean isInitialized() {
-          if (!hasIval()) {
-            return false;
-          }
           return true;
         }
 
@@ -532,19 +525,19 @@ public  final class NestedTypeOuter extends
 
         private int ival_ ;
         /**
-         * <code>required int32 ival = 1;</code>
+         * <code>optional int32 ival = 1;</code>
          */
         public boolean hasIval() {
           return ((bitField0_ & 0x00000001) == 0x00000001);
         }
         /**
-         * <code>required int32 ival = 1;</code>
+         * <code>optional int32 ival = 1;</code>
          */
         public int getIval() {
           return ival_;
         }
         /**
-         * <code>required int32 ival = 1;</code>
+         * <code>optional int32 ival = 1;</code>
          */
         public Builder setIval(int value) {
           bitField0_ |= 0x00000001;
@@ -553,7 +546,7 @@ public  final class NestedTypeOuter extends
           return this;
         }
         /**
-         * <code>required int32 ival = 1;</code>
+         * <code>optional int32 ival = 1;</code>
          */
         public Builder clearIval() {
           bitField0_ = (bitField0_ & ~0x00000001);

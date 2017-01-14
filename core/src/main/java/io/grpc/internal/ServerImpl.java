@@ -193,6 +193,16 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
   }
 
+  @Override
+  public List<ServerServiceDefinition> getImmutableServices() {
+    return registry.getServices();
+  }
+
+  @Override
+  public List<ServerServiceDefinition> getMutableServices() {
+    return Collections.unmodifiableList(fallbackRegistry.getServices());
+  }
+
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
    */

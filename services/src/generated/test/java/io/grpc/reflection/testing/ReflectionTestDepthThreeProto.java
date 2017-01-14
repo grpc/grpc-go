@@ -51,8 +51,8 @@ public final class ReflectionTestDepthThreeProto {
       "\n<io/grpc/reflection/testing/reflection_" +
       "test_depth_three.proto\022\027grpc.reflection." +
       "testing\"\016\n\014EmptyMessage\"(\n\016ThirdLevelTyp" +
-      "e\022\017\n\007message\030\001 \002(\t*\005\010d\020\310\001\"2\n\017NestedTypeO" +
-      "uter\032\037\n\006Middle\032\025\n\005Inner\022\014\n\004ival\030\001 \002(\005B=\n" +
+      "e\022\017\n\007message\030\001 \001(\t*\005\010d\020\310\001\"2\n\017NestedTypeO" +
+      "uter\032\037\n\006Middle\032\025\n\005Inner\022\014\n\004ival\030\001 \001(\005B=\n" +
       "\032io.grpc.reflection.testingB\035ReflectionT" +
       "estDepthThreeProtoP\001"
     };

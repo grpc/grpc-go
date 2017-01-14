@@ -38,17 +38,21 @@ import static org.junit.Assert.fail;
 
 import com.google.protobuf.ByteString;
 
+import io.grpc.BindableService;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
+import io.grpc.reflection.testing.AnotherDynamicServiceGrpc;
+import io.grpc.reflection.testing.DynamicReflectionTestDepthTwoProto;
 import io.grpc.reflection.testing.DynamicServiceGrpc;
 import io.grpc.reflection.testing.ReflectableServiceGrpc;
 import io.grpc.reflection.testing.ReflectionTestDepthThreeProto;
 import io.grpc.reflection.testing.ReflectionTestDepthTwoAlternateProto;
 import io.grpc.reflection.testing.ReflectionTestDepthTwoProto;
 import io.grpc.reflection.testing.ReflectionTestProto;
+import io.grpc.reflection.v1alpha.ExtensionNumberResponse;
 import io.grpc.reflection.v1alpha.ExtensionRequest;
 import io.grpc.reflection.v1alpha.FileDescriptorResponse;
 import io.grpc.reflection.v1alpha.ServerReflectionGrpc;
@@ -82,14 +86,18 @@ import java.util.concurrent.TimeUnit;
 public class ProtoReflectionServiceTest {
   private static final String TEST_HOST = "localhost";
   private MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
-  private ProtoReflectionService reflectionService;
+  private BindableService reflectionService;
+  private ServerServiceDefinition dynamicService =
+      (new DynamicServiceGrpc.DynamicServiceImplBase() {}).bindService();
+  private ServerServiceDefinition anotherDynamicService =
+      (new AnotherDynamicServiceGrpc.AnotherDynamicServiceImplBase() {}).bindService();
   private Server server;
   private ManagedChannel channel;
   private ServerReflectionGrpc.ServerReflectionStub stub;
 
   @Before
   public void setUp() throws Exception {
-    reflectionService = new ProtoReflectionService();
+    reflectionService = ProtoReflectionService.getInstance();
     server = InProcessServerBuilder.forName("proto-reflection-test")
         .directExecutor()
         .addService(reflectionService)
@@ -130,8 +138,6 @@ public class ProtoReflectionServiceTest {
     );
     assertServiceResponseEquals(originalServices);
 
-    ServerServiceDefinition dynamicService =
-        (new DynamicServiceGrpc.DynamicServiceImplBase() {}).bindService();
     handlerRegistry.addService(dynamicService);
     assertServiceResponseEquals(new HashSet<ServiceResponse>(
         Arrays.asList(
@@ -146,7 +152,38 @@ public class ProtoReflectionServiceTest {
                 .build())
     ));
 
+    handlerRegistry.addService(anotherDynamicService);
+    assertServiceResponseEquals(new HashSet<ServiceResponse>(
+        Arrays.asList(
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.v1alpha.ServerReflection")
+                .build(),
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.testing.ReflectableService")
+                .build(),
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.testing.DynamicService")
+                .build(),
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.testing.AnotherDynamicService")
+                .build())
+    ));
+
     handlerRegistry.removeService(dynamicService);
+    assertServiceResponseEquals(new HashSet<ServiceResponse>(
+        Arrays.asList(
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.v1alpha.ServerReflection")
+                .build(),
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.testing.ReflectableService")
+                .build(),
+            ServiceResponse.newBuilder()
+                .setName("grpc.reflection.testing.AnotherDynamicService")
+                .build())
+    ));
+
+    handlerRegistry.removeService(anotherDynamicService);
     assertServiceResponseEquals(originalServices);
   }
 
@@ -176,6 +213,38 @@ public class ProtoReflectionServiceTest {
     requestObserver.onCompleted();
 
     assertEquals(goldenResponse, responseObserver.firstValue().get());
+  }
+
+  @Test
+  public void fileByFilenameForMutableServices() throws Exception {
+    ServerReflectionRequest request =
+        ServerReflectionRequest.newBuilder()
+            .setHost(TEST_HOST)
+            .setFileByFilename("io/grpc/reflection/testing/dynamic_reflection_test_depth_two.proto")
+            .build();
+    ServerReflectionResponse goldenResponse =
+        ServerReflectionResponse.newBuilder()
+            .setValidHost(TEST_HOST)
+            .setOriginalRequest(request)
+            .setFileDescriptorResponse(
+                FileDescriptorResponse.newBuilder()
+                    .addFileDescriptorProto(
+                        DynamicReflectionTestDepthTwoProto.getDescriptor().toProto().toByteString())
+                    .build())
+            .build();
+
+    StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver =
+        stub.serverReflectionInfo(responseObserver);
+    handlerRegistry.addService(dynamicService);
+    requestObserver.onNext(request);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertEquals(goldenResponse, responseObserver.getValues().get(0));
+    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.getValues().get(1).getMessageResponseCase());
   }
 
   @Test
@@ -232,6 +301,38 @@ public class ProtoReflectionServiceTest {
     requestObserver.onNext(request);
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
+  }
+
+  @Test
+  public void fileContainingSymbolForMutableServices() throws Exception {
+    ServerReflectionRequest request =
+        ServerReflectionRequest.newBuilder()
+            .setHost(TEST_HOST)
+            .setFileContainingSymbol("grpc.reflection.testing.DynamicRequest")
+            .build();
+    ServerReflectionResponse goldenResponse =
+        ServerReflectionResponse.newBuilder()
+            .setValidHost(TEST_HOST)
+            .setOriginalRequest(request)
+            .setFileDescriptorResponse(
+                FileDescriptorResponse.newBuilder()
+                    .addFileDescriptorProto(
+                        DynamicReflectionTestDepthTwoProto.getDescriptor().toProto().toByteString())
+                    .build())
+            .build();
+
+    StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver =
+        stub.serverReflectionInfo(responseObserver);
+    handlerRegistry.addService(dynamicService);
+    requestObserver.onNext(request);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertEquals(goldenResponse, responseObserver.getValues().get(0));
+    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.getValues().get(1).getMessageResponseCase());
   }
 
   @Test
@@ -301,6 +402,42 @@ public class ProtoReflectionServiceTest {
   }
 
   @Test
+  public void fileContainingExtensionForMutableServices() throws Exception {
+    ServerReflectionRequest request =
+        ServerReflectionRequest.newBuilder()
+            .setHost(TEST_HOST)
+            .setFileContainingExtension(
+                ExtensionRequest.newBuilder()
+                    .setContainingType("grpc.reflection.testing.TypeWithExtensions")
+                    .setExtensionNumber(200)
+                    .build())
+            .build();
+    ServerReflectionResponse goldenResponse =
+        ServerReflectionResponse.newBuilder()
+            .setValidHost(TEST_HOST)
+            .setOriginalRequest(request)
+            .setFileDescriptorResponse(
+                FileDescriptorResponse.newBuilder()
+                    .addFileDescriptorProto(
+                        DynamicReflectionTestDepthTwoProto.getDescriptor().toProto().toByteString())
+                    .build())
+            .build();
+
+    StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver =
+        stub.serverReflectionInfo(responseObserver);
+    handlerRegistry.addService(dynamicService);
+    requestObserver.onNext(request);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertEquals(goldenResponse, responseObserver.getValues().get(0));
+    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.getValues().get(1).getMessageResponseCase());
+  }
+
+  @Test
   public void allExtensionNumbersOfType() throws Exception {
     ServerReflectionRequest request =
         ServerReflectionRequest.newBuilder()
@@ -323,6 +460,39 @@ public class ProtoReflectionServiceTest {
                 .getAllExtensionNumbersResponse()
                 .getExtensionNumberList());
     assertEquals(goldenResponse, extensionNumberResponseSet);
+  }
+
+  @Test
+  public void allExtensionNumbersOfTypeForMutableServices() throws Exception {
+    String type = "grpc.reflection.testing.TypeWithExtensions";
+    ServerReflectionRequest request =
+        ServerReflectionRequest.newBuilder()
+            .setHost(TEST_HOST)
+            .setAllExtensionNumbersOfType(type)
+            .build();
+    ServerReflectionResponse goldenResponse =
+        ServerReflectionResponse.newBuilder()
+            .setValidHost(TEST_HOST)
+            .setOriginalRequest(request)
+            .setAllExtensionNumbersResponse(
+                ExtensionNumberResponse.newBuilder()
+                    .setBaseTypeName(type)
+                    .addExtensionNumber(200)
+                    .build())
+            .build();
+
+    StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver =
+        stub.serverReflectionInfo(responseObserver);
+    handlerRegistry.addService(dynamicService);
+    requestObserver.onNext(request);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver.onNext(request);
+    requestObserver.onCompleted();
+
+    assertEquals(goldenResponse, responseObserver.getValues().get(0));
+    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.getValues().get(1).getMessageResponseCase());
   }
 
   @Test

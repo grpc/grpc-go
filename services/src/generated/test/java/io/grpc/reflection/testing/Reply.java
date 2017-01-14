@@ -80,13 +80,13 @@ public  final class Reply extends
   public static final int MESSAGE_FIELD_NUMBER = 1;
   private volatile java.lang.Object message_;
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   public boolean hasMessage() {
     return ((bitField0_ & 0x00000001) == 0x00000001);
   }
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   public java.lang.String getMessage() {
     java.lang.Object ref = message_;
@@ -103,7 +103,7 @@ public  final class Reply extends
     }
   }
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   public com.google.protobuf.ByteString
       getMessageBytes() {
@@ -125,10 +125,6 @@ public  final class Reply extends
     if (isInitialized == 1) return true;
     if (isInitialized == 0) return false;
 
-    if (!hasMessage()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
     memoizedIsInitialized = 1;
     return true;
   }
@@ -387,9 +383,6 @@ public  final class Reply extends
     }
 
     public final boolean isInitialized() {
-      if (!hasMessage()) {
-        return false;
-      }
       return true;
     }
 
@@ -414,13 +407,13 @@ public  final class Reply extends
 
     private java.lang.Object message_ = "";
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public boolean hasMessage() {
       return ((bitField0_ & 0x00000001) == 0x00000001);
     }
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public java.lang.String getMessage() {
       java.lang.Object ref = message_;
@@ -437,7 +430,7 @@ public  final class Reply extends
       }
     }
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public com.google.protobuf.ByteString
         getMessageBytes() {
@@ -453,7 +446,7 @@ public  final class Reply extends
       }
     }
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public Builder setMessage(
         java.lang.String value) {
@@ -466,7 +459,7 @@ public  final class Reply extends
       return this;
     }
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public Builder clearMessage() {
       bitField0_ = (bitField0_ & ~0x00000001);
@@ -475,7 +468,7 @@ public  final class Reply extends
       return this;
     }
     /**
-     * <code>required string message = 1;</code>
+     * <code>optional string message = 1;</code>
      */
     public Builder setMessageBytes(
         com.google.protobuf.ByteString value) {

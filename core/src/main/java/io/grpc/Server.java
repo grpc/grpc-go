@@ -66,11 +66,30 @@ public abstract class Server {
   }
 
   /**
-   * Returns the services registered with the server, or an empty list if not supported by the
+   * Returns all services registered with the server, or an empty list if not supported by the
    * implementation.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
   public List<ServerServiceDefinition> getServices() {
+    return Collections.emptyList();
+  }
+
+  /**
+   * Returns immutable services registered with the server, or an empty list if not supported by the
+   * implementation.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public List<ServerServiceDefinition> getImmutableServices() {
+    return Collections.emptyList();
+  }
+
+
+  /**
+   * Returns mutable services registered with the server, or an empty list if not supported by the
+   * implementation.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+  public List<ServerServiceDefinition> getMutableServices() {
     return Collections.emptyList();
   }
 

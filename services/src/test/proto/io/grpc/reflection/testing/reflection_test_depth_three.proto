@@ -40,14 +40,14 @@ package grpc.reflection.testing;
 message EmptyMessage {}
 
 message ThirdLevelType {
-  required string message = 1;
+  optional string message = 1;
   extensions 100 to 199;
 }
 
 message NestedTypeOuter {
   message Middle {
     message Inner {
-      required int32 ival = 1;
+      optional int32 ival = 1;
     }
   }
 }

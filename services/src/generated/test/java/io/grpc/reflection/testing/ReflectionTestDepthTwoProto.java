@@ -49,7 +49,7 @@ public final class ReflectionTestDepthTwoProto {
       "test_depth_two.proto\022\027grpc.reflection.te" +
       "sting\032<io/grpc/reflection/testing/reflec" +
       "tion_test_depth_three.proto\"\032\n\007Request\022\017" +
-      "\n\007message\030\001 \002(\t\"\030\n\005Reply\022\017\n\007message\030\001 \002(" +
+      "\n\007message\030\001 \001(\t\"\030\n\005Reply\022\017\n\007message\030\001 \001(" +
       "\t:h\n\020nested_extension\022\'.grpc.reflection." +
       "testing.ThirdLevelType\030e \001(\0132%.grpc.refl" +
       "ection.testing.EmptyMessageB;\n\032io.grpc.r" +

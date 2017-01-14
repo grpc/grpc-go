@@ -8,15 +8,15 @@ public interface ReplyOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   boolean hasMessage();
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   java.lang.String getMessage();
   /**
-   * <code>required string message = 1;</code>
+   * <code>optional string message = 1;</code>
    */
   com.google.protobuf.ByteString
       getMessageBytes();
