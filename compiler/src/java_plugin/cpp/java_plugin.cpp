@@ -31,7 +31,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
                         const string& parameter,
                         google::protobuf::compiler::GeneratorContext* context,
                         string* error) const {
-    vector<pair<string, string> > options;
+    std::vector<std::pair<string, string> > options;
     google::protobuf::compiler::ParseGeneratorParameter(parameter, &options);
 
     java_grpc_generator::ProtoFlavor flavor =

@@ -133,14 +133,14 @@ static void GrpcSplitStringToIteratorUsing(const string& full,
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
 static void GrpcSplitStringUsing(const string& full,
                              const char* delim,
-                             vector<string>* result) {
-  std::back_insert_iterator< vector<string> > it(*result);
+                             std::vector<string>* result) {
+  std::back_insert_iterator< std::vector<string> > it(*result);
   GrpcSplitStringToIteratorUsing(full, delim, it);
 }
 
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
-static vector<string> GrpcSplit(const string& full, const char* delim) {
-  vector<string> result;
+static std::vector<string> GrpcSplit(const string& full, const char* delim) {
+  std::vector<string> result;
   GrpcSplitStringUsing(full, delim, &result);
   return result;
 }
@@ -216,7 +216,7 @@ static string GrpcGetCommentsForDescriptor(const DescriptorType* descriptor) {
 }
 
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
-static vector<string> GrpcGetDocLines(const string& comments) {
+static std::vector<string> GrpcGetDocLines(const string& comments) {
   if (!comments.empty()) {
     // TODO(kenton):  Ideally we should parse the comment text as Markdown and
     //   write it back as HTML, but this requires a Markdown parser.  For now
@@ -226,24 +226,24 @@ static vector<string> GrpcGetDocLines(const string& comments) {
     // HTML-escape them so that they don't accidentally close the doc comment.
     string escapedComments = GrpcEscapeJavadoc(comments);
 
-    vector<string> lines = GrpcSplit(escapedComments, "\n");
+    std::vector<string> lines = GrpcSplit(escapedComments, "\n");
     while (!lines.empty() && lines.back().empty()) {
       lines.pop_back();
     }
     return lines;
   }
-  return vector<string>();
+  return std::vector<string>();
 }
 
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
 template <typename DescriptorType>
-static vector<string> GrpcGetDocLinesForDescriptor(const DescriptorType* descriptor) {
+static std::vector<string> GrpcGetDocLinesForDescriptor(const DescriptorType* descriptor) {
   return GrpcGetDocLines(GrpcGetCommentsForDescriptor(descriptor));
 }
 
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
 static void GrpcWriteDocCommentBody(Printer* printer,
-                                    const vector<string>& lines,
+                                    const std::vector<string>& lines,
                                     bool surroundWithPreTag) {
   if (!lines.empty()) {
     if (surroundWithPreTag) {
@@ -270,7 +270,7 @@ static void GrpcWriteDocCommentBody(Printer* printer,
 // TODO(nmittler): Remove once protobuf includes javadoc methods in distribution.
 static void GrpcWriteDocComment(Printer* printer, const string& comments) {
   printer->Print("/**\n");
-  vector<string> lines = GrpcGetDocLines(comments);
+  std::vector<string> lines = GrpcGetDocLines(comments);
   GrpcWriteDocCommentBody(printer, lines, false);
   printer->Print(" */\n");
 }
@@ -281,7 +281,7 @@ static void GrpcWriteServiceDocComment(Printer* printer,
   // Deviating from protobuf to avoid extraneous docs
   // (see https://github.com/google/protobuf/issues/1406);
   printer->Print("/**\n");
-  vector<string> lines = GrpcGetDocLinesForDescriptor(service);
+  std::vector<string> lines = GrpcGetDocLinesForDescriptor(service);
   GrpcWriteDocCommentBody(printer, lines, true);
   printer->Print(" */\n");
 }
@@ -292,14 +292,14 @@ void GrpcWriteMethodDocComment(Printer* printer,
   // Deviating from protobuf to avoid extraneous docs
   // (see https://github.com/google/protobuf/issues/1406);
   printer->Print("/**\n");
-  vector<string> lines = GrpcGetDocLinesForDescriptor(method);
+  std::vector<string> lines = GrpcGetDocLinesForDescriptor(method);
   GrpcWriteDocCommentBody(printer, lines, true);
   printer->Print(" */\n");
 }
 
 static void PrintMethodFields(
-    const ServiceDescriptor* service, map<string, string>* vars, Printer* p,
-    ProtoFlavor flavor) {
+    const ServiceDescriptor* service, std::map<string, string>* vars, 
+    Printer* p, ProtoFlavor flavor) {
   p->Print("// Static method descriptors that strictly reflect the proto.\n");
   (*vars)["service_name"] = service->name();
   for (int i = 0; i < service->method_count(); ++i) {
@@ -432,12 +432,12 @@ enum CallType {
 };
 
 static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
-                                   map<string, string>* vars,
+                                   std::map<string, string>* vars,
                                    Printer* p,
                                    bool generate_nano);
 
 static void PrintDeprecatedDocComment(const ServiceDescriptor* service,
-                                      map<string, string>* vars,
+                                      std::map<string, string>* vars,
                                       Printer* p) {
   p->Print(
       *vars,
@@ -470,7 +470,7 @@ static void PrintDeprecatedDocComment(const ServiceDescriptor* service,
 // Prints a client interface or implementation class, or a server interface.
 static void PrintStub(
     const ServiceDescriptor* service,
-    map<string, string>* vars,
+    std::map<string, string>* vars,
     Printer* p, StubType type, bool generate_nano,
     bool enable_deprecated) {
   const string service_name = service->name();
@@ -766,12 +766,12 @@ static bool CompareMethodClientStreaming(const MethodDescriptor* method1,
 // Place all method invocations into a single class to reduce memory footprint
 // on Android.
 static void PrintMethodHandlerClass(const ServiceDescriptor* service,
-                                   map<string, string>* vars,
+                                   std::map<string, string>* vars,
                                    Printer* p,
                                    bool generate_nano,
                                    bool enable_deprecated) {
   // Sort method ids based on client_streaming() so switch tables are compact.
-  vector<const MethodDescriptor*> sorted_methods(service->method_count());
+  std::vector<const MethodDescriptor*> sorted_methods(service->method_count());
   for (int i = 0; i < service->method_count(); ++i) {
     sorted_methods[i] = service->method(i);
   }
@@ -882,7 +882,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
 }
 
 static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
-                                   map<string, string>* vars,
+                                   std::map<string, string>* vars,
                                    Printer* p,
                                    ProtoFlavor flavor) {
   (*vars)["service_name"] = service->name();
@@ -960,7 +960,7 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
 }
 
 static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
-                                   map<string, string>* vars,
+                                   std::map<string, string>* vars,
                                    Printer* p,
                                    bool generate_nano) {
   (*vars)["service_name"] = service->name();
@@ -1017,7 +1017,7 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
 }
 
 static void PrintService(const ServiceDescriptor* service,
-                         map<string, string>* vars,
+                         std::map<string, string>* vars,
                          Printer* p,
                          ProtoFlavor flavor,
                          bool enable_deprecated) {
@@ -1168,7 +1168,7 @@ void GenerateService(const ServiceDescriptor* service,
                      bool enable_deprecated) {
   // All non-generated classes must be referred by fully qualified names to
   // avoid collision with generated classes.
-  map<string, string> vars;
+  std::map<string, string> vars;
   vars["String"] = "java.lang.String";
   vars["Override"] = "java.lang.Override";
   vars["Deprecated"] = "java.lang.Deprecated";
