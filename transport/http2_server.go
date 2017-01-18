@@ -274,8 +274,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.Context, string) context.Context) {
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
-	if _, err := io.ReadFull(t.conn, preface); err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+	if n, err := io.ReadFull(t.conn, preface); err != nil {
+		// Only log if it isn't a simple tcp accept check (ie: tcp balancer doing open/close socket)
+		if n > 0 || err != io.EOF {
+			grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+		}
 		t.Close()
 		return
 	}
