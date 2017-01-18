@@ -230,8 +230,10 @@ gRPC comes with three Transport implementations:
 * [Server Stream Listener](https://github.com/google/grpc-java/blob/master/core/src/main/java/io/grpc/internal/ServerStreamListener.java)
 
 
-### Examples
+Examples
+--------
 
-Tests showing how these layers are composed to execute calls using protobuf
-messages can be found here
-https://github.com/google/grpc-java/tree/master/interop-testing/src/main/java/io/grpc/testing/integration
+The [examples](https://github.com/grpc/grpc-java/tree/master/examples)
+and the
+[Android example](https://github.com/grpc/grpc-java/tree/master/examples/android) are standalone projects that
+showcase the usage of gRPC.
