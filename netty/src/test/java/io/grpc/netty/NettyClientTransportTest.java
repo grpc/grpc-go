@@ -38,6 +38,7 @@ import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -45,7 +46,9 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.Attributes;
+import io.grpc.Attributes.Key;
 import io.grpc.Context;
+import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -62,6 +65,7 @@ import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.testing.TestUtils;
+
 import io.netty.channel.ChannelConfig;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -113,7 +117,7 @@ public class NettyClientTransportTest {
   private NettyServer server;
 
   @Before
-  public void setup() throws Exception {
+  public void setup() {
     MockitoAnnotations.initMocks(this);
   }
 
@@ -296,7 +300,7 @@ public class NettyClientTransportTest {
   }
 
   @Test
-  public void maxHeaderListSizeShouldBeEnforcedOnServer()  throws Exception {
+  public void maxHeaderListSizeShouldBeEnforcedOnServer() throws Exception {
     startServer(100, 1);
 
     NettyClientTransport transport = newTransport(newNegotiator());
@@ -312,6 +316,37 @@ public class NettyClientTransportTest {
       assertTrue(rootCause instanceof StatusException);
       assertEquals(Status.INTERNAL.getCode(), ((StatusException) rootCause).getStatus().getCode());
     }
+  }
+
+  @Test
+  public void getAttributes_negotiatorHandler() throws Exception {
+    address = TestUtils.testServerAddress(12345);
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
+    final Attributes attributes =
+        Attributes.newBuilder().set(Key.<String>of("fakeKey"), "fakeValue").build();
+
+    NettyClientTransport transport = newTransport(
+        new ProtocolNegotiator() {
+          @Override
+          public Handler newHandler(GrpcHttp2ConnectionHandler handler) {
+            return null;
+          }
+        });
+
+    assertEquals(Attributes.EMPTY, transport.getAttrs());
+
+    transports.clear();
+  }
+
+  @Test
+  public void clientStreamGetsSslSessionAttributes() throws Exception {
+    startServer();
+    NettyClientTransport transport = newTransport(newNegotiator());
+    transport.start(clientTransportListener);
+    Rpc rpc = new Rpc(transport).halfClose();
+    rpc.waitForResponse();
+
+    assertNotNull(rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION));
   }
 
   private Throwable getRootCause(Throwable t) {
@@ -395,9 +430,9 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static class TestClientStreamListener implements ClientStreamListener {
-    private final SettableFuture<Void> closedFuture = SettableFuture.create();
-    private final SettableFuture<Void> responseFuture = SettableFuture.create();
+  private static final class TestClientStreamListener implements ClientStreamListener {
+    final SettableFuture<Void> closedFuture = SettableFuture.create();
+    final SettableFuture<Void> responseFuture = SettableFuture.create();
 
     @Override
     public void headersRead(Metadata headers) {
@@ -459,7 +494,7 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static class EchoServerListener implements ServerListener {
+  private static final class EchoServerListener implements ServerListener {
     final List<NettyServerTransport> transports = new ArrayList<NettyServerTransport>();
     final List<EchoServerStreamListener> streamListeners =
             Collections.synchronizedList(new ArrayList<EchoServerStreamListener>());
@@ -496,7 +531,7 @@ public class NettyClientTransportTest {
     }
   }
 
-  private static class StringMarshaller implements Marshaller<String> {
+  private static final class StringMarshaller implements Marshaller<String> {
     static final StringMarshaller INSTANCE = new StringMarshaller();
 
     @Override

@@ -570,6 +570,11 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
       }
 
       @Override
+      public Attributes getAttributes() {
+        return Attributes.EMPTY;
+      }
+
+      @Override
       public void setCompressor(Compressor compressor) {}
 
       @Override

@@ -38,6 +38,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.verify;
 
+import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -262,6 +263,11 @@ public class AbstractClientStreamTest {
 
     @Override
     public void setAuthority(String authority) {}
+
+    @Override
+    public Attributes getAttributes() {
+      return Attributes.EMPTY;
+    }
 
     @Override
     public void request(int numMessages) {}

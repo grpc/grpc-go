@@ -37,6 +37,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.verify;
 
+import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -260,6 +261,11 @@ public class AbstractClientStream2Test {
 
     @Override
     public void setMaxOutboundMessageSize(int maxSize) {}
+
+    @Override
+    public Attributes getAttributes() {
+      return Attributes.EMPTY;
+    }
   }
 
   private static class BaseSink implements AbstractClientStream2.Sink {

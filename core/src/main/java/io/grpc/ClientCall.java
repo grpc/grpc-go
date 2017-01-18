@@ -252,4 +252,14 @@ public abstract class ClientCall<ReqT, RespT> {
   public void setMessageCompression(boolean enabled) {
     // noop
   }
+
+  /**
+   * Returns a set of attributes, which may vary depending on the particular
+   * implementation and the state of the call, channel, or transport at the moment it is being
+   * called. By default it returns EMPTY attributes.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2607")
+  public Attributes getAttributes() {
+    return Attributes.EMPTY;
+  }
 }

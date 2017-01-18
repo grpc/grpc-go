@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
 import io.grpc.Status;
 
 /**
@@ -84,4 +85,9 @@ public interface ClientStream extends Stream {
    * Sets the max size sent to the remote endpoint.
    */
   void setMaxOutboundMessageSize(int maxSize);
+
+  /**
+   * Attributes that the stream holds at the current moment.
+   */
+  Attributes getAttributes();
 }

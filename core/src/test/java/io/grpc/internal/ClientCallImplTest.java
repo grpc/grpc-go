@@ -35,6 +35,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.ACCEPT_ENCODING_SPLITTER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -58,6 +59,8 @@ import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContext;
 import com.google.instrumentation.stats.TagValue;
 
+import io.grpc.Attributes;
+import io.grpc.Attributes.Key;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Codec;
@@ -841,6 +844,22 @@ public class ClientCallImplTest {
 
     verify(stream).setMaxInboundMessageSize(1);
     verify(stream).setMaxOutboundMessageSize(2);
+  }
+
+  @Test
+  public void getAttributes() {
+    ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
+        DESCRIPTOR, MoreExecutors.directExecutor(), CallOptions.DEFAULT, statsTraceCtx, provider,
+        deadlineCancellationExecutor);
+    Attributes attrs =
+        Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
+    when(stream.getAttributes()).thenReturn(attrs);
+
+    assertNotEquals(attrs, call.getAttributes());
+
+    call.start(callListener, new Metadata());
+
+    assertEquals(attrs, call.getAttributes());
   }
 
   private void assertStatusInStats(Status.Code statusCode) {

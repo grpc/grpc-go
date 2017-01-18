@@ -31,6 +31,7 @@
 
 package io.grpc.internal;
 
+import io.grpc.Attributes;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Status;
@@ -48,6 +49,11 @@ public class NoopClientStream implements ClientStream {
 
   @Override
   public void start(ClientStreamListener listener) {}
+
+  @Override
+  public Attributes getAttributes() {
+    return Attributes.EMPTY;
+  }
 
   @Override
   public void request(int numMessages) {}

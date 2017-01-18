@@ -34,6 +34,7 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -133,6 +134,11 @@ class OkHttpClientStream extends Http2ClientStream {
   public void setAuthority(String authority) {
     checkState(listener() == null, "must be call before start");
     this.authority = checkNotNull(authority, "authority");
+  }
+
+  @Override
+  public Attributes getAttributes() {
+    return Attributes.EMPTY;
   }
 
   @Override

@@ -36,6 +36,7 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import io.grpc.Attributes;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import io.grpc.Metadata;
@@ -215,6 +216,14 @@ class DelayedStream implements ClientStream {
         }
       });
     }
+  }
+
+  @Override
+  public Attributes getAttributes() {
+    if (passThrough) {
+      return realStream.getAttributes();
+    }
+    return Attributes.EMPTY;
   }
 
   @Override

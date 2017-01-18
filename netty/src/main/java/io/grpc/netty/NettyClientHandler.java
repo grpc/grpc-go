@@ -39,6 +39,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 
+import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -113,6 +114,7 @@ class NettyClientHandler extends AbstractNettyHandler {
   private final Ticker ticker;
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
+  private Attributes attributes = Attributes.EMPTY;
 
   static NettyClientHandler newHandler(ClientTransportLifecycleManager lifecycleManager,
       @Nullable KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
@@ -208,6 +210,14 @@ class NettyClientHandler extends AbstractNettyHandler {
         }
       }
     });
+  }
+
+  /**
+   * The protocol negotiation attributes, available once the protocol negotiation completes;
+   * otherwise returns {@code Attributes.EMPTY}.
+   */
+  Attributes getAttributes() {
+    return attributes;
   }
 
   /**
@@ -327,6 +337,12 @@ class NettyClientHandler extends AbstractNettyHandler {
         keepAliveManager.onTransportShutdown();
       }
     }
+  }
+
+  @Override
+  public void handleProtocolNegotiationCompleted(Attributes attributes) {
+    this.attributes = attributes;
+    super.handleProtocolNegotiationCompleted(attributes);
   }
 
   @Override

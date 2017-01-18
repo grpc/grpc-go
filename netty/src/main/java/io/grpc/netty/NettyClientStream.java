@@ -36,6 +36,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
+import io.grpc.Attributes;
 import io.grpc.InternalKnownTransport;
 import io.grpc.InternalMethodDescriptor;
 import io.grpc.Metadata;
@@ -47,6 +48,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -76,9 +78,10 @@ class NettyClientStream extends AbstractClientStream2 {
   private final AsciiString scheme;
   private final AsciiString userAgent;
 
-  NettyClientStream(TransportState state, MethodDescriptor<?, ?> method, Metadata headers,
-      Channel channel, AsciiString authority, AsciiString scheme,
-      AsciiString userAgent, StatsTraceContext statsTraceCtx) {
+  NettyClientStream(
+      TransportState state, MethodDescriptor<?, ?> method, Metadata headers,
+      Channel channel, AsciiString authority, AsciiString scheme, AsciiString userAgent,
+      StatsTraceContext statsTraceCtx) {
     super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
     this.state = checkNotNull(state, "transportState");
     this.writeQueue = state.handler.getWriteQueue();
@@ -135,6 +138,11 @@ class NettyClientStream extends AbstractClientStream2 {
     // Write the command requesting the creation of the stream.
     writeQueue.enqueue(new CreateStreamCommand(http2Headers, transportState()),
         !method.getType().clientSendsOneMessage()).addListener(failureListener);
+  }
+
+  @Override
+  public Attributes getAttributes() {
+    return state.handler.getAttributes();
   }
 
   private class Sink implements AbstractClientStream2.Sink {
