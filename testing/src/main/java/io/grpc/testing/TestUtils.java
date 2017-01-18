@@ -180,7 +180,7 @@ public class TestUtils {
 
   /**
    * Capture the request attributes. Useful for testing ServerCalls.
-   * {@link ServerCall#attributes()}
+   * {@link ServerCall#getAttributes()}
    */
   public static ServerInterceptor recordServerCallInterceptor(
       final AtomicReference<ServerCall<?, ?>> serverCallCapture) {

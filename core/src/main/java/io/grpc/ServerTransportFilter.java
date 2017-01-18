@@ -34,7 +34,7 @@ package io.grpc;
 /**
  * Listens on server transport life-cycle events, with the capability to read and/or change
  * transport attributes.  Attributes returned by this filter will be merged into {@link
- * ServerCall#attributes}.
+ * ServerCall#getAttributes}.
  *
  * <p>Multiple filters maybe registered to a server, in which case the output of a filter is the
  * input of the next filter.  For example, what returned by {@link #transportReady} of a filter is

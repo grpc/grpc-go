@@ -80,7 +80,7 @@ abstract class PartialForwardingServerCall<ReqT, RespT> extends ServerCall<ReqT,
 
   @Override
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
-  public Attributes attributes() {
-    return delegate().attributes();
+  public Attributes getAttributes() {
+    return delegate().getAttributes();
   }
 }

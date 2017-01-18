@@ -58,7 +58,7 @@ import javax.net.ssl.SSLSession;
 public abstract class ServerCall<ReqT, RespT> {
   /**
    * {@link Attributes.Key} for the remote address of server call attributes
-   * {@link ServerCall#attributes()}
+   * {@link ServerCall#getAttributes()}
    *
    * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_REMOTE_ADDR} instead
    */
@@ -69,7 +69,7 @@ public abstract class ServerCall<ReqT, RespT> {
 
   /**
    * {@link Attributes.Key} for the SSL session of server call attributes
-   * {@link ServerCall#attributes()}
+   * {@link ServerCall#getAttributes()}
    *
    * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_SSL_SESSION} instead
    */
@@ -237,10 +237,18 @@ public abstract class ServerCall<ReqT, RespT> {
    * @return Attributes container
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
-  public Attributes attributes() {
+  public Attributes getAttributes() {
     return Attributes.EMPTY;
   }
 
+  /**
+   * @deprecated use {@link #getAttributes()} instead.
+   */
+  @Deprecated
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
+  public Attributes attributes() {
+    return getAttributes();
+  }
 
   /**
    * The {@link MethodDescriptor} for the call.
