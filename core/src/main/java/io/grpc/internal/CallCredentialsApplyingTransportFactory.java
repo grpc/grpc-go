@@ -92,7 +92,7 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
         Attributes.Builder effectiveAttrsBuilder = Attributes.newBuilder()
             .set(CallCredentials.ATTR_AUTHORITY, authority)
             .set(CallCredentials.ATTR_SECURITY_LEVEL, SecurityLevel.NONE)
-            .setAll(delegate.getAttrs());
+            .setAll(delegate.getAttributes());
         if (callOptions.getAuthority() != null) {
           effectiveAttrsBuilder.set(CallCredentials.ATTR_AUTHORITY, callOptions.getAuthority());
         }

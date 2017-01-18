@@ -209,7 +209,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   }
 
   @Override
-  public Attributes getAttrs() {
+  public Attributes getAttributes() {
     return Attributes.EMPTY;
   }
 

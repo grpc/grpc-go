@@ -1044,7 +1044,7 @@ public class ManagedChannelImpl2Test {
         same(socketAddress), eq(authority), eq(userAgent));
     MockClientTransportInfo transportInfo = transports.poll();
     final ConnectionClientTransport transport = transportInfo.transport;
-    when(transport.getAttrs()).thenReturn(Attributes.EMPTY);
+    when(transport.getAttributes()).thenReturn(Attributes.EMPTY);
     doAnswer(new Answer<ClientStream>() {
         @Override
         public ClientStream answer(InvocationOnMock in) throws Throwable {

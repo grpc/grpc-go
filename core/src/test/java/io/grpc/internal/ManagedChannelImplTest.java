@@ -877,7 +877,7 @@ public class ManagedChannelImplTest {
           any(MetadataApplier.class));
 
     final ConnectionClientTransport transport = mock(ConnectionClientTransport.class);
-    when(transport.getAttrs()).thenReturn(Attributes.EMPTY);
+    when(transport.getAttributes()).thenReturn(Attributes.EMPTY);
     when(mockTransportFactory.newClientTransport(any(SocketAddress.class), any(String.class),
             any(String.class))).thenReturn(transport);
     doAnswer(new Answer<ClientStream>() {

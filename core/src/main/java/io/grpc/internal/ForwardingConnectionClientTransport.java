@@ -78,8 +78,8 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   }
 
   @Override
-  public Attributes getAttrs() {
-    return delegate().getAttrs();
+  public Attributes getAttributes() {
+    return delegate().getAttributes();
   }
 
   @Override

@@ -268,7 +268,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public Attributes getAttrs() {
+  public Attributes getAttributes() {
     // TODO(zhangkun83): fill channel security attributes
     return Attributes.EMPTY;
   }

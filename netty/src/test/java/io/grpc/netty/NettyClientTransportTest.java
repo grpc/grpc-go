@@ -333,7 +333,7 @@ public class NettyClientTransportTest {
           }
         });
 
-    assertEquals(Attributes.EMPTY, transport.getAttrs());
+    assertEquals(Attributes.EMPTY, transport.getAttributes());
 
     transports.clear();
   }
