@@ -65,6 +65,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A {@link LoadBalancer} that provides round-robin load balancing mechanism over the
@@ -177,7 +178,7 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
      */
     private static List<Subchannel> filterNonFailingSubchannels(
         Collection<Subchannel> subchannels) {
-      List<Subchannel> readySubchannels = new ArrayList<Subchannel>();
+      List<Subchannel> readySubchannels = new ArrayList<Subchannel>(subchannels.size());
       for (Subchannel subchannel : subchannels) {
         if (getSubchannelStateInfoRef(subchannel).get().getState() == READY) {
           readySubchannels.add(subchannel);
@@ -211,9 +212,8 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
         ConnectivityStateInfo stateInfo = getSubchannelStateInfoRef(subchannel).get();
         if (stateInfo.getState() != TRANSIENT_FAILURE) {
           return null;
-        } else {
-          status = stateInfo.getStatus();
         }
+        status = stateInfo.getStatus();
       }
       return status;
     }
@@ -238,38 +238,40 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
   @VisibleForTesting
   static class Picker extends SubchannelPicker {
     @Nullable
-    final Status status;
+    private final Status status;
     private final List<Subchannel> list;
-    private int index;
-    private final boolean empty;
+    private final int size;
+    @GuardedBy("this")
+    private int index = 0;
 
     Picker(List<Subchannel> list, @Nullable Status status) {
-      this.empty = list.isEmpty();
-      this.list = list;
+      this.list = Collections.unmodifiableList(list);
+      this.size = list.size();
       this.status = status;
     }
 
     @Override
     public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
-      if (!empty) {
+      if (size > 0) {
         return PickResult.withSubchannel(nextSubchannel());
-      } else {
-        if (status != null) {
-          return PickResult.withError(status);
-        }
-        return PickResult.withNoResult();
       }
+
+      if (status != null) {
+        return PickResult.withError(status);
+      }
+
+      return PickResult.withNoResult();
     }
 
     private Subchannel nextSubchannel() {
-      if (empty) {
+      if (size == 0) {
         throw new NoSuchElementException();
       }
       synchronized (this) {
         Subchannel val = list.get(index);
         index++;
-        if (index >= list.size()) {
-          index -= list.size();
+        if (index >= size) {
+          index = 0;
         }
         return val;
       }
@@ -277,7 +279,12 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
 
     @VisibleForTesting
     List<Subchannel> getList() {
-      return Collections.unmodifiableList(list);
+      return list;
+    }
+
+    @VisibleForTesting
+    Status getStatus() {
+      return status;
     }
   }
 }
