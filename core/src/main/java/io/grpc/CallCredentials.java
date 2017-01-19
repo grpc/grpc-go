@@ -37,6 +37,13 @@ import java.util.concurrent.Executor;
 
 /**
  * Carries credential data that will be propagated to the server via request metadata for each RPC.
+ *
+ * <p>This is used by {@link CallOptions#withCallCredentials} and {@code withCallCredentials()} on
+ * the generated stub, for example:
+ * <pre>
+ * FooGrpc.FooStub stub = FooGrpc.newStub(channel);
+ * response = stub.withCallCredentials(creds).bar(request);
+ * </pre>
  */
 @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
 public interface CallCredentials {
