@@ -99,6 +99,7 @@ public class MessageDeframer implements Closeable {
   private final Listener listener;
   private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
+  private final String debugString;
   private Decompressor decompressor;
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
@@ -117,13 +118,15 @@ public class MessageDeframer implements Closeable {
    * @param decompressor the compression used if a compressed frame is encountered, with
    *  {@code NONE} meaning unsupported
    * @param maxMessageSize the maximum allowed size for received messages.
+   * @param debugString a string that will appear on errors statuses
    */
   public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
-      StatsTraceContext statsTraceCtx) {
+      StatsTraceContext statsTraceCtx, String debugString) {
     this.listener = Preconditions.checkNotNull(listener, "sink");
     this.decompressor = Preconditions.checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
+    this.debugString = debugString;
   }
 
   void setMaxInboundMessageSize(int messageSize) {
@@ -278,8 +281,8 @@ public class MessageDeframer implements Closeable {
         } else {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
-          throw Status.INTERNAL.withDescription("Encountered end-of-stream mid-frame")
-              .asRuntimeException();
+          throw Status.INTERNAL.withDescription(
+              debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
         }
       }
 
@@ -335,7 +338,8 @@ public class MessageDeframer implements Closeable {
   private void processHeader() {
     int type = nextFrame.readUnsignedByte();
     if ((type & RESERVED_MASK) != 0) {
-      throw Status.INTERNAL.withDescription("Frame header malformed: reserved bits not zero")
+      throw Status.INTERNAL.withDescription(
+          debugString + ": Frame header malformed: reserved bits not zero")
           .asRuntimeException();
     }
     compressedFlag = (type & COMPRESSED_FLAG_MASK) != 0;
@@ -343,8 +347,8 @@ public class MessageDeframer implements Closeable {
     // Update the required length to include the length of the frame.
     requiredLength = nextFrame.readInt();
     if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-      throw Status.INTERNAL.withDescription(String.format("Frame size %d exceeds maximum: %d. ",
-          requiredLength, maxInboundMessageSize)).asRuntimeException();
+      throw Status.INTERNAL.withDescription(String.format("%s: Frame size %d exceeds maximum: %d. ",
+              debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
     }
 
     // Continue reading the frame body.
@@ -373,14 +377,16 @@ public class MessageDeframer implements Closeable {
   private InputStream getCompressedBody() {
     if (decompressor == Codec.Identity.NONE) {
       throw Status.INTERNAL.withDescription(
-          "Can't decode compressed frame as compression not configured.").asRuntimeException();
+          debugString + ": Can't decode compressed frame as compression not configured.")
+          .asRuntimeException();
     }
 
     try {
       // Enforce the maxMessageSize limit on the returned stream.
       InputStream unlimitedStream =
           decompressor.decompress(ReadableBuffers.openStream(nextFrame, true));
-      return new SizeEnforcingInputStream(unlimitedStream, maxInboundMessageSize, statsTraceCtx);
+      return new SizeEnforcingInputStream(
+          unlimitedStream, maxInboundMessageSize, statsTraceCtx, debugString);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -393,14 +399,17 @@ public class MessageDeframer implements Closeable {
   static final class SizeEnforcingInputStream extends FilterInputStream {
     private final int maxMessageSize;
     private final StatsTraceContext statsTraceCtx;
+    private final String debugString;
     private long maxCount;
     private long count;
     private long mark = -1;
 
-    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx) {
+    SizeEnforcingInputStream(InputStream in, int maxMessageSize, StatsTraceContext statsTraceCtx,
+        String debugString) {
       super(in);
       this.maxMessageSize = maxMessageSize;
       this.statsTraceCtx = statsTraceCtx;
+      this.debugString = debugString;
     }
 
     @Override
@@ -464,8 +473,8 @@ public class MessageDeframer implements Closeable {
     private void verifySize() {
       if (count > maxMessageSize) {
         throw Status.INTERNAL.withDescription(String.format(
-                "Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
-                maxMessageSize, count)).asRuntimeException();
+                "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
+                debugString, maxMessageSize, count)).asRuntimeException();
       }
     }
   }

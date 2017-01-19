@@ -135,7 +135,7 @@ public abstract class AbstractStream implements Stream {
       StatsTraceContext statsTraceCtx) {
     framer = new MessageFramer(new FramerSink(), bufferAllocator, statsTraceCtx);
     deframer = new MessageDeframer(new DeframerListener(), Codec.Identity.NONE, maxMessageSize,
-        statsTraceCtx);
+        statsTraceCtx, getClass().getName());
   }
 
   protected final void setMaxInboundMessageSizeProtected(int maxSize) {
