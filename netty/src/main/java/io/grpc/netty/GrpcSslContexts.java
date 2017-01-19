@@ -81,19 +81,19 @@ public class GrpcSslContexts {
    * These configs use ACCEPT due to limited support in OpenSSL.  Actual protocol enforcement is
    * done in ProtocolNegotiators.
    */
-  private static ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
+  private static final ApplicationProtocolConfig ALPN = new ApplicationProtocolConfig(
       Protocol.ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
       NEXT_PROTOCOL_VERSIONS);
 
-  private static ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
+  private static final ApplicationProtocolConfig NPN = new ApplicationProtocolConfig(
       Protocol.NPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,
       NEXT_PROTOCOL_VERSIONS);
 
-  private static ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
+  private static final ApplicationProtocolConfig NPN_AND_ALPN = new ApplicationProtocolConfig(
       Protocol.NPN_AND_ALPN,
       SelectorFailureBehavior.NO_ADVERTISE,
       SelectedListenerFailureBehavior.ACCEPT,

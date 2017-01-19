@@ -168,14 +168,10 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void newCallExitsIdleness() throws Exception {
-    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
-
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
 
-    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
-    Helper helper = helperCaptor.getValue();
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
 
     verify(mockNameResolver).start(nameResolverListenerCaptor.capture());
     // Simulate new address resolved to make sure the LoadBalancer is correctly linked to
@@ -186,17 +182,13 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void newCallRefreshesIdlenessTimer() throws Exception {
-    final EquivalentAddressGroup addressGroup = addressGroupList.get(1);
-
     // First call to exit the initial idleness, then immediately cancel the call.
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());
     call.cancel("For testing", null);
 
     // Verify that we have exited the idle mode
-    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
-    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
-    Helper helper = helperCaptor.getValue();
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
     assertFalse(channel.inUseStateAggregator.isInUse());
 
     // Move closer to idleness, but not yet.
@@ -297,7 +289,6 @@ public class ManagedChannelImpl2IdlenessTest {
 
   @Test
   public void oobTransportDoesNotAffectIdleness() {
-    FakeClock oobExecutor = new FakeClock();
     // Start a call, which goes to delayed transport
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
     call.start(mockCallListener, new Metadata());

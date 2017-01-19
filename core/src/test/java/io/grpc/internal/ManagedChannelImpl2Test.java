@@ -816,8 +816,8 @@ public class ManagedChannelImpl2Test {
   @Test
   public void subchannelsNoConnectionShutdownNow() {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    Subchannel sub1 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
-    Subchannel sub2 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    helper.createSubchannel(addressGroup, Attributes.EMPTY);
     channel.shutdownNow();
 
     verify(mockLoadBalancer).shutdown();
@@ -975,8 +975,8 @@ public class ManagedChannelImpl2Test {
   @Test
   public void oobChannelsNoConnectionShutdownNow() {
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
-    ManagedChannel oob1 = helper.createOobChannel(addressGroup, "oob1Authority");
-    ManagedChannel oob2 = helper.createOobChannel(addressGroup, "oob2Authority");
+    helper.createOobChannel(addressGroup, "oob1Authority");
+    helper.createOobChannel(addressGroup, "oob2Authority");
     channel.shutdownNow();
 
     verify(mockLoadBalancer).shutdown();

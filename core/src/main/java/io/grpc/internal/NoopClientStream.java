@@ -42,7 +42,7 @@ import java.io.InputStream;
  * An implementation of {@link ClientStream} that silently does nothing for the operations.
  */
 public class NoopClientStream implements ClientStream {
-  public static NoopClientStream INSTANCE = new NoopClientStream();
+  public static final NoopClientStream INSTANCE = new NoopClientStream();
 
   @Override
   public void setAuthority(String authority) {}

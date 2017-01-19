@@ -98,9 +98,6 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
   @VisibleForTesting
   static final long SUBCHANNEL_SHUTDOWN_DELAY_SECONDS = 5;
 
-  private static final ClientTransport SHUTDOWN_TRANSPORT =
-      new FailingClientTransport(Status.UNAVAILABLE.withDescription("Channel is shutdown"));
-
   @VisibleForTesting
   static final Status SHUTDOWN_NOW_STATUS =
       Status.UNAVAILABLE.withDescription("Channel shutdownNow invoked");
@@ -631,12 +628,12 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
               }
 
               @Override
-              public void onInUse(InternalSubchannel is) {
+              void onInUse(InternalSubchannel is) {
                 inUseStateAggregator.updateObjectInUse(is, true);
               }
 
               @Override
-              public void onNotInUse(InternalSubchannel is) {
+              void onNotInUse(InternalSubchannel is) {
                 inUseStateAggregator.updateObjectInUse(is, false);
               }
             });
