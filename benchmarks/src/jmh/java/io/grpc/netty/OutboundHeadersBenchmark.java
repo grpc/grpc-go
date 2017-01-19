@@ -111,7 +111,7 @@ public class OutboundHeadersBenchmark {
     scratchBuffer.clear();
     Http2Headers headers =
         Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
-    headersEncoder.encodeHeaders(headers, scratchBuffer);
+    headersEncoder.encodeHeaders(1, headers, scratchBuffer);
     return scratchBuffer;
   }
 }

@@ -182,6 +182,8 @@ public final class GrpcUtil {
     }
     switch (httpStatusCode) {
       case HttpURLConnection.HTTP_BAD_REQUEST:  // 400
+      case 431: // Request Header Fields Too Large
+        // TODO(carl-mastrangelo): this should be added to the http-grpc-status-mapping.md doc.
         return Status.Code.INTERNAL;
       case HttpURLConnection.HTTP_UNAUTHORIZED:  // 401
         return Status.Code.UNAUTHENTICATED;
