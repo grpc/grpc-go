@@ -379,8 +379,18 @@ public class Context {
 
   /**
    * Detach the current context and attach the provided replacement which should be the context of
-   * the outer scope, thus exit the current scope.  If this context is not {@link #current()} a
-   * SEVERE message will be logged but the context to attach will still be bound.
+   * the outer scope, thus exit the current scope.
+   *
+   * <p>This context should be the same context that was previously {@link #attach attached}.  The
+   * provided replacement should be what was returned by the same {@link #attach attach()} call.  If
+   * an {@code attach()} and a {@code detach()} meet above requirements, they match.
+   *
+   * <p>It is expected that between any pair of matching {@code attach()} and {@code detach()}, all
+   * {@code attach()}es and {@code detach()}es are called in matching pairs.  If this method finds
+   * that this context is not {@link #current current}, either you or some code in-between are not
+   * detaching correctly, and a SEVERE message will be logged but the context to attach will still
+   * be bound.  <strong>Never</strong> use {@code Context.current().detach()}, as this will
+   * compromise this error-detecting mechanism.
    */
   public void detach(Context toAttach) {
     checkNotNull(toAttach, "toAttach");
