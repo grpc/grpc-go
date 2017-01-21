@@ -36,6 +36,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.instrumentation.stats.StatsContextFactory;
+
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -51,7 +53,7 @@ import javax.annotation.Nullable;
 /**
  * Common utility methods for tests.
  */
-final class TestUtils {
+public final class TestUtils {
 
   static class MockClientTransportInfo {
     /**
@@ -109,5 +111,24 @@ final class TestUtils {
         .newClientTransport(any(SocketAddress.class), any(String.class), any(String.class));
 
     return captor;
+  }
+
+  /**
+   * Sets a custom {@link StatsContextFactory} for tests.
+   */
+  public static void setStatsContextFactory(
+      AbstractManagedChannelImplBuilder<?> builder, StatsContextFactory factory) {
+    builder.statsContextFactory(factory);
+  }
+
+  /**
+   * Sets a custom {@link StatsContextFactory} for tests.
+   */
+  public static void setStatsContextFactory(
+      AbstractServerImplBuilder<?> builder, StatsContextFactory factory) {
+    builder.statsContextFactory(factory);
+  }
+
+  private TestUtils() {
   }
 }

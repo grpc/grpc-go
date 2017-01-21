@@ -69,13 +69,13 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    return NettyChannelBuilder
+    NettyChannelBuilder builder = NettyChannelBuilder
         .forAddress(new LocalAddress("in-process-1"))
         .negotiationType(NegotiationType.PLAINTEXT)
         .channelType(LocalChannel.class)
         .flowControlWindow(65 * 1024)
-        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
-        .statsContextFactory(getClientStatsFactory())
-        .build();
+        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
+    io.grpc.internal.TestUtils.setStatsContextFactory(builder, getClientStatsFactory());
+    return builder.build();
   }
 }

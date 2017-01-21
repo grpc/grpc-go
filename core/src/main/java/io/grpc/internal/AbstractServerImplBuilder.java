@@ -153,11 +153,10 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   /**
-   * Override the default stats implementation.  This is meant to be used in tests.
+   * Override the default stats implementation.
    */
   @VisibleForTesting
-  @Internal
-  public T statsContextFactory(StatsContextFactory statsFactory) {
+  protected T statsContextFactory(StatsContextFactory statsFactory) {
     this.statsFactory = statsFactory;
     return thisT();
   }

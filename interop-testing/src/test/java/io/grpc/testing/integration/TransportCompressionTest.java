@@ -148,11 +148,10 @@ public class TransportCompressionTest extends AbstractInteropTest {
 
   @Override
   protected ManagedChannel createChannel() {
-    return NettyChannelBuilder.forAddress("localhost", getPort())
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("localhost", getPort())
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .decompressorRegistry(decompressors)
         .compressorRegistry(compressors)
-        .statsContextFactory(getClientStatsFactory())
         .intercept(new ClientInterceptor() {
           @Override
           public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
@@ -190,8 +189,9 @@ public class TransportCompressionTest extends AbstractInteropTest {
             };
           }
         })
-        .usePlaintext(true)
-        .build();
+        .usePlaintext(true);
+    io.grpc.internal.TestUtils.setStatsContextFactory(builder, getClientStatsFactory());
+    return builder.build();
   }
 
   /**

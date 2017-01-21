@@ -81,7 +81,7 @@ public class Http2NettyTest extends AbstractInteropTest {
   @Override
   protected ManagedChannel createChannel() {
     try {
-      return NettyChannelBuilder
+      NettyChannelBuilder builder = NettyChannelBuilder
           .forAddress(TestUtils.testServerAddress(getPort()))
           .flowControlWindow(65 * 1024)
           .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
@@ -91,9 +91,9 @@ public class Http2NettyTest extends AbstractInteropTest {
               .trustManager(TestUtils.loadX509Cert("ca.pem"))
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
               .sslProvider(SslProvider.OPENSSL)
-              .build())
-          .statsContextFactory(getClientStatsFactory())
-          .build();
+              .build());
+      io.grpc.internal.TestUtils.setStatsContextFactory(builder, getClientStatsFactory());
+      return builder.build();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }

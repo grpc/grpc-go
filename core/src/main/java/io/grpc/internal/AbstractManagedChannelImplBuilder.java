@@ -44,7 +44,6 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
-import io.grpc.Internal;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer2;
 import io.grpc.ManagedChannel;
@@ -259,11 +258,10 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
-   * Override the default stats implementation.  This is meant to be used in tests.
+   * Override the default stats implementation.
    */
   @VisibleForTesting
-  @Internal
-  public T statsContextFactory(StatsContextFactory statsFactory) {
+  protected T statsContextFactory(StatsContextFactory statsFactory) {
     this.statsFactory = statsFactory;
     return thisT();
   }
