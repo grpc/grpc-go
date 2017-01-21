@@ -33,7 +33,6 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import io.grpc.ExperimentalApi;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -44,7 +43,6 @@ import io.grpc.Status;
  * Utility functions for adapting {@link ServerCallHandler}s to application service implementation,
  * meant to be used by the generated code.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1790")
 public final class ServerCalls {
 
   private ServerCalls() {

@@ -60,7 +60,6 @@ public abstract class Server {
    *
    * @throws IllegalStateException if the server has not yet been started.
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1780")
   public int getPort() {
     return -1;
   }
