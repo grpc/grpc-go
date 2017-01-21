@@ -43,10 +43,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/grpclog"
+	"github.com/lypnol/grpc-go"
+	testpb "github.com/lypnol/grpc-go/benchmark/grpc_testing"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/grpclog"
 )
 
 var (

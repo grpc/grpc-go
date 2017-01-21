@@ -40,16 +40,16 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/benchmark"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"github.com/lypnol/grpc-go"
+	"github.com/lypnol/grpc-go/benchmark"
+	testpb "github.com/lypnol/grpc-go/benchmark/grpc_testing"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/grpclog"
 )
 
 var (
-	// File path related to google.golang.org/grpc.
+	// File path related to github.com/lypnol/grpc-go.
 	certFile = "benchmark/server/testdata/server1.pem"
 	keyFile  = "benchmark/server/testdata/server1.key"
 )

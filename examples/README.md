@@ -21,8 +21,8 @@ INSTALL
 -------
 
 ```
-$ go get -u google.golang.org/grpc/examples/helloworld/greeter_client
-$ go get -u google.golang.org/grpc/examples/helloworld/greeter_server
+$ go get -u github.com/lypnol/grpc-go/examples/helloworld/greeter_client
+$ go get -u github.com/lypnol/grpc-go/examples/helloworld/greeter_server
 ```
 
 TRY IT!

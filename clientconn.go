@@ -43,10 +43,10 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/transport"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/grpclog"
+	"github.com/lypnol/grpc-go/stats"
+	"github.com/lypnol/grpc-go/transport"
 )
 
 var (

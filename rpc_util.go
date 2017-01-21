@@ -45,11 +45,11 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/metadata"
+	"github.com/lypnol/grpc-go/stats"
+	"github.com/lypnol/grpc-go/transport"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/transport"
 )
 
 // Codec defines the interface gRPC uses to encode and decode messages.
@@ -312,6 +312,57 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	return buf, nil
 }
 
+// encodeRaw serializes msg and prepends the message header. If msg is nil, it
+// generates the message header of 0 message length.
+func encodeRaw(c Codec, msg []byte, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, error) {
+	var (
+		b      []byte
+		length uint
+	)
+	if msg != nil {
+		b = msg
+		if outPayload != nil {
+			outPayload.Payload = msg
+			outPayload.Data = b
+			outPayload.Length = len(b)
+		}
+		if cp != nil {
+			if err := cp.Do(cbuf, b); err != nil {
+				return nil, err
+			}
+			b = cbuf.Bytes()
+		}
+		length = uint(len(b))
+	}
+	if length > math.MaxUint32 {
+		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
+	}
+
+	const (
+		payloadLen = 1
+		sizeLen    = 4
+	)
+
+	var buf = make([]byte, payloadLen+sizeLen+len(b))
+
+	// Write payload format
+	if cp == nil {
+		buf[0] = byte(compressionNone)
+	} else {
+		buf[0] = byte(compressionMade)
+	}
+	// Write length of b into buf
+	binary.BigEndian.PutUint32(buf[1:], uint32(length))
+	// Copy encoded msg to buf
+	copy(buf[5:], b)
+
+	if outPayload != nil {
+		outPayload.WireLength = len(buf)
+	}
+
+	return buf, nil
+}
+
 func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {
 	switch pf {
 	case compressionNone:
@@ -357,6 +408,40 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 		inPayload.Data = d
 		inPayload.Length = len(d)
 	}
+	return nil
+}
+
+func rawRecv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m []byte, maxMsgSize int, inPayload *stats.InPayload) error {
+	pf, d, err := p.recvMsg(maxMsgSize)
+	if err != nil {
+		return err
+	}
+	if inPayload != nil {
+		inPayload.WireLength = len(d)
+	}
+	if err := checkRecvPayload(pf, s.RecvCompress(), dc); err != nil {
+		return err
+	}
+	if pf == compressionMade {
+		d, err = dc.Do(bytes.NewReader(d))
+		if err != nil {
+			return Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
+		}
+	}
+	if len(d) > maxMsgSize {
+		return Errorf(codes.Internal, "grpc: received a message of %d bytes exceeding %d limit", len(d), maxMsgSize)
+	}
+
+	copy(m, d)
+
+	if inPayload != nil {
+		inPayload.RecvTime = time.Now()
+		inPayload.Payload = m
+		// TODO truncate large payload.
+		inPayload.Data = d
+		inPayload.Length = len(d)
+	}
+
 	return nil
 }
 

@@ -6,14 +6,14 @@ set -e
 workdir=.cover
 profile="$workdir/cover.out"
 mode=set
-end2endtest="google.golang.org/grpc/test"
+end2endtest="github.com/lypnol/grpc-go/test"
 
 generate_cover_data() {
     rm -rf "$workdir"
     mkdir "$workdir"
 
     for pkg in "$@"; do
-        if [ $pkg == "google.golang.org/grpc" -o $pkg == "google.golang.org/grpc/transport" -o $pkg == "google.golang.org/grpc/metadata" -o $pkg == "google.golang.org/grpc/credentials" ]
+        if [ $pkg == "github.com/lypnol/grpc-go" -o $pkg == "github.com/lypnol/grpc-go/transport" -o $pkg == "github.com/lypnol/grpc-go/metadata" -o $pkg == "github.com/lypnol/grpc-go/credentials" ]
             then
                 f="$workdir/$(echo $pkg | tr / -)"
                 go test -covermode="$mode" -coverprofile="$f.cover" "$pkg"

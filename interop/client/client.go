@@ -38,12 +38,12 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"github.com/lypnol/grpc-go"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/credentials/oauth"
+	"github.com/lypnol/grpc-go/grpclog"
+	"github.com/lypnol/grpc-go/interop"
+	testpb "github.com/lypnol/grpc-go/interop/grpc_testing"
 )
 
 var (

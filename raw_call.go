@@ -1,57 +1,22 @@
-/*
- *
- * Copyright 2014, Google Inc.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
 package grpc
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"math"
 	"time"
 
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
 	"github.com/lypnol/grpc-go/codes"
 	"github.com/lypnol/grpc-go/stats"
 	"github.com/lypnol/grpc-go/transport"
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 
-// recvResponse receives and parses an RPC response.
+// recvRawResponse receives an RPC raw response.
 // On error, it returns the error and indicates whether the call should be retried.
-//
-// TODO(zhaoq): Check whether the received message sequence is valid.
-// TODO ctx is used for stats collection and processing. It is the context passed from the application.
-func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
+func recvRawResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply []byte) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
 		if err != nil {
@@ -72,7 +37,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, inPayload); err != nil {
+		if err = rawRecv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -88,8 +53,8 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	return nil
 }
 
-// sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+// sendRawRequest writes out various information of an RPC such as Context and Message.
+func sendRawRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args []byte, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -114,7 +79,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	outBuf, err := encodeRaw(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
@@ -125,7 +90,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
-	// recvResponse to get the final status.
+	// recvRawResponse to get the final status.
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -133,17 +98,19 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	return stream, nil
 }
 
-// Invoke sends the RPC request on the wire and returns after response is received.
-// Invoke is called by generated code. Also users can call Invoke directly when it
+// RawInvoke sends the RPC request on the wire and returns after response is received.
+// The query message and the reply are in raw bytes format.
+// RawInvoke is called by generated code. Also users can call Invoke directly when it
 // is really needed in their use cases.
-func Invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+func RawInvoke(ctx context.Context, method string, args, reply []byte, cc *ClientConn, opts ...CallOption) error {
 	if cc.dopts.unaryInt != nil {
-		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
+		// Does not support unaryInt
+		return errors.New("RawInvoke does not support unaryInt")
 	}
-	return invoke(ctx, method, args, reply, cc, opts...)
+	return rawInvoke(ctx, method, args, reply, cc, opts...)
 }
 
-func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
+func rawInvoke(ctx context.Context, method string, args, reply []byte, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
 	if mc, ok := cc.getMethodConfig(method); ok {
 		c.failFast = !mc.WaitForReady
@@ -242,7 +209,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
+		stream, err = sendRawRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
 			if put != nil {
 				put()
@@ -259,7 +226,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
+		err = recvRawResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
 				put()
