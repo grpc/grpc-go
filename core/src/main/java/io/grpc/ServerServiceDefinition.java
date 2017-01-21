@@ -59,8 +59,8 @@ public final class ServerServiceDefinition {
   private ServerServiceDefinition(
       ServiceDescriptor serviceDescriptor, Map<String, ServerMethodDefinition<?, ?>> methods) {
     this.serviceDescriptor = checkNotNull(serviceDescriptor, "serviceDescriptor");
-    this.methods = Collections.unmodifiableMap(
-        new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
+    this.methods =
+        Collections.unmodifiableMap(new HashMap<String, ServerMethodDefinition<?, ?>>(methods));
   }
 
   /**

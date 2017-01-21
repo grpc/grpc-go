@@ -31,12 +31,16 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.base.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -66,6 +70,8 @@ public final class ServiceDescriptor {
   public ServiceDescriptor(String name, Object marshallerDescriptor,
                            Collection<MethodDescriptor<?, ?>> methods) {
     this.name = Preconditions.checkNotNull(name, "name");
+    Preconditions.checkNotNull(methods, "methods");
+    validateMethodNames(name, methods);
     this.marshallerDescriptor = marshallerDescriptor;
     this.methods = Collections.unmodifiableList(new ArrayList<MethodDescriptor<?, ?>>(methods));
   }
@@ -91,5 +97,17 @@ public final class ServiceDescriptor {
   @Nullable
   public Object getMarshallerDescriptor() {
     return marshallerDescriptor;
+  }
+
+  static void validateMethodNames(String serviceName, Collection<MethodDescriptor<?, ?>> methods) {
+    Set<String> allNames = new HashSet<String>(methods.size());
+    for (MethodDescriptor<?, ?> method : methods) {
+      String methodServiceName =
+          MethodDescriptor.extractFullServiceName(method.getFullMethodName());
+      checkArgument(serviceName.equals(methodServiceName),
+          "service names %s != %s", methodServiceName, serviceName);
+      checkArgument(allNames.add(method.getFullMethodName()),
+          "duplicate name %s", method.getFullMethodName());
+    }
   }
 }
