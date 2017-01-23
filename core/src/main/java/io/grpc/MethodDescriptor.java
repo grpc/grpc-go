@@ -305,18 +305,6 @@ public final class MethodDescriptor<ReqT, RespT> {
   }
 
   /**
-   * Set idempotency on this method.
-   *
-   * @param idempotent the idempotency of this method.
-   * @return a new copy of MethodDescriptor.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1775")
-  public MethodDescriptor<ReqT, RespT> withIdempotent(boolean idempotent) {
-    return new MethodDescriptor<ReqT, RespT>(type, fullMethodName, requestMarshaller,
-        responseMarshaller, idempotent, safe);
-  }
-
-  /**
    * Returns whether this method is safe.
    *
    * <p>A safe request does nothing except retrieval so it has no side effects on the server side.
@@ -324,22 +312,6 @@ public final class MethodDescriptor<ReqT, RespT> {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1775")
   public boolean isSafe() {
     return safe;
-  }
-
-  /**
-   * Setting safe on the method. Works only with unary rpcs.
-   *
-   * <p>A safe request does nothing except retrieval so it has no side effects on the server side.
-   * The method will try to fetch cached responses if it's both safe and idempotent. This is best
-   * effort and may have performance impact if the method is not desgined to be cacheable.
-   *
-   * @param safe whether the method is safe.
-   * @return a new copy of MethodDescriptor.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1775")
-  public MethodDescriptor<ReqT, RespT> withSafe(boolean safe) {
-    return new MethodDescriptor<ReqT, RespT>(type, fullMethodName, requestMarshaller,
-        responseMarshaller, idempotent, safe);
   }
 
   /**

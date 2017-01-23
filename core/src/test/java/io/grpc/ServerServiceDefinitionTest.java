@@ -54,7 +54,8 @@ public class ServerServiceDefinitionTest {
       .setRequestMarshaller(StringMarshaller.INSTANCE)
       .setResponseMarshaller(IntegerMarshaller.INSTANCE)
       .build();
-  private MethodDescriptor<String, Integer> diffMethod1 = method1.withIdempotent(true);
+  private MethodDescriptor<String, Integer> diffMethod1 =
+      method1.toBuilder().setIdempotent(true).build();
   private MethodDescriptor<String, Integer> method2 = method1.toBuilder()
       .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, "method2"))
       .build();
