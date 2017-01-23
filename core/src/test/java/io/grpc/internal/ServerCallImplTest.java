@@ -86,8 +86,12 @@ public class ServerCallImplTest {
   private ServerCallImpl<Long, Long> call;
   private Context.CancellableContext context;
 
-  private final MethodDescriptor<Long, Long> method = MethodDescriptor.create(
-      MethodType.UNARY, "/service/method", new LongMarshaller(), new LongMarshaller());
+  private final MethodDescriptor<Long, Long> method = MethodDescriptor.<Long, Long>newBuilder()
+      .setType(MethodType.UNARY)
+      .setFullMethodName("/service/method")
+      .setRequestMarshaller(new LongMarshaller())
+      .setResponseMarshaller(new LongMarshaller())
+      .build();
 
   private final Metadata requestHeaders = new Metadata();
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();

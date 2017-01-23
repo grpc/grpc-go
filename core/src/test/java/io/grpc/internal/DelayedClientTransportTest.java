@@ -36,11 +36,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -55,6 +55,7 @@ import io.grpc.LoadBalancer2.PickResult;
 import io.grpc.LoadBalancer2.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
 
@@ -91,14 +92,15 @@ public class DelayedClientTransportTest {
 
   private static final Attributes.Key<Integer> SHARD_ID = Attributes.Key.of("shard-id");
 
-  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
-
-  private final MethodDescriptor<String, Integer> method2 = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method2",
-      new StringMarshaller(), new IntegerMarshaller());
-
+  private final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
+  private final MethodDescriptor<String, Integer> method2 =
+      method.toBuilder().setFullMethodName("/service/method2").build();
   private final Metadata headers = new Metadata();
   private final Metadata headers2 = new Metadata();
 

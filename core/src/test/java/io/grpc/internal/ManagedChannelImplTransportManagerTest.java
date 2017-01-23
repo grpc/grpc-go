@@ -55,12 +55,13 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
+import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.TransportManager.OobTransportProvider;
-import io.grpc.TransportManager;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 
 import org.junit.After;
@@ -93,12 +94,17 @@ public class ManagedChannelImplTransportManagerTest {
   private static final String USER_AGENT = "mosaic";
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
-  private final MethodDescriptor<String, String> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new StringMarshaller());
-  private final MethodDescriptor<String, String> method2 = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method2",
-      new StringMarshaller(), new StringMarshaller());
+  private final MethodDescriptor<String, String> method =
+      MethodDescriptor.<String, String>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new StringMarshaller())
+          .build();
+
+  private final MethodDescriptor<String, String> method2 = method.toBuilder()
+      .setFullMethodName("/service/method2")
+      .build();
   private final CallOptions callOptions = CallOptions.DEFAULT.withAuthority("dummy_value");
   private final CallOptions callOptions2 = CallOptions.DEFAULT.withAuthority("dummy_value2");
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(

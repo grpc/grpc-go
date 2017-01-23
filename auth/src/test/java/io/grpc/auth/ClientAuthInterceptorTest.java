@@ -111,8 +111,12 @@ public class ClientAuthInterceptorTest {
   @Before
   public void startUp() {
     MockitoAnnotations.initMocks(this);
-    descriptor = MethodDescriptor.create(
-        MethodDescriptor.MethodType.UNKNOWN, "a.service/method", stringMarshaller, intMarshaller);
+    descriptor = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("a.service/method")
+        .setRequestMarshaller(stringMarshaller)
+        .setResponseMarshaller(intMarshaller)
+        .build();
     when(channel.newCall(same(descriptor), any(CallOptions.class))).thenReturn(call);
     doReturn("localhost:443").when(channel).authority();
     interceptor = new ClientAuthInterceptor(credentials, executor);

@@ -48,15 +48,16 @@ import java.util.HashSet;
 @RunWith(JUnit4.class)
 public class ServerServiceDefinitionTest {
   private String serviceName = "com.example.service";
-  private MethodDescriptor<String, Integer> method1 = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN,
-      MethodDescriptor.generateFullMethodName(serviceName, "method1"),
-      StringMarshaller.INSTANCE, IntegerMarshaller.INSTANCE);
+  private MethodDescriptor<String, Integer> method1 = MethodDescriptor.<String, Integer>newBuilder()
+      .setType(MethodDescriptor.MethodType.UNKNOWN)
+      .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, "method1"))
+      .setRequestMarshaller(StringMarshaller.INSTANCE)
+      .setResponseMarshaller(IntegerMarshaller.INSTANCE)
+      .build();
   private MethodDescriptor<String, Integer> diffMethod1 = method1.withIdempotent(true);
-  private MethodDescriptor<String, Integer> method2 = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN,
-      MethodDescriptor.generateFullMethodName(serviceName, "method2"),
-      StringMarshaller.INSTANCE, IntegerMarshaller.INSTANCE);
+  private MethodDescriptor<String, Integer> method2 = method1.toBuilder()
+      .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, "method2"))
+      .build();
   private ServerCallHandler<String, Integer> methodHandler1
       = new NoopServerCallHandler<String, Integer>();
   private ServerCallHandler<String, Integer> methodHandler2

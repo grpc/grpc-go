@@ -38,6 +38,7 @@ import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServiceDescriptor;
+import io.grpc.testing.TestMethodDescriptors;
 import io.grpc.util.MutableHandlerRegistry;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -88,13 +89,17 @@ public class HandlerRegistryBenchmark {
           new ServiceDescriptor(serviceName));
       for (int methodIndex = 0; methodIndex < methodCountPerService; ++methodIndex) {
         String methodName = randomString();
-        MethodDescriptor<Object, Object> methodDescriptor = MethodDescriptor.create(
-            MethodDescriptor.MethodType.UNKNOWN,
-            MethodDescriptor.generateFullMethodName(serviceName, methodName), null, null);
+
+        MethodDescriptor<Void, Void> methodDescriptor = MethodDescriptor.<Void, Void>newBuilder()
+            .setType(MethodDescriptor.MethodType.UNKNOWN)
+            .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, methodName))
+            .setRequestMarshaller(TestMethodDescriptors.noopMarshaller())
+            .setResponseMarshaller(TestMethodDescriptors.noopMarshaller())
+            .build();
         serviceBuilder.addMethod(methodDescriptor,
-            new ServerCallHandler<Object, Object>() {
+            new ServerCallHandler<Void, Void>() {
               @Override
-              public Listener<Object> startCall(ServerCall<Object, Object> call,
+              public Listener<Void> startCall(ServerCall<Void, Void> call,
                   Metadata headers) {
                 return null;
               }

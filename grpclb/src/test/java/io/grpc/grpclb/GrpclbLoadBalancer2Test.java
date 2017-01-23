@@ -114,9 +114,13 @@ public class GrpclbLoadBalancer2Test {
       Attributes.Key.of("resolution-attr");
   private static final String SERVICE_AUTHORITY = "api.google.com";
 
-  private static final MethodDescriptor<String, String> TRASH_METHOD = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNARY, "/service/trashmethod",
-      new StringMarshaller(), new StringMarshaller());
+  private static final MethodDescriptor<String, String> TRASH_METHOD =
+      MethodDescriptor.<String, String>newBuilder()
+          .setType(MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName("/service/trashmethod")
+          .setRequestMarshaller(StringMarshaller.INSTANCE)
+          .setResponseMarshaller(StringMarshaller.INSTANCE)
+          .build();
 
   private static class StringMarshaller implements Marshaller<String> {
     static final StringMarshaller INSTANCE = new StringMarshaller();
@@ -179,7 +183,7 @@ public class GrpclbLoadBalancer2Test {
         public StreamObserver<LoadBalanceRequest> balanceLoad(
             final StreamObserver<LoadBalanceResponse> responseObserver) {
           StreamObserver<LoadBalanceRequest> requestObserver =
-              (StreamObserver<LoadBalanceRequest>) mock(StreamObserver.class);
+              mock(StreamObserver.class);
           Answer<Void> closeRpc = new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocation) {

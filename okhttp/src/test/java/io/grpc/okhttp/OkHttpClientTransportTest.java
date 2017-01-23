@@ -967,33 +967,21 @@ public class OkHttpClientTransportTest {
 
   @Test
   public void serverStreamingHeadersShouldNotBeFlushed() throws Exception {
-    method = MethodDescriptor.create(
-        MethodType.SERVER_STREAMING,
-        method.getFullMethodName(),
-        TestMethodDescriptors.noopMarshaller(),
-        TestMethodDescriptors.noopMarshaller());
+    method = method.toBuilder().setType(MethodType.SERVER_STREAMING).build();
     shouldHeadersBeFlushed(false);
     shutdownAndVerify();
   }
 
   @Test
   public void clientStreamingHeadersShouldBeFlushed() throws Exception {
-    method = MethodDescriptor.create(
-        MethodType.CLIENT_STREAMING,
-        method.getFullMethodName(),
-        TestMethodDescriptors.noopMarshaller(),
-        TestMethodDescriptors.noopMarshaller());
+    method = method.toBuilder().setType(MethodType.CLIENT_STREAMING).build();
     shouldHeadersBeFlushed(true);
     shutdownAndVerify();
   }
 
   @Test
   public void duplexStreamingHeadersShouldNotBeFlushed() throws Exception {
-    method = MethodDescriptor.create(
-        MethodType.BIDI_STREAMING,
-        method.getFullMethodName(),
-        TestMethodDescriptors.noopMarshaller(),
-        TestMethodDescriptors.noopMarshaller());
+    method = method.toBuilder().setType(MethodType.BIDI_STREAMING).build();
     shouldHeadersBeFlushed(true);
     shutdownAndVerify();
   }

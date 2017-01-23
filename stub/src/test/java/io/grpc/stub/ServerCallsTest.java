@@ -76,15 +76,18 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @RunWith(JUnit4.class)
 public class ServerCallsTest {
-  static final MethodDescriptor<Integer, Integer> STREAMING_METHOD = MethodDescriptor.create(
-      MethodDescriptor.MethodType.BIDI_STREAMING,
-      "some/method",
-      new IntegerMarshaller(), new IntegerMarshaller());
+  static final MethodDescriptor<Integer, Integer> STREAMING_METHOD =
+      MethodDescriptor.<Integer, Integer>newBuilder()
+          .setType(MethodDescriptor.MethodType.BIDI_STREAMING)
+          .setFullMethodName("some/method")
+          .setRequestMarshaller(new IntegerMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
 
-  static final MethodDescriptor<Integer, Integer> UNARY_METHOD = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNARY,
-      "some/unarymethod",
-      new IntegerMarshaller(), new IntegerMarshaller());
+  static final MethodDescriptor<Integer, Integer> UNARY_METHOD = STREAMING_METHOD.toBuilder()
+      .setType(MethodDescriptor.MethodType.UNARY)
+      .setFullMethodName("some/unarymethod")
+      .build();
 
   private final ServerCallRecorder serverCall = new ServerCallRecorder();
 

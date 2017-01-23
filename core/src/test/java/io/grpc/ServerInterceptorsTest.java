@@ -89,8 +89,12 @@ public class ServerInterceptorsTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    flowMethod = MethodDescriptor.create(
-        MethodType.UNKNOWN, "basic/flow", requestMarshaller, responseMarshaller);
+    flowMethod = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodType.UNKNOWN)
+        .setFullMethodName("basic/flow")
+        .setRequestMarshaller(requestMarshaller)
+        .setResponseMarshaller(responseMarshaller)
+        .build();
 
     Mockito.when(handler.startCall(
         Mockito.<ServerCall<String, Integer>>any(), Mockito.<Metadata>any()))
@@ -153,9 +157,8 @@ public class ServerInterceptorsTest {
   public void correctHandlerCalled() {
     @SuppressWarnings("unchecked")
     ServerCallHandler<String, Integer> handler2 = mock(ServerCallHandler.class);
-    MethodDescriptor<String, Integer> flowMethod2 = MethodDescriptor
-        .create(MethodType.UNKNOWN, "basic/flow2",
-            requestMarshaller, responseMarshaller);
+    MethodDescriptor<String, Integer> flowMethod2 =
+        flowMethod.toBuilder().setFullMethodName("basic/flow2").build();
     serviceDefinition = ServerServiceDefinition.builder(
         new ServiceDescriptor("basic", flowMethod, flowMethod2))
         .addMethod(flowMethod, handler)
@@ -335,9 +338,12 @@ public class ServerInterceptorsTest {
       }
     };
 
-    MethodDescriptor<Holder, Holder> wrappedMethod = MethodDescriptor
-        .create(MethodType.UNKNOWN, "basic/wrapped",
-            marshaller, marshaller);
+    MethodDescriptor<Holder, Holder> wrappedMethod = MethodDescriptor.<Holder, Holder>newBuilder()
+        .setType(MethodType.UNKNOWN)
+        .setFullMethodName("basic/wrapped")
+        .setRequestMarshaller(marshaller)
+        .setResponseMarshaller(marshaller)
+        .build();
     ServerServiceDefinition serviceDef = ServerServiceDefinition.builder(
         new ServiceDescriptor("basic", wrappedMethod))
         .addMethod(wrappedMethod, handler2).build();

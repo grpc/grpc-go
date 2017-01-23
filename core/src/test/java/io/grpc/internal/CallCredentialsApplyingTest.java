@@ -43,8 +43,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
@@ -94,9 +94,13 @@ public class CallCredentialsApplyingTest {
   private static final String USER_AGENT = "testuseragent";
   private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.of("somekey");
   private static final String ATTR_VALUE = "somevalue";
-  private static final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private static final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodDescriptor.MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private static final Metadata.Key<String> ORIG_HEADER_KEY =
       Metadata.Key.of("header1", Metadata.ASCII_STRING_MARSHALLER);
   private static final String ORIG_HEADER_VALUE = "some original header value";

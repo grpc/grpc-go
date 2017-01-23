@@ -60,13 +60,18 @@ public class MethodDescriptorTest {
 
   @Test
   public void idempotent() {
-    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>create(
-        MethodType.SERVER_STREAMING, "/package.service/method", new StringMarshaller(),
-        new StringMarshaller());    
+    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.SERVER_STREAMING)
+        .setFullMethodName("/package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .build();
+
     assertFalse(descriptor.isIdempotent());
 
     // Create a new desriptor by setting idempotent to true
-    MethodDescriptor<String, String> newDescriptor = descriptor.withIdempotent(true);
+    MethodDescriptor<String, String> newDescriptor =
+        descriptor.toBuilder().setIdempotent(true).build();
     assertTrue(newDescriptor.isIdempotent());
     // All other fields should staty the same
     assertEquals(MethodType.SERVER_STREAMING, newDescriptor.getType());
@@ -75,13 +80,16 @@ public class MethodDescriptorTest {
 
   @Test
   public void safe() {
-    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>create(
-        MethodType.UNARY, "/package.service/method", new StringMarshaller(),
-        new StringMarshaller());
+    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.UNARY)
+        .setFullMethodName("/package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .build();
     assertFalse(descriptor.isSafe());
 
     // Create a new desriptor by setting safe to true
-    MethodDescriptor<String, String> newDescriptor = descriptor.withSafe(true);
+    MethodDescriptor<String, String> newDescriptor = descriptor.toBuilder().setSafe(true).build();
     assertTrue(newDescriptor.isSafe());
     // All other fields should staty the same
     assertEquals(MethodType.UNARY, newDescriptor.getType());
@@ -90,10 +98,17 @@ public class MethodDescriptorTest {
 
   @Test(expected = IllegalArgumentException.class)
   public void safeAndNonUnary() {
-    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>create(
-        MethodType.SERVER_STREAMING, "/package.service/method", new StringMarshaller(),
-        new StringMarshaller());
-    MethodDescriptor<String, String> newDescriptor = descriptor.withSafe(true);
+    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.SERVER_STREAMING)
+        .setFullMethodName("/package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .build();
+
+
+    MethodDescriptor<String,String> discard = descriptor.toBuilder().setSafe(true).build();
+    // Never reached
+    assert discard == null;
   }
 }
 

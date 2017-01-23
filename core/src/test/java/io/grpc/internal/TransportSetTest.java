@@ -95,9 +95,13 @@ public class TransportSetTest {
   @Mock private TransportSet.Callback mockTransportSetCallback;
   @Mock private ClientStreamListener mockStreamListener;
 
-  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodDescriptor.MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private final Metadata headers = new Metadata();
   private final CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withWaitForReady();
   private final CallOptions failFastCallOptions = CallOptions.DEFAULT;

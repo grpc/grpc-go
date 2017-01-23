@@ -88,17 +88,21 @@ public class MutableHandlerRegistryTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    MethodDescriptor<String, Integer> flowMethod = MethodDescriptor
-        .create(MethodType.UNKNOWN, "basic/flow", requestMarshaller, responseMarshaller);
+    MethodDescriptor<String, Integer> flowMethod = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodType.UNKNOWN)
+        .setFullMethodName("basic/flow")
+        .setRequestMarshaller(requestMarshaller)
+        .setResponseMarshaller(responseMarshaller)
+        .build();
     basicServiceDefinition = ServerServiceDefinition.builder(
         new ServiceDescriptor("basic", flowMethod))
         .addMethod(flowMethod, flowHandler)
         .build();
 
-    MethodDescriptor<String, Integer> coupleMethod = MethodDescriptor
-        .create(MethodType.UNKNOWN, "multi/couple", requestMarshaller, responseMarshaller);
-    MethodDescriptor<String, Integer> fewMethod = MethodDescriptor
-        .create(MethodType.UNKNOWN, "multi/few", requestMarshaller, responseMarshaller);
+    MethodDescriptor<String, Integer> coupleMethod =
+        flowMethod.toBuilder().setFullMethodName("multi/couple").build();
+    MethodDescriptor<String, Integer> fewMethod =
+        flowMethod.toBuilder().setFullMethodName("multi/few").build();
     multiServiceDefinition = ServerServiceDefinition.builder(
         new ServiceDescriptor("multi", coupleMethod, fewMethod))
         .addMethod(coupleMethod, coupleHandler)
@@ -173,8 +177,12 @@ public class MutableHandlerRegistryTest {
   public void replaceAndLookup() {
     assertNull(registry.addService(basicServiceDefinition));
     assertNotNull(registry.lookupMethod("basic/flow"));
-    MethodDescriptor<String, Integer> anotherMethod = MethodDescriptor
-        .create(MethodType.UNKNOWN, "basic/another", requestMarshaller, responseMarshaller);
+    MethodDescriptor<String, Integer> anotherMethod = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodType.UNKNOWN)
+        .setFullMethodName("basic/another")
+        .setRequestMarshaller(requestMarshaller)
+        .setResponseMarshaller(responseMarshaller)
+        .build();
     ServerServiceDefinition replaceServiceDefinition = ServerServiceDefinition.builder(
         new ServiceDescriptor("basic", anotherMethod))
         .addMethod(anotherMethod, flowHandler).build();

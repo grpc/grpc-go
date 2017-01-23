@@ -397,9 +397,13 @@ public class NettyClientTransportTest {
 
   private static class Rpc {
     static final String MESSAGE = "hello";
-    static final MethodDescriptor<String, String> METHOD = MethodDescriptor.create(
-            MethodDescriptor.MethodType.UNARY, "/testService/test", StringMarshaller.INSTANCE,
-            StringMarshaller.INSTANCE);
+    static final MethodDescriptor<String, String> METHOD =
+        MethodDescriptor.<String, String>newBuilder()
+            .setType(MethodDescriptor.MethodType.UNARY)
+            .setFullMethodName("/testService/test")
+            .setRequestMarshaller(StringMarshaller.INSTANCE)
+            .setResponseMarshaller(StringMarshaller.INSTANCE)
+            .build();
 
     final ClientStream stream;
     final TestClientStreamListener listener = new TestClientStreamListener();

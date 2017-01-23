@@ -56,11 +56,12 @@ public final class TestMethodDescriptors {
 
   private static MethodDescriptor<Void, Void> noopMethod(
       String serviceName, String methodName) {
-    return MethodDescriptor.create(
-        MethodType.UNARY,
-        MethodDescriptor.generateFullMethodName(serviceName, methodName),
-        noopMarshaller(),
-        noopMarshaller());
+    return MethodDescriptor.<Void, Void>newBuilder()
+        .setType(MethodType.UNARY)
+        .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, methodName))
+        .setRequestMarshaller(noopMarshaller())
+        .setResponseMarshaller(noopMarshaller())
+        .build();
   }
 
   /**

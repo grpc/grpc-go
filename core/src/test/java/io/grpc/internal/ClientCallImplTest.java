@@ -70,12 +70,12 @@ import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
-import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils;
+import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
+import io.grpc.testing.TestMethodDescriptors;
 
 import org.junit.After;
 import org.junit.Before;
@@ -107,22 +107,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RunWith(JUnit4.class)
 public class ClientCallImplTest {
 
-  private static final MethodDescriptor<Void, Void> DESCRIPTOR = MethodDescriptor.create(
-      MethodType.UNARY,
-      "service/method",
-      new TestMarshaller<Void>(),
-      new TestMarshaller<Void>());
-
   private final FakeClock fakeClock = new FakeClock();
   private final ScheduledExecutorService deadlineCancellationExecutor =
       fakeClock.getScheduledExecutorService();
   private final DecompressorRegistry decompressorRegistry =
       DecompressorRegistry.getDefaultInstance().with(new Codec.Gzip(), true);
-  private final MethodDescriptor<Void, Void> method = MethodDescriptor.create(
-      MethodType.UNARY,
-      "service/method",
-      new TestMarshaller<Void>(),
-      new TestMarshaller<Void>());
+  private final MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
+      .setType(MethodType.UNARY)
+      .setFullMethodName("service/method")
+      .setRequestMarshaller(TestMethodDescriptors.noopMarshaller())
+      .setResponseMarshaller(TestMethodDescriptors.noopMarshaller())
+      .build();
 
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
   private final StatsContext parentStatsContext = statsCtxFactory.getDefault().with(
@@ -459,7 +454,7 @@ public class ClientCallImplTest {
     Context.current().withValue(testKey, "testValue").attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -533,7 +528,7 @@ public class ClientCallImplTest {
     Context previous = cancellableContext.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -563,7 +558,7 @@ public class ClientCallImplTest {
     Context previous = cancellableContext.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -608,7 +603,7 @@ public class ClientCallImplTest {
     CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(0, TimeUnit.SECONDS);
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         callOptions,
         statsTraceCtx,
@@ -631,7 +626,7 @@ public class ClientCallImplTest {
     context.attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -659,7 +654,7 @@ public class ClientCallImplTest {
 
     CallOptions callOpts = CallOptions.DEFAULT.withDeadlineAfter(2, TimeUnit.SECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         callOpts,
         statsTraceCtx,
@@ -687,7 +682,7 @@ public class ClientCallImplTest {
 
     CallOptions callOpts = CallOptions.DEFAULT.withDeadlineAfter(1, TimeUnit.SECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         callOpts,
         statsTraceCtx,
@@ -711,7 +706,7 @@ public class ClientCallImplTest {
   public void expiredDeadlineCancelsStream_CallOptions() {
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
         statsTraceCtx,
@@ -735,7 +730,7 @@ public class ClientCallImplTest {
         .attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -755,7 +750,7 @@ public class ClientCallImplTest {
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
         statsTraceCtx,
@@ -779,7 +774,7 @@ public class ClientCallImplTest {
   @Test
   public void timeoutShouldNotBeSet() {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -796,7 +791,7 @@ public class ClientCallImplTest {
   @Test
   public void cancelInOnMessageShouldInvokeStreamCancel() throws Exception {
     final ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         MoreExecutors.directExecutor(),
         CallOptions.DEFAULT,
         statsTraceCtx,
@@ -832,7 +827,7 @@ public class ClientCallImplTest {
     CallOptions callOptions =
         CallOptions.DEFAULT.withMaxInboundMessageSize(1).withMaxOutboundMessageSize(2);
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR,
+        method,
         new SerializingExecutor(Executors.newSingleThreadExecutor()),
         callOptions,
         statsTraceCtx,
@@ -849,7 +844,7 @@ public class ClientCallImplTest {
   @Test
   public void getAttributes() {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
-        DESCRIPTOR, MoreExecutors.directExecutor(), CallOptions.DEFAULT, statsTraceCtx, provider,
+        method, MoreExecutors.directExecutor(), CallOptions.DEFAULT, statsTraceCtx, provider,
         deadlineCancellationExecutor);
     Attributes attrs =
         Attributes.newBuilder().set(Key.<String>of("fake key"), "fake value").build();
@@ -868,18 +863,6 @@ public class ClientCallImplTest {
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertNotNull(statusTag);
     assertEquals(statusCode.toString(), statusTag.toString());
-  }
-
-  private static class TestMarshaller<T> implements Marshaller<T> {
-    @Override
-    public InputStream stream(T value) {
-      return null;
-    }
-
-    @Override
-    public T parse(InputStream stream) {
-      return null;
-    }
   }
 
   private static void assertTimeoutBetween(long timeout, long from, long to) {

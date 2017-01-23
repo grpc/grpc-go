@@ -66,8 +66,12 @@ public class MethodDescriptorBenchmark {
     }
   };
 
-  MethodDescriptor<Void, Void> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNARY, "Service/Method", marshaller, marshaller);
+  MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
+      .setType(MethodDescriptor.MethodType.UNARY)
+      .setFullMethodName("Service/Method")
+      .setRequestMarshaller(marshaller)
+      .setResponseMarshaller(marshaller)
+      .build();
 
   InternalMethodDescriptor imd = new InternalMethodDescriptor(InternalKnownTransport.NETTY);
 

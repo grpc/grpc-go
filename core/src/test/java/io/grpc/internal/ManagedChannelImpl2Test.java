@@ -60,8 +60,8 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.ImmutableList;
 
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
+import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -80,6 +80,7 @@ import io.grpc.LoadBalancer2.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
@@ -125,9 +126,13 @@ public class ManagedChannelImpl2Test {
       Collections.<ClientInterceptor>emptyList();
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, 447).build();
-  private static final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
+  private static final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private static final Attributes.Key<String> SUBCHANNEL_ATTR_KEY =
       Attributes.Key.of("subchannel-attr-key");
   private final String serviceName = "fake.example.com";
@@ -608,7 +613,7 @@ public class ManagedChannelImpl2Test {
             any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class),
             any(StatsTraceContext.class)))
         .thenReturn(mock(ClientStream.class));
-    
+
     goodTransportInfo.listener.transportReady();
     inOrder.verify(mockLoadBalancer).handleSubchannelState(
         same(subchannel), stateInfoCaptor.capture());

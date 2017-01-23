@@ -38,6 +38,7 @@ import com.google.common.base.Preconditions;
 import java.io.InputStream;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
@@ -208,7 +209,8 @@ public final class MethodDescriptor<ReqT, RespT> {
   }
 
   private MethodDescriptor(
-      MethodType type, String fullMethodName,
+      MethodType type,
+      String fullMethodName,
       Marshaller<ReqT> requestMarshaller,
       Marshaller<RespT> responseMarshaller,
       boolean idempotent,
@@ -364,5 +366,136 @@ public final class MethodDescriptor<ReqT, RespT> {
       return null;
     }
     return fullMethodName.substring(0, index);
+  }
+
+  /**
+   * Creates a new builder for a {@link MethodDescriptor}.
+   */
+  @CheckReturnValue
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
+  public static <ReqT, RespT> Builder<ReqT, RespT> newBuilder() {
+    return newBuilder(null, null);
+  }
+
+  /**
+   * Creates a new builder for a {@link MethodDescriptor}.
+   */
+  @CheckReturnValue
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
+  public static <ReqT, RespT> Builder<ReqT, RespT> newBuilder(
+      Marshaller<ReqT> requestMarshaller, Marshaller<RespT> responseMarshaller) {
+    return new Builder<ReqT, RespT>()
+        .setRequestMarshaller(requestMarshaller)
+        .setResponseMarshaller(responseMarshaller);
+  }
+
+  /**
+   * Turns this descriptor into a builder.
+   */
+  @CheckReturnValue
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
+  public Builder<ReqT, RespT> toBuilder() {
+    return toBuilder(requestMarshaller, responseMarshaller);
+  }
+
+  /**
+   * Turns this descriptor into a builder, replacing the request and response marshallers.
+   */
+  @CheckReturnValue
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
+  public <NewReqT, NewRespT> Builder<NewReqT, NewRespT> toBuilder(
+      Marshaller<NewReqT> requestMarshaller, Marshaller<NewRespT> responseMarshaller) {
+    return MethodDescriptor.<NewReqT, NewRespT>newBuilder()
+        .setRequestMarshaller(requestMarshaller)
+        .setResponseMarshaller(responseMarshaller)
+        .setType(type)
+        .setFullMethodName(fullMethodName)
+        .setIdempotent(idempotent)
+        .setSafe(safe);
+  }
+
+  /**
+   * A builder for a {@link MethodDescriptor}.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
+  public static final class Builder<ReqT, RespT> {
+
+    private Marshaller<ReqT> requestMarshaller;
+    private Marshaller<RespT> responseMarshaller;
+    private MethodType type;
+    private String fullMethodName;
+    private boolean idempotent;
+    private boolean safe;
+
+    private Builder() {}
+
+    /**
+     * Sets the request marshaller.
+     * @param requestMarshaller the marshaller to use.
+     */
+    public Builder<ReqT, RespT> setRequestMarshaller(Marshaller<ReqT> requestMarshaller) {
+      this.requestMarshaller = requestMarshaller;
+      return this;
+    }
+
+    /**
+     * Sets the response marshaller.
+     * @param responseMarshaller the marshaller to use.
+     */
+    @SuppressWarnings("unchecked")
+    public Builder<ReqT, RespT> setResponseMarshaller(Marshaller<RespT> responseMarshaller) {
+      this.responseMarshaller = responseMarshaller;
+      return this;
+    }
+
+    /**
+     * Sets the method type.
+     * @param type the type of the method.
+     */
+    public Builder<ReqT, RespT> setType(MethodType type) {
+      this.type = type;
+      return this;
+    }
+
+    /**
+     * Sets the fully qualified (service and method) method name.
+     * @see MethodDescriptor#generateFullMethodName
+     */
+    public Builder<ReqT, RespT> setFullMethodName(String fullMethodName) {
+      this.fullMethodName = fullMethodName;
+      return this;
+    }
+
+    /**
+     * Sets whether the method is idempotent.  If true, calling this method more than once doesn't
+     * have additional side effects.
+     */
+    public Builder<ReqT, RespT> setIdempotent(boolean idempotent) {
+      this.idempotent = idempotent;
+      return this;
+    }
+
+    /**
+     * Sets whether this method is safe.  If true, calling this method any number of times doesn't
+     * have side effects.
+     */
+    public Builder<ReqT, RespT> setSafe(boolean safe) {
+      this.safe = safe;
+      return this;
+    }
+
+    /**
+     * Builds the method descriptor.
+     */
+    @CheckReturnValue
+    public MethodDescriptor<ReqT, RespT> build() {
+      return new MethodDescriptor<ReqT, RespT>(
+          type,
+          fullMethodName,
+          requestMarshaller,
+          responseMarshaller,
+          idempotent,
+          safe);
+    }
   }
 }

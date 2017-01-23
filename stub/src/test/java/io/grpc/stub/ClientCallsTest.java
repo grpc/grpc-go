@@ -81,11 +81,13 @@ import java.util.concurrent.atomic.AtomicReference;
 @RunWith(JUnit4.class)
 public class ClientCallsTest {
 
-  private static final MethodDescriptor<Integer, Integer> STREAMING_METHOD = MethodDescriptor
-      .create(
-          MethodDescriptor.MethodType.BIDI_STREAMING,
-          "some/method",
-          new IntegerMarshaller(), new IntegerMarshaller());
+  private static final MethodDescriptor<Integer, Integer> STREAMING_METHOD =
+      MethodDescriptor.<Integer, Integer>newBuilder()
+          .setType(MethodDescriptor.MethodType.BIDI_STREAMING)
+          .setFullMethodName("some/method")
+          .setRequestMarshaller(new IntegerMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
 
   private Server server;
   private ManagedChannel channel;

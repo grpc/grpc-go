@@ -127,8 +127,12 @@ public class GoogleAuthLibraryCallCredentialsTest {
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    method = MethodDescriptor.create(
-        MethodDescriptor.MethodType.UNKNOWN, "a.service/method", stringMarshaller, intMarshaller);
+    method = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("a.service/method")
+        .setRequestMarshaller(stringMarshaller)
+        .setResponseMarshaller(intMarshaller)
+        .build();
     expectedUri = new URI("https://testauthority/a.service");
     doAnswer(new Answer<Void>() {
         @Override

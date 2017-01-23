@@ -58,13 +58,14 @@ import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
-import io.grpc.TransportManager.OobTransportProvider;
 import io.grpc.TransportManager;
+import io.grpc.TransportManager.OobTransportProvider;
 import io.grpc.internal.TestUtils.MockClientTransportInfo;
 
 import org.junit.After;
@@ -103,14 +104,17 @@ public class ManagedChannelImplIdlenessTest {
   private static final long IDLE_TIMEOUT_SECONDS = 30;
   private ManagedChannelImpl channel;
 
-  private final MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "/service/method",
-      new StringMarshaller(), new IntegerMarshaller());
-
+  private final MethodDescriptor<String, Integer> method =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodType.UNKNOWN)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new StringMarshaller())
+          .setResponseMarshaller(new IntegerMarshaller())
+          .build();
   private final List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
   private final List<EquivalentAddressGroup> addressGroupList =
       new ArrayList<EquivalentAddressGroup>();
-  
+
   @Mock private SharedResourceHolder.Resource<ScheduledExecutorService> timerService;
   @Mock private ClientTransportFactory mockTransportFactory;
   @Mock private LoadBalancer<ClientTransport> mockLoadBalancer;
@@ -425,11 +429,11 @@ public class ManagedChannelImplIdlenessTest {
 
   private static class FakeSocketAddress extends SocketAddress {
     final String name;
- 
+
     FakeSocketAddress(String name) {
       this.name = name;
     }
- 
+
     @Override
     public String toString() {
       return "FakeSocketAddress-" + name;

@@ -70,7 +70,6 @@ import io.grpc.HandlerRegistry;
 import io.grpc.IntegerMarshaller;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
@@ -382,8 +381,12 @@ public class ServerImplTest {
         = StatsTraceContext.createStatsHeader(statsCtxFactory);
     final AtomicReference<ServerCall<String, Integer>> callReference
         = new AtomicReference<ServerCall<String, Integer>>();
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
+    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("Waiter/serve")
+        .setRequestMarshaller(STRING_MARSHALLER)
+        .setResponseMarshaller(INTEGER_MARSHALLER)
+        .build();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
         new ServiceDescriptor("Waiter", method))
         .addMethod(
@@ -570,9 +573,12 @@ public class ServerImplTest {
   public void exceptionInStartCallPropagatesToStream() throws Exception {
     createAndStartServer(NO_FILTERS);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
-    MethodDescriptor<String, Integer> method = MethodDescriptor
-        .create(MethodType.UNKNOWN, "Waiter/serve",
-            STRING_MARSHALLER, INTEGER_MARSHALLER);
+    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("Waiter/serve")
+        .setRequestMarshaller(STRING_MARSHALLER)
+        .setResponseMarshaller(INTEGER_MARSHALLER)
+        .build();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
         new ServiceDescriptor("Waiter", method))
         .addMethod(method,
@@ -689,8 +695,12 @@ public class ServerImplTest {
   @Test
   public void testCallContextIsBoundInListenerCallbacks() throws Exception {
     createAndStartServer(NO_FILTERS);
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
+    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("Waiter/serve")
+        .setRequestMarshaller(STRING_MARSHALLER)
+        .setResponseMarshaller(INTEGER_MARSHALLER)
+        .build();
     final AtomicBoolean  onReadyCalled = new AtomicBoolean(false);
     final AtomicBoolean onMessageCalled = new AtomicBoolean(false);
     final AtomicBoolean onHalfCloseCalled = new AtomicBoolean(false);
@@ -768,7 +778,7 @@ public class ServerImplTest {
     streamListener.messageRead(new ByteArrayInputStream(new byte[0]));
     assertEquals(1, executor.runDueTasks());
     assertTrue(onMessageCalled.get());
-    
+
     streamListener.halfClosed();
     assertEquals(1, executor.runDueTasks());
     assertTrue(onHalfCloseCalled.get());
@@ -799,8 +809,13 @@ public class ServerImplTest {
 
     final AtomicReference<ServerCall<String, Integer>> callReference
         = new AtomicReference<ServerCall<String, Integer>>();
-    MethodDescriptor<String, Integer> method = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Waiter/serve", STRING_MARSHALLER, INTEGER_MARSHALLER);
+    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("Waiter/serve")
+        .setRequestMarshaller(STRING_MARSHALLER)
+        .setResponseMarshaller(INTEGER_MARSHALLER)
+        .build();
+
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
         new ServiceDescriptor("Waiter", method))
         .addMethod(method,
@@ -868,8 +883,12 @@ public class ServerImplTest {
   @Test
   public void handlerRegistryPriorities() throws Exception {
     fallbackRegistry = mock(HandlerRegistry.class);
-    MethodDescriptor<String, Integer> method1 = MethodDescriptor.create(
-        MethodType.UNKNOWN, "Service1/Method1", STRING_MARSHALLER, INTEGER_MARSHALLER);
+    MethodDescriptor<String, Integer> method1 = MethodDescriptor.<String, Integer>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNKNOWN)
+        .setFullMethodName("Service1/Method1")
+        .setRequestMarshaller(STRING_MARSHALLER)
+        .setResponseMarshaller(INTEGER_MARSHALLER)
+        .build();
     registry = new InternalHandlerRegistry.Builder()
         .addService(ServerServiceDefinition.builder(new ServiceDescriptor("Service1", method1))
             .addMethod(method1, callHandler).build())
