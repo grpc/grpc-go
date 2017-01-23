@@ -594,8 +594,8 @@ public abstract class AbstractTransportTest {
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
     assertEquals("additional attribute value",
-        serverStream.attributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
-    assertNotNull(serverStream.attributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
+        serverStream.getAttributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
+    assertNotNull(serverStream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
 
     serverStream.request(1);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).onReady();

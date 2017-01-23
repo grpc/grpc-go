@@ -165,7 +165,7 @@ public abstract class AbstractServerStream extends AbstractStream2
     return super.isReady();
   }
 
-  @Override public Attributes attributes() {
+  @Override public Attributes getAttributes() {
     return Attributes.EMPTY;
   }
 

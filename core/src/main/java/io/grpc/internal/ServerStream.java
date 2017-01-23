@@ -74,7 +74,7 @@ public interface ServerStream extends Stream {
    *
    * @return Attributes container
    */
-  Attributes attributes();
+  Attributes getAttributes();
 
 
   /**

@@ -193,7 +193,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
 
   @Override
   public Attributes getAttributes() {
-    return stream.attributes();
+    return stream.getAttributes();
   }
 
   @Override

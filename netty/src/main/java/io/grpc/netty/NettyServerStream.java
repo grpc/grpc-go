@@ -82,7 +82,7 @@ class NettyServerStream extends AbstractServerStream {
   }
 
   @Override
-  public Attributes attributes() {
+  public Attributes getAttributes() {
     return attributes;
   }
 
