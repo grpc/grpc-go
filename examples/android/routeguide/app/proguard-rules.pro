@@ -1,6 +1,6 @@
 # Add project specific ProGuard rules here.
 # By default, the flags in this file are appended to flags specified
-# in /usr/local/google/home/rocking/Android/Sdk/tools/proguard/proguard-android.txt
+# in $ANDROID_HOME/tools/proguard/proguard-android.txt
 # You can edit the include path and order by changing the proguardFiles
 # directive in build.gradle.
 #
@@ -12,4 +12,7 @@
 -dontwarn sun.misc.Unsafe
 -dontwarn com.google.common.**
 -dontwarn okio.**
-
+# Ignores: can't find referenced class javax.lang.model.element.Modifier
+-dontwarn com.google.errorprone.annotations.**
+-keep class io.grpc.internal.DnsNameResolverProvider
+-keep class io.grpc.okhttp.OkHttpChannelProvider
