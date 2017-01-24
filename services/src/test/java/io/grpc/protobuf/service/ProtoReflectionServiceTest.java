@@ -76,8 +76,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Tests for {@link ProtoReflectionService}.
@@ -109,10 +107,6 @@ public class ProtoReflectionServiceTest {
         .directExecutor()
         .build();
     stub = ServerReflectionGrpc.newStub(channel);
-
-    // TODO(ericgribkoff) Remove after fix for https://github.com/grpc/grpc-java/issues/2444 is
-    // merged.
-    doNoOpCall();
   }
 
   @After
@@ -605,32 +599,5 @@ public class ProtoReflectionServiceTest {
         responseObserver.firstValue().get().getListServicesResponse().getServiceList();
     assertEquals(goldenResponse.size(), response.size());
     assertEquals(goldenResponse, new HashSet<ServiceResponse>(response));
-  }
-
-  // TODO(ericgribkoff) Remove after fix for https://github.com/grpc/grpc-java/issues/2444 is
-  // merged.
-  private void doNoOpCall() throws Exception {
-    final CountDownLatch latch = new CountDownLatch(1);
-    ServerReflectionRequest request =
-        ServerReflectionRequest.newBuilder().setHost(TEST_HOST).setListServices("services").build();
-    StreamObserver<ServerReflectionRequest> requestObserver =
-        stub.serverReflectionInfo(new StreamObserver<ServerReflectionResponse>() {
-          @Override
-          public void onNext(ServerReflectionResponse value) {
-          }
-
-          @Override
-          public void onError(Throwable t) {
-            latch.countDown();
-          }
-
-          @Override
-          public void onCompleted() {
-            latch.countDown();
-          }
-        });
-    requestObserver.onNext(request);
-    requestObserver.onCompleted();
-    assertTrue(latch.await(5, TimeUnit.SECONDS));
   }
 }
