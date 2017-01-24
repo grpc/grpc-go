@@ -140,6 +140,15 @@ class DnsNameResolver extends NameResolver {
           resolving = true;
         }
         try {
+          if (System.getenv("GRPC_PROXY_EXP") != null) {
+            ResolvedServerInfoGroup servers = ResolvedServerInfoGroup.builder()
+                .add(new ResolvedServerInfo(
+                    InetSocketAddress.createUnresolved(host, port), Attributes.EMPTY))
+                .build();
+            savedListener.onUpdate(Collections.singletonList(servers), Attributes.EMPTY);
+            return;
+          }
+
           try {
             inetAddrs = getAllByName(host);
           } catch (UnknownHostException e) {

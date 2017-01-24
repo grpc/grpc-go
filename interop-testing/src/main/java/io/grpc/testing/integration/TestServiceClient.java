@@ -43,9 +43,6 @@ import io.grpc.testing.TestUtils;
 import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.io.FileInputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -304,16 +301,6 @@ public class TestServiceClient {
     @Override
     protected ManagedChannel createChannel() {
       if (!useOkHttp) {
-        InetAddress address;
-        try {
-          address = InetAddress.getByName(serverHost);
-          if (serverHostOverride != null) {
-            // Force the hostname to match the cert the server uses.
-            address = InetAddress.getByAddress(serverHostOverride, address.getAddress());
-          }
-        } catch (UnknownHostException ex) {
-          throw new RuntimeException(ex);
-        }
         SslContext sslContext = null;
         if (useTestCa) {
           try {
@@ -323,7 +310,8 @@ public class TestServiceClient {
             throw new RuntimeException(ex);
           }
         }
-        return NettyChannelBuilder.forAddress(new InetSocketAddress(address, serverPort))
+        return NettyChannelBuilder.forAddress(serverHost, serverPort)
+            .overrideAuthority(serverHostOverride)
             .flowControlWindow(65 * 1024)
             .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
             .sslContext(sslContext)

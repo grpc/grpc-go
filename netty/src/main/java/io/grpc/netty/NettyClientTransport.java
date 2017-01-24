@@ -194,8 +194,9 @@ class NettyClientTransport implements ConnectionClientTransport {
      * that it may begin buffering writes.
      */
     b.handler(negotiationHandler);
+    channel = b.register().channel();
     // Start the connection operation to the server.
-    channel = b.connect(address).addListener(new ChannelFutureListener() {
+    channel.connect(address).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
         if (!future.isSuccess()) {
@@ -209,7 +210,7 @@ class NettyClientTransport implements ConnectionClientTransport {
           future.channel().pipeline().fireExceptionCaught(future.cause());
         }
       }
-    }).channel();
+    });
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
     // This write will have no effect, yet it will only complete once the negotiationHandler
