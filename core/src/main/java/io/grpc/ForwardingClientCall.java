@@ -77,6 +77,11 @@ public abstract class ForwardingClientCall<ReqT, RespT> extends ClientCall<ReqT,
     return delegate().isReady();
   }
 
+  @Override
+  public Attributes getAttributes() {
+    return delegate().getAttributes();
+  }
+
   /**
    * A simplified version of {@link ForwardingClientCall} where subclasses can pass in a {@link
    * ClientCall} as the delegate.
