@@ -110,7 +110,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
             .build())
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
             TestUtils.TEST_SERVER_HOST, getPort()));
-    io.grpc.internal.TestUtils.setStatsContextFactory(builder, getClientStatsFactory());
+    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
     try {
       builder.sslSocketFactory(TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
               TestUtils.loadCert("ca.pem")));

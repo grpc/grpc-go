@@ -75,7 +75,7 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
         .channelType(LocalChannel.class)
         .flowControlWindow(65 * 1024)
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
-    io.grpc.internal.TestUtils.setStatsContextFactory(builder, getClientStatsFactory());
+    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
     return builder.build();
   }
 }

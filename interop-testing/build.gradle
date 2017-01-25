@@ -16,10 +16,6 @@ dependencies {
             libraries.mockito,
             libraries.netty_tcnative,
             libraries.oauth_client
-
-    // Tests depend on base class defined by core module.
-    compile project(':grpc-core').sourceSets.test.output
-    testCompile project(':grpc-core').sourceSets.test.output
 }
 
 test {

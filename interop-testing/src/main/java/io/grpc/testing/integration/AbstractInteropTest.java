@@ -152,7 +152,7 @@ public abstract class AbstractInteropTest {
     builder.addService(ServerInterceptors.intercept(
         new TestServiceImpl(testServiceExecutor),
         allInterceptors));
-    io.grpc.internal.TestUtils.setStatsContextFactory(builder, serverStatsFactory);
+    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, serverStatsFactory);
     try {
       server = builder.build().start();
     } catch (IOException ex) {

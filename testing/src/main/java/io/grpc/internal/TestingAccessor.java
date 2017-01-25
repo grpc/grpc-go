@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, Google Inc. All rights reserved.
+ * Copyright 2017, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,42 +29,30 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.testing.integration;
+package io.grpc.internal;
 
-import io.grpc.ManagedChannel;
-import io.grpc.netty.HandlerSettings;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.NettyServerBuilder;
+import com.google.instrumentation.stats.StatsContextFactory;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
-@RunWith(JUnit4.class)
-public class AutoWindowSizingOnTest extends AbstractInteropTest {
-
-  @BeforeClass
-  public static void turnOnAutoWindow() {
-    HandlerSettings.enable(true);
-    HandlerSettings.autoWindowOn(true);
-    startStaticServer(
-        NettyServerBuilder.forPort(0)
-            .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE));
+/**
+ * Test helper that allows accessing package-private stuff.
+ */
+public final class TestingAccessor {
+  /**
+   * Sets a custom {@link StatsContextFactory} for tests.
+   */
+  public static void setStatsContextFactory(
+      AbstractManagedChannelImplBuilder<?> builder, StatsContextFactory factory) {
+    builder.statsContextFactory(factory);
   }
 
-  @AfterClass
-  public static void shutdown() {
-    stopStaticServer();
+  /**
+   * Sets a custom {@link StatsContextFactory} for tests.
+   */
+  public static void setStatsContextFactory(
+      AbstractServerImplBuilder<?> builder, StatsContextFactory factory) {
+    builder.statsContextFactory(factory);
   }
 
-  @Override
-  protected ManagedChannel createChannel() {
-    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("localhost", getPort())
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
-    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
-    return builder.build();
+  private TestingAccessor() {
   }
 }
