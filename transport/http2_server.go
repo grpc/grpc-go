@@ -36,7 +36,6 @@ package transport
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -90,6 +89,11 @@ type http2Server struct {
 	sendQuotaPool *quotaPool
 
 	stats stats.Handler
+
+	// Tos value for this transport.
+	tos int
+	// Hook for callback to retrieve tos value from conn.
+	getTOS func(net.Conn) int
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -150,6 +154,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
 		stats:           config.StatsHandler,
+		getTOS:          config.GetTOS,
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -286,6 +291,18 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		return
 	}
 
+	// TOS values are only set at client. Thus, the server needs to recieve
+	// data from client first in order to read what tos was set.
+	// Note: the user must provide a callback to retrieve such a recieved tos
+	// value and the kernel must support such an operation.
+	if t.getTOS != nil {
+		t.tos = t.getTOS(t.conn)
+	} else {
+		// If the user doesn't provide a callback to retrieve recieved tos
+		// from socket. Use the default method to get socket's tos value.
+		t.tos = defaultGetTOS(t.conn)
+	}
+
 	frame, err := t.framer.readFrame()
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		t.Close()
@@ -347,6 +364,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
 	}
+}
+
+func (t *http2Server) GetTOS() int {
+	return t.tos
 }
 
 func (t *http2Server) getStream(f http2.Frame) (*Stream, bool) {

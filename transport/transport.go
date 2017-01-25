@@ -362,6 +362,7 @@ type ServerConfig struct {
 	AuthInfo     credentials.AuthInfo
 	InTapHandle  tap.ServerInHandle
 	StatsHandler stats.Handler
+	GetTOS       func(net.Conn) int
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -384,6 +385,8 @@ type ConnectOptions struct {
 	TransportCredentials credentials.TransportCredentials
 	// StatsHandler stores the handler for stats.
 	StatsHandler stats.Handler
+	// GetTOS is a hook for a callback to retrieve tos.
+	GetTOS func(net.Conn) int
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
@@ -605,4 +608,31 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 	case i := <-proceed:
 		return i, nil
 	}
+}
+
+const (
+	// DefaultTOS is the default value for TOS
+	DefaultTOS = 0
+)
+
+// Default implementation to fallback to when user doesn't provide getTos mechanism
+// getTOS retrieves tos value for a connection
+// If an error occurs it returns the default value for tos
+func defaultGetTOS(conn net.Conn) int {
+	var fd int
+	switch conn := conn.(type) {
+	case *net.TCPConn, *net.UDPConn, *net.UnixConn:
+		fd = int(reflect.ValueOf(conn).Elem().FieldByName("conn").FieldByName("fd").Elem().FieldByName("sysfd").Int())
+	default:
+		// Can't retrieve tos without access to file descriptor.
+		grpclog.Println("Couldn't retrieve tos value: Unknown connection type")
+		return DefaultTOS
+	}
+	tos, err := syscall.GetsockoptInt(fd, syscall.SOL_IP, syscall.IP_TOS)
+	if err != nil {
+		grpclog.Println("Couldn't retrieve tos value:", err)
+		return DefaultTOS
+	}
+
+	return tos
 }

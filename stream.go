@@ -561,6 +561,15 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
+func (ss *serverStream) GetTOS() int {
+	if st, ok := ss.t.(interface {
+		GetTOS() int
+	}); ok {
+		return st.GetTOS()
+	}
+	return transport.DefaultTOS
+}
+
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
