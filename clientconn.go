@@ -104,7 +104,7 @@ type dialOptions struct {
 type DialOption func(*dialOptions)
 
 // WithTOSCallback returns a DialOption which provides tranpsort a mechanism to retrieve tos
-func WithTOSCallback( f func(net.Conn) int) DialOption {
+func WithTOSCallback(f func(net.Conn) int) DialOption {
 	return func(o *dialOptions) {
 		o.copts.GetTOS = f
 	}

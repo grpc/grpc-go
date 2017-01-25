@@ -85,7 +85,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
 	}
 	c.trailerMD = stream.Trailer()
-	if v, ok := t.(interface{
+	if v, ok := t.(interface {
 		GetTOS() int
 	}); ok {
 		c.tos = v.GetTOS()

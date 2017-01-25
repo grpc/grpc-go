@@ -288,7 +288,7 @@ type clientStream struct {
 }
 
 func (cs *clientStream) GetTOS() int {
-	if ct, ok := cs.t.(interface{
+	if ct, ok := cs.t.(interface {
 		GetTOS() int
 	}); ok {
 		return ct.GetTOS()
