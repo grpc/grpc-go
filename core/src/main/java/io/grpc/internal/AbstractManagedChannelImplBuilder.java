@@ -112,11 +112,10 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private NameResolver.Factory nameResolverFactory;
 
-  @Nullable
   private LoadBalancer.Factory loadBalancerFactory;
 
   @Nullable
-  private LoadBalancer2.Factory loadBalancer2Factory;
+  private ChannelFactory channelFactory;
 
   @Nullable
   private DecompressorRegistry decompressorRegistry;
@@ -206,17 +205,38 @@ public abstract class AbstractManagedChannelImplBuilder
         "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
         directServerAddress);
     this.loadBalancerFactory = loadBalancerFactory;
+    this.channelFactory = null;
     return thisT();
   }
 
   /**
    * DO NOT CALL THIS, as its argument type will soon be renamed.
    */
-  public final T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory) {
+  public final T loadBalancerFactory(final LoadBalancer2.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
         directServerAddress);
-    this.loadBalancer2Factory = loadBalancerFactory;
+    this.channelFactory = new ChannelFactory() {
+        @Override
+        public ManagedChannel create(ClientTransportFactory transportFactory) {
+          return new ManagedChannelImpl2(
+              target,
+              // TODO(carl-mastrangelo): Allow clients to pass this in
+              new ExponentialBackoffPolicy.Provider(),
+              nameResolverFactory,
+              getNameResolverParams(),
+              loadBalancerFactory,
+              transportFactory,
+              firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
+              firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
+              SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
+              getExecutorPool(executor),
+              SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
+              GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
+              userAgent, interceptors, firstNonNull(statsFactory,
+              firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
+        }
+      };
     return thisT();
   }
 
@@ -294,23 +314,8 @@ public abstract class AbstractManagedChannelImplBuilder
       // getResource(), then this shouldn't be a problem unless called on the UI thread.
       nameResolverFactory = NameResolverProvider.asFactory();
     }
-    if (loadBalancer2Factory != null) {
-      return new ManagedChannelImpl2(
-          target,
-          // TODO(carl-mastrangelo): Allow clients to pass this in
-          new ExponentialBackoffPolicy.Provider(),
-          nameResolverFactory,
-          getNameResolverParams(),
-          loadBalancer2Factory,
-          transportFactory,
-          firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
-          firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-          SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-          getExecutorPool(executor),
-          SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
-          GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
-          userAgent, interceptors, firstNonNull(statsFactory,
-              firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
+    if (channelFactory != null) {
+      return channelFactory.create(transportFactory);
     } else {
       return new ManagedChannelImpl(
           target,
@@ -428,5 +433,14 @@ public abstract class AbstractManagedChannelImplBuilder
     @SuppressWarnings("unchecked")
     T thisT = (T) this;
     return thisT;
+  }
+
+  /**
+   * A temporary solution to contain the reference to ManagedChannelImpl2 in the v2 LoadBalancer
+   * setter, so that on Android ManagedChannelImpl2 can be stripped out by ProGuard since the v2
+   * setter will not be called.  This should be deleted along with the old ManagedChannelImpl.
+   */
+  private interface ChannelFactory {
+    ManagedChannel create(ClientTransportFactory transportFactory);
   }
 }
