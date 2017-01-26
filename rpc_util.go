@@ -492,11 +492,11 @@ type MethodConfig struct {
 	// by the application via the gRPC client API. If either one is not set, then the other
 	// will be used.  If neither is set, then the built-in default is used.
 	// TODO: support this.
-	MaxReqSize uint64
+	MaxReqSize uint32
 	// MaxRespSize is the maximum allowed payload size for an individual response in a
 	// stream (server->client) in bytes.
 	// TODO: support this.
-	MaxRespSize uint64
+	MaxRespSize uint32
 }
 
 // ServiceConfig is provided by the service provider and contains parameters for how
