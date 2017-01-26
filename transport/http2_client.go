@@ -99,7 +99,6 @@ type http2Client struct {
 
 	creds []credentials.PerRPCCredentials
 
-	statsHandler stats.Handler
 	// ToS value for this transport.
 	tos int
 
@@ -270,6 +269,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	go t.controller()
 	t.writableChan <- 0
 	return t, nil
+}
+
+func (t *http2Client) GetTOS() int {
+	return t.tos
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {

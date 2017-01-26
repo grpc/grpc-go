@@ -458,7 +458,7 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		AuthInfo:     authInfo,
 		InTapHandle:  s.opts.inTapHandle,
 		StatsHandler: s.opts.statsHandler,
-		GetTOS:      s.opts.GetTOS,
+		GetTOS:       s.opts.GetTOS,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
