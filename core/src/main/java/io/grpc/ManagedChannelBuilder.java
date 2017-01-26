@@ -159,9 +159,28 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
    * for the channel.
+   *
+   * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer2.Factory)}.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
+
+  /**
+   * Provides a custom {@link LoadBalancer2.Factory} for the channel.
+   *
+   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
+   * for the channel.
+   *
+   * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer.Factory)}.
+   *
+   * <p><strong>IMPORTANT: </strong>Calling this will make the channel to run the LBv2 code path,
+   * which is new and not as well-exercised as the current one.  You should use it only if you want
+   * to try out LBv2, or you are migrating your LoadBalancer implementation to LBv2.  See
+   * <a href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more
+   * information.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
+  public abstract T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory);
 
   /**
    * Set the decompression registry for use in the channel.  This is an advanced API call and

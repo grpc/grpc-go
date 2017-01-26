@@ -206,9 +206,7 @@ public abstract class AbstractManagedChannelImplBuilder
     return thisT();
   }
 
-  /**
-   * DO NOT CALL THIS, as its argument type will soon be renamed.
-   */
+  @Override
   public final T loadBalancerFactory(final LoadBalancer2.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",

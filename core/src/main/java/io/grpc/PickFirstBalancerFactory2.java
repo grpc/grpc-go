@@ -39,9 +39,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link LoadBalancer} that provides no load balancing mechanism over the
+ * A {@link LoadBalancer2} that provides no load balancing mechanism over the
  * addresses from the {@link NameResolver}.  The channel's default behavior
  * (currently pick-first) is used for all addresses found.
+ *
+ * <p><strong>TECHNICAL PREVIEW: </strong>The name of this class is temporary. It will be renamed to
+ * {@code PickFirstBalancerFactory} during <a href="https://github.com/grpc/grpc-java/issues/2656"
+ * target="_blank">the transition to LBv2</a>. You should use it only if you want to experiment the
+ * LBv2 code path.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 public final class PickFirstBalancerFactory2 extends LoadBalancer2.Factory {

@@ -43,8 +43,10 @@ import javax.annotation.concurrent.ThreadSafe;
  * channel a usable subchannel when asked.  This is the new interface that will replace {@link
  * LoadBalancer}.
  *
- * <p><strong>Warning: this is still in developement.  Consult gRPC team before starting any related
- * work.</strong>
+ * <p><strong>IMPORTANT NOTICE FOR IMPLEMENTORS: </strong>The name of this class is temporary.  It
+ * will be renamed to {@code LoadBalancer} eventually.  Make sure you have read through <a
+ * href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> to understand the
+ * transition path.
  *
  * <h3>Overview</h3>
  *
@@ -61,7 +63,7 @@ import javax.annotation.concurrent.ThreadSafe;
  *
  * <p>{@link Helper Helper} is implemented by gRPC library and provided to {@link Factory
  * Factory}. It provides functionalities that a {@code LoadBalancer2} implementation would typically
- * need.</li>
+ * need.
  *
  * <h3>Channel Executor</h3>
  *
@@ -109,7 +111,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * the pattern above.  It may be possible to implement in a different way, but that would usually
  * result in more complicated threading.
  */
-@Internal
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 @NotThreadSafe
 public abstract class LoadBalancer2 {
   /**

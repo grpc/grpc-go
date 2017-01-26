@@ -69,6 +69,11 @@ import javax.annotation.concurrent.GuardedBy;
  * addresses from the {@link NameResolver}.  The sub-lists received from the name resolver
  * are considered to be an {@link EquivalentAddressGroup} and each of these sub-lists is
  * what is then balanced across.
+ *
+ * <p><strong>TECHNICAL PREVIEW: </strong>The name of this class is temporary. It will be renamed to
+ * {@code RoundRobinLoadBalancerFactory} during the
+ * <a href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">transition to LBv2</a>.
+ * You should use it only if you want to experiment the LBv2 code path.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
