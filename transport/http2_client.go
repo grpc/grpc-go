@@ -39,7 +39,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -852,48 +851,14 @@ func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 }
 
-// decodeHeader reads header fields from a header frame and returns decodeState.
-func decodeHeader(frame *http2.MetaHeadersFrame) decodeState {
-	var d decodeState
-	for _, hf := range frame.Fields {
-		d.processHeaderField(hf)
-	}
-	if d.err != nil {
-		return d
-	}
-	// If gRPC status exists, no need to check further.
-	if d.statusExists {
-		return d
-	}
-	// If gRPC status doesn't exist and http status doesn't exist then set error.
-	if !d.hstatusExists {
-		d.setErr(streamErrorf(codes.Internal, "Malformed http header"))
-		return d
-	}
-	// If https status exists but status code is not OK then set error.
-	if d.hstatusCode != http.StatusOK {
-		gcode, ok := httpStatusConvTab[d.hstatusCode]
-		if !ok {
-			gcode = codes.Unknown
-		}
-		d.setErr(streamErrorf(gcode, http.StatusText(d.hstatusCode)))
-		return d
-	}
-	// gRPC status doesn't exist and https status is OK.
-	// Set state.statusCode to UNKNOWN.
-	// If the stream hasn't ended this status code will be ignored.
-	// If the stream has ended missing grpc-status puts state to be UNKNOWN.
-	d.statusCode = codes.Unknown
-	return d
-}
-
 // operateHeaders takes action on the decoded headers.
 func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	s, ok := t.getStream(frame)
 	if !ok {
 		return
 	}
-	state := decodeHeader(frame)
+	var state decodeState
+	state.decodeHeader(frame)
 	if state.err != nil {
 		s.mu.Lock()
 		if !s.headerDone {

@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -162,6 +163,40 @@ func validContentType(t string) bool {
 		return false
 	}
 	return true
+}
+
+// decodeHeader reads header fields from a header frame and returns decodeState.
+func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) {
+	for _, hf := range frame.Fields {
+		d.processHeaderField(hf)
+	}
+	if d.err != nil {
+		return
+	}
+	// If gRPC status exists, no need to check further.
+	if d.statusExists {
+		return
+	}
+	// If gRPC status doesn't exist and http status doesn't exist then set error.
+	if !d.hstatusExists {
+		d.setErr(streamErrorf(codes.Internal, "Malformed http header"))
+		return
+	}
+	// If https status exists but status code is not OK then set error.
+	if d.hstatusCode != http.StatusOK {
+		gcode, ok := httpStatusConvTab[d.hstatusCode]
+		if !ok {
+			gcode = codes.Unknown
+		}
+		d.setErr(streamErrorf(gcode, http.StatusText(d.hstatusCode)))
+		return
+	}
+	// gRPC status doesn't exist and https status is OK.
+	// Set state.statusCode to UNKNOWN.
+	// If the stream hasn't ended this status code will be ignored.
+	// If the stream has ended missing grpc-status puts state to be UNKNOWN.
+	d.statusCode = codes.Unknown
+	return
 }
 
 func (d *decodeState) processHeaderField(f hpack.HeaderField) {

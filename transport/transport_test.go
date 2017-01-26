@@ -843,18 +843,14 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	done := make(chan error, 1)
 	// Launch an HTTP server to send back header with httpStatus.
 	go func() {
-		var err error
-		defer func() {
-			done <- err
-		}()
 		conn, err := lis.Accept()
 		if err != nil {
 			t.Errorf("Error at server-side while accpeting: %v", err)
 			return
 		}
+		defer conn.Close()
 		// Read the preface sent by client.
 		if _, err = io.ReadFull(conn, make([]byte, len(http2.ClientPreface))); err != nil {
 			t.Errorf("Error at server-side while reading from conn: %v", err)
@@ -898,17 +894,15 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int) {
 	if err != nil {
 		t.Fatalf("Error creating stream on client transport :%v", err)
 	}
-	// wait for the server to send header with http status or fail.
-	if err = <-done; err != nil {
-		// Error already printed out once.
-		return
-	}
-	want := "code = " + fmt.Sprint(uint32(httpStatusConvTab[httpStatus]))
+	expctCode := httpStatusConvTab[httpStatus]
 	if _, err = stream.Read([]byte{}); err == nil {
-		t.Fatalf("Strean err is nil, want err with code: %s", want)
+		t.Fatalf("Strean err is nil, want err with code: %v", expctCode)
 	}
-	got := err.Error()
-	if !strings.Contains(got, want) {
-		t.Fatalf("Stream error code not what expected. Stream error: %s, want error with code: %s", got, want)
+	serr, ok := err.(StreamError)
+	if !ok {
+		t.Fatalf("Expected error type to be transport.StreamError, got %T:", err)
+	}
+	if expctCode != serr.Code {
+		t.Fatalf("Test failed: Expected error code to be: %v, got: %v", expctCode, serr.Code)
 	}
 }
