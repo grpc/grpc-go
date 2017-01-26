@@ -34,7 +34,6 @@ package io.grpc.internal;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-
 import java.util.concurrent.Executor;
 import javax.annotation.concurrent.ThreadSafe;
 

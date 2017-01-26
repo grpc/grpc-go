@@ -42,9 +42,9 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
-
 import io.grpc.TransportManager.InterimTransport;
-
+import java.net.SocketAddress;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,9 +53,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.net.SocketAddress;
-import java.util.List;
 
 /** Unit test for {@link PickFirstBalancerFactory}. */
 @RunWith(JUnit4.class)

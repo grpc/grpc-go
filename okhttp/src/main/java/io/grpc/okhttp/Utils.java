@@ -32,14 +32,12 @@
 package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.CipherSuite;
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.framed.Header;
-
 import java.util.List;
 
 /**

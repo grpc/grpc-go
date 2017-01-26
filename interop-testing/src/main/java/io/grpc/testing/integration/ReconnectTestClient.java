@@ -34,7 +34,6 @@ package io.grpc.testing.integration;
 import static org.junit.Assert.assertTrue;
 
 import com.google.protobuf.EmptyProtos.Empty;
-
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NegotiationType;

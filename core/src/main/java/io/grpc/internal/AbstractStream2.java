@@ -35,13 +35,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
-
 import java.io.InputStream;
-
 import javax.annotation.concurrent.GuardedBy;
 
 /**

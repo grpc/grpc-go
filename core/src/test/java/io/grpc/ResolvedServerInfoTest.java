@@ -36,11 +36,10 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
+import java.net.InetSocketAddress;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 
 @RunWith(JUnit4.class)
 public class ResolvedServerInfoTest {

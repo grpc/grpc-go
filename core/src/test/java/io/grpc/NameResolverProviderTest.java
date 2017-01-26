@@ -40,15 +40,13 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import io.grpc.internal.DnsNameResolverProvider;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.ServiceConfigurationError;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link NameResolverProvider}. */
 @RunWith(JUnit4.class)

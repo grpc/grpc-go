@@ -34,7 +34,6 @@ package io.grpc.benchmarks.netty;
 import io.grpc.CallOptions;
 import io.grpc.stub.ClientCalls;
 import io.netty.buffer.Unpooled;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;

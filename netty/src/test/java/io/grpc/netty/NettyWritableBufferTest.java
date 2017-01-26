@@ -34,13 +34,11 @@ package io.grpc.netty;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.internal.WritableBufferTestBase;
 import io.netty.buffer.Unpooled;
-
+import java.util.Arrays;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Arrays;
 
 /**
  * Tests for {@link NettyWritableBuffer}.

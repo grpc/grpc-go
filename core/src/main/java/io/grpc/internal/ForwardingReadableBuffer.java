@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;

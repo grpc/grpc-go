@@ -42,17 +42,16 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
-
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
-
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
-
+import java.net.SocketAddress;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -63,9 +62,6 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-
-import java.net.SocketAddress;
-import java.util.List;
 
 /** Unit test for {@link RoundRobinLoadBalancerFactory}. */
 @RunWith(JUnit4.class)

@@ -35,14 +35,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
 import com.google.instrumentation.stats.StatsContextFactory;
-
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
-
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 

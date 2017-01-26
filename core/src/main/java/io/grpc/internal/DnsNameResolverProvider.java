@@ -32,10 +32,8 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.Attributes;
 import io.grpc.NameResolverProvider;
-
 import java.net.URI;
 
 /**

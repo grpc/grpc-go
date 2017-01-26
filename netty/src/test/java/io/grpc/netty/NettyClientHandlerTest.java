@@ -60,7 +60,6 @@ import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -87,7 +86,8 @@ import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
-
+import java.io.InputStream;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -98,9 +98,6 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.io.InputStream;
-import java.util.List;
 
 /**
  * Tests for {@link NettyClientHandler}.

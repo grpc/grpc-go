@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import io.grpc.internal.ClientTransport.PingCallback;
-
 import java.util.concurrent.Executor;
 
 /**

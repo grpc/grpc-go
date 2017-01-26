@@ -32,7 +32,6 @@
 package io.grpc.thrift;
 
 import io.grpc.ExperimentalApi;
-
 import org.apache.thrift.TBase;
 
 /** 

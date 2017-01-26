@@ -32,7 +32,6 @@
 package io.grpc;
 
 import com.google.common.base.Supplier;
-
 import java.util.Collection;
 
 /**

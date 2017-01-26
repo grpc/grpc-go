@@ -41,7 +41,6 @@ import static io.netty.handler.codec.http2.DefaultHttp2LocalFlowController.DEFAU
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
 import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
@@ -80,7 +79,6 @@ import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
 import io.netty.handler.logging.LogLevel;
 import io.netty.util.ReferenceCountUtil;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;

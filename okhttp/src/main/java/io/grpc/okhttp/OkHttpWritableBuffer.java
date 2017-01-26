@@ -32,7 +32,6 @@
 package io.grpc.okhttp;
 
 import io.grpc.internal.WritableBuffer;
-
 import okio.Buffer;
 
 class OkHttpWritableBuffer implements WritableBuffer {

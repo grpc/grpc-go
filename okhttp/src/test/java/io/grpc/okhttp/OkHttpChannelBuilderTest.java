@@ -36,17 +36,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import com.squareup.okhttp.ConnectionSpec;
-
 import io.grpc.NameResolver;
 import io.grpc.internal.GrpcUtil;
-
+import java.net.InetSocketAddress;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 
 /**
  * Tests for {@link OkHttpChannelBuilder}.

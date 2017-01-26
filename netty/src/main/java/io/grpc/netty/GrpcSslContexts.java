@@ -44,7 +44,6 @@ import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
-
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;

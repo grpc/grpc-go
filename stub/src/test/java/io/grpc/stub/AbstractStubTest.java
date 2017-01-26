@@ -36,7 +36,6 @@ import static org.junit.Assert.assertTrue;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

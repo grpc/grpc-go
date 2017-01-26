@@ -32,7 +32,6 @@
 package io.grpc.testing.integration;
 
 import com.google.common.io.Files;
-
 import io.grpc.ManagedChannel;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.GrpcSslContexts;
@@ -42,14 +41,12 @@ import io.grpc.okhttp.OkHttpChannelBuilder;
 import io.grpc.okhttp.internal.Platform;
 import io.grpc.testing.TestUtils;
 import io.netty.handler.ssl.SslContext;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-
 import javax.net.ssl.SSLSocketFactory;
 
 /**

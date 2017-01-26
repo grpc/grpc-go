@@ -48,7 +48,6 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -56,7 +55,10 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
-
+import java.io.IOException;
+import java.net.URI;
+import java.util.Date;
+import java.util.concurrent.Executor;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -66,11 +68,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-
-import java.io.IOException;
-import java.net.URI;
-import java.util.Date;
-import java.util.concurrent.Executor;
 
 /**
  * Tests for {@link ClientAuthInterceptor}.

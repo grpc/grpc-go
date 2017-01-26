@@ -38,12 +38,10 @@ import static org.junit.Assert.fail;
 
 import io.grpc.Attributes;
 import io.grpc.NameResolverProvider;
-
+import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.URI;
 
 /** Unit tests for {@link DnsNameResolverProvider}. */
 @RunWith(JUnit4.class)

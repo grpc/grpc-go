@@ -32,9 +32,7 @@
 package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.ManagedChannelProvider.ProviderNotFoundException;
-
 import java.util.ServiceLoader;
 
 /**

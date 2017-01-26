@@ -34,7 +34,6 @@ package io.grpc.benchmarks;
 import static io.grpc.benchmarks.Utils.pickUnusedPort;
 
 import com.google.protobuf.ByteString;
-
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
@@ -56,7 +55,8 @@ import io.netty.channel.ServerChannel;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
-
+import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Mode;
@@ -66,9 +66,6 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
-
-import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
 
 /** Some text. */
 @State(Scope.Benchmark)

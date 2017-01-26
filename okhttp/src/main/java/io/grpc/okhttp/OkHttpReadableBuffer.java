@@ -33,7 +33,6 @@ package io.grpc.okhttp;
 
 import io.grpc.internal.AbstractReadableBuffer;
 import io.grpc.internal.ReadableBuffer;
-
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;

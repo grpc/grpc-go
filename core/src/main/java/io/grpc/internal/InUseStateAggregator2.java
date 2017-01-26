@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import java.util.HashSet;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**

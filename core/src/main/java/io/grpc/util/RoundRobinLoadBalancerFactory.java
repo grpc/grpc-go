@@ -32,7 +32,6 @@
 package io.grpc.util;
 
 import com.google.common.base.Supplier;
-
 import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
@@ -43,7 +42,6 @@ import io.grpc.Status;
 import io.grpc.TransportManager;
 import io.grpc.TransportManager.InterimTransport;
 import io.grpc.internal.RoundRobinServerList;
-
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.concurrent.GuardedBy;

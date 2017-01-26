@@ -32,7 +32,6 @@
 package io.grpc;
 
 import com.google.common.base.Preconditions;
-
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;

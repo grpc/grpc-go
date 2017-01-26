@@ -35,7 +35,6 @@ import static java.util.concurrent.ForkJoinPool.defaultForkJoinWorkerThreadFacto
 
 import com.google.common.util.concurrent.UncaughtExceptionHandlers;
 import com.google.protobuf.ByteString;
-
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -60,9 +59,6 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.util.concurrent.DefaultThreadFactory;
-
-import org.HdrHistogram.Histogram;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -75,9 +71,9 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
 import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocketFactory;
+import org.HdrHistogram.Histogram;
 
 /**
  * Utility methods to support benchmarking classes.

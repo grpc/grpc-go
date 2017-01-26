@@ -33,7 +33,6 @@ package io.grpc;
 
 import java.util.Collections;
 import java.util.List;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 

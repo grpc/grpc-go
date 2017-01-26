@@ -33,13 +33,10 @@ package io.grpc.protobuf.nano;
 
 import com.google.protobuf.nano.CodedOutputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
-
 import io.grpc.KnownLength;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
 import javax.annotation.Nullable;
 
 /**

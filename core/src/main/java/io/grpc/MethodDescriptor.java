@@ -34,10 +34,8 @@ package io.grpc;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
-
 import java.io.InputStream;
 import java.util.concurrent.atomic.AtomicReferenceArray;
-
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;

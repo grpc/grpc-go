@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
-
 import java.net.SocketAddress;
 
 /**

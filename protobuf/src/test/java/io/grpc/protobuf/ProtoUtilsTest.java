@@ -37,19 +37,16 @@ import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
 import com.google.protobuf.Type;
-
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 
 /** Unit tests for {@link ProtoUtils}. */
 @RunWith(JUnit4.class)

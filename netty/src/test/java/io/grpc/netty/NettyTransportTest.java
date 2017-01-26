@@ -35,14 +35,12 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
-
+import java.net.InetSocketAddress;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 
 /** Unit tests for Netty transport. */
 @RunWith(JUnit4.class)

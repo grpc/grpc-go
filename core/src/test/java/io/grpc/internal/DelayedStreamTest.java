@@ -50,7 +50,8 @@ import io.grpc.Attributes.Key;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
-
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -62,9 +63,6 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 
 /**
  * Tests for {@link DelayedStream}.  Most of the state checking is enforced by

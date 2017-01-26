@@ -36,15 +36,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.auth.Credentials;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.BaseEncoding;
-
 import io.grpc.Attributes;
-import io.grpc.CallCredentials.MetadataApplier;
 import io.grpc.CallCredentials;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusException;
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.net.URI;

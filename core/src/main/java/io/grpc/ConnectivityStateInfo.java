@@ -33,8 +33,6 @@ package io.grpc;
 
 import com.google.common.base.Preconditions;
 
-import io.grpc.Status;
-
 /**
  * A tuple of a {@link ConnectivityState} and its associated {@link Status}.
  *

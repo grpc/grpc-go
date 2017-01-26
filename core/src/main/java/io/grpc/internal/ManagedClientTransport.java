@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import io.grpc.Status;
-
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;

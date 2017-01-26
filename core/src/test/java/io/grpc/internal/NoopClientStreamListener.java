@@ -33,7 +33,6 @@ package io.grpc.internal;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
-
 import java.io.InputStream;
 
 /**

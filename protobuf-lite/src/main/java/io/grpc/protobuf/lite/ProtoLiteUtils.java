@@ -38,7 +38,6 @@ import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
-
 import io.grpc.ExperimentalApi;
 import io.grpc.KnownLength;
 import io.grpc.Metadata;
@@ -46,7 +45,6 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.PrototypeMarshaller;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.Reference;

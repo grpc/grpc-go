@@ -40,17 +40,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.io.BaseEncoding;
-
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Metadata.BinaryMarshaller;
 import io.grpc.Metadata.Key;
-
+import java.util.Arrays;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Arrays;
 
 /** Unit tests for {@link TransportFrameUtil}. */
 @RunWith(JUnit4.class)

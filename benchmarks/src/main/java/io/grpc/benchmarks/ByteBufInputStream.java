@@ -34,7 +34,6 @@ package io.grpc.benchmarks;
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
 import io.netty.buffer.ByteBuf;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;

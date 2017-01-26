@@ -42,16 +42,13 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Objects;
-
 import io.grpc.Attributes.Key;
 import io.grpc.internal.SerializingExecutor;
-
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link CallOptions}. */
 @RunWith(JUnit4.class)

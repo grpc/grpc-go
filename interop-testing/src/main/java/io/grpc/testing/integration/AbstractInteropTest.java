@@ -58,7 +58,6 @@ import com.google.instrumentation.stats.TagValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 import com.google.protobuf.MessageLite;
-
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.Grpc;
@@ -90,16 +89,6 @@ import io.grpc.testing.integration.Messages.StreamingInputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingInputCallResponse;
 import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
-import org.mockito.verification.VerificationMode;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.cert.Certificate;
@@ -114,9 +103,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.mockito.verification.VerificationMode;
 
 /**
  * Abstract base class for all GRPC transport tests.

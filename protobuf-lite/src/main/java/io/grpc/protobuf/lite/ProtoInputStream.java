@@ -35,15 +35,12 @@ import com.google.common.io.ByteStreams;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
-
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-
 import javax.annotation.Nullable;
 
 /**

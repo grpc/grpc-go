@@ -38,16 +38,12 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.okhttp.internal.framed.FrameWriter;
-
-import okio.Buffer;
-
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Queue;
-
 import javax.annotation.Nullable;
+import okio.Buffer;
 
 /**
  * Simple outbound flow controller that evenly splits the connection window across all existing

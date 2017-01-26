@@ -35,16 +35,13 @@ import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.Metadata;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.TransportFrameUtil;
 import io.grpc.okhttp.internal.framed.Header;
-
-import okio.ByteString;
-
 import java.util.ArrayList;
 import java.util.List;
+import okio.ByteString;
 
 /**
  * Constants for request/response headers.

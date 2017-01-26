@@ -36,7 +36,6 @@ import static junit.framework.TestCase.assertTrue;
 
 import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.Stats;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

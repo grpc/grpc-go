@@ -35,7 +35,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractServerImplBuilder;
@@ -44,11 +43,9 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
-
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 

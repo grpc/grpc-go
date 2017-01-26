@@ -45,16 +45,14 @@ import static org.mockito.Mockito.verify;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
-
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 
 /**
  * Tests for {@link AbstractServerStream}.

@@ -39,7 +39,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.instrumentation.stats.Stats;
 import com.google.instrumentation.stats.StatsContextFactory;
-
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
@@ -53,7 +52,6 @@ import io.grpc.NameResolverProvider;
 import io.grpc.PickFirstBalancerFactory;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
-
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -62,7 +60,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
-
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 

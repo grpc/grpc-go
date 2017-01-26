@@ -33,16 +33,14 @@ package io.grpc;
 
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.testing.TestMethodDescriptors;
-
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 
 /**
  * Tests for {@link ServiceDescriptor}.

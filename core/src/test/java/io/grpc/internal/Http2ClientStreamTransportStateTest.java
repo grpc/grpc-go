@@ -43,7 +43,6 @@ import static org.mockito.Mockito.verify;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

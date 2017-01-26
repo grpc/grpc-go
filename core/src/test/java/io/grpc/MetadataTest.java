@@ -42,19 +42,16 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
-
 import io.grpc.Metadata.Key;
 import io.grpc.internal.GrpcUtil;
-
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Locale;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Locale;
 
 /**
  * Tests for {@link Metadata}.

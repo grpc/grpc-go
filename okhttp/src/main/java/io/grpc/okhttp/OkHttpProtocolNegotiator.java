@@ -34,18 +34,15 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.okhttp.internal.OptionalMethod;
 import io.grpc.okhttp.internal.Platform;
 import io.grpc.okhttp.internal.Protocol;
 import io.grpc.okhttp.internal.Util;
-
 import java.io.IOException;
 import java.net.Socket;
 import java.security.Provider;
 import java.security.Security;
 import java.util.List;
-
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocket;
 

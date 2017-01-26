@@ -35,20 +35,17 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos;
-
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages;
 import io.grpc.testing.integration.TestServiceGrpc;
-
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runners.model.Statement;
-
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runners.model.Statement;
 
 public class GrpcServerRuleTest {
 

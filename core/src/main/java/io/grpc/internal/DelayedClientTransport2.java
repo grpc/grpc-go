@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.LoadBalancer2.PickResult;
@@ -40,12 +39,10 @@ import io.grpc.LoadBalancer2.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 

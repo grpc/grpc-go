@@ -41,10 +41,8 @@ import com.google.instrumentation.stats.StatsContext;
 import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagKey;
 import com.google.instrumentation.stats.TagValue;
-
 import io.grpc.Metadata;
 import io.grpc.Status;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

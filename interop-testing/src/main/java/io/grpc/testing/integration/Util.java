@@ -32,13 +32,10 @@
 package io.grpc.testing.integration;
 
 import com.google.protobuf.MessageLite;
-
 import io.grpc.Metadata;
 import io.grpc.protobuf.ProtoUtils;
-
-import org.junit.Assert;
-
 import java.util.List;
+import org.junit.Assert;
 
 /**
  * Utility methods to support integration testing.

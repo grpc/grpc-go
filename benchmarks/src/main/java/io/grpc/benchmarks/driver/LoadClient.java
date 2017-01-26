@@ -32,7 +32,6 @@
 package io.grpc.benchmarks.driver;
 
 import com.sun.management.OperatingSystemMXBean;
-
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -52,12 +51,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.epoll.Epoll;
 import io.netty.util.concurrent.DefaultThreadFactory;
-
-import org.HdrHistogram.Histogram;
-import org.HdrHistogram.LogarithmicIterator;
-import org.HdrHistogram.Recorder;
-import org.apache.commons.math3.distribution.ExponentialDistribution;
-
 import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -68,6 +61,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.HdrHistogram.Histogram;
+import org.HdrHistogram.LogarithmicIterator;
+import org.HdrHistogram.Recorder;
+import org.apache.commons.math3.distribution.ExponentialDistribution;
 
 /**
  * Implements the client-side contract for the load testing scenarios.

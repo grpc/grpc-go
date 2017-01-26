@@ -32,9 +32,7 @@
 package io.grpc;
 
 import com.google.errorprone.annotations.DoNotMock;
-
 import java.net.SocketAddress;
-
 import javax.net.ssl.SSLSession;
 
 /**

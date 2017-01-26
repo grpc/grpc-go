@@ -39,7 +39,6 @@ import static org.junit.Assert.assertTrue;
 
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil.Http2Error;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;

@@ -32,11 +32,10 @@
 package io.grpc.internal.testing;
 
 import io.grpc.internal.ClientTransportFactory;
+import java.net.InetSocketAddress;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 
 @RunWith(JUnit4.class)
 public abstract class AbstractClientTransportFactoryTest {

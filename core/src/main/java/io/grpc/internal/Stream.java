@@ -33,7 +33,6 @@ package io.grpc.internal;
 
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
-
 import java.io.InputStream;
 
 /**

@@ -53,7 +53,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.io.ByteStreams;
-
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -78,7 +77,7 @@ import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
-
+import java.io.InputStream;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -87,8 +86,6 @@ import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.io.InputStream;
 
 /**
  * Unit tests for {@link NettyServerHandler}.

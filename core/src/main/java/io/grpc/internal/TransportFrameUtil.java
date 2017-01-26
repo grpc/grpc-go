@@ -34,10 +34,8 @@ package io.grpc.internal;
 import static com.google.common.base.Charsets.US_ASCII;
 
 import com.google.common.io.BaseEncoding;
-
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
-
 import java.util.Arrays;
 import java.util.logging.Logger;
 

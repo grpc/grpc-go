@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import io.grpc.LoadBalancer2;
-
 import javax.annotation.Nullable;
 
 /**

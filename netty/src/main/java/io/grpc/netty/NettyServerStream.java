@@ -45,7 +45,6 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
 

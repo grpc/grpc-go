@@ -31,8 +31,6 @@
 
 package io.grpc;
 
-import io.grpc.Attributes;
-
 import java.net.SocketAddress;
 import javax.net.ssl.SSLSession;
 

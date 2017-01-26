@@ -33,14 +33,12 @@ package io.grpc.internal;
 
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 final class InternalHandlerRegistry {

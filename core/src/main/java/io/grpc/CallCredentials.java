@@ -32,7 +32,6 @@
 package io.grpc;
 
 import io.grpc.Attributes.Key;
-
 import java.util.concurrent.Executor;
 
 /**

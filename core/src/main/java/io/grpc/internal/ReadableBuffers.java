@@ -34,9 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Charsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.KnownLength;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;

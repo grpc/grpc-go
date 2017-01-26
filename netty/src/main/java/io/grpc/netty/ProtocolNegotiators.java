@@ -36,7 +36,6 @@ import static io.grpc.netty.GrpcSslContexts.NEXT_PROTOCOL_VERSIONS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
 import io.grpc.Attributes;
 import io.grpc.Grpc;
 import io.grpc.Internal;
@@ -62,7 +61,6 @@ import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslHandshakeCompletionEvent;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
-
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.Arrays;

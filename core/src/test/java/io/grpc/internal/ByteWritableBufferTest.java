@@ -31,9 +31,8 @@
 
 package io.grpc.internal;
 
-import org.junit.Before;
-
 import java.util.Arrays;
+import org.junit.Before;
 
 public class ByteWritableBufferTest extends WritableBufferTestBase {
 

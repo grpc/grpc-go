@@ -37,7 +37,6 @@ import static java.lang.Integer.parseInt;
 import io.grpc.benchmarks.SocketAddressValidator;
 import io.grpc.benchmarks.Utils;
 import io.grpc.netty.NettyChannelBuilder;
-
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;

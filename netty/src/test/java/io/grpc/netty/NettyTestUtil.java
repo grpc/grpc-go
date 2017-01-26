@@ -34,10 +34,8 @@ package io.grpc.netty;
 import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.io.ByteStreams;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;

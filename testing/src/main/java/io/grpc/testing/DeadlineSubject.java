@@ -37,12 +37,9 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import com.google.common.truth.ComparableSubject;
 import com.google.common.truth.FailureStrategy;
 import com.google.common.truth.SubjectFactory;
-
 import io.grpc.Deadline;
-
 import java.math.BigInteger;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 

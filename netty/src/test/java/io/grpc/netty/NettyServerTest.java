@@ -37,12 +37,10 @@ import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-
+import java.net.InetSocketAddress;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
 
 @RunWith(JUnit4.class)
 public class NettyServerTest {

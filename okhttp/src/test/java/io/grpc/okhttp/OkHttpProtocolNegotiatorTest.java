@@ -41,12 +41,17 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-
 import io.grpc.okhttp.OkHttpProtocolNegotiator.AndroidNegotiator;
 import io.grpc.okhttp.OkHttpProtocolNegotiator.AndroidNegotiator.TlsExtensionType;
 import io.grpc.okhttp.internal.Platform;
 import io.grpc.okhttp.internal.Protocol;
-
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.Provider;
+import java.security.Security;
+import javax.net.ssl.HandshakeCompletedListener;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -55,15 +60,6 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.Provider;
-import java.security.Security;
-
-import javax.net.ssl.HandshakeCompletedListener;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocket;
 
 /**
  * Tests for {@link OkHttpProtocolNegotiator}.

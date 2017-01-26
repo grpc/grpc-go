@@ -40,7 +40,6 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
-
 import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Compressor;
@@ -53,7 +52,6 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;

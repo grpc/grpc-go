@@ -34,9 +34,7 @@ package io.grpc.benchmarks.driver;
 import static java.util.concurrent.ForkJoinPool.defaultForkJoinWorkerThreadFactory;
 
 import com.google.common.util.concurrent.UncaughtExceptionHandlers;
-
 import com.sun.management.OperatingSystemMXBean;
-
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
@@ -57,7 +55,6 @@ import io.grpc.stub.StreamObserver;
 import io.grpc.testing.TestUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
-
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.util.List;

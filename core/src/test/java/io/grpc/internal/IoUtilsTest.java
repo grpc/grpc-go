@@ -34,12 +34,11 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 
 /** Unit test for IoUtils. */
 @RunWith(JUnit4.class)

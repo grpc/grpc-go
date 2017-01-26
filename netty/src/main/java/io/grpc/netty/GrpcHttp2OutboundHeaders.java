@@ -33,7 +33,6 @@ package io.grpc.netty;
 
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
-
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;

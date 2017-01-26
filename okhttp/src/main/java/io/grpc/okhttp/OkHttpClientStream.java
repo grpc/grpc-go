@@ -45,14 +45,11 @@ import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
-
-import okio.Buffer;
-
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
-
 import javax.annotation.concurrent.GuardedBy;
+import okio.Buffer;
 
 /**
  * Client stream for the okhttp transport.

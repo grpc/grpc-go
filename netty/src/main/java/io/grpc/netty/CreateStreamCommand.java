@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
-
 import io.netty.handler.codec.http2.Http2Headers;
 
 /**

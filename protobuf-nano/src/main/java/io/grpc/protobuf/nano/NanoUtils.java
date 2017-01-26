@@ -34,10 +34,8 @@ package io.grpc.protobuf.nano;
 import com.google.common.io.ByteStreams;
 import com.google.protobuf.nano.CodedInputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
-
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
-
 import java.io.IOException;
 import java.io.InputStream;
 

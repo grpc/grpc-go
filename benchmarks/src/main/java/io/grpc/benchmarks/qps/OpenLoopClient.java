@@ -53,14 +53,11 @@ import io.grpc.Status;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.benchmarks.proto.Messages.SimpleResponse;
-
 import io.grpc.stub.StreamObserver;
-
-import org.HdrHistogram.AtomicHistogram;
-import org.HdrHistogram.Histogram;
-
 import java.util.Random;
 import java.util.concurrent.Callable;
+import org.HdrHistogram.AtomicHistogram;
+import org.HdrHistogram.Histogram;
 
 /**
  * Tries to generate traffic that closely resembles user-generated RPC traffic. This is done using

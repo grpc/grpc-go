@@ -34,9 +34,7 @@ package io.grpc.internal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.Status;
-
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -59,7 +57,7 @@ public class KeepAliveManager {
     @Override
     public void run() {
       boolean shouldShutdown = false;
-      synchronized (KeepAliveManager.this) { 
+      synchronized (KeepAliveManager.this) {
         if (state != State.DISCONNECTED) {
           // We haven't received a ping response within the timeout. The connection is likely gone
           // already. Shutdown the transport and fail all existing rpcs.
@@ -77,7 +75,7 @@ public class KeepAliveManager {
     @Override
     public void run() {
       boolean shouldSendPing = false;
-      synchronized (KeepAliveManager.this) { 
+      synchronized (KeepAliveManager.this) {
         if (state == State.PING_SCHEDULED) {
           shouldSendPing = true;
           state = State.PING_SENT;
@@ -191,7 +189,7 @@ public class KeepAliveManager {
       state = State.IDLE_AND_PING_SENT;
     }
   }
-  
+
   /**
    * Transport is shutting down. We no longer need to do keepalives.
    */
@@ -205,7 +203,7 @@ public class KeepAliveManager {
         pingFuture.cancel(false);
       }
     }
-  }  
+  }
 
   private class KeepAlivePingCallback implements ClientTransport.PingCallback {
 

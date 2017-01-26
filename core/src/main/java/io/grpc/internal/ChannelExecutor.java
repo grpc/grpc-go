@@ -34,7 +34,6 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import java.util.LinkedList;
 import java.util.logging.Level;
 import java.util.logging.Logger;

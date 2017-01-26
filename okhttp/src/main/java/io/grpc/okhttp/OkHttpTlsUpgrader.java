@@ -33,11 +33,9 @@ package io.grpc.okhttp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
 import io.grpc.okhttp.internal.ConnectionSpec;
 import io.grpc.okhttp.internal.OkHostnameVerifier;
 import io.grpc.okhttp.internal.Protocol;
-
 import java.io.IOException;
 import java.net.Socket;
 import java.util.Arrays;

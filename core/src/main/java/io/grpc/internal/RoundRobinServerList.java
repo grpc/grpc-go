@@ -32,11 +32,9 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.Status;
 import io.grpc.TransportManager;
-
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -44,7 +42,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;

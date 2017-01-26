@@ -52,7 +52,6 @@ import static io.grpc.benchmarks.qps.ClientConfiguration.ClientParam.WARMUP_DURA
 
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
-
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
@@ -62,10 +61,6 @@ import io.grpc.benchmarks.proto.Messages.Payload;
 import io.grpc.benchmarks.proto.Messages.SimpleRequest;
 import io.grpc.benchmarks.proto.Messages.SimpleResponse;
 import io.grpc.stub.StreamObserver;
-
-import org.HdrHistogram.Histogram;
-import org.HdrHistogram.HistogramIterationValue;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -73,6 +68,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.HdrHistogram.Histogram;
+import org.HdrHistogram.HistogramIterationValue;
 
 /**
  * QPS Client using the non-blocking API.

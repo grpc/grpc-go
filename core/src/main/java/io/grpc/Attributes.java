@@ -33,11 +33,9 @@ package io.grpc;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 

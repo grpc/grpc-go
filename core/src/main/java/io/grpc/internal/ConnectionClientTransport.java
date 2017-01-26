@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import io.grpc.Attributes;
-
 import javax.annotation.concurrent.ThreadSafe;
 
 /**

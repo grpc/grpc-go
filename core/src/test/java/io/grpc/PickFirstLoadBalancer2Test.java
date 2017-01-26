@@ -44,13 +44,13 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
-
 import io.grpc.LoadBalancer2.Helper;
 import io.grpc.LoadBalancer2.PickResult;
 import io.grpc.LoadBalancer2.Subchannel;
 import io.grpc.PickFirstBalancerFactory2.PickFirstBalancer;
 import io.grpc.PickFirstBalancerFactory2.Picker;
-
+import java.net.SocketAddress;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -60,9 +60,6 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.net.SocketAddress;
-import java.util.List;
 
 
 /** Unit test for {@link PickFirstBalancerFactory2}. */

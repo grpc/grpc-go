@@ -37,10 +37,8 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Throwables;
 import com.google.protobuf.EmptyProtos.Empty;
-
 import com.squareup.okhttp.ConnectionSpec;
 import com.squareup.okhttp.TlsVersion;
-
 import io.grpc.ManagedChannel;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.GrpcSslContexts;
@@ -55,16 +53,13 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
-
+import java.io.IOException;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.IOException;
-
-import javax.net.ssl.SSLPeerUnverifiedException;
 
 /**
  * Integration tests for GRPC over Http2 using the OkHttp framework.

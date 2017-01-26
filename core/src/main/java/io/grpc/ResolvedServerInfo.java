@@ -34,9 +34,7 @@ package io.grpc;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Objects;
-
 import java.net.SocketAddress;
-
 import javax.annotation.concurrent.Immutable;
 
 /**

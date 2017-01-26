@@ -34,11 +34,8 @@ package io.grpc;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
-
-
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 

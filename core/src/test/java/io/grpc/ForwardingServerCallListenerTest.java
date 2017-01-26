@@ -34,7 +34,6 @@ package io.grpc;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.ForwardingServerCallListener.SimpleForwardingServerCallListener;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

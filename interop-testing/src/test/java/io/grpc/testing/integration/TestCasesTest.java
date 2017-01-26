@@ -34,12 +34,11 @@ package io.grpc.testing.integration;
 import static io.grpc.testing.integration.TestCases.fromString;
 import static org.junit.Assert.assertEquals;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.HashSet;
-import java.util.Set;
 
 /**
  * Unit tests for {@link TestCases}.

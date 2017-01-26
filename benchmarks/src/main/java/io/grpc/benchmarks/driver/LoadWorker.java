@@ -32,7 +32,6 @@
 package io.grpc.benchmarks.driver;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import io.grpc.Status;
 import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.Control.ClientArgs;
@@ -43,7 +42,6 @@ import io.grpc.internal.ServerImpl;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.nio.NioEventLoopGroup;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
 

@@ -36,7 +36,6 @@ import static org.junit.Assert.assertEquals;
 import io.grpc.internal.WritableBuffer;
 import io.grpc.internal.WritableBufferAllocator;
 import io.grpc.internal.WritableBufferAllocatorTestBase;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

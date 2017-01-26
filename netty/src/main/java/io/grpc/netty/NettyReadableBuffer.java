@@ -32,10 +32,8 @@
 package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.internal.AbstractReadableBuffer;
 import io.netty.buffer.ByteBuf;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;

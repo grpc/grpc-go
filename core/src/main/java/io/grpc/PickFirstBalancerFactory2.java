@@ -34,7 +34,6 @@ package io.grpc;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;

@@ -39,7 +39,6 @@ import static io.netty.util.CharsetUtil.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -52,7 +51,6 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.DefaultThreadFactory;
-
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;

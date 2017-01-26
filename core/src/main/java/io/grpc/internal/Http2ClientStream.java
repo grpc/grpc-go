@@ -33,13 +33,10 @@ package io.grpc.internal;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
-
 import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.Status;
-
 import java.nio.charset.Charset;
-
 import javax.annotation.Nullable;
 
 /**

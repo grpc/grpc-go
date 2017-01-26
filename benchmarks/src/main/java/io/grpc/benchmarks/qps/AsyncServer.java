@@ -32,7 +32,6 @@
 package io.grpc.benchmarks.qps;
 
 import com.google.common.util.concurrent.UncaughtExceptionHandlers;
-
 import io.grpc.Server;
 import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
@@ -49,7 +48,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ForkJoinPool;

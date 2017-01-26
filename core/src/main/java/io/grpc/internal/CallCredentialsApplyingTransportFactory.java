@@ -40,7 +40,6 @@ import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
-
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
 import javax.annotation.Nullable;

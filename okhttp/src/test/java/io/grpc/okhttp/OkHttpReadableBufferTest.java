@@ -33,9 +33,7 @@ package io.grpc.okhttp;
 
 import io.grpc.internal.ReadableBuffer;
 import io.grpc.internal.ReadableBufferTestBase;
-
 import okio.Buffer;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

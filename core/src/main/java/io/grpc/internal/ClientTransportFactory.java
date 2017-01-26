@@ -33,7 +33,6 @@ package io.grpc.internal;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
-
 import javax.annotation.Nullable;
 
 /** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */

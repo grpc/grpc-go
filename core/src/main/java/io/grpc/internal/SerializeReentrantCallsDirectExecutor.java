@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-
 import java.util.ArrayDeque;
 import java.util.concurrent.Executor;
 import java.util.logging.Level;

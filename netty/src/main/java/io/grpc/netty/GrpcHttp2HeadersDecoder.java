@@ -54,7 +54,6 @@ import static io.netty.handler.codec.http2.Http2Exception.connectionError;
 import static io.netty.util.AsciiString.isUpperCase;
 
 import com.google.common.io.BaseEncoding;
-
 import io.grpc.Metadata;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
@@ -65,7 +64,6 @@ import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.internal.hpack.Decoder;
 import io.netty.util.AsciiString;
 import io.netty.util.internal.PlatformDependent;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

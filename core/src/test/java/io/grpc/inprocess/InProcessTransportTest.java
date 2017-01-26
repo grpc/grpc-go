@@ -34,7 +34,6 @@ package io.grpc.inprocess;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
-
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 

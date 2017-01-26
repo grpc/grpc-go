@@ -37,13 +37,11 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.lang.Math.min;
 
 import com.google.common.io.ByteStreams;
-
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Drainable;
 import io.grpc.KnownLength;
 import io.grpc.Status;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,7 +49,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-
 import javax.annotation.Nullable;
 
 /**

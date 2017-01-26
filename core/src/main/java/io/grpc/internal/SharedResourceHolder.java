@@ -32,13 +32,11 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-
 import java.util.IdentityHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.concurrent.ThreadSafe;
 
 /**

@@ -46,7 +46,6 @@ import static org.mockito.Mockito.when;
 import com.google.common.io.CharStreams;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.TagValue;
-
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
@@ -57,9 +56,11 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ServerCallImpl.ServerStreamListenerImpl;
-import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils;
-
+import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -71,10 +72,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 
 @RunWith(JUnit4.class)
 public class ServerCallImplTest {

@@ -32,10 +32,8 @@
 package io.grpc.internal;
 
 import io.grpc.ConnectivityState;
-
 import java.util.ArrayList;
 import java.util.concurrent.Executor;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**

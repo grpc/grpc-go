@@ -35,7 +35,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-
 import io.grpc.Attributes;
 import io.grpc.Channel;
 import io.grpc.EquivalentAddressGroup;
@@ -49,7 +48,6 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.RoundRobinServerList;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.stub.StreamObserver;
-
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -60,7 +58,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Logger;
-
 import javax.annotation.concurrent.GuardedBy;
 
 /**

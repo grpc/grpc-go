@@ -38,7 +38,6 @@ import io.grpc.Status;
 import io.netty.channel.ConnectTimeoutException;
 import io.netty.handler.codec.http2.Http2Error;
 import io.netty.handler.codec.http2.Http2Exception;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

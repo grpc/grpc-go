@@ -49,7 +49,6 @@ import io.grpc.testing.NoopClientCall;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;

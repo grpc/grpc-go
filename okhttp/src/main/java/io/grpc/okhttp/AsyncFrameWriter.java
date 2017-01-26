@@ -32,20 +32,17 @@
 package io.grpc.okhttp;
 
 import com.google.common.base.Preconditions;
-
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.FrameWriter;
 import io.grpc.okhttp.internal.framed.Header;
 import io.grpc.okhttp.internal.framed.Settings;
-
-import okio.Buffer;
-
 import java.io.IOException;
 import java.net.Socket;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import okio.Buffer;
 
 class AsyncFrameWriter implements FrameWriter {
   private static final Logger log = Logger.getLogger(OkHttpClientTransport.class.getName());

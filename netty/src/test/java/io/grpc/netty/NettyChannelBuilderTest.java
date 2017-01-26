@@ -38,17 +38,14 @@ import static org.mockito.Mockito.mock;
 import io.grpc.netty.InternalNettyChannelBuilder.OverrideAuthorityChecker;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.handler.ssl.SslContext;
-
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import javax.net.ssl.SSLException;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-
-import javax.net.ssl.SSLException;
 
 @RunWith(JUnit4.class)
 public class NettyChannelBuilderTest {

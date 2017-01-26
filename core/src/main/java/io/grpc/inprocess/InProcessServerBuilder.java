@@ -33,12 +33,10 @@ package io.grpc.inprocess;
 
 import com.google.common.base.Preconditions;
 import com.google.instrumentation.stats.StatsContextFactory;
-
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.NoopStatsContextFactory;
-
 import java.io.File;
 
 /**

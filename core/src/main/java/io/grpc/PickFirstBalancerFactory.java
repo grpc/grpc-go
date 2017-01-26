@@ -32,13 +32,10 @@
 package io.grpc;
 
 import com.google.common.base.Supplier;
-
 import io.grpc.TransportManager.InterimTransport;
-
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
-
 import javax.annotation.concurrent.GuardedBy;
 
 /**

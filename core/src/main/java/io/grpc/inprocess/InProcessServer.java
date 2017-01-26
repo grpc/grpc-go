@@ -34,11 +34,9 @@ package io.grpc.inprocess;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransportListener;
-
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-
 import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe

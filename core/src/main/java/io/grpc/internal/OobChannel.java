@@ -32,18 +32,16 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.grpc.ConnectivityState.READY;
-import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
 import com.google.instrumentation.stats.StatsContextFactory;
-
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer2;
 import io.grpc.LoadBalancer2.PickResult;
 import io.grpc.LoadBalancer2.SubchannelPicker;
 import io.grpc.ManagedChannel;
@@ -51,7 +49,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
-
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;

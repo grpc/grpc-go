@@ -33,16 +33,13 @@ package io.grpc.testing;
 
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-
 import io.grpc.ExperimentalApi;
 import io.grpc.stub.StreamObserver;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.Nullable;
 
 /**

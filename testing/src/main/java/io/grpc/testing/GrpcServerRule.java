@@ -40,12 +40,10 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.AbstractStub;
 import io.grpc.util.MutableHandlerRegistry;
-
-import org.junit.rules.ExternalResource;
-import org.junit.rules.TestRule;
-
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import org.junit.rules.ExternalResource;
+import org.junit.rules.TestRule;
 
 /**
  * {@code GrpcServerRule} is a JUnit {@link TestRule} that starts an in-process gRPC service with

@@ -43,17 +43,16 @@ import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.internal.IoUtils;
-import org.apache.thrift.TException;
-import org.apache.thrift.TSerializer;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import org.apache.thrift.TException;
+import org.apache.thrift.TSerializer;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link ThriftUtils}. */
 @RunWith(JUnit4.class)

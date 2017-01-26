@@ -32,7 +32,6 @@
 package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
