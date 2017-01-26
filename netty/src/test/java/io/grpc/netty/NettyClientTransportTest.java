@@ -335,7 +335,7 @@ public class NettyClientTransportTest {
   }
 
   @Test
-  public void clientStreamGetsSslSessionAttributes() throws Exception {
+  public void clientStreamGetsAttributes() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
     transport.start(clientTransportListener);
@@ -343,6 +343,7 @@ public class NettyClientTransportTest {
     rpc.waitForResponse();
 
     assertNotNull(rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION));
+    assertEquals(address, rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
   }
 
   private Throwable getRootCause(Throwable t) {
