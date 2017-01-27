@@ -76,8 +76,8 @@ public class ServiceDescriptorTest {
         MethodDescriptor.create(
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("wrongservice", "method"),
-            TestMethodDescriptors.noopMarshaller(),
-            TestMethodDescriptors.noopMarshaller())));
+            TestMethodDescriptors.voidMarshaller(),
+            TestMethodDescriptors.voidMarshaller())));
   }
 
   @Test
@@ -89,12 +89,12 @@ public class ServiceDescriptorTest {
         MethodDescriptor.create(
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("name", "method"),
-            TestMethodDescriptors.noopMarshaller(),
-            TestMethodDescriptors.noopMarshaller()),
+            TestMethodDescriptors.voidMarshaller(),
+            TestMethodDescriptors.voidMarshaller()),
         MethodDescriptor.create(
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("name", "method"),
-            TestMethodDescriptors.noopMarshaller(),
-            TestMethodDescriptors.noopMarshaller())));
+            TestMethodDescriptors.voidMarshaller(),
+            TestMethodDescriptors.voidMarshaller())));
   }
 }

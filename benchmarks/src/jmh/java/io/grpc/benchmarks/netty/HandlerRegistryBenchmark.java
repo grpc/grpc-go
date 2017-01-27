@@ -91,8 +91,8 @@ public class HandlerRegistryBenchmark {
         MethodDescriptor<Void, Void> methodDescriptor = MethodDescriptor.<Void, Void>newBuilder()
             .setType(MethodDescriptor.MethodType.UNKNOWN)
             .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, methodName))
-            .setRequestMarshaller(TestMethodDescriptors.noopMarshaller())
-            .setResponseMarshaller(TestMethodDescriptors.noopMarshaller())
+            .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+            .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
             .build();
         serviceBuilder.addMethod(methodDescriptor,
             new ServerCallHandler<Void, Void>() {

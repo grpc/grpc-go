@@ -40,6 +40,8 @@ import java.io.InputStream;
 /**
  * A collection of method descriptor constructors useful for tests.  These are useful if you need
  * a descriptor, but don't really care how it works.
+ *
+ * @since 1.1.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
 public final class TestMethodDescriptors {
@@ -48,36 +50,63 @@ public final class TestMethodDescriptors {
   /**
    * Creates a new method descriptor that always creates zero length messages, and always parses to
    * null objects.
+   *
+   * @since 1.1.0
    */
-  public static MethodDescriptor<Void, Void> noopMethod() {
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
+  public static MethodDescriptor<Void, Void> voidMethod() {
+    return TestMethodDescriptors.<Void, Void>noopMethod();
+  }
+
+  /**
+   * Creates a new method descriptor that always creates zero length messages, and always parses to
+   * null objects.
+   *
+   * @since 1.1.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
+  public static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod() {
     return noopMethod("service_foo", "method_bar");
   }
 
-  private static MethodDescriptor<Void, Void> noopMethod(
+  private static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod(
       String serviceName, String methodName) {
-    return MethodDescriptor.<Void, Void>newBuilder()
+    return MethodDescriptor.<ReqT, RespT>newBuilder()
         .setType(MethodType.UNARY)
         .setFullMethodName(MethodDescriptor.generateFullMethodName(serviceName, methodName))
-        .setRequestMarshaller(noopMarshaller())
-        .setResponseMarshaller(noopMarshaller())
+        .setRequestMarshaller(TestMethodDescriptors.<ReqT>noopMarshaller())
+        .setResponseMarshaller(TestMethodDescriptors.<RespT>noopMarshaller())
         .build();
   }
 
   /**
    * Creates a new marshaller that does nothing.
+   *
+   * @since 1.1.0
    */
-  public static MethodDescriptor.Marshaller<Void> noopMarshaller() {
-    return new NoopMarshaller();
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
+  public static MethodDescriptor.Marshaller<Void> voidMarshaller() {
+    return TestMethodDescriptors.<Void>noopMarshaller();
   }
 
-  private static final class NoopMarshaller implements MethodDescriptor.Marshaller<Void> {
+  /**
+   * Creates a new marshaller that does nothing.
+   *
+   * @since 1.1.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
+  public static <T> MethodDescriptor.Marshaller<T> noopMarshaller() {
+    return new NoopMarshaller<T>();
+  }
+
+  private static final class NoopMarshaller<T> implements MethodDescriptor.Marshaller<T> {
     @Override
-    public InputStream stream(Void value) {
+    public InputStream stream(T value) {
       return new ByteArrayInputStream(new byte[]{});
     }
 
     @Override
-    public Void parse(InputStream stream) {
+    public T parse(InputStream stream) {
       return null;
     }
   }

@@ -112,8 +112,8 @@ public class ClientCallImplTest {
   private final MethodDescriptor<Void, Void> method = MethodDescriptor.<Void, Void>newBuilder()
       .setType(MethodType.UNARY)
       .setFullMethodName("service/method")
-      .setRequestMarshaller(TestMethodDescriptors.noopMarshaller())
-      .setResponseMarshaller(TestMethodDescriptors.noopMarshaller())
+      .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+      .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
       .build();
 
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();

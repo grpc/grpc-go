@@ -73,7 +73,7 @@ public class ClientInterceptorsTest {
 
   private BaseClientCall call = new BaseClientCall();
 
-  private final MethodDescriptor<Void, Void> method = TestMethodDescriptors.noopMethod();
+  private final MethodDescriptor<Void, Void> method = TestMethodDescriptors.voidMethod();
 
   /**
    * Sets up mocks.

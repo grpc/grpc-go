@@ -131,7 +131,7 @@ public class OkHttpClientTransportTest {
   @Mock
   private FrameWriter frameWriter;
 
-  private MethodDescriptor<Void, Void> method = TestMethodDescriptors.noopMethod();
+  private MethodDescriptor<Void, Void> method = TestMethodDescriptors.voidMethod();
 
   @Mock
   private ManagedClientTransport.Listener transportListener;
