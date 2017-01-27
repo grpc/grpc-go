@@ -1075,36 +1075,39 @@ func (t *http2Client) controller() {
 	}
 	isPingSent := false
 	keepalivePing := &ping{data: [8]byte{}}
+	cchan := t.controlBuf.get()
+	wchan := nil
 	for {
 		select {
-		case i := <-t.controlBuf.get():
+		case i := <-cchan:
 			t.controlBuf.load()
-			select {
-			case <-t.writableChan:
-				switch i := i.(type) {
-				case *windowUpdate:
-					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
-				case *settings:
-					if i.ack {
-						t.framer.writeSettingsAck(true)
-						t.applySettings(i.ss)
-					} else {
-						t.framer.writeSettings(true, i.ss...)
-					}
-				case *resetStream:
-					t.framer.writeRSTStream(true, i.streamID, i.code)
-				case *flushIO:
-					t.framer.flushWrite()
-				case *ping:
-					t.framer.writePing(true, i.ack, i.data)
-				default:
-					grpclog.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
+			wchan = t.writableChan
+			cchan = nil
+			continue
+		case <-wchan:
+			switch i := i.(type) {
+			case *windowUpdate:
+				t.framer.writeWindowUpdate(true, i.streamID, i.increment)
+			case *settings:
+				if i.ack {
+					t.framer.writeSettingsAck(true)
+					t.applySettings(i.ss)
+				} else {
+					t.framer.writeSettings(true, i.ss...)
 				}
-				t.writableChan <- 0
-				continue
-			case <-t.shutdownChan:
-				return
+			case *resetStream:
+				t.framer.writeRSTStream(true, i.streamID, i.code)
+			case *flushIO:
+				t.framer.flushWrite()
+			case *ping:
+				t.framer.writePing(true, i.ack, i.data)
+			default:
+				grpclog.Printf("transport: http2Client.controller got unexpected item type %v\n", i)
 			}
+			wchan <- 0
+			wchan = nil
+			cchan = t.controlBuf.get()
+			continue
 		case <-timer.C:
 			t.mu.Lock()
 			ns := len(t.activeStreams)
