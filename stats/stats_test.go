@@ -40,6 +40,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -49,25 +50,12 @@ import (
 	testpb "google.golang.org/grpc/stats/grpc_testing"
 )
 
-func TestStartStop(t *testing.T) {
-	stats.RegisterHandler(nil)
-	stats.Start()
-	if stats.On() != false {
-		t.Fatalf("stats.Start() with nil handler, stats.On() = true, want false")
-	}
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {})
-	if stats.On() != false {
-		t.Fatalf("after stats.RegisterHandler(), stats.On() = true, want false")
-	}
-	stats.Start()
-	if stats.On() != true {
-		t.Fatalf("after stats.Start(_), stats.On() = false, want true")
-	}
-	stats.Stop()
-	if stats.On() != false {
-		t.Fatalf("after stats.Stop(), stats.On() = true, want false")
-	}
+func init() {
+	grpc.EnableTracing = false
 }
+
+type connCtxKey struct{}
+type rpcCtxKey struct{}
 
 var (
 	// For headers:
@@ -136,11 +124,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
-	t        *testing.T
-	compress string
-
-	ctx    context.Context // valid for life of test, before tearDown
-	cancel context.CancelFunc
+	t                  *testing.T
+	compress           string
+	clientStatsHandler stats.Handler
+	serverStatsHandler stats.Handler
 
 	testServer testpb.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
@@ -151,10 +138,6 @@ type test struct {
 }
 
 func (te *test) tearDown() {
-	if te.cancel != nil {
-		te.cancel()
-		te.cancel = nil
-	}
 	if te.cc != nil {
 		te.cc.Close()
 		te.cc = nil
@@ -162,12 +145,20 @@ func (te *test) tearDown() {
 	te.srv.Stop()
 }
 
+type testConfig struct {
+	compress string
+}
+
 // newTest returns a new test using the provided testing.T and
 // environment.  It is returned with default values. Tests should
 // modify it before calling its startServer and clientConn methods.
-func newTest(t *testing.T, compress string) *test {
-	te := &test{t: t, compress: compress}
-	te.ctx, te.cancel = context.WithCancel(context.Background())
+func newTest(t *testing.T, tc *testConfig, ch stats.Handler, sh stats.Handler) *test {
+	te := &test{
+		t:                  t,
+		compress:           tc.compress,
+		clientStatsHandler: ch,
+		serverStatsHandler: sh,
+	}
 	return te
 }
 
@@ -185,6 +176,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
 		)
+	}
+	if te.serverStatsHandler != nil {
+		opts = append(opts, grpc.StatsHandler(te.serverStatsHandler))
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
@@ -205,12 +199,15 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
 	if te.compress == "gzip" {
 		opts = append(opts,
 			grpc.WithCompressor(grpc.NewGZIPCompressor()),
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
+	}
+	if te.clientStatsHandler != nil {
+		opts = append(opts, grpc.WithStatsHandler(te.clientStatsHandler))
 	}
 
 	var err error
@@ -222,9 +219,10 @@ func (te *test) clientConn() *grpc.ClientConn {
 }
 
 type rpcConfig struct {
-	count    int  // Number of requests and responses for streaming RPCs.
-	success  bool // Whether the RPC should succeed or return error.
-	failfast bool
+	count     int  // Number of requests and responses for streaming RPCs.
+	success   bool // Whether the RPC should succeed or return error.
+	failfast  bool
+	streaming bool // Whether the rpc should be a streaming RPC.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
@@ -242,10 +240,6 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 	ctx := metadata.NewContext(context.Background(), testMetadata)
 
 	resp, err = tc.UnaryCall(ctx, req, grpc.FailFast(c.failfast))
-	if err != nil {
-		return req, resp, err
-	}
-
 	return req, resp, err
 }
 
@@ -278,14 +272,14 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]*testpb.SimpleRequest
 		}
 		resps = append(resps, resp)
 	}
-	if err = stream.CloseSend(); err != nil {
+	if err = stream.CloseSend(); err != nil && err != io.EOF {
 		return reqs, resps, err
 	}
 	if _, err = stream.Recv(); err != io.EOF {
 		return reqs, resps, err
 	}
 
-	return reqs, resps, err
+	return reqs, resps, nil
 }
 
 type expectedData struct {
@@ -303,7 +297,7 @@ type expectedData struct {
 type gotData struct {
 	ctx    context.Context
 	client bool
-	s      stats.RPCStats
+	s      interface{} // This could be RPCStats or ConnStats.
 }
 
 const (
@@ -315,6 +309,8 @@ const (
 	outPayload
 	outHeader
 	outTrailer
+	connbegin
+	connend
 )
 
 func checkBegin(t *testing.T, d *gotData, e *expectedData) {
@@ -362,6 +358,24 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		}
 		if st.Compression != e.compression {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+		}
+
+		if connInfo, ok := d.ctx.Value(connCtxKey{}).(*stats.ConnTagInfo); ok {
+			if connInfo.RemoteAddr != st.RemoteAddr {
+				t.Fatalf("connInfo.RemoteAddr = %v, want %v", connInfo.RemoteAddr, st.RemoteAddr)
+			}
+			if connInfo.LocalAddr != st.LocalAddr {
+				t.Fatalf("connInfo.LocalAddr = %v, want %v", connInfo.LocalAddr, st.LocalAddr)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with connCtxKey", d.ctx)
+		}
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo); ok {
+			if rpcInfo.FullMethodName != st.FullMethod {
+				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with rpcCtxKey", d.ctx)
 		}
 	}
 }
@@ -451,10 +465,18 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
 		}
 		if st.RemoteAddr.String() != e.serverAddr {
-			t.Fatalf("st.LocalAddr = %v, want %v", st.LocalAddr, e.serverAddr)
+			t.Fatalf("st.RemoteAddr = %v, want %v", st.RemoteAddr, e.serverAddr)
 		}
 		if st.Compression != e.compression {
 			t.Fatalf("st.Compression = %v, want %v", st.Compression, e.compression)
+		}
+
+		if rpcInfo, ok := d.ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo); ok {
+			if rpcInfo.FullMethodName != st.FullMethod {
+				t.Fatalf("rpcInfo.FullMethod = %s, want %v", rpcInfo.FullMethodName, st.FullMethod)
+			}
+		} else {
+			t.Fatalf("got context %v, want one with rpcCtxKey", d.ctx)
 		}
 	}
 }
@@ -546,35 +568,160 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func TestServerStatsUnaryRPC(t *testing.T) {
-	var got []*gotData
+func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
+	var (
+		ok bool
+		st *stats.ConnBegin
+	)
+	if st, ok = d.s.(*stats.ConnBegin); !ok {
+		t.Fatalf("got %T, want ConnBegin", d.s)
+	}
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	st.IsClient() // TODO remove this.
+}
 
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		if !s.IsClient() {
-			got = append(got, &gotData{ctx, false, s})
+func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
+	var (
+		ok bool
+		st *stats.ConnEnd
+	)
+	if st, ok = d.s.(*stats.ConnEnd); !ok {
+		t.Fatalf("got %T, want ConnEnd", d.s)
+	}
+	if d.ctx == nil {
+		t.Fatalf("d.ctx = nil, want <non-nil>")
+	}
+	st.IsClient() // TODO remove this.
+}
+
+type statshandler struct {
+	mu      sync.Mutex
+	gotRPC  []*gotData
+	gotConn []*gotData
+}
+
+func (h *statshandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+	return context.WithValue(ctx, connCtxKey{}, info)
+}
+
+func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	return context.WithValue(ctx, rpcCtxKey{}, info)
+}
+
+func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
+}
+
+func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
+}
+
+func checkConnStats(t *testing.T, got []*gotData) {
+	if len(got) <= 0 || len(got)%2 != 0 {
+		for i, g := range got {
+			t.Errorf(" - %v, %T = %+v, ctx: %v", i, g.s, g.s, g.ctx)
 		}
-	})
-	stats.Start()
-	defer stats.Stop()
+		t.Fatalf("got %v stats, want even positive number", len(got))
+	}
+	// The first conn stats must be a ConnBegin.
+	checkConnBegin(t, got[0], nil)
+	// The last conn stats must be a ConnEnd.
+	checkConnEnd(t, got[len(got)-1], nil)
+}
 
-	te := newTest(t, "")
+func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
+	if len(got) != len(checkFuncs) {
+		for i, g := range got {
+			t.Errorf(" - %v, %T", i, g.s)
+		}
+		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
+	}
+
+	var rpcctx context.Context
+	for i := 0; i < len(got); i++ {
+		if _, ok := got[i].s.(stats.RPCStats); ok {
+			if rpcctx != nil && got[i].ctx != rpcctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			rpcctx = got[i].ctx
+		}
+	}
+
+	for i, f := range checkFuncs {
+		f(t, got[i], expect)
+	}
+}
+
+func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
+	h := &statshandler{}
+	te := newTest(t, tc, nil, h)
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
-	req, resp, err := te.doUnaryCall(&rpcConfig{success: true})
-	if err != nil {
-		t.Fatalf(err.Error())
+	var (
+		reqs  []*testpb.SimpleRequest
+		resps []*testpb.SimpleResponse
+		err   error
+	)
+	if !cc.streaming {
+		req, resp, e := te.doUnaryCall(cc)
+		reqs = []*testpb.SimpleRequest{req}
+		resps = []*testpb.SimpleResponse{resp}
+		err = e
+	} else {
+		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
 	}
+	if cc.success != (err == nil) {
+		t.Fatalf("cc.success: %v, got error: %v", cc.success, err)
+	}
+	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
 
-	expect := &expectedData{
-		method:     "/grpc.testing.TestService/UnaryCall",
-		serverAddr: te.srvAddr,
-		requests:   []*testpb.SimpleRequest{req},
-		responses:  []*testpb.SimpleResponse{resp},
+	for {
+		h.mu.Lock()
+		if len(h.gotRPC) >= len(checkFuncs) {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	for {
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	expect := &expectedData{
+		serverAddr:  te.srvAddr,
+		compression: tc.compress,
+		requests:    reqs,
+		responses:   resps,
+		err:         err,
+	}
+	if !cc.streaming {
+		expect.method = "/grpc.testing.TestService/UnaryCall"
+	} else {
+		expect.method = "/grpc.testing.TestService/FullDuplexCall"
+	}
+
+	checkConnStats(t, h.gotConn)
+	checkServerStats(t, h.gotRPC, expect, checkFuncs)
+}
+
+func TestServerStatsUnaryRPC(t *testing.T) {
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -582,104 +729,22 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 		checkOutPayload,
 		checkOutTrailer,
 		checkEnd,
-	}
-
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	})
 }
 
 func TestServerStatsUnaryRPCError(t *testing.T) {
-	var got []*gotData
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		if !s.IsClient() {
-			got = append(got, &gotData{ctx, false, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	req, resp, err := te.doUnaryCall(&rpcConfig{success: false})
-	if err == nil {
-		t.Fatalf("got error <nil>; want <non-nil>")
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:     "/grpc.testing.TestService/UnaryCall",
-		serverAddr: te.srvAddr,
-		requests:   []*testpb.SimpleRequest{req},
-		responses:  []*testpb.SimpleResponse{resp},
-		err:        err,
-	}
-
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 		checkOutTrailer,
 		checkEnd,
-	}
-
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	})
 }
 
 func TestServerStatsStreamingRPC(t *testing.T) {
-	var got []*gotData
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		if !s.IsClient() {
-			got = append(got, &gotData{ctx, false, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "gzip")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
 	count := 5
-	reqs, resps, err := te.doFullDuplexCallRoundtrip(&rpcConfig{count: count, success: true})
-	if err == nil {
-		t.Fatalf(err.Error())
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:      "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr:  te.srvAddr,
-		compression: "gzip",
-		requests:    reqs,
-		responses:   resps,
-	}
-
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
@@ -692,76 +757,23 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	for i := 0; i < count; i++ {
 		checkFuncs = append(checkFuncs, ioPayFuncs...)
 	}
-	checkFuncs = append(checkFuncs, checkOutTrailer, checkEnd)
-
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	checkFuncs = append(checkFuncs,
+		checkOutTrailer,
+		checkEnd,
+	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, streaming: true}, checkFuncs)
 }
 
 func TestServerStatsStreamingRPCError(t *testing.T) {
-	var got []*gotData
-
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		if !s.IsClient() {
-			got = append(got, &gotData{ctx, false, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "gzip")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
 	count := 5
-	reqs, resps, err := te.doFullDuplexCallRoundtrip(&rpcConfig{count: count, success: false})
-	if err == nil {
-		t.Fatalf("got error <nil>; want <non-nil>")
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:      "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr:  te.srvAddr,
-		compression: "gzip",
-		requests:    reqs,
-		responses:   resps,
-		err:         err,
-	}
-
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, streaming: true}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 		checkInPayload,
 		checkOutTrailer,
 		checkEnd,
-	}
-
-	if len(got) != len(checkFuncs) {
-		t.Fatalf("got %v stats, want %v stats", len(got), len(checkFuncs))
-	}
-
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
-		}
-	}
-
-	for i, f := range checkFuncs {
-		f(t, got[i], expect)
-	}
+	})
 }
 
 type checkFuncWithCount struct {
@@ -775,12 +787,19 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		expectLen += v.c
 	}
 	if len(got) != expectLen {
+		for i, g := range got {
+			t.Errorf(" - %v, %T", i, g.s)
+		}
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
 	}
 
-	for i := 0; i < len(got)-1; i++ {
-		if got[i].ctx != got[i+1].ctx {
-			t.Fatalf("got different contexts with two stats %T %T", got[i].s, got[i+1].s)
+	var rpcctx context.Context
+	for i := 0; i < len(got); i++ {
+		if _, ok := got[i].s.(stats.RPCStats); ok {
+			if rpcctx != nil && got[i].ctx != rpcctx {
+				t.Fatalf("got different contexts with stats %T", got[i].s)
+			}
+			rpcctx = got[i].ctx
 		}
 	}
 
@@ -788,87 +807,133 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		switch s.s.(type) {
 		case *stats.Begin:
 			if checkFuncs[begin].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[begin].f(t, s, expect)
 			checkFuncs[begin].c--
 		case *stats.OutHeader:
 			if checkFuncs[outHeader].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[outHeader].f(t, s, expect)
 			checkFuncs[outHeader].c--
 		case *stats.OutPayload:
 			if checkFuncs[outPayload].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[outPayload].f(t, s, expect)
 			checkFuncs[outPayload].c--
 		case *stats.InHeader:
 			if checkFuncs[inHeader].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inHeader].f(t, s, expect)
 			checkFuncs[inHeader].c--
 		case *stats.InPayload:
 			if checkFuncs[inPayload].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inPayload].f(t, s, expect)
 			checkFuncs[inPayload].c--
 		case *stats.InTrailer:
 			if checkFuncs[inTrailer].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[inTrailer].f(t, s, expect)
 			checkFuncs[inTrailer].c--
 		case *stats.End:
 			if checkFuncs[end].c <= 0 {
-				t.Fatalf("unexpected stats: %T", s)
+				t.Fatalf("unexpected stats: %T", s.s)
 			}
 			checkFuncs[end].f(t, s, expect)
 			checkFuncs[end].c--
+		case *stats.ConnBegin:
+			if checkFuncs[connbegin].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s.s)
+			}
+			checkFuncs[connbegin].f(t, s, expect)
+			checkFuncs[connbegin].c--
+		case *stats.ConnEnd:
+			if checkFuncs[connend].c <= 0 {
+				t.Fatalf("unexpected stats: %T", s.s)
+			}
+			checkFuncs[connend].f(t, s, expect)
+			checkFuncs[connend].c--
 		default:
-			t.Fatalf("unexpected stats: %T", s)
+			t.Fatalf("unexpected stats: %T", s.s)
 		}
 	}
 }
 
-func TestClientStatsUnaryRPC(t *testing.T) {
-	var (
-		mu  sync.Mutex
-		got []*gotData
-	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			got = append(got, &gotData{ctx, true, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "")
+func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
+	h := &statshandler{}
+	te := newTest(t, tc, h, nil)
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
-	failfast := false
-	req, resp, err := te.doUnaryCall(&rpcConfig{success: true, failfast: failfast})
-	if err != nil {
-		t.Fatalf(err.Error())
+	var (
+		reqs  []*testpb.SimpleRequest
+		resps []*testpb.SimpleResponse
+		err   error
+	)
+	if !cc.streaming {
+		req, resp, e := te.doUnaryCall(cc)
+		reqs = []*testpb.SimpleRequest{req}
+		resps = []*testpb.SimpleResponse{resp}
+		err = e
+	} else {
+		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
 	}
+	if cc.success != (err == nil) {
+		t.Fatalf("cc.success: %v, got error: %v", cc.success, err)
+	}
+	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
 
-	expect := &expectedData{
-		method:     "/grpc.testing.TestService/UnaryCall",
-		serverAddr: te.srvAddr,
-		requests:   []*testpb.SimpleRequest{req},
-		responses:  []*testpb.SimpleResponse{resp},
-		failfast:   failfast,
+	lenRPCStats := 0
+	for _, v := range checkFuncs {
+		lenRPCStats += v.c
+	}
+	for {
+		h.mu.Lock()
+		if len(h.gotRPC) >= lenRPCStats {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
 	}
 
-	checkFuncs := map[int]*checkFuncWithCount{
+	for {
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	expect := &expectedData{
+		serverAddr:  te.srvAddr,
+		compression: tc.compress,
+		requests:    reqs,
+		responses:   resps,
+		failfast:    cc.failfast,
+		err:         err,
+	}
+	if !cc.streaming {
+		expect.method = "/grpc.testing.TestService/UnaryCall"
+	} else {
+		expect.method = "/grpc.testing.TestService/FullDuplexCall"
+	}
+
+	checkConnStats(t, h.gotConn)
+	checkClientStats(t, h.gotRPC, expect, checkFuncs)
+}
+
+func TestClientStatsUnaryRPC(t *testing.T) {
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
@@ -876,96 +941,23 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 		inPayload:  {checkInPayload, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
-	}
-
-	checkClientStats(t, got, expect, checkFuncs)
+	})
 }
 
 func TestClientStatsUnaryRPCError(t *testing.T) {
-	var (
-		mu  sync.Mutex
-		got []*gotData
-	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			got = append(got, &gotData{ctx, true, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	failfast := true
-	req, resp, err := te.doUnaryCall(&rpcConfig{success: false, failfast: failfast})
-	if err == nil {
-		t.Fatalf("got error <nil>; want <non-nil>")
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:     "/grpc.testing.TestService/UnaryCall",
-		serverAddr: te.srvAddr,
-		requests:   []*testpb.SimpleRequest{req},
-		responses:  []*testpb.SimpleResponse{resp},
-		err:        err,
-		failfast:   failfast,
-	}
-
-	checkFuncs := map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
-	}
-
-	checkClientStats(t, got, expect, checkFuncs)
+	})
 }
 
 func TestClientStatsStreamingRPC(t *testing.T) {
-	var (
-		mu  sync.Mutex
-		got []*gotData
-	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			// t.Logf(" == %T %v", s, s.IsClient())
-			got = append(got, &gotData{ctx, true, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "gzip")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
 	count := 5
-	failfast := false
-	reqs, resps, err := te.doFullDuplexCallRoundtrip(&rpcConfig{count: count, success: true, failfast: failfast})
-	if err == nil {
-		t.Fatalf(err.Error())
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:      "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr:  te.srvAddr,
-		compression: "gzip",
-		requests:    reqs,
-		responses:   resps,
-		failfast:    failfast,
-	}
-
-	checkFuncs := map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, count},
@@ -973,56 +965,17 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 		inPayload:  {checkInPayload, count},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
-	}
-
-	checkClientStats(t, got, expect, checkFuncs)
+	})
 }
 
 func TestClientStatsStreamingRPCError(t *testing.T) {
-	var (
-		mu  sync.Mutex
-		got []*gotData
-	)
-	stats.RegisterHandler(func(ctx context.Context, s stats.RPCStats) {
-		mu.Lock()
-		defer mu.Unlock()
-		if s.IsClient() {
-			got = append(got, &gotData{ctx, true, s})
-		}
-	})
-	stats.Start()
-	defer stats.Stop()
-
-	te := newTest(t, "gzip")
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
 	count := 5
-	failfast := true
-	reqs, resps, err := te.doFullDuplexCallRoundtrip(&rpcConfig{count: count, success: false, failfast: failfast})
-	if err == nil {
-		t.Fatalf("got error <nil>; want <non-nil>")
-	}
-	te.srv.GracefulStop() // Wait for the server to stop.
-
-	expect := &expectedData{
-		method:      "/grpc.testing.TestService/FullDuplexCall",
-		serverAddr:  te.srvAddr,
-		compression: "gzip",
-		requests:    reqs,
-		responses:   resps,
-		err:         err,
-		failfast:    failfast,
-	}
-
-	checkFuncs := map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
-	}
-
-	checkClientStats(t, got, expect, checkFuncs)
+	})
 }

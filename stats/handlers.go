@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2015, Google Inc.
+ * Copyright 2016, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,40 +31,46 @@
  *
  */
 
-package main
+package stats
 
 import (
-	"log"
 	"net"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/reflection"
 )
 
-const (
-	port = ":50051"
-)
-
-// server is used to implement helloworld.GreeterServer.
-type server struct{}
-
-// SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
+// ConnTagInfo defines the relevant information needed by connection context tagger.
+type ConnTagInfo struct {
+	// RemoteAddr is the remote address of the corresponding connection.
+	RemoteAddr net.Addr
+	// LocalAddr is the local address of the corresponding connection.
+	LocalAddr net.Addr
+	// TODO add QOS related fields.
 }
 
-func main() {
-	lis, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, &server{})
-	// Register reflection service on gRPC server.
-	reflection.Register(s)
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+// RPCTagInfo defines the relevant information needed by RPC context tagger.
+type RPCTagInfo struct {
+	// FullMethodName is the RPC method in the format of /package.service/method.
+	FullMethodName string
+}
+
+// Handler defines the interface for the related stats handling (e.g., RPCs, connections).
+type Handler interface {
+	// TagRPC can attach some information to the given context.
+	// The returned context is used in the rest lifetime of the RPC.
+	TagRPC(context.Context, *RPCTagInfo) context.Context
+	// HandleRPC processes the RPC stats.
+	HandleRPC(context.Context, RPCStats)
+
+	// TagConn can attach some information to the given context.
+	// The returned context will be used for stats handling.
+	// For conn stats handling, the context used in HandleConn for this
+	// connection will be derived from the context returned.
+	// For RPC stats handling,
+	//  - On server side, the context used in HandleRPC for all RPCs on this
+	// connection will be derived from the context returned.
+	//  - On client side, the context is not derived from the context returned.
+	TagConn(context.Context, *ConnTagInfo) context.Context
+	// HandleConn processes the Conn stats.
+	HandleConn(context.Context, ConnStats)
 }

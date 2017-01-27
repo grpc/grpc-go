@@ -428,6 +428,7 @@ type test struct {
 	streamClientInt   grpc.StreamClientInterceptor
 	unaryServerInt    grpc.UnaryServerInterceptor
 	streamServerInt   grpc.StreamServerInterceptor
+	sc                <-chan grpc.ServiceConfig
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -450,7 +451,9 @@ func (te *test) tearDown() {
 		te.restoreLogs()
 		te.restoreLogs = nil
 	}
-	te.srv.Stop()
+	if te.srv != nil {
+		te.srv.Stop()
+	}
 }
 
 // newTest returns a new test using the provided testing.T and
@@ -545,6 +548,10 @@ func (te *test) clientConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithDialer(te.e.dialer),
 		grpc.WithUserAgent(te.userAgent),
+	}
+
+	if te.sc != nil {
+		opts = append(opts, grpc.WithServiceConfig(te.sc))
 	}
 
 	if te.clientCompression {
@@ -1011,6 +1018,79 @@ func testFailFast(t *testing.T, e env) {
 	}
 
 	awaitNewConnLogOutput()
+}
+
+func TestServiceConfig(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServiceConfig(t, e)
+	}
+}
+
+func testServiceConfig(t *testing.T, e env) {
+	te := newTest(t, e)
+	ch := make(chan grpc.ServiceConfig)
+	te.sc = ch
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	defer te.tearDown()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		mc := grpc.MethodConfig{
+			WaitForReady: true,
+			Timeout:      time.Millisecond,
+		}
+		m := make(map[string]grpc.MethodConfig)
+		m["/grpc.testing.TestService/EmptyCall"] = mc
+		m["/grpc.testing.TestService/FullDuplexCall"] = mc
+		sc := grpc.ServiceConfig{
+			Methods: m,
+		}
+		ch <- sc
+	}()
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+	wg.Wait()
+	// Generate a service config update.
+	mc := grpc.MethodConfig{
+		WaitForReady: false,
+	}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+	// Loop until the new update becomes effective.
+	for {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+			continue
+		}
+		break
+	}
+	// The following RPCs are expected to become fail-fast.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	}
+	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.Unavailable)
+	}
 }
 
 func TestTap(t *testing.T) {
@@ -3188,6 +3268,117 @@ func TestServerCredsDispatch(t *testing.T) {
 	}
 }
 
+func TestFlowControlLogicalRace(t *testing.T) {
+	// Test for a regression of https://github.com/grpc/grpc-go/issues/632,
+	// and other flow control bugs.
+
+	defer leakCheck(t)()
+
+	const (
+		itemCount   = 100
+		itemSize    = 1 << 10
+		recvCount   = 2
+		maxFailures = 3
+
+		requestTimeout = time.Second
+	)
+
+	requestCount := 10000
+	if raceMode {
+		requestCount = 1000
+	}
+
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+
+	s := grpc.NewServer()
+	testpb.RegisterTestServiceServer(s, &flowControlLogicalRaceServer{
+		itemCount: itemCount,
+		itemSize:  itemSize,
+	})
+	defer s.Stop()
+
+	go s.Serve(lis)
+
+	ctx := context.Background()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+	cl := testpb.NewTestServiceClient(cc)
+
+	failures := 0
+	for i := 0; i < requestCount; i++ {
+		ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+		output, err := cl.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+		if err != nil {
+			t.Fatalf("StreamingOutputCall; err = %q", err)
+		}
+
+		j := 0
+	loop:
+		for ; j < recvCount; j++ {
+			_, err := output.Recv()
+			if err != nil {
+				if err == io.EOF {
+					break loop
+				}
+				switch grpc.Code(err) {
+				case codes.DeadlineExceeded:
+					break loop
+				default:
+					t.Fatalf("Recv; err = %q", err)
+				}
+			}
+		}
+		cancel()
+		<-ctx.Done()
+
+		if j < recvCount {
+			t.Errorf("got %d responses to request %d", j, i)
+			failures++
+			if failures >= maxFailures {
+				// Continue past the first failure to see if the connection is
+				// entirely broken, or if only a single RPC was affected
+				break
+			}
+		}
+	}
+}
+
+type flowControlLogicalRaceServer struct {
+	testpb.TestServiceServer
+
+	itemSize  int
+	itemCount int
+}
+
+func (s *flowControlLogicalRaceServer) StreamingOutputCall(req *testpb.StreamingOutputCallRequest, srv testpb.TestService_StreamingOutputCallServer) error {
+	for i := 0; i < s.itemCount; i++ {
+		err := srv.Send(&testpb.StreamingOutputCallResponse{
+			Payload: &testpb.Payload{
+				// Sending a large stream of data which the client reject
+				// helps to trigger some types of flow control bugs.
+				//
+				// Reallocating memory here is inefficient, but the stress it
+				// puts on the GC leads to more frequent flow control
+				// failures. The GC likely causes more variety in the
+				// goroutine scheduling orders.
+				Body: bytes.Repeat([]byte("a"), s.itemSize),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // interestingGoroutines returns all goroutines we care about for the purpose
 // of leak checking. It excludes testing or runtime ones.
 func interestingGoroutines() (gs []string) {
@@ -3208,6 +3399,7 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "testing.tRunner(") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
+			strings.Contains(stack, "created by runtime/trace.Start") ||
 			strings.Contains(stack, "created by google3/base/go/log.init") ||
 			strings.Contains(stack, "interestingGoroutines") ||
 			strings.Contains(stack, "runtime.MHeap_Scavenger") ||

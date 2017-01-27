@@ -49,6 +49,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/tap"
 )
 
@@ -358,9 +359,10 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams  uint32
-	AuthInfo    credentials.AuthInfo
-	InTapHandle tap.ServerInHandle
+	MaxStreams   uint32
+	AuthInfo     credentials.AuthInfo
+	InTapHandle  tap.ServerInHandle
+	StatsHandler stats.Handler
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -383,6 +385,8 @@ type ConnectOptions struct {
 	TransportCredentials credentials.TransportCredentials
 	// KeepaliveParams stores the keepalive parameters.
 	KeepaliveParams keepalive.Params
+	// StatsHandler stores the handler for stats.
+	StatsHandler stats.Handler
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.

@@ -41,7 +41,6 @@ import (
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/oauth"
 )
 
 const tlsDir = "testdata/"
@@ -51,8 +50,8 @@ func TestDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != ErrClientConnTimeout {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
 	}
 }
 
@@ -65,8 +64,8 @@ func TestTLSDialTimeout(t *testing.T) {
 	if err == nil {
 		conn.Close()
 	}
-	if err != ErrClientConnTimeout {
-		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Dial(_, _) = %v, %v, want %v", conn, err, context.DeadlineExceeded)
 	}
 }
 
@@ -131,6 +130,17 @@ func TestDialWithBlockingBalancer(t *testing.T) {
 	<-dialDone
 }
 
+// securePerRPCCredentials always requires transport security.
+type securePerRPCCredentials struct{}
+
+func (c securePerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return nil, nil
+}
+
+func (c securePerRPCCredentials) RequireTransportSecurity() bool {
+	return true
+}
+
 func TestCredentialsMisuse(t *testing.T) {
 	tlsCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
 	if err != nil {
@@ -140,12 +150,8 @@ func TestCredentialsMisuse(t *testing.T) {
 	if _, err := Dial("Non-Existent.Server:80", WithTransportCredentials(tlsCreds), WithBlock(), WithInsecure()); err != errCredentialsConflict {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errCredentialsConflict)
 	}
-	rpcCreds, err := oauth.NewJWTAccessFromKey(nil)
-	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
-	}
 	// security info on insecure connection
-	if _, err := Dial("Non-Existent.Server:80", WithPerRPCCredentials(rpcCreds), WithBlock(), WithInsecure()); err != errTransportCredentialsMissing {
+	if _, err := Dial("Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithBlock(), WithInsecure()); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 }
