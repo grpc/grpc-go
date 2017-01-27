@@ -40,10 +40,14 @@ option java_outer_classname = "DynamicReflectionTestProto";
 
 package grpc.reflection.testing;
 
+// A DynamicService
 service DynamicService {
+  // A method
   rpc Method (DynamicRequest) returns (DynamicReply) {}
 }
 
+// AnotherDynamicService
 service AnotherDynamicService {
+  // A method
   rpc Method (DynamicRequest) returns (DynamicReply) {}
 }

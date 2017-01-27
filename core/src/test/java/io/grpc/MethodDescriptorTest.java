@@ -58,7 +58,7 @@ public class MethodDescriptorTest {
 
   @Test
   public void idempotent() {
-    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>newBuilder()
+    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
         .setFullMethodName("/package.service/method")
         .setRequestMarshaller(new StringMarshaller())
@@ -78,7 +78,7 @@ public class MethodDescriptorTest {
 
   @Test
   public void safe() {
-    MethodDescriptor<String,String> descriptor = MethodDescriptor.<String, String>newBuilder()
+    MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.UNARY)
         .setFullMethodName("/package.service/method")
         .setRequestMarshaller(new StringMarshaller())
@@ -104,9 +104,8 @@ public class MethodDescriptorTest {
         .build();
 
 
-    MethodDescriptor<String,String> discard = descriptor.toBuilder().setSafe(true).build();
+    MethodDescriptor<String, String> discard = descriptor.toBuilder().setSafe(true).build();
     // Never reached
     assert discard == null;
   }
 }
-

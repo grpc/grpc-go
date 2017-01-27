@@ -64,7 +64,7 @@ public class ServiceDescriptorTest {
     thrown.expect(NullPointerException.class);
     thrown.expectMessage("methods");
 
-    new ServiceDescriptor("name", (Collection<MethodDescriptor<?, ?>>)null);
+    new ServiceDescriptor("name", (Collection<MethodDescriptor<?, ?>>) null);
   }
 
   @Test

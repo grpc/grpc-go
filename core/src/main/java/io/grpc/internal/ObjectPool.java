@@ -33,6 +33,9 @@ package io.grpc.internal;
 
 import javax.annotation.concurrent.ThreadSafe;
 
+/**
+ * An object pool.
+ */
 @ThreadSafe
 public interface ObjectPool<T> {
   /**

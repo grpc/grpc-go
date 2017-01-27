@@ -16,6 +16,9 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 
 /**
+ * <pre>
+ * AnotherDynamicService
+ * </pre>
  */
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.1.0-SNAPSHOT)",
@@ -61,10 +64,16 @@ public class AnotherDynamicServiceGrpc {
   }
 
   /**
+   * <pre>
+   * AnotherDynamicService
+   * </pre>
    */
   public static abstract class AnotherDynamicServiceImplBase implements io.grpc.BindableService {
 
     /**
+     * <pre>
+     * A method
+     * </pre>
      */
     public void method(io.grpc.reflection.testing.DynamicRequest request,
         io.grpc.stub.StreamObserver<io.grpc.reflection.testing.DynamicReply> responseObserver) {
@@ -85,6 +94,9 @@ public class AnotherDynamicServiceGrpc {
   }
 
   /**
+   * <pre>
+   * AnotherDynamicService
+   * </pre>
    */
   public static final class AnotherDynamicServiceStub extends io.grpc.stub.AbstractStub<AnotherDynamicServiceStub> {
     private AnotherDynamicServiceStub(io.grpc.Channel channel) {
@@ -103,6 +115,9 @@ public class AnotherDynamicServiceGrpc {
     }
 
     /**
+     * <pre>
+     * A method
+     * </pre>
      */
     public void method(io.grpc.reflection.testing.DynamicRequest request,
         io.grpc.stub.StreamObserver<io.grpc.reflection.testing.DynamicReply> responseObserver) {
@@ -112,6 +127,9 @@ public class AnotherDynamicServiceGrpc {
   }
 
   /**
+   * <pre>
+   * AnotherDynamicService
+   * </pre>
    */
   public static final class AnotherDynamicServiceBlockingStub extends io.grpc.stub.AbstractStub<AnotherDynamicServiceBlockingStub> {
     private AnotherDynamicServiceBlockingStub(io.grpc.Channel channel) {
@@ -130,6 +148,9 @@ public class AnotherDynamicServiceGrpc {
     }
 
     /**
+     * <pre>
+     * A method
+     * </pre>
      */
     public io.grpc.reflection.testing.DynamicReply method(io.grpc.reflection.testing.DynamicRequest request) {
       return blockingUnaryCall(
@@ -138,6 +159,9 @@ public class AnotherDynamicServiceGrpc {
   }
 
   /**
+   * <pre>
+   * AnotherDynamicService
+   * </pre>
    */
   public static final class AnotherDynamicServiceFutureStub extends io.grpc.stub.AbstractStub<AnotherDynamicServiceFutureStub> {
     private AnotherDynamicServiceFutureStub(io.grpc.Channel channel) {
@@ -156,6 +180,9 @@ public class AnotherDynamicServiceGrpc {
     }
 
     /**
+     * <pre>
+     * A method
+     * </pre>
      */
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.reflection.testing.DynamicReply> method(
         io.grpc.reflection.testing.DynamicRequest request) {

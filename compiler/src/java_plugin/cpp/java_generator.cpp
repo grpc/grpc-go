@@ -298,7 +298,7 @@ void GrpcWriteMethodDocComment(Printer* printer,
 }
 
 static void PrintMethodFields(
-    const ServiceDescriptor* service, std::map<string, string>* vars, 
+    const ServiceDescriptor* service, std::map<string, string>* vars,
     Printer* p, ProtoFlavor flavor) {
   p->Print("// Static method descriptors that strictly reflect the proto.\n");
   (*vars)["service_name"] = service->name();
