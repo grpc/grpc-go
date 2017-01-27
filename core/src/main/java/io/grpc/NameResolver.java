@@ -49,11 +49,13 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public abstract class NameResolver {
   /**
-   * Returns the authority, which is also the name of the service.
+   * Returns the authority used to authenticate connections to servers.  It <strong>must</strong> be
+   * from a trusted source, because if the authority is tampered with, RPCs may be sent to the
+   * attackers which may leak sensitive user data.
    *
-   * <p>An implementation must generate it locally and <string>must</strong> keep it
-   * unchanged. {@code NameResolver}s created from the same factory with the same argument must
-   * return the same authority.
+   * <p>An implementation must generate it without blocking, typically in line, and
+   * <strong>must</strong> keep it unchanged. {@code NameResolver}s created from the same factory
+   * with the same argument must return the same authority.
    */
   public abstract String getServiceAuthority();
 
