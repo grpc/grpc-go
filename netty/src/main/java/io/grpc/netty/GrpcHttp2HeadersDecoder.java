@@ -58,7 +58,6 @@ import io.grpc.Metadata;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2Exception;
-import io.netty.handler.codec.http2.Http2HeaderTable;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.internal.hpack.Decoder;
@@ -79,21 +78,11 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
   private static final float HEADERS_COUNT_WEIGHT_NEW = 1 / 5f;
   private static final float HEADERS_COUNT_WEIGHT_HISTORICAL = 1 - HEADERS_COUNT_WEIGHT_NEW;
 
-  private final Decoder decoder = new Decoder();
-  private final Http2HeaderTable headerTable = new GrpcHttp2HeaderTable();
+  private final Decoder decoder;
   private float numHeadersGuess = 8;
 
   GrpcHttp2HeadersDecoder(long maxHeaderListSize) {
-    try {
-      decoder.setMaxHeaderListSize(maxHeaderListSize);
-    } catch (Http2Exception e) {
-      PlatformDependent.throwException(e);
-    }
-  }
-
-  @Override
-  public Http2HeaderTable headerTable() {
-    return headerTable;
+    decoder = new Decoder(maxHeaderListSize, 32 /* same as default */);
   }
 
   @Override
@@ -114,26 +103,30 @@ abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
     return this;
   }
 
-  private final class GrpcHttp2HeaderTable implements Http2HeaderTable {
-    @Override
-    public void maxHeaderTableSize(long max) throws Http2Exception {
-      decoder.setMaxHeaderTableSize(max);
-    }
+  @Override
+  public long maxHeaderListSize() {
+    return decoder.getMaxHeaderListSize();
+  }
 
-    @Override
-    public long maxHeaderTableSize() {
-      return decoder.getMaxHeaderTableSize();
-    }
+  @Override
+  public void maxHeaderListSize(long maxHeaderListSize, long maxHeaderListSizeGoAway)
+      throws Http2Exception {
+    decoder.setMaxHeaderListSize(maxHeaderListSize, maxHeaderListSizeGoAway);
+  }
 
-    @Override
-    public void maxHeaderListSize(long max) throws Http2Exception {
-      decoder.setMaxHeaderListSize(max);
-    }
+  @Override
+  public long maxHeaderListSizeGoAway() {
+    return decoder.getMaxHeaderListSizeGoAway();
+  }
 
-    @Override
-    public long maxHeaderListSize() {
-      return decoder.getMaxHeaderListSize();
-    }
+  @Override
+  public long maxHeaderTableSize() {
+    return decoder.getMaxHeaderTableSize();
+  }
+
+  @Override
+  public void maxHeaderTableSize(long max) throws Http2Exception {
+    decoder.setMaxHeaderTableSize(max);
   }
 
   static final class GrpcHttp2ServerHeadersDecoder extends GrpcHttp2HeadersDecoder {
