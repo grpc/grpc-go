@@ -22,13 +22,13 @@ func (p *Params) Validate() {
 		p.Time = Infinity
 	}
 	if p.Timeout == 0 {
-		p.Time = TwentySec
+		p.Time = TwentyScnd
 	}
 }
 
 const (
 	// Infinity is the default value of keepalive time.
 	Infinity = time.Duration(math.MaxInt64)
-	// TwentySec is the default value of timeout.
-	TwentySec = time.Duration(20 * time.Second)
+	// TwentyScnd is the default value of timeout.
+	TwentyScnd = time.Duration(20 * time.Second)
 )

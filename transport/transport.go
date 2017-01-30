@@ -392,7 +392,7 @@ type ConnectOptions struct {
 // default values for keepalive parameters.
 var defaultKeepaliveParams = &keepalive.Params{
 	Time:    keepalive.Infinity, // default to infinite.
-	Timeout: keepalive.TwentySec,
+	Timeout: keepalive.TwentyScnd,
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
