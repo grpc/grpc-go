@@ -298,10 +298,8 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
-	keepalive.Enable()
-	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: &keepalive.Params{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
 		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
@@ -324,10 +322,8 @@ func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
-	keepalive.Enable()
-	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: &keepalive.Params{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
 		PermitWithoutStream: false,           // Don't run keepalive even with no RPCs.
@@ -350,10 +346,8 @@ func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
 }
 
 func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
-	keepalive.Enable()
-	defer keepalive.Disable()
 	done := make(chan net.Conn, 1)
-	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.Params{
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: &keepalive.Params{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
 		PermitWithoutStream: false,           // Don't run keepalive even with no RPCs.
@@ -381,12 +375,10 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
-	keepalive.Enable()
-	defer keepalive.Disable()
-	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KeepaliveParams: keepalive.Params{
+	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KeepaliveParams: &keepalive.Params{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
-		PermitWithoutStream: true,            // Don't run keepalive even with no RPCs.
+		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
 	}})
 	defer s.stop()
 	defer tr.Close()

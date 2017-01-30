@@ -2,7 +2,6 @@ package keepalive
 
 import (
 	"math"
-	"sync"
 	"time"
 )
 
@@ -16,35 +15,20 @@ type Params struct {
 	PermitWithoutStream bool
 }
 
-// DefaultParams contains default values for keepalive parameters.
-var DefaultParams = Params{
-	Time:    time.Duration(math.MaxInt64), // default to infinite.
-	Timeout: time.Duration(20 * time.Second),
+// Validate is used to validate the keepalive parameters.
+// Time durations initialized to 0 will be replaced with default Values.
+func (p *Params) Validate() {
+	if p.Time == 0 {
+		p.Time = Infinity
+	}
+	if p.Timeout == 0 {
+		p.Time = TwentySec
+	}
 }
 
-// mu is a mutex to protect Enabled variable.
-var mu = sync.Mutex{}
-
-// enable is a knob used to turn keepalive on or off.
-var enable = false
-
-// Enabled exposes the value of enable variable.
-func Enabled() bool {
-	mu.Lock()
-	defer mu.Unlock()
-	return enable
-}
-
-// Enable can be called to enable keepalives.
-func Enable() {
-	mu.Lock()
-	defer mu.Unlock()
-	enable = true
-}
-
-// Disable can be called to disable keepalive.
-func Disable() {
-	mu.Lock()
-	defer mu.Unlock()
-	enable = false
-}
+const (
+	// Infinity is the default value of keepalive time.
+	Infinity = time.Duration(math.MaxInt64)
+	// TwentySec is the default value of timeout.
+	TwentySec = time.Duration(20 * time.Second)
+)

@@ -51,6 +51,11 @@ const (
 // The following defines various control items which could flow through
 // the control buffer of transport. They represent different aspects of
 // control tasks, e.g., flow control, settings, streaming resetting, etc.
+
+type fireKeepaliveTimer struct{}
+
+func (fireKeepaliveTimer) item() {}
+
 type windowUpdate struct {
 	streamID  uint32
 	increment uint32

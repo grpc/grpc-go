@@ -384,9 +384,15 @@ type ConnectOptions struct {
 	// TransportCredentials stores the Authenticator required to setup a client connection.
 	TransportCredentials credentials.TransportCredentials
 	// KeepaliveParams stores the keepalive parameters.
-	KeepaliveParams keepalive.Params
+	KeepaliveParams *keepalive.Params
 	// StatsHandler stores the handler for stats.
 	StatsHandler stats.Handler
+}
+
+// default values for keepalive parameters.
+var defaultKeepaliveParams = &keepalive.Params{
+	Time:    keepalive.Infinity, // default to infinite.
+	Timeout: keepalive.TwentySec,
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.

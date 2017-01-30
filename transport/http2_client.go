@@ -101,10 +101,14 @@ type http2Client struct {
 
 	creds []credentials.PerRPCCredentials
 
-	// Counter to keep track of activity(reading and writing on transport).
+	// Counter to keep track of reading activity on transport.
 	activity uint64 // accessed atomically.
+	// Flag to keep track if the keepalive check was skipped because there
+	// were no active streams and keepalive.PermitWithoutStream was false
+	// keepaliveSkipped = 1 means skipped
+	keepaliveSkipped uint32 // accessed atomically
 	// keepalive parameters.
-	kp keepalive.Params
+	kp           *keepalive.Params
 	statsHandler stats.Handler
 
 	mu            sync.Mutex     // guard the following variables
@@ -188,9 +192,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
-	kp := keepalive.DefaultParams
-	if opts.KeepaliveParams != (keepalive.Params{}) {
+	kp := defaultKeepaliveParams
+	if opts.KeepaliveParams != nil {
 		kp = opts.KeepaliveParams
+		kp.Validate()
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -384,6 +389,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	s := t.newStream(ctx, callHdr)
 	s.clientStatsCtx = userCtx
 	t.activeStreams[s.id] = s
+	// if the number of active streams are now equal to 1, then check if keepalive
+	// was being skipped. If so, fire the keepalive timer
+	if len(t.activeStreams) == 1 && atomic.LoadUint32(&t.keepaliveSkipped) == 1 {
+		t.controlBuf.put(fireKeepaliveTimer{})
+	}
 
 	// This stream is not counted when applySetings(...) initialize t.streamsQuota.
 	// Reset t.streamsQuota to the right value.
@@ -717,7 +727,6 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			break
 		}
 	}
-	atomic.AddUint64(&t.activity, 1)
 	if !opts.Last {
 		return nil
 	}
@@ -1082,7 +1091,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Client) controller() {
 	timer := time.NewTimer(t.kp.Time)
-	if !keepalive.Enabled() {
+	if t.kp.Timeout == keepalive.Infinity {
 		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
 			<-timer.C
@@ -1090,17 +1099,36 @@ func (t *http2Client) controller() {
 	}
 	isPingSent := false
 	keepalivePing := &ping{data: [8]byte{}}
+	// select toggles between control channel and writable chanel.
+	// We need to wait on writable channel only after having recieved
+	// a control message that requires controller to take an action.
+	// However, while waiting on either of these channels, the keepalive
+	// timer channel or shutdown channel might trigger. Such toggling
+	// take care of this case.
 	cchan := t.controlBuf.get()
-	wchan := nil
+	var wchan chan int
+	var controlMsg item
 	for {
 		select {
-		case i := <-cchan:
+		case controlMsg = <-cchan:
 			t.controlBuf.load()
+			// If controlMsg is of type fireKeepaliveTimer,
+			// then check if the keepaliveSkipped flag is still set.
+			if _, ok := controlMsg.(fireKeepaliveTimer); ok {
+				if atomic.LoadUint32(&t.keepaliveSkipped) == 1 {
+					// Reset the timer to 0 so that it fires.
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(0)
+				}
+				continue
+			}
 			wchan = t.writableChan
 			cchan = nil
 			continue
 		case <-wchan:
-			switch i := i.(type) {
+			switch i := controlMsg.(type) {
 			case *windowUpdate:
 				t.framer.writeWindowUpdate(true, i.streamID, i.increment)
 			case *settings:
@@ -1127,22 +1155,30 @@ func (t *http2Client) controller() {
 			t.mu.Lock()
 			ns := len(t.activeStreams)
 			t.mu.Unlock()
-			// Get the activity counter value and reset it.
-			a := atomic.SwapUint64(&t.activity, 0)
-			if a > 0 || (!t.kp.PermitWithoutStream && ns < 1) {
+			if !t.kp.PermitWithoutStream && ns < 1 {
 				timer.Reset(t.kp.Time)
 				isPingSent = false
-			} else {
-				if !isPingSent {
-					// Send ping.
-					t.controlBuf.put(keepalivePing)
-					isPingSent = true
-					timer.Reset(t.kp.Timeout)
-				} else {
-					t.Close()
-					continue
-				}
+				// set flag that signifyies keepalive was skipped
+				atomic.StoreUint32(&t.keepaliveSkipped, 1)
+				continue
 			}
+			// reset the keepaliveSkipped flag
+			atomic.StoreUint32(&t.keepaliveSkipped, 0)
+			// Get the activity counter value and reset it.
+			a := atomic.SwapUint64(&t.activity, 0)
+			if a > 0 {
+				timer.Reset(t.kp.Time)
+				isPingSent = false
+				continue
+			}
+			if !isPingSent {
+				// Send ping.
+				t.controlBuf.put(keepalivePing)
+				isPingSent = true
+				timer.Reset(t.kp.Timeout)
+				continue
+			}
+			t.Close()
 		case <-t.shutdownChan:
 			return
 		}
