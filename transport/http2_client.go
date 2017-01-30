@@ -1003,6 +1003,7 @@ func (t *http2Client) reader() {
 		t.notifyError(err)
 		return
 	}
+	atomic.AddUint64(&t.activity, 1)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		t.notifyError(err)
