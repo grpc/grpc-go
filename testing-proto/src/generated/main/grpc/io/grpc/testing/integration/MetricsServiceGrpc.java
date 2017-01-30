@@ -286,11 +286,11 @@ public class MetricsServiceGrpc {
       synchronized (MetricsServiceGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new MetricsServiceDescriptorSupplier(),
-              METHOD_GET_ALL_GAUGES,
-              METHOD_GET_GAUGE);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new MetricsServiceDescriptorSupplier())
+              .addMethod(METHOD_GET_ALL_GAUGES)
+              .addMethod(METHOD_GET_GAUGE)
+              .build();
         }
       }
     }

@@ -395,13 +395,13 @@ public class WorkerServiceGrpc {
       synchronized (WorkerServiceGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new WorkerServiceDescriptorSupplier(),
-              METHOD_RUN_SERVER,
-              METHOD_RUN_CLIENT,
-              METHOD_CORE_COUNT,
-              METHOD_QUIT_WORKER);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new WorkerServiceDescriptorSupplier())
+              .addMethod(METHOD_RUN_SERVER)
+              .addMethod(METHOD_RUN_CLIENT)
+              .addMethod(METHOD_CORE_COUNT)
+              .addMethod(METHOD_QUIT_WORKER)
+              .build();
         }
       }
     }

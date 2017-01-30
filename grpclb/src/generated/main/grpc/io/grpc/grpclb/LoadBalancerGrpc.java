@@ -208,10 +208,10 @@ public class LoadBalancerGrpc {
       synchronized (LoadBalancerGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new LoadBalancerDescriptorSupplier(),
-              METHOD_BALANCE_LOAD);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new LoadBalancerDescriptorSupplier())
+              .addMethod(METHOD_BALANCE_LOAD)
+              .build();
         }
       }
     }

@@ -337,10 +337,10 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
         List<ServerServiceDefinition> currentMutableServices = server.getMutableServices();
         for (ServerServiceDefinition mutableService : currentMutableServices) {
           io.grpc.ServiceDescriptor serviceDescriptor = mutableService.getServiceDescriptor();
-          if (serviceDescriptor.getMarshallerDescriptor() instanceof ProtoFileDescriptorSupplier) {
+          if (serviceDescriptor.getSchemaDescriptor() instanceof ProtoFileDescriptorSupplier) {
             String serviceName = serviceDescriptor.getName();
             FileDescriptor fileDescriptor =
-                ((ProtoFileDescriptorSupplier) serviceDescriptor.getMarshallerDescriptor())
+                ((ProtoFileDescriptorSupplier) serviceDescriptor.getSchemaDescriptor())
                     .getFileDescriptor();
             currentFileDescriptors.add(fileDescriptor);
             checkState(!currentServiceNames.contains(serviceName),
@@ -433,9 +433,9 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       Set<String> seenFiles = new HashSet<String>();
       for (ServerServiceDefinition service : services) {
         io.grpc.ServiceDescriptor serviceDescriptor = service.getServiceDescriptor();
-        if (serviceDescriptor.getMarshallerDescriptor() instanceof ProtoFileDescriptorSupplier) {
+        if (serviceDescriptor.getSchemaDescriptor() instanceof ProtoFileDescriptorSupplier) {
           FileDescriptor fileDescriptor =
-              ((ProtoFileDescriptorSupplier) serviceDescriptor.getMarshallerDescriptor())
+              ((ProtoFileDescriptorSupplier) serviceDescriptor.getSchemaDescriptor())
                   .getFileDescriptor();
           String serviceName = serviceDescriptor.getName();
           checkState(!serviceNames.contains(serviceName),

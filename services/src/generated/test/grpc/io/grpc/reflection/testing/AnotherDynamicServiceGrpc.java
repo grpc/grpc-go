@@ -245,10 +245,10 @@ public class AnotherDynamicServiceGrpc {
       synchronized (AnotherDynamicServiceGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new AnotherDynamicServiceDescriptorSupplier(),
-              METHOD_METHOD);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new AnotherDynamicServiceDescriptorSupplier())
+              .addMethod(METHOD_METHOD)
+              .build();
         }
       }
     }

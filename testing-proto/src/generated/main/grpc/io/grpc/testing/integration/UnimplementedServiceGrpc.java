@@ -250,10 +250,10 @@ public class UnimplementedServiceGrpc {
       synchronized (UnimplementedServiceGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new UnimplementedServiceDescriptorSupplier(),
-              METHOD_UNIMPLEMENTED_CALL);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new UnimplementedServiceDescriptorSupplier())
+              .addMethod(METHOD_UNIMPLEMENTED_CALL)
+              .build();
         }
       }
     }

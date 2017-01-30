@@ -571,16 +571,16 @@ public class TestServiceGrpc {
       synchronized (TestServiceGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new TestServiceDescriptorSupplier(),
-              METHOD_EMPTY_CALL,
-              METHOD_UNARY_CALL,
-              METHOD_STREAMING_OUTPUT_CALL,
-              METHOD_STREAMING_INPUT_CALL,
-              METHOD_FULL_DUPLEX_CALL,
-              METHOD_HALF_DUPLEX_CALL,
-              METHOD_UNIMPLEMENTED_CALL);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new TestServiceDescriptorSupplier())
+              .addMethod(METHOD_EMPTY_CALL)
+              .addMethod(METHOD_UNARY_CALL)
+              .addMethod(METHOD_STREAMING_OUTPUT_CALL)
+              .addMethod(METHOD_STREAMING_INPUT_CALL)
+              .addMethod(METHOD_FULL_DUPLEX_CALL)
+              .addMethod(METHOD_HALF_DUPLEX_CALL)
+              .addMethod(METHOD_UNIMPLEMENTED_CALL)
+              .build();
         }
       }
     }

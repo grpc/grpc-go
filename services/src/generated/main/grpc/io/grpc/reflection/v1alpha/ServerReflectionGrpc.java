@@ -210,10 +210,10 @@ public class ServerReflectionGrpc {
       synchronized (ServerReflectionGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new ServerReflectionDescriptorSupplier(),
-              METHOD_SERVER_REFLECTION_INFO);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new ServerReflectionDescriptorSupplier())
+              .addMethod(METHOD_SERVER_REFLECTION_INFO)
+              .build();
         }
       }
     }

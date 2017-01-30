@@ -218,10 +218,10 @@ public class HealthGrpc {
       synchronized (HealthGrpc.class) {
         result = serviceDescriptor;
         if (result == null) {
-          serviceDescriptor = result = new io.grpc.ServiceDescriptor(
-              SERVICE_NAME,
-              new HealthDescriptorSupplier(),
-              METHOD_CHECK);
+          serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
+              .setSchemaDescriptor(new HealthDescriptorSupplier())
+              .addMethod(METHOD_CHECK)
+              .build();
         }
       }
     }

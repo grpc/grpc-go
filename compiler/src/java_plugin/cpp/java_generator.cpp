@@ -930,21 +930,20 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
 
   p->Print(
       *vars,
-      "serviceDescriptor = result = new $ServiceDescriptor$(\n");
+      "serviceDescriptor = result = $ServiceDescriptor$.newBuilder(SERVICE_NAME)");
   p->Indent();
   p->Indent();
-  p->Print("SERVICE_NAME");
   if (flavor == ProtoFlavor::NORMAL) {
     p->Print(
         *vars,
-        ",\nnew $proto_descriptor_supplier$()");
+        "\n.setSchemaDescriptor(new $proto_descriptor_supplier$())");
   }
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
-    p->Print(*vars, ",\n$method_field_name$");
+    p->Print(*vars, "\n.addMethod($method_field_name$)");
   }
-  p->Print(");\n");
+  p->Print("\n.build();\n");
   p->Outdent();
   p->Outdent();
 

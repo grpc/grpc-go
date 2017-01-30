@@ -56,7 +56,7 @@ public class ServiceDescriptorTest {
     thrown.expect(NullPointerException.class);
     thrown.expectMessage("name");
 
-    new ServiceDescriptor(null, Collections.emptyList());
+    new ServiceDescriptor(null, Collections.<MethodDescriptor<?, ?>>emptyList());
   }
 
   @Test
@@ -65,6 +65,14 @@ public class ServiceDescriptorTest {
     thrown.expectMessage("methods");
 
     new ServiceDescriptor("name", (Collection<MethodDescriptor<?, ?>>) null);
+  }
+
+  @Test
+  public void failsOnNullMethod() {
+    thrown.expect(NullPointerException.class);
+    thrown.expectMessage("method");
+
+    new ServiceDescriptor("name", (Collections.<MethodDescriptor<?, ?>>singletonList(null)));
   }
 
   @Test
