@@ -4,7 +4,7 @@ description = "Thrift Examples"
 
 startScripts.enabled = false
 
-def grpcVersion = '1.1.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+def grpcVersion = '1.2.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 repositories {
   mavenCentral()
