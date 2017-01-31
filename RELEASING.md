@@ -135,6 +135,20 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
    $ git push upstream v$MAJOR.$MINOR.$PATCH
    $ git push upstream v$MAJOR.$MINOR.x
    ```
+8. Make sure you are [logged in](https://grpc-testing.appspot.com/manage) to
+   Jenkins, then make a [new release
+   job](https://grpc-testing.appspot.com/view/Releases/newJob)
+   * _Name_: gRPC-Java-$MAJOR.$MINOR-Windows
+   * _Copy from_: gRPC-Java-master-windows
+   * Click _OK_ button
+   * _Display Name_ under _Use custom workspace_ (not ~~Project
+     url~~): gRPC Java $MAJOR.$MINOR Windows
+   * Under _Source Code Management_, _Branches to build_'s
+   _Branch Specifier_: `*/v$MAJOR.$MINOR.x`
+   * Click _SAVE_ button
+   * Click _Build Now_
+   * Click on job #1, then _Console Output_. Verify the `git checkout` checked
+     out the correct commit
 
 Setup Build Environment
 ---------------------------
