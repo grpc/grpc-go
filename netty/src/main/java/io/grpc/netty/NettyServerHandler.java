@@ -352,10 +352,18 @@ class NettyServerHandler extends AbstractNettyHandler {
    */
   private void sendResponseHeaders(ChannelHandlerContext ctx, SendResponseHeadersCommand cmd,
       ChannelPromise promise) throws Http2Exception {
-    if (cmd.endOfStream()) {
-      closeStreamWhenDone(promise, cmd.stream().id());
+    // TODO(carl-mastrangelo): remove this check once https://github.com/netty/netty/issues/6296 is
+    // fixed.
+    int streamId = cmd.stream().id();
+    Http2Stream stream = connection().stream(streamId);
+    if (stream == null) {
+      resetStream(ctx, streamId, Http2Error.CANCEL.code(), promise);
+      return;
     }
-    encoder().writeHeaders(ctx, cmd.stream().id(), cmd.headers(), 0, cmd.endOfStream(), promise);
+    if (cmd.endOfStream()) {
+      closeStreamWhenDone(promise, streamId);
+    }
+    encoder().writeHeaders(ctx, streamId, cmd.headers(), 0, cmd.endOfStream(), promise);
   }
 
   private void cancelStream(ChannelHandlerContext ctx, CancelServerStreamCommand cmd,
