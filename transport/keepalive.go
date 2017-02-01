@@ -1,12 +1,12 @@
-package keepalive
+package transport
 
 import (
 	"math"
 	"time"
 )
 
-// Params is used to set keepalive parameters.
-type Params struct {
+// KeepaliveParameters is used to set keepalive parameters.
+type KeepaliveParameters struct {
 	// After a duration of this time the client pings the server to see if the transport is still alive.
 	Time time.Duration
 	// After having pinged fot keepalive check, the client waits for a duration of keepalive_timeout before closing the transport.
@@ -17,18 +17,18 @@ type Params struct {
 
 // Validate is used to validate the keepalive parameters.
 // Time durations initialized to 0 will be replaced with default Values.
-func (p *Params) Validate() {
+func (p *KeepaliveParameters) validate() {
 	if p.Time == 0 {
-		p.Time = Infinity
+		p.Time = infinity
 	}
 	if p.Timeout == 0 {
-		p.Time = TwentyScnd
+		p.Timeout = twentyScnd
 	}
 }
 
 const (
 	// Infinity is the default value of keepalive time.
-	Infinity = time.Duration(math.MaxInt64)
+	infinity = time.Duration(math.MaxInt64)
 	// TwentyScnd is the default value of timeout.
-	TwentyScnd = time.Duration(20 * time.Second)
+	twentyScnd = time.Duration(20 * time.Second)
 )

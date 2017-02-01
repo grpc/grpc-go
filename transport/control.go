@@ -52,9 +52,9 @@ const (
 // the control buffer of transport. They represent different aspects of
 // control tasks, e.g., flow control, settings, streaming resetting, etc.
 
-type fireKeepaliveTimer struct{}
+type resetKeepaliveTimer struct{}
 
-func (fireKeepaliveTimer) item() {}
+func (resetKeepaliveTimer) item() {}
 
 type windowUpdate struct {
 	streamID  uint32
