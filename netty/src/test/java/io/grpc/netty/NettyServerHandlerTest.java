@@ -136,6 +136,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
     // Simulate receipt of the connection preface
+    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY);
     channelRead(Http2CodecUtil.connectionPrefaceBuf());
     // Simulate receipt of initial remote settings.
     ByteBuf serializedSettings = serializeSettings(new Http2Settings());
