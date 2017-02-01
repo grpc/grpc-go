@@ -21,7 +21,7 @@ need to make the following changes:
 ```diff
 --- a/examples/build.gradle
 +++ b/examples/build.gradle
-@@ -27,6 +27,7 @@ def grpcVersion = '1.2.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+@@ -27,6 +27,7 @@
  dependencies {
    compile "io.grpc:grpc-netty:${grpcVersion}"
    compile "io.grpc:grpc-protobuf:${grpcVersion}"
