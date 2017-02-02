@@ -5,6 +5,7 @@ buildscript {
   }
   dependencies {
     classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
+    classpath "ru.vyarus:gradle-animalsniffer-plugin:1.2.0"
   }
 }
 
@@ -17,6 +18,8 @@ subprojects {
     apply plugin: "jacoco"
 
     apply plugin: "com.google.osdetector"
+    // The plugin only has an effect if a signature is specified
+    apply plugin: "ru.vyarus.animalsniffer"
 
     group = "io.grpc"
     version = "1.2.0-SNAPSHOT" // CURRENT_GRPC_VERSION

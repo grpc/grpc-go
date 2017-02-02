@@ -7,6 +7,7 @@ dependencies {
     // Tests depend on base class defined by core module.
     testCompile project(':grpc-core').sourceSets.test.output,
                 project(':grpc-testing')
+    signature "org.codehaus.mojo.signature:java17:+@signature"
 }
 
 test {

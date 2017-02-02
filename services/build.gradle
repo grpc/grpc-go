@@ -8,24 +8,16 @@ buildscript {
     }
 }
 
-plugins {
-    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
-}
-
 description = "gRPC: Services"
 
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
     testCompile project(':grpc-testing')
+    signature "org.codehaus.mojo.signature:java16:+@signature"
 }
 
 configureProtoCompilation()
-
-// Configure the animal sniffer plugin
-animalsniffer {
-    signature = "org.codehaus.mojo.signature:java16:+@signature"
-}
 
 // Let intellij projects refer to generated code
 idea {

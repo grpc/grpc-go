@@ -8,10 +8,6 @@ buildscript {
     }
 }
 
-plugins {
-    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
-}
-
 apply plugin: 'com.google.protobuf'
 
 description = 'gRPC: Protobuf Lite'
@@ -22,6 +18,8 @@ dependencies {
             libraries.guava
 
     testProtobuf libraries.protobuf
+
+    signature "org.codehaus.mojo.signature:java16:+@signature"
 }
 
 compileTestJava {
@@ -56,8 +54,4 @@ protobuf {
       }
     }
   }
-}
-
-animalsniffer {
-    signature = "org.codehaus.mojo.signature:java16:+@signature"
 }

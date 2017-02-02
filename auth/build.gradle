@@ -1,15 +1,7 @@
-plugins {
-    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
-}
-
 description = "gRpc: Auth"
 dependencies {
     compile project(':grpc-core'),
             libraries.google_auth_credentials
     testCompile libraries.oauth_client
-}
-
-// Configure the animal sniffer plugin
-animalsniffer {
-    signature = "org.codehaus.mojo.signature:java16:+@signature"
+    signature "org.codehaus.mojo.signature:java16:+@signature"
 }

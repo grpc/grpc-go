@@ -1,17 +1,9 @@
-plugins {
-    id "be.insaneprogramming.gradle.animalsniffer" version "1.4.0"
-}
-
 description = "gRPC: Stub"
 dependencies {
     compile project(':grpc-core')
     testCompile libraries.truth,
     project(':grpc-testing')
-}
-
-// Configure the animal sniffer plugin
-animalsniffer {
-    signature = "org.codehaus.mojo.signature:java16:+@signature"
+    signature "org.codehaus.mojo.signature:java16:+@signature"
 }
 
 javadoc.options.links "https://google.github.io/guava/releases/${guavaVersion}/api/docs/"
