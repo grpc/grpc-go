@@ -116,6 +116,8 @@ import org.mockito.verification.VerificationMode;
 
 /**
  * Abstract base class for all GRPC transport tests.
+ *
+ * <p> New tests should avoid using Mockito to support running on AppEngine.</p>
  */
 public abstract class AbstractInteropTest {
   /** Must be at least {@link #unaryPayloadLength()}, plus some to account for encoding overhead. */
@@ -354,29 +356,41 @@ public abstract class AbstractInteropTest {
                 .setBody(ByteString.copyFrom(new byte[58979])))
             .build());
 
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(5);
     StreamObserver<StreamingOutputCallRequest> requestObserver
-        = asyncStub.fullDuplexCall(responseObserver);
+        = asyncStub.fullDuplexCall(new StreamObserver<StreamingOutputCallResponse>() {
+          @Override
+          public void onNext(StreamingOutputCallResponse response) {
+            queue.add(response);
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            queue.add(t);
+          }
+
+          @Override
+          public void onCompleted() {
+            queue.add("Completed");
+          }
+        });
     for (int i = 0; i < requests.size(); i++) {
+      assertNull(queue.peek());
       requestObserver.onNext(requests.get(i));
-      verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(i));
-      verifyNoMoreInteractions(responseObserver);
+      assertEquals(goldenResponses.get(i),
+                   queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     }
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
-    verifyNoMoreInteractions(responseObserver);
+    assertEquals("Completed", queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
   }
 
   @Test(timeout = 10000)
   public void emptyStream() throws Exception {
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
-    verifyNoMoreInteractions(responseObserver);
+    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
   }
 
   @Test(timeout = 10000)
@@ -410,19 +424,16 @@ public abstract class AbstractInteropTest {
             .setBody(ByteString.copyFrom(new byte[31415])))
         .build();
 
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(request);
-    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponse);
-    verifyNoMoreInteractions(responseObserver);
-
+    assertEquals(goldenResponse, responseObserver.firstValue().get());
     requestObserver.onError(new RuntimeException());
-    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(operationTimeoutMillis())).onError(captor.capture());
-    assertEquals(Status.Code.CANCELLED, Status.fromThrowable(captor.getValue()).getCode());
-    verifyNoMoreInteractions(responseObserver);
+    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+    assertEquals(1, responseObserver.getValues().size());
+    assertEquals(Status.Code.CANCELLED,
+                 Status.fromThrowable(responseObserver.getError()).getCode());
 
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.CANCELLED);
@@ -1071,11 +1082,11 @@ public abstract class AbstractInteropTest {
 
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   @Test(timeout = 10000)
-  public void timeoutOnSleepingServer() {
+  public void timeoutOnSleepingServer() throws Exception {
     TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel)
         .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+
+    StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = stub.fullDuplexCall(responseObserver);
 
@@ -1089,11 +1100,10 @@ public abstract class AbstractInteropTest {
       // This can happen if the stream has already been terminated due to deadline exceeded.
     }
 
-    ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-    verify(responseObserver, timeout(operationTimeoutMillis())).onError(captor.capture());
+    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+    assertEquals(0, responseObserver.getValues().size());
     assertEquals(Status.DEADLINE_EXCEEDED.getCode(),
-        Status.fromThrowable(captor.getValue()).getCode());
-    verifyNoMoreInteractions(responseObserver);
+                 Status.fromThrowable(responseObserver.getError()).getCode());
 
     if (metricsExpected()) {
       assertClientMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.DEADLINE_EXCEEDED);
