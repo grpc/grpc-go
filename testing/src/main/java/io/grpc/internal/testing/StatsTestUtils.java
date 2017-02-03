@@ -91,6 +91,9 @@ public class StatsTestUtils {
     }
   }
 
+  /**
+   * This tag will be propagated by {@link FakeStatsContextFactory} on the wire.
+   */
   public static final TagKey EXTRA_TAG = TagKey.create("/rpc/test/extratag");
 
   private static final String EXTRA_TAG_HEADER_VALUE_PREFIX = "extratag:";
