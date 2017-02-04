@@ -263,6 +263,15 @@ func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 	}
 }
 
+// WithAuthority returns a DialOption that specifies the value to be used as
+// the :authority pseudo-header. This value overrides the :authority value
+// provided by TransportCredentials if present.
+func WithAuthority(a string) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Authority = a
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
@@ -319,7 +328,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.dopts.bs = DefaultBackoffConfig
 	}
 	creds := cc.dopts.copts.TransportCredentials
-	if creds != nil && creds.Info().ServerName != "" {
+	if cc.dopts.copts.Authority != "" {
+		cc.authority = cc.dopts.copts.Authority
+	} else if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
 	} else {
 		colonPos := strings.LastIndex(target, ":")
