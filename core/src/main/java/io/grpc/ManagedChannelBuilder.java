@@ -178,9 +178,15 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * to try out LBv2, or you are migrating your LoadBalancer implementation to LBv2.  See
    * <a href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more
    * information.
+   *
+   * <p><strong>IMPORTANT: </strong>This method is implemented by all stock channel builders that
+   * are shipped with gRPC, but may not be implemented by custom channel builders, in which case
+   * this method will throw.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-  public abstract T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory);
+  public T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory) {
+    throw new UnsupportedOperationException("Not implemented by " + this.getClass().getName());
+  }
 
   /**
    * Set the decompression registry for use in the channel.  This is an advanced API call and
