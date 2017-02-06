@@ -145,7 +145,7 @@ public class NettyClientTransportTest {
   public void addDefaultUserAgent() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     // Send a single RPC and wait for the response.
     new Rpc(transport).halfClose().waitForResponse();
@@ -169,7 +169,7 @@ public class NettyClientTransportTest {
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
         authority, null /* user agent */);
     transports.add(transport);
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     // verify SO_LINGER has been set
     ChannelConfig config = transport.channel().config();
@@ -182,7 +182,7 @@ public class NettyClientTransportTest {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator(),
         DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent");
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     new Rpc(transport, new Metadata()).halfClose().waitForResponse();
 
@@ -199,7 +199,7 @@ public class NettyClientTransportTest {
     // Allow the response payloads of up to 1 byte.
     NettyClientTransport transport = newTransport(newNegotiator(),
         1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null);
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     try {
       // Send a single RPC and wait for the response.
@@ -224,7 +224,7 @@ public class NettyClientTransportTest {
     ProtocolNegotiator negotiator = newNegotiator();
     for (int index = 0; index < 2; ++index) {
       NettyClientTransport transport = newTransport(negotiator);
-      transport.start(clientTransportListener);
+      callMeMaybe(transport.start(clientTransportListener));
     }
 
     // Send a single RPC on each transport.
@@ -245,7 +245,7 @@ public class NettyClientTransportTest {
     startServer(1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE);
 
     NettyClientTransport transport = newTransport(newNegotiator());
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     // Send a dummy RPC in order to ensure that the updated SETTINGS_MAX_CONCURRENT_STREAMS
     // has been received by the remote endpoint.
@@ -281,7 +281,7 @@ public class NettyClientTransportTest {
 
     NettyClientTransport transport =
         newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1, null);
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     try {
       // Send a single RPC and wait for the response.
@@ -300,7 +300,7 @@ public class NettyClientTransportTest {
     startServer(100, 1);
 
     NettyClientTransport transport = newTransport(newNegotiator());
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
 
     try {
       // Send a single RPC and wait for the response.
@@ -338,7 +338,7 @@ public class NettyClientTransportTest {
   public void clientStreamGetsAttributes() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator());
-    transport.start(clientTransportListener);
+    callMeMaybe(transport.start(clientTransportListener));
     Rpc rpc = new Rpc(transport).halfClose();
     rpc.waitForResponse();
 
@@ -390,6 +390,12 @@ public class NettyClientTransportTest {
     server.start(serverListener);
     address = TestUtils.testServerAddress(server.getPort());
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
+  }
+
+  private void callMeMaybe(Runnable r) {
+    if (r != null) {
+      r.run();
+    }
   }
 
   private static class Rpc {

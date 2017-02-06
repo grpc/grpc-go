@@ -33,6 +33,7 @@ package io.grpc.netty;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelPromise;
@@ -87,6 +88,7 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
+  @CanIgnoreReturnValue
   ChannelFuture enqueue(QueuedCommand command, boolean flush) {
     return enqueue(command, channel.newPromise(), flush);
   }
@@ -99,6 +101,7 @@ class WriteQueue {
    * @param flush true if a flush of the write should be schedule, false if a later call to
    *              enqueue will schedule the flush.
    */
+  @CanIgnoreReturnValue
   ChannelFuture enqueue(QueuedCommand command, ChannelPromise promise, boolean flush) {
     // Detect erroneous code that tries to reuse command objects.
     Preconditions.checkArgument(command.promise() == null, "promise must not be set on command");

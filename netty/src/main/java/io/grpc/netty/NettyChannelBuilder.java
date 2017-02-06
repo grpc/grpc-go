@@ -39,6 +39,7 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
 import io.grpc.NameResolver;
@@ -57,6 +58,7 @@ import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 
@@ -64,6 +66,7 @@ import javax.net.ssl.SSLException;
  * A builder to help simplify construction of channels using the Netty transport.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
+@CanIgnoreReturnValue
 public final class NettyChannelBuilder
     extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
@@ -91,6 +94,7 @@ public final class NettyChannelBuilder
    * generally be preferred over this method, since that API permits delaying DNS lookups and
    * noticing changes to DNS.
    */
+  @CheckReturnValue
   public static NettyChannelBuilder forAddress(SocketAddress serverAddress) {
     return new NettyChannelBuilder(serverAddress);
   }
@@ -98,6 +102,7 @@ public final class NettyChannelBuilder
   /**
    * Creates a new builder with the given host and port.
    */
+  @CheckReturnValue
   public static NettyChannelBuilder forAddress(String host, int port) {
     return new NettyChannelBuilder(host, port);
   }
@@ -106,22 +111,27 @@ public final class NettyChannelBuilder
    * Creates a new builder with the given target string that will be resolved by
    * {@link io.grpc.NameResolver}.
    */
+  @CheckReturnValue
   public static NettyChannelBuilder forTarget(String target) {
     return new NettyChannelBuilder(target);
   }
 
+  @CheckReturnValue
   NettyChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
   }
 
+  @CheckReturnValue
   NettyChannelBuilder(String target) {
     super(target);
   }
 
+  @CheckReturnValue
   NettyChannelBuilder(SocketAddress address) {
     super(address, getAuthorityFromAddress(address));
   }
 
+  @CheckReturnValue
   private static String getAuthorityFromAddress(SocketAddress address) {
     if (address instanceof InetSocketAddress) {
       InetSocketAddress inetAddress = (InetSocketAddress) address;
@@ -258,6 +268,7 @@ public final class NettyChannelBuilder
   }
 
   @Override
+  @CheckReturnValue
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
         negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
@@ -265,6 +276,7 @@ public final class NettyChannelBuilder
   }
 
   @Override
+  @CheckReturnValue
   protected Attributes getNameResolverParams() {
     int defaultPort;
     switch (negotiationType) {
@@ -287,6 +299,7 @@ public final class NettyChannelBuilder
   }
 
   @VisibleForTesting
+  @CheckReturnValue
   static ProtocolNegotiator createProtocolNegotiator(
       String authority,
       NegotiationType negotiationType,
@@ -306,6 +319,7 @@ public final class NettyChannelBuilder
     return negotiator;
   }
 
+  @CheckReturnValue
   private static ProtocolNegotiator createProtocolNegotiatorByType(
       String authority,
       NegotiationType negotiationType,
@@ -329,11 +343,13 @@ public final class NettyChannelBuilder
     }
   }
 
+  @CheckReturnValue
   interface OverrideAuthorityChecker {
     String checkAuthority(String authority);
   }
 
   @Override
+  @CheckReturnValue
   protected String checkAuthority(String authority) {
     if (authorityChecker != null) {
       return authorityChecker.checkAuthority(authority);
@@ -346,10 +362,12 @@ public final class NettyChannelBuilder
   }
 
   interface TransportCreationParamsFilterFactory {
+    @CheckReturnValue
     TransportCreationParamsFilter create(
         SocketAddress targetServerAddress, String authority, @Nullable String userAgent);
   }
 
+  @CheckReturnValue
   interface TransportCreationParamsFilter {
     SocketAddress getTargetServerAddress();
 
@@ -363,6 +381,7 @@ public final class NettyChannelBuilder
   /**
    * Creates Netty transports. Exposed for internal use, as it should be private.
    */
+  @CheckReturnValue
   private static final class NettyTransportFactory implements ClientTransportFactory {
     private final TransportCreationParamsFilterFactory transportCreationParamsFilterFactory;
     private final Class<? extends Channel> channelType;
@@ -446,6 +465,7 @@ public final class NettyChannelBuilder
       }
     }
 
+    @CheckReturnValue
     private final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
 
       private final SocketAddress targetServerAddress;

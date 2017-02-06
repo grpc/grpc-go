@@ -33,6 +33,7 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
 import io.netty.handler.codec.http2.Http2SecurityUtil;
 import io.netty.handler.ssl.ApplicationProtocolConfig;
@@ -133,6 +134,7 @@ public class GrpcSslContexts {
    * Set ciphers and APN appropriate for gRPC. Precisely what is set is permitted to change, so if
    * an application requires particular settings it should override the options set here.
    */
+  @CanIgnoreReturnValue
   public static SslContextBuilder configure(SslContextBuilder builder) {
     return configure(builder, defaultSslProvider());
   }
@@ -142,6 +144,7 @@ public class GrpcSslContexts {
    * an application requires particular settings it should override the options set here.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
+  @CanIgnoreReturnValue
   public static SslContextBuilder configure(SslContextBuilder builder, SslProvider provider) {
     return builder.sslProvider(provider)
                   .ciphers(Http2SecurityUtil.CIPHERS, SupportedCipherSuiteFilter.INSTANCE)

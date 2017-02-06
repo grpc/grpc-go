@@ -60,6 +60,7 @@ import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -536,6 +537,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     createStream();
   }
 
+  @CanIgnoreReturnValue
   private ChannelFuture sendPing(PingCallback callback) {
     return enqueue(new SendPingCommand(callback, MoreExecutors.directExecutor()));
   }
@@ -545,11 +547,13 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     channelRead(serializedSettings);
   }
 
+  @CanIgnoreReturnValue
   private ChannelFuture createStream() throws Exception {
     ChannelFuture future = enqueue(new CreateStreamCommand(grpcHeaders, streamTransportState));
     return future;
   }
 
+  @CanIgnoreReturnValue
   private ChannelFuture cancelStream(Status status) throws Exception {
     return enqueue(new CancelClientStreamCommand(streamTransportState, status));
   }

@@ -35,6 +35,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
 import com.google.common.base.Preconditions;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.internal.AbstractServerImplBuilder;
@@ -46,6 +47,7 @@ import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
 
@@ -53,6 +55,7 @@ import javax.net.ssl.SSLException;
  * A builder to help simplify the construction of a Netty-based GRPC server.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
+@CanIgnoreReturnValue
 public final class NettyServerBuilder extends AbstractServerImplBuilder<NettyServerBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
@@ -75,6 +78,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * @param port the port on which the server is to be bound.
    * @return the server builder.
    */
+  @CheckReturnValue
   public static NettyServerBuilder forPort(int port) {
     return new NettyServerBuilder(port);
   }
@@ -85,14 +89,17 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * @param address the socket address on which the server is to be bound.
    * @return the server builder
    */
+  @CheckReturnValue
   public static NettyServerBuilder forAddress(SocketAddress address) {
     return new NettyServerBuilder(address);
   }
 
+  @CheckReturnValue
   private NettyServerBuilder(int port) {
     this.address = new InetSocketAddress(port);
   }
 
+  @CheckReturnValue
   private NettyServerBuilder(SocketAddress address) {
     this.address = address;
   }
@@ -221,6 +228,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   @Override
+  @CheckReturnValue
   protected NettyServer buildTransportServer() {
     ProtocolNegotiator negotiator = protocolNegotiator;
     if (negotiator == null) {
