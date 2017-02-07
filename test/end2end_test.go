@@ -1484,6 +1484,38 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 }
 
+func TestPeerClientSide(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerClientSide(t, e)
+	}
+}
+
+func testPeerClientSide(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	peer := new(peer.Peer)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	pa := extractPort(peer.Addr.String())
+	sa := extractPort(te.srvAddr)
+	if pa != sa {
+		t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pa, sa)
+	}
+}
+
+func extractPort(addr string) string {
+	sp := strings.Split(addr, ":")
+	if len(sp) < 2 {
+		return ""
+	}
+	return sp[1]
+}
+
 func TestMultipleSetTrailerUnaryRPC(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
