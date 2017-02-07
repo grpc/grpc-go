@@ -34,6 +34,8 @@
 package grpc
 
 import (
+	"bytes"
+	"sync"
 	"testing"
 
 	"google.golang.org/grpc/test/codec_perf"
@@ -61,10 +63,8 @@ func marshalAndUnmarshal(protoCodec Codec, expectedBody []byte, t *testing.T) {
 
 	result := deserialized.GetBody()
 
-	for i, v := range result {
-		if expectedBody[i] != v {
-			t.Fatalf("expected slice differs from result")
-		}
+	if bytes.Compare(result, expectedBody) != 0 {
+		t.Fatalf("Unexpected body; got %v; want %v", result, expectedBody)
 	}
 }
 
@@ -116,5 +116,76 @@ func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 		if expectedBody2[i] != v {
 			t.Fatalf("expected %v at index %v but got %v", i, expectedBody2[i], v)
 		}
+	}
+}
+
+// The possible use of certain protobuf APIs like the proto.Buffer API potentially involves caching
+// on our side. This can add checks around memory allocations and possible contention.
+// Example run: go test -v -run=^$ -bench=BenchmarkProtoCodec -benchmem
+func BenchmarkProtoCodecSingleGoroutine(b *testing.B) {
+	codec := &protoCodec{}
+	benchmarkProtoCodec(codec, b)
+}
+
+func BenchmarkProtoCodec2Goroutines(b *testing.B) {
+	benchmarkProtoCodecConcurrentUsage(2, b)
+}
+
+func BenchmarkProtoCodec10Goroutines(b *testing.B) {
+	benchmarkProtoCodecConcurrentUsage(10, b)
+}
+
+func BenchmarkProtoCodec100Goroutines(b *testing.B) {
+	benchmarkProtoCodecConcurrentUsage(100, b)
+}
+
+func BenchmarkProtoCodec1000Goroutines(b *testing.B) {
+	benchmarkProtoCodecConcurrentUsage(1000, b)
+}
+
+func BenchmarkProtoCodec10000Goroutines(b *testing.B) {
+	benchmarkProtoCodecConcurrentUsage(10000, b)
+}
+
+func benchmarkProtoCodecConcurrentUsage(goroutines int, b *testing.B) {
+	codec := &protoCodec{}
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i += 1 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			benchmarkProtoCodec(codec, b)
+		}()
+	}
+	wg.Wait()
+}
+
+func benchmarkProtoCodec(codec *protoCodec, b *testing.B) {
+	// small, arbitrary byte slices
+	protoBodies := [][]byte{
+		[]byte("one"),
+		[]byte("two"),
+		[]byte("three"),
+		[]byte("four"),
+		[]byte("five"),
+	}
+
+	protoStruct := &codec_perf.Buffer{}
+
+	for i := 0; i < b.N; i += 1 {
+		body := protoBodies[i%len(protoBodies)]
+		protoStruct.Body = body
+		fastMarshalAndUnmarshal(codec, protoStruct, b)
+	}
+}
+
+func fastMarshalAndUnmarshal(protoCodec Codec, protoStruct interface{}, b *testing.B) {
+	marshalledBytes, err := protoCodec.Marshal(protoStruct)
+	if err != nil {
+		b.Fatalf("protoCodec.Marshal(_) returned an error")
+	}
+
+	if err = protoCodec.Unmarshal(marshalledBytes, protoStruct); err != nil {
+		b.Fatalf("protoCodec.Unmarshal(_) returned an error")
 	}
 }

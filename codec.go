@@ -64,7 +64,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	// field in 'proto.Buffer.enc_len_thing'
 	var sizeNeeded = proto.Size(protoMsg) + protoSizeFieldLength
 
-	buffer := globalBufAlloc()
+	buffer := protoBufferPool.Get().(*proto.Buffer)
 
 	newSlice := make([]byte, sizeNeeded)
 
@@ -76,17 +76,16 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	}
 	out := buffer.Bytes()
 	buffer.SetBuf(nil)
-	globalBufFree(buffer)
+	protoBufferPool.Put(buffer)
 	return out, err
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
-	//var token = atomic.AddUint32(&globalBufCacheToken, 1)
-	buffer := globalBufAlloc()
+	buffer := protoBufferPool.Get().(*proto.Buffer)
 	buffer.SetBuf(data)
 	err := buffer.Unmarshal(v.(proto.Message))
 	buffer.SetBuf(nil)
-	globalBufFree(buffer)
+	protoBufferPool.Put(buffer)
 	return err
 }
 
@@ -95,13 +94,5 @@ func (protoCodec) String() string {
 }
 
 var (
-	bufCachePool = &sync.Pool{New: func() interface{} { return &proto.Buffer{} }}
+	protoBufferPool = &sync.Pool{New: func() interface{} { return &proto.Buffer{} }}
 )
-
-func globalBufAlloc() *proto.Buffer {
-	return bufCachePool.Get().(*proto.Buffer)
-}
-
-func globalBufFree(buf *proto.Buffer) {
-	bufCachePool.Put(buf)
-}
