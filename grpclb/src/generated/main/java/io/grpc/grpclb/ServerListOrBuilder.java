@@ -74,7 +74,7 @@ public interface ServerListOrBuilder extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   boolean hasExpirationInterval();
   /**
@@ -85,7 +85,7 @@ public interface ServerListOrBuilder extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   com.google.protobuf.Duration getExpirationInterval();
   /**
@@ -96,7 +96,7 @@ public interface ServerListOrBuilder extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   com.google.protobuf.DurationOrBuilder getExpirationIntervalOrBuilder();
 }

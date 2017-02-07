@@ -181,7 +181,7 @@ public  final class FileDescriptorResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     if (getFileDescriptorProtoCount() > 0) {
       hash = (37 * hash) + FILE_DESCRIPTOR_PROTO_FIELD_NUMBER;
       hash = (53 * hash) + getFileDescriptorProtoList().hashCode();

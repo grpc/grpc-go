@@ -95,7 +95,7 @@ public  final class ClientStats extends
    * The total number of requests sent by the client since the last report.
    * </pre>
    *
-   * <code>optional int64 total_requests = 1;</code>
+   * <code>int64 total_requests = 1;</code>
    */
   public long getTotalRequests() {
     return totalRequests_;
@@ -108,7 +108,7 @@ public  final class ClientStats extends
    * The number of client rpc errors since the last report.
    * </pre>
    *
-   * <code>optional int64 client_rpc_errors = 2;</code>
+   * <code>int64 client_rpc_errors = 2;</code>
    */
   public long getClientRpcErrors() {
     return clientRpcErrors_;
@@ -121,7 +121,7 @@ public  final class ClientStats extends
    * The number of dropped requests since the last report.
    * </pre>
    *
-   * <code>optional int64 dropped_requests = 3;</code>
+   * <code>int64 dropped_requests = 3;</code>
    */
   public long getDroppedRequests() {
     return droppedRequests_;
@@ -198,7 +198,7 @@ public  final class ClientStats extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + TOTAL_REQUESTS_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getTotalRequests());
@@ -444,7 +444,7 @@ public  final class ClientStats extends
      * The total number of requests sent by the client since the last report.
      * </pre>
      *
-     * <code>optional int64 total_requests = 1;</code>
+     * <code>int64 total_requests = 1;</code>
      */
     public long getTotalRequests() {
       return totalRequests_;
@@ -454,7 +454,7 @@ public  final class ClientStats extends
      * The total number of requests sent by the client since the last report.
      * </pre>
      *
-     * <code>optional int64 total_requests = 1;</code>
+     * <code>int64 total_requests = 1;</code>
      */
     public Builder setTotalRequests(long value) {
       
@@ -467,7 +467,7 @@ public  final class ClientStats extends
      * The total number of requests sent by the client since the last report.
      * </pre>
      *
-     * <code>optional int64 total_requests = 1;</code>
+     * <code>int64 total_requests = 1;</code>
      */
     public Builder clearTotalRequests() {
       
@@ -482,7 +482,7 @@ public  final class ClientStats extends
      * The number of client rpc errors since the last report.
      * </pre>
      *
-     * <code>optional int64 client_rpc_errors = 2;</code>
+     * <code>int64 client_rpc_errors = 2;</code>
      */
     public long getClientRpcErrors() {
       return clientRpcErrors_;
@@ -492,7 +492,7 @@ public  final class ClientStats extends
      * The number of client rpc errors since the last report.
      * </pre>
      *
-     * <code>optional int64 client_rpc_errors = 2;</code>
+     * <code>int64 client_rpc_errors = 2;</code>
      */
     public Builder setClientRpcErrors(long value) {
       
@@ -505,7 +505,7 @@ public  final class ClientStats extends
      * The number of client rpc errors since the last report.
      * </pre>
      *
-     * <code>optional int64 client_rpc_errors = 2;</code>
+     * <code>int64 client_rpc_errors = 2;</code>
      */
     public Builder clearClientRpcErrors() {
       
@@ -520,7 +520,7 @@ public  final class ClientStats extends
      * The number of dropped requests since the last report.
      * </pre>
      *
-     * <code>optional int64 dropped_requests = 3;</code>
+     * <code>int64 dropped_requests = 3;</code>
      */
     public long getDroppedRequests() {
       return droppedRequests_;
@@ -530,7 +530,7 @@ public  final class ClientStats extends
      * The number of dropped requests since the last report.
      * </pre>
      *
-     * <code>optional int64 dropped_requests = 3;</code>
+     * <code>int64 dropped_requests = 3;</code>
      */
     public Builder setDroppedRequests(long value) {
       
@@ -543,7 +543,7 @@ public  final class ClientStats extends
      * The number of dropped requests since the last report.
      * </pre>
      *
-     * <code>optional int64 dropped_requests = 3;</code>
+     * <code>int64 dropped_requests = 3;</code>
      */
     public Builder clearDroppedRequests() {
       

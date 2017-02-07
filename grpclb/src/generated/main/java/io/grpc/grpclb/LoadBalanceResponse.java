@@ -137,7 +137,7 @@ public  final class LoadBalanceResponse extends
    * This message should be sent on the first response to the client.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse() {
     if (loadBalanceResponseTypeCase_ == 1) {
@@ -150,7 +150,7 @@ public  final class LoadBalanceResponse extends
    * This message should be sent on the first response to the client.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder() {
     if (loadBalanceResponseTypeCase_ == 1) {
@@ -166,7 +166,7 @@ public  final class LoadBalanceResponse extends
    * should send requests to these servers in the specified order.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
    */
   public io.grpc.grpclb.ServerList getServerList() {
     if (loadBalanceResponseTypeCase_ == 2) {
@@ -180,7 +180,7 @@ public  final class LoadBalanceResponse extends
    * should send requests to these servers in the specified order.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
    */
   public io.grpc.grpclb.ServerListOrBuilder getServerListOrBuilder() {
     if (loadBalanceResponseTypeCase_ == 2) {
@@ -262,7 +262,7 @@ public  final class LoadBalanceResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     switch (loadBalanceResponseTypeCase_) {
       case 1:
         hash = (37 * hash) + INITIAL_RESPONSE_FIELD_NUMBER;
@@ -534,7 +534,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse() {
       if (initialResponseBuilder_ == null) {
@@ -554,7 +554,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public Builder setInitialResponse(io.grpc.grpclb.InitialLoadBalanceResponse value) {
       if (initialResponseBuilder_ == null) {
@@ -574,7 +574,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public Builder setInitialResponse(
         io.grpc.grpclb.InitialLoadBalanceResponse.Builder builderForValue) {
@@ -592,7 +592,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public Builder mergeInitialResponse(io.grpc.grpclb.InitialLoadBalanceResponse value) {
       if (initialResponseBuilder_ == null) {
@@ -618,7 +618,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public Builder clearInitialResponse() {
       if (initialResponseBuilder_ == null) {
@@ -641,7 +641,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceResponse.Builder getInitialResponseBuilder() {
       return getInitialResponseFieldBuilder().getBuilder();
@@ -651,7 +651,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder() {
       if ((loadBalanceResponseTypeCase_ == 1) && (initialResponseBuilder_ != null)) {
@@ -668,7 +668,7 @@ public  final class LoadBalanceResponse extends
      * This message should be sent on the first response to the client.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceResponse, io.grpc.grpclb.InitialLoadBalanceResponse.Builder, io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder> 
@@ -697,7 +697,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public io.grpc.grpclb.ServerList getServerList() {
       if (serverListBuilder_ == null) {
@@ -718,7 +718,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public Builder setServerList(io.grpc.grpclb.ServerList value) {
       if (serverListBuilder_ == null) {
@@ -739,7 +739,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public Builder setServerList(
         io.grpc.grpclb.ServerList.Builder builderForValue) {
@@ -758,7 +758,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public Builder mergeServerList(io.grpc.grpclb.ServerList value) {
       if (serverListBuilder_ == null) {
@@ -785,7 +785,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public Builder clearServerList() {
       if (serverListBuilder_ == null) {
@@ -809,7 +809,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public io.grpc.grpclb.ServerList.Builder getServerListBuilder() {
       return getServerListFieldBuilder().getBuilder();
@@ -820,7 +820,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     public io.grpc.grpclb.ServerListOrBuilder getServerListOrBuilder() {
       if ((loadBalanceResponseTypeCase_ == 2) && (serverListBuilder_ != null)) {
@@ -838,7 +838,7 @@ public  final class LoadBalanceResponse extends
      * should send requests to these servers in the specified order.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.ServerList, io.grpc.grpclb.ServerList.Builder, io.grpc.grpclb.ServerListOrBuilder> 

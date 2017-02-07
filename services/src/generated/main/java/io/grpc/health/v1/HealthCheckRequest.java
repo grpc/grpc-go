@@ -75,7 +75,7 @@ public  final class HealthCheckRequest extends
   public static final int SERVICE_FIELD_NUMBER = 1;
   private volatile java.lang.Object service_;
   /**
-   * <code>optional string service = 1;</code>
+   * <code>string service = 1;</code>
    */
   public java.lang.String getService() {
     java.lang.Object ref = service_;
@@ -90,7 +90,7 @@ public  final class HealthCheckRequest extends
     }
   }
   /**
-   * <code>optional string service = 1;</code>
+   * <code>string service = 1;</code>
    */
   public com.google.protobuf.ByteString
       getServiceBytes() {
@@ -158,7 +158,7 @@ public  final class HealthCheckRequest extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + SERVICE_FIELD_NUMBER;
     hash = (53 * hash) + getService().hashCode();
     hash = (29 * hash) + unknownFields.hashCode();
@@ -377,7 +377,7 @@ public  final class HealthCheckRequest extends
 
     private java.lang.Object service_ = "";
     /**
-     * <code>optional string service = 1;</code>
+     * <code>string service = 1;</code>
      */
     public java.lang.String getService() {
       java.lang.Object ref = service_;
@@ -392,7 +392,7 @@ public  final class HealthCheckRequest extends
       }
     }
     /**
-     * <code>optional string service = 1;</code>
+     * <code>string service = 1;</code>
      */
     public com.google.protobuf.ByteString
         getServiceBytes() {
@@ -408,7 +408,7 @@ public  final class HealthCheckRequest extends
       }
     }
     /**
-     * <code>optional string service = 1;</code>
+     * <code>string service = 1;</code>
      */
     public Builder setService(
         java.lang.String value) {
@@ -421,7 +421,7 @@ public  final class HealthCheckRequest extends
       return this;
     }
     /**
-     * <code>optional string service = 1;</code>
+     * <code>string service = 1;</code>
      */
     public Builder clearService() {
       
@@ -430,7 +430,7 @@ public  final class HealthCheckRequest extends
       return this;
     }
     /**
-     * <code>optional string service = 1;</code>
+     * <code>string service = 1;</code>
      */
     public Builder setServiceBytes(
         com.google.protobuf.ByteString value) {

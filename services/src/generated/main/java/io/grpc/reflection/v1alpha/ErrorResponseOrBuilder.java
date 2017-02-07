@@ -12,16 +12,16 @@ public interface ErrorResponseOrBuilder extends
    * This field uses the error codes defined in grpc::StatusCode.
    * </pre>
    *
-   * <code>optional int32 error_code = 1;</code>
+   * <code>int32 error_code = 1;</code>
    */
   int getErrorCode();
 
   /**
-   * <code>optional string error_message = 2;</code>
+   * <code>string error_message = 2;</code>
    */
   java.lang.String getErrorMessage();
   /**
-   * <code>optional string error_message = 2;</code>
+   * <code>string error_message = 2;</code>
    */
   com.google.protobuf.ByteString
       getErrorMessageBytes();

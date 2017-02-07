@@ -277,7 +277,7 @@ public final class Messages {
      * The type of data in body.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
+     * <code>.grpc.testing.PayloadType type = 1;</code>
      */
     int getTypeValue();
     /**
@@ -285,7 +285,7 @@ public final class Messages {
      * The type of data in body.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
+     * <code>.grpc.testing.PayloadType type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getType();
 
@@ -294,7 +294,7 @@ public final class Messages {
      * Primary contents of payload.
      * </pre>
      *
-     * <code>optional bytes body = 2;</code>
+     * <code>bytes body = 2;</code>
      */
     com.google.protobuf.ByteString getBody();
   }
@@ -384,7 +384,7 @@ public final class Messages {
      * The type of data in body.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
+     * <code>.grpc.testing.PayloadType type = 1;</code>
      */
     public int getTypeValue() {
       return type_;
@@ -394,7 +394,7 @@ public final class Messages {
      * The type of data in body.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType type = 1;</code>
+     * <code>.grpc.testing.PayloadType type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getType() {
       io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(type_);
@@ -408,7 +408,7 @@ public final class Messages {
      * Primary contents of payload.
      * </pre>
      *
-     * <code>optional bytes body = 2;</code>
+     * <code>bytes body = 2;</code>
      */
     public com.google.protobuf.ByteString getBody() {
       return body_;
@@ -475,7 +475,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + TYPE_FIELD_NUMBER;
       hash = (53 * hash) + type_;
       hash = (37 * hash) + BODY_FIELD_NUMBER;
@@ -709,7 +709,7 @@ public final class Messages {
        * The type of data in body.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
+       * <code>.grpc.testing.PayloadType type = 1;</code>
        */
       public int getTypeValue() {
         return type_;
@@ -719,7 +719,7 @@ public final class Messages {
        * The type of data in body.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
+       * <code>.grpc.testing.PayloadType type = 1;</code>
        */
       public Builder setTypeValue(int value) {
         type_ = value;
@@ -731,7 +731,7 @@ public final class Messages {
        * The type of data in body.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
+       * <code>.grpc.testing.PayloadType type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getType() {
         io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(type_);
@@ -742,7 +742,7 @@ public final class Messages {
        * The type of data in body.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
+       * <code>.grpc.testing.PayloadType type = 1;</code>
        */
       public Builder setType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -758,7 +758,7 @@ public final class Messages {
        * The type of data in body.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType type = 1;</code>
+       * <code>.grpc.testing.PayloadType type = 1;</code>
        */
       public Builder clearType() {
         
@@ -773,7 +773,7 @@ public final class Messages {
        * Primary contents of payload.
        * </pre>
        *
-       * <code>optional bytes body = 2;</code>
+       * <code>bytes body = 2;</code>
        */
       public com.google.protobuf.ByteString getBody() {
         return body_;
@@ -783,7 +783,7 @@ public final class Messages {
        * Primary contents of payload.
        * </pre>
        *
-       * <code>optional bytes body = 2;</code>
+       * <code>bytes body = 2;</code>
        */
       public Builder setBody(com.google.protobuf.ByteString value) {
         if (value == null) {
@@ -799,7 +799,7 @@ public final class Messages {
        * Primary contents of payload.
        * </pre>
        *
-       * <code>optional bytes body = 2;</code>
+       * <code>bytes body = 2;</code>
        */
       public Builder clearBody() {
         
@@ -861,16 +861,16 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 code = 1;</code>
+     * <code>int32 code = 1;</code>
      */
     int getCode();
 
     /**
-     * <code>optional string message = 2;</code>
+     * <code>string message = 2;</code>
      */
     java.lang.String getMessage();
     /**
-     * <code>optional string message = 2;</code>
+     * <code>string message = 2;</code>
      */
     com.google.protobuf.ByteString
         getMessageBytes();
@@ -958,7 +958,7 @@ public final class Messages {
     public static final int CODE_FIELD_NUMBER = 1;
     private int code_;
     /**
-     * <code>optional int32 code = 1;</code>
+     * <code>int32 code = 1;</code>
      */
     public int getCode() {
       return code_;
@@ -967,7 +967,7 @@ public final class Messages {
     public static final int MESSAGE_FIELD_NUMBER = 2;
     private volatile java.lang.Object message_;
     /**
-     * <code>optional string message = 2;</code>
+     * <code>string message = 2;</code>
      */
     public java.lang.String getMessage() {
       java.lang.Object ref = message_;
@@ -982,7 +982,7 @@ public final class Messages {
       }
     }
     /**
-     * <code>optional string message = 2;</code>
+     * <code>string message = 2;</code>
      */
     public com.google.protobuf.ByteString
         getMessageBytes() {
@@ -1059,7 +1059,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + CODE_FIELD_NUMBER;
       hash = (53 * hash) + getCode();
       hash = (37 * hash) + MESSAGE_FIELD_NUMBER;
@@ -1291,13 +1291,13 @@ public final class Messages {
 
       private int code_ ;
       /**
-       * <code>optional int32 code = 1;</code>
+       * <code>int32 code = 1;</code>
        */
       public int getCode() {
         return code_;
       }
       /**
-       * <code>optional int32 code = 1;</code>
+       * <code>int32 code = 1;</code>
        */
       public Builder setCode(int value) {
         
@@ -1306,7 +1306,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 code = 1;</code>
+       * <code>int32 code = 1;</code>
        */
       public Builder clearCode() {
         
@@ -1317,7 +1317,7 @@ public final class Messages {
 
       private java.lang.Object message_ = "";
       /**
-       * <code>optional string message = 2;</code>
+       * <code>string message = 2;</code>
        */
       public java.lang.String getMessage() {
         java.lang.Object ref = message_;
@@ -1332,7 +1332,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string message = 2;</code>
+       * <code>string message = 2;</code>
        */
       public com.google.protobuf.ByteString
           getMessageBytes() {
@@ -1348,7 +1348,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string message = 2;</code>
+       * <code>string message = 2;</code>
        */
       public Builder setMessage(
           java.lang.String value) {
@@ -1361,7 +1361,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string message = 2;</code>
+       * <code>string message = 2;</code>
        */
       public Builder clearMessage() {
         
@@ -1370,7 +1370,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string message = 2;</code>
+       * <code>string message = 2;</code>
        */
       public Builder setMessageBytes(
           com.google.protobuf.ByteString value) {
@@ -1442,7 +1442,7 @@ public final class Messages {
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     int getResponseTypeValue();
     /**
@@ -1451,7 +1451,7 @@ public final class Messages {
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getResponseType();
 
@@ -1461,7 +1461,7 @@ public final class Messages {
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
-     * <code>optional int32 response_size = 2;</code>
+     * <code>int32 response_size = 2;</code>
      */
     int getResponseSize();
 
@@ -1470,7 +1470,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     boolean hasPayload();
     /**
@@ -1478,7 +1478,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
@@ -1486,7 +1486,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
@@ -1495,7 +1495,7 @@ public final class Messages {
      * Whether SimpleResponse should include username.
      * </pre>
      *
-     * <code>optional bool fill_username = 4;</code>
+     * <code>bool fill_username = 4;</code>
      */
     boolean getFillUsername();
 
@@ -1504,7 +1504,7 @@ public final class Messages {
      * Whether SimpleResponse should include OAuth scope.
      * </pre>
      *
-     * <code>optional bool fill_oauth_scope = 5;</code>
+     * <code>bool fill_oauth_scope = 5;</code>
      */
     boolean getFillOauthScope();
 
@@ -1513,7 +1513,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     int getResponseCompressionValue();
     /**
@@ -1521,7 +1521,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
 
@@ -1530,7 +1530,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     boolean hasResponseStatus();
     /**
@@ -1538,7 +1538,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
     /**
@@ -1546,7 +1546,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
@@ -1682,7 +1682,7 @@ public final class Messages {
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     public int getResponseTypeValue() {
       return responseType_;
@@ -1693,7 +1693,7 @@ public final class Messages {
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
       io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
@@ -1708,7 +1708,7 @@ public final class Messages {
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
-     * <code>optional int32 response_size = 2;</code>
+     * <code>int32 response_size = 2;</code>
      */
     public int getResponseSize() {
       return responseSize_;
@@ -1721,7 +1721,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
@@ -1731,7 +1731,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
@@ -1741,7 +1741,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -1754,7 +1754,7 @@ public final class Messages {
      * Whether SimpleResponse should include username.
      * </pre>
      *
-     * <code>optional bool fill_username = 4;</code>
+     * <code>bool fill_username = 4;</code>
      */
     public boolean getFillUsername() {
       return fillUsername_;
@@ -1767,7 +1767,7 @@ public final class Messages {
      * Whether SimpleResponse should include OAuth scope.
      * </pre>
      *
-     * <code>optional bool fill_oauth_scope = 5;</code>
+     * <code>bool fill_oauth_scope = 5;</code>
      */
     public boolean getFillOauthScope() {
       return fillOauthScope_;
@@ -1780,7 +1780,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     public int getResponseCompressionValue() {
       return responseCompression_;
@@ -1790,7 +1790,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
       io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
@@ -1804,7 +1804,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public boolean hasResponseStatus() {
       return responseStatus_ != null;
@@ -1814,7 +1814,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
       return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
@@ -1824,7 +1824,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
       return getResponseStatus();
@@ -1941,7 +1941,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + RESPONSE_TYPE_FIELD_NUMBER;
       hash = (53 * hash) + responseType_;
       hash = (37 * hash) + RESPONSE_SIZE_FIELD_NUMBER;
@@ -2238,7 +2238,7 @@ public final class Messages {
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public int getResponseTypeValue() {
         return responseType_;
@@ -2249,7 +2249,7 @@ public final class Messages {
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseTypeValue(int value) {
         responseType_ = value;
@@ -2262,7 +2262,7 @@ public final class Messages {
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
         io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
@@ -2274,7 +2274,7 @@ public final class Messages {
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -2291,7 +2291,7 @@ public final class Messages {
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder clearResponseType() {
         
@@ -2307,7 +2307,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 response_size = 2;</code>
+       * <code>int32 response_size = 2;</code>
        */
       public int getResponseSize() {
         return responseSize_;
@@ -2318,7 +2318,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 response_size = 2;</code>
+       * <code>int32 response_size = 2;</code>
        */
       public Builder setResponseSize(int value) {
         
@@ -2332,7 +2332,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 response_size = 2;</code>
+       * <code>int32 response_size = 2;</code>
        */
       public Builder clearResponseSize() {
         
@@ -2349,7 +2349,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
@@ -2359,7 +2359,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -2373,7 +2373,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -2393,7 +2393,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -2411,7 +2411,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -2433,7 +2433,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -2451,7 +2451,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -2463,7 +2463,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -2478,7 +2478,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -2500,7 +2500,7 @@ public final class Messages {
        * Whether SimpleResponse should include username.
        * </pre>
        *
-       * <code>optional bool fill_username = 4;</code>
+       * <code>bool fill_username = 4;</code>
        */
       public boolean getFillUsername() {
         return fillUsername_;
@@ -2510,7 +2510,7 @@ public final class Messages {
        * Whether SimpleResponse should include username.
        * </pre>
        *
-       * <code>optional bool fill_username = 4;</code>
+       * <code>bool fill_username = 4;</code>
        */
       public Builder setFillUsername(boolean value) {
         
@@ -2523,7 +2523,7 @@ public final class Messages {
        * Whether SimpleResponse should include username.
        * </pre>
        *
-       * <code>optional bool fill_username = 4;</code>
+       * <code>bool fill_username = 4;</code>
        */
       public Builder clearFillUsername() {
         
@@ -2538,7 +2538,7 @@ public final class Messages {
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
        *
-       * <code>optional bool fill_oauth_scope = 5;</code>
+       * <code>bool fill_oauth_scope = 5;</code>
        */
       public boolean getFillOauthScope() {
         return fillOauthScope_;
@@ -2548,7 +2548,7 @@ public final class Messages {
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
        *
-       * <code>optional bool fill_oauth_scope = 5;</code>
+       * <code>bool fill_oauth_scope = 5;</code>
        */
       public Builder setFillOauthScope(boolean value) {
         
@@ -2561,7 +2561,7 @@ public final class Messages {
        * Whether SimpleResponse should include OAuth scope.
        * </pre>
        *
-       * <code>optional bool fill_oauth_scope = 5;</code>
+       * <code>bool fill_oauth_scope = 5;</code>
        */
       public Builder clearFillOauthScope() {
         
@@ -2576,7 +2576,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public int getResponseCompressionValue() {
         return responseCompression_;
@@ -2586,7 +2586,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompressionValue(int value) {
         responseCompression_ = value;
@@ -2598,7 +2598,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
         io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
@@ -2609,7 +2609,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
         if (value == null) {
@@ -2625,7 +2625,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder clearResponseCompression() {
         
@@ -2642,7 +2642,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public boolean hasResponseStatus() {
         return responseStatusBuilder_ != null || responseStatus_ != null;
@@ -2652,7 +2652,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -2666,7 +2666,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -2686,7 +2686,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(
           io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
@@ -2704,7 +2704,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -2726,7 +2726,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder clearResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -2744,7 +2744,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
         
@@ -2756,7 +2756,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
         if (responseStatusBuilder_ != null) {
@@ -2771,7 +2771,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
@@ -2844,7 +2844,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
@@ -2852,7 +2852,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
@@ -2860,7 +2860,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
@@ -2870,7 +2870,7 @@ public final class Messages {
      * successful when the client expected it.
      * </pre>
      *
-     * <code>optional string username = 2;</code>
+     * <code>string username = 2;</code>
      */
     java.lang.String getUsername();
     /**
@@ -2879,7 +2879,7 @@ public final class Messages {
      * successful when the client expected it.
      * </pre>
      *
-     * <code>optional string username = 2;</code>
+     * <code>string username = 2;</code>
      */
     com.google.protobuf.ByteString
         getUsernameBytes();
@@ -2889,7 +2889,7 @@ public final class Messages {
      * OAuth scope.
      * </pre>
      *
-     * <code>optional string oauth_scope = 3;</code>
+     * <code>string oauth_scope = 3;</code>
      */
     java.lang.String getOauthScope();
     /**
@@ -2897,7 +2897,7 @@ public final class Messages {
      * OAuth scope.
      * </pre>
      *
-     * <code>optional string oauth_scope = 3;</code>
+     * <code>string oauth_scope = 3;</code>
      */
     com.google.protobuf.ByteString
         getOauthScopeBytes();
@@ -3002,7 +3002,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
@@ -3012,7 +3012,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
@@ -3022,7 +3022,7 @@ public final class Messages {
      * Payload to increase message size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -3036,7 +3036,7 @@ public final class Messages {
      * successful when the client expected it.
      * </pre>
      *
-     * <code>optional string username = 2;</code>
+     * <code>string username = 2;</code>
      */
     public java.lang.String getUsername() {
       java.lang.Object ref = username_;
@@ -3056,7 +3056,7 @@ public final class Messages {
      * successful when the client expected it.
      * </pre>
      *
-     * <code>optional string username = 2;</code>
+     * <code>string username = 2;</code>
      */
     public com.google.protobuf.ByteString
         getUsernameBytes() {
@@ -3079,7 +3079,7 @@ public final class Messages {
      * OAuth scope.
      * </pre>
      *
-     * <code>optional string oauth_scope = 3;</code>
+     * <code>string oauth_scope = 3;</code>
      */
     public java.lang.String getOauthScope() {
       java.lang.Object ref = oauthScope_;
@@ -3098,7 +3098,7 @@ public final class Messages {
      * OAuth scope.
      * </pre>
      *
-     * <code>optional string oauth_scope = 3;</code>
+     * <code>string oauth_scope = 3;</code>
      */
     public com.google.protobuf.ByteString
         getOauthScopeBytes() {
@@ -3186,7 +3186,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasPayload()) {
         hash = (37 * hash) + PAYLOAD_FIELD_NUMBER;
         hash = (53 * hash) + getPayload().hashCode();
@@ -3442,7 +3442,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
@@ -3452,7 +3452,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -3466,7 +3466,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -3486,7 +3486,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -3504,7 +3504,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -3526,7 +3526,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -3544,7 +3544,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -3556,7 +3556,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -3571,7 +3571,7 @@ public final class Messages {
        * Payload to increase message size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -3594,7 +3594,7 @@ public final class Messages {
        * successful when the client expected it.
        * </pre>
        *
-       * <code>optional string username = 2;</code>
+       * <code>string username = 2;</code>
        */
       public java.lang.String getUsername() {
         java.lang.Object ref = username_;
@@ -3614,7 +3614,7 @@ public final class Messages {
        * successful when the client expected it.
        * </pre>
        *
-       * <code>optional string username = 2;</code>
+       * <code>string username = 2;</code>
        */
       public com.google.protobuf.ByteString
           getUsernameBytes() {
@@ -3635,7 +3635,7 @@ public final class Messages {
        * successful when the client expected it.
        * </pre>
        *
-       * <code>optional string username = 2;</code>
+       * <code>string username = 2;</code>
        */
       public Builder setUsername(
           java.lang.String value) {
@@ -3653,7 +3653,7 @@ public final class Messages {
        * successful when the client expected it.
        * </pre>
        *
-       * <code>optional string username = 2;</code>
+       * <code>string username = 2;</code>
        */
       public Builder clearUsername() {
         
@@ -3667,7 +3667,7 @@ public final class Messages {
        * successful when the client expected it.
        * </pre>
        *
-       * <code>optional string username = 2;</code>
+       * <code>string username = 2;</code>
        */
       public Builder setUsernameBytes(
           com.google.protobuf.ByteString value) {
@@ -3687,7 +3687,7 @@ public final class Messages {
        * OAuth scope.
        * </pre>
        *
-       * <code>optional string oauth_scope = 3;</code>
+       * <code>string oauth_scope = 3;</code>
        */
       public java.lang.String getOauthScope() {
         java.lang.Object ref = oauthScope_;
@@ -3706,7 +3706,7 @@ public final class Messages {
        * OAuth scope.
        * </pre>
        *
-       * <code>optional string oauth_scope = 3;</code>
+       * <code>string oauth_scope = 3;</code>
        */
       public com.google.protobuf.ByteString
           getOauthScopeBytes() {
@@ -3726,7 +3726,7 @@ public final class Messages {
        * OAuth scope.
        * </pre>
        *
-       * <code>optional string oauth_scope = 3;</code>
+       * <code>string oauth_scope = 3;</code>
        */
       public Builder setOauthScope(
           java.lang.String value) {
@@ -3743,7 +3743,7 @@ public final class Messages {
        * OAuth scope.
        * </pre>
        *
-       * <code>optional string oauth_scope = 3;</code>
+       * <code>string oauth_scope = 3;</code>
        */
       public Builder clearOauthScope() {
         
@@ -3756,7 +3756,7 @@ public final class Messages {
        * OAuth scope.
        * </pre>
        *
-       * <code>optional string oauth_scope = 3;</code>
+       * <code>string oauth_scope = 3;</code>
        */
       public Builder setOauthScopeBytes(
           com.google.protobuf.ByteString value) {
@@ -3823,11 +3823,11 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional string value = 1;</code>
+     * <code>string value = 1;</code>
      */
     java.lang.String getValue();
     /**
-     * <code>optional string value = 1;</code>
+     * <code>string value = 1;</code>
      */
     com.google.protobuf.ByteString
         getValueBytes();
@@ -3904,7 +3904,7 @@ public final class Messages {
     public static final int VALUE_FIELD_NUMBER = 1;
     private volatile java.lang.Object value_;
     /**
-     * <code>optional string value = 1;</code>
+     * <code>string value = 1;</code>
      */
     public java.lang.String getValue() {
       java.lang.Object ref = value_;
@@ -3919,7 +3919,7 @@ public final class Messages {
       }
     }
     /**
-     * <code>optional string value = 1;</code>
+     * <code>string value = 1;</code>
      */
     public com.google.protobuf.ByteString
         getValueBytes() {
@@ -3987,7 +3987,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + VALUE_FIELD_NUMBER;
       hash = (53 * hash) + getValue().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -4206,7 +4206,7 @@ public final class Messages {
 
       private java.lang.Object value_ = "";
       /**
-       * <code>optional string value = 1;</code>
+       * <code>string value = 1;</code>
        */
       public java.lang.String getValue() {
         java.lang.Object ref = value_;
@@ -4221,7 +4221,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string value = 1;</code>
+       * <code>string value = 1;</code>
        */
       public com.google.protobuf.ByteString
           getValueBytes() {
@@ -4237,7 +4237,7 @@ public final class Messages {
         }
       }
       /**
-       * <code>optional string value = 1;</code>
+       * <code>string value = 1;</code>
        */
       public Builder setValue(
           java.lang.String value) {
@@ -4250,7 +4250,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string value = 1;</code>
+       * <code>string value = 1;</code>
        */
       public Builder clearValue() {
         
@@ -4259,7 +4259,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional string value = 1;</code>
+       * <code>string value = 1;</code>
        */
       public Builder setValueBytes(
           com.google.protobuf.ByteString value) {
@@ -4330,7 +4330,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
@@ -4338,7 +4338,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
@@ -4346,7 +4346,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
@@ -4436,7 +4436,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
@@ -4446,7 +4446,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
@@ -4456,7 +4456,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -4518,7 +4518,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasPayload()) {
         hash = (37 * hash) + PAYLOAD_FIELD_NUMBER;
         hash = (53 * hash) + getPayload().hashCode();
@@ -4756,7 +4756,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
@@ -4766,7 +4766,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -4780,7 +4780,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -4800,7 +4800,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -4818,7 +4818,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -4840,7 +4840,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -4858,7 +4858,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -4870,7 +4870,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -4885,7 +4885,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -4958,7 +4958,7 @@ public final class Messages {
      * Aggregated size of payloads received from the client.
      * </pre>
      *
-     * <code>optional int32 aggregated_payload_size = 1;</code>
+     * <code>int32 aggregated_payload_size = 1;</code>
      */
     int getAggregatedPayloadSize();
   }
@@ -5041,7 +5041,7 @@ public final class Messages {
      * Aggregated size of payloads received from the client.
      * </pre>
      *
-     * <code>optional int32 aggregated_payload_size = 1;</code>
+     * <code>int32 aggregated_payload_size = 1;</code>
      */
     public int getAggregatedPayloadSize() {
       return aggregatedPayloadSize_;
@@ -5100,7 +5100,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + AGGREGATED_PAYLOAD_SIZE_FIELD_NUMBER;
       hash = (53 * hash) + getAggregatedPayloadSize();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -5326,7 +5326,7 @@ public final class Messages {
        * Aggregated size of payloads received from the client.
        * </pre>
        *
-       * <code>optional int32 aggregated_payload_size = 1;</code>
+       * <code>int32 aggregated_payload_size = 1;</code>
        */
       public int getAggregatedPayloadSize() {
         return aggregatedPayloadSize_;
@@ -5336,7 +5336,7 @@ public final class Messages {
        * Aggregated size of payloads received from the client.
        * </pre>
        *
-       * <code>optional int32 aggregated_payload_size = 1;</code>
+       * <code>int32 aggregated_payload_size = 1;</code>
        */
       public Builder setAggregatedPayloadSize(int value) {
         
@@ -5349,7 +5349,7 @@ public final class Messages {
        * Aggregated size of payloads received from the client.
        * </pre>
        *
-       * <code>optional int32 aggregated_payload_size = 1;</code>
+       * <code>int32 aggregated_payload_size = 1;</code>
        */
       public Builder clearAggregatedPayloadSize() {
         
@@ -5416,7 +5416,7 @@ public final class Messages {
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
-     * <code>optional int32 size = 1;</code>
+     * <code>int32 size = 1;</code>
      */
     int getSize();
 
@@ -5426,7 +5426,7 @@ public final class Messages {
      * microseconds.
      * </pre>
      *
-     * <code>optional int32 interval_us = 2;</code>
+     * <code>int32 interval_us = 2;</code>
      */
     int getIntervalUs();
   }
@@ -5516,7 +5516,7 @@ public final class Messages {
      * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
-     * <code>optional int32 size = 1;</code>
+     * <code>int32 size = 1;</code>
      */
     public int getSize() {
       return size_;
@@ -5530,7 +5530,7 @@ public final class Messages {
      * microseconds.
      * </pre>
      *
-     * <code>optional int32 interval_us = 2;</code>
+     * <code>int32 interval_us = 2;</code>
      */
     public int getIntervalUs() {
       return intervalUs_;
@@ -5598,7 +5598,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + SIZE_FIELD_NUMBER;
       hash = (53 * hash) + getSize();
       hash = (37 * hash) + INTERVAL_US_FIELD_NUMBER;
@@ -5833,7 +5833,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 size = 1;</code>
+       * <code>int32 size = 1;</code>
        */
       public int getSize() {
         return size_;
@@ -5844,7 +5844,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 size = 1;</code>
+       * <code>int32 size = 1;</code>
        */
       public Builder setSize(int value) {
         
@@ -5858,7 +5858,7 @@ public final class Messages {
        * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
-       * <code>optional int32 size = 1;</code>
+       * <code>int32 size = 1;</code>
        */
       public Builder clearSize() {
         
@@ -5874,7 +5874,7 @@ public final class Messages {
        * microseconds.
        * </pre>
        *
-       * <code>optional int32 interval_us = 2;</code>
+       * <code>int32 interval_us = 2;</code>
        */
       public int getIntervalUs() {
         return intervalUs_;
@@ -5885,7 +5885,7 @@ public final class Messages {
        * microseconds.
        * </pre>
        *
-       * <code>optional int32 interval_us = 2;</code>
+       * <code>int32 interval_us = 2;</code>
        */
       public Builder setIntervalUs(int value) {
         
@@ -5899,7 +5899,7 @@ public final class Messages {
        * microseconds.
        * </pre>
        *
-       * <code>optional int32 interval_us = 2;</code>
+       * <code>int32 interval_us = 2;</code>
        */
       public Builder clearIntervalUs() {
         
@@ -5968,7 +5968,7 @@ public final class Messages {
      * stream.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     int getResponseTypeValue();
     /**
@@ -5979,7 +5979,7 @@ public final class Messages {
      * stream.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadType getResponseType();
 
@@ -6032,7 +6032,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     boolean hasPayload();
     /**
@@ -6040,7 +6040,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
@@ -6048,7 +6048,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
 
@@ -6057,7 +6057,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     int getResponseCompressionValue();
     /**
@@ -6065,7 +6065,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     io.grpc.testing.integration.Messages.CompressionType getResponseCompression();
 
@@ -6074,7 +6074,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     boolean hasResponseStatus();
     /**
@@ -6082,7 +6082,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatus getResponseStatus();
     /**
@@ -6090,7 +6090,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
   }
@@ -6224,7 +6224,7 @@ public final class Messages {
      * stream.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     public int getResponseTypeValue() {
       return responseType_;
@@ -6237,7 +6237,7 @@ public final class Messages {
      * stream.
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+     * <code>.grpc.testing.PayloadType response_type = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
       io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
@@ -6306,7 +6306,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
@@ -6316,7 +6316,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
@@ -6326,7 +6326,7 @@ public final class Messages {
      * Optional input payload sent along with the request.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 3;</code>
+     * <code>.grpc.testing.Payload payload = 3;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -6339,7 +6339,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     public int getResponseCompressionValue() {
       return responseCompression_;
@@ -6349,7 +6349,7 @@ public final class Messages {
      * Compression algorithm to be used by the server for the response (stream)
      * </pre>
      *
-     * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
      */
     public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
       io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
@@ -6363,7 +6363,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public boolean hasResponseStatus() {
       return responseStatus_ != null;
@@ -6373,7 +6373,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
       return responseStatus_ == null ? io.grpc.testing.integration.Messages.EchoStatus.getDefaultInstance() : responseStatus_;
@@ -6383,7 +6383,7 @@ public final class Messages {
      * Whether server should return a given status
      * </pre>
      *
-     * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+     * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
       return getResponseStatus();
@@ -6482,7 +6482,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + RESPONSE_TYPE_FIELD_NUMBER;
       hash = (53 * hash) + responseType_;
       if (getResponseParametersCount() > 0) {
@@ -6805,7 +6805,7 @@ public final class Messages {
        * stream.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public int getResponseTypeValue() {
         return responseType_;
@@ -6818,7 +6818,7 @@ public final class Messages {
        * stream.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseTypeValue(int value) {
         responseType_ = value;
@@ -6833,7 +6833,7 @@ public final class Messages {
        * stream.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadType getResponseType() {
         io.grpc.testing.integration.Messages.PayloadType result = io.grpc.testing.integration.Messages.PayloadType.valueOf(responseType_);
@@ -6847,7 +6847,7 @@ public final class Messages {
        * stream.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder setResponseType(io.grpc.testing.integration.Messages.PayloadType value) {
         if (value == null) {
@@ -6866,7 +6866,7 @@ public final class Messages {
        * stream.
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadType response_type = 1;</code>
+       * <code>.grpc.testing.PayloadType response_type = 1;</code>
        */
       public Builder clearResponseType() {
         
@@ -7195,7 +7195,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
@@ -7205,7 +7205,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -7219,7 +7219,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -7239,7 +7239,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -7257,7 +7257,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -7279,7 +7279,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -7297,7 +7297,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -7309,7 +7309,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -7324,7 +7324,7 @@ public final class Messages {
        * Optional input payload sent along with the request.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 3;</code>
+       * <code>.grpc.testing.Payload payload = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -7346,7 +7346,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public int getResponseCompressionValue() {
         return responseCompression_;
@@ -7356,7 +7356,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompressionValue(int value) {
         responseCompression_ = value;
@@ -7368,7 +7368,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public io.grpc.testing.integration.Messages.CompressionType getResponseCompression() {
         io.grpc.testing.integration.Messages.CompressionType result = io.grpc.testing.integration.Messages.CompressionType.valueOf(responseCompression_);
@@ -7379,7 +7379,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder setResponseCompression(io.grpc.testing.integration.Messages.CompressionType value) {
         if (value == null) {
@@ -7395,7 +7395,7 @@ public final class Messages {
        * Compression algorithm to be used by the server for the response (stream)
        * </pre>
        *
-       * <code>optional .grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
        */
       public Builder clearResponseCompression() {
         
@@ -7412,7 +7412,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public boolean hasResponseStatus() {
         return responseStatusBuilder_ != null || responseStatus_ != null;
@@ -7422,7 +7422,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus getResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -7436,7 +7436,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -7456,7 +7456,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder setResponseStatus(
           io.grpc.testing.integration.Messages.EchoStatus.Builder builderForValue) {
@@ -7474,7 +7474,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder mergeResponseStatus(io.grpc.testing.integration.Messages.EchoStatus value) {
         if (responseStatusBuilder_ == null) {
@@ -7496,7 +7496,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public Builder clearResponseStatus() {
         if (responseStatusBuilder_ == null) {
@@ -7514,7 +7514,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatus.Builder getResponseStatusBuilder() {
         
@@ -7526,7 +7526,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       public io.grpc.testing.integration.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder() {
         if (responseStatusBuilder_ != null) {
@@ -7541,7 +7541,7 @@ public final class Messages {
        * Whether server should return a given status
        * </pre>
        *
-       * <code>optional .grpc.testing.EchoStatus response_status = 7;</code>
+       * <code>.grpc.testing.EchoStatus response_status = 7;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.EchoStatus, io.grpc.testing.integration.Messages.EchoStatus.Builder, io.grpc.testing.integration.Messages.EchoStatusOrBuilder> 
@@ -7614,7 +7614,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     boolean hasPayload();
     /**
@@ -7622,7 +7622,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.Payload getPayload();
     /**
@@ -7630,7 +7630,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder();
   }
@@ -7720,7 +7720,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public boolean hasPayload() {
       return payload_ != null;
@@ -7730,7 +7730,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.Payload getPayload() {
       return payload_ == null ? io.grpc.testing.integration.Messages.Payload.getDefaultInstance() : payload_;
@@ -7740,7 +7740,7 @@ public final class Messages {
      * Payload to increase response size.
      * </pre>
      *
-     * <code>optional .grpc.testing.Payload payload = 1;</code>
+     * <code>.grpc.testing.Payload payload = 1;</code>
      */
     public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
       return getPayload();
@@ -7802,7 +7802,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasPayload()) {
         hash = (37 * hash) + PAYLOAD_FIELD_NUMBER;
         hash = (53 * hash) + getPayload().hashCode();
@@ -8040,7 +8040,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public boolean hasPayload() {
         return payloadBuilder_ != null || payload_ != null;
@@ -8050,7 +8050,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload getPayload() {
         if (payloadBuilder_ == null) {
@@ -8064,7 +8064,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -8084,7 +8084,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder setPayload(
           io.grpc.testing.integration.Messages.Payload.Builder builderForValue) {
@@ -8102,7 +8102,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder mergePayload(io.grpc.testing.integration.Messages.Payload value) {
         if (payloadBuilder_ == null) {
@@ -8124,7 +8124,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public Builder clearPayload() {
         if (payloadBuilder_ == null) {
@@ -8142,7 +8142,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.Payload.Builder getPayloadBuilder() {
         
@@ -8154,7 +8154,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       public io.grpc.testing.integration.Messages.PayloadOrBuilder getPayloadOrBuilder() {
         if (payloadBuilder_ != null) {
@@ -8169,7 +8169,7 @@ public final class Messages {
        * Payload to increase response size.
        * </pre>
        *
-       * <code>optional .grpc.testing.Payload payload = 1;</code>
+       * <code>.grpc.testing.Payload payload = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.testing.integration.Messages.Payload, io.grpc.testing.integration.Messages.Payload.Builder, io.grpc.testing.integration.Messages.PayloadOrBuilder> 
@@ -8238,7 +8238,7 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+     * <code>int32 max_reconnect_backoff_ms = 1;</code>
      */
     int getMaxReconnectBackoffMs();
   }
@@ -8318,7 +8318,7 @@ public final class Messages {
     public static final int MAX_RECONNECT_BACKOFF_MS_FIELD_NUMBER = 1;
     private int maxReconnectBackoffMs_;
     /**
-     * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+     * <code>int32 max_reconnect_backoff_ms = 1;</code>
      */
     public int getMaxReconnectBackoffMs() {
       return maxReconnectBackoffMs_;
@@ -8377,7 +8377,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + MAX_RECONNECT_BACKOFF_MS_FIELD_NUMBER;
       hash = (53 * hash) + getMaxReconnectBackoffMs();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -8600,13 +8600,13 @@ public final class Messages {
 
       private int maxReconnectBackoffMs_ ;
       /**
-       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
        */
       public int getMaxReconnectBackoffMs() {
         return maxReconnectBackoffMs_;
       }
       /**
-       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
        */
       public Builder setMaxReconnectBackoffMs(int value) {
         
@@ -8615,7 +8615,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional int32 max_reconnect_backoff_ms = 1;</code>
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
        */
       public Builder clearMaxReconnectBackoffMs() {
         
@@ -8677,7 +8677,7 @@ public final class Messages {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional bool passed = 1;</code>
+     * <code>bool passed = 1;</code>
      */
     boolean getPassed();
 
@@ -8797,7 +8797,7 @@ public final class Messages {
     public static final int PASSED_FIELD_NUMBER = 1;
     private boolean passed_;
     /**
-     * <code>optional bool passed = 1;</code>
+     * <code>bool passed = 1;</code>
      */
     public boolean getPassed() {
       return passed_;
@@ -8903,7 +8903,7 @@ public final class Messages {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + PASSED_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getPassed());
@@ -9153,13 +9153,13 @@ public final class Messages {
 
       private boolean passed_ ;
       /**
-       * <code>optional bool passed = 1;</code>
+       * <code>bool passed = 1;</code>
        */
       public boolean getPassed() {
         return passed_;
       }
       /**
-       * <code>optional bool passed = 1;</code>
+       * <code>bool passed = 1;</code>
        */
       public Builder setPassed(boolean value) {
         
@@ -9168,7 +9168,7 @@ public final class Messages {
         return this;
       }
       /**
-       * <code>optional bool passed = 1;</code>
+       * <code>bool passed = 1;</code>
        */
       public Builder clearPassed() {
         

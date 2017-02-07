@@ -15,7 +15,7 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 1;</code>
+   * <code>string load_balancer_delegate = 1;</code>
    */
   java.lang.String getLoadBalancerDelegate();
   /**
@@ -26,7 +26,7 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 1;</code>
+   * <code>string load_balancer_delegate = 1;</code>
    */
   com.google.protobuf.ByteString
       getLoadBalancerDelegateBytes();
@@ -38,7 +38,7 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   boolean hasClientStatsReportInterval();
   /**
@@ -48,7 +48,7 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   com.google.protobuf.Duration getClientStatsReportInterval();
   /**
@@ -58,7 +58,7 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder();
 }

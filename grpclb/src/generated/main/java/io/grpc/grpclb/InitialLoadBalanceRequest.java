@@ -79,7 +79,7 @@ public  final class InitialLoadBalanceRequest extends
    * Name of load balanced service
    * </pre>
    *
-   * <code>optional string name = 1;</code>
+   * <code>string name = 1;</code>
    */
   public java.lang.String getName() {
     java.lang.Object ref = name_;
@@ -98,7 +98,7 @@ public  final class InitialLoadBalanceRequest extends
    * Name of load balanced service
    * </pre>
    *
-   * <code>optional string name = 1;</code>
+   * <code>string name = 1;</code>
    */
   public com.google.protobuf.ByteString
       getNameBytes() {
@@ -166,7 +166,7 @@ public  final class InitialLoadBalanceRequest extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + NAME_FIELD_NUMBER;
     hash = (53 * hash) + getName().hashCode();
     hash = (29 * hash) + unknownFields.hashCode();
@@ -389,7 +389,7 @@ public  final class InitialLoadBalanceRequest extends
      * Name of load balanced service
      * </pre>
      *
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public java.lang.String getName() {
       java.lang.Object ref = name_;
@@ -408,7 +408,7 @@ public  final class InitialLoadBalanceRequest extends
      * Name of load balanced service
      * </pre>
      *
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public com.google.protobuf.ByteString
         getNameBytes() {
@@ -428,7 +428,7 @@ public  final class InitialLoadBalanceRequest extends
      * Name of load balanced service
      * </pre>
      *
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public Builder setName(
         java.lang.String value) {
@@ -445,7 +445,7 @@ public  final class InitialLoadBalanceRequest extends
      * Name of load balanced service
      * </pre>
      *
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public Builder clearName() {
       
@@ -458,7 +458,7 @@ public  final class InitialLoadBalanceRequest extends
      * Name of load balanced service
      * </pre>
      *
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public Builder setNameBytes(
         com.google.protobuf.ByteString value) {

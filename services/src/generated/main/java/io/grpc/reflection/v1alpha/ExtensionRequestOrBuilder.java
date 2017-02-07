@@ -12,7 +12,7 @@ public interface ExtensionRequestOrBuilder extends
    * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string containing_type = 1;</code>
+   * <code>string containing_type = 1;</code>
    */
   java.lang.String getContainingType();
   /**
@@ -20,13 +20,13 @@ public interface ExtensionRequestOrBuilder extends
    * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string containing_type = 1;</code>
+   * <code>string containing_type = 1;</code>
    */
   com.google.protobuf.ByteString
       getContainingTypeBytes();
 
   /**
-   * <code>optional int32 extension_number = 2;</code>
+   * <code>int32 extension_number = 2;</code>
    */
   int getExtensionNumber();
 }

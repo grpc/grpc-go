@@ -326,7 +326,7 @@ public final class Control {
      * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
      * </pre>
      *
-     * <code>optional double offered_load = 1;</code>
+     * <code>double offered_load = 1;</code>
      */
     double getOfferedLoad();
   }
@@ -410,7 +410,7 @@ public final class Control {
      * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
      * </pre>
      *
-     * <code>optional double offered_load = 1;</code>
+     * <code>double offered_load = 1;</code>
      */
     public double getOfferedLoad() {
       return offeredLoad_;
@@ -471,7 +471,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + OFFERED_LOAD_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getOfferedLoad()));
@@ -699,7 +699,7 @@ public final class Control {
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
        *
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public double getOfferedLoad() {
         return offeredLoad_;
@@ -709,7 +709,7 @@ public final class Control {
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
        *
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public Builder setOfferedLoad(double value) {
         
@@ -722,7 +722,7 @@ public final class Control {
        * The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
        * </pre>
        *
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public Builder clearOfferedLoad() {
         
@@ -784,12 +784,12 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double interarrival_lo = 1;</code>
+     * <code>double interarrival_lo = 1;</code>
      */
     double getInterarrivalLo();
 
     /**
-     * <code>optional double interarrival_hi = 2;</code>
+     * <code>double interarrival_hi = 2;</code>
      */
     double getInterarrivalHi();
   }
@@ -870,7 +870,7 @@ public final class Control {
     public static final int INTERARRIVAL_LO_FIELD_NUMBER = 1;
     private double interarrivalLo_;
     /**
-     * <code>optional double interarrival_lo = 1;</code>
+     * <code>double interarrival_lo = 1;</code>
      */
     public double getInterarrivalLo() {
       return interarrivalLo_;
@@ -879,7 +879,7 @@ public final class Control {
     public static final int INTERARRIVAL_HI_FIELD_NUMBER = 2;
     private double interarrivalHi_;
     /**
-     * <code>optional double interarrival_hi = 2;</code>
+     * <code>double interarrival_hi = 2;</code>
      */
     public double getInterarrivalHi() {
       return interarrivalHi_;
@@ -951,7 +951,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + INTERARRIVAL_LO_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getInterarrivalLo()));
@@ -1179,13 +1179,13 @@ public final class Control {
 
       private double interarrivalLo_ ;
       /**
-       * <code>optional double interarrival_lo = 1;</code>
+       * <code>double interarrival_lo = 1;</code>
        */
       public double getInterarrivalLo() {
         return interarrivalLo_;
       }
       /**
-       * <code>optional double interarrival_lo = 1;</code>
+       * <code>double interarrival_lo = 1;</code>
        */
       public Builder setInterarrivalLo(double value) {
         
@@ -1194,7 +1194,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double interarrival_lo = 1;</code>
+       * <code>double interarrival_lo = 1;</code>
        */
       public Builder clearInterarrivalLo() {
         
@@ -1205,13 +1205,13 @@ public final class Control {
 
       private double interarrivalHi_ ;
       /**
-       * <code>optional double interarrival_hi = 2;</code>
+       * <code>double interarrival_hi = 2;</code>
        */
       public double getInterarrivalHi() {
         return interarrivalHi_;
       }
       /**
-       * <code>optional double interarrival_hi = 2;</code>
+       * <code>double interarrival_hi = 2;</code>
        */
       public Builder setInterarrivalHi(double value) {
         
@@ -1220,7 +1220,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double interarrival_hi = 2;</code>
+       * <code>double interarrival_hi = 2;</code>
        */
       public Builder clearInterarrivalHi() {
         
@@ -1282,7 +1282,7 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double offered_load = 1;</code>
+     * <code>double offered_load = 1;</code>
      */
     double getOfferedLoad();
   }
@@ -1357,7 +1357,7 @@ public final class Control {
     public static final int OFFERED_LOAD_FIELD_NUMBER = 1;
     private double offeredLoad_;
     /**
-     * <code>optional double offered_load = 1;</code>
+     * <code>double offered_load = 1;</code>
      */
     public double getOfferedLoad() {
       return offeredLoad_;
@@ -1418,7 +1418,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + OFFERED_LOAD_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getOfferedLoad()));
@@ -1637,13 +1637,13 @@ public final class Control {
 
       private double offeredLoad_ ;
       /**
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public double getOfferedLoad() {
         return offeredLoad_;
       }
       /**
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public Builder setOfferedLoad(double value) {
         
@@ -1652,7 +1652,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double offered_load = 1;</code>
+       * <code>double offered_load = 1;</code>
        */
       public Builder clearOfferedLoad() {
         
@@ -1714,12 +1714,12 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional double interarrival_base = 1;</code>
+     * <code>double interarrival_base = 1;</code>
      */
     double getInterarrivalBase();
 
     /**
-     * <code>optional double alpha = 2;</code>
+     * <code>double alpha = 2;</code>
      */
     double getAlpha();
   }
@@ -1800,7 +1800,7 @@ public final class Control {
     public static final int INTERARRIVAL_BASE_FIELD_NUMBER = 1;
     private double interarrivalBase_;
     /**
-     * <code>optional double interarrival_base = 1;</code>
+     * <code>double interarrival_base = 1;</code>
      */
     public double getInterarrivalBase() {
       return interarrivalBase_;
@@ -1809,7 +1809,7 @@ public final class Control {
     public static final int ALPHA_FIELD_NUMBER = 2;
     private double alpha_;
     /**
-     * <code>optional double alpha = 2;</code>
+     * <code>double alpha = 2;</code>
      */
     public double getAlpha() {
       return alpha_;
@@ -1881,7 +1881,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + INTERARRIVAL_BASE_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getInterarrivalBase()));
@@ -2109,13 +2109,13 @@ public final class Control {
 
       private double interarrivalBase_ ;
       /**
-       * <code>optional double interarrival_base = 1;</code>
+       * <code>double interarrival_base = 1;</code>
        */
       public double getInterarrivalBase() {
         return interarrivalBase_;
       }
       /**
-       * <code>optional double interarrival_base = 1;</code>
+       * <code>double interarrival_base = 1;</code>
        */
       public Builder setInterarrivalBase(double value) {
         
@@ -2124,7 +2124,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double interarrival_base = 1;</code>
+       * <code>double interarrival_base = 1;</code>
        */
       public Builder clearInterarrivalBase() {
         
@@ -2135,13 +2135,13 @@ public final class Control {
 
       private double alpha_ ;
       /**
-       * <code>optional double alpha = 2;</code>
+       * <code>double alpha = 2;</code>
        */
       public double getAlpha() {
         return alpha_;
       }
       /**
-       * <code>optional double alpha = 2;</code>
+       * <code>double alpha = 2;</code>
        */
       public Builder setAlpha(double value) {
         
@@ -2150,7 +2150,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional double alpha = 2;</code>
+       * <code>double alpha = 2;</code>
        */
       public Builder clearAlpha() {
         
@@ -2321,7 +2321,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -2587,47 +2587,47 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+     * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop();
     /**
-     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+     * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+     * <code>.grpc.testing.PoissonParams poisson = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.PoissonParams getPoisson();
     /**
-     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+     * <code>.grpc.testing.PoissonParams poisson = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+     * <code>.grpc.testing.UniformParams uniform = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.UniformParams getUniform();
     /**
-     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+     * <code>.grpc.testing.UniformParams uniform = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
      */
     io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm();
     /**
-     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
      */
     io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
      */
     io.grpc.benchmarks.proto.Control.ParetoParams getPareto();
     /**
-     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
      */
     io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder();
 
@@ -2811,7 +2811,7 @@ public final class Control {
 
     public static final int CLOSED_LOOP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+     * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop() {
       if (loadCase_ == 1) {
@@ -2820,7 +2820,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ClosedLoopParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+     * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder() {
       if (loadCase_ == 1) {
@@ -2831,7 +2831,7 @@ public final class Control {
 
     public static final int POISSON_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+     * <code>.grpc.testing.PoissonParams poisson = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.PoissonParams getPoisson() {
       if (loadCase_ == 2) {
@@ -2840,7 +2840,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.PoissonParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+     * <code>.grpc.testing.PoissonParams poisson = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder() {
       if (loadCase_ == 2) {
@@ -2851,7 +2851,7 @@ public final class Control {
 
     public static final int UNIFORM_FIELD_NUMBER = 3;
     /**
-     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+     * <code>.grpc.testing.UniformParams uniform = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
       if (loadCase_ == 3) {
@@ -2860,7 +2860,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+     * <code>.grpc.testing.UniformParams uniform = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
       if (loadCase_ == 3) {
@@ -2871,7 +2871,7 @@ public final class Control {
 
     public static final int DETERM_FIELD_NUMBER = 4;
     /**
-     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
      */
     public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
       if (loadCase_ == 4) {
@@ -2880,7 +2880,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
      */
     public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
       if (loadCase_ == 4) {
@@ -2891,7 +2891,7 @@ public final class Control {
 
     public static final int PARETO_FIELD_NUMBER = 5;
     /**
-     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
      */
     public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
       if (loadCase_ == 5) {
@@ -2900,7 +2900,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
      */
     public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
       if (loadCase_ == 5) {
@@ -3015,7 +3015,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       switch (loadCase_) {
         case 1:
           hash = (37 * hash) + CLOSED_LOOP_FIELD_NUMBER;
@@ -3328,7 +3328,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> closedLoopBuilder_;
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParams getClosedLoop() {
         if (closedLoopBuilder_ == null) {
@@ -3344,7 +3344,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder setClosedLoop(io.grpc.benchmarks.proto.Control.ClosedLoopParams value) {
         if (closedLoopBuilder_ == null) {
@@ -3360,7 +3360,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder setClosedLoop(
           io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder builderForValue) {
@@ -3374,7 +3374,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder mergeClosedLoop(io.grpc.benchmarks.proto.Control.ClosedLoopParams value) {
         if (closedLoopBuilder_ == null) {
@@ -3396,7 +3396,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public Builder clearClosedLoop() {
         if (closedLoopBuilder_ == null) {
@@ -3415,13 +3415,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder getClosedLoopBuilder() {
         return getClosedLoopFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder getClosedLoopOrBuilder() {
         if ((loadCase_ == 1) && (closedLoopBuilder_ != null)) {
@@ -3434,7 +3434,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClosedLoopParams closed_loop = 1;</code>
+       * <code>.grpc.testing.ClosedLoopParams closed_loop = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClosedLoopParams, io.grpc.benchmarks.proto.Control.ClosedLoopParams.Builder, io.grpc.benchmarks.proto.Control.ClosedLoopParamsOrBuilder> 
@@ -3458,7 +3458,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> poissonBuilder_;
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParams getPoisson() {
         if (poissonBuilder_ == null) {
@@ -3474,7 +3474,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder setPoisson(io.grpc.benchmarks.proto.Control.PoissonParams value) {
         if (poissonBuilder_ == null) {
@@ -3490,7 +3490,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder setPoisson(
           io.grpc.benchmarks.proto.Control.PoissonParams.Builder builderForValue) {
@@ -3504,7 +3504,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder mergePoisson(io.grpc.benchmarks.proto.Control.PoissonParams value) {
         if (poissonBuilder_ == null) {
@@ -3526,7 +3526,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public Builder clearPoisson() {
         if (poissonBuilder_ == null) {
@@ -3545,13 +3545,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParams.Builder getPoissonBuilder() {
         return getPoissonFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder() {
         if ((loadCase_ == 2) && (poissonBuilder_ != null)) {
@@ -3564,7 +3564,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PoissonParams poisson = 2;</code>
+       * <code>.grpc.testing.PoissonParams poisson = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.PoissonParams, io.grpc.benchmarks.proto.Control.PoissonParams.Builder, io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder> 
@@ -3588,7 +3588,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> uniformBuilder_;
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
         if (uniformBuilder_ == null) {
@@ -3604,7 +3604,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder setUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
         if (uniformBuilder_ == null) {
@@ -3620,7 +3620,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder setUniform(
           io.grpc.benchmarks.proto.Control.UniformParams.Builder builderForValue) {
@@ -3634,7 +3634,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder mergeUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
         if (uniformBuilder_ == null) {
@@ -3656,7 +3656,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public Builder clearUniform() {
         if (uniformBuilder_ == null) {
@@ -3675,13 +3675,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParams.Builder getUniformBuilder() {
         return getUniformFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
         if ((loadCase_ == 3) && (uniformBuilder_ != null)) {
@@ -3694,7 +3694,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.UniformParams uniform = 3;</code>
+       * <code>.grpc.testing.UniformParams uniform = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> 
@@ -3718,7 +3718,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> determBuilder_;
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
         if (determBuilder_ == null) {
@@ -3734,7 +3734,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder setDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
         if (determBuilder_ == null) {
@@ -3750,7 +3750,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder setDeterm(
           io.grpc.benchmarks.proto.Control.DeterministicParams.Builder builderForValue) {
@@ -3764,7 +3764,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder mergeDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
         if (determBuilder_ == null) {
@@ -3786,7 +3786,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public Builder clearDeterm() {
         if (determBuilder_ == null) {
@@ -3805,13 +3805,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParams.Builder getDetermBuilder() {
         return getDetermFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
         if ((loadCase_ == 4) && (determBuilder_ != null)) {
@@ -3824,7 +3824,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.DeterministicParams determ = 4;</code>
+       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> 
@@ -3848,7 +3848,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> paretoBuilder_;
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
         if (paretoBuilder_ == null) {
@@ -3864,7 +3864,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder setPareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
         if (paretoBuilder_ == null) {
@@ -3880,7 +3880,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder setPareto(
           io.grpc.benchmarks.proto.Control.ParetoParams.Builder builderForValue) {
@@ -3894,7 +3894,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder mergePareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
         if (paretoBuilder_ == null) {
@@ -3916,7 +3916,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public Builder clearPareto() {
         if (paretoBuilder_ == null) {
@@ -3935,13 +3935,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParams.Builder getParetoBuilder() {
         return getParetoFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
         if ((loadCase_ == 5) && (paretoBuilder_ != null)) {
@@ -3954,7 +3954,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ParetoParams pareto = 5;</code>
+       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> 
@@ -4028,16 +4028,16 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional bool use_test_ca = 1;</code>
+     * <code>bool use_test_ca = 1;</code>
      */
     boolean getUseTestCa();
 
     /**
-     * <code>optional string server_host_override = 2;</code>
+     * <code>string server_host_override = 2;</code>
      */
     java.lang.String getServerHostOverride();
     /**
-     * <code>optional string server_host_override = 2;</code>
+     * <code>string server_host_override = 2;</code>
      */
     com.google.protobuf.ByteString
         getServerHostOverrideBytes();
@@ -4124,7 +4124,7 @@ public final class Control {
     public static final int USE_TEST_CA_FIELD_NUMBER = 1;
     private boolean useTestCa_;
     /**
-     * <code>optional bool use_test_ca = 1;</code>
+     * <code>bool use_test_ca = 1;</code>
      */
     public boolean getUseTestCa() {
       return useTestCa_;
@@ -4133,7 +4133,7 @@ public final class Control {
     public static final int SERVER_HOST_OVERRIDE_FIELD_NUMBER = 2;
     private volatile java.lang.Object serverHostOverride_;
     /**
-     * <code>optional string server_host_override = 2;</code>
+     * <code>string server_host_override = 2;</code>
      */
     public java.lang.String getServerHostOverride() {
       java.lang.Object ref = serverHostOverride_;
@@ -4148,7 +4148,7 @@ public final class Control {
       }
     }
     /**
-     * <code>optional string server_host_override = 2;</code>
+     * <code>string server_host_override = 2;</code>
      */
     public com.google.protobuf.ByteString
         getServerHostOverrideBytes() {
@@ -4225,7 +4225,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + USE_TEST_CA_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getUseTestCa());
@@ -4457,13 +4457,13 @@ public final class Control {
 
       private boolean useTestCa_ ;
       /**
-       * <code>optional bool use_test_ca = 1;</code>
+       * <code>bool use_test_ca = 1;</code>
        */
       public boolean getUseTestCa() {
         return useTestCa_;
       }
       /**
-       * <code>optional bool use_test_ca = 1;</code>
+       * <code>bool use_test_ca = 1;</code>
        */
       public Builder setUseTestCa(boolean value) {
         
@@ -4472,7 +4472,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional bool use_test_ca = 1;</code>
+       * <code>bool use_test_ca = 1;</code>
        */
       public Builder clearUseTestCa() {
         
@@ -4483,7 +4483,7 @@ public final class Control {
 
       private java.lang.Object serverHostOverride_ = "";
       /**
-       * <code>optional string server_host_override = 2;</code>
+       * <code>string server_host_override = 2;</code>
        */
       public java.lang.String getServerHostOverride() {
         java.lang.Object ref = serverHostOverride_;
@@ -4498,7 +4498,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional string server_host_override = 2;</code>
+       * <code>string server_host_override = 2;</code>
        */
       public com.google.protobuf.ByteString
           getServerHostOverrideBytes() {
@@ -4514,7 +4514,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional string server_host_override = 2;</code>
+       * <code>string server_host_override = 2;</code>
        */
       public Builder setServerHostOverride(
           java.lang.String value) {
@@ -4527,7 +4527,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional string server_host_override = 2;</code>
+       * <code>string server_host_override = 2;</code>
        */
       public Builder clearServerHostOverride() {
         
@@ -4536,7 +4536,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional string server_host_override = 2;</code>
+       * <code>string server_host_override = 2;</code>
        */
       public Builder setServerHostOverrideBytes(
           com.google.protobuf.ByteString value) {
@@ -4638,24 +4638,24 @@ public final class Control {
         getServerTargetsBytes(int index);
 
     /**
-     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+     * <code>.grpc.testing.ClientType client_type = 2;</code>
      */
     int getClientTypeValue();
     /**
-     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+     * <code>.grpc.testing.ClientType client_type = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientType getClientType();
 
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     boolean hasSecurityParams();
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams();
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
@@ -4665,7 +4665,7 @@ public final class Control {
      * For synchronous client, use a separate thread for each outstanding RPC.
      * </pre>
      *
-     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
+     * <code>int32 outstanding_rpcs_per_channel = 4;</code>
      */
     int getOutstandingRpcsPerChannel();
 
@@ -4675,7 +4675,7 @@ public final class Control {
      * i-th channel will connect to server_target[i % server_targets.size()]
      * </pre>
      *
-     * <code>optional int32 client_channels = 5;</code>
+     * <code>int32 client_channels = 5;</code>
      */
     int getClientChannels();
 
@@ -4684,16 +4684,16 @@ public final class Control {
      * Only for async client. Number of threads to use to start/manage RPCs.
      * </pre>
      *
-     * <code>optional int32 async_client_threads = 7;</code>
+     * <code>int32 async_client_threads = 7;</code>
      */
     int getAsyncClientThreads();
 
     /**
-     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+     * <code>.grpc.testing.RpcType rpc_type = 8;</code>
      */
     int getRpcTypeValue();
     /**
-     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+     * <code>.grpc.testing.RpcType rpc_type = 8;</code>
      */
     io.grpc.benchmarks.proto.Control.RpcType getRpcType();
 
@@ -4702,7 +4702,7 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     boolean hasLoadParams();
     /**
@@ -4710,7 +4710,7 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     io.grpc.benchmarks.proto.Control.LoadParams getLoadParams();
     /**
@@ -4718,33 +4718,33 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     boolean hasPayloadConfig();
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     boolean hasHistogramParams();
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams();
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder();
 
@@ -4774,7 +4774,7 @@ public final class Control {
     int getCoreList(int index);
 
     /**
-     * <code>optional int32 core_limit = 14;</code>
+     * <code>int32 core_limit = 14;</code>
      */
     int getCoreLimit();
   }
@@ -5017,13 +5017,13 @@ public final class Control {
     public static final int CLIENT_TYPE_FIELD_NUMBER = 2;
     private int clientType_;
     /**
-     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+     * <code>.grpc.testing.ClientType client_type = 2;</code>
      */
     public int getClientTypeValue() {
       return clientType_;
     }
     /**
-     * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+     * <code>.grpc.testing.ClientType client_type = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
       io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
@@ -5033,19 +5033,19 @@ public final class Control {
     public static final int SECURITY_PARAMS_FIELD_NUMBER = 3;
     private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_;
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     public boolean hasSecurityParams() {
       return securityParams_ != null;
     }
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
       return securityParams_ == null ? io.grpc.benchmarks.proto.Control.SecurityParams.getDefaultInstance() : securityParams_;
     }
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
       return getSecurityParams();
@@ -5059,7 +5059,7 @@ public final class Control {
      * For synchronous client, use a separate thread for each outstanding RPC.
      * </pre>
      *
-     * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
+     * <code>int32 outstanding_rpcs_per_channel = 4;</code>
      */
     public int getOutstandingRpcsPerChannel() {
       return outstandingRpcsPerChannel_;
@@ -5073,7 +5073,7 @@ public final class Control {
      * i-th channel will connect to server_target[i % server_targets.size()]
      * </pre>
      *
-     * <code>optional int32 client_channels = 5;</code>
+     * <code>int32 client_channels = 5;</code>
      */
     public int getClientChannels() {
       return clientChannels_;
@@ -5086,7 +5086,7 @@ public final class Control {
      * Only for async client. Number of threads to use to start/manage RPCs.
      * </pre>
      *
-     * <code>optional int32 async_client_threads = 7;</code>
+     * <code>int32 async_client_threads = 7;</code>
      */
     public int getAsyncClientThreads() {
       return asyncClientThreads_;
@@ -5095,13 +5095,13 @@ public final class Control {
     public static final int RPC_TYPE_FIELD_NUMBER = 8;
     private int rpcType_;
     /**
-     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+     * <code>.grpc.testing.RpcType rpc_type = 8;</code>
      */
     public int getRpcTypeValue() {
       return rpcType_;
     }
     /**
-     * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+     * <code>.grpc.testing.RpcType rpc_type = 8;</code>
      */
     public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
       io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
@@ -5115,7 +5115,7 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     public boolean hasLoadParams() {
       return loadParams_ != null;
@@ -5125,7 +5125,7 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     public io.grpc.benchmarks.proto.Control.LoadParams getLoadParams() {
       return loadParams_ == null ? io.grpc.benchmarks.proto.Control.LoadParams.getDefaultInstance() : loadParams_;
@@ -5135,7 +5135,7 @@ public final class Control {
      * The requested load for the entire client (aggregated over all the threads).
      * </pre>
      *
-     * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+     * <code>.grpc.testing.LoadParams load_params = 10;</code>
      */
     public io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder() {
       return getLoadParams();
@@ -5144,19 +5144,19 @@ public final class Control {
     public static final int PAYLOAD_CONFIG_FIELD_NUMBER = 11;
     private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_;
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public boolean hasPayloadConfig() {
       return payloadConfig_ != null;
     }
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
       return payloadConfig_ == null ? io.grpc.benchmarks.proto.Payloads.PayloadConfig.getDefaultInstance() : payloadConfig_;
     }
     /**
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
       return getPayloadConfig();
@@ -5165,19 +5165,19 @@ public final class Control {
     public static final int HISTOGRAM_PARAMS_FIELD_NUMBER = 12;
     private io.grpc.benchmarks.proto.Stats.HistogramParams histogramParams_;
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public boolean hasHistogramParams() {
       return histogramParams_ != null;
     }
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams() {
       return histogramParams_ == null ? io.grpc.benchmarks.proto.Stats.HistogramParams.getDefaultInstance() : histogramParams_;
     }
     /**
-     * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+     * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder() {
       return getHistogramParams();
@@ -5221,7 +5221,7 @@ public final class Control {
     public static final int CORE_LIMIT_FIELD_NUMBER = 14;
     private int coreLimit_;
     /**
-     * <code>optional int32 core_limit = 14;</code>
+     * <code>int32 core_limit = 14;</code>
      */
     public int getCoreLimit() {
       return coreLimit_;
@@ -5408,7 +5408,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (getServerTargetsCount() > 0) {
         hash = (37 * hash) + SERVER_TARGETS_FIELD_NUMBER;
         hash = (53 * hash) + getServerTargetsList().hashCode();
@@ -5914,13 +5914,13 @@ public final class Control {
 
       private int clientType_ = 0;
       /**
-       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+       * <code>.grpc.testing.ClientType client_type = 2;</code>
        */
       public int getClientTypeValue() {
         return clientType_;
       }
       /**
-       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+       * <code>.grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder setClientTypeValue(int value) {
         clientType_ = value;
@@ -5928,14 +5928,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+       * <code>.grpc.testing.ClientType client_type = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientType getClientType() {
         io.grpc.benchmarks.proto.Control.ClientType result = io.grpc.benchmarks.proto.Control.ClientType.valueOf(clientType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ClientType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+       * <code>.grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder setClientType(io.grpc.benchmarks.proto.Control.ClientType value) {
         if (value == null) {
@@ -5947,7 +5947,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientType client_type = 2;</code>
+       * <code>.grpc.testing.ClientType client_type = 2;</code>
        */
       public Builder clearClientType() {
         
@@ -5960,13 +5960,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public boolean hasSecurityParams() {
         return securityParamsBuilder_ != null || securityParams_ != null;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -5976,7 +5976,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder setSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -5992,7 +5992,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder setSecurityParams(
           io.grpc.benchmarks.proto.Control.SecurityParams.Builder builderForValue) {
@@ -6006,7 +6006,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder mergeSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -6024,7 +6024,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public Builder clearSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -6038,7 +6038,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams.Builder getSecurityParamsBuilder() {
         
@@ -6046,7 +6046,7 @@ public final class Control {
         return getSecurityParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
         if (securityParamsBuilder_ != null) {
@@ -6057,7 +6057,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 3;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
@@ -6080,7 +6080,7 @@ public final class Control {
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
        *
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
+       * <code>int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public int getOutstandingRpcsPerChannel() {
         return outstandingRpcsPerChannel_;
@@ -6091,7 +6091,7 @@ public final class Control {
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
        *
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
+       * <code>int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public Builder setOutstandingRpcsPerChannel(int value) {
         
@@ -6105,7 +6105,7 @@ public final class Control {
        * For synchronous client, use a separate thread for each outstanding RPC.
        * </pre>
        *
-       * <code>optional int32 outstanding_rpcs_per_channel = 4;</code>
+       * <code>int32 outstanding_rpcs_per_channel = 4;</code>
        */
       public Builder clearOutstandingRpcsPerChannel() {
         
@@ -6121,7 +6121,7 @@ public final class Control {
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
        *
-       * <code>optional int32 client_channels = 5;</code>
+       * <code>int32 client_channels = 5;</code>
        */
       public int getClientChannels() {
         return clientChannels_;
@@ -6132,7 +6132,7 @@ public final class Control {
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
        *
-       * <code>optional int32 client_channels = 5;</code>
+       * <code>int32 client_channels = 5;</code>
        */
       public Builder setClientChannels(int value) {
         
@@ -6146,7 +6146,7 @@ public final class Control {
        * i-th channel will connect to server_target[i % server_targets.size()]
        * </pre>
        *
-       * <code>optional int32 client_channels = 5;</code>
+       * <code>int32 client_channels = 5;</code>
        */
       public Builder clearClientChannels() {
         
@@ -6161,7 +6161,7 @@ public final class Control {
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
        *
-       * <code>optional int32 async_client_threads = 7;</code>
+       * <code>int32 async_client_threads = 7;</code>
        */
       public int getAsyncClientThreads() {
         return asyncClientThreads_;
@@ -6171,7 +6171,7 @@ public final class Control {
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
        *
-       * <code>optional int32 async_client_threads = 7;</code>
+       * <code>int32 async_client_threads = 7;</code>
        */
       public Builder setAsyncClientThreads(int value) {
         
@@ -6184,7 +6184,7 @@ public final class Control {
        * Only for async client. Number of threads to use to start/manage RPCs.
        * </pre>
        *
-       * <code>optional int32 async_client_threads = 7;</code>
+       * <code>int32 async_client_threads = 7;</code>
        */
       public Builder clearAsyncClientThreads() {
         
@@ -6195,13 +6195,13 @@ public final class Control {
 
       private int rpcType_ = 0;
       /**
-       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+       * <code>.grpc.testing.RpcType rpc_type = 8;</code>
        */
       public int getRpcTypeValue() {
         return rpcType_;
       }
       /**
-       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+       * <code>.grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder setRpcTypeValue(int value) {
         rpcType_ = value;
@@ -6209,14 +6209,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+       * <code>.grpc.testing.RpcType rpc_type = 8;</code>
        */
       public io.grpc.benchmarks.proto.Control.RpcType getRpcType() {
         io.grpc.benchmarks.proto.Control.RpcType result = io.grpc.benchmarks.proto.Control.RpcType.valueOf(rpcType_);
         return result == null ? io.grpc.benchmarks.proto.Control.RpcType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+       * <code>.grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder setRpcType(io.grpc.benchmarks.proto.Control.RpcType value) {
         if (value == null) {
@@ -6228,7 +6228,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.RpcType rpc_type = 8;</code>
+       * <code>.grpc.testing.RpcType rpc_type = 8;</code>
        */
       public Builder clearRpcType() {
         
@@ -6245,7 +6245,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public boolean hasLoadParams() {
         return loadParamsBuilder_ != null || loadParams_ != null;
@@ -6255,7 +6255,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParams getLoadParams() {
         if (loadParamsBuilder_ == null) {
@@ -6269,7 +6269,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder setLoadParams(io.grpc.benchmarks.proto.Control.LoadParams value) {
         if (loadParamsBuilder_ == null) {
@@ -6289,7 +6289,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder setLoadParams(
           io.grpc.benchmarks.proto.Control.LoadParams.Builder builderForValue) {
@@ -6307,7 +6307,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder mergeLoadParams(io.grpc.benchmarks.proto.Control.LoadParams value) {
         if (loadParamsBuilder_ == null) {
@@ -6329,7 +6329,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public Builder clearLoadParams() {
         if (loadParamsBuilder_ == null) {
@@ -6347,7 +6347,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParams.Builder getLoadParamsBuilder() {
         
@@ -6359,7 +6359,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       public io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder getLoadParamsOrBuilder() {
         if (loadParamsBuilder_ != null) {
@@ -6374,7 +6374,7 @@ public final class Control {
        * The requested load for the entire client (aggregated over all the threads).
        * </pre>
        *
-       * <code>optional .grpc.testing.LoadParams load_params = 10;</code>
+       * <code>.grpc.testing.LoadParams load_params = 10;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.LoadParams, io.grpc.benchmarks.proto.Control.LoadParams.Builder, io.grpc.benchmarks.proto.Control.LoadParamsOrBuilder> 
@@ -6394,13 +6394,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public boolean hasPayloadConfig() {
         return payloadConfigBuilder_ != null || payloadConfig_ != null;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -6410,7 +6410,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder setPayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -6426,7 +6426,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder setPayloadConfig(
           io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder builderForValue) {
@@ -6440,7 +6440,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder mergePayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -6458,7 +6458,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public Builder clearPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -6472,7 +6472,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder getPayloadConfigBuilder() {
         
@@ -6480,7 +6480,7 @@ public final class Control {
         return getPayloadConfigFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
         if (payloadConfigBuilder_ != null) {
@@ -6491,7 +6491,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 11;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 11;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
@@ -6511,13 +6511,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> histogramParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public boolean hasHistogramParams() {
         return histogramParamsBuilder_ != null || histogramParams_ != null;
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParams getHistogramParams() {
         if (histogramParamsBuilder_ == null) {
@@ -6527,7 +6527,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder setHistogramParams(io.grpc.benchmarks.proto.Stats.HistogramParams value) {
         if (histogramParamsBuilder_ == null) {
@@ -6543,7 +6543,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder setHistogramParams(
           io.grpc.benchmarks.proto.Stats.HistogramParams.Builder builderForValue) {
@@ -6557,7 +6557,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder mergeHistogramParams(io.grpc.benchmarks.proto.Stats.HistogramParams value) {
         if (histogramParamsBuilder_ == null) {
@@ -6575,7 +6575,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public Builder clearHistogramParams() {
         if (histogramParamsBuilder_ == null) {
@@ -6589,7 +6589,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParams.Builder getHistogramParamsBuilder() {
         
@@ -6597,7 +6597,7 @@ public final class Control {
         return getHistogramParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder getHistogramParamsOrBuilder() {
         if (histogramParamsBuilder_ != null) {
@@ -6608,7 +6608,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.HistogramParams histogram_params = 12;</code>
+       * <code>.grpc.testing.HistogramParams histogram_params = 12;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.HistogramParams, io.grpc.benchmarks.proto.Stats.HistogramParams.Builder, io.grpc.benchmarks.proto.Stats.HistogramParamsOrBuilder> 
@@ -6720,13 +6720,13 @@ public final class Control {
 
       private int coreLimit_ ;
       /**
-       * <code>optional int32 core_limit = 14;</code>
+       * <code>int32 core_limit = 14;</code>
        */
       public int getCoreLimit() {
         return coreLimit_;
       }
       /**
-       * <code>optional int32 core_limit = 14;</code>
+       * <code>int32 core_limit = 14;</code>
        */
       public Builder setCoreLimit(int value) {
         
@@ -6735,7 +6735,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional int32 core_limit = 14;</code>
+       * <code>int32 core_limit = 14;</code>
        */
       public Builder clearCoreLimit() {
         
@@ -6797,15 +6797,15 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     boolean hasStats();
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ClientStats getStats();
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder();
   }
@@ -6887,19 +6887,19 @@ public final class Control {
     public static final int STATS_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.ClientStats stats_;
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     public boolean hasStats() {
       return stats_ != null;
     }
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ClientStats getStats() {
       return stats_ == null ? io.grpc.benchmarks.proto.Stats.ClientStats.getDefaultInstance() : stats_;
     }
     /**
-     * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+     * <code>.grpc.testing.ClientStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder() {
       return getStats();
@@ -6961,7 +6961,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasStats()) {
         hash = (37 * hash) + STATS_FIELD_NUMBER;
         hash = (53 * hash) + getStats().hashCode();
@@ -7191,13 +7191,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> statsBuilder_;
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public boolean hasStats() {
         return statsBuilder_ != null || stats_ != null;
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStats getStats() {
         if (statsBuilder_ == null) {
@@ -7207,7 +7207,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder setStats(io.grpc.benchmarks.proto.Stats.ClientStats value) {
         if (statsBuilder_ == null) {
@@ -7223,7 +7223,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder setStats(
           io.grpc.benchmarks.proto.Stats.ClientStats.Builder builderForValue) {
@@ -7237,7 +7237,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder mergeStats(io.grpc.benchmarks.proto.Stats.ClientStats value) {
         if (statsBuilder_ == null) {
@@ -7255,7 +7255,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public Builder clearStats() {
         if (statsBuilder_ == null) {
@@ -7269,7 +7269,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStats.Builder getStatsBuilder() {
         
@@ -7277,7 +7277,7 @@ public final class Control {
         return getStatsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getStatsOrBuilder() {
         if (statsBuilder_ != null) {
@@ -7288,7 +7288,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClientStats stats = 1;</code>
+       * <code>.grpc.testing.ClientStats stats = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
@@ -7361,7 +7361,7 @@ public final class Control {
      * if true, the stats will be reset after taking their snapshot.
      * </pre>
      *
-     * <code>optional bool reset = 1;</code>
+     * <code>bool reset = 1;</code>
      */
     boolean getReset();
   }
@@ -7444,7 +7444,7 @@ public final class Control {
      * if true, the stats will be reset after taking their snapshot.
      * </pre>
      *
-     * <code>optional bool reset = 1;</code>
+     * <code>bool reset = 1;</code>
      */
     public boolean getReset() {
       return reset_;
@@ -7503,7 +7503,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + RESET_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getReset());
@@ -7730,7 +7730,7 @@ public final class Control {
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
        *
-       * <code>optional bool reset = 1;</code>
+       * <code>bool reset = 1;</code>
        */
       public boolean getReset() {
         return reset_;
@@ -7740,7 +7740,7 @@ public final class Control {
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
        *
-       * <code>optional bool reset = 1;</code>
+       * <code>bool reset = 1;</code>
        */
       public Builder setReset(boolean value) {
         
@@ -7753,7 +7753,7 @@ public final class Control {
        * if true, the stats will be reset after taking their snapshot.
        * </pre>
        *
-       * <code>optional bool reset = 1;</code>
+       * <code>bool reset = 1;</code>
        */
       public Builder clearReset() {
         
@@ -7815,20 +7815,20 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+     * <code>.grpc.testing.ClientConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientConfig getSetup();
     /**
-     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+     * <code>.grpc.testing.ClientConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.Mark getMark();
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder();
 
@@ -7964,7 +7964,7 @@ public final class Control {
 
     public static final int SETUP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+     * <code>.grpc.testing.ClientConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientConfig getSetup() {
       if (argtypeCase_ == 1) {
@@ -7973,7 +7973,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+     * <code>.grpc.testing.ClientConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder() {
       if (argtypeCase_ == 1) {
@@ -7984,7 +7984,7 @@ public final class Control {
 
     public static final int MARK_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.Mark getMark() {
       if (argtypeCase_ == 2) {
@@ -7993,7 +7993,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
       if (argtypeCase_ == 2) {
@@ -8075,7 +8075,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       switch (argtypeCase_) {
         case 1:
           hash = (37 * hash) + SETUP_FIELD_NUMBER;
@@ -8343,7 +8343,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> setupBuilder_;
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfig getSetup() {
         if (setupBuilder_ == null) {
@@ -8359,7 +8359,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder setSetup(io.grpc.benchmarks.proto.Control.ClientConfig value) {
         if (setupBuilder_ == null) {
@@ -8375,7 +8375,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder setSetup(
           io.grpc.benchmarks.proto.Control.ClientConfig.Builder builderForValue) {
@@ -8389,7 +8389,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder mergeSetup(io.grpc.benchmarks.proto.Control.ClientConfig value) {
         if (setupBuilder_ == null) {
@@ -8411,7 +8411,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public Builder clearSetup() {
         if (setupBuilder_ == null) {
@@ -8430,13 +8430,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfig.Builder getSetupBuilder() {
         return getSetupFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getSetupOrBuilder() {
         if ((argtypeCase_ == 1) && (setupBuilder_ != null)) {
@@ -8449,7 +8449,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ClientConfig setup = 1;</code>
+       * <code>.grpc.testing.ClientConfig setup = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> 
@@ -8473,7 +8473,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark getMark() {
         if (markBuilder_ == null) {
@@ -8489,7 +8489,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -8505,7 +8505,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(
           io.grpc.benchmarks.proto.Control.Mark.Builder builderForValue) {
@@ -8519,7 +8519,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder mergeMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -8541,7 +8541,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder clearMark() {
         if (markBuilder_ == null) {
@@ -8560,13 +8560,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark.Builder getMarkBuilder() {
         return getMarkFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
         if ((argtypeCase_ == 2) && (markBuilder_ != null)) {
@@ -8579,7 +8579,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
@@ -8653,24 +8653,24 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+     * <code>.grpc.testing.ServerType server_type = 1;</code>
      */
     int getServerTypeValue();
     /**
-     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+     * <code>.grpc.testing.ServerType server_type = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerType getServerType();
 
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     boolean hasSecurityParams();
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams();
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder();
 
@@ -8679,7 +8679,7 @@ public final class Control {
      * Port on which to listen. Zero means pick unused port.
      * </pre>
      *
-     * <code>optional int32 port = 4;</code>
+     * <code>int32 port = 4;</code>
      */
     int getPort();
 
@@ -8688,7 +8688,7 @@ public final class Control {
      * Only for async server. Number of threads used to serve the requests.
      * </pre>
      *
-     * <code>optional int32 async_server_threads = 7;</code>
+     * <code>int32 async_server_threads = 7;</code>
      */
     int getAsyncServerThreads();
 
@@ -8697,7 +8697,7 @@ public final class Control {
      * Specify the number of cores to limit server to, if desired
      * </pre>
      *
-     * <code>optional int32 core_limit = 8;</code>
+     * <code>int32 core_limit = 8;</code>
      */
     int getCoreLimit();
 
@@ -8706,7 +8706,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     boolean hasPayloadConfig();
     /**
@@ -8714,7 +8714,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
@@ -8722,7 +8722,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder();
 
@@ -8893,13 +8893,13 @@ public final class Control {
     public static final int SERVER_TYPE_FIELD_NUMBER = 1;
     private int serverType_;
     /**
-     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+     * <code>.grpc.testing.ServerType server_type = 1;</code>
      */
     public int getServerTypeValue() {
       return serverType_;
     }
     /**
-     * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+     * <code>.grpc.testing.ServerType server_type = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
       io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
@@ -8909,19 +8909,19 @@ public final class Control {
     public static final int SECURITY_PARAMS_FIELD_NUMBER = 2;
     private io.grpc.benchmarks.proto.Control.SecurityParams securityParams_;
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     public boolean hasSecurityParams() {
       return securityParams_ != null;
     }
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
       return securityParams_ == null ? io.grpc.benchmarks.proto.Control.SecurityParams.getDefaultInstance() : securityParams_;
     }
     /**
-     * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+     * <code>.grpc.testing.SecurityParams security_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
       return getSecurityParams();
@@ -8934,7 +8934,7 @@ public final class Control {
      * Port on which to listen. Zero means pick unused port.
      * </pre>
      *
-     * <code>optional int32 port = 4;</code>
+     * <code>int32 port = 4;</code>
      */
     public int getPort() {
       return port_;
@@ -8947,7 +8947,7 @@ public final class Control {
      * Only for async server. Number of threads used to serve the requests.
      * </pre>
      *
-     * <code>optional int32 async_server_threads = 7;</code>
+     * <code>int32 async_server_threads = 7;</code>
      */
     public int getAsyncServerThreads() {
       return asyncServerThreads_;
@@ -8960,7 +8960,7 @@ public final class Control {
      * Specify the number of cores to limit server to, if desired
      * </pre>
      *
-     * <code>optional int32 core_limit = 8;</code>
+     * <code>int32 core_limit = 8;</code>
      */
     public int getCoreLimit() {
       return coreLimit_;
@@ -8973,7 +8973,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public boolean hasPayloadConfig() {
       return payloadConfig_ != null;
@@ -8983,7 +8983,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
       return payloadConfig_ == null ? io.grpc.benchmarks.proto.Payloads.PayloadConfig.getDefaultInstance() : payloadConfig_;
@@ -8993,7 +8993,7 @@ public final class Control {
      * payload config, used in generic server
      * </pre>
      *
-     * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+     * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
       return getPayloadConfig();
@@ -9161,7 +9161,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + SERVER_TYPE_FIELD_NUMBER;
       hash = (53 * hash) + serverType_;
       if (hasSecurityParams()) {
@@ -9464,13 +9464,13 @@ public final class Control {
 
       private int serverType_ = 0;
       /**
-       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+       * <code>.grpc.testing.ServerType server_type = 1;</code>
        */
       public int getServerTypeValue() {
         return serverType_;
       }
       /**
-       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+       * <code>.grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder setServerTypeValue(int value) {
         serverType_ = value;
@@ -9478,14 +9478,14 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+       * <code>.grpc.testing.ServerType server_type = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerType getServerType() {
         io.grpc.benchmarks.proto.Control.ServerType result = io.grpc.benchmarks.proto.Control.ServerType.valueOf(serverType_);
         return result == null ? io.grpc.benchmarks.proto.Control.ServerType.UNRECOGNIZED : result;
       }
       /**
-       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+       * <code>.grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder setServerType(io.grpc.benchmarks.proto.Control.ServerType value) {
         if (value == null) {
@@ -9497,7 +9497,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerType server_type = 1;</code>
+       * <code>.grpc.testing.ServerType server_type = 1;</code>
        */
       public Builder clearServerType() {
         
@@ -9510,13 +9510,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> securityParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public boolean hasSecurityParams() {
         return securityParamsBuilder_ != null || securityParams_ != null;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams getSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -9526,7 +9526,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder setSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -9542,7 +9542,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder setSecurityParams(
           io.grpc.benchmarks.proto.Control.SecurityParams.Builder builderForValue) {
@@ -9556,7 +9556,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder mergeSecurityParams(io.grpc.benchmarks.proto.Control.SecurityParams value) {
         if (securityParamsBuilder_ == null) {
@@ -9574,7 +9574,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public Builder clearSecurityParams() {
         if (securityParamsBuilder_ == null) {
@@ -9588,7 +9588,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParams.Builder getSecurityParamsBuilder() {
         
@@ -9596,7 +9596,7 @@ public final class Control {
         return getSecurityParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder getSecurityParamsOrBuilder() {
         if (securityParamsBuilder_ != null) {
@@ -9607,7 +9607,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.SecurityParams security_params = 2;</code>
+       * <code>.grpc.testing.SecurityParams security_params = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.SecurityParams, io.grpc.benchmarks.proto.Control.SecurityParams.Builder, io.grpc.benchmarks.proto.Control.SecurityParamsOrBuilder> 
@@ -9629,7 +9629,7 @@ public final class Control {
        * Port on which to listen. Zero means pick unused port.
        * </pre>
        *
-       * <code>optional int32 port = 4;</code>
+       * <code>int32 port = 4;</code>
        */
       public int getPort() {
         return port_;
@@ -9639,7 +9639,7 @@ public final class Control {
        * Port on which to listen. Zero means pick unused port.
        * </pre>
        *
-       * <code>optional int32 port = 4;</code>
+       * <code>int32 port = 4;</code>
        */
       public Builder setPort(int value) {
         
@@ -9652,7 +9652,7 @@ public final class Control {
        * Port on which to listen. Zero means pick unused port.
        * </pre>
        *
-       * <code>optional int32 port = 4;</code>
+       * <code>int32 port = 4;</code>
        */
       public Builder clearPort() {
         
@@ -9667,7 +9667,7 @@ public final class Control {
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
        *
-       * <code>optional int32 async_server_threads = 7;</code>
+       * <code>int32 async_server_threads = 7;</code>
        */
       public int getAsyncServerThreads() {
         return asyncServerThreads_;
@@ -9677,7 +9677,7 @@ public final class Control {
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
        *
-       * <code>optional int32 async_server_threads = 7;</code>
+       * <code>int32 async_server_threads = 7;</code>
        */
       public Builder setAsyncServerThreads(int value) {
         
@@ -9690,7 +9690,7 @@ public final class Control {
        * Only for async server. Number of threads used to serve the requests.
        * </pre>
        *
-       * <code>optional int32 async_server_threads = 7;</code>
+       * <code>int32 async_server_threads = 7;</code>
        */
       public Builder clearAsyncServerThreads() {
         
@@ -9705,7 +9705,7 @@ public final class Control {
        * Specify the number of cores to limit server to, if desired
        * </pre>
        *
-       * <code>optional int32 core_limit = 8;</code>
+       * <code>int32 core_limit = 8;</code>
        */
       public int getCoreLimit() {
         return coreLimit_;
@@ -9715,7 +9715,7 @@ public final class Control {
        * Specify the number of cores to limit server to, if desired
        * </pre>
        *
-       * <code>optional int32 core_limit = 8;</code>
+       * <code>int32 core_limit = 8;</code>
        */
       public Builder setCoreLimit(int value) {
         
@@ -9728,7 +9728,7 @@ public final class Control {
        * Specify the number of cores to limit server to, if desired
        * </pre>
        *
-       * <code>optional int32 core_limit = 8;</code>
+       * <code>int32 core_limit = 8;</code>
        */
       public Builder clearCoreLimit() {
         
@@ -9745,7 +9745,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public boolean hasPayloadConfig() {
         return payloadConfigBuilder_ != null || payloadConfig_ != null;
@@ -9755,7 +9755,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -9769,7 +9769,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder setPayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -9789,7 +9789,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder setPayloadConfig(
           io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder builderForValue) {
@@ -9807,7 +9807,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder mergePayloadConfig(io.grpc.benchmarks.proto.Payloads.PayloadConfig value) {
         if (payloadConfigBuilder_ == null) {
@@ -9829,7 +9829,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public Builder clearPayloadConfig() {
         if (payloadConfigBuilder_ == null) {
@@ -9847,7 +9847,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder getPayloadConfigBuilder() {
         
@@ -9859,7 +9859,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder getPayloadConfigOrBuilder() {
         if (payloadConfigBuilder_ != null) {
@@ -9874,7 +9874,7 @@ public final class Control {
        * payload config, used in generic server
        * </pre>
        *
-       * <code>optional .grpc.testing.PayloadConfig payload_config = 9;</code>
+       * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> 
@@ -10037,20 +10037,20 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+     * <code>.grpc.testing.ServerConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerConfig getSetup();
     /**
-     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+     * <code>.grpc.testing.ServerConfig setup = 1;</code>
      */
     io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.Mark getMark();
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder();
 
@@ -10186,7 +10186,7 @@ public final class Control {
 
     public static final int SETUP_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+     * <code>.grpc.testing.ServerConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerConfig getSetup() {
       if (argtypeCase_ == 1) {
@@ -10195,7 +10195,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+     * <code>.grpc.testing.ServerConfig setup = 1;</code>
      */
     public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder() {
       if (argtypeCase_ == 1) {
@@ -10206,7 +10206,7 @@ public final class Control {
 
     public static final int MARK_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.Mark getMark() {
       if (argtypeCase_ == 2) {
@@ -10215,7 +10215,7 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.Mark.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.Mark mark = 2;</code>
+     * <code>.grpc.testing.Mark mark = 2;</code>
      */
     public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
       if (argtypeCase_ == 2) {
@@ -10297,7 +10297,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       switch (argtypeCase_) {
         case 1:
           hash = (37 * hash) + SETUP_FIELD_NUMBER;
@@ -10565,7 +10565,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> setupBuilder_;
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfig getSetup() {
         if (setupBuilder_ == null) {
@@ -10581,7 +10581,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder setSetup(io.grpc.benchmarks.proto.Control.ServerConfig value) {
         if (setupBuilder_ == null) {
@@ -10597,7 +10597,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder setSetup(
           io.grpc.benchmarks.proto.Control.ServerConfig.Builder builderForValue) {
@@ -10611,7 +10611,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder mergeSetup(io.grpc.benchmarks.proto.Control.ServerConfig value) {
         if (setupBuilder_ == null) {
@@ -10633,7 +10633,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public Builder clearSetup() {
         if (setupBuilder_ == null) {
@@ -10652,13 +10652,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfig.Builder getSetupBuilder() {
         return getSetupFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getSetupOrBuilder() {
         if ((argtypeCase_ == 1) && (setupBuilder_ != null)) {
@@ -10671,7 +10671,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ServerConfig setup = 1;</code>
+       * <code>.grpc.testing.ServerConfig setup = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> 
@@ -10695,7 +10695,7 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> markBuilder_;
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark getMark() {
         if (markBuilder_ == null) {
@@ -10711,7 +10711,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -10727,7 +10727,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder setMark(
           io.grpc.benchmarks.proto.Control.Mark.Builder builderForValue) {
@@ -10741,7 +10741,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder mergeMark(io.grpc.benchmarks.proto.Control.Mark value) {
         if (markBuilder_ == null) {
@@ -10763,7 +10763,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public Builder clearMark() {
         if (markBuilder_ == null) {
@@ -10782,13 +10782,13 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.Mark.Builder getMarkBuilder() {
         return getMarkFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       public io.grpc.benchmarks.proto.Control.MarkOrBuilder getMarkOrBuilder() {
         if ((argtypeCase_ == 2) && (markBuilder_ != null)) {
@@ -10801,7 +10801,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.Mark mark = 2;</code>
+       * <code>.grpc.testing.Mark mark = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Control.Mark, io.grpc.benchmarks.proto.Control.Mark.Builder, io.grpc.benchmarks.proto.Control.MarkOrBuilder> 
@@ -10875,15 +10875,15 @@ public final class Control {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     boolean hasStats();
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ServerStats getStats();
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder();
 
@@ -10892,7 +10892,7 @@ public final class Control {
      * the port bound by the server
      * </pre>
      *
-     * <code>optional int32 port = 2;</code>
+     * <code>int32 port = 2;</code>
      */
     int getPort();
 
@@ -10901,7 +10901,7 @@ public final class Control {
      * Number of cores available to the server
      * </pre>
      *
-     * <code>optional int32 cores = 3;</code>
+     * <code>int32 cores = 3;</code>
      */
     int getCores();
   }
@@ -10995,19 +10995,19 @@ public final class Control {
     public static final int STATS_FIELD_NUMBER = 1;
     private io.grpc.benchmarks.proto.Stats.ServerStats stats_;
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     public boolean hasStats() {
       return stats_ != null;
     }
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ServerStats getStats() {
       return stats_ == null ? io.grpc.benchmarks.proto.Stats.ServerStats.getDefaultInstance() : stats_;
     }
     /**
-     * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+     * <code>.grpc.testing.ServerStats stats = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder() {
       return getStats();
@@ -11020,7 +11020,7 @@ public final class Control {
      * the port bound by the server
      * </pre>
      *
-     * <code>optional int32 port = 2;</code>
+     * <code>int32 port = 2;</code>
      */
     public int getPort() {
       return port_;
@@ -11033,7 +11033,7 @@ public final class Control {
      * Number of cores available to the server
      * </pre>
      *
-     * <code>optional int32 cores = 3;</code>
+     * <code>int32 cores = 3;</code>
      */
     public int getCores() {
       return cores_;
@@ -11113,7 +11113,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasStats()) {
         hash = (37 * hash) + STATS_FIELD_NUMBER;
         hash = (53 * hash) + getStats().hashCode();
@@ -11359,13 +11359,13 @@ public final class Control {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> statsBuilder_;
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public boolean hasStats() {
         return statsBuilder_ != null || stats_ != null;
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStats getStats() {
         if (statsBuilder_ == null) {
@@ -11375,7 +11375,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder setStats(io.grpc.benchmarks.proto.Stats.ServerStats value) {
         if (statsBuilder_ == null) {
@@ -11391,7 +11391,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder setStats(
           io.grpc.benchmarks.proto.Stats.ServerStats.Builder builderForValue) {
@@ -11405,7 +11405,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder mergeStats(io.grpc.benchmarks.proto.Stats.ServerStats value) {
         if (statsBuilder_ == null) {
@@ -11423,7 +11423,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public Builder clearStats() {
         if (statsBuilder_ == null) {
@@ -11437,7 +11437,7 @@ public final class Control {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStats.Builder getStatsBuilder() {
         
@@ -11445,7 +11445,7 @@ public final class Control {
         return getStatsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getStatsOrBuilder() {
         if (statsBuilder_ != null) {
@@ -11456,7 +11456,7 @@ public final class Control {
         }
       }
       /**
-       * <code>optional .grpc.testing.ServerStats stats = 1;</code>
+       * <code>.grpc.testing.ServerStats stats = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
@@ -11478,7 +11478,7 @@ public final class Control {
        * the port bound by the server
        * </pre>
        *
-       * <code>optional int32 port = 2;</code>
+       * <code>int32 port = 2;</code>
        */
       public int getPort() {
         return port_;
@@ -11488,7 +11488,7 @@ public final class Control {
        * the port bound by the server
        * </pre>
        *
-       * <code>optional int32 port = 2;</code>
+       * <code>int32 port = 2;</code>
        */
       public Builder setPort(int value) {
         
@@ -11501,7 +11501,7 @@ public final class Control {
        * the port bound by the server
        * </pre>
        *
-       * <code>optional int32 port = 2;</code>
+       * <code>int32 port = 2;</code>
        */
       public Builder clearPort() {
         
@@ -11516,7 +11516,7 @@ public final class Control {
        * Number of cores available to the server
        * </pre>
        *
-       * <code>optional int32 cores = 3;</code>
+       * <code>int32 cores = 3;</code>
        */
       public int getCores() {
         return cores_;
@@ -11526,7 +11526,7 @@ public final class Control {
        * Number of cores available to the server
        * </pre>
        *
-       * <code>optional int32 cores = 3;</code>
+       * <code>int32 cores = 3;</code>
        */
       public Builder setCores(int value) {
         
@@ -11539,7 +11539,7 @@ public final class Control {
        * Number of cores available to the server
        * </pre>
        *
-       * <code>optional int32 cores = 3;</code>
+       * <code>int32 cores = 3;</code>
        */
       public Builder clearCores() {
         
@@ -11705,7 +11705,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -11970,7 +11970,7 @@ public final class Control {
      * Number of cores available on the server
      * </pre>
      *
-     * <code>optional int32 cores = 1;</code>
+     * <code>int32 cores = 1;</code>
      */
     int getCores();
   }
@@ -12049,7 +12049,7 @@ public final class Control {
      * Number of cores available on the server
      * </pre>
      *
-     * <code>optional int32 cores = 1;</code>
+     * <code>int32 cores = 1;</code>
      */
     public int getCores() {
       return cores_;
@@ -12108,7 +12108,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + CORES_FIELD_NUMBER;
       hash = (53 * hash) + getCores();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -12330,7 +12330,7 @@ public final class Control {
        * Number of cores available on the server
        * </pre>
        *
-       * <code>optional int32 cores = 1;</code>
+       * <code>int32 cores = 1;</code>
        */
       public int getCores() {
         return cores_;
@@ -12340,7 +12340,7 @@ public final class Control {
        * Number of cores available on the server
        * </pre>
        *
-       * <code>optional int32 cores = 1;</code>
+       * <code>int32 cores = 1;</code>
        */
       public Builder setCores(int value) {
         
@@ -12353,7 +12353,7 @@ public final class Control {
        * Number of cores available on the server
        * </pre>
        *
-       * <code>optional int32 cores = 1;</code>
+       * <code>int32 cores = 1;</code>
        */
       public Builder clearCores() {
         
@@ -12519,7 +12519,7 @@ public final class Control {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;

@@ -161,7 +161,7 @@ public  final class ServerReflectionRequest extends
   public static final int HOST_FIELD_NUMBER = 1;
   private volatile java.lang.Object host_;
   /**
-   * <code>optional string host = 1;</code>
+   * <code>string host = 1;</code>
    */
   public java.lang.String getHost() {
     java.lang.Object ref = host_;
@@ -176,7 +176,7 @@ public  final class ServerReflectionRequest extends
     }
   }
   /**
-   * <code>optional string host = 1;</code>
+   * <code>string host = 1;</code>
    */
   public com.google.protobuf.ByteString
       getHostBytes() {
@@ -198,7 +198,7 @@ public  final class ServerReflectionRequest extends
    * Find a proto file by the file name.
    * </pre>
    *
-   * <code>optional string file_by_filename = 3;</code>
+   * <code>string file_by_filename = 3;</code>
    */
   public java.lang.String getFileByFilename() {
     java.lang.Object ref = "";
@@ -222,7 +222,7 @@ public  final class ServerReflectionRequest extends
    * Find a proto file by the file name.
    * </pre>
    *
-   * <code>optional string file_by_filename = 3;</code>
+   * <code>string file_by_filename = 3;</code>
    */
   public com.google.protobuf.ByteString
       getFileByFilenameBytes() {
@@ -251,7 +251,7 @@ public  final class ServerReflectionRequest extends
    * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
    * </pre>
    *
-   * <code>optional string file_containing_symbol = 4;</code>
+   * <code>string file_containing_symbol = 4;</code>
    */
   public java.lang.String getFileContainingSymbol() {
     java.lang.Object ref = "";
@@ -277,7 +277,7 @@ public  final class ServerReflectionRequest extends
    * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
    * </pre>
    *
-   * <code>optional string file_containing_symbol = 4;</code>
+   * <code>string file_containing_symbol = 4;</code>
    */
   public com.google.protobuf.ByteString
       getFileContainingSymbolBytes() {
@@ -305,7 +305,7 @@ public  final class ServerReflectionRequest extends
    * message type with the given field number.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
   public io.grpc.reflection.v1alpha.ExtensionRequest getFileContainingExtension() {
     if (messageRequestCase_ == 5) {
@@ -319,7 +319,7 @@ public  final class ServerReflectionRequest extends
    * message type with the given field number.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
   public io.grpc.reflection.v1alpha.ExtensionRequestOrBuilder getFileContainingExtensionOrBuilder() {
     if (messageRequestCase_ == 5) {
@@ -341,7 +341,7 @@ public  final class ServerReflectionRequest extends
    * &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string all_extension_numbers_of_type = 6;</code>
+   * <code>string all_extension_numbers_of_type = 6;</code>
    */
   public java.lang.String getAllExtensionNumbersOfType() {
     java.lang.Object ref = "";
@@ -372,7 +372,7 @@ public  final class ServerReflectionRequest extends
    * &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string all_extension_numbers_of_type = 6;</code>
+   * <code>string all_extension_numbers_of_type = 6;</code>
    */
   public com.google.protobuf.ByteString
       getAllExtensionNumbersOfTypeBytes() {
@@ -400,7 +400,7 @@ public  final class ServerReflectionRequest extends
    * checked.
    * </pre>
    *
-   * <code>optional string list_services = 7;</code>
+   * <code>string list_services = 7;</code>
    */
   public java.lang.String getListServices() {
     java.lang.Object ref = "";
@@ -425,7 +425,7 @@ public  final class ServerReflectionRequest extends
    * checked.
    * </pre>
    *
-   * <code>optional string list_services = 7;</code>
+   * <code>string list_services = 7;</code>
    */
   public com.google.protobuf.ByteString
       getListServicesBytes() {
@@ -556,7 +556,7 @@ public  final class ServerReflectionRequest extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + HOST_FIELD_NUMBER;
     hash = (53 * hash) + getHost().hashCode();
     switch (messageRequestCase_) {
@@ -873,7 +873,7 @@ public  final class ServerReflectionRequest extends
 
     private java.lang.Object host_ = "";
     /**
-     * <code>optional string host = 1;</code>
+     * <code>string host = 1;</code>
      */
     public java.lang.String getHost() {
       java.lang.Object ref = host_;
@@ -888,7 +888,7 @@ public  final class ServerReflectionRequest extends
       }
     }
     /**
-     * <code>optional string host = 1;</code>
+     * <code>string host = 1;</code>
      */
     public com.google.protobuf.ByteString
         getHostBytes() {
@@ -904,7 +904,7 @@ public  final class ServerReflectionRequest extends
       }
     }
     /**
-     * <code>optional string host = 1;</code>
+     * <code>string host = 1;</code>
      */
     public Builder setHost(
         java.lang.String value) {
@@ -917,7 +917,7 @@ public  final class ServerReflectionRequest extends
       return this;
     }
     /**
-     * <code>optional string host = 1;</code>
+     * <code>string host = 1;</code>
      */
     public Builder clearHost() {
       
@@ -926,7 +926,7 @@ public  final class ServerReflectionRequest extends
       return this;
     }
     /**
-     * <code>optional string host = 1;</code>
+     * <code>string host = 1;</code>
      */
     public Builder setHostBytes(
         com.google.protobuf.ByteString value) {
@@ -945,7 +945,7 @@ public  final class ServerReflectionRequest extends
      * Find a proto file by the file name.
      * </pre>
      *
-     * <code>optional string file_by_filename = 3;</code>
+     * <code>string file_by_filename = 3;</code>
      */
     public java.lang.String getFileByFilename() {
       java.lang.Object ref = "";
@@ -969,7 +969,7 @@ public  final class ServerReflectionRequest extends
      * Find a proto file by the file name.
      * </pre>
      *
-     * <code>optional string file_by_filename = 3;</code>
+     * <code>string file_by_filename = 3;</code>
      */
     public com.google.protobuf.ByteString
         getFileByFilenameBytes() {
@@ -994,7 +994,7 @@ public  final class ServerReflectionRequest extends
      * Find a proto file by the file name.
      * </pre>
      *
-     * <code>optional string file_by_filename = 3;</code>
+     * <code>string file_by_filename = 3;</code>
      */
     public Builder setFileByFilename(
         java.lang.String value) {
@@ -1011,7 +1011,7 @@ public  final class ServerReflectionRequest extends
      * Find a proto file by the file name.
      * </pre>
      *
-     * <code>optional string file_by_filename = 3;</code>
+     * <code>string file_by_filename = 3;</code>
      */
     public Builder clearFileByFilename() {
       if (messageRequestCase_ == 3) {
@@ -1026,7 +1026,7 @@ public  final class ServerReflectionRequest extends
      * Find a proto file by the file name.
      * </pre>
      *
-     * <code>optional string file_by_filename = 3;</code>
+     * <code>string file_by_filename = 3;</code>
      */
     public Builder setFileByFilenameBytes(
         com.google.protobuf.ByteString value) {
@@ -1047,7 +1047,7 @@ public  final class ServerReflectionRequest extends
      * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
      * </pre>
      *
-     * <code>optional string file_containing_symbol = 4;</code>
+     * <code>string file_containing_symbol = 4;</code>
      */
     public java.lang.String getFileContainingSymbol() {
       java.lang.Object ref = "";
@@ -1073,7 +1073,7 @@ public  final class ServerReflectionRequest extends
      * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
      * </pre>
      *
-     * <code>optional string file_containing_symbol = 4;</code>
+     * <code>string file_containing_symbol = 4;</code>
      */
     public com.google.protobuf.ByteString
         getFileContainingSymbolBytes() {
@@ -1100,7 +1100,7 @@ public  final class ServerReflectionRequest extends
      * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
      * </pre>
      *
-     * <code>optional string file_containing_symbol = 4;</code>
+     * <code>string file_containing_symbol = 4;</code>
      */
     public Builder setFileContainingSymbol(
         java.lang.String value) {
@@ -1119,7 +1119,7 @@ public  final class ServerReflectionRequest extends
      * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
      * </pre>
      *
-     * <code>optional string file_containing_symbol = 4;</code>
+     * <code>string file_containing_symbol = 4;</code>
      */
     public Builder clearFileContainingSymbol() {
       if (messageRequestCase_ == 4) {
@@ -1136,7 +1136,7 @@ public  final class ServerReflectionRequest extends
      * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
      * </pre>
      *
-     * <code>optional string file_containing_symbol = 4;</code>
+     * <code>string file_containing_symbol = 4;</code>
      */
     public Builder setFileContainingSymbolBytes(
         com.google.protobuf.ByteString value) {
@@ -1158,7 +1158,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionRequest getFileContainingExtension() {
       if (fileContainingExtensionBuilder_ == null) {
@@ -1179,7 +1179,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public Builder setFileContainingExtension(io.grpc.reflection.v1alpha.ExtensionRequest value) {
       if (fileContainingExtensionBuilder_ == null) {
@@ -1200,7 +1200,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public Builder setFileContainingExtension(
         io.grpc.reflection.v1alpha.ExtensionRequest.Builder builderForValue) {
@@ -1219,7 +1219,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public Builder mergeFileContainingExtension(io.grpc.reflection.v1alpha.ExtensionRequest value) {
       if (fileContainingExtensionBuilder_ == null) {
@@ -1246,7 +1246,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public Builder clearFileContainingExtension() {
       if (fileContainingExtensionBuilder_ == null) {
@@ -1270,7 +1270,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionRequest.Builder getFileContainingExtensionBuilder() {
       return getFileContainingExtensionFieldBuilder().getBuilder();
@@ -1281,7 +1281,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionRequestOrBuilder getFileContainingExtensionOrBuilder() {
       if ((messageRequestCase_ == 5) && (fileContainingExtensionBuilder_ != null)) {
@@ -1299,7 +1299,7 @@ public  final class ServerReflectionRequest extends
      * message type with the given field number.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ExtensionRequest, io.grpc.reflection.v1alpha.ExtensionRequest.Builder, io.grpc.reflection.v1alpha.ExtensionRequestOrBuilder> 
@@ -1332,7 +1332,7 @@ public  final class ServerReflectionRequest extends
      * &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string all_extension_numbers_of_type = 6;</code>
+     * <code>string all_extension_numbers_of_type = 6;</code>
      */
     public java.lang.String getAllExtensionNumbersOfType() {
       java.lang.Object ref = "";
@@ -1363,7 +1363,7 @@ public  final class ServerReflectionRequest extends
      * &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string all_extension_numbers_of_type = 6;</code>
+     * <code>string all_extension_numbers_of_type = 6;</code>
      */
     public com.google.protobuf.ByteString
         getAllExtensionNumbersOfTypeBytes() {
@@ -1395,7 +1395,7 @@ public  final class ServerReflectionRequest extends
      * &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string all_extension_numbers_of_type = 6;</code>
+     * <code>string all_extension_numbers_of_type = 6;</code>
      */
     public Builder setAllExtensionNumbersOfType(
         java.lang.String value) {
@@ -1419,7 +1419,7 @@ public  final class ServerReflectionRequest extends
      * &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string all_extension_numbers_of_type = 6;</code>
+     * <code>string all_extension_numbers_of_type = 6;</code>
      */
     public Builder clearAllExtensionNumbersOfType() {
       if (messageRequestCase_ == 6) {
@@ -1441,7 +1441,7 @@ public  final class ServerReflectionRequest extends
      * &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string all_extension_numbers_of_type = 6;</code>
+     * <code>string all_extension_numbers_of_type = 6;</code>
      */
     public Builder setAllExtensionNumbersOfTypeBytes(
         com.google.protobuf.ByteString value) {
@@ -1461,7 +1461,7 @@ public  final class ServerReflectionRequest extends
      * checked.
      * </pre>
      *
-     * <code>optional string list_services = 7;</code>
+     * <code>string list_services = 7;</code>
      */
     public java.lang.String getListServices() {
       java.lang.Object ref = "";
@@ -1486,7 +1486,7 @@ public  final class ServerReflectionRequest extends
      * checked.
      * </pre>
      *
-     * <code>optional string list_services = 7;</code>
+     * <code>string list_services = 7;</code>
      */
     public com.google.protobuf.ByteString
         getListServicesBytes() {
@@ -1512,7 +1512,7 @@ public  final class ServerReflectionRequest extends
      * checked.
      * </pre>
      *
-     * <code>optional string list_services = 7;</code>
+     * <code>string list_services = 7;</code>
      */
     public Builder setListServices(
         java.lang.String value) {
@@ -1530,7 +1530,7 @@ public  final class ServerReflectionRequest extends
      * checked.
      * </pre>
      *
-     * <code>optional string list_services = 7;</code>
+     * <code>string list_services = 7;</code>
      */
     public Builder clearListServices() {
       if (messageRequestCase_ == 7) {
@@ -1546,7 +1546,7 @@ public  final class ServerReflectionRequest extends
      * checked.
      * </pre>
      *
-     * <code>optional string list_services = 7;</code>
+     * <code>string list_services = 7;</code>
      */
     public Builder setListServicesBytes(
         com.google.protobuf.ByteString value) {

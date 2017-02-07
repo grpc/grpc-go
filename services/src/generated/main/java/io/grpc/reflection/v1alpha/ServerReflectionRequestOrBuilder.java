@@ -8,11 +8,11 @@ public interface ServerReflectionRequestOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional string host = 1;</code>
+   * <code>string host = 1;</code>
    */
   java.lang.String getHost();
   /**
-   * <code>optional string host = 1;</code>
+   * <code>string host = 1;</code>
    */
   com.google.protobuf.ByteString
       getHostBytes();
@@ -22,7 +22,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * Find a proto file by the file name.
    * </pre>
    *
-   * <code>optional string file_by_filename = 3;</code>
+   * <code>string file_by_filename = 3;</code>
    */
   java.lang.String getFileByFilename();
   /**
@@ -30,7 +30,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * Find a proto file by the file name.
    * </pre>
    *
-   * <code>optional string file_by_filename = 3;</code>
+   * <code>string file_by_filename = 3;</code>
    */
   com.google.protobuf.ByteString
       getFileByFilenameBytes();
@@ -42,7 +42,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
    * </pre>
    *
-   * <code>optional string file_containing_symbol = 4;</code>
+   * <code>string file_containing_symbol = 4;</code>
    */
   java.lang.String getFileContainingSymbol();
   /**
@@ -52,7 +52,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * (e.g. &lt;package&gt;.&lt;service&gt;[.&lt;method&gt;] or &lt;package&gt;.&lt;type&gt;).
    * </pre>
    *
-   * <code>optional string file_containing_symbol = 4;</code>
+   * <code>string file_containing_symbol = 4;</code>
    */
   com.google.protobuf.ByteString
       getFileContainingSymbolBytes();
@@ -63,7 +63,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * message type with the given field number.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
   io.grpc.reflection.v1alpha.ExtensionRequest getFileContainingExtension();
   /**
@@ -72,7 +72,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * message type with the given field number.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
   io.grpc.reflection.v1alpha.ExtensionRequestOrBuilder getFileContainingExtensionOrBuilder();
 
@@ -88,7 +88,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string all_extension_numbers_of_type = 6;</code>
+   * <code>string all_extension_numbers_of_type = 6;</code>
    */
   java.lang.String getAllExtensionNumbersOfType();
   /**
@@ -103,7 +103,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string all_extension_numbers_of_type = 6;</code>
+   * <code>string all_extension_numbers_of_type = 6;</code>
    */
   com.google.protobuf.ByteString
       getAllExtensionNumbersOfTypeBytes();
@@ -114,7 +114,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * checked.
    * </pre>
    *
-   * <code>optional string list_services = 7;</code>
+   * <code>string list_services = 7;</code>
    */
   java.lang.String getListServices();
   /**
@@ -123,7 +123,7 @@ public interface ServerReflectionRequestOrBuilder extends
    * checked.
    * </pre>
    *
-   * <code>optional string list_services = 7;</code>
+   * <code>string list_services = 7;</code>
    */
   com.google.protobuf.ByteString
       getListServicesBytes();

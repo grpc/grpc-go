@@ -13,7 +13,7 @@ public interface ServerOrBuilder extends
    * either be an IPv4 or IPv6 address.
    * </pre>
    *
-   * <code>optional bytes ip_address = 1;</code>
+   * <code>bytes ip_address = 1;</code>
    */
   com.google.protobuf.ByteString getIpAddress();
 
@@ -22,7 +22,7 @@ public interface ServerOrBuilder extends
    * A resolved port number for the server.
    * </pre>
    *
-   * <code>optional int32 port = 2;</code>
+   * <code>int32 port = 2;</code>
    */
   int getPort();
 
@@ -34,7 +34,7 @@ public interface ServerOrBuilder extends
    * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
-   * <code>optional string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 3;</code>
    */
   java.lang.String getLoadBalanceToken();
   /**
@@ -45,7 +45,7 @@ public interface ServerOrBuilder extends
    * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
-   * <code>optional string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 3;</code>
    */
   com.google.protobuf.ByteString
       getLoadBalanceTokenBytes();
@@ -56,7 +56,7 @@ public interface ServerOrBuilder extends
    * when this server is chosen from the list.
    * </pre>
    *
-   * <code>optional bool drop_request = 4;</code>
+   * <code>bool drop_request = 4;</code>
    */
   boolean getDropRequest();
 }

@@ -22,16 +22,16 @@ public interface Messages {
       return _emptyArray;
     }
 
-    // optional int32 i = 1;
+    // int32 i = 1;
     public int i;
 
-    // optional bool b = 2;
+    // bool b = 2;
     public boolean b;
 
-    // optional string s = 3;
+    // string s = 3;
     public java.lang.String s;
 
-    // optional bytes bs = 4;
+    // bytes bs = 4;
     public byte[] bs;
 
     public Message() {

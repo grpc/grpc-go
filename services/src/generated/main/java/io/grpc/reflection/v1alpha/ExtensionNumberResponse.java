@@ -111,7 +111,7 @@ public  final class ExtensionNumberResponse extends
    * is &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string base_type_name = 1;</code>
+   * <code>string base_type_name = 1;</code>
    */
   public java.lang.String getBaseTypeName() {
     java.lang.Object ref = baseTypeName_;
@@ -131,7 +131,7 @@ public  final class ExtensionNumberResponse extends
    * is &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string base_type_name = 1;</code>
+   * <code>string base_type_name = 1;</code>
    */
   public com.google.protobuf.ByteString
       getBaseTypeNameBytes() {
@@ -246,7 +246,7 @@ public  final class ExtensionNumberResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + BASE_TYPE_NAME_FIELD_NUMBER;
     hash = (53 * hash) + getBaseTypeName().hashCode();
     if (getExtensionNumberCount() > 0) {
@@ -500,7 +500,7 @@ public  final class ExtensionNumberResponse extends
      * is &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string base_type_name = 1;</code>
+     * <code>string base_type_name = 1;</code>
      */
     public java.lang.String getBaseTypeName() {
       java.lang.Object ref = baseTypeName_;
@@ -520,7 +520,7 @@ public  final class ExtensionNumberResponse extends
      * is &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string base_type_name = 1;</code>
+     * <code>string base_type_name = 1;</code>
      */
     public com.google.protobuf.ByteString
         getBaseTypeNameBytes() {
@@ -541,7 +541,7 @@ public  final class ExtensionNumberResponse extends
      * is &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string base_type_name = 1;</code>
+     * <code>string base_type_name = 1;</code>
      */
     public Builder setBaseTypeName(
         java.lang.String value) {
@@ -559,7 +559,7 @@ public  final class ExtensionNumberResponse extends
      * is &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string base_type_name = 1;</code>
+     * <code>string base_type_name = 1;</code>
      */
     public Builder clearBaseTypeName() {
       
@@ -573,7 +573,7 @@ public  final class ExtensionNumberResponse extends
      * is &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string base_type_name = 1;</code>
+     * <code>string base_type_name = 1;</code>
      */
     public Builder setBaseTypeNameBytes(
         com.google.protobuf.ByteString value) {

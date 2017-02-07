@@ -8,11 +8,11 @@ public interface HealthCheckResponseOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+   * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
    */
   int getStatusValue();
   /**
-   * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+   * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
    */
   io.grpc.health.v1.HealthCheckResponse.ServingStatus getStatus();
 }

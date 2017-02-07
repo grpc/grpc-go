@@ -195,7 +195,7 @@ public  final class ListServiceResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     if (getServiceCount() > 0) {
       hash = (37 * hash) + SERVICE_FIELD_NUMBER;
       hash = (53 * hash) + getServiceList().hashCode();

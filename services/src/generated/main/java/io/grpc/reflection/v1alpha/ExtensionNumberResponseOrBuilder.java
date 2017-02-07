@@ -13,7 +13,7 @@ public interface ExtensionNumberResponseOrBuilder extends
    * is &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string base_type_name = 1;</code>
+   * <code>string base_type_name = 1;</code>
    */
   java.lang.String getBaseTypeName();
   /**
@@ -22,7 +22,7 @@ public interface ExtensionNumberResponseOrBuilder extends
    * is &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string base_type_name = 1;</code>
+   * <code>string base_type_name = 1;</code>
    */
   com.google.protobuf.ByteString
       getBaseTypeNameBytes();

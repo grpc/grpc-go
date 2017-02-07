@@ -137,7 +137,7 @@ public  final class LoadBalanceRequest extends
    * This message should be sent on the first request to the load balancer.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest() {
     if (loadBalanceRequestTypeCase_ == 1) {
@@ -150,7 +150,7 @@ public  final class LoadBalanceRequest extends
    * This message should be sent on the first request to the load balancer.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   public io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder() {
     if (loadBalanceRequestTypeCase_ == 1) {
@@ -166,7 +166,7 @@ public  final class LoadBalanceRequest extends
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   public io.grpc.grpclb.ClientStats getClientStats() {
     if (loadBalanceRequestTypeCase_ == 2) {
@@ -180,7 +180,7 @@ public  final class LoadBalanceRequest extends
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   public io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder() {
     if (loadBalanceRequestTypeCase_ == 2) {
@@ -262,7 +262,7 @@ public  final class LoadBalanceRequest extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     switch (loadBalanceRequestTypeCase_) {
       case 1:
         hash = (37 * hash) + INITIAL_REQUEST_FIELD_NUMBER;
@@ -534,7 +534,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest() {
       if (initialRequestBuilder_ == null) {
@@ -554,7 +554,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder setInitialRequest(io.grpc.grpclb.InitialLoadBalanceRequest value) {
       if (initialRequestBuilder_ == null) {
@@ -574,7 +574,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder setInitialRequest(
         io.grpc.grpclb.InitialLoadBalanceRequest.Builder builderForValue) {
@@ -592,7 +592,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder mergeInitialRequest(io.grpc.grpclb.InitialLoadBalanceRequest value) {
       if (initialRequestBuilder_ == null) {
@@ -618,7 +618,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public Builder clearInitialRequest() {
       if (initialRequestBuilder_ == null) {
@@ -641,7 +641,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequest.Builder getInitialRequestBuilder() {
       return getInitialRequestFieldBuilder().getBuilder();
@@ -651,7 +651,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     public io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder() {
       if ((loadBalanceRequestTypeCase_ == 1) && (initialRequestBuilder_ != null)) {
@@ -668,7 +668,7 @@ public  final class LoadBalanceRequest extends
      * This message should be sent on the first request to the load balancer.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceRequest, io.grpc.grpclb.InitialLoadBalanceRequest.Builder, io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder> 
@@ -697,7 +697,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStats getClientStats() {
       if (clientStatsBuilder_ == null) {
@@ -718,7 +718,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder setClientStats(io.grpc.grpclb.ClientStats value) {
       if (clientStatsBuilder_ == null) {
@@ -739,7 +739,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder setClientStats(
         io.grpc.grpclb.ClientStats.Builder builderForValue) {
@@ -758,7 +758,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder mergeClientStats(io.grpc.grpclb.ClientStats value) {
       if (clientStatsBuilder_ == null) {
@@ -785,7 +785,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public Builder clearClientStats() {
       if (clientStatsBuilder_ == null) {
@@ -809,7 +809,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStats.Builder getClientStatsBuilder() {
       return getClientStatsFieldBuilder().getBuilder();
@@ -820,7 +820,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     public io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder() {
       if ((loadBalanceRequestTypeCase_ == 2) && (clientStatsBuilder_ != null)) {
@@ -838,7 +838,7 @@ public  final class LoadBalanceRequest extends
      * based on the duration defined in the InitialLoadBalanceResponse.
      * </pre>
      *
-     * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.ClientStats, io.grpc.grpclb.ClientStats.Builder, io.grpc.grpclb.ClientStatsOrBuilder> 

@@ -12,7 +12,7 @@ public interface ClientStatsOrBuilder extends
    * The total number of requests sent by the client since the last report.
    * </pre>
    *
-   * <code>optional int64 total_requests = 1;</code>
+   * <code>int64 total_requests = 1;</code>
    */
   long getTotalRequests();
 
@@ -21,7 +21,7 @@ public interface ClientStatsOrBuilder extends
    * The number of client rpc errors since the last report.
    * </pre>
    *
-   * <code>optional int64 client_rpc_errors = 2;</code>
+   * <code>int64 client_rpc_errors = 2;</code>
    */
   long getClientRpcErrors();
 
@@ -30,7 +30,7 @@ public interface ClientStatsOrBuilder extends
    * The number of dropped requests since the last report.
    * </pre>
    *
-   * <code>optional int64 dropped_requests = 3;</code>
+   * <code>int64 dropped_requests = 3;</code>
    */
   long getDroppedRequests();
 }

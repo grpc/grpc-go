@@ -19,31 +19,31 @@ public final class Metrics {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     java.lang.String getName();
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     com.google.protobuf.ByteString
         getNameBytes();
 
     /**
-     * <code>optional int64 long_value = 2;</code>
+     * <code>int64 long_value = 2;</code>
      */
     long getLongValue();
 
     /**
-     * <code>optional double double_value = 3;</code>
+     * <code>double double_value = 3;</code>
      */
     double getDoubleValue();
 
     /**
-     * <code>optional string string_value = 4;</code>
+     * <code>string string_value = 4;</code>
      */
     java.lang.String getStringValue();
     /**
-     * <code>optional string string_value = 4;</code>
+     * <code>string string_value = 4;</code>
      */
     com.google.protobuf.ByteString
         getStringValueBytes();
@@ -182,7 +182,7 @@ public final class Metrics {
     public static final int NAME_FIELD_NUMBER = 1;
     private volatile java.lang.Object name_;
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public java.lang.String getName() {
       java.lang.Object ref = name_;
@@ -197,7 +197,7 @@ public final class Metrics {
       }
     }
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public com.google.protobuf.ByteString
         getNameBytes() {
@@ -215,7 +215,7 @@ public final class Metrics {
 
     public static final int LONG_VALUE_FIELD_NUMBER = 2;
     /**
-     * <code>optional int64 long_value = 2;</code>
+     * <code>int64 long_value = 2;</code>
      */
     public long getLongValue() {
       if (valueCase_ == 2) {
@@ -226,7 +226,7 @@ public final class Metrics {
 
     public static final int DOUBLE_VALUE_FIELD_NUMBER = 3;
     /**
-     * <code>optional double double_value = 3;</code>
+     * <code>double double_value = 3;</code>
      */
     public double getDoubleValue() {
       if (valueCase_ == 3) {
@@ -237,7 +237,7 @@ public final class Metrics {
 
     public static final int STRING_VALUE_FIELD_NUMBER = 4;
     /**
-     * <code>optional string string_value = 4;</code>
+     * <code>string string_value = 4;</code>
      */
     public java.lang.String getStringValue() {
       java.lang.Object ref = "";
@@ -257,7 +257,7 @@ public final class Metrics {
       }
     }
     /**
-     * <code>optional string string_value = 4;</code>
+     * <code>string string_value = 4;</code>
      */
     public com.google.protobuf.ByteString
         getStringValueBytes() {
@@ -375,7 +375,7 @@ public final class Metrics {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + NAME_FIELD_NUMBER;
       hash = (53 * hash) + getName().hashCode();
       switch (valueCase_) {
@@ -662,7 +662,7 @@ public final class Metrics {
 
       private java.lang.Object name_ = "";
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public java.lang.String getName() {
         java.lang.Object ref = name_;
@@ -677,7 +677,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public com.google.protobuf.ByteString
           getNameBytes() {
@@ -693,7 +693,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder setName(
           java.lang.String value) {
@@ -706,7 +706,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder clearName() {
         
@@ -715,7 +715,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder setNameBytes(
           com.google.protobuf.ByteString value) {
@@ -730,7 +730,7 @@ public final class Metrics {
       }
 
       /**
-       * <code>optional int64 long_value = 2;</code>
+       * <code>int64 long_value = 2;</code>
        */
       public long getLongValue() {
         if (valueCase_ == 2) {
@@ -739,7 +739,7 @@ public final class Metrics {
         return 0L;
       }
       /**
-       * <code>optional int64 long_value = 2;</code>
+       * <code>int64 long_value = 2;</code>
        */
       public Builder setLongValue(long value) {
         valueCase_ = 2;
@@ -748,7 +748,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional int64 long_value = 2;</code>
+       * <code>int64 long_value = 2;</code>
        */
       public Builder clearLongValue() {
         if (valueCase_ == 2) {
@@ -760,7 +760,7 @@ public final class Metrics {
       }
 
       /**
-       * <code>optional double double_value = 3;</code>
+       * <code>double double_value = 3;</code>
        */
       public double getDoubleValue() {
         if (valueCase_ == 3) {
@@ -769,7 +769,7 @@ public final class Metrics {
         return 0D;
       }
       /**
-       * <code>optional double double_value = 3;</code>
+       * <code>double double_value = 3;</code>
        */
       public Builder setDoubleValue(double value) {
         valueCase_ = 3;
@@ -778,7 +778,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional double double_value = 3;</code>
+       * <code>double double_value = 3;</code>
        */
       public Builder clearDoubleValue() {
         if (valueCase_ == 3) {
@@ -790,7 +790,7 @@ public final class Metrics {
       }
 
       /**
-       * <code>optional string string_value = 4;</code>
+       * <code>string string_value = 4;</code>
        */
       public java.lang.String getStringValue() {
         java.lang.Object ref = "";
@@ -810,7 +810,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string string_value = 4;</code>
+       * <code>string string_value = 4;</code>
        */
       public com.google.protobuf.ByteString
           getStringValueBytes() {
@@ -831,7 +831,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string string_value = 4;</code>
+       * <code>string string_value = 4;</code>
        */
       public Builder setStringValue(
           java.lang.String value) {
@@ -844,7 +844,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string string_value = 4;</code>
+       * <code>string string_value = 4;</code>
        */
       public Builder clearStringValue() {
         if (valueCase_ == 4) {
@@ -855,7 +855,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string string_value = 4;</code>
+       * <code>string string_value = 4;</code>
        */
       public Builder setStringValueBytes(
           com.google.protobuf.ByteString value) {
@@ -922,11 +922,11 @@ public final class Metrics {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     java.lang.String getName();
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     com.google.protobuf.ByteString
         getNameBytes();
@@ -1007,7 +1007,7 @@ public final class Metrics {
     public static final int NAME_FIELD_NUMBER = 1;
     private volatile java.lang.Object name_;
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public java.lang.String getName() {
       java.lang.Object ref = name_;
@@ -1022,7 +1022,7 @@ public final class Metrics {
       }
     }
     /**
-     * <code>optional string name = 1;</code>
+     * <code>string name = 1;</code>
      */
     public com.google.protobuf.ByteString
         getNameBytes() {
@@ -1090,7 +1090,7 @@ public final class Metrics {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + NAME_FIELD_NUMBER;
       hash = (53 * hash) + getName().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
@@ -1313,7 +1313,7 @@ public final class Metrics {
 
       private java.lang.Object name_ = "";
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public java.lang.String getName() {
         java.lang.Object ref = name_;
@@ -1328,7 +1328,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public com.google.protobuf.ByteString
           getNameBytes() {
@@ -1344,7 +1344,7 @@ public final class Metrics {
         }
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder setName(
           java.lang.String value) {
@@ -1357,7 +1357,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder clearName() {
         
@@ -1366,7 +1366,7 @@ public final class Metrics {
         return this;
       }
       /**
-       * <code>optional string name = 1;</code>
+       * <code>string name = 1;</code>
        */
       public Builder setNameBytes(
           com.google.protobuf.ByteString value) {
@@ -1537,7 +1537,7 @@ public final class Metrics {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;

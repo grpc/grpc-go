@@ -98,7 +98,7 @@ public  final class Server extends
    * either be an IPv4 or IPv6 address.
    * </pre>
    *
-   * <code>optional bytes ip_address = 1;</code>
+   * <code>bytes ip_address = 1;</code>
    */
   public com.google.protobuf.ByteString getIpAddress() {
     return ipAddress_;
@@ -111,7 +111,7 @@ public  final class Server extends
    * A resolved port number for the server.
    * </pre>
    *
-   * <code>optional int32 port = 2;</code>
+   * <code>int32 port = 2;</code>
    */
   public int getPort() {
     return port_;
@@ -127,7 +127,7 @@ public  final class Server extends
    * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
-   * <code>optional string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 3;</code>
    */
   public java.lang.String getLoadBalanceToken() {
     java.lang.Object ref = loadBalanceToken_;
@@ -149,7 +149,7 @@ public  final class Server extends
    * allow the backend to report load to the gRPC LB system.
    * </pre>
    *
-   * <code>optional string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 3;</code>
    */
   public com.google.protobuf.ByteString
       getLoadBalanceTokenBytes() {
@@ -173,7 +173,7 @@ public  final class Server extends
    * when this server is chosen from the list.
    * </pre>
    *
-   * <code>optional bool drop_request = 4;</code>
+   * <code>bool drop_request = 4;</code>
    */
   public boolean getDropRequest() {
     return dropRequest_;
@@ -258,7 +258,7 @@ public  final class Server extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + IP_ADDRESS_FIELD_NUMBER;
     hash = (53 * hash) + getIpAddress().hashCode();
     hash = (37 * hash) + PORT_FIELD_NUMBER;
@@ -507,7 +507,7 @@ public  final class Server extends
      * either be an IPv4 or IPv6 address.
      * </pre>
      *
-     * <code>optional bytes ip_address = 1;</code>
+     * <code>bytes ip_address = 1;</code>
      */
     public com.google.protobuf.ByteString getIpAddress() {
       return ipAddress_;
@@ -518,7 +518,7 @@ public  final class Server extends
      * either be an IPv4 or IPv6 address.
      * </pre>
      *
-     * <code>optional bytes ip_address = 1;</code>
+     * <code>bytes ip_address = 1;</code>
      */
     public Builder setIpAddress(com.google.protobuf.ByteString value) {
       if (value == null) {
@@ -535,7 +535,7 @@ public  final class Server extends
      * either be an IPv4 or IPv6 address.
      * </pre>
      *
-     * <code>optional bytes ip_address = 1;</code>
+     * <code>bytes ip_address = 1;</code>
      */
     public Builder clearIpAddress() {
       
@@ -550,7 +550,7 @@ public  final class Server extends
      * A resolved port number for the server.
      * </pre>
      *
-     * <code>optional int32 port = 2;</code>
+     * <code>int32 port = 2;</code>
      */
     public int getPort() {
       return port_;
@@ -560,7 +560,7 @@ public  final class Server extends
      * A resolved port number for the server.
      * </pre>
      *
-     * <code>optional int32 port = 2;</code>
+     * <code>int32 port = 2;</code>
      */
     public Builder setPort(int value) {
       
@@ -573,7 +573,7 @@ public  final class Server extends
      * A resolved port number for the server.
      * </pre>
      *
-     * <code>optional int32 port = 2;</code>
+     * <code>int32 port = 2;</code>
      */
     public Builder clearPort() {
       
@@ -591,7 +591,7 @@ public  final class Server extends
      * allow the backend to report load to the gRPC LB system.
      * </pre>
      *
-     * <code>optional string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 3;</code>
      */
     public java.lang.String getLoadBalanceToken() {
       java.lang.Object ref = loadBalanceToken_;
@@ -613,7 +613,7 @@ public  final class Server extends
      * allow the backend to report load to the gRPC LB system.
      * </pre>
      *
-     * <code>optional string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 3;</code>
      */
     public com.google.protobuf.ByteString
         getLoadBalanceTokenBytes() {
@@ -636,7 +636,7 @@ public  final class Server extends
      * allow the backend to report load to the gRPC LB system.
      * </pre>
      *
-     * <code>optional string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 3;</code>
      */
     public Builder setLoadBalanceToken(
         java.lang.String value) {
@@ -656,7 +656,7 @@ public  final class Server extends
      * allow the backend to report load to the gRPC LB system.
      * </pre>
      *
-     * <code>optional string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 3;</code>
      */
     public Builder clearLoadBalanceToken() {
       
@@ -672,7 +672,7 @@ public  final class Server extends
      * allow the backend to report load to the gRPC LB system.
      * </pre>
      *
-     * <code>optional string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 3;</code>
      */
     public Builder setLoadBalanceTokenBytes(
         com.google.protobuf.ByteString value) {
@@ -693,7 +693,7 @@ public  final class Server extends
      * when this server is chosen from the list.
      * </pre>
      *
-     * <code>optional bool drop_request = 4;</code>
+     * <code>bool drop_request = 4;</code>
      */
     public boolean getDropRequest() {
       return dropRequest_;
@@ -704,7 +704,7 @@ public  final class Server extends
      * when this server is chosen from the list.
      * </pre>
      *
-     * <code>optional bool drop_request = 4;</code>
+     * <code>bool drop_request = 4;</code>
      */
     public Builder setDropRequest(boolean value) {
       
@@ -718,7 +718,7 @@ public  final class Server extends
      * when this server is chosen from the list.
      * </pre>
      *
-     * <code>optional bool drop_request = 4;</code>
+     * <code>bool drop_request = 4;</code>
      */
     public Builder clearDropRequest() {
       

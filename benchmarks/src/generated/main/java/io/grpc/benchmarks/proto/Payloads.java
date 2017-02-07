@@ -19,12 +19,12 @@ public final class Payloads {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 req_size = 1;</code>
+     * <code>int32 req_size = 1;</code>
      */
     int getReqSize();
 
     /**
-     * <code>optional int32 resp_size = 2;</code>
+     * <code>int32 resp_size = 2;</code>
      */
     int getRespSize();
   }
@@ -105,7 +105,7 @@ public final class Payloads {
     public static final int REQ_SIZE_FIELD_NUMBER = 1;
     private int reqSize_;
     /**
-     * <code>optional int32 req_size = 1;</code>
+     * <code>int32 req_size = 1;</code>
      */
     public int getReqSize() {
       return reqSize_;
@@ -114,7 +114,7 @@ public final class Payloads {
     public static final int RESP_SIZE_FIELD_NUMBER = 2;
     private int respSize_;
     /**
-     * <code>optional int32 resp_size = 2;</code>
+     * <code>int32 resp_size = 2;</code>
      */
     public int getRespSize() {
       return respSize_;
@@ -182,7 +182,7 @@ public final class Payloads {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + REQ_SIZE_FIELD_NUMBER;
       hash = (53 * hash) + getReqSize();
       hash = (37 * hash) + RESP_SIZE_FIELD_NUMBER;
@@ -408,13 +408,13 @@ public final class Payloads {
 
       private int reqSize_ ;
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public int getReqSize() {
         return reqSize_;
       }
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public Builder setReqSize(int value) {
         
@@ -423,7 +423,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public Builder clearReqSize() {
         
@@ -434,13 +434,13 @@ public final class Payloads {
 
       private int respSize_ ;
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public int getRespSize() {
         return respSize_;
       }
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public Builder setRespSize(int value) {
         
@@ -449,7 +449,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public Builder clearRespSize() {
         
@@ -511,12 +511,12 @@ public final class Payloads {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional int32 req_size = 1;</code>
+     * <code>int32 req_size = 1;</code>
      */
     int getReqSize();
 
     /**
-     * <code>optional int32 resp_size = 2;</code>
+     * <code>int32 resp_size = 2;</code>
      */
     int getRespSize();
   }
@@ -597,7 +597,7 @@ public final class Payloads {
     public static final int REQ_SIZE_FIELD_NUMBER = 1;
     private int reqSize_;
     /**
-     * <code>optional int32 req_size = 1;</code>
+     * <code>int32 req_size = 1;</code>
      */
     public int getReqSize() {
       return reqSize_;
@@ -606,7 +606,7 @@ public final class Payloads {
     public static final int RESP_SIZE_FIELD_NUMBER = 2;
     private int respSize_;
     /**
-     * <code>optional int32 resp_size = 2;</code>
+     * <code>int32 resp_size = 2;</code>
      */
     public int getRespSize() {
       return respSize_;
@@ -674,7 +674,7 @@ public final class Payloads {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + REQ_SIZE_FIELD_NUMBER;
       hash = (53 * hash) + getReqSize();
       hash = (37 * hash) + RESP_SIZE_FIELD_NUMBER;
@@ -900,13 +900,13 @@ public final class Payloads {
 
       private int reqSize_ ;
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public int getReqSize() {
         return reqSize_;
       }
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public Builder setReqSize(int value) {
         
@@ -915,7 +915,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional int32 req_size = 1;</code>
+       * <code>int32 req_size = 1;</code>
        */
       public Builder clearReqSize() {
         
@@ -926,13 +926,13 @@ public final class Payloads {
 
       private int respSize_ ;
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public int getRespSize() {
         return respSize_;
       }
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public Builder setRespSize(int value) {
         
@@ -941,7 +941,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional int32 resp_size = 2;</code>
+       * <code>int32 resp_size = 2;</code>
        */
       public Builder clearRespSize() {
         
@@ -1112,7 +1112,7 @@ public final class Payloads {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -1378,29 +1378,29 @@ public final class Payloads {
       com.google.protobuf.MessageOrBuilder {
 
     /**
-     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams();
     /**
-     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams();
     /**
-     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder();
 
     /**
-     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams();
     /**
-     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder();
 
@@ -1552,7 +1552,7 @@ public final class Payloads {
 
     public static final int BYTEBUF_PARAMS_FIELD_NUMBER = 1;
     /**
-     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams() {
       if (payloadCase_ == 1) {
@@ -1561,7 +1561,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.ByteBufferParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder() {
       if (payloadCase_ == 1) {
@@ -1572,7 +1572,7 @@ public final class Payloads {
 
     public static final int SIMPLE_PARAMS_FIELD_NUMBER = 2;
     /**
-     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
       if (payloadCase_ == 2) {
@@ -1581,7 +1581,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder() {
       if (payloadCase_ == 2) {
@@ -1592,7 +1592,7 @@ public final class Payloads {
 
     public static final int COMPLEX_PARAMS_FIELD_NUMBER = 3;
     /**
-     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams() {
       if (payloadCase_ == 3) {
@@ -1601,7 +1601,7 @@ public final class Payloads {
       return io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.getDefaultInstance();
     }
     /**
-     * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
     public io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder() {
       if (payloadCase_ == 3) {
@@ -1694,7 +1694,7 @@ public final class Payloads {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       switch (payloadCase_) {
         case 1:
           hash = (37 * hash) + BYTEBUF_PARAMS_FIELD_NUMBER;
@@ -1977,7 +1977,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder, io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder> bytebufParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams() {
         if (bytebufParamsBuilder_ == null) {
@@ -1993,7 +1993,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder setBytebufParams(io.grpc.benchmarks.proto.Payloads.ByteBufferParams value) {
         if (bytebufParamsBuilder_ == null) {
@@ -2009,7 +2009,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder setBytebufParams(
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder builderForValue) {
@@ -2023,7 +2023,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder mergeBytebufParams(io.grpc.benchmarks.proto.Payloads.ByteBufferParams value) {
         if (bytebufParamsBuilder_ == null) {
@@ -2045,7 +2045,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public Builder clearBytebufParams() {
         if (bytebufParamsBuilder_ == null) {
@@ -2064,13 +2064,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder getBytebufParamsBuilder() {
         return getBytebufParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder getBytebufParamsOrBuilder() {
         if ((payloadCase_ == 1) && (bytebufParamsBuilder_ != null)) {
@@ -2083,7 +2083,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder, io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder> 
@@ -2107,7 +2107,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder> simpleParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
         if (simpleParamsBuilder_ == null) {
@@ -2123,7 +2123,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder setSimpleParams(io.grpc.benchmarks.proto.Payloads.SimpleProtoParams value) {
         if (simpleParamsBuilder_ == null) {
@@ -2139,7 +2139,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder setSimpleParams(
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder builderForValue) {
@@ -2153,7 +2153,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder mergeSimpleParams(io.grpc.benchmarks.proto.Payloads.SimpleProtoParams value) {
         if (simpleParamsBuilder_ == null) {
@@ -2175,7 +2175,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public Builder clearSimpleParams() {
         if (simpleParamsBuilder_ == null) {
@@ -2194,13 +2194,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder getSimpleParamsBuilder() {
         return getSimpleParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder() {
         if ((payloadCase_ == 2) && (simpleParamsBuilder_ != null)) {
@@ -2213,7 +2213,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.SimpleProtoParams, io.grpc.benchmarks.proto.Payloads.SimpleProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder> 
@@ -2237,7 +2237,7 @@ public final class Payloads {
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder> complexParamsBuilder_;
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams() {
         if (complexParamsBuilder_ == null) {
@@ -2253,7 +2253,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder setComplexParams(io.grpc.benchmarks.proto.Payloads.ComplexProtoParams value) {
         if (complexParamsBuilder_ == null) {
@@ -2269,7 +2269,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder setComplexParams(
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder builderForValue) {
@@ -2283,7 +2283,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder mergeComplexParams(io.grpc.benchmarks.proto.Payloads.ComplexProtoParams value) {
         if (complexParamsBuilder_ == null) {
@@ -2305,7 +2305,7 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public Builder clearComplexParams() {
         if (complexParamsBuilder_ == null) {
@@ -2324,13 +2324,13 @@ public final class Payloads {
         return this;
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder getComplexParamsBuilder() {
         return getComplexParamsFieldBuilder().getBuilder();
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder getComplexParamsOrBuilder() {
         if ((payloadCase_ == 3) && (complexParamsBuilder_ != null)) {
@@ -2343,7 +2343,7 @@ public final class Payloads {
         }
       }
       /**
-       * <code>optional .grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.ComplexProtoParams, io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.Builder, io.grpc.benchmarks.proto.Payloads.ComplexProtoParamsOrBuilder> 

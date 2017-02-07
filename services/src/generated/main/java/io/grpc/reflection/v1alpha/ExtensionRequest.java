@@ -90,7 +90,7 @@ public  final class ExtensionRequest extends
    * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string containing_type = 1;</code>
+   * <code>string containing_type = 1;</code>
    */
   public java.lang.String getContainingType() {
     java.lang.Object ref = containingType_;
@@ -109,7 +109,7 @@ public  final class ExtensionRequest extends
    * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
    * </pre>
    *
-   * <code>optional string containing_type = 1;</code>
+   * <code>string containing_type = 1;</code>
    */
   public com.google.protobuf.ByteString
       getContainingTypeBytes() {
@@ -128,7 +128,7 @@ public  final class ExtensionRequest extends
   public static final int EXTENSION_NUMBER_FIELD_NUMBER = 2;
   private int extensionNumber_;
   /**
-   * <code>optional int32 extension_number = 2;</code>
+   * <code>int32 extension_number = 2;</code>
    */
   public int getExtensionNumber() {
     return extensionNumber_;
@@ -195,7 +195,7 @@ public  final class ExtensionRequest extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + CONTAINING_TYPE_FIELD_NUMBER;
     hash = (53 * hash) + getContainingType().hashCode();
     hash = (37 * hash) + EXTENSION_NUMBER_FIELD_NUMBER;
@@ -431,7 +431,7 @@ public  final class ExtensionRequest extends
      * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string containing_type = 1;</code>
+     * <code>string containing_type = 1;</code>
      */
     public java.lang.String getContainingType() {
       java.lang.Object ref = containingType_;
@@ -450,7 +450,7 @@ public  final class ExtensionRequest extends
      * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string containing_type = 1;</code>
+     * <code>string containing_type = 1;</code>
      */
     public com.google.protobuf.ByteString
         getContainingTypeBytes() {
@@ -470,7 +470,7 @@ public  final class ExtensionRequest extends
      * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string containing_type = 1;</code>
+     * <code>string containing_type = 1;</code>
      */
     public Builder setContainingType(
         java.lang.String value) {
@@ -487,7 +487,7 @@ public  final class ExtensionRequest extends
      * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string containing_type = 1;</code>
+     * <code>string containing_type = 1;</code>
      */
     public Builder clearContainingType() {
       
@@ -500,7 +500,7 @@ public  final class ExtensionRequest extends
      * Fully-qualified type name. The format should be &lt;package&gt;.&lt;type&gt;
      * </pre>
      *
-     * <code>optional string containing_type = 1;</code>
+     * <code>string containing_type = 1;</code>
      */
     public Builder setContainingTypeBytes(
         com.google.protobuf.ByteString value) {
@@ -516,13 +516,13 @@ public  final class ExtensionRequest extends
 
     private int extensionNumber_ ;
     /**
-     * <code>optional int32 extension_number = 2;</code>
+     * <code>int32 extension_number = 2;</code>
      */
     public int getExtensionNumber() {
       return extensionNumber_;
     }
     /**
-     * <code>optional int32 extension_number = 2;</code>
+     * <code>int32 extension_number = 2;</code>
      */
     public Builder setExtensionNumber(int value) {
       
@@ -531,7 +531,7 @@ public  final class ExtensionRequest extends
       return this;
     }
     /**
-     * <code>optional int32 extension_number = 2;</code>
+     * <code>int32 extension_number = 2;</code>
      */
     public Builder clearExtensionNumber() {
       

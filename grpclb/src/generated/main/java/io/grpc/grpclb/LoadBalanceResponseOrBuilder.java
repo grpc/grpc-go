@@ -12,7 +12,7 @@ public interface LoadBalanceResponseOrBuilder extends
    * This message should be sent on the first response to the client.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse();
   /**
@@ -20,7 +20,7 @@ public interface LoadBalanceResponseOrBuilder extends
    * This message should be sent on the first response to the client.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder();
 
@@ -30,7 +30,7 @@ public interface LoadBalanceResponseOrBuilder extends
    * should send requests to these servers in the specified order.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
    */
   io.grpc.grpclb.ServerList getServerList();
   /**
@@ -39,7 +39,7 @@ public interface LoadBalanceResponseOrBuilder extends
    * should send requests to these servers in the specified order.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ServerList server_list = 2;</code>
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
    */
   io.grpc.grpclb.ServerListOrBuilder getServerListOrBuilder();
 

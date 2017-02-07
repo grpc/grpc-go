@@ -23,7 +23,7 @@ public final class Stats {
      * wall clock time change in seconds since last reset
      * </pre>
      *
-     * <code>optional double time_elapsed = 1;</code>
+     * <code>double time_elapsed = 1;</code>
      */
     double getTimeElapsed();
 
@@ -32,7 +32,7 @@ public final class Stats {
      * change in user time (in seconds) used by the server since last reset
      * </pre>
      *
-     * <code>optional double time_user = 2;</code>
+     * <code>double time_user = 2;</code>
      */
     double getTimeUser();
 
@@ -42,7 +42,7 @@ public final class Stats {
      * threads since last reset
      * </pre>
      *
-     * <code>optional double time_system = 3;</code>
+     * <code>double time_system = 3;</code>
      */
     double getTimeSystem();
   }
@@ -133,7 +133,7 @@ public final class Stats {
      * wall clock time change in seconds since last reset
      * </pre>
      *
-     * <code>optional double time_elapsed = 1;</code>
+     * <code>double time_elapsed = 1;</code>
      */
     public double getTimeElapsed() {
       return timeElapsed_;
@@ -146,7 +146,7 @@ public final class Stats {
      * change in user time (in seconds) used by the server since last reset
      * </pre>
      *
-     * <code>optional double time_user = 2;</code>
+     * <code>double time_user = 2;</code>
      */
     public double getTimeUser() {
       return timeUser_;
@@ -160,7 +160,7 @@ public final class Stats {
      * threads since last reset
      * </pre>
      *
-     * <code>optional double time_system = 3;</code>
+     * <code>double time_system = 3;</code>
      */
     public double getTimeSystem() {
       return timeSystem_;
@@ -243,7 +243,7 @@ public final class Stats {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + TIME_ELAPSED_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getTimeElapsed()));
@@ -484,7 +484,7 @@ public final class Stats {
        * wall clock time change in seconds since last reset
        * </pre>
        *
-       * <code>optional double time_elapsed = 1;</code>
+       * <code>double time_elapsed = 1;</code>
        */
       public double getTimeElapsed() {
         return timeElapsed_;
@@ -494,7 +494,7 @@ public final class Stats {
        * wall clock time change in seconds since last reset
        * </pre>
        *
-       * <code>optional double time_elapsed = 1;</code>
+       * <code>double time_elapsed = 1;</code>
        */
       public Builder setTimeElapsed(double value) {
         
@@ -507,7 +507,7 @@ public final class Stats {
        * wall clock time change in seconds since last reset
        * </pre>
        *
-       * <code>optional double time_elapsed = 1;</code>
+       * <code>double time_elapsed = 1;</code>
        */
       public Builder clearTimeElapsed() {
         
@@ -522,7 +522,7 @@ public final class Stats {
        * change in user time (in seconds) used by the server since last reset
        * </pre>
        *
-       * <code>optional double time_user = 2;</code>
+       * <code>double time_user = 2;</code>
        */
       public double getTimeUser() {
         return timeUser_;
@@ -532,7 +532,7 @@ public final class Stats {
        * change in user time (in seconds) used by the server since last reset
        * </pre>
        *
-       * <code>optional double time_user = 2;</code>
+       * <code>double time_user = 2;</code>
        */
       public Builder setTimeUser(double value) {
         
@@ -545,7 +545,7 @@ public final class Stats {
        * change in user time (in seconds) used by the server since last reset
        * </pre>
        *
-       * <code>optional double time_user = 2;</code>
+       * <code>double time_user = 2;</code>
        */
       public Builder clearTimeUser() {
         
@@ -561,7 +561,7 @@ public final class Stats {
        * threads since last reset
        * </pre>
        *
-       * <code>optional double time_system = 3;</code>
+       * <code>double time_system = 3;</code>
        */
       public double getTimeSystem() {
         return timeSystem_;
@@ -572,7 +572,7 @@ public final class Stats {
        * threads since last reset
        * </pre>
        *
-       * <code>optional double time_system = 3;</code>
+       * <code>double time_system = 3;</code>
        */
       public Builder setTimeSystem(double value) {
         
@@ -586,7 +586,7 @@ public final class Stats {
        * threads since last reset
        * </pre>
        *
-       * <code>optional double time_system = 3;</code>
+       * <code>double time_system = 3;</code>
        */
       public Builder clearTimeSystem() {
         
@@ -652,7 +652,7 @@ public final class Stats {
      * first bucket is [0, 1 + resolution)
      * </pre>
      *
-     * <code>optional double resolution = 1;</code>
+     * <code>double resolution = 1;</code>
      */
     double getResolution();
 
@@ -661,7 +661,7 @@ public final class Stats {
      * use enough buckets to allow this value
      * </pre>
      *
-     * <code>optional double max_possible = 2;</code>
+     * <code>double max_possible = 2;</code>
      */
     double getMaxPossible();
   }
@@ -750,7 +750,7 @@ public final class Stats {
      * first bucket is [0, 1 + resolution)
      * </pre>
      *
-     * <code>optional double resolution = 1;</code>
+     * <code>double resolution = 1;</code>
      */
     public double getResolution() {
       return resolution_;
@@ -763,7 +763,7 @@ public final class Stats {
      * use enough buckets to allow this value
      * </pre>
      *
-     * <code>optional double max_possible = 2;</code>
+     * <code>double max_possible = 2;</code>
      */
     public double getMaxPossible() {
       return maxPossible_;
@@ -835,7 +835,7 @@ public final class Stats {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       hash = (37 * hash) + RESOLUTION_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
           java.lang.Double.doubleToLongBits(getResolution()));
@@ -1071,7 +1071,7 @@ public final class Stats {
        * first bucket is [0, 1 + resolution)
        * </pre>
        *
-       * <code>optional double resolution = 1;</code>
+       * <code>double resolution = 1;</code>
        */
       public double getResolution() {
         return resolution_;
@@ -1081,7 +1081,7 @@ public final class Stats {
        * first bucket is [0, 1 + resolution)
        * </pre>
        *
-       * <code>optional double resolution = 1;</code>
+       * <code>double resolution = 1;</code>
        */
       public Builder setResolution(double value) {
         
@@ -1094,7 +1094,7 @@ public final class Stats {
        * first bucket is [0, 1 + resolution)
        * </pre>
        *
-       * <code>optional double resolution = 1;</code>
+       * <code>double resolution = 1;</code>
        */
       public Builder clearResolution() {
         
@@ -1109,7 +1109,7 @@ public final class Stats {
        * use enough buckets to allow this value
        * </pre>
        *
-       * <code>optional double max_possible = 2;</code>
+       * <code>double max_possible = 2;</code>
        */
       public double getMaxPossible() {
         return maxPossible_;
@@ -1119,7 +1119,7 @@ public final class Stats {
        * use enough buckets to allow this value
        * </pre>
        *
-       * <code>optional double max_possible = 2;</code>
+       * <code>double max_possible = 2;</code>
        */
       public Builder setMaxPossible(double value) {
         
@@ -1132,7 +1132,7 @@ public final class Stats {
        * use enough buckets to allow this value
        * </pre>
        *
-       * <code>optional double max_possible = 2;</code>
+       * <code>double max_possible = 2;</code>
        */
       public Builder clearMaxPossible() {
         
@@ -1207,27 +1207,27 @@ public final class Stats {
     int getBucket(int index);
 
     /**
-     * <code>optional double min_seen = 2;</code>
+     * <code>double min_seen = 2;</code>
      */
     double getMinSeen();
 
     /**
-     * <code>optional double max_seen = 3;</code>
+     * <code>double max_seen = 3;</code>
      */
     double getMaxSeen();
 
     /**
-     * <code>optional double sum = 4;</code>
+     * <code>double sum = 4;</code>
      */
     double getSum();
 
     /**
-     * <code>optional double sum_of_squares = 5;</code>
+     * <code>double sum_of_squares = 5;</code>
      */
     double getSumOfSquares();
 
     /**
-     * <code>optional double count = 6;</code>
+     * <code>double count = 6;</code>
      */
     double getCount();
   }
@@ -1379,7 +1379,7 @@ public final class Stats {
     public static final int MIN_SEEN_FIELD_NUMBER = 2;
     private double minSeen_;
     /**
-     * <code>optional double min_seen = 2;</code>
+     * <code>double min_seen = 2;</code>
      */
     public double getMinSeen() {
       return minSeen_;
@@ -1388,7 +1388,7 @@ public final class Stats {
     public static final int MAX_SEEN_FIELD_NUMBER = 3;
     private double maxSeen_;
     /**
-     * <code>optional double max_seen = 3;</code>
+     * <code>double max_seen = 3;</code>
      */
     public double getMaxSeen() {
       return maxSeen_;
@@ -1397,7 +1397,7 @@ public final class Stats {
     public static final int SUM_FIELD_NUMBER = 4;
     private double sum_;
     /**
-     * <code>optional double sum = 4;</code>
+     * <code>double sum = 4;</code>
      */
     public double getSum() {
       return sum_;
@@ -1406,7 +1406,7 @@ public final class Stats {
     public static final int SUM_OF_SQUARES_FIELD_NUMBER = 5;
     private double sumOfSquares_;
     /**
-     * <code>optional double sum_of_squares = 5;</code>
+     * <code>double sum_of_squares = 5;</code>
      */
     public double getSumOfSquares() {
       return sumOfSquares_;
@@ -1415,7 +1415,7 @@ public final class Stats {
     public static final int COUNT_FIELD_NUMBER = 6;
     private double count_;
     /**
-     * <code>optional double count = 6;</code>
+     * <code>double count = 6;</code>
      */
     public double getCount() {
       return count_;
@@ -1544,7 +1544,7 @@ public final class Stats {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (getBucketCount() > 0) {
         hash = (37 * hash) + BUCKET_FIELD_NUMBER;
         hash = (53 * hash) + getBucketList().hashCode();
@@ -1894,13 +1894,13 @@ public final class Stats {
 
       private double minSeen_ ;
       /**
-       * <code>optional double min_seen = 2;</code>
+       * <code>double min_seen = 2;</code>
        */
       public double getMinSeen() {
         return minSeen_;
       }
       /**
-       * <code>optional double min_seen = 2;</code>
+       * <code>double min_seen = 2;</code>
        */
       public Builder setMinSeen(double value) {
         
@@ -1909,7 +1909,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double min_seen = 2;</code>
+       * <code>double min_seen = 2;</code>
        */
       public Builder clearMinSeen() {
         
@@ -1920,13 +1920,13 @@ public final class Stats {
 
       private double maxSeen_ ;
       /**
-       * <code>optional double max_seen = 3;</code>
+       * <code>double max_seen = 3;</code>
        */
       public double getMaxSeen() {
         return maxSeen_;
       }
       /**
-       * <code>optional double max_seen = 3;</code>
+       * <code>double max_seen = 3;</code>
        */
       public Builder setMaxSeen(double value) {
         
@@ -1935,7 +1935,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double max_seen = 3;</code>
+       * <code>double max_seen = 3;</code>
        */
       public Builder clearMaxSeen() {
         
@@ -1946,13 +1946,13 @@ public final class Stats {
 
       private double sum_ ;
       /**
-       * <code>optional double sum = 4;</code>
+       * <code>double sum = 4;</code>
        */
       public double getSum() {
         return sum_;
       }
       /**
-       * <code>optional double sum = 4;</code>
+       * <code>double sum = 4;</code>
        */
       public Builder setSum(double value) {
         
@@ -1961,7 +1961,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double sum = 4;</code>
+       * <code>double sum = 4;</code>
        */
       public Builder clearSum() {
         
@@ -1972,13 +1972,13 @@ public final class Stats {
 
       private double sumOfSquares_ ;
       /**
-       * <code>optional double sum_of_squares = 5;</code>
+       * <code>double sum_of_squares = 5;</code>
        */
       public double getSumOfSquares() {
         return sumOfSquares_;
       }
       /**
-       * <code>optional double sum_of_squares = 5;</code>
+       * <code>double sum_of_squares = 5;</code>
        */
       public Builder setSumOfSquares(double value) {
         
@@ -1987,7 +1987,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double sum_of_squares = 5;</code>
+       * <code>double sum_of_squares = 5;</code>
        */
       public Builder clearSumOfSquares() {
         
@@ -1998,13 +1998,13 @@ public final class Stats {
 
       private double count_ ;
       /**
-       * <code>optional double count = 6;</code>
+       * <code>double count = 6;</code>
        */
       public double getCount() {
         return count_;
       }
       /**
-       * <code>optional double count = 6;</code>
+       * <code>double count = 6;</code>
        */
       public Builder setCount(double value) {
         
@@ -2013,7 +2013,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double count = 6;</code>
+       * <code>double count = 6;</code>
        */
       public Builder clearCount() {
         
@@ -2079,7 +2079,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     boolean hasLatencies();
     /**
@@ -2087,7 +2087,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramData getLatencies();
     /**
@@ -2095,7 +2095,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder();
 
@@ -2104,17 +2104,17 @@ public final class Stats {
      * See ServerStats for details.
      * </pre>
      *
-     * <code>optional double time_elapsed = 2;</code>
+     * <code>double time_elapsed = 2;</code>
      */
     double getTimeElapsed();
 
     /**
-     * <code>optional double time_user = 3;</code>
+     * <code>double time_user = 3;</code>
      */
     double getTimeUser();
 
     /**
-     * <code>optional double time_system = 4;</code>
+     * <code>double time_system = 4;</code>
      */
     double getTimeSystem();
   }
@@ -2218,7 +2218,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     public boolean hasLatencies() {
       return latencies_ != null;
@@ -2228,7 +2228,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
       return latencies_ == null ? io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
@@ -2238,7 +2238,7 @@ public final class Stats {
      * Latency histogram. Data points are in nanoseconds.
      * </pre>
      *
-     * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+     * <code>.grpc.testing.HistogramData latencies = 1;</code>
      */
     public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
       return getLatencies();
@@ -2251,7 +2251,7 @@ public final class Stats {
      * See ServerStats for details.
      * </pre>
      *
-     * <code>optional double time_elapsed = 2;</code>
+     * <code>double time_elapsed = 2;</code>
      */
     public double getTimeElapsed() {
       return timeElapsed_;
@@ -2260,7 +2260,7 @@ public final class Stats {
     public static final int TIME_USER_FIELD_NUMBER = 3;
     private double timeUser_;
     /**
-     * <code>optional double time_user = 3;</code>
+     * <code>double time_user = 3;</code>
      */
     public double getTimeUser() {
       return timeUser_;
@@ -2269,7 +2269,7 @@ public final class Stats {
     public static final int TIME_SYSTEM_FIELD_NUMBER = 4;
     private double timeSystem_;
     /**
-     * <code>optional double time_system = 4;</code>
+     * <code>double time_system = 4;</code>
      */
     public double getTimeSystem() {
       return timeSystem_;
@@ -2364,7 +2364,7 @@ public final class Stats {
         return memoizedHashCode;
       }
       int hash = 41;
-      hash = (19 * hash) + getDescriptorForType().hashCode();
+      hash = (19 * hash) + getDescriptor().hashCode();
       if (hasLatencies()) {
         hash = (37 * hash) + LATENCIES_FIELD_NUMBER;
         hash = (53 * hash) + getLatencies().hashCode();
@@ -2625,7 +2625,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public boolean hasLatencies() {
         return latenciesBuilder_ != null || latencies_ != null;
@@ -2635,7 +2635,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
         if (latenciesBuilder_ == null) {
@@ -2649,7 +2649,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder setLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
         if (latenciesBuilder_ == null) {
@@ -2669,7 +2669,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder setLatencies(
           io.grpc.benchmarks.proto.Stats.HistogramData.Builder builderForValue) {
@@ -2687,7 +2687,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder mergeLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
         if (latenciesBuilder_ == null) {
@@ -2709,7 +2709,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public Builder clearLatencies() {
         if (latenciesBuilder_ == null) {
@@ -2727,7 +2727,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramData.Builder getLatenciesBuilder() {
         
@@ -2739,7 +2739,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
         if (latenciesBuilder_ != null) {
@@ -2754,7 +2754,7 @@ public final class Stats {
        * Latency histogram. Data points are in nanoseconds.
        * </pre>
        *
-       * <code>optional .grpc.testing.HistogramData latencies = 1;</code>
+       * <code>.grpc.testing.HistogramData latencies = 1;</code>
        */
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> 
@@ -2776,7 +2776,7 @@ public final class Stats {
        * See ServerStats for details.
        * </pre>
        *
-       * <code>optional double time_elapsed = 2;</code>
+       * <code>double time_elapsed = 2;</code>
        */
       public double getTimeElapsed() {
         return timeElapsed_;
@@ -2786,7 +2786,7 @@ public final class Stats {
        * See ServerStats for details.
        * </pre>
        *
-       * <code>optional double time_elapsed = 2;</code>
+       * <code>double time_elapsed = 2;</code>
        */
       public Builder setTimeElapsed(double value) {
         
@@ -2799,7 +2799,7 @@ public final class Stats {
        * See ServerStats for details.
        * </pre>
        *
-       * <code>optional double time_elapsed = 2;</code>
+       * <code>double time_elapsed = 2;</code>
        */
       public Builder clearTimeElapsed() {
         
@@ -2810,13 +2810,13 @@ public final class Stats {
 
       private double timeUser_ ;
       /**
-       * <code>optional double time_user = 3;</code>
+       * <code>double time_user = 3;</code>
        */
       public double getTimeUser() {
         return timeUser_;
       }
       /**
-       * <code>optional double time_user = 3;</code>
+       * <code>double time_user = 3;</code>
        */
       public Builder setTimeUser(double value) {
         
@@ -2825,7 +2825,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_user = 3;</code>
+       * <code>double time_user = 3;</code>
        */
       public Builder clearTimeUser() {
         
@@ -2836,13 +2836,13 @@ public final class Stats {
 
       private double timeSystem_ ;
       /**
-       * <code>optional double time_system = 4;</code>
+       * <code>double time_system = 4;</code>
        */
       public double getTimeSystem() {
         return timeSystem_;
       }
       /**
-       * <code>optional double time_system = 4;</code>
+       * <code>double time_system = 4;</code>
        */
       public Builder setTimeSystem(double value) {
         
@@ -2851,7 +2851,7 @@ public final class Stats {
         return this;
       }
       /**
-       * <code>optional double time_system = 4;</code>
+       * <code>double time_system = 4;</code>
        */
       public Builder clearTimeSystem() {
         

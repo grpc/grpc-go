@@ -182,13 +182,13 @@ public  final class HealthCheckResponse extends
   public static final int STATUS_FIELD_NUMBER = 1;
   private int status_;
   /**
-   * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+   * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
    */
   public int getStatusValue() {
     return status_;
   }
   /**
-   * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+   * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
    */
   public io.grpc.health.v1.HealthCheckResponse.ServingStatus getStatus() {
     io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.valueOf(status_);
@@ -247,7 +247,7 @@ public  final class HealthCheckResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + STATUS_FIELD_NUMBER;
     hash = (53 * hash) + status_;
     hash = (29 * hash) + unknownFields.hashCode();
@@ -465,13 +465,13 @@ public  final class HealthCheckResponse extends
 
     private int status_ = 0;
     /**
-     * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+     * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public int getStatusValue() {
       return status_;
     }
     /**
-     * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+     * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public Builder setStatusValue(int value) {
       status_ = value;
@@ -479,14 +479,14 @@ public  final class HealthCheckResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+     * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public io.grpc.health.v1.HealthCheckResponse.ServingStatus getStatus() {
       io.grpc.health.v1.HealthCheckResponse.ServingStatus result = io.grpc.health.v1.HealthCheckResponse.ServingStatus.valueOf(status_);
       return result == null ? io.grpc.health.v1.HealthCheckResponse.ServingStatus.UNRECOGNIZED : result;
     }
     /**
-     * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+     * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public Builder setStatus(io.grpc.health.v1.HealthCheckResponse.ServingStatus value) {
       if (value == null) {
@@ -498,7 +498,7 @@ public  final class HealthCheckResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
+     * <code>.grpc.health.v1.HealthCheckResponse.ServingStatus status = 1;</code>
      */
     public Builder clearStatus() {
       

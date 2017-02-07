@@ -172,7 +172,7 @@ public  final class ServerList extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   public boolean hasExpirationInterval() {
     return expirationInterval_ != null;
@@ -185,7 +185,7 @@ public  final class ServerList extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   public com.google.protobuf.Duration getExpirationInterval() {
     return expirationInterval_ == null ? com.google.protobuf.Duration.getDefaultInstance() : expirationInterval_;
@@ -198,7 +198,7 @@ public  final class ServerList extends
    * client can assume the list is valid until the next list is received.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
    */
   public com.google.protobuf.DurationOrBuilder getExpirationIntervalOrBuilder() {
     return getExpirationInterval();
@@ -269,7 +269,7 @@ public  final class ServerList extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     if (getServersCount() > 0) {
       hash = (37 * hash) + SERVERS_FIELD_NUMBER;
       hash = (53 * hash) + getServersList().hashCode();
@@ -922,7 +922,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public boolean hasExpirationInterval() {
       return expirationIntervalBuilder_ != null || expirationInterval_ != null;
@@ -935,7 +935,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public com.google.protobuf.Duration getExpirationInterval() {
       if (expirationIntervalBuilder_ == null) {
@@ -952,7 +952,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public Builder setExpirationInterval(com.google.protobuf.Duration value) {
       if (expirationIntervalBuilder_ == null) {
@@ -975,7 +975,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public Builder setExpirationInterval(
         com.google.protobuf.Duration.Builder builderForValue) {
@@ -996,7 +996,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public Builder mergeExpirationInterval(com.google.protobuf.Duration value) {
       if (expirationIntervalBuilder_ == null) {
@@ -1021,7 +1021,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public Builder clearExpirationInterval() {
       if (expirationIntervalBuilder_ == null) {
@@ -1042,7 +1042,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public com.google.protobuf.Duration.Builder getExpirationIntervalBuilder() {
       
@@ -1057,7 +1057,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     public com.google.protobuf.DurationOrBuilder getExpirationIntervalOrBuilder() {
       if (expirationIntervalBuilder_ != null) {
@@ -1075,7 +1075,7 @@ public  final class ServerList extends
      * client can assume the list is valid until the next list is received.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration expiration_interval = 3;</code>
+     * <code>.google.protobuf.Duration expiration_interval = 3;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 

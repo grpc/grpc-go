@@ -12,7 +12,7 @@ public interface LoadBalanceRequestOrBuilder extends
    * This message should be sent on the first request to the load balancer.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest();
   /**
@@ -20,7 +20,7 @@ public interface LoadBalanceRequestOrBuilder extends
    * This message should be sent on the first request to the load balancer.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
   io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder();
 
@@ -30,7 +30,7 @@ public interface LoadBalanceRequestOrBuilder extends
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   io.grpc.grpclb.ClientStats getClientStats();
   /**
@@ -39,7 +39,7 @@ public interface LoadBalanceRequestOrBuilder extends
    * based on the duration defined in the InitialLoadBalanceResponse.
    * </pre>
    *
-   * <code>optional .grpc.lb.v1.ClientStats client_stats = 2;</code>
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
    */
   io.grpc.grpclb.ClientStatsOrBuilder getClientStatsOrBuilder();
 

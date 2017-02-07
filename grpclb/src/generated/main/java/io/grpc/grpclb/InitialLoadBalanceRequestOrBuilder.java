@@ -12,7 +12,7 @@ public interface InitialLoadBalanceRequestOrBuilder extends
    * Name of load balanced service
    * </pre>
    *
-   * <code>optional string name = 1;</code>
+   * <code>string name = 1;</code>
    */
   java.lang.String getName();
   /**
@@ -20,7 +20,7 @@ public interface InitialLoadBalanceRequestOrBuilder extends
    * Name of load balanced service
    * </pre>
    *
-   * <code>optional string name = 1;</code>
+   * <code>string name = 1;</code>
    */
   com.google.protobuf.ByteString
       getNameBytes();

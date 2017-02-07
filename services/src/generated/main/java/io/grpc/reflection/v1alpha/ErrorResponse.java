@@ -89,7 +89,7 @@ public  final class ErrorResponse extends
    * This field uses the error codes defined in grpc::StatusCode.
    * </pre>
    *
-   * <code>optional int32 error_code = 1;</code>
+   * <code>int32 error_code = 1;</code>
    */
   public int getErrorCode() {
     return errorCode_;
@@ -98,7 +98,7 @@ public  final class ErrorResponse extends
   public static final int ERROR_MESSAGE_FIELD_NUMBER = 2;
   private volatile java.lang.Object errorMessage_;
   /**
-   * <code>optional string error_message = 2;</code>
+   * <code>string error_message = 2;</code>
    */
   public java.lang.String getErrorMessage() {
     java.lang.Object ref = errorMessage_;
@@ -113,7 +113,7 @@ public  final class ErrorResponse extends
     }
   }
   /**
-   * <code>optional string error_message = 2;</code>
+   * <code>string error_message = 2;</code>
    */
   public com.google.protobuf.ByteString
       getErrorMessageBytes() {
@@ -190,7 +190,7 @@ public  final class ErrorResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + ERROR_CODE_FIELD_NUMBER;
     hash = (53 * hash) + getErrorCode();
     hash = (37 * hash) + ERROR_MESSAGE_FIELD_NUMBER;
@@ -425,7 +425,7 @@ public  final class ErrorResponse extends
      * This field uses the error codes defined in grpc::StatusCode.
      * </pre>
      *
-     * <code>optional int32 error_code = 1;</code>
+     * <code>int32 error_code = 1;</code>
      */
     public int getErrorCode() {
       return errorCode_;
@@ -435,7 +435,7 @@ public  final class ErrorResponse extends
      * This field uses the error codes defined in grpc::StatusCode.
      * </pre>
      *
-     * <code>optional int32 error_code = 1;</code>
+     * <code>int32 error_code = 1;</code>
      */
     public Builder setErrorCode(int value) {
       
@@ -448,7 +448,7 @@ public  final class ErrorResponse extends
      * This field uses the error codes defined in grpc::StatusCode.
      * </pre>
      *
-     * <code>optional int32 error_code = 1;</code>
+     * <code>int32 error_code = 1;</code>
      */
     public Builder clearErrorCode() {
       
@@ -459,7 +459,7 @@ public  final class ErrorResponse extends
 
     private java.lang.Object errorMessage_ = "";
     /**
-     * <code>optional string error_message = 2;</code>
+     * <code>string error_message = 2;</code>
      */
     public java.lang.String getErrorMessage() {
       java.lang.Object ref = errorMessage_;
@@ -474,7 +474,7 @@ public  final class ErrorResponse extends
       }
     }
     /**
-     * <code>optional string error_message = 2;</code>
+     * <code>string error_message = 2;</code>
      */
     public com.google.protobuf.ByteString
         getErrorMessageBytes() {
@@ -490,7 +490,7 @@ public  final class ErrorResponse extends
       }
     }
     /**
-     * <code>optional string error_message = 2;</code>
+     * <code>string error_message = 2;</code>
      */
     public Builder setErrorMessage(
         java.lang.String value) {
@@ -503,7 +503,7 @@ public  final class ErrorResponse extends
       return this;
     }
     /**
-     * <code>optional string error_message = 2;</code>
+     * <code>string error_message = 2;</code>
      */
     public Builder clearErrorMessage() {
       
@@ -512,7 +512,7 @@ public  final class ErrorResponse extends
       return this;
     }
     /**
-     * <code>optional string error_message = 2;</code>
+     * <code>string error_message = 2;</code>
      */
     public Builder setErrorMessageBytes(
         com.google.protobuf.ByteString value) {

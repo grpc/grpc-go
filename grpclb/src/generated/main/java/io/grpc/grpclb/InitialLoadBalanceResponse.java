@@ -95,7 +95,7 @@ public  final class InitialLoadBalanceResponse extends
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 1;</code>
+   * <code>string load_balancer_delegate = 1;</code>
    */
   public java.lang.String getLoadBalancerDelegate() {
     java.lang.Object ref = loadBalancerDelegate_;
@@ -117,7 +117,7 @@ public  final class InitialLoadBalanceResponse extends
    * load_balancer_delegate and call the BalanceLoad method.
    * </pre>
    *
-   * <code>optional string load_balancer_delegate = 1;</code>
+   * <code>string load_balancer_delegate = 1;</code>
    */
   public com.google.protobuf.ByteString
       getLoadBalancerDelegateBytes() {
@@ -142,7 +142,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public boolean hasClientStatsReportInterval() {
     return clientStatsReportInterval_ != null;
@@ -154,7 +154,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public com.google.protobuf.Duration getClientStatsReportInterval() {
     return clientStatsReportInterval_ == null ? com.google.protobuf.Duration.getDefaultInstance() : clientStatsReportInterval_;
@@ -166,7 +166,7 @@ public  final class InitialLoadBalanceResponse extends
    * positive.
    * </pre>
    *
-   * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+   * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
    */
   public com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder() {
     return getClientStatsReportInterval();
@@ -236,7 +236,7 @@ public  final class InitialLoadBalanceResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + LOAD_BALANCER_DELEGATE_FIELD_NUMBER;
     hash = (53 * hash) + getLoadBalancerDelegate().hashCode();
     if (hasClientStatsReportInterval()) {
@@ -480,7 +480,7 @@ public  final class InitialLoadBalanceResponse extends
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 1;</code>
+     * <code>string load_balancer_delegate = 1;</code>
      */
     public java.lang.String getLoadBalancerDelegate() {
       java.lang.Object ref = loadBalancerDelegate_;
@@ -502,7 +502,7 @@ public  final class InitialLoadBalanceResponse extends
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 1;</code>
+     * <code>string load_balancer_delegate = 1;</code>
      */
     public com.google.protobuf.ByteString
         getLoadBalancerDelegateBytes() {
@@ -525,7 +525,7 @@ public  final class InitialLoadBalanceResponse extends
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 1;</code>
+     * <code>string load_balancer_delegate = 1;</code>
      */
     public Builder setLoadBalancerDelegate(
         java.lang.String value) {
@@ -545,7 +545,7 @@ public  final class InitialLoadBalanceResponse extends
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 1;</code>
+     * <code>string load_balancer_delegate = 1;</code>
      */
     public Builder clearLoadBalancerDelegate() {
       
@@ -561,7 +561,7 @@ public  final class InitialLoadBalanceResponse extends
      * load_balancer_delegate and call the BalanceLoad method.
      * </pre>
      *
-     * <code>optional string load_balancer_delegate = 1;</code>
+     * <code>string load_balancer_delegate = 1;</code>
      */
     public Builder setLoadBalancerDelegateBytes(
         com.google.protobuf.ByteString value) {
@@ -585,7 +585,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public boolean hasClientStatsReportInterval() {
       return clientStatsReportIntervalBuilder_ != null || clientStatsReportInterval_ != null;
@@ -597,7 +597,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.Duration getClientStatsReportInterval() {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -613,7 +613,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder setClientStatsReportInterval(com.google.protobuf.Duration value) {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -635,7 +635,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder setClientStatsReportInterval(
         com.google.protobuf.Duration.Builder builderForValue) {
@@ -655,7 +655,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder mergeClientStatsReportInterval(com.google.protobuf.Duration value) {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -679,7 +679,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public Builder clearClientStatsReportInterval() {
       if (clientStatsReportIntervalBuilder_ == null) {
@@ -699,7 +699,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.Duration.Builder getClientStatsReportIntervalBuilder() {
       
@@ -713,7 +713,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     public com.google.protobuf.DurationOrBuilder getClientStatsReportIntervalOrBuilder() {
       if (clientStatsReportIntervalBuilder_ != null) {
@@ -730,7 +730,7 @@ public  final class InitialLoadBalanceResponse extends
      * positive.
      * </pre>
      *
-     * <code>optional .google.protobuf.Duration client_stats_report_interval = 2;</code>
+     * <code>.google.protobuf.Duration client_stats_report_interval = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         com.google.protobuf.Duration, com.google.protobuf.Duration.Builder, com.google.protobuf.DurationOrBuilder> 

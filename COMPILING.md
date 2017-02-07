@@ -33,7 +33,7 @@ For Linux, Mac and MinGW:
 ```
 $ git clone https://github.com/google/protobuf.git
 $ cd protobuf
-$ git checkout v3.1.0
+$ git checkout v3.2.0
 $ ./autogen.sh
 $ ./configure
 $ make
@@ -72,16 +72,16 @@ When building on Windows and VC++, you need to specify project properties for
 Gradle to find protobuf:
 ```
 .\gradlew install ^
-    -PvcProtobufInclude=C:\path\to\protobuf-3.1.0\src ^
-    -PvcProtobufLibs=C:\path\to\protobuf-3.1.0\vsprojects\Release ^
+    -PvcProtobufInclude=C:\path\to\protobuf-3.2.0\src ^
+    -PvcProtobufLibs=C:\path\to\protobuf-3.2.0\vsprojects\Release ^
     -PtargetArch=x86_32
 ```
 
 Since specifying those properties every build is bothersome, you can instead
 create ``<project-root>\gradle.properties`` with contents like:
 ```
-vcProtobufInclude=C:\\path\\to\\protobuf-3.1.0\\src
-vcProtobufLibs=C:\\path\\to\\protobuf-3.1.0\\vsprojects\\Release
+vcProtobufInclude=C:\\path\\to\\protobuf-3.2.0\\src
+vcProtobufLibs=C:\\path\\to\\protobuf-3.2.0\\vsprojects\\Release
 targetArch=x86_32
 ```
 

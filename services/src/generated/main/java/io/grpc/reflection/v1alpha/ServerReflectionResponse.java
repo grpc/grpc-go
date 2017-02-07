@@ -190,7 +190,7 @@ public  final class ServerReflectionResponse extends
   public static final int VALID_HOST_FIELD_NUMBER = 1;
   private volatile java.lang.Object validHost_;
   /**
-   * <code>optional string valid_host = 1;</code>
+   * <code>string valid_host = 1;</code>
    */
   public java.lang.String getValidHost() {
     java.lang.Object ref = validHost_;
@@ -205,7 +205,7 @@ public  final class ServerReflectionResponse extends
     }
   }
   /**
-   * <code>optional string valid_host = 1;</code>
+   * <code>string valid_host = 1;</code>
    */
   public com.google.protobuf.ByteString
       getValidHostBytes() {
@@ -224,19 +224,19 @@ public  final class ServerReflectionResponse extends
   public static final int ORIGINAL_REQUEST_FIELD_NUMBER = 2;
   private io.grpc.reflection.v1alpha.ServerReflectionRequest originalRequest_;
   /**
-   * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+   * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
    */
   public boolean hasOriginalRequest() {
     return originalRequest_ != null;
   }
   /**
-   * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+   * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
    */
   public io.grpc.reflection.v1alpha.ServerReflectionRequest getOriginalRequest() {
     return originalRequest_ == null ? io.grpc.reflection.v1alpha.ServerReflectionRequest.getDefaultInstance() : originalRequest_;
   }
   /**
-   * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+   * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
    */
   public io.grpc.reflection.v1alpha.ServerReflectionRequestOrBuilder getOriginalRequestOrBuilder() {
     return getOriginalRequest();
@@ -253,7 +253,7 @@ public  final class ServerReflectionResponse extends
    * that were previously sent in response to earlier requests in the stream.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+   * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
    */
   public io.grpc.reflection.v1alpha.FileDescriptorResponse getFileDescriptorResponse() {
     if (messageResponseCase_ == 4) {
@@ -271,7 +271,7 @@ public  final class ServerReflectionResponse extends
    * that were previously sent in response to earlier requests in the stream.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+   * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
    */
   public io.grpc.reflection.v1alpha.FileDescriptorResponseOrBuilder getFileDescriptorResponseOrBuilder() {
     if (messageResponseCase_ == 4) {
@@ -286,7 +286,7 @@ public  final class ServerReflectionResponse extends
    * This message is used to answer all_extension_numbers_of_type requst.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
    */
   public io.grpc.reflection.v1alpha.ExtensionNumberResponse getAllExtensionNumbersResponse() {
     if (messageResponseCase_ == 5) {
@@ -299,7 +299,7 @@ public  final class ServerReflectionResponse extends
    * This message is used to answer all_extension_numbers_of_type requst.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+   * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
    */
   public io.grpc.reflection.v1alpha.ExtensionNumberResponseOrBuilder getAllExtensionNumbersResponseOrBuilder() {
     if (messageResponseCase_ == 5) {
@@ -314,7 +314,7 @@ public  final class ServerReflectionResponse extends
    * This message is used to answer list_services request.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+   * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
    */
   public io.grpc.reflection.v1alpha.ListServiceResponse getListServicesResponse() {
     if (messageResponseCase_ == 6) {
@@ -327,7 +327,7 @@ public  final class ServerReflectionResponse extends
    * This message is used to answer list_services request.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+   * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
    */
   public io.grpc.reflection.v1alpha.ListServiceResponseOrBuilder getListServicesResponseOrBuilder() {
     if (messageResponseCase_ == 6) {
@@ -342,7 +342,7 @@ public  final class ServerReflectionResponse extends
    * This message is used when an error occurs.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+   * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
    */
   public io.grpc.reflection.v1alpha.ErrorResponse getErrorResponse() {
     if (messageResponseCase_ == 7) {
@@ -355,7 +355,7 @@ public  final class ServerReflectionResponse extends
    * This message is used when an error occurs.
    * </pre>
    *
-   * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+   * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
    */
   public io.grpc.reflection.v1alpha.ErrorResponseOrBuilder getErrorResponseOrBuilder() {
     if (messageResponseCase_ == 7) {
@@ -479,7 +479,7 @@ public  final class ServerReflectionResponse extends
       return memoizedHashCode;
     }
     int hash = 41;
-    hash = (19 * hash) + getDescriptorForType().hashCode();
+    hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + VALID_HOST_FIELD_NUMBER;
     hash = (53 * hash) + getValidHost().hashCode();
     if (hasOriginalRequest()) {
@@ -807,7 +807,7 @@ public  final class ServerReflectionResponse extends
 
     private java.lang.Object validHost_ = "";
     /**
-     * <code>optional string valid_host = 1;</code>
+     * <code>string valid_host = 1;</code>
      */
     public java.lang.String getValidHost() {
       java.lang.Object ref = validHost_;
@@ -822,7 +822,7 @@ public  final class ServerReflectionResponse extends
       }
     }
     /**
-     * <code>optional string valid_host = 1;</code>
+     * <code>string valid_host = 1;</code>
      */
     public com.google.protobuf.ByteString
         getValidHostBytes() {
@@ -838,7 +838,7 @@ public  final class ServerReflectionResponse extends
       }
     }
     /**
-     * <code>optional string valid_host = 1;</code>
+     * <code>string valid_host = 1;</code>
      */
     public Builder setValidHost(
         java.lang.String value) {
@@ -851,7 +851,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional string valid_host = 1;</code>
+     * <code>string valid_host = 1;</code>
      */
     public Builder clearValidHost() {
       
@@ -860,7 +860,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional string valid_host = 1;</code>
+     * <code>string valid_host = 1;</code>
      */
     public Builder setValidHostBytes(
         com.google.protobuf.ByteString value) {
@@ -878,13 +878,13 @@ public  final class ServerReflectionResponse extends
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ServerReflectionRequest, io.grpc.reflection.v1alpha.ServerReflectionRequest.Builder, io.grpc.reflection.v1alpha.ServerReflectionRequestOrBuilder> originalRequestBuilder_;
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public boolean hasOriginalRequest() {
       return originalRequestBuilder_ != null || originalRequest_ != null;
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public io.grpc.reflection.v1alpha.ServerReflectionRequest getOriginalRequest() {
       if (originalRequestBuilder_ == null) {
@@ -894,7 +894,7 @@ public  final class ServerReflectionResponse extends
       }
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public Builder setOriginalRequest(io.grpc.reflection.v1alpha.ServerReflectionRequest value) {
       if (originalRequestBuilder_ == null) {
@@ -910,7 +910,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public Builder setOriginalRequest(
         io.grpc.reflection.v1alpha.ServerReflectionRequest.Builder builderForValue) {
@@ -924,7 +924,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public Builder mergeOriginalRequest(io.grpc.reflection.v1alpha.ServerReflectionRequest value) {
       if (originalRequestBuilder_ == null) {
@@ -942,7 +942,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public Builder clearOriginalRequest() {
       if (originalRequestBuilder_ == null) {
@@ -956,7 +956,7 @@ public  final class ServerReflectionResponse extends
       return this;
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public io.grpc.reflection.v1alpha.ServerReflectionRequest.Builder getOriginalRequestBuilder() {
       
@@ -964,7 +964,7 @@ public  final class ServerReflectionResponse extends
       return getOriginalRequestFieldBuilder().getBuilder();
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     public io.grpc.reflection.v1alpha.ServerReflectionRequestOrBuilder getOriginalRequestOrBuilder() {
       if (originalRequestBuilder_ != null) {
@@ -975,7 +975,7 @@ public  final class ServerReflectionResponse extends
       }
     }
     /**
-     * <code>optional .grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
+     * <code>.grpc.reflection.v1alpha.ServerReflectionRequest original_request = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ServerReflectionRequest, io.grpc.reflection.v1alpha.ServerReflectionRequest.Builder, io.grpc.reflection.v1alpha.ServerReflectionRequestOrBuilder> 
@@ -1003,7 +1003,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public io.grpc.reflection.v1alpha.FileDescriptorResponse getFileDescriptorResponse() {
       if (fileDescriptorResponseBuilder_ == null) {
@@ -1028,7 +1028,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public Builder setFileDescriptorResponse(io.grpc.reflection.v1alpha.FileDescriptorResponse value) {
       if (fileDescriptorResponseBuilder_ == null) {
@@ -1053,7 +1053,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public Builder setFileDescriptorResponse(
         io.grpc.reflection.v1alpha.FileDescriptorResponse.Builder builderForValue) {
@@ -1076,7 +1076,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public Builder mergeFileDescriptorResponse(io.grpc.reflection.v1alpha.FileDescriptorResponse value) {
       if (fileDescriptorResponseBuilder_ == null) {
@@ -1107,7 +1107,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public Builder clearFileDescriptorResponse() {
       if (fileDescriptorResponseBuilder_ == null) {
@@ -1135,7 +1135,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public io.grpc.reflection.v1alpha.FileDescriptorResponse.Builder getFileDescriptorResponseBuilder() {
       return getFileDescriptorResponseFieldBuilder().getBuilder();
@@ -1150,7 +1150,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     public io.grpc.reflection.v1alpha.FileDescriptorResponseOrBuilder getFileDescriptorResponseOrBuilder() {
       if ((messageResponseCase_ == 4) && (fileDescriptorResponseBuilder_ != null)) {
@@ -1172,7 +1172,7 @@ public  final class ServerReflectionResponse extends
      * that were previously sent in response to earlier requests in the stream.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.FileDescriptorResponse, io.grpc.reflection.v1alpha.FileDescriptorResponse.Builder, io.grpc.reflection.v1alpha.FileDescriptorResponseOrBuilder> 
@@ -1200,7 +1200,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionNumberResponse getAllExtensionNumbersResponse() {
       if (allExtensionNumbersResponseBuilder_ == null) {
@@ -1220,7 +1220,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public Builder setAllExtensionNumbersResponse(io.grpc.reflection.v1alpha.ExtensionNumberResponse value) {
       if (allExtensionNumbersResponseBuilder_ == null) {
@@ -1240,7 +1240,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public Builder setAllExtensionNumbersResponse(
         io.grpc.reflection.v1alpha.ExtensionNumberResponse.Builder builderForValue) {
@@ -1258,7 +1258,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public Builder mergeAllExtensionNumbersResponse(io.grpc.reflection.v1alpha.ExtensionNumberResponse value) {
       if (allExtensionNumbersResponseBuilder_ == null) {
@@ -1284,7 +1284,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public Builder clearAllExtensionNumbersResponse() {
       if (allExtensionNumbersResponseBuilder_ == null) {
@@ -1307,7 +1307,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionNumberResponse.Builder getAllExtensionNumbersResponseBuilder() {
       return getAllExtensionNumbersResponseFieldBuilder().getBuilder();
@@ -1317,7 +1317,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     public io.grpc.reflection.v1alpha.ExtensionNumberResponseOrBuilder getAllExtensionNumbersResponseOrBuilder() {
       if ((messageResponseCase_ == 5) && (allExtensionNumbersResponseBuilder_ != null)) {
@@ -1334,7 +1334,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer all_extension_numbers_of_type requst.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ExtensionNumberResponse, io.grpc.reflection.v1alpha.ExtensionNumberResponse.Builder, io.grpc.reflection.v1alpha.ExtensionNumberResponseOrBuilder> 
@@ -1362,7 +1362,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public io.grpc.reflection.v1alpha.ListServiceResponse getListServicesResponse() {
       if (listServicesResponseBuilder_ == null) {
@@ -1382,7 +1382,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public Builder setListServicesResponse(io.grpc.reflection.v1alpha.ListServiceResponse value) {
       if (listServicesResponseBuilder_ == null) {
@@ -1402,7 +1402,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public Builder setListServicesResponse(
         io.grpc.reflection.v1alpha.ListServiceResponse.Builder builderForValue) {
@@ -1420,7 +1420,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public Builder mergeListServicesResponse(io.grpc.reflection.v1alpha.ListServiceResponse value) {
       if (listServicesResponseBuilder_ == null) {
@@ -1446,7 +1446,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public Builder clearListServicesResponse() {
       if (listServicesResponseBuilder_ == null) {
@@ -1469,7 +1469,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public io.grpc.reflection.v1alpha.ListServiceResponse.Builder getListServicesResponseBuilder() {
       return getListServicesResponseFieldBuilder().getBuilder();
@@ -1479,7 +1479,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     public io.grpc.reflection.v1alpha.ListServiceResponseOrBuilder getListServicesResponseOrBuilder() {
       if ((messageResponseCase_ == 6) && (listServicesResponseBuilder_ != null)) {
@@ -1496,7 +1496,7 @@ public  final class ServerReflectionResponse extends
      * This message is used to answer list_services request.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ListServiceResponse, io.grpc.reflection.v1alpha.ListServiceResponse.Builder, io.grpc.reflection.v1alpha.ListServiceResponseOrBuilder> 
@@ -1524,7 +1524,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public io.grpc.reflection.v1alpha.ErrorResponse getErrorResponse() {
       if (errorResponseBuilder_ == null) {
@@ -1544,7 +1544,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public Builder setErrorResponse(io.grpc.reflection.v1alpha.ErrorResponse value) {
       if (errorResponseBuilder_ == null) {
@@ -1564,7 +1564,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public Builder setErrorResponse(
         io.grpc.reflection.v1alpha.ErrorResponse.Builder builderForValue) {
@@ -1582,7 +1582,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public Builder mergeErrorResponse(io.grpc.reflection.v1alpha.ErrorResponse value) {
       if (errorResponseBuilder_ == null) {
@@ -1608,7 +1608,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public Builder clearErrorResponse() {
       if (errorResponseBuilder_ == null) {
@@ -1631,7 +1631,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public io.grpc.reflection.v1alpha.ErrorResponse.Builder getErrorResponseBuilder() {
       return getErrorResponseFieldBuilder().getBuilder();
@@ -1641,7 +1641,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     public io.grpc.reflection.v1alpha.ErrorResponseOrBuilder getErrorResponseOrBuilder() {
       if ((messageResponseCase_ == 7) && (errorResponseBuilder_ != null)) {
@@ -1658,7 +1658,7 @@ public  final class ServerReflectionResponse extends
      * This message is used when an error occurs.
      * </pre>
      *
-     * <code>optional .grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ErrorResponse, io.grpc.reflection.v1alpha.ErrorResponse.Builder, io.grpc.reflection.v1alpha.ErrorResponseOrBuilder> 
