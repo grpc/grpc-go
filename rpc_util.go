@@ -48,6 +48,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -141,6 +142,7 @@ type callInfo struct {
 	headerMD  metadata.MD
 	trailerMD metadata.MD
 	traceInfo traceInfo // in trace.go
+	peer      peer.Peer
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -180,6 +182,13 @@ func Header(md *metadata.MD) CallOption {
 func Trailer(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
 		*md = c.trailerMD
+	})
+}
+
+// Peer returns a CallOption that retrieves peer information.
+func Peer(peer *peer.Peer) CallOption {
+	return afterCall(func(c *callInfo) {
+		*peer = c.peer
 	})
 }
 
