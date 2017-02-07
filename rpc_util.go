@@ -141,8 +141,8 @@ type callInfo struct {
 	failFast  bool
 	headerMD  metadata.MD
 	trailerMD metadata.MD
-	traceInfo traceInfo // in trace.go
 	peer      peer.Peer
+	traceInfo traceInfo // in trace.go
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -185,7 +185,8 @@ func Trailer(md *metadata.MD) CallOption {
 	})
 }
 
-// Peer returns a CallOption that retrieves peer information.
+// Peer returns a CallOption that retrieves peer information for a
+// unary RPC.
 func Peer(peer *peer.Peer) CallOption {
 	return afterCall(func(c *callInfo) {
 		*peer = c.peer
