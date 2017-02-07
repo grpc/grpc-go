@@ -74,7 +74,7 @@ func TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
 
 // Try to catch possible race conditions around use of pools
 func TestConcurrentUsage(t *testing.T) {
-	const numGoRoutines  = 100
+	const numGoRoutines = 100
 	const numMarshUnmarsh = 1000
 
 	// small, arbitrary byte slices
@@ -89,11 +89,11 @@ func TestConcurrentUsage(t *testing.T) {
 	var wg sync.WaitGroup
 	codec := protoCodec{}
 
-	for i := 0; i < numGoRoutines; i += 1 {
+	for i := 0; i < numGoRoutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for k := 0; k < numMarshUnmarsh; k += 1 {
+			for k := 0; k < numMarshUnmarsh; k++ {
 				marshalAndUnmarshal(codec, protoBodies[k%len(protoBodies)], t)
 			}
 		}()
@@ -180,7 +180,7 @@ func BenchmarkProtoCodec10000Goroutines(b *testing.B) {
 func benchmarkProtoCodecConcurrentUsage(goroutines int, b *testing.B) {
 	codec := &protoCodec{}
 	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i += 1 {
+	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -202,7 +202,7 @@ func benchmarkProtoCodec(codec *protoCodec, b *testing.B) {
 
 	protoStruct := &codec_perf.Buffer{}
 
-	for i := 0; i < b.N; i += 1 {
+	for i := 0; i < b.N; i++ {
 		body := protoBodies[i%len(protoBodies)]
 		protoStruct.Body = body
 		fastMarshalAndUnmarshal(codec, protoStruct, b)
