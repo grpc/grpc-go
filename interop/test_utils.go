@@ -121,11 +121,9 @@ func DoClientStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			Payload: pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		sum += s
-		grpclog.Printf("Sent a request of size %d, aggregated size %d", s, sum)
-
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
@@ -173,7 +171,7 @@ func DoServerStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 		respCnt++
 	}
 	if rpcStatus != io.EOF {
-		grpclog.Fatalf("Failed to finish the server streaming rpc: %v", err)
+		grpclog.Fatalf("Failed to finish the server streaming rpc: %v", rpcStatus)
 	}
 	if respCnt != len(respSizes) {
 		grpclog.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
@@ -200,7 +198,7 @@ func DoPingPong(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			Payload:            pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		reply, err := stream.Recv()
 		if err != nil {
@@ -448,7 +446,7 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient, args ...grpc.CallOp
 		Payload:            pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+		grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 	}
 	if _, err := stream.Recv(); err != nil {
 		grpclog.Fatalf("%v.Recv() = %v", stream, err)
@@ -526,7 +524,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 		Payload:            pl,
 	}
 	if err := stream.Send(streamReq); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, streamReq, err)
+		grpclog.Fatalf("%v has error %v while sending %v", stream, err, streamReq)
 	}
 	streamHeader, err := stream.Header()
 	if err != nil {
@@ -570,7 +568,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption
 		ResponseStatus: respStatus,
 	}
 	if err := stream.Send(streamReq); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v, want <nil>", stream, streamReq, err)
+		grpclog.Fatalf("%v has error %v while sending %v, want <nil>", stream, err, streamReq)
 	}
 	if err := stream.CloseSend(); err != nil {
 		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
