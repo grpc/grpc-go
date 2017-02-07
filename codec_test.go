@@ -72,6 +72,36 @@ func TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
 	marshalAndUnmarshal(newProtoCodec(), []byte{1, 2, 3}, t)
 }
 
+// Try to catch possible race conditions around use of pools
+func TestConcurrentUsage(t *testing.T) {
+	const numGoRoutines  = 100
+	const numMarshUnmarsh = 1000
+
+	// small, arbitrary byte slices
+	protoBodies := [][]byte{
+		[]byte("one"),
+		[]byte("two"),
+		[]byte("three"),
+		[]byte("four"),
+		[]byte("five"),
+	}
+
+	var wg sync.WaitGroup
+	codec := protoCodec{}
+
+	for i := 0; i < numGoRoutines; i += 1 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for k := 0; k < numMarshUnmarsh; k += 1 {
+				marshalAndUnmarshal(codec, protoBodies[k%len(protoBodies)], t)
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
 // This tries to make sure that buffers weren't stomped on
 // between marshals on codecs taking from the same pool.
 func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
