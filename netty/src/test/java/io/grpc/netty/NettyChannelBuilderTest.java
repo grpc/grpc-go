@@ -62,7 +62,7 @@ public class NettyChannelBuilderTest {
         return authority;
       }
     });
-    builder.overrideAuthority("[invalidauthority")
+    Object unused = builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
   }
@@ -74,7 +74,7 @@ public class NettyChannelBuilderTest {
 
     NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
 
-    builder.overrideAuthority("[invalidauthority")
+    Object unused = builder.overrideAuthority("[invalidauthority")
         .negotiationType(NegotiationType.PLAINTEXT)
         .buildTransportFactory();
   }
