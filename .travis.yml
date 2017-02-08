@@ -5,7 +5,7 @@ go:
   - 1.6.3
   - 1.7
 
-go_import_path: google.golang.org/grpc
+go_import_path: github.com/lypnol/grpc-go
 
 before_install:
   - if [[ $TRAVIS_GO_VERSION != 1.5* ]]; then go get github.com/golang/lint/golint; fi

@@ -49,10 +49,10 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/metadata"
+	"github.com/lypnol/grpc-go/peer"
 )
 
 // NewServerHandlerTransport returns a ServerTransport handling gRPC

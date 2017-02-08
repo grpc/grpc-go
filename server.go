@@ -49,14 +49,14 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/tap"
-	"google.golang.org/grpc/transport"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/grpclog"
+	"github.com/lypnol/grpc-go/internal"
+	"github.com/lypnol/grpc-go/metadata"
+	"github.com/lypnol/grpc-go/stats"
+	"github.com/lypnol/grpc-go/tap"
+	"github.com/lypnol/grpc-go/transport"
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor UnaryServerInterceptor) (interface{}, error)

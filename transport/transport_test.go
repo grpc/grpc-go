@@ -48,7 +48,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/codes"
+	"github.com/lypnol/grpc-go/codes"
 )
 
 type server struct {

@@ -1,6 +1,6 @@
 #gRPC-Go
 
-[![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go) [![GoDoc](https://godoc.org/google.golang.org/grpc?status.svg)](https://godoc.org/google.golang.org/grpc)
+[![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go) [![GoDoc](https://godoc.org/github.com/lypnol/grpc-go?status.svg)](https://godoc.org/github.com/lypnol/grpc-go)
 
 The Go implementation of [gRPC](http://www.grpc.io/): A high performance, open source, general RPC framework that puts mobile and HTTP/2 first. For more information see the [gRPC Quick Start](http://www.grpc.io/docs/) guide.
 
@@ -10,7 +10,7 @@ Installation
 To install this package, you need to install Go and setup your Go workspace on your computer. The simplest way to install the library is to run:
 
 ```
-$ go get google.golang.org/grpc
+$ go get github.com/lypnol/grpc-go
 ```
 
 Prerequisites
@@ -36,11 +36,11 @@ $ rm go$GO_VERSION.$OS-$ARCH.tar.gz
 
 Constraints
 -----------
-The grpc package should only depend on standard Go packages and a small number of exceptions. If your contribution introduces new dependencies which are NOT in the [list](http://godoc.org/google.golang.org/grpc?imports), you need a discussion with gRPC-Go authors and consultants.
+The grpc package should only depend on standard Go packages and a small number of exceptions. If your contribution introduces new dependencies which are NOT in the [list](http://godoc.org/github.com/lypnol/grpc-go?imports), you need a discussion with gRPC-Go authors and consultants.
 
 Documentation
 -------------
-See [API documentation](https://godoc.org/google.golang.org/grpc) for package and API descriptions and find examples in the [examples directory](examples/).
+See [API documentation](https://godoc.org/github.com/lypnol/grpc-go) for package and API descriptions and find examples in the [examples directory](examples/).
 
 Status
 ------
@@ -53,5 +53,5 @@ FAQ
 
 Please update proto package, gRPC package and rebuild the proto files:
  - `go get -u github.com/golang/protobuf/{proto,protoc-gen-go}`
- - `go get -u google.golang.org/grpc`
+ - `go get -u github.com/lypnol/grpc-go`
  - `protoc --go_out=plugins=grpc:. *.proto`

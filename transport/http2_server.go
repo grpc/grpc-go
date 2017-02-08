@@ -45,13 +45,13 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/tap"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/credentials"
+	"github.com/lypnol/grpc-go/grpclog"
+	"github.com/lypnol/grpc-go/metadata"
+	"github.com/lypnol/grpc-go/peer"
+	"github.com/lypnol/grpc-go/stats"
+	"github.com/lypnol/grpc-go/tap"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of

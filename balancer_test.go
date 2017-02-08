@@ -41,8 +41,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/naming"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/naming"
 )
 
 type testWatcher struct {

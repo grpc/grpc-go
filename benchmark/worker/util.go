@@ -39,15 +39,15 @@ import (
 )
 
 // abs returns the absolute path the given relative file or directory path,
-// relative to the google.golang.org/grpc directory in the user's GOPATH.
+// relative to the github.com/lypnol/grpc-go directory in the user's GOPATH.
 // If rel is already absolute, it is returned unmodified.
 func abs(rel string) string {
 	if filepath.IsAbs(rel) {
 		return rel
 	}
-	v, err := goPackagePath("google.golang.org/grpc")
+	v, err := goPackagePath("github.com/lypnol/grpc-go")
 	if err != nil {
-		log.Fatalf("Error finding google.golang.org/grpc/testdata directory: %v", err)
+		log.Fatalf("Error finding github.com/lypnol/grpc-go/testdata directory: %v", err)
 	}
 	return filepath.Join(v, rel)
 }

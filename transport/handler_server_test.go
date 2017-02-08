@@ -44,8 +44,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
+	"github.com/lypnol/grpc-go/codes"
+	"github.com/lypnol/grpc-go/metadata"
 )
 
 func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
