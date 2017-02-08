@@ -253,9 +253,14 @@ public abstract class ClientCall<ReqT, RespT> {
   }
 
   /**
-   * Returns a set of attributes, which may vary depending on the particular
-   * implementation and the state of the call, channel, or transport at the moment it is being
-   * called. By default it returns EMPTY attributes.
+   * Returns additional properties of the call. May only be called after {@link Listener#onHeaders}
+   * or {@link Listener#onClose}. If called prematurely, the implementation may throw {@code
+   * IllegalStateException} or return abitrary {@code Attributes}.
+   *
+   * <p>{@link Grpc} defines commonly used attributes, but they are not guaranteed to be present.
+   *
+   * @return non-{@code null} attributes
+   * @throws IllegalStateException (optional) if called before permitted
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2607")
   public Attributes getAttributes() {
