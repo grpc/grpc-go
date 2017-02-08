@@ -153,8 +153,8 @@ public final class Http2Client {
 
   private void setUp() {
     channel = createChannel();
-    blockingStub = TestServiceGrpc.newBlockingStub(channel);
-    asyncStub = TestServiceGrpc.newStub(channel);
+    blockingStub = TestServiceGrpc.newBlockingStub(channel).withWaitForReady();
+    asyncStub = TestServiceGrpc.newStub(channel).withWaitForReady();
   }
 
   private void shutdown() {
@@ -272,6 +272,7 @@ public final class Http2Client {
 
     private void goAway() throws Exception {
       assertResponseEquals(blockingStub.unaryCall(simpleRequest), goldenResponse);
+      TimeUnit.SECONDS.sleep(1);
       assertResponseEquals(blockingStub.unaryCall(simpleRequest), goldenResponse);
     }
 
