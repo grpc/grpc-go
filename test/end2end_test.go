@@ -1466,7 +1466,6 @@ func testPeerClientSide(t *testing.T, e env) {
 	}
 	_, pp, err := net.SplitHostPort(pa)
 	if err != nil {
-		fmt.Println(peer.Addr.String())
 		t.Fatalf("Failed to parse address from peer.")
 	}
 	_, sp, err := net.SplitHostPort(te.srvAddr)
