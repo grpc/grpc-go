@@ -87,7 +87,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	}
 	c.trailerMD = stream.Trailer()
 	if peer, ok := peer.FromContext(stream.Context()); ok {
-		c.peer = *peer
+		c.peer = peer
 	}
 	return nil
 }

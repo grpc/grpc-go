@@ -141,7 +141,7 @@ type callInfo struct {
 	failFast  bool
 	headerMD  metadata.MD
 	trailerMD metadata.MD
-	peer      peer.Peer
+	peer      *peer.Peer
 	traceInfo traceInfo // in trace.go
 }
 
@@ -189,7 +189,7 @@ func Trailer(md *metadata.MD) CallOption {
 // unary RPC.
 func Peer(peer *peer.Peer) CallOption {
 	return afterCall(func(c *callInfo) {
-		*peer = c.peer
+		*peer = *c.peer
 	})
 }
 
