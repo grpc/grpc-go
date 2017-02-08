@@ -1440,6 +1440,43 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 }
 
+func TestPeerClientSide(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerClientSide(t, e)
+	}
+}
+
+func testPeerClientSide(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	peer := new(peer.Peer)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(peer), grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	pa := peer.Addr.String()
+	if e.network == "unix" {
+		if pa != te.srvAddr {
+			t.Fatalf("peer.Addr = %v, want %v", pa, te.srvAddr)
+		}
+		return
+	}
+	_, pp, err := net.SplitHostPort(pa)
+	if err != nil {
+		t.Fatalf("Failed to parse address from peer.")
+	}
+	_, sp, err := net.SplitHostPort(te.srvAddr)
+	if err != nil {
+		t.Fatalf("Failed to parse address of test server.")
+	}
+	if pp != sp {
+		t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
+	}
+}
+
 func TestMetadataUnaryRPC(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
