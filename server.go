@@ -116,12 +116,20 @@ type options struct {
 	statsHandler         stats.Handler
 	maxConcurrentStreams uint32
 	useHandlerImpl       bool // use http.Handler-based server
+	GetTOS               func(net.Conn) int
 }
 
 var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
 // A ServerOption sets options.
 type ServerOption func(*options)
+
+// CustomGetTOS returns a ServerOption that sets a callback for transport to retrieve tos
+func CustomGetTOS(f func(net.Conn) int) ServerOption {
+	return func(o *options) {
+		o.GetTOS = f
+	}
+}
 
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 func CustomCodec(codec Codec) ServerOption {
@@ -450,6 +458,7 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		AuthInfo:     authInfo,
 		InTapHandle:  s.opts.inTapHandle,
 		StatsHandler: s.opts.statsHandler,
+		GetTOS:       s.opts.GetTOS,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {

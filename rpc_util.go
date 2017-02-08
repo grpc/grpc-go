@@ -141,6 +141,7 @@ type callInfo struct {
 	headerMD  metadata.MD
 	trailerMD metadata.MD
 	traceInfo traceInfo // in trace.go
+	tos       int
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -180,6 +181,13 @@ func Header(md *metadata.MD) CallOption {
 func Trailer(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
 		*md = c.trailerMD
+	})
+}
+
+// TOS returns a CallOptions that retrieves the tos for a unary RPC.
+func TOS(tos *int) CallOption {
+	return afterCall(func(c *callInfo) {
+		*tos = c.tos
 	})
 }
 

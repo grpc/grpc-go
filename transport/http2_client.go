@@ -99,6 +99,9 @@ type http2Client struct {
 
 	creds []credentials.PerRPCCredentials
 
+	// ToS value for this transport.
+	tos int
+
 	statsHandler stats.Handler
 
 	mu            sync.Mutex     // guard the following variables
@@ -212,6 +215,14 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		streamSendQuota: defaultWindowSize,
 		statsHandler:    opts.StatsHandler,
 	}
+
+	// Retrieve tos for client transport.
+	if opts.GetTOS != nil {
+		t.tos = opts.GetTOS(t.conn)
+	} else {
+		t.tos = defaultGetTOS(t.conn)
+	}
+
 	if t.statsHandler != nil {
 		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
@@ -258,6 +269,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	go t.controller()
 	t.writableChan <- 0
 	return t, nil
+}
+
+func (t *http2Client) GetTOS() int {
+	return t.tos
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {

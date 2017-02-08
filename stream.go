@@ -287,6 +287,16 @@ type clientStream struct {
 	statsHandler stats.Handler
 }
 
+func (cs *clientStream) GetTOS() int {
+	if ct, ok := cs.t.(interface {
+		GetTOS() int
+	}); ok {
+		return ct.GetTOS()
+	}
+	// otherwise return the default value for TOS
+	return transport.DefaultTOS
+}
+
 func (cs *clientStream) Context() context.Context {
 	return cs.s.Context()
 }
@@ -549,6 +559,15 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	}
 	ss.s.SetTrailer(md)
 	return
+}
+
+func (ss *serverStream) GetTOS() int {
+	if st, ok := ss.t.(interface {
+		GetTOS() int
+	}); ok {
+		return st.GetTOS()
+	}
+	return transport.DefaultTOS
 }
 
 func (ss *serverStream) SendMsg(m interface{}) (err error) {
