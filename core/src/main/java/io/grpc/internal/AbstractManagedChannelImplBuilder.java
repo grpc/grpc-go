@@ -49,7 +49,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
-import io.grpc.PickFirstBalancerFactory;
+import io.grpc.PickFirstBalancerFactory2;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import java.net.SocketAddress;
@@ -109,7 +109,7 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private NameResolver.Factory nameResolverFactory;
 
-  private LoadBalancer.Factory loadBalancerFactory;
+  private LoadBalancer2.Factory loadBalancerFactory;
 
   @Nullable
   private ChannelFactory channelFactory;
@@ -197,7 +197,7 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
-  public final T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory) {
+  public final T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
         directServerAddress);
@@ -207,14 +207,14 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
-  public final T loadBalancerFactory(final LoadBalancer2.Factory loadBalancerFactory) {
+  public final T loadBalancerFactory(final LoadBalancer.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
         directServerAddress);
     this.channelFactory = new ChannelFactory() {
         @Override
         public ManagedChannel create(ClientTransportFactory transportFactory) {
-          return new ManagedChannelImpl2(
+          return new ManagedChannelImpl(
               target,
               // TODO(carl-mastrangelo): Allow clients to pass this in
               new ExponentialBackoffPolicy.Provider(),
@@ -224,12 +224,10 @@ public abstract class AbstractManagedChannelImplBuilder
               transportFactory,
               firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
               firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-              SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-              getExecutorPool(executor),
-              SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
-              GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
-              userAgent, interceptors, firstNonNull(statsFactory,
-              firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
+              GrpcUtil.TIMER_SERVICE, GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
+              executor, userAgent, interceptors,
+              firstNonNull(statsFactory,
+                  firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
         }
       };
     return thisT();
@@ -312,19 +310,21 @@ public abstract class AbstractManagedChannelImplBuilder
     if (channelFactory != null) {
       return channelFactory.create(transportFactory);
     } else {
-      return new ManagedChannelImpl(
+      return new ManagedChannelImpl2(
           target,
           // TODO(carl-mastrangelo): Allow clients to pass this in
           new ExponentialBackoffPolicy.Provider(),
           nameResolverFactory,
           getNameResolverParams(),
-          firstNonNull(loadBalancerFactory, PickFirstBalancerFactory.getInstance()),
+          firstNonNull(loadBalancerFactory, PickFirstBalancerFactory2.getInstance()),
           transportFactory,
           firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
           firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-          GrpcUtil.TIMER_SERVICE, GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
-          executor, userAgent, interceptors,
-          firstNonNull(statsFactory,
+          SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
+          getExecutorPool(executor),
+          SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
+          GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
+          userAgent, interceptors, firstNonNull(statsFactory,
               firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
     }
   }
@@ -431,9 +431,9 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   /**
-   * A temporary solution to contain the reference to ManagedChannelImpl2 in the v2 LoadBalancer
-   * setter, so that on Android ManagedChannelImpl2 can be stripped out by ProGuard since the v2
-   * setter will not be called.  This should be deleted along with the old ManagedChannelImpl.
+   * A temporary solution to contain the reference to ManagedChannelImpl in the v1 LoadBalancer
+   * setter, so that on Android ManagedChannelImpl can be stripped out by ProGuard since the v1
+   * setter will not be called.  This should be deleted along with v1 ManagedChannelImpl.
    */
   private interface ChannelFactory {
     ManagedChannel create(ClientTransportFactory transportFactory);

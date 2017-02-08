@@ -161,6 +161,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * for the channel.
    *
    * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer2.Factory)}.
+   *
+   * <p>Calling this will revert the channel back to the original (LBv1) implementation.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
@@ -173,13 +175,11 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer.Factory)}.
    *
-   * <p><strong>IMPORTANT: </strong>Calling this will make the channel to run the LBv2 code path,
-   * which is new and not as well-exercised as the current one.  You should use it only if you want
-   * to try out LBv2, or you are migrating your LoadBalancer implementation to LBv2.  See
-   * <a href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more
+   * <p>Calling this will make the channel to run the LBv2 code path. See <a
+   * href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more
    * information.
    *
-   * <p><strong>IMPORTANT: </strong>This method is implemented by all stock channel builders that
+   * <p>This method is implemented by all stock channel builders that
    * are shipped with gRPC, but may not be implemented by custom channel builders, in which case
    * this method will throw.
    */
