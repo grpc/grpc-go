@@ -51,7 +51,7 @@ import (
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
 // TODO ctx is used for stats collection and processing. It is the context passed from the application.
-func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
+func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, eco *EffectiveCallOptions, stream *transport.Stream, reply interface{}) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
 		if err != nil {
@@ -60,9 +60,11 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 			}
 		}
 	}()
-	c.headerMD, err = stream.Header()
-	if err != nil {
-		return
+	if eco.HeaderMD != nil {
+		*eco.HeaderMD, err = stream.Header()
+		if err != nil {
+			return
+		}
 	}
 	p := &parser{r: stream}
 	var inPayload *stats.InPayload
@@ -84,7 +86,9 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		// Fix the order if necessary.
 		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
 	}
-	c.trailerMD = stream.Trailer()
+	if eco.TrailerMD != nil {
+		*eco.TrailerMD = stream.Trailer()
+	}
 	return nil
 }
 
@@ -144,38 +148,33 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 }
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
-	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
+	var mc *MethodConfig
+	if mcfg, ok := cc.getMethodConfig(method); ok {
+		mc = &mcfg
 		if mc.Timeout > 0 {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
 			defer cancel()
 		}
 	}
-	for _, o := range opts {
-		if err := o.before(&c); err != nil {
-			return toRPCErr(err)
-		}
+	eco, err := GetEffectiveCallOptions(mc, opts...)
+	if err != nil {
+		return err
 	}
-	defer func() {
-		for _, o := range opts {
-			o.after(&c)
-		}
-	}()
+	var traceInfo traceInfo
 	if EnableTracing {
-		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
-		defer c.traceInfo.tr.Finish()
-		c.traceInfo.firstLine.client = true
+		traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
+		defer traceInfo.tr.Finish()
+		traceInfo.firstLine.client = true
 		if deadline, ok := ctx.Deadline(); ok {
-			c.traceInfo.firstLine.deadline = deadline.Sub(time.Now())
+			traceInfo.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		c.traceInfo.tr.LazyLog(&c.traceInfo.firstLine, false)
+		traceInfo.tr.LazyLog(&traceInfo.firstLine, false)
 		// TODO(dsymonds): Arrange for c.traceInfo.firstLine.remoteAddr to be set.
 		defer func() {
 			if e != nil {
-				c.traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{e}}, true)
-				c.traceInfo.tr.SetError()
+				traceInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{e}}, true)
+				traceInfo.tr.SetError()
 			}
 		}()
 	}
@@ -185,7 +184,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
-			FailFast:  c.failFast,
+			FailFast:  eco.FailFast,
 		}
 		sh.HandleRPC(ctx, begin)
 	}
@@ -222,7 +221,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 
 		gopts := BalancerGetOptions{
-			BlockingWait: !c.failFast,
+			BlockingWait: !eco.FailFast,
 		}
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
@@ -231,7 +230,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				return err
 			}
 			if err == errConnClosing || err == errConnUnavailable {
-				if c.failFast {
+				if eco.FailFast {
 					return Errorf(codes.Unavailable, "%v", err)
 				}
 				continue
@@ -239,8 +238,8 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			// All the other errors are treated as Internal errors.
 			return Errorf(codes.Internal, "%v", err)
 		}
-		if c.traceInfo.tr != nil {
-			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
+		if traceInfo.tr != nil {
+			traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
 		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
@@ -252,29 +251,29 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
+				if eco.FailFast {
 					return toRPCErr(err)
 				}
 				continue
 			}
 			return toRPCErr(err)
 		}
-		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
+		err = recvResponse(ctx, cc.dopts, t, &eco, stream, reply)
 		if err != nil {
 			if put != nil {
 				put()
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
+				if eco.FailFast {
 					return toRPCErr(err)
 				}
 				continue
 			}
 			return toRPCErr(err)
 		}
-		if c.traceInfo.tr != nil {
-			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
+		if traceInfo.tr != nil {
+			traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {

@@ -135,51 +135,39 @@ func (d *gzipDecompressor) Type() string {
 	return "gzip"
 }
 
-// callInfo contains all related configuration and information about an RPC.
-type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-	traceInfo traceInfo // in trace.go
+// EffectiveCallOptions contains the options in effect for an RPC call.
+type EffectiveCallOptions struct {
+	FailFast  bool
+	HeaderMD  *metadata.MD
+	TrailerMD *metadata.MD
 }
 
-var defaultCallInfo = callInfo{failFast: true}
+var defaultCallOptions = EffectiveCallOptions{FailFast: true}
 
-// CallOption configures a Call before it starts or extracts information from
-// a Call after it completes.
+// CallOption configures a Call before it starts.
 type CallOption interface {
-	// before is called before the call is sent to any server.  If before
+	// apply is called before the call is sent to any server.  If apply
 	// returns a non-nil error, the RPC fails with that error.
-	before(*callInfo) error
-
-	// after is called after the call has completed.  after cannot return an
-	// error, so any failures should be reported via output parameters.
-	after(*callInfo)
+	apply(*EffectiveCallOptions) error
 }
 
-type beforeCall func(c *callInfo) error
+type callOption func(c *EffectiveCallOptions)
 
-func (o beforeCall) before(c *callInfo) error { return o(c) }
-func (o beforeCall) after(c *callInfo)        {}
-
-type afterCall func(c *callInfo)
-
-func (o afterCall) before(c *callInfo) error { return nil }
-func (o afterCall) after(c *callInfo)        { o(c) }
+func (o callOption) apply(c *EffectiveCallOptions) error { o(c); return nil }
 
 // Header returns a CallOptions that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		*md = c.headerMD
+	return callOption(func(c *EffectiveCallOptions) {
+		c.HeaderMD = md
 	})
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
-	return afterCall(func(c *callInfo) {
-		*md = c.trailerMD
+	return callOption(func(c *EffectiveCallOptions) {
+		c.TrailerMD = md
 	})
 }
 
@@ -190,10 +178,24 @@ func Trailer(md *metadata.MD) CallOption {
 // the call if it fails due to a transient error. Please refer to
 // https://github.com/grpc/grpc/blob/master/doc/fail_fast.md
 func FailFast(failFast bool) CallOption {
-	return beforeCall(func(c *callInfo) error {
-		c.failFast = failFast
-		return nil
+	return callOption(func(c *EffectiveCallOptions) {
+		c.FailFast = failFast
 	})
+}
+
+// GetEffectiveCallOptions returns the set of options to use for an RPC based on the given method
+// configuration and explicit options. If the given method configuration is nil, it is ignored.
+func GetEffectiveCallOptions(mc *MethodConfig, opts ...CallOption) (EffectiveCallOptions, error) {
+	c := defaultCallOptions
+	if mc != nil {
+		c.FailFast = !mc.WaitForReady
+	}
+	for _, o := range opts {
+		if err := o.apply(&c); err != nil {
+			return c, toRPCErr(err)
+		}
+	}
+	return c, nil
 }
 
 // The format of the payload: compressed or not?
