@@ -44,8 +44,9 @@ const (
 	// The default value of flow control window size in HTTP2 spec.
 	defaultWindowSize = 65535
 	// The initial window size for flow control.
-	initialWindowSize     = defaultWindowSize      // for an RPC
-	initialConnWindowSize = defaultWindowSize * 16 // for a connection
+	initialWindowSize       = defaultWindowSize      // for an RPC
+	initialConnWindowSize   = defaultWindowSize * 16 // for a connection
+	defaultMaxStreamsClient = 100
 )
 
 // The following defines various control items which could flow through

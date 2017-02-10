@@ -208,7 +208,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		state:           reachable,
 		activeStreams:   make(map[uint32]*Stream),
 		creds:           opts.PerRPCCredentials,
-		maxStreams:      math.MaxInt32,
+		maxStreams:      defaultMaxStreamsClient,
 		streamSendQuota: defaultWindowSize,
 		statsHandler:    opts.StatsHandler,
 	}
