@@ -47,7 +47,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// allows reuse of the same testpb.Payload object
+// Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {
 		grpclog.Fatalf("Requested a response with invalid length %d", size)
