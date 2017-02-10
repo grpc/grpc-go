@@ -23,7 +23,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: io/grpc/reflection/testing/dynamic_reflection_test.proto")
-public class DynamicServiceGrpc {
+public final class DynamicServiceGrpc {
 
   private DynamicServiceGrpc() {}
 
@@ -193,7 +193,7 @@ public class DynamicServiceGrpc {
 
   private static final int METHODID_METHOD = 0;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -201,7 +201,7 @@ public class DynamicServiceGrpc {
     private final DynamicServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(DynamicServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(DynamicServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

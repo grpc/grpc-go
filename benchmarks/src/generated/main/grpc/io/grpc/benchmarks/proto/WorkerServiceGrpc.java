@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: services.proto")
-public class WorkerServiceGrpc {
+public final class WorkerServiceGrpc {
 
   private WorkerServiceGrpc() {}
 
@@ -333,7 +333,7 @@ public class WorkerServiceGrpc {
   private static final int METHODID_RUN_SERVER = 2;
   private static final int METHODID_RUN_CLIENT = 3;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -341,7 +341,7 @@ public class WorkerServiceGrpc {
     private final WorkerServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(WorkerServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(WorkerServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

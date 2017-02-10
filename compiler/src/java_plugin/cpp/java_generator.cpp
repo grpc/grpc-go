@@ -793,7 +793,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
   }
   p->Print(
       *vars,
-      "private static class MethodHandlers<Req, Resp> implements\n"
+      "private static final class MethodHandlers<Req, Resp> implements\n"
       "    io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,\n"
       "    io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,\n"
       "    io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,\n"
@@ -801,7 +801,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
       "  private final $service_name$ serviceImpl;\n"
       "  private final int methodId;\n"
       "\n"
-      "  public MethodHandlers($service_name$ serviceImpl, int methodId) {\n"
+      "  MethodHandlers($service_name$ serviceImpl, int methodId) {\n"
       "    this.serviceImpl = serviceImpl;\n"
       "    this.methodId = methodId;\n"
       "  }\n\n");
@@ -1035,7 +1035,7 @@ static void PrintService(const ServiceDescriptor* service,
       "@$Generated$(\n"
       "    value = \"by gRPC proto compiler$grpc_version$\",\n"
       "    comments = \"Source: $file_name$\")\n"
-      "public class $service_class_name$ {\n\n");
+      "public final class $service_class_name$ {\n\n");
   p->Indent();
   p->Print(
       *vars,

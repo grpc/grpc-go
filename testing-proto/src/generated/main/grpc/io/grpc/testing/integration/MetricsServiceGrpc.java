@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/metrics.proto")
-public class MetricsServiceGrpc {
+public final class MetricsServiceGrpc {
 
   private MetricsServiceGrpc() {}
 
@@ -230,7 +230,7 @@ public class MetricsServiceGrpc {
   private static final int METHODID_GET_ALL_GAUGES = 0;
   private static final int METHODID_GET_GAUGE = 1;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -238,7 +238,7 @@ public class MetricsServiceGrpc {
     private final MetricsServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(MetricsServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(MetricsServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

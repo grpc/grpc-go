@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: load_balancer.proto")
-public class LoadBalancerGrpc {
+public final class LoadBalancerGrpc {
 
   private LoadBalancerGrpc() {}
 
@@ -157,7 +157,7 @@ public class LoadBalancerGrpc {
 
   private static final int METHODID_BALANCE_LOAD = 0;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -165,7 +165,7 @@ public class LoadBalancerGrpc {
     private final LoadBalancerImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(LoadBalancerImplBase serviceImpl, int methodId) {
+    MethodHandlers(LoadBalancerImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

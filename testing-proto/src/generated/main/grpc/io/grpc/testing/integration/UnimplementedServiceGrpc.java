@@ -24,7 +24,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
-public class UnimplementedServiceGrpc {
+public final class UnimplementedServiceGrpc {
 
   private UnimplementedServiceGrpc() {}
 
@@ -198,7 +198,7 @@ public class UnimplementedServiceGrpc {
 
   private static final int METHODID_UNIMPLEMENTED_CALL = 0;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -206,7 +206,7 @@ public class UnimplementedServiceGrpc {
     private final UnimplementedServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(UnimplementedServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(UnimplementedServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

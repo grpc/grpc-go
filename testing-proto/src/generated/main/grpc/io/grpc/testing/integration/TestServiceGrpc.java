@@ -24,7 +24,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: io/grpc/testing/integration/test.proto")
-public class TestServiceGrpc {
+public final class TestServiceGrpc {
 
   private TestServiceGrpc() {}
 
@@ -498,7 +498,7 @@ public class TestServiceGrpc {
   private static final int METHODID_FULL_DUPLEX_CALL = 5;
   private static final int METHODID_HALF_DUPLEX_CALL = 6;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -506,7 +506,7 @@ public class TestServiceGrpc {
     private final TestServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(TestServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(TestServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

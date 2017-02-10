@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: io/grpc/reflection/v1alpha/reflection.proto")
-public class ServerReflectionGrpc {
+public final class ServerReflectionGrpc {
 
   private ServerReflectionGrpc() {}
 
@@ -159,7 +159,7 @@ public class ServerReflectionGrpc {
 
   private static final int METHODID_SERVER_REFLECTION_INFO = 0;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -167,7 +167,7 @@ public class ServerReflectionGrpc {
     private final ServerReflectionImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(ServerReflectionImplBase serviceImpl, int methodId) {
+    MethodHandlers(ServerReflectionImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: services.proto")
-public class BenchmarkServiceGrpc {
+public final class BenchmarkServiceGrpc {
 
   private BenchmarkServiceGrpc() {}
 
@@ -222,7 +222,7 @@ public class BenchmarkServiceGrpc {
   private static final int METHODID_UNARY_CALL = 0;
   private static final int METHODID_STREAMING_CALL = 1;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -230,7 +230,7 @@ public class BenchmarkServiceGrpc {
     private final BenchmarkServiceImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(BenchmarkServiceImplBase serviceImpl, int methodId) {
+    MethodHandlers(BenchmarkServiceImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }

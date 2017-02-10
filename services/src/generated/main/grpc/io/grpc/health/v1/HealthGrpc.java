@@ -20,7 +20,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
 @javax.annotation.Generated(
     value = "by gRPC proto compiler (version 1.2.0-SNAPSHOT)",
     comments = "Source: health.proto")
-public class HealthGrpc {
+public final class HealthGrpc {
 
   private HealthGrpc() {}
 
@@ -166,7 +166,7 @@ public class HealthGrpc {
 
   private static final int METHODID_CHECK = 0;
 
-  private static class MethodHandlers<Req, Resp> implements
+  private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ServerStreamingMethod<Req, Resp>,
       io.grpc.stub.ServerCalls.ClientStreamingMethod<Req, Resp>,
@@ -174,7 +174,7 @@ public class HealthGrpc {
     private final HealthImplBase serviceImpl;
     private final int methodId;
 
-    public MethodHandlers(HealthImplBase serviceImpl, int methodId) {
+    MethodHandlers(HealthImplBase serviceImpl, int methodId) {
       this.serviceImpl = serviceImpl;
       this.methodId = methodId;
     }
