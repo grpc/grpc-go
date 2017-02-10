@@ -41,41 +41,34 @@ import (
 	"google.golang.org/grpc/test/codec_perf"
 )
 
-func newProtoCodec() Codec {
-	return &protoCodec{}
-}
+func marshalAndUnmarshal(t *testing.T, protoCodec Codec, expectedBody []byte) {
+	p := &codec_perf.Buffer{}
+	p.Body = expectedBody
 
-func marshalAndUnmarshal(protoCodec Codec, expectedBody []byte, t *testing.T) {
-	original := &codec_perf.Buffer{}
-	original.Body = expectedBody
-
-	var marshalledBytes []byte
-	deserialized := &codec_perf.Buffer{}
-	var err error
-
-	if marshalledBytes, err = protoCodec.Marshal(original); err != nil {
+	marshalledBytes, err := protoCodec.Marshal(p)
+	if err != nil {
 		t.Fatalf("protoCodec.Marshal(_) returned an error")
 	}
 
-	if err := protoCodec.Unmarshal(marshalledBytes, deserialized); err != nil {
+	if err := protoCodec.Unmarshal(marshalledBytes, p); err != nil {
 		t.Fatalf("protoCodec.Unmarshal(_) returned an error")
 	}
 
-	result := deserialized.GetBody()
-
-	if bytes.Compare(result, expectedBody) != 0 {
-		t.Fatalf("Unexpected body; got %v; want %v", result, expectedBody)
+	if bytes.Compare(p.GetBody(), expectedBody) != 0 {
+		t.Fatalf("Unexpected body; got %v; want %v", p.GetBody(), expectedBody)
 	}
 }
 
 func TestBasicProtoCodecMarshalAndUnmarshal(t *testing.T) {
-	marshalAndUnmarshal(newProtoCodec(), []byte{1, 2, 3}, t)
+	marshalAndUnmarshal(t, protoCodec{}, []byte{1, 2, 3})
 }
 
 // Try to catch possible race conditions around use of pools
 func TestConcurrentUsage(t *testing.T) {
-	const numGoRoutines = 100
-	const numMarshUnmarsh = 1000
+	const (
+		numGoRoutines   = 100
+		numMarshUnmarsh = 1000
+	)
 
 	// small, arbitrary byte slices
 	protoBodies := [][]byte{
@@ -94,7 +87,7 @@ func TestConcurrentUsage(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for k := 0; k < numMarshUnmarsh; k++ {
-				marshalAndUnmarshal(codec, protoBodies[k%len(protoBodies)], t)
+				marshalAndUnmarshal(t, codec, protoBodies[k%len(protoBodies)])
 			}
 		}()
 	}
@@ -102,11 +95,11 @@ func TestConcurrentUsage(t *testing.T) {
 	wg.Wait()
 }
 
-// This tries to make sure that buffers weren't stomped on
-// between marshals on codecs taking from the same pool.
+// TestStaggeredMarshalAndUnmarshalUsingSamePool tries to catch potential errors in which slices get
+// stomped on during reuse of a proto.Buffer.
 func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
-	codec1 := newProtoCodec().(Codec)
-	codec2 := newProtoCodec().(Codec)
+	codec1 := protoCodec{}
+	codec2 := protoCodec{}
 
 	expectedBody1 := []byte{1, 2, 3}
 	expectedBody2 := []byte{4, 5, 6}

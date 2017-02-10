@@ -59,25 +59,24 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 		protoSizeFieldLength = 4
 	)
 
-	var protoMsg = v.(proto.Message)
-	// adding 4 to proto.Size avoids an extra allocation when appending the 4 byte length
-	// field in 'proto.Buffer.enc_len_thing'
-	var sizeNeeded = proto.Size(protoMsg) + protoSizeFieldLength
-
+	protoMsg := v.(proto.Message)
 	buffer := protoBufferPool.Get().(*proto.Buffer)
+	defer func() {
+		buffer.SetBuf(nil)
+		protoBufferPool.Put(buffer)
+	}()
 
-	newSlice := make([]byte, sizeNeeded)
+	// Adding 4 to proto.Size avoids an extra allocation when appending the 4 byte length
+	// field in 'proto.Buffer.enc_len_thing'.
+	newSlice := make([]byte, proto.Size(protoMsg)+protoSizeFieldLength)
 
 	buffer.SetBuf(newSlice)
 	buffer.Reset()
-	err := buffer.Marshal(protoMsg)
-	if err != nil {
+	if err := buffer.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
 	out := buffer.Bytes()
-	buffer.SetBuf(nil)
-	protoBufferPool.Put(buffer)
-	return out, err
+	return out, nil
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
