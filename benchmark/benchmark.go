@@ -81,8 +81,9 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 }
 
 func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
-	response := new(testpb.SimpleResponse)
-	payload := new(testpb.Payload)
+	response := &testpb.SimpleResponse{
+		Payload: new(testpb.Payload),
+	}
 	in := new(testpb.SimpleRequest)
 	for {
 		// use ServerStream directly to reuse the same testpb.SimpleRequest object
@@ -94,8 +95,7 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 		if err != nil {
 			return err
 		}
-		setPayload(payload, in.ResponseType, int(in.ResponseSize))
-		response.Payload = payload
+		setPayload(response.Payload, in.ResponseType, int(in.ResponseSize))
 		if err := stream.Send(response); err != nil {
 			return err
 		}
