@@ -156,9 +156,7 @@ func (s *serverReflectionServer) fileDescContainingExtension(st reflect.Type, ex
 		return nil, fmt.Errorf("failed to find registered extension for extension number %v", ext)
 	}
 
-	extT := reflect.TypeOf(extDesc.ExtensionType).Elem()
-
-	return s.fileDescForType(extT)
+	return s.decodeFileDesc(proto.FileDescriptor(extDesc.Filename))
 }
 
 func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]int32, error) {
