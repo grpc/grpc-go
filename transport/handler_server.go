@@ -51,6 +51,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -273,6 +274,13 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 	})
 }
 
+type handlerServerStreamReader struct{}
+
+func (*handlerServerStreamReader) Read(_ []byte) (int, error) {
+	grpclog.Fatalf("handler server streamReader is unimplemented")
+	return 0, nil
+}
+
 func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), traceCtx func(context.Context, string) context.Context) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
 
@@ -305,13 +313,13 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	req := ht.req
 
 	s := &Stream{
-		id:            0,            // irrelevant
-		windowHandler: func(int) {}, // nothing
-		cancel:        cancel,
-		buf:           newRecvBuffer(),
-		st:            ht,
-		method:        req.URL.Path,
-		recvCompress:  req.Header.Get("grpc-encoding"),
+		id:           0, // irrelevant
+		cancel:       cancel,
+		buf:          newRecvBuffer(),
+		st:           ht,
+		method:       req.URL.Path,
+		recvCompress: req.Header.Get("grpc-encoding"),
+		streamReader: &handlerServerStreamReader{},
 	}
 	pr := &peer.Peer{
 		Addr: ht.RemoteAddr(),
@@ -322,7 +330,6 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	ctx = metadata.NewContext(ctx, ht.headerMD)
 	ctx = peer.NewContext(ctx, pr)
 	s.ctx = newContextWithStream(ctx, s)
-	s.dec = &recvBufferReader{ctx: s.ctx, recv: s.buf}
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.
 	readerDone := make(chan struct{})

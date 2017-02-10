@@ -2243,8 +2243,8 @@ func testCancelNoIO(t *testing.T, e env) {
 // The following tests the gRPC streaming RPC implementations.
 // TODO(zhaoq): Have better coverage on error cases.
 var (
-	reqSizes  = []int{27182, 8, 1828, 45904}
-	respSizes = []int{31415, 9, 2653, 58979}
+	pingPongReqSizes  = []int{27182, 8, 1828, 45904}
+	pingPongRespSizes = []int{31415, 9, 2653, 58979}
 )
 
 func TestNoService(t *testing.T) {
@@ -2289,14 +2289,14 @@ func testPingPong(t *testing.T, e env) {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
 	var index int
-	for index < len(reqSizes) {
+	for index < len(pingPongReqSizes) {
 		respParam := []*testpb.ResponseParameters{
 			{
-				Size: proto.Int32(int32(respSizes[index])),
+				Size: proto.Int32(int32(pingPongRespSizes[index])),
 			},
 		}
 
-		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(pingPongReqSizes[index]))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2318,8 +2318,8 @@ func testPingPong(t *testing.T, e env) {
 			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
-			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		if size != int(pingPongRespSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, pingPongRespSizes[index])
 		}
 		index++
 	}
@@ -2367,14 +2367,14 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
 		var index int
-		for index < len(reqSizes) {
+		for index < len(pingPongReqSizes) {
 			respParam := []*testpb.ResponseParameters{
 				{
-					Size: proto.Int32(int32(respSizes[index])),
+					Size: proto.Int32(int32(pingPongRespSizes[index])),
 				},
 			}
 
-			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(reqSizes[index]))
+			payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(pingPongReqSizes[index]))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2405,20 +2405,26 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 }
 
 func TestServerStreaming(t *testing.T) {
+	serverRespSizes := [][]int{
+		{27182, 8, 1828, 45904},
+		{(1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21)},
+	}
 	defer leakCheck(t)()
-	for _, e := range listTestEnv() {
-		testServerStreaming(t, e)
+	for _, s := range serverRespSizes {
+		for _, e := range listTestEnv() {
+			testServerStreaming(t, e, s)
+		}
 	}
 }
 
-func testServerStreaming(t *testing.T, e env) {
+func testServerStreaming(t *testing.T, e env, serverRespSizes []int) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	respParam := make([]*testpb.ResponseParameters, len(respSizes))
-	for i, s := range respSizes {
+	respParam := make([]*testpb.ResponseParameters, len(serverRespSizes))
+	for i, s := range serverRespSizes {
 		respParam[i] = &testpb.ResponseParameters{
 			Size: proto.Int32(int32(s)),
 		}
@@ -2445,8 +2451,8 @@ func testServerStreaming(t *testing.T, e env) {
 			t.Fatalf("Got the reply of type %d, want %d", pt, testpb.PayloadType_COMPRESSABLE)
 		}
 		size := len(reply.GetPayload().GetBody())
-		if size != int(respSizes[index]) {
-			t.Fatalf("Got reply body of length %d, want %d", size, respSizes[index])
+		if size != int(serverRespSizes[index]) {
+			t.Fatalf("Got reply body of length %d, want %d", size, serverRespSizes[index])
 		}
 		index++
 		respCnt++
@@ -2454,8 +2460,8 @@ func testServerStreaming(t *testing.T, e env) {
 	if rpcStatus != io.EOF {
 		t.Fatalf("Failed to finish the server streaming rpc: %v, want <EOF>", rpcStatus)
 	}
-	if respCnt != len(respSizes) {
-		t.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
+	if respCnt != len(serverRespSizes) {
+		t.Fatalf("Got %d reply, want %d", len(serverRespSizes), respCnt)
 	}
 }
 
@@ -2473,8 +2479,8 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	respParam := make([]*testpb.ResponseParameters, len(respSizes))
-	for i, s := range respSizes {
+	respParam := make([]*testpb.ResponseParameters, len(pingPongRespSizes))
+	for i, s := range pingPongRespSizes {
 		respParam[i] = &testpb.ResponseParameters{
 			Size: proto.Int32(int32(s)),
 		}
@@ -2576,12 +2582,18 @@ func testServerStreamingConcurrent(t *testing.T, e env) {
 
 func TestClientStreaming(t *testing.T) {
 	defer leakCheck(t)()
-	for _, e := range listTestEnv() {
-		testClientStreaming(t, e)
+	clientReqSizes := [][]int{
+		{27182, 8, 1828, 45904},
+		{(1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21)},
+	}
+	for _, s := range clientReqSizes {
+		for _, e := range listTestEnv() {
+			testClientStreaming(t, e, s)
+		}
 	}
 }
 
-func testClientStreaming(t *testing.T, e env) {
+func testClientStreaming(t *testing.T, e env, clientReqSizes []int) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -2593,7 +2605,7 @@ func testClientStreaming(t *testing.T, e env) {
 	}
 
 	var sum int
-	for _, s := range reqSizes {
+	for _, s := range clientReqSizes {
 		payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(s))
 		if err != nil {
 			t.Fatal(err)

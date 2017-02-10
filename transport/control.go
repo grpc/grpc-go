@@ -39,6 +39,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/grpclog"
+
 	"golang.org/x/net/http2"
 )
 
@@ -58,6 +60,14 @@ const (
 	defaultServerKeepaliveTime    = time.Duration(2 * time.Hour)
 	defaultServerKeepaliveTimeout = time.Duration(20 * time.Second)
 	defaultKeepalivePolicyMinTime = time.Duration(5 * time.Minute)
+	// Put a cap on the max possible window update (this value reached when
+	// an attempt to read a large message is made).
+	// 4M is greater than connection window but is arbitrary otherwise.
+	// Note this must be greater than a stream's incoming window size to have an effect.
+	maxSingleStreamWindowUpdate = 4194303
+
+	// max legal window update
+	http2MaxWindowUpdate = 2147483647
 )
 
 // The following defines various control items which could flow through
@@ -161,12 +171,17 @@ type inFlow struct {
 	limit uint32
 
 	mu sync.Mutex
-	// pendingData is the overall data which have been received but not been
+	// PendingData is the overall data which have been received but not been
 	// consumed by applications.
 	pendingData uint32
 	// The amount of data the application has consumed but grpc has not sent
 	// window update for them. Used to reduce window update frequency.
 	pendingUpdate uint32
+
+	// This is temporary space in the incoming flow control that can be granted at convenient times
+	// to prevent the sender from stalling for lack flow control space.
+	// If present, it is paid back when data is consumed from the window.
+	loanedWindowSpace uint32
 }
 
 // onData is invoked when some data frame is received. It updates pendingData.
@@ -174,10 +189,17 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pendingData += n
-	if f.pendingData+f.pendingUpdate > f.limit {
-		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit)
+	if f.pendingData+f.pendingUpdate > f.limit+f.loanedWindowSpace {
+		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit+f.loanedWindowSpace)
 	}
 	return nil
+}
+
+func min(a uint32, b uint32) uint32 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // onRead is invoked when the application reads the data. It returns the window size
@@ -185,13 +207,34 @@ func (f *inFlow) onData(n uint32) error {
 func (f *inFlow) onRead(n uint32) uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.pendingData == 0 {
-		return 0
+	if n > http2MaxWindowUpdate {
+		grpclog.Fatalf("potential window update too large. onRead(n) where n is %v; max n is %v", f.pendingUpdate, http2MaxWindowUpdate)
 	}
 	f.pendingData -= n
+	// first use up remaining "loanedWindowSpace", add remaining Read to "pendingUpdate"
+	windowSpaceDebtPayment := min(n, f.loanedWindowSpace)
+	f.loanedWindowSpace -= windowSpaceDebtPayment
+	n -= windowSpaceDebtPayment
+
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {
 		wu := f.pendingUpdate
+		f.pendingUpdate = 0
+		return wu
+	}
+	return 0
+}
+
+func (f *inFlow) loanWindowSpace(n uint32) uint32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.loanedWindowSpace > 0 {
+		grpclog.Fatalf("pre-consuming window space while there is pre-consumed window space still  outstanding")
+	}
+	f.loanedWindowSpace = n
+
+	if f.loanedWindowSpace+f.pendingUpdate >= f.limit/4 {
+		wu := f.pendingUpdate + f.loanedWindowSpace
 		f.pendingUpdate = 0
 		return wu
 	}

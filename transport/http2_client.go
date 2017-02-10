@@ -296,18 +296,17 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:    make(chan struct{}),
 	}
 	t.nextID += 2
-	s.windowHandler = func(n int) {
-		t.updateWindow(s, uint32(n))
-	}
 	// The client side stream context should have exactly the same life cycle with the user provided context.
 	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
 	// So we use the original context here instead of creating a copy.
 	s.ctx = ctx
-	s.dec = &recvBufferReader{
-		ctx:    s.ctx,
-		goAway: s.goAway,
-		recv:   s.buf,
+	consumeConnAndStreamWindows := func(n uint32) {
+		t.updateWindow(s, n)
 	}
+	loanSpaceInStreamWindow := func(n uint32) {
+		t.loanSpaceInStreamWindow(s, n)
+	}
+	s.setClientStreamReader(consumeConnAndStreamWindows, loanSpaceInStreamWindow)
 	return s
 }
 
@@ -768,6 +767,17 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 		t.controlBuf.put(&windowUpdate{0, w})
 	}
 	if w := s.fc.onRead(n); w > 0 {
+		t.controlBuf.put(&windowUpdate{s.id, w})
+	}
+}
+
+func (t *http2Client) loanSpaceInStreamWindow(s *Stream, n uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == streamDone {
+		return
+	}
+	if w := s.fc.loanWindowSpace(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }

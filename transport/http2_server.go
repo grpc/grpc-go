@@ -264,10 +264,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.ctx = metadata.NewContext(s.ctx, state.mdata)
 	}
 
-	s.dec = &recvBufferReader{
-		ctx:  s.ctx,
-		recv: s.buf,
-	}
 	s.recvCompress = state.encoding
 	s.method = state.method
 	if t.inTapHandle != nil {
@@ -305,9 +301,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.idle = time.Time{}
 	}
 	t.mu.Unlock()
-	s.windowHandler = func(n int) {
-		t.updateWindow(s, uint32(n))
-	}
 	s.ctx = traceCtx(s.ctx, s.method)
 	if t.stats != nil {
 		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
@@ -320,6 +313,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
 	}
+	consumeConnAndStreamWindows := func(n uint32) {
+		t.updateWindow(s, n)
+	}
+	loanSpaceInStreamWindow := func(n uint32) {
+		t.loanSpaceInStreamWindow(s, n)
+	}
+	s.setServerStreamReader(consumeConnAndStreamWindows, loanSpaceInStreamWindow)
 	handle(s)
 	return
 }
@@ -434,6 +434,17 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 		t.controlBuf.put(&windowUpdate{0, w})
 	}
 	if w := s.fc.onRead(n); w > 0 {
+		t.controlBuf.put(&windowUpdate{s.id, w})
+	}
+}
+
+func (t *http2Server) loanSpaceInStreamWindow(s *Stream, n uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == streamDone {
+		return
+	}
+	if w := s.fc.loanWindowSpace(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }
