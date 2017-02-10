@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -53,9 +54,7 @@ import io.grpc.Status;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -70,8 +69,6 @@ import org.mockito.MockitoAnnotations;
  */
 @RunWith(JUnit4.class)
 public class DelayedStreamTest {
-  @Rule public final ExpectedException thrown = ExpectedException.none();
-
   @Mock private ClientStreamListener listener;
   @Mock private ClientStream realStream;
   @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
@@ -208,7 +205,13 @@ public class DelayedStreamTest {
     when(realStream.getAttributes()).thenReturn(attributes);
 
     stream.start(listener);
-    assertEquals(Attributes.EMPTY, stream.getAttributes());
+
+    try {
+      stream.getAttributes(); // expect to throw IllegalStateException, otherwise fail()
+      fail();
+    } catch (IllegalStateException expected) {
+      // ignore
+    }
 
     stream.setStream(realStream);
     assertEquals(attributes, stream.getAttributes());
