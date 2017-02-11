@@ -251,7 +251,7 @@ func WithUserAgent(s string) DialOption {
 
 // WithKeepaliveParams returns a DialOption that specifies keepalive paramaters for the client transport.
 func WithKeepaliveParams(k KeepaliveParameters) DialOption {
-	kp := &transport.KeepaliveParameters{
+	kp := transport.KeepaliveParameters{
 		Time:                k.Time,
 		Timeout:             k.Timeout,
 		PermitWithoutStream: k.PermitWithoutStream,

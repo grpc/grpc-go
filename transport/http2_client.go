@@ -107,7 +107,7 @@ type http2Client struct {
 	// keepaliveSkipped = 1 means skipped
 	keepaliveSkipped uint32 // accessed atomically
 	// keepalive parameters.
-	kp           *KeepaliveParameters
+	kp           KeepaliveParameters
 	statsHandler stats.Handler
 
 	mu            sync.Mutex     // guard the following variables
@@ -191,10 +191,13 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
-	kp := defaultKeepaliveParams
-	if opts.KeepaliveParams != nil {
-		kp = opts.KeepaliveParams
-		kp.validate()
+	kp := opts.KeepaliveParams
+	// Validate keepalive parameters.
+	if kp.Time == 0 {
+		kp.Time = defaultKeepaliveTime
+	}
+	if kp.Timeout == 0 {
+		kp.Timeout = defaultKeepaliveTimeout
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -1092,11 +1095,13 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Client) controller() {
 	timer := time.NewTimer(t.kp.Time)
+	timerUsed := true
 	if t.kp.Time == infinity {
 		// Prevent the timer from firing, ever.
 		if !timer.Stop() {
 			<-timer.C
 		}
+		timerUsed = false
 	}
 	isPingSent := false
 	keepalivePing := &ping{data: [8]byte{}}
@@ -1174,28 +1179,26 @@ func (t *http2Client) controller() {
 			t.mu.Lock()
 			ns := len(t.activeStreams)
 			if !t.kp.PermitWithoutStream && ns < 1 {
-				// set flag that signifyies keepalive was skipped
+				// Set flag that signifyies keepalive was skipped.
 				atomic.StoreUint32(&t.keepaliveSkipped, 1)
 				t.mu.Unlock()
 				timer.Reset(infinity)
 				continue
 			}
 			t.mu.Unlock()
-			// reset the keepaliveSkipped flag
+			// Reset the keepaliveSkipped flag.
 			atomic.StoreUint32(&t.keepaliveSkipped, 0)
 			// Send ping.
 			t.controlBuf.put(keepalivePing)
 			isPingSent = true
 			timer.Reset(t.kp.Timeout)
 		case <-t.shutdownChan:
-			// stop the keepalive timer
+			if !timerUsed {
+				return
+			}
+			// Stop the keepalive timer.
 			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-					// In case we stopped the timer before the for loop began.
-					// This happens when keepalive time provided was infinity.
-				}
+				<-timer.C
 			}
 			return
 		}
