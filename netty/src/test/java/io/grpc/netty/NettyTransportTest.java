@@ -78,11 +78,16 @@ public class NettyTransportTest extends AbstractTransportTest {
   }
 
   @Override
+  protected String testAuthority(InternalServer server) {
+    return "localhost:" + server.getPort();
+  }
+
+  @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
     int port = server.getPort();
     return clientFactory.newClientTransport(
         new InetSocketAddress("localhost", port),
-        "localhost:" + port,
+        testAuthority(server),
         null /* agent */);
   }
 

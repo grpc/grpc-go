@@ -418,7 +418,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
             try {
               ServerMethodDefinition<?, ?> method = registry.lookupMethod(methodName);
               if (method == null) {
-                method = fallbackRegistry.lookupMethod(methodName);
+                method = fallbackRegistry.lookupMethod(methodName, stream.getAuthority());
               }
               if (method == null) {
                 Status status = Status.UNIMPLEMENTED.withDescription(

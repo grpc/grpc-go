@@ -119,6 +119,11 @@ public abstract class AbstractTransportTest {
   protected abstract ManagedClientTransport newClientTransport(InternalServer server);
 
   /**
+   * Returns the authority string used by a client to connect to {@code server}.
+   */
+  protected abstract String testAuthority(InternalServer server);
+
+  /**
    * When non-null, will be shut down during tearDown(). However, it _must_ have been started with
    * {@code serverListener}, otherwise tearDown() can't wait for shutdown which can put following
    * tests in an indeterminate state.
@@ -646,6 +651,25 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(metadataCaptor.getValue().getAll(asciiKey)));
     assertEquals(Lists.newArrayList(trailers.getAll(binaryKey)),
         Lists.newArrayList(metadataCaptor.getValue().getAll(binaryKey)));
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  public void authorityPropagation() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    runIfNotNull(client.start(mockClientTransportListener));
+    MockServerTransportListener serverTransportListener
+            = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    Metadata clientHeaders = new Metadata();
+    ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders);
+    clientStream.start(mockClientStreamListener);
+    StreamCreation serverStreamCreation
+            = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ServerStream serverStream = serverStreamCreation.stream;
+
+    assertEquals(testAuthority(server), serverStream.getAuthority());
   }
 
   @Test

@@ -60,14 +60,16 @@ class NettyServerStream extends AbstractServerStream {
   private final Channel channel;
   private final WriteQueue writeQueue;
   private final Attributes attributes;
+  private final String authority;
 
   public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs,
-      StatsTraceContext statsTraceCtx) {
+      String authority, StatsTraceContext statsTraceCtx) {
     super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
     this.attributes = checkNotNull(transportAttrs);
+    this.authority = authority;
   }
 
   @Override
@@ -83,6 +85,11 @@ class NettyServerStream extends AbstractServerStream {
   @Override
   public Attributes getAttributes() {
     return attributes;
+  }
+
+  @Override
+  public String getAuthority() {
+    return authority;
   }
 
   private class Sink implements AbstractServerStream.Sink {

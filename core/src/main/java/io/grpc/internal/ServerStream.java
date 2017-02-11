@@ -76,6 +76,11 @@ public interface ServerStream extends Stream {
    */
   Attributes getAttributes();
 
+  /**
+   * Gets the authority this stream is addressed to.
+   * @return the authority string.
+   */
+  String getAuthority();
 
   /**
    * Sets the server stream listener.

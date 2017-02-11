@@ -76,11 +76,16 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   }
 
   @Override
+  protected String testAuthority(InternalServer server) {
+    return "127.0.0.1:" + server.getPort();
+  }
+
+  @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
     int port = server.getPort();
     return clientFactory.newClientTransport(
         new InetSocketAddress("127.0.0.1", port),
-        "127.0.0.1:" + port,
+        testAuthority(server),
         null /* agent */);
   }
 

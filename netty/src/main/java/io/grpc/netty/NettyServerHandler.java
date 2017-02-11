@@ -77,7 +77,9 @@ import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
 import io.netty.handler.logging.LogLevel;
+import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
+
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -96,6 +98,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   private Throwable connectionError;
   private boolean teWarningLogged;
   private WriteQueue serverWriteQueue;
+  private AsciiString lastKnownAuthority;
 
   static NettyServerHandler newHandler(ServerTransportListener transportListener,
                                        int maxStreams,
@@ -190,8 +193,9 @@ class NettyServerHandler extends AbstractNettyHandler {
           checkNotNull(transportListener.methodDetermined(method, metadata), "statsTraceCtx");
       NettyServerStream.TransportState state = new NettyServerStream.TransportState(
           this, http2Stream, maxMessageSize, statsTraceCtx);
+      String authority = getOrUpdateAuthority((AsciiString)headers.authority());
       NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes,
-          statsTraceCtx);
+          authority, statsTraceCtx);
       transportListener.streamCreated(stream, method, metadata);
       state.onStreamAllocated();
       http2Stream.setProperty(streamKey, state);
@@ -203,6 +207,18 @@ class NettyServerHandler extends AbstractNettyHandler {
       // Throw an exception that will get handled by onStreamError.
       throw newStreamException(streamId, e);
     }
+  }
+
+  private String getOrUpdateAuthority(AsciiString authority) {
+    if (authority == null) {
+      return null;
+    } else if (!authority.equals(lastKnownAuthority)) {
+      lastKnownAuthority = authority;
+    }
+
+    // AsciiString.toString() is internally cached, so subsequent calls will not
+    // result in recomputing the String representation of lastKnownAuthority.
+    return lastKnownAuthority.toString();
   }
 
   private void onDataRead(int streamId, ByteBuf data, int padding, boolean endOfStream)

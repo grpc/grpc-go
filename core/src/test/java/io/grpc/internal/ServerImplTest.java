@@ -423,6 +423,7 @@ public class ServerImplTest {
     assertEquals(1, executor.runDueTasks());
     ServerCall<String, Integer> call = callReference.get();
     assertNotNull(call);
+    verify(stream).getAuthority();
 
     String order = "Lots of pizza, please";
     streamListener.messageRead(STRING_MARSHALLER.stream(order));
@@ -604,6 +605,7 @@ public class ServerImplTest {
     verifyNoMoreInteractions(stream);
 
     assertEquals(1, executor.runDueTasks());
+    verify(stream).getAuthority();
     verify(stream).close(same(status), notNull(Metadata.class));
     verify(stream, atLeast(1)).statsTraceContext();
     verifyNoMoreInteractions(stream);

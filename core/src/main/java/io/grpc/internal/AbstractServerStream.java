@@ -168,6 +168,11 @@ public abstract class AbstractServerStream extends AbstractStream2
   }
 
   @Override
+  public String getAuthority() {
+    return null;
+  }
+
+  @Override
   public final void setListener(ServerStreamListener serverStreamListener) {
     transportState().setListener(serverStreamListener);
   }

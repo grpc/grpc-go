@@ -119,7 +119,7 @@ public class InProcessChannelBuilder extends
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
       }
-      return new InProcessTransport(name);
+      return new InProcessTransport(name, authority);
     }
 
     @Override
