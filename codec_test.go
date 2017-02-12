@@ -152,7 +152,7 @@ func BenchmarkProtoCodec(b *testing.B) {
 		p := 1 << i
 		i += 2
 		b.Run(fmt.Sprintf("BenchmarkProtoCodec_SetParallelism(%v)", p), func(b *testing.B) {
-		        codec := &protoCodec{}
+			codec := &protoCodec{}
 			b.SetParallelism(p)
 			b.RunParallel(func(pb *testing.PB) {
 				benchmarkProtoCodec(codec, pb, b)

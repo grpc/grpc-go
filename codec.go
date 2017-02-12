@@ -35,6 +35,7 @@ package grpc
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -55,10 +56,6 @@ type protoCodec struct {
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
-	const (
-		protoSizeFieldLength = 4
-	)
-
 	protoMsg := v.(proto.Message)
 	buffer := protoBufferPool.Get().(*proto.Buffer)
 	defer func() {
@@ -66,9 +63,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 		protoBufferPool.Put(buffer)
 	}()
 
-	// Adding 4 to proto.Size avoids an extra allocation when appending the 4 byte length
-	// field in 'proto.Buffer.enc_len_thing'.
-	newSlice := make([]byte, proto.Size(protoMsg)+protoSizeFieldLength)
+	newSlice := make([]byte, 0, atomic.LoadUint32(&lastMarshaledSize))
 
 	buffer.SetBuf(newSlice)
 	buffer.Reset()
@@ -76,6 +71,7 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 		return nil, err
 	}
 	out := buffer.Bytes()
+	atomic.StoreUint32(&lastMarshaledSize, uint32(len(out)))
 	return out, nil
 }
 
@@ -93,5 +89,6 @@ func (protoCodec) String() string {
 }
 
 var (
-	protoBufferPool = &sync.Pool{New: func() interface{} { return &proto.Buffer{} }}
+	protoBufferPool   = &sync.Pool{New: func() interface{} { return &proto.Buffer{} }}
+	lastMarshaledSize = uint32(0)
 )
