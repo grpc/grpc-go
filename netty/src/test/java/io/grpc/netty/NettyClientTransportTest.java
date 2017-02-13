@@ -70,7 +70,6 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannelConfig;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SupportedCipherSuiteFilter;
@@ -290,8 +289,10 @@ public class NettyClientTransportTest {
           + " size limit!");
     } catch (Exception e) {
       Throwable rootCause = getRootCause(e);
-      assertTrue(rootCause instanceof Http2Exception);
-      assertEquals("Header size exceeded max allowed size (1)", rootCause.getMessage());
+      Status status = ((StatusException) rootCause).getStatus();
+      assertEquals(Status.Code.INTERNAL, status.getCode());
+      assertEquals("HTTP/2 error code: PROTOCOL_ERROR\nReceived Rst Stream",
+          status.getDescription());
     }
   }
 

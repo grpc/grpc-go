@@ -113,7 +113,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
     return newHandler(frameReader, frameWriter, transportListener, maxStreams, flowControlWindow,
-        maxMessageSize);
+        maxHeaderListSize, maxMessageSize);
   }
 
   @VisibleForTesting
@@ -121,9 +121,11 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        ServerTransportListener transportListener,
                                        int maxStreams,
                                        int flowControlWindow,
+                                       int maxHeaderListSize,
                                        int maxMessageSize) {
     Preconditions.checkArgument(maxStreams > 0, "maxStreams must be positive");
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Preconditions.checkArgument(maxMessageSize > 0, "maxMessageSize must be positive");
 
     Http2Connection connection = new DefaultHttp2Connection(true);
@@ -140,6 +142,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     Http2Settings settings = new Http2Settings();
     settings.initialWindowSize(flowControlWindow);
     settings.maxConcurrentStreams(maxStreams);
+    settings.maxHeaderListSize(maxHeaderListSize);
 
     return new NettyServerHandler(transportListener, decoder, encoder, settings, maxMessageSize);
   }
