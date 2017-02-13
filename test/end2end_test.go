@@ -2676,7 +2676,7 @@ const defaultMaxStreamsClient = 100
 func TestClientExceedMaxStreamsLimit(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testExceedMaxStreamsLimit(t, e)
+		testClientExceedMaxStreamsLimit(t, e)
 	}
 }
 
