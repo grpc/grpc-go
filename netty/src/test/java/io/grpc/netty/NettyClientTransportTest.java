@@ -45,7 +45,6 @@ import static org.junit.Assert.fail;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
-import io.grpc.Attributes.Key;
 import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
@@ -319,8 +318,6 @@ public class NettyClientTransportTest {
   public void getAttributes_negotiatorHandler() throws Exception {
     address = TestUtils.testServerAddress(12345);
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
-    final Attributes attributes =
-        Attributes.newBuilder().set(Key.<String>of("fakeKey"), "fakeValue").build();
 
     NettyClientTransport transport = newTransport(
         new ProtocolNegotiator() {
