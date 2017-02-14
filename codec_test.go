@@ -149,15 +149,16 @@ func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 func BenchmarkProtoCodec(b *testing.B) {
 	i := uint32(0)
 	for i < 20 {
-		p := 1 << i
 		i += 2
-		b.Run(fmt.Sprintf("BenchmarkProtoCodec_SetParallelism(%v)", p), func(b *testing.B) {
-			codec := &protoCodec{}
-			b.SetParallelism(p)
-			b.RunParallel(func(pb *testing.PB) {
-				benchmarkProtoCodec(codec, pb, b)
+		func(p int) {
+			b.Run(fmt.Sprintf("BenchmarkProtoCodec_SetParallelism(%v)", p), func(b *testing.B) {
+				codec := &protoCodec{}
+				b.SetParallelism(p)
+				b.RunParallel(func(pb *testing.PB) {
+					benchmarkProtoCodec(codec, pb, b)
+				})
 			})
-		})
+		}(1 << i)
 	}
 }
 
