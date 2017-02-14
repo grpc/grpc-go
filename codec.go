@@ -1,5 +1,5 @@
 /*
- *
+*
  * Copyright 2014, Google Inc.
  * All rights reserved.
  *
@@ -50,17 +50,13 @@ type Codec interface {
 	String() string
 }
 
-func NewProtoCodec() Codec {
-	return protoCodec{}
-}
-
 // protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
 type protoCodec struct {
 }
 
 type cachedProtoBuffer struct {
 	lastMarshaledSize int32
-	buffer *proto.Buffer
+	buffer proto.Buffer
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
@@ -100,7 +96,7 @@ var (
 	protoBufferPool = &sync.Pool{
 		New: func() interface{} {
 			return &cachedProtoBuffer{
-				buffer: &proto.Buffer{},
+				buffer: proto.Buffer{},
 				lastMarshaledSize: 16,
 			}
 		},
