@@ -175,7 +175,7 @@ func benchmarkProtoCodec(codec *protoCodec, pb *testing.PB, b *testing.B) {
 
 	counter := 0
 	for pb.Next() {
-		counter += 1
+		counter++
 		body := protoBodies[counter%len(protoBodies)]
 		protoStruct.Body = body
 		fastMarshalAndUnmarshal(codec, protoStruct, b)

@@ -29,7 +29,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- */
+*/
 
 package grpc
 
@@ -56,7 +56,7 @@ type protoCodec struct {
 
 type cachedProtoBuffer struct {
 	lastMarshaledSize int32
-	buffer proto.Buffer
+	buffer            proto.Buffer
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
@@ -96,7 +96,7 @@ var (
 	protoBufferPool = &sync.Pool{
 		New: func() interface{} {
 			return &cachedProtoBuffer{
-				buffer: proto.Buffer{},
+				buffer:            proto.Buffer{},
 				lastMarshaledSize: 16,
 			}
 		},
