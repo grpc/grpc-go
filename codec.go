@@ -35,7 +35,6 @@ package grpc
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -51,36 +50,45 @@ type Codec interface {
 	String() string
 }
 
+func NewProtoCodec() Codec {
+	return protoCodec{}
+}
+
 // protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
 type protoCodec struct {
 }
 
+type cachedProtoBuffer struct {
+	lastMarshaledSize int32
+	buffer *proto.Buffer
+}
+
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	protoMsg := v.(proto.Message)
-	buffer := protoBufferPool.Get().(*proto.Buffer)
+	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	defer func() {
-		buffer.SetBuf(nil)
-		protoBufferPool.Put(buffer)
+		cb.buffer.SetBuf(nil)
+		protoBufferPool.Put(cb)
 	}()
 
-	newSlice := make([]byte, 0, atomic.LoadUint32(&lastMarshaledSize))
+	newSlice := make([]byte, 0, cb.lastMarshaledSize)
 
-	buffer.SetBuf(newSlice)
-	buffer.Reset()
-	if err := buffer.Marshal(protoMsg); err != nil {
+	cb.buffer.SetBuf(newSlice)
+	cb.buffer.Reset()
+	if err := cb.buffer.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
-	out := buffer.Bytes()
-	atomic.StoreUint32(&lastMarshaledSize, uint32(len(out)))
+	out := cb.buffer.Bytes()
+	cb.lastMarshaledSize = int32(len(out))
 	return out, nil
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
-	buffer := protoBufferPool.Get().(*proto.Buffer)
-	buffer.SetBuf(data)
-	err := buffer.Unmarshal(v.(proto.Message))
-	buffer.SetBuf(nil)
-	protoBufferPool.Put(buffer)
+	cb := protoBufferPool.Get().(*cachedProtoBuffer)
+	cb.buffer.SetBuf(data)
+	err := cb.buffer.Unmarshal(v.(proto.Message))
+	cb.buffer.SetBuf(nil)
+	protoBufferPool.Put(cb)
 	return err
 }
 
@@ -89,6 +97,12 @@ func (protoCodec) String() string {
 }
 
 var (
-	protoBufferPool   = &sync.Pool{New: func() interface{} { return &proto.Buffer{} }}
-	lastMarshaledSize = uint32(0)
+	protoBufferPool = &sync.Pool{
+		New: func() interface{} {
+			return &cachedProtoBuffer{
+				buffer: &proto.Buffer{},
+				lastMarshaledSize: 16,
+			}
+		},
+	}
 )
