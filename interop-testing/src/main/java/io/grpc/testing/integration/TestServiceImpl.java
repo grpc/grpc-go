@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.GuardedBy;
@@ -378,7 +379,8 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         Chunk nextChunk = chunks.peek();
         if (nextChunk != null) {
           scheduled = true;
-          executor.schedule(new LogExceptionRunnable(dispatchTask),
+          // TODO(ejona): cancel future if RPC is cancelled
+          Future<?> unused = executor.schedule(new LogExceptionRunnable(dispatchTask),
               nextChunk.delayMicroseconds, TimeUnit.MICROSECONDS);
           return;
         }

@@ -43,6 +43,7 @@ import static org.mockito.Mockito.verify;
 
 import com.google.common.truth.Truth;
 import java.util.Arrays;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -189,7 +190,7 @@ public class DeadlineTest {
     Deadline base = Deadline.after(50, TimeUnit.MICROSECONDS, ticker);
     ScheduledExecutorService mockScheduler = mock(ScheduledExecutorService.class);
     final AtomicBoolean executed = new AtomicBoolean();
-    base.runOnExpiration(
+    Future<?> unused = base.runOnExpiration(
         new Runnable() {
           @Override
           public void run() {
@@ -208,7 +209,7 @@ public class DeadlineTest {
     Deadline base = Deadline.after(0, TimeUnit.MICROSECONDS, ticker);
     ScheduledExecutorService mockScheduler = mock(ScheduledExecutorService.class);
     final AtomicBoolean executed = new AtomicBoolean();
-    base.runOnExpiration(
+    Future<?> unused = base.runOnExpiration(
         new Runnable() {
           @Override
           public void run() {

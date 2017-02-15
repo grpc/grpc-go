@@ -79,7 +79,7 @@ public class ProxyTest {
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
     int serverPort = server.init();
-    executor.submit(server);
+    executor.execute(server);
 
     int latency = (int) TimeUnit.MILLISECONDS.toNanos(50);
     proxy = new TrafficControlProxy(serverPort, 1024 * 1024, latency, TimeUnit.NANOSECONDS);
@@ -111,7 +111,7 @@ public class ProxyTest {
       throws UnknownHostException, IOException, InterruptedException, ExecutionException {
     server = new Server();
     int serverPort = server.init();
-    executor.submit(server);
+    executor.execute(server);
 
     int latency = (int) TimeUnit.MILLISECONDS.toNanos(250);
     proxy = new TrafficControlProxy(serverPort, 1024 * 1024, latency, TimeUnit.NANOSECONDS);
@@ -143,7 +143,7 @@ public class ProxyTest {
     server = new Server();
     int serverPort = server.init();
     server.setMode("stream");
-    executor.submit(server);
+    executor.execute(server);
     assertEquals(server.mode(), "stream");
 
     int bandwidth = 64 * 1024;
@@ -169,7 +169,7 @@ public class ProxyTest {
     server = new Server();
     int serverPort = server.init();
     server.setMode("stream");
-    executor.submit(server);
+    executor.execute(server);
     assertEquals(server.mode(), "stream");
     int bandwidth = 10 * 1024 * 1024;
     proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);

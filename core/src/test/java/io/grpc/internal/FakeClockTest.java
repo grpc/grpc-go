@@ -95,7 +95,7 @@ public class FakeClockTest {
   public void testScheduledExecutorService_result() {
     FakeClock fakeClock = new FakeClock();
     final boolean[] result = new boolean[]{false};
-    fakeClock.getScheduledExecutorService().schedule(
+    ScheduledFuture<?> unused = fakeClock.getScheduledExecutorService().schedule(
         new Runnable() {
           @Override
           public void run() {
@@ -137,6 +137,7 @@ public class FakeClockTest {
   }
 
   @Test
+  @SuppressWarnings("FutureReturnValueIgnored")
   public void testPendingAndDueTasks() {
     FakeClock fakeClock = new FakeClock();
     ScheduledExecutorService scheduledExecutorService = fakeClock.getScheduledExecutorService();

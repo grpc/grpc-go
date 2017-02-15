@@ -189,7 +189,8 @@ public final class FakeClock {
     }
 
     @Override public void execute(Runnable command) {
-      schedule(command, 0, TimeUnit.NANOSECONDS);
+      // Since it is being enqueued immediately, no point in tracing the future for cancellation.
+      Future<?> unused = schedule(command, 0, TimeUnit.NANOSECONDS);
     }
   }
 

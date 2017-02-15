@@ -56,6 +56,7 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
 import java.net.InetSocketAddress;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -182,7 +183,7 @@ public class TransportBenchmark {
       throw new Exception("failed to shut down server");
     }
     if (groupToShutdown != null) {
-      groupToShutdown.shutdownGracefully(0, 1, TimeUnit.SECONDS);
+      Future<?> unused = groupToShutdown.shutdownGracefully(0, 1, TimeUnit.SECONDS);
       groupToShutdown.awaitTermination(1, TimeUnit.SECONDS);
       if (!groupToShutdown.isTerminated()) {
         throw new Exception("failed to shut down event loop group.");
