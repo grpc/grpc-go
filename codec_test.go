@@ -173,6 +173,7 @@ func setupBenchmarkProtoCodecInputs(b *testing.B) [][]byte {
 // The possible use of certain protobuf APIs like the proto.Buffer API potentially involves caching
 // on our side. This can add checks around memory allocations and possible contention.
 // Example run: go test -v -run=^$ -bench=BenchmarkProtoCodec -benchmem
+<<<<<<< HEAD
 func BenchmarkProtoCodec(b *testing.B) {
 	i := uint32(0)
 	marshaledBytes := setupBenchmarkProtoCodecInputs(b)
@@ -188,6 +189,22 @@ func BenchmarkProtoCodec(b *testing.B) {
 			})
 		}(1 << i)
 	}
+}
+
+func BenchmarkProtoCodec_Size_1024(b *testing.B) {
+	ps := make([]proto.Message, 1)
+	p := &codec_perf.Buffer{}
+	p.Body = make([]byte, 1024)
+	ps[0] = p
+	benchmarkProtoCodecWithParallelism(b, 65536, ps)
+}
+
+func benchmarkProtoCodecWithParallelism(b *testing.B, p int, protos []proto.Message) {
+	codec := &protoCodec{}
+	b.SetParallelism(p)
+	b.RunParallel(func(pb *testing.PB) {
+		benchmarkProtoCodec(codec, protos, pb, b)
+	})
 }
 
 func benchmarkProtoCodec(codec *protoCodec, marshaledBytes [][]byte, pb *testing.PB, b *testing.B) {
