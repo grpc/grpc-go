@@ -742,7 +742,7 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 }
 
 func (t *http2Client) handleData(f *http2.DataFrame) {
-	size := len(f.Data())
+	size := f.Header().Length
 	if err := t.fc.onData(uint32(size)); err != nil {
 		t.notifyError(connectionErrorf(true, err, "%v", err))
 		return
@@ -756,6 +756,11 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		return
 	}
 	if size > 0 {
+		if f.Header().Flags.Has(http2.FlagDataPadded) {
+			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
+				t.controlBuf.put(&windowUpdate{0, w})
+			}
+		}
 		s.mu.Lock()
 		if s.state == streamDone {
 			s.mu.Unlock()
@@ -775,13 +780,20 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
 			return
 		}
+		if f.Header().Flags.Has(http2.FlagDataPadded) {
+			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
+				t.controlBuf.put(&windowUpdate{s.id, w})
+			}
+		}
 		s.mu.Unlock()
 		// TODO(bradfitz, zhaoq): A copy is required here because there is no
 		// guarantee f.Data() is consumed before the arrival of next frame.
 		// Can this copy be eliminated?
-		data := make([]byte, size)
-		copy(data, f.Data())
-		s.write(recvMsg{data: data})
+		if len(f.Data()) > 0 {
+			data := make([]byte, len(f.Data()))
+			copy(data, f.Data())
+			s.write(recvMsg{data: data})
+		}
 	}
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
