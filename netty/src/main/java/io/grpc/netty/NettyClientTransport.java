@@ -165,11 +165,6 @@ class NettyClientTransport implements ConnectionClientTransport {
     lifecycleManager = new ClientTransportLifecycleManager(
         Preconditions.checkNotNull(transportListener, "listener"));
 
-    if (enableKeepAlive) {
-      keepAliveManager = new KeepAliveManager(this, channel.eventLoop(), keepAliveDelayNanos,
-          keepAliveTimeoutNanos);
-    }
-
     handler = newHandler();
     HandlerSettings.setAutoWindow(handler);
 
@@ -234,6 +229,12 @@ class NettyClientTransport implements ConnectionClientTransport {
             Status.INTERNAL.withDescription("Connection closed with unknown cause"));
       }
     });
+
+    if (enableKeepAlive) {
+      keepAliveManager = new KeepAliveManager(this, channel.eventLoop(), keepAliveDelayNanos,
+          keepAliveTimeoutNanos);
+    }
+
     return null;
   }
 
@@ -274,6 +275,11 @@ class NettyClientTransport implements ConnectionClientTransport {
   @VisibleForTesting
   Channel channel() {
     return channel;
+  }
+
+  @VisibleForTesting
+  KeepAliveManager keepAliveManager() {
+    return keepAliveManager;
   }
 
   /**

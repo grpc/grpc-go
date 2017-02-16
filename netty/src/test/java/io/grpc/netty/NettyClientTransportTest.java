@@ -39,6 +39,7 @@ import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -179,7 +180,7 @@ public class NettyClientTransportTest {
   public void overrideDefaultUserAgent() throws Exception {
     startServer();
     NettyClientTransport transport = newTransport(newNegotiator(),
-        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent");
+        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, "testUserAgent", true);
     callMeMaybe(transport.start(clientTransportListener));
 
     new Rpc(transport, new Metadata()).halfClose().waitForResponse();
@@ -196,7 +197,7 @@ public class NettyClientTransportTest {
     startServer();
     // Allow the response payloads of up to 1 byte.
     NettyClientTransport transport = newTransport(newNegotiator(),
-        1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null);
+        1, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null, true);
     callMeMaybe(transport.start(clientTransportListener));
 
     try {
@@ -278,7 +279,7 @@ public class NettyClientTransportTest {
     startServer();
 
     NettyClientTransport transport =
-        newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1, null);
+        newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE, 1, null, true);
     callMeMaybe(transport.start(clientTransportListener));
 
     try {
@@ -344,6 +345,30 @@ public class NettyClientTransportTest {
     assertEquals(address, rpc.stream.getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR));
   }
 
+  @Test
+  public void keepAliveEnabled() throws Exception {
+    startServer();
+    NettyClientTransport transport = newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE,
+        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null /* user agent */, true /* keep alive */);
+    callMeMaybe(transport.start(clientTransportListener));
+    Rpc rpc = new Rpc(transport).halfClose();
+    rpc.waitForResponse();
+
+    assertNotNull(transport.keepAliveManager());
+  }
+
+  @Test
+  public void keepAliveDisabled() throws Exception {
+    startServer();
+    NettyClientTransport transport = newTransport(newNegotiator(), DEFAULT_MAX_MESSAGE_SIZE,
+        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null /* user agent */, false /* keep alive */);
+    callMeMaybe(transport.start(clientTransportListener));
+    Rpc rpc = new Rpc(transport).halfClose();
+    rpc.waitForResponse();
+
+    assertNull(transport.keepAliveManager());
+  }
+
   private Throwable getRootCause(Throwable t) {
     if (t.getCause() == null) {
       return t;
@@ -359,15 +384,18 @@ public class NettyClientTransportTest {
   }
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator) {
-    return newTransport(negotiator,
-        DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, null /* user agent */);
+    return newTransport(negotiator, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
+        null /* user agent */, true /* keep alive */);
   }
 
-  private NettyClientTransport newTransport(
-      ProtocolNegotiator negotiator, int maxMsgSize, int maxHeaderListSize, String userAgent) {
+  private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize,
+      int maxHeaderListSize, String userAgent, boolean enableKeepAlive) {
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
         DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, authority, userAgent);
+    if (enableKeepAlive) {
+      transport.enableKeepAlive(true, 1000, 1000);
+    }
     transports.add(transport);
     return transport;
   }
