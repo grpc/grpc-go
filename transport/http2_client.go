@@ -34,11 +34,13 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -149,6 +151,30 @@ func isTemporary(err error) bool {
 	return false
 }
 
+func doHTTPConnectHandshake(conn net.Conn) error {
+	testPath := "127.0.0.1:9527"
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "CONNECT %s HTTP/1.0\r\n", testPath)
+	fmt.Fprintf(&buf, "Host: %s\r\n", testPath)
+	// fmt.Fprintf(&buf, "User-Agent: %s\n", primaryUA)
+	fmt.Fprintf(&buf, "\r\n")
+	if _, err := conn.Write(buf.Bytes()); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		return fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode < 200 || 300 <= resp.StatusCode {
+		return fmt.Errorf("server rejected connection: %s", resp.Status)
+	}
+
+	return nil
+}
+
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
@@ -167,6 +193,9 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			conn.Close()
 		}
 	}(conn)
+	if err := doHTTPConnectHandshake(conn); err != nil {
+		return nil, connectionErrorf(false, err, "failed to connect: %v", err)
+	}
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
