@@ -143,10 +143,10 @@ public final class TrafficControlProxy {
     MessageQueue clientPipe = new MessageQueue(clientIn, clientOut);
     MessageQueue serverPipe = new MessageQueue(serverIn, serverOut);
 
-    executor.execute(new Thread(new Reader(clientPipe)));
-    executor.execute(new Thread(new Writer(clientPipe)));
-    executor.execute(new Thread(new Reader(serverPipe)));
-    executor.execute(new Thread(new Writer(serverPipe)));
+    executor.execute(new Reader(clientPipe));
+    executor.execute(new Writer(clientPipe));
+    executor.execute(new Reader(serverPipe));
+    executor.execute(new Writer(serverPipe));
   }
 
   private final class Reader implements Runnable {
