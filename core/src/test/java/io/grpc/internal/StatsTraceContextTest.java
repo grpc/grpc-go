@@ -92,6 +92,7 @@ public class StatsTraceContextTest {
     assertEquals(methodName, methodTag.toString());
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.OK.toString(), statusTag.toString());
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
     assertEquals(1028 + 99, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertEquals(1128 + 865,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
@@ -120,6 +121,7 @@ public class StatsTraceContextTest {
     assertEquals(methodName, methodTag.toString());
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.DEADLINE_EXCEEDED.toString(), statusTag.toString());
+    assertEquals(1, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_ERROR_COUNT));
     assertEquals(0, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertEquals(0,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
@@ -163,6 +165,7 @@ public class StatsTraceContextTest {
     assertEquals(methodName, serverMethodTag.toString());
     TagValue serverStatusTag = serverRecord.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.OK.toString(), serverStatusTag.toString());
+    assertNull(serverRecord.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
     TagValue serverPropagatedTag = serverRecord.tags.get(StatsTestUtils.EXTRA_TAG);
     assertEquals("extra-tag-value-897", serverPropagatedTag.toString());
     
@@ -173,6 +176,7 @@ public class StatsTraceContextTest {
     assertEquals(methodName, clientMethodTag.toString());
     TagValue clientStatusTag = clientRecord.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.OK.toString(), clientStatusTag.toString());
+    assertNull(clientRecord.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
     TagValue clientPropagatedTag = clientRecord.tags.get(StatsTestUtils.EXTRA_TAG);
     assertEquals("extra-tag-value-897", clientPropagatedTag.toString());
   }
@@ -205,6 +209,7 @@ public class StatsTraceContextTest {
     assertEquals(methodName, methodTag.toString());
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.CANCELLED.toString(), statusTag.toString());
+    assertEquals(1, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_ERROR_COUNT));
     assertEquals(1028 + 99, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
     assertEquals(1128 + 865,
         record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES));

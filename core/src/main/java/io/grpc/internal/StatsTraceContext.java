@@ -236,18 +236,21 @@ public final class StatsTraceContext {
     MeasurementDescriptor wireBytesReceivedMetric;
     MeasurementDescriptor uncompressedBytesSentMetric;
     MeasurementDescriptor uncompressedBytesReceivedMetric;
+    MeasurementDescriptor errorCountMetric;
     if (side == Side.CLIENT) {
       latencyMetric = RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY;
       wireBytesSentMetric = RpcConstants.RPC_CLIENT_REQUEST_BYTES;
       wireBytesReceivedMetric = RpcConstants.RPC_CLIENT_RESPONSE_BYTES;
       uncompressedBytesSentMetric = RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES;
       uncompressedBytesReceivedMetric = RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES;
+      errorCountMetric = RpcConstants.RPC_CLIENT_ERROR_COUNT;
     } else {
       latencyMetric = RpcConstants.RPC_SERVER_SERVER_LATENCY;
       wireBytesSentMetric = RpcConstants.RPC_SERVER_RESPONSE_BYTES;
       wireBytesReceivedMetric = RpcConstants.RPC_SERVER_REQUEST_BYTES;
       uncompressedBytesSentMetric = RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES;
       uncompressedBytesReceivedMetric = RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES;
+      errorCountMetric = RpcConstants.RPC_SERVER_ERROR_COUNT;
     }
     long roundtripNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
     MeasurementMap.Builder builder = MeasurementMap.builder()
@@ -256,6 +259,9 @@ public final class StatsTraceContext {
         .put(wireBytesReceivedMetric, wireBytesReceived)
         .put(uncompressedBytesSentMetric, uncompressedBytesSent)
         .put(uncompressedBytesReceivedMetric, uncompressedBytesReceived);
+    if (!status.isOk()) {
+      builder.put(errorCountMetric, 1.0);
+    }
     if (side == Side.CLIENT) {
       if (clientPendingNanos >= 0) {
         builder.put(
