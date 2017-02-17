@@ -93,6 +93,7 @@ type dialOptions struct {
 	dc        Decompressor
 	bs        backoffStrategy
 	balancer  Balancer
+	pm        ProxyMapper
 	block     bool
 	insecure  bool
 	timeout   time.Duration
@@ -130,6 +131,13 @@ func WithDecompressor(dc Decompressor) DialOption {
 func WithBalancer(b Balancer) DialOption {
 	return func(o *dialOptions) {
 		o.balancer = b
+	}
+}
+
+// WithProxyMapper returns a DialOption which sets the proxy mapper.
+func WithProxyMapper(pm ProxyMapper) DialOption {
+	return func(o *dialOptions) {
+		o.pm = pm
 	}
 }
 
@@ -339,6 +347,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		cc.authority = target[:colonPos]
 	}
+
+	if cc.dopts.pm != nil {
+		target, err = cc.dopts.pm.MapName(ctx, target)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var ok bool
 	waitC := make(chan error, 1)
 	go func() {
@@ -506,6 +521,14 @@ func (cc *ClientConn) scWatcher() {
 // If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
 // If tearDownErr is nil, errConnDrain will be used instead.
 func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr error) error {
+	if cc.dopts.pm != nil {
+		// TODO use the target returned by MapName?
+		var err error
+		addr, err = cc.dopts.pm.MapAddress(cc.ctx, cc.target, addr)
+		if err != nil {
+			return err
+		}
+	}
 	ac := &addrConn{
 		cc:    cc,
 		addr:  addr,
