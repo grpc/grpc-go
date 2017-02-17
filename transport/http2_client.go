@@ -491,8 +491,14 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		return
 	}
 	t.mu.Unlock()
-	defer t.streamsQuota.add(1)
+	var rstStream bool
+	defer func() {
+		if !rstStream {
+			t.streamsQuota.add(1)
+		}
+	}()
 	s.mu.Lock()
+	rstStream = s.rstStream
 	if q := s.fc.resetPendingData(); q > 0 {
 		if n := t.fc.onRead(q); n > 0 {
 			t.controlBuf.put(&windowUpdate{0, n})
@@ -509,6 +515,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.state = streamDone
 	s.mu.Unlock()
 	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
+		rstStream = true
 		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}
 }
@@ -750,6 +757,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.state = streamDone
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
+			s.rstStream = true
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
@@ -1060,6 +1068,7 @@ func (t *http2Client) controller() {
 						t.framer.writeSettings(true, i.ss...)
 					}
 				case *resetStream:
+					t.streamsQuota.add(1)
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *flushIO:
 					t.framer.flushWrite()

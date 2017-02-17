@@ -35,7 +35,7 @@
 Package transport defines and implements message oriented communication channel
 to complete various transactions (e.g., an RPC).
 */
-package transport // import "google.golang.org/grpc/transport"
+package transport // externally used as import "google.golang.org/grpc/transport"
 
 import (
 	"bytes"
@@ -213,6 +213,9 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
+	// rstStream is a flag that is true when a RST stream frame
+	// is sent to the server signifying that this stream is closing.
+	rstStream bool
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
