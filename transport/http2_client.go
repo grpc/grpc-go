@@ -152,15 +152,17 @@ func isTemporary(err error) bool {
 	return false
 }
 
-func doHTTPConnectHandshake(conn net.Conn) error {
-	testPath := "127.0.0.1:9527"
-
+func doHTTPConnectHandshake(conn net.Conn, addr string, header http.Header) error {
+	if header == nil {
+		header = make(map[string][]string)
+	}
+	if ua := header.Get("User-Agent"); ua == "" {
+		header.Set("User-Agent", primaryUA)
+	}
 	req := http.Request{
 		Method: "CONNECT",
-		URL:    &url.URL{Host: testPath},
-		Header: map[string][]string{
-			"User-Agent": {primaryUA},
-		},
+		URL:    &url.URL{Host: addr},
+		Header: header,
 	}
 	if err := req.Write(conn); err != nil {
 		return fmt.Errorf("failed to write the HTTP request: %v", err)
@@ -196,8 +198,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			conn.Close()
 		}
 	}(conn)
-	if err := doHTTPConnectHandshake(conn); err != nil {
-		return nil, connectionErrorf(true, err, "failed to connect: %v", err)
+	if addr.UsingProxy {
+		if err := doHTTPConnectHandshake(conn, addr.ConnectTarget, nil); err != nil {
+			return nil, connectionErrorf(true, err, "failed to connect: %v", err)
+		}
 	}
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {

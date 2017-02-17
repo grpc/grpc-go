@@ -42,6 +42,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -393,6 +394,13 @@ type ConnectOptions struct {
 type TargetInfo struct {
 	Addr     string
 	Metadata interface{}
+
+	// UsingProxy indicates if the transport is connecting to a proxy (if http CONNECT is requred).
+	UsingProxy bool
+	// When UsingProxy is true, ConnectTarget contains the host for http CONNECT.
+	ConnectTarget string
+	// When UsingProxy is true, Header contains headers to be sent with http CONNECT.
+	Header http.Header
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions

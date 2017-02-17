@@ -521,14 +521,6 @@ func (cc *ClientConn) scWatcher() {
 // If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
 // If tearDownErr is nil, errConnDrain will be used instead.
 func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr error) error {
-	if cc.dopts.pm != nil {
-		// TODO use the target returned by MapName?
-		var err error
-		addr, err = cc.dopts.pm.MapAddress(cc.ctx, cc.target, addr)
-		if err != nil {
-			return err
-		}
-	}
 	ac := &addrConn{
 		cc:    cc,
 		addr:  addr,
@@ -769,6 +761,24 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
+	sinfo := transport.TargetInfo{
+		Addr:     ac.addr.Addr,
+		Metadata: ac.addr.Metadata,
+	}
+	if ac.cc.dopts.pm != nil {
+		sinfo.UsingProxy = true
+		sinfo.ConnectTarget = ac.cc.target
+
+		tempAddr, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr)
+		// TODO sinfo.Header = blah
+		if err != nil {
+			return err
+		}
+		if tempAddr != ac.addr {
+			sinfo.Addr = tempAddr.Addr
+			sinfo.ConnectTarget = ac.addr.Addr
+		}
+	}
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
 		ac.printf("connecting")
@@ -795,10 +805,6 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		}
 		ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 		connectTime := time.Now()
-		sinfo := transport.TargetInfo{
-			Addr:     ac.addr.Addr,
-			Metadata: ac.addr.Metadata,
-		}
 		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
 		if err != nil {
 			cancel()
