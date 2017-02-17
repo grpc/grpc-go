@@ -33,8 +33,11 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.Attributes;
@@ -44,6 +47,7 @@ import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.AbstractClientStream2.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
+import java.io.ByteArrayInputStream;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -227,6 +231,25 @@ public class AbstractClientStream2Test {
 
     verify(mockListener).closed(any(Status.class), any(Metadata.class));
   }
+  
+  @Test
+  public void getRequest() {
+    AbstractClientStream2.Sink sink = mock(AbstractClientStream2.Sink.class);
+    AbstractClientStream2 stream = new BaseAbstractClientStream(allocator,
+        new BaseTransportState(statsTraceCtx), sink, statsTraceCtx, true);
+    stream.start(mockListener);
+    stream.writeMessage(new ByteArrayInputStream(new byte[1]));
+    // writeHeaders will be delayed since we're sending a GET request.
+    verify(sink, never()).writeHeaders(any(Metadata.class), any(byte[].class));
+    // halfClose will trigger writeHeaders.
+    stream.halfClose();
+    ArgumentCaptor<byte[]> payloadCaptor = ArgumentCaptor.forClass(byte[].class);
+    verify(sink).writeHeaders(any(Metadata.class), payloadCaptor.capture());
+    assertTrue(payloadCaptor.getValue() != null);
+    // GET requests don't have BODY.
+    verify(sink, never())
+        .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Boolean.class));
+  }
 
   /**
    * No-op base class for testing.
@@ -242,7 +265,12 @@ public class AbstractClientStream2Test {
 
     public BaseAbstractClientStream(WritableBufferAllocator allocator, TransportState state,
         Sink sink, StatsTraceContext statsTraceCtx) {
-      super(allocator, statsTraceCtx);
+      this(allocator, state, sink, statsTraceCtx, false);
+    }
+
+    public BaseAbstractClientStream(WritableBufferAllocator allocator, TransportState state,
+        Sink sink, StatsTraceContext statsTraceCtx, boolean useGet) {
+      super(allocator, statsTraceCtx, new Metadata(), useGet);
       this.state = state;
       this.sink = sink;
     }
@@ -273,6 +301,9 @@ public class AbstractClientStream2Test {
   }
 
   private static class BaseSink implements AbstractClientStream2.Sink {
+    @Override
+    public void writeHeaders(Metadata headers, byte[] payload) {}
+
     @Override
     public void request(int numMessages) {}
 

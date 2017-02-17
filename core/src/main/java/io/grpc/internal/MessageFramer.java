@@ -55,7 +55,7 @@ import javax.annotation.Nullable;
  * Encodes gRPC messages to be delivered via the transport layer which implements {@link
  * MessageFramer.Sink}.
  */
-public class MessageFramer {
+public class MessageFramer implements Framer {
 
   private static final int NO_MAX_OUTBOUND_MESSAGE_SIZE = -1;
 
@@ -104,17 +104,20 @@ public class MessageFramer {
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
   }
 
-  MessageFramer setCompressor(Compressor compressor) {
+  @Override
+  public MessageFramer setCompressor(Compressor compressor) {
     this.compressor = checkNotNull(compressor, "Can't pass an empty compressor");
     return this;
   }
 
-  MessageFramer setMessageCompression(boolean enable) {
+  @Override
+  public MessageFramer setMessageCompression(boolean enable) {
     messageCompression = enable;
     return this;
   }
 
-  void setMaxOutboundMessageSize(int maxSize) {
+  @Override
+  public void setMaxOutboundMessageSize(int maxSize) {
     checkState(maxOutboundMessageSize == NO_MAX_OUTBOUND_MESSAGE_SIZE, "max size already set");
     maxOutboundMessageSize = maxSize;
   }
@@ -124,6 +127,7 @@ public class MessageFramer {
    *
    * @param message contains the message to be written out. It will be completely consumed.
    */
+  @Override
   public void writePayload(InputStream message) {
     verifyNotClosed();
     boolean compressed = messageCompression && compressor != Codec.Identity.NONE;
@@ -286,6 +290,7 @@ public class MessageFramer {
   /**
    * Flushes any buffered data in the framer to the sink.
    */
+  @Override
   public void flush() {
     if (buffer != null && buffer.readableBytes() > 0) {
       commitToSink(false, true);
@@ -296,6 +301,7 @@ public class MessageFramer {
    * Indicates whether or not this framer has been closed via a call to either
    * {@link #close()} or {@link #dispose()}.
    */
+  @Override
   public boolean isClosed() {
     return closed;
   }
@@ -304,6 +310,7 @@ public class MessageFramer {
    * Flushes and closes the framer and releases any buffers. After the framer is closed or
    * disposed, additional calls to this method will have no affect.
    */
+  @Override
   public void close() {
     if (!isClosed()) {
       closed = true;
@@ -320,6 +327,7 @@ public class MessageFramer {
    * Closes the framer and releases any buffers, but does not flush. After the framer is
    * closed or disposed, additional calls to this method will have no affect.
    */
+  @Override
   public void dispose() {
     closed = true;
     releaseBuffer();

@@ -33,8 +33,10 @@ package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.Compressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import java.io.InputStream;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -54,6 +56,15 @@ public abstract class AbstractClientStream2 extends AbstractStream2
    * collisions/confusion. Only called from application thread.
    */
   protected interface Sink {
+    /** 
+     * Sends the request headers to the remote end point.
+     *
+     * @param metadata the metadata to be sent
+     * @param payload the payload needs to be sent in the headers if not null. Should only be used
+     *     when sending an unary GET request
+     */
+    void writeHeaders(Metadata metadata, @Nullable byte[] payload);
+
     /**
      * Sends an outbound frame to the remote end point.
      *
@@ -82,7 +93,9 @@ public abstract class AbstractClientStream2 extends AbstractStream2
     void cancel(Status status);
   }
 
-  private final MessageFramer framer;
+  private final Framer framer;
+  private boolean useGet;
+  private Metadata headers;
   private boolean outboundClosed;
   /**
    * Whether cancel() has been called. This is not strictly necessary, but removes the delay between
@@ -92,8 +105,15 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   private volatile boolean cancelled;
 
   protected AbstractClientStream2(WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx) {
-    framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
+      StatsTraceContext statsTraceCtx, Metadata headers, boolean useGet) {
+    Preconditions.checkNotNull(headers, "headers");
+    this.useGet = useGet;
+    if (!useGet) {
+      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
+      this.headers = headers;
+    } else {
+      framer = new GetFramer(headers, statsTraceCtx);
+    }
   }
 
   @Override
@@ -111,8 +131,12 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   protected abstract TransportState transportState();
 
   @Override
-  public void start(ClientStreamListener listener) {
+  public final void start(ClientStreamListener listener) {
     transportState().setListener(listener);
+    if (!useGet) {
+      abstractClientStreamSink().writeHeaders(headers, null);
+      headers = null;
+    }
   }
 
   /**
@@ -122,7 +146,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   protected abstract Sink abstractClientStreamSink();
 
   @Override
-  protected final MessageFramer framer() {
+  protected final Framer framer() {
     return framer;
   }
 
@@ -307,5 +331,72 @@ public abstract class AbstractClientStream2 extends AbstractStream2
         listener().closed(status, trailers);
       }
     }
+  }
+
+  public static final String GRPC_PAYLOAD_BIN_KEY = "grpc-payload-bin";
+
+  private class GetFramer implements Framer {
+    private Metadata headers;
+    private boolean closed;
+    private final StatsTraceContext statsTraceCtx;
+    private byte[] payload;
+
+    public GetFramer(Metadata headers, StatsTraceContext statsTraceCtx) {
+      this.headers = Preconditions.checkNotNull(headers, "headers");
+      this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    }
+
+    @Override
+    public void writePayload(InputStream message) {
+      Preconditions.checkState(payload == null, "writePayload should not be called multiple times");
+      try {
+        payload = IoUtils.toByteArray(message);
+      } catch (java.io.IOException ex) {
+        throw new RuntimeException(ex);
+      }
+    }
+
+    @Override
+    public void flush() {}
+
+    @Override
+    public boolean isClosed() {
+      return closed;
+    }
+
+    /** Closes, with flush. */
+    @Override
+    public void close() {
+      closed = true;
+      Preconditions.checkState(payload != null,
+          "Lack of request message. GET request is only supported for unary requests");
+      abstractClientStreamSink().writeHeaders(headers, payload);
+      statsTraceCtx.wireBytesSent(payload.length);
+      payload = null;
+      headers = null;
+    }
+
+    /** Closes, without flush. */
+    @Override
+    public void dispose() {
+      closed = true;
+      payload = null;
+      headers = null;
+    }
+
+    // Compression is not supported for GET encoding.
+    @Override
+    public Framer setMessageCompression(boolean enable) {
+      return this;
+    }
+
+    @Override
+    public Framer setCompressor(Compressor compressor) {
+      return this;
+    }
+
+    // TODO(zsurocking): support this
+    @Override
+    public void setMaxOutboundMessageSize(int maxSize) {}
   }
 }

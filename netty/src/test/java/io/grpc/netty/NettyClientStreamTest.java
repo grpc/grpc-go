@@ -55,6 +55,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.io.BaseEncoding;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -390,6 +391,38 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     verify(writeQueue).enqueue(cmdCap.capture(), eq(false));
     assertThat(ImmutableListMultimap.copyOf(cmdCap.getValue().headers()))
         .containsEntry(Utils.USER_AGENT, AsciiString.of("good agent"));
+  }
+
+  @Test
+  public void getRequestSentThroughHeader() {
+    // Creating a GET method
+    MethodDescriptor<?, ?> descriptor = MethodDescriptor.<Void, Void>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNARY)
+        .setFullMethodName("/testService/test")
+        .setRequestMarshaller(marshaller)
+        .setResponseMarshaller(marshaller)
+        .setIdempotent(true)
+        .setSafe(true)
+        .build();
+    NettyClientStream stream = new NettyClientStream(
+        new TransportStateImpl(handler, DEFAULT_MAX_MESSAGE_SIZE), descriptor, new Metadata(),
+        channel, AsciiString.of("localhost"), AsciiString.of("http"), AsciiString.of("agent"),
+        StatsTraceContext.NOOP);
+    stream.start(listener);
+    stream.transportState().setId(STREAM_ID);
+    stream.transportState().setHttp2Stream(http2Stream);
+
+    byte[] msg = smallMessage();
+    stream.writeMessage(new ByteArrayInputStream(msg));
+    stream.flush();
+    stream.halfClose();
+    verify(writeQueue, never()).enqueue(any(SendGrpcFrameCommand.class), any(ChannelPromise.class),
+        any(Boolean.class));
+    ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
+    verify(writeQueue).enqueue(cmdCap.capture(), eq(true));
+    assertThat(ImmutableListMultimap.copyOf(cmdCap.getValue().headers()))
+        .containsEntry(AsciiString.of(":path"), AsciiString.of(
+            "//testService/test?grpc-payload-bin=" + BaseEncoding.base64().encode(msg)));
   }
 
   @Override

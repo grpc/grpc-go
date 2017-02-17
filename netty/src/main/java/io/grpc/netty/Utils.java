@@ -65,6 +65,7 @@ class Utils {
 
   public static final AsciiString STATUS_OK = AsciiString.of("200");
   public static final AsciiString HTTP_METHOD = AsciiString.of(GrpcUtil.HTTP_METHOD);
+  public static final AsciiString HTTP_GET_METHOD = AsciiString.of("GET");
   public static final AsciiString HTTPS = AsciiString.of("https");
   public static final AsciiString HTTP = AsciiString.of("http");
   public static final AsciiString CONTENT_TYPE_HEADER = AsciiString.of(CONTENT_TYPE_KEY.name());
@@ -116,15 +117,17 @@ class Utils {
       AsciiString scheme,
       AsciiString defaultPath,
       AsciiString authority,
+      AsciiString method,
       AsciiString userAgent) {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
+    Preconditions.checkNotNull(method, "method");
 
     return GrpcHttp2OutboundHeaders.clientRequestHeaders(
         toHttp2Headers(headers),
         authority,
         defaultPath,
-        HTTP_METHOD,
+        method,
         scheme,
         userAgent);
   }

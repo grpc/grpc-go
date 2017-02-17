@@ -413,7 +413,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     // Create an intermediate promise so that we can intercept the failure reported back to the
     // application.
     ChannelPromise tempPromise = ctx().newPromise();
-    encoder().writeHeaders(ctx(), streamId, headers, 0, false, tempPromise)
+    encoder().writeHeaders(ctx(), streamId, headers, 0, command.isGet(), tempPromise)
             .addListener(new ChannelFutureListener() {
               @Override
               public void operationComplete(ChannelFuture future) throws Exception {

@@ -36,6 +36,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.netty.buffer.Unpooled.EMPTY_BUFFER;
 
+import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
 import io.grpc.InternalKnownTransport;
 import io.grpc.InternalMethodDescriptor;
@@ -43,7 +44,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.AbstractClientStream2;
-import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
@@ -69,8 +69,6 @@ class NettyClientStream extends AbstractClientStream2 {
   private final TransportState state;
   private final WriteQueue writeQueue;
   private final MethodDescriptor<?, ?> method;
-  /** {@code null} after start. */
-  private Metadata headers;
   private final Channel channel;
   private AsciiString authority;
   private final AsciiString scheme;
@@ -80,11 +78,13 @@ class NettyClientStream extends AbstractClientStream2 {
       TransportState state, MethodDescriptor<?, ?> method, Metadata headers,
       Channel channel, AsciiString authority, AsciiString scheme, AsciiString userAgent,
       StatsTraceContext statsTraceCtx) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
+    super(new NettyWritableBufferAllocator(channel.alloc()),
+        statsTraceCtx,
+        headers,
+        useGet(method));
     this.state = checkNotNull(state, "transportState");
     this.writeQueue = state.handler.getWriteQueue();
     this.method = checkNotNull(method, "method");
-    this.headers = checkNotNull(headers, "headers");
     this.channel = checkNotNull(channel, "channel");
     this.authority = checkNotNull(authority, "authority");
     this.scheme = checkNotNull(scheme, "scheme");
@@ -103,39 +103,7 @@ class NettyClientStream extends AbstractClientStream2 {
 
   @Override
   public void setAuthority(String authority) {
-    checkState(headers != null, "must be call before start");
     this.authority = AsciiString.of(checkNotNull(authority, "authority"));
-  }
-
-  @Override
-  public void start(ClientStreamListener listener) {
-    super.start(listener);
-
-    // Convert the headers into Netty HTTP/2 headers.
-    AsciiString defaultPath = (AsciiString) methodDescriptorAccessor.geRawMethodName(method);
-    if (defaultPath == null) {
-      defaultPath = new AsciiString("/" + method.getFullMethodName());
-      methodDescriptorAccessor.setRawMethodName(method, defaultPath);
-    }
-    headers.discardAll(GrpcUtil.USER_AGENT_KEY);
-    Http2Headers http2Headers
-        = Utils.convertClientHeaders(headers, scheme, defaultPath, authority, userAgent);
-    headers = null;
-
-    ChannelFutureListener failureListener = new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          // Stream creation failed. Close the stream if not already closed.
-          Status s = transportState().statusFromFailedFuture(future);
-          transportState().transportReportStatus(s, true, new Metadata());
-        }
-      }
-    };
-
-    // Write the command requesting the creation of the stream.
-    writeQueue.enqueue(new CreateStreamCommand(http2Headers, transportState()),
-        !method.getType().clientSendsOneMessage()).addListener(failureListener);
   }
 
   @Override
@@ -143,7 +111,49 @@ class NettyClientStream extends AbstractClientStream2 {
     return state.handler.getAttributes();
   }
 
+  private static boolean useGet(MethodDescriptor<?, ?> method) {
+    return method.isSafe();
+  }
+
   private class Sink implements AbstractClientStream2.Sink {
+    @Override
+    public void writeHeaders(Metadata headers, byte[] requestPayload) {
+      // Convert the headers into Netty HTTP/2 headers.
+      AsciiString defaultPath = (AsciiString) methodDescriptorAccessor.geRawMethodName(method);
+      if (defaultPath == null) {
+        defaultPath = new AsciiString("/" + method.getFullMethodName());
+        methodDescriptorAccessor.setRawMethodName(method, defaultPath);
+      }
+      boolean get = (requestPayload != null);
+      AsciiString httpMethod;
+      if (get) {
+        // Forge the query string
+        defaultPath = new AsciiString(defaultPath + "?" + GRPC_PAYLOAD_BIN_KEY + "="
+            + BaseEncoding.base64().encode(requestPayload));
+        httpMethod = Utils.HTTP_GET_METHOD;
+      } else {
+        httpMethod = Utils.HTTP_METHOD;
+      }
+      headers.discardAll(GrpcUtil.USER_AGENT_KEY);
+      Http2Headers http2Headers = Utils.convertClientHeaders(headers, scheme, defaultPath,
+          authority, httpMethod, userAgent);
+
+      ChannelFutureListener failureListener = new ChannelFutureListener() {
+        @Override
+        public void operationComplete(ChannelFuture future) throws Exception {
+          if (!future.isSuccess()) {
+            // Stream creation failed. Close the stream if not already closed.
+            Status s = transportState().statusFromFailedFuture(future);
+            transportState().transportReportStatus(s, true, new Metadata());
+          }
+        }
+      };
+
+      // Write the command requesting the creation of the stream.
+      writeQueue.enqueue(new CreateStreamCommand(http2Headers, transportState(), get),
+          !method.getType().clientSendsOneMessage() || get).addListener(failureListener);
+    }
+
     @Override
     public void writeFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
       ByteBuf bytebuf = frame == null ? EMPTY_BUFFER : ((NettyWritableBuffer) frame).bytebuf();

@@ -89,7 +89,8 @@ public class OutboundHeadersBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public Http2Headers convertClientHeaders() {
-    return Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
+    return Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, Utils.HTTP_METHOD,
+        userAgent);
   }
 
   @Benchmark
@@ -108,7 +109,8 @@ public class OutboundHeadersBenchmark {
   public ByteBuf encodeClientHeaders() throws Exception {
     scratchBuffer.clear();
     Http2Headers headers =
-        Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, userAgent);
+        Utils.convertClientHeaders(metadata, scheme, defaultPath, authority, Utils.HTTP_METHOD,
+            userAgent);
     headersEncoder.encodeHeaders(1, headers, scratchBuffer);
     return scratchBuffer;
   }

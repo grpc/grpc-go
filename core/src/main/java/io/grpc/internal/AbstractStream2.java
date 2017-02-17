@@ -46,7 +46,7 @@ import javax.annotation.concurrent.GuardedBy;
  */
 public abstract class AbstractStream2 implements Stream {
   /** The framer to use for sending messages. */
-  protected abstract MessageFramer framer();
+  protected abstract Framer framer();
 
   /**
    * Obtain the transport state corresponding to this stream. Each stream must have its own unique
