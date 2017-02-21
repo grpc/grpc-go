@@ -32,8 +32,6 @@
 package io.grpc;
 
 import com.google.errorprone.annotations.DoNotMock;
-import java.net.SocketAddress;
-import javax.net.ssl.SSLSession;
 
 /**
  * Encapsulates a single call received from a remote client. Calls may not simply be unary
@@ -54,27 +52,6 @@ import javax.net.ssl.SSLSession;
  */
 @DoNotMock("Use InProcessTransport and make a fake server instead")
 public abstract class ServerCall<ReqT, RespT> {
-  /**
-   * {@link Attributes.Key} for the remote address of server call attributes
-   * {@link ServerCall#getAttributes()}
-   *
-   * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_REMOTE_ADDR} instead
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
-  @Deprecated
-  public static final Attributes.Key<SocketAddress> REMOTE_ADDR_KEY =
-      Grpc.TRANSPORT_ATTR_REMOTE_ADDR;
-
-  /**
-   * {@link Attributes.Key} for the SSL session of server call attributes
-   * {@link ServerCall#getAttributes()}
-   *
-   * @deprecated use the equivalent {@link io.grpc.Grpc#TRANSPORT_ATTR_SSL_SESSION} instead
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1710")
-  @Deprecated
-  public static final Attributes.Key<SSLSession> SSL_SESSION_KEY =
-      Grpc.TRANSPORT_ATTR_SSL_SESSION;
 
   /**
    * Callbacks for consuming incoming RPC messages.
@@ -236,15 +213,6 @@ public abstract class ServerCall<ReqT, RespT> {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
   public Attributes getAttributes() {
     return Attributes.EMPTY;
-  }
-
-  /**
-   * @deprecated use {@link #getAttributes()} instead.
-   */
-  @Deprecated
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
-  public Attributes attributes() {
-    return getAttributes();
   }
 
   /**
