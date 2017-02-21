@@ -43,7 +43,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@link ManagedChannelImpl#getNameResolver}. */
+/** Unit tests for {@link ManagedChannelImpl2#getNameResolver}. */
 @RunWith(JUnit4.class)
 public class ManagedChannelImplGetNameResolverTest {
   private static final Attributes NAME_RESOLVER_PARAMS =
@@ -121,7 +121,7 @@ public class ManagedChannelImplGetNameResolverTest {
       }
     };
     try {
-      ManagedChannelImpl.getNameResolver(
+      ManagedChannelImpl2.getNameResolver(
           "foo.googleapis.com:8080", nameResolverFactory, NAME_RESOLVER_PARAMS);
       fail("Should fail");
     } catch (IllegalArgumentException e) {
@@ -131,7 +131,7 @@ public class ManagedChannelImplGetNameResolverTest {
 
   private void testValidTarget(String target, String expectedUriString, URI expectedUri) {
     Factory nameResolverFactory = new FakeNameResolverFactory(expectedUri.getScheme());
-    FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl.getNameResolver(
+    FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl2.getNameResolver(
         target, nameResolverFactory, NAME_RESOLVER_PARAMS);
     assertNotNull(nameResolver);
     assertEquals(expectedUri, nameResolver.uri);
@@ -142,7 +142,7 @@ public class ManagedChannelImplGetNameResolverTest {
     Factory nameResolverFactory = new FakeNameResolverFactory("dns");
 
     try {
-      FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl.getNameResolver(
+      FakeNameResolver nameResolver = (FakeNameResolver) ManagedChannelImpl2.getNameResolver(
           target, nameResolverFactory, NAME_RESOLVER_PARAMS);
       fail("Should have failed, but got resolver with " + nameResolver.uri);
     } catch (IllegalArgumentException e) {

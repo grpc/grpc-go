@@ -41,7 +41,7 @@ import javax.annotation.concurrent.ThreadSafe;
 /**
  * A pluggable component that receives resolved addresses from {@link NameResolver} and provides the
  * channel a usable subchannel when asked.  This is the new interface that will replace {@link
- * LoadBalancer}.
+ * LoadBalancer2}.
  *
  * <p><strong>IMPORTANT NOTICE FOR IMPLEMENTORS: </strong>The name of this class is temporary.  It
  * will be renamed to {@code LoadBalancer} eventually.  Make sure you have read through <a

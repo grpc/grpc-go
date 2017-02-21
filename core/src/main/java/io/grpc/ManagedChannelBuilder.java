@@ -155,25 +155,10 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T nameResolverFactory(NameResolver.Factory resolverFactory);
 
   /**
-   * Provides a custom {@link LoadBalancer.Factory} for the channel.
-   *
-   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
-   * for the channel.
-   *
-   * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer2.Factory)}.
-   *
-   * <p>Calling this will revert the channel back to the original (LBv1) implementation.
-   */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-  public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
-
-  /**
    * Provides a custom {@link LoadBalancer2.Factory} for the channel.
    *
-   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
+   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory2}
    * for the channel.
-   *
-   * <p>This overrides what was set by {@link #loadBalancerFactory(LoadBalancer.Factory)}.
    *
    * <p>Calling this will make the channel to run the LBv2 code path. See <a
    * href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more

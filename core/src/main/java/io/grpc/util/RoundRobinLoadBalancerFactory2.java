@@ -41,7 +41,6 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
-import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer2;
 import io.grpc.LoadBalancer2.PickResult;
 import io.grpc.LoadBalancer2.Subchannel;
@@ -65,7 +64,7 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A {@link LoadBalancer} that provides round-robin load balancing mechanism over the
+ * A {@link LoadBalancer2} that provides round-robin load balancing mechanism over the
  * addresses from the {@link NameResolver}.  The sub-lists received from the name resolver
  * are considered to be an {@link EquivalentAddressGroup} and each of these sub-lists is
  * what is then balanced across.
