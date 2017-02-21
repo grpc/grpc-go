@@ -225,7 +225,7 @@ public class ManagedChannelImpl2Test {
   }
 
   /**
-   * The counterpart of {@link ManagedChannelImpl2IdlenessTest#enterIdleModeAfterForceExit}.
+   * The counterpart of {@link ManagedChannelImplIdlenessTest#enterIdleModeAfterForceExit}.
    */
   @Test
   @SuppressWarnings("unchecked")
