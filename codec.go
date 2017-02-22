@@ -59,14 +59,8 @@ type cachedProtoBuffer struct {
 	buffer            proto.Buffer
 }
 
-func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
-	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	defer func() {
-		cb.buffer.SetBuf(nil)
-		protoBufferPool.Put(cb)
-	}()
-
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
 
 	cb.buffer.SetBuf(newSlice)
@@ -77,6 +71,14 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	out := cb.buffer.Bytes()
 	cb.lastMarshaledSize = int32(len(out))
 	return out, nil
+}
+
+func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+	cb := protoBufferPool.Get().(*cachedProtoBuffer)
+	out, err := p.marshal(v, cb)
+	cb.buffer.SetBuf(nil)
+	protoBufferPool.Put(cb)
+	return out, err
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
