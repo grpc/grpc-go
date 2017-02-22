@@ -496,7 +496,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	la := "localhost:0"
 	switch te.e.network {
 	case "unix":
-		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now())
+		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
 		syscall.Unlink(la)
 	}
 	lis, err := net.Listen(te.e.network, la)
