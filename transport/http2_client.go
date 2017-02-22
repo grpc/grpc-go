@@ -159,6 +159,10 @@ func doHTTPConnectHandshake(conn net.Conn, addr string, header http.Header) erro
 	if ua := header.Get("User-Agent"); ua == "" {
 		header.Set("User-Agent", primaryUA)
 	}
+	if host := header.Get("Host"); host != "" {
+		// Use the user specified Host header if it's set.
+		addr = host
+	}
 	req := http.Request{
 		Method: "CONNECT",
 		URL:    &url.URL{Host: addr},
