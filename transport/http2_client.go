@@ -152,7 +152,7 @@ func isTemporary(err error) bool {
 	return false
 }
 
-func doHTTPConnectHandshake(conn net.Conn, addr string, header http.Header) error {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) error {
 	if header == nil {
 		header = make(map[string][]string)
 	}
@@ -163,11 +163,11 @@ func doHTTPConnectHandshake(conn net.Conn, addr string, header http.Header) erro
 		// Use the user specified Host header if it's set.
 		addr = host
 	}
-	req := http.Request{
+	req := (&http.Request{
 		Method: "CONNECT",
 		URL:    &url.URL{Host: addr},
 		Header: header,
-	}
+	}).WithContext(ctx)
 	if err := req.Write(conn); err != nil {
 		return fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
@@ -203,7 +203,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		}
 	}(conn)
 	if addr.UsingProxy {
-		if err := doHTTPConnectHandshake(conn, addr.ConnectTarget, nil); err != nil {
+		if err := doHTTPConnectHandshake(ctx, conn, addr.ConnectTarget, nil); err != nil {
 			return nil, connectionErrorf(true, err, "failed to connect: %v", err)
 		}
 	}
