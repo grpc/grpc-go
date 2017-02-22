@@ -42,7 +42,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * The thread-less Channel Executor used to run the state mutation logic in {@link
- * ManagedChannelImpl}, {@link InternalSubchannel} and {@link io.grpc.LoadBalancer2}s.
+ * ManagedChannelImpl}, {@link InternalSubchannel} and {@link io.grpc.LoadBalancer}s.
  *
  * <p>Tasks are queued until {@link #drain} is called.  Tasks are guaranteed to be run in the same
  * order as they are submitted.

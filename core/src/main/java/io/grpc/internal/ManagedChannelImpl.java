@@ -51,9 +51,9 @@ import io.grpc.CompressorRegistry;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -81,8 +81,8 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /** A communication channel for making outgoing RPCs. */
 @ThreadSafe
-public final class ManagedChannelImpl2 extends ManagedChannel implements WithLogId {
-  private static final Logger log = Logger.getLogger(ManagedChannelImpl2.class.getName());
+public final class ManagedChannelImpl extends ManagedChannel implements WithLogId {
+  private static final Logger log = Logger.getLogger(ManagedChannelImpl.class.getName());
 
   // Matching this pattern means the target string is a URI target or at least intended to be one.
   // A URI target must be an absolute hierarchical URI.
@@ -102,7 +102,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
   private final String target;
   private final NameResolver.Factory nameResolverFactory;
   private final Attributes nameResolverParams;
-  private final LoadBalancer2.Factory loadBalancerFactory;
+  private final LoadBalancer.Factory loadBalancerFactory;
   private final ClientTransportFactory transportFactory;
   private final Executor executor;
   private final ObjectPool<? extends Executor> executorPool;
@@ -140,7 +140,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
 
   // null when channel is in idle mode.  Must be assigned from channelExecutor.
   @Nullable
-  private LoadBalancer2 loadBalancer;
+  private LoadBalancer loadBalancer;
 
   // Must be assigned from channelExecutor.  null if channel is in idle mode.
   @Nullable
@@ -155,7 +155,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
   private final Set<InternalSubchannel> oobChannels = new HashSet<InternalSubchannel>(1, .75f);
 
   // reprocess() must be run from channelExecutor
-  private final DelayedClientTransport2 delayedTransport;
+  private final DelayedClientTransport delayedTransport;
 
   // Shutdown states.
   //
@@ -234,8 +234,8 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
 
   // Must be accessed from channelExecutor
   @VisibleForTesting
-  final InUseStateAggregator2<Object> inUseStateAggregator =
-      new InUseStateAggregator2<Object>() {
+  final InUseStateAggregator<Object> inUseStateAggregator =
+      new InUseStateAggregator<Object>() {
         @Override
         void handleInUse() {
           exitIdleMode();
@@ -381,9 +381,9 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
     }
   };
 
-  ManagedChannelImpl2(String target, BackoffPolicy.Provider backoffPolicyProvider,
+  ManagedChannelImpl(String target, BackoffPolicy.Provider backoffPolicyProvider,
       NameResolver.Factory nameResolverFactory, Attributes nameResolverParams,
-      LoadBalancer2.Factory loadBalancerFactory, ClientTransportFactory transportFactory,
+      LoadBalancer.Factory loadBalancerFactory, ClientTransportFactory transportFactory,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
       ObjectPool<ScheduledExecutorService> timerServicePool,
       ObjectPool<? extends Executor> executorPool, ObjectPool<? extends Executor> oobExecutorPool,
@@ -398,7 +398,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.oobExecutorPool = checkNotNull(oobExecutorPool, "oobExecutorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
-    this.delayedTransport = new DelayedClientTransport2(this.executor, this.channelExecutor);
+    this.delayedTransport = new DelayedClientTransport(this.executor, this.channelExecutor);
     this.delayedTransport.start(delayedTransportListener);
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory =
@@ -473,7 +473,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
    * cancelled.
    */
   @Override
-  public ManagedChannelImpl2 shutdown() {
+  public ManagedChannelImpl shutdown() {
     log.log(Level.FINE, "[{0}] shutdown() called", getLogId());
     if (!shutdown.compareAndSet(false, true)) {
       return this;
@@ -495,7 +495,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
    * return {@code false} immediately after this method returns.
    */
   @Override
-  public ManagedChannelImpl2 shutdownNow() {
+  public ManagedChannelImpl shutdownNow() {
     log.log(Level.FINE, "[{0}] shutdownNow() called", getLogId());
     shutdown();
     delayedTransport.shutdownNow(SHUTDOWN_NOW_STATUS);
@@ -547,7 +547,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
         CallOptions callOptions) {
       Executor executor = callOptions.getExecutor();
       if (executor == null) {
-        executor = ManagedChannelImpl2.this.executor;
+        executor = ManagedChannelImpl.this.executor;
       }
       StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
           method.getFullMethodName(), statsFactory, stopwatchSupplier);
@@ -588,8 +588,8 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
     }
   }
 
-  private class LbHelperImpl extends LoadBalancer2.Helper {
-    LoadBalancer2 lb;
+  private class LbHelperImpl extends LoadBalancer.Helper {
+    LoadBalancer lb;
     final NameResolver nr;
 
     LbHelperImpl(NameResolver nr) {
@@ -702,7 +702,7 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
 
     @Override
     public String getAuthority() {
-      return ManagedChannelImpl2.this.authority();
+      return ManagedChannelImpl.this.authority();
     }
 
     @Override
@@ -733,8 +733,8 @@ public final class ManagedChannelImpl2 extends ManagedChannel implements WithLog
   }
 
   private class NameResolverListenerImpl implements NameResolver.Listener {
-    final LoadBalancer2 balancer;
-    final LoadBalancer2.Helper helper;
+    final LoadBalancer balancer;
+    final LoadBalancer.Helper helper;
 
     NameResolverListenerImpl(LbHelperImpl helperImpl) {
       this.balancer = helperImpl.lb;

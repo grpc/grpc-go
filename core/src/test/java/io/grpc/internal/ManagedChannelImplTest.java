@@ -71,11 +71,11 @@ import io.grpc.Context;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.Helper;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.Subchannel;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -116,9 +116,9 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-/** Unit tests for {@link ManagedChannelImpl2}. */
+/** Unit tests for {@link ManagedChannelImpl}. */
 @RunWith(JUnit4.class)
-public class ManagedChannelImpl2Test {
+public class ManagedChannelImplTest {
   private static final List<ClientInterceptor> NO_INTERCEPTOR =
       Collections.<ClientInterceptor>emptyList();
   private static final Attributes NAME_RESOLVER_PARAMS =
@@ -147,16 +147,16 @@ public class ManagedChannelImpl2Test {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
-  private ManagedChannelImpl2 channel;
+  private ManagedChannelImpl channel;
   private Helper helper;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
   @Captor
   private ArgumentCaptor<StatsTraceContext> statsTraceCtxCaptor;
   @Mock
-  private LoadBalancer2.Factory mockLoadBalancerFactory;
+  private LoadBalancer.Factory mockLoadBalancerFactory;
   @Mock
-  private LoadBalancer2 mockLoadBalancer;
+  private LoadBalancer mockLoadBalancer;
   @Captor
   private ArgumentCaptor<ConnectivityStateInfo> stateInfoCaptor;
   @Mock
@@ -188,11 +188,11 @@ public class ManagedChannelImpl2Test {
 
   private void createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
-    channel = new ManagedChannelImpl2(target, new FakeBackoffPolicyProvider(),
+    channel = new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
         nameResolverFactory, NAME_RESOLVER_PARAMS, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
         CompressorRegistry.getDefaultInstance(), timerServicePool, executorPool, oobExecutorPool,
-        timer.getStopwatchSupplier(),  ManagedChannelImpl2.IDLE_TIMEOUT_MILLIS_DISABLE, userAgent,
+        timer.getStopwatchSupplier(),  ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, userAgent,
         interceptors, statsCtxFactory);
     // Force-exit the initial idle-mode
     channel.exitIdleMode();
@@ -365,7 +365,7 @@ public class ManagedChannelImpl2Test {
       assertTrue(nameResolverFactory.resolvers.get(0).shutdown);
       // call should have been aborted by delayed transport
       executor.runDueTasks();
-      verify(mockCallListener).onClose(same(ManagedChannelImpl2.SHUTDOWN_NOW_STATUS),
+      verify(mockCallListener).onClose(same(ManagedChannelImpl.SHUTDOWN_NOW_STATUS),
           any(Metadata.class));
     } else {
       // LoadBalancer and NameResolver are still running.
@@ -389,7 +389,7 @@ public class ManagedChannelImpl2Test {
 
     if (shutdownNow) {
       // Channel shutdownNow() all subchannels after shutting down LoadBalancer
-      verify(mockTransport).shutdownNow(ManagedChannelImpl2.SHUTDOWN_NOW_STATUS);
+      verify(mockTransport).shutdownNow(ManagedChannelImpl.SHUTDOWN_NOW_STATUS);
     } else {
       verify(mockTransport, never()).shutdownNow(any(Status.class));
     }
@@ -755,7 +755,7 @@ public class ManagedChannelImpl2Test {
 
     // shutdown() has a delay
     sub1.shutdown();
-    timer.forwardTime(ManagedChannelImpl2.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS - 1, TimeUnit.SECONDS);
+    timer.forwardTime(ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS - 1, TimeUnit.SECONDS);
     sub1.shutdown();
     verify(transportInfo1.transport, never()).shutdown();
     timer.forwardTime(1, TimeUnit.SECONDS);
@@ -991,12 +991,12 @@ public class ManagedChannelImpl2Test {
 
   @Test
   public void uriPattern() {
-    assertTrue(ManagedChannelImpl2.URI_PATTERN.matcher("a:/").matches());
-    assertTrue(ManagedChannelImpl2.URI_PATTERN.matcher("Z019+-.:/!@ #~ ").matches());
-    assertFalse(ManagedChannelImpl2.URI_PATTERN.matcher("a/:").matches()); // "/:" not matched
-    assertFalse(ManagedChannelImpl2.URI_PATTERN.matcher("0a:/").matches()); // '0' not matched
-    assertFalse(ManagedChannelImpl2.URI_PATTERN.matcher("a,:/").matches()); // ',' not matched
-    assertFalse(ManagedChannelImpl2.URI_PATTERN.matcher(" a:/").matches()); // space not matched
+    assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("a:/").matches());
+    assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("Z019+-.:/!@ #~ ").matches());
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("a/:").matches()); // "/:" not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("0a:/").matches()); // '0' not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher("a,:/").matches()); // ',' not matched
+    assertFalse(ManagedChannelImpl.URI_PATTERN.matcher(" a:/").matches()); // space not matched
   }
 
   /**

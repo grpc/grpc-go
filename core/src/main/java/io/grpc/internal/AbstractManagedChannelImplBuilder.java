@@ -43,12 +43,12 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
-import io.grpc.LoadBalancer2;
+import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
-import io.grpc.PickFirstBalancerFactory2;
+import io.grpc.PickFirstBalancerFactory;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import java.net.SocketAddress;
@@ -108,7 +108,7 @@ public abstract class AbstractManagedChannelImplBuilder
   @Nullable
   private NameResolver.Factory nameResolverFactory;
 
-  private LoadBalancer2.Factory loadBalancerFactory;
+  private LoadBalancer.Factory loadBalancerFactory;
 
   @Nullable
   private DecompressorRegistry decompressorRegistry;
@@ -193,9 +193,9 @@ public abstract class AbstractManagedChannelImplBuilder
   }
 
   @Override
-  public final T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory) {
+  public final T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory) {
     Preconditions.checkState(directServerAddress == null,
-        "directServerAddress is set (%s), which forbids the use of LoadBalancerFactory",
+        "directServerAddress is set (%s), which forbids the use of LoadBalancer.Factory",
         directServerAddress);
     this.loadBalancerFactory = loadBalancerFactory;
     return thisT();
@@ -231,7 +231,7 @@ public abstract class AbstractManagedChannelImplBuilder
     // We convert to the largest unit to avoid overflow
     if (unit.toDays(value) >= IDLE_MODE_MAX_TIMEOUT_DAYS) {
       // This disables idle mode
-      this.idleTimeoutMillis = ManagedChannelImpl2.IDLE_TIMEOUT_MILLIS_DISABLE;
+      this.idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
     } else {
       this.idleTimeoutMillis = Math.max(unit.toMillis(value), IDLE_MODE_MIN_TIMEOUT_MILLIS);
     }
@@ -275,21 +275,25 @@ public abstract class AbstractManagedChannelImplBuilder
       // getResource(), then this shouldn't be a problem unless called on the UI thread.
       nameResolverFactory = NameResolverProvider.asFactory();
     }
-    return new ManagedChannelImpl2(
+    return new ManagedChannelImpl(
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
         new ExponentialBackoffPolicy.Provider(),
         nameResolverFactory,
         getNameResolverParams(),
-        firstNonNull(loadBalancerFactory, PickFirstBalancerFactory2.getInstance()),
+        firstNonNull(loadBalancerFactory, PickFirstBalancerFactory.getInstance()),
         transportFactory,
         firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
         getExecutorPool(executor),
         SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
-        GrpcUtil.STOPWATCH_SUPPLIER, idleTimeoutMillis,
-        userAgent, interceptors, firstNonNull(statsFactory,
+        GrpcUtil.STOPWATCH_SUPPLIER,
+        idleTimeoutMillis,
+        userAgent,
+        interceptors,
+        firstNonNull(
+            statsFactory,
             firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
   }
 

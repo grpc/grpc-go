@@ -62,11 +62,11 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.Helper;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.Subchannel;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -76,8 +76,8 @@ import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
-import io.grpc.grpclb.GrpclbLoadBalancer2.ErrorPicker;
-import io.grpc.grpclb.GrpclbLoadBalancer2.RoundRobinPicker;
+import io.grpc.grpclb.GrpclbLoadBalancer.ErrorPicker;
+import io.grpc.grpclb.GrpclbLoadBalancer.RoundRobinPicker;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.internal.SerializingExecutor;
@@ -105,9 +105,9 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-/** Unit tests for {@link GrpclbLoadBalancer2}. */
+/** Unit tests for {@link GrpclbLoadBalancer}. */
 @RunWith(JUnit4.class)
-public class GrpclbLoadBalancer2Test {
+public class GrpclbLoadBalancerTest {
   private static final Attributes.Key<String> RESOLUTION_ATTR =
       Attributes.Key.of("resolution-attr");
   private static final String SERVICE_AUTHORITY = "api.google.com";
@@ -159,14 +159,14 @@ public class GrpclbLoadBalancer2Test {
       new SerializingExecutor(MoreExecutors.directExecutor());
   private final Metadata headers = new Metadata();
   @Mock
-  private LoadBalancer2.Factory pickFirstBalancerFactory;
+  private LoadBalancer.Factory pickFirstBalancerFactory;
   @Mock
-  private LoadBalancer2 pickFirstBalancer;
+  private LoadBalancer pickFirstBalancer;
   @Mock
-  private LoadBalancer2.Factory roundRobinBalancerFactory;
+  private LoadBalancer.Factory roundRobinBalancerFactory;
   @Mock
-  private LoadBalancer2 roundRobinBalancer;
-  private GrpclbLoadBalancer2 balancer;
+  private LoadBalancer roundRobinBalancer;
+  private GrpclbLoadBalancer balancer;
 
   @SuppressWarnings("unchecked")
   @Before
@@ -240,7 +240,7 @@ public class GrpclbLoadBalancer2Test {
         }
       }).when(helper).runSerialized(any(Runnable.class));
     when(helper.getAuthority()).thenReturn(SERVICE_AUTHORITY);
-    balancer = new GrpclbLoadBalancer2(helper, pickFirstBalancerFactory, roundRobinBalancerFactory);
+    balancer = new GrpclbLoadBalancer(helper, pickFirstBalancerFactory, roundRobinBalancerFactory);
   }
 
   @After
@@ -290,7 +290,7 @@ public class GrpclbLoadBalancer2Test {
   @Test
   public void bufferPicker() {
     assertEquals(PickResult.withNoResult(),
-        GrpclbLoadBalancer2.BUFFER_PICKER.pickSubchannel(Attributes.EMPTY, headers));
+        GrpclbLoadBalancer.BUFFER_PICKER.pickSubchannel(Attributes.EMPTY, headers));
   }
 
   @Test
@@ -553,11 +553,11 @@ public class GrpclbLoadBalancer2Test {
     assertEquals(new EquivalentAddressGroup(backends1.get(1)), subchannel2.getAddresses());
 
     // Before any subchannel is READY, a buffer picker will be provided
-    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer2.BUFFER_PICKER));
+    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
 
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(CONNECTING));
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(CONNECTING));
-    inOrder.verify(helper, times(2)).updatePicker(same(GrpclbLoadBalancer2.BUFFER_PICKER));
+    inOrder.verify(helper, times(2)).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
 
     // Let subchannels be connected
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
@@ -724,7 +724,7 @@ public class GrpclbLoadBalancer2Test {
         eq(new EquivalentAddressGroup(backends.get(0))), any(Attributes.class));
     inOrder.verify(helper).createSubchannel(
         eq(new EquivalentAddressGroup(backends.get(1))), any(Attributes.class));
-    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer2.BUFFER_PICKER));
+    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
     inOrder.verifyNoMoreInteractions();
   }
 
@@ -806,7 +806,7 @@ public class GrpclbLoadBalancer2Test {
       Subchannel subchannel = subchannels[i];
       if (subchannel == null) {
         assertSame("list[" + i + "] should be drop",
-            GrpclbLoadBalancer2.THROTTLED_RESULT, picker.list.get(i));
+            GrpclbLoadBalancer.THROTTLED_RESULT, picker.list.get(i));
       } else {
         assertEquals("list[" + i + "] should be Subchannel",
             subchannel, picker.list.get(i).getSubchannel());

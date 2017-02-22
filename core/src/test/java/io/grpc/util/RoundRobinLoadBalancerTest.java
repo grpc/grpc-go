@@ -34,7 +34,7 @@ package io.grpc.util;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
-import static io.grpc.util.RoundRobinLoadBalancerFactory2.RoundRobinLoadBalancer.STATE_INFO;
+import static io.grpc.util.RoundRobinLoadBalancerFactory.RoundRobinLoadBalancer.STATE_INFO;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
@@ -53,15 +53,15 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.Helper;
-import io.grpc.LoadBalancer2.Subchannel;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
-import io.grpc.util.RoundRobinLoadBalancerFactory2.Picker;
-import io.grpc.util.RoundRobinLoadBalancerFactory2.RoundRobinLoadBalancer;
+import io.grpc.util.RoundRobinLoadBalancerFactory.Picker;
+import io.grpc.util.RoundRobinLoadBalancerFactory.RoundRobinLoadBalancer;
 import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.List;
@@ -79,9 +79,9 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-/** Unit test for {@link RoundRobinLoadBalancerFactory2}. */
+/** Unit test for {@link RoundRobinLoadBalancerFactory}. */
 @RunWith(JUnit4.class)
-public class RoundRobinLoadBalancer2Test {
+public class RoundRobinLoadBalancerTest {
   private RoundRobinLoadBalancer loadBalancer;
   private Map<ResolvedServerInfoGroup, EquivalentAddressGroup> servers = Maps.newHashMap();
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Maps.newLinkedHashMap();
@@ -117,7 +117,7 @@ public class RoundRobinLoadBalancer2Test {
           }
         });
 
-    loadBalancer = (RoundRobinLoadBalancer) RoundRobinLoadBalancerFactory2.getInstance()
+    loadBalancer = (RoundRobinLoadBalancer) RoundRobinLoadBalancerFactory.getInstance()
         .newLoadBalancer(mockHelper);
   }
 
@@ -323,7 +323,7 @@ public class RoundRobinLoadBalancer2Test {
     Status error = Status.NOT_FOUND.withDescription("nameResolutionError");
     loadBalancer.handleNameResolutionError(error);
     verify(mockHelper).updatePicker(pickerCaptor.capture());
-    LoadBalancer2.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
+    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
         new Metadata());
     assertNull(pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
@@ -341,12 +341,12 @@ public class RoundRobinLoadBalancer2Test {
         any(Attributes.class));
     verify(mockHelper, times(2)).updatePicker(pickerCaptor.capture());
 
-    LoadBalancer2.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
+    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
         new Metadata());
     assertEquals(readySubchannel, pickResult.getSubchannel());
     assertEquals(Status.OK.getCode(), pickResult.getStatus().getCode());
 
-    LoadBalancer2.PickResult pickResult2 = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
+    LoadBalancer.PickResult pickResult2 = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
         new Metadata());
     assertEquals(readySubchannel, pickResult2.getSubchannel());
     verifyNoMoreInteractions(mockHelper);

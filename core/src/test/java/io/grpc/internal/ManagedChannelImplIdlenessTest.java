@@ -52,11 +52,11 @@ import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.Helper;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.Subchannel;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -90,14 +90,14 @@ import org.mockito.MockitoAnnotations;
  * Unit tests for {@link ManagedChannelImpl}'s idle mode.
  */
 @RunWith(JUnit4.class)
-public class ManagedChannelImpl2IdlenessTest {
+public class ManagedChannelImplIdlenessTest {
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private final FakeClock oobExecutor = new FakeClock();
   private static final String AUTHORITY = "fakeauthority";
   private static final String USER_AGENT = "fakeagent";
   private static final long IDLE_TIMEOUT_SECONDS = 30;
-  private ManagedChannelImpl2 channel;
+  private ManagedChannelImpl channel;
 
   private final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
@@ -115,8 +115,8 @@ public class ManagedChannelImpl2IdlenessTest {
   @Mock private ObjectPool<Executor> executorPool;
   @Mock private ObjectPool<Executor> oobExecutorPool;
   @Mock private ClientTransportFactory mockTransportFactory;
-  @Mock private LoadBalancer2 mockLoadBalancer;
-  @Mock private LoadBalancer2.Factory mockLoadBalancerFactory;
+  @Mock private LoadBalancer mockLoadBalancer;
+  @Mock private LoadBalancer.Factory mockLoadBalancerFactory;
   @Mock private NameResolver mockNameResolver;
   @Mock private NameResolver.Factory mockNameResolverFactory;
   @Mock private ClientCall.Listener<Integer> mockCallListener;
@@ -136,7 +136,7 @@ public class ManagedChannelImpl2IdlenessTest {
         .newNameResolver(any(URI.class), any(Attributes.class)))
         .thenReturn(mockNameResolver);
 
-    channel = new ManagedChannelImpl2("fake://target", new FakeBackoffPolicyProvider(),
+    channel = new ManagedChannelImpl("fake://target", new FakeBackoffPolicyProvider(),
         mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
         mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
         CompressorRegistry.getDefaultInstance(), timerServicePool, executorPool, oobExecutorPool,

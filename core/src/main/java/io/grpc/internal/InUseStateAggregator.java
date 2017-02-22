@@ -38,7 +38,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Aggregates the in-use state of a set of objects.
  */
 @NotThreadSafe
-abstract class InUseStateAggregator2<T> {
+abstract class InUseStateAggregator<T> {
 
   private final HashSet<T> inUseObjects = new HashSet<T>();
 

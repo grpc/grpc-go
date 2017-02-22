@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, Google Inc. All rights reserved.
+ * Copyright 2015, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,6 +31,7 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -39,44 +40,39 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link LoadBalancer2} that provides no load balancing mechanism over the
+ * A {@link LoadBalancer} that provides no load balancing mechanism over the
  * addresses from the {@link NameResolver}.  The channel's default behavior
  * (currently pick-first) is used for all addresses found.
- *
- * <p><strong>TECHNICAL PREVIEW: </strong>The name of this class is temporary. It will be renamed to
- * {@code PickFirstBalancerFactory} during <a href="https://github.com/grpc/grpc-java/issues/2656"
- * target="_blank">the transition to LBv2</a>. You should use it only if you want to experiment the
- * LBv2 code path.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-public final class PickFirstBalancerFactory2 extends LoadBalancer2.Factory {
+public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
 
-  private static final PickFirstBalancerFactory2 INSTANCE = new PickFirstBalancerFactory2();
+  private static final PickFirstBalancerFactory INSTANCE = new PickFirstBalancerFactory();
 
-  private PickFirstBalancerFactory2() {
+  private PickFirstBalancerFactory() {
   }
 
-  public static PickFirstBalancerFactory2 getInstance() {
+  public static PickFirstBalancerFactory getInstance() {
     return INSTANCE;
   }
 
   @Override
-  public LoadBalancer2 newLoadBalancer(LoadBalancer2.Helper helper) {
+  public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new PickFirstBalancer(helper);
   }
 
   @VisibleForTesting
-  static class PickFirstBalancer extends LoadBalancer2 {
+  static final class PickFirstBalancer extends LoadBalancer {
     private final Helper helper;
     private Subchannel subchannel;
 
-    public PickFirstBalancer(Helper helper) {
-      this.helper = helper;
+    PickFirstBalancer(Helper helper) {
+      this.helper = checkNotNull(helper, "helper");
     }
 
     @Override
-    public void handleResolvedAddresses(List<ResolvedServerInfoGroup> servers,
-        Attributes attributes) {
+    public void handleResolvedAddresses(
+        List<ResolvedServerInfoGroup> servers, Attributes attributes) {
       // Flatten servers list received from name resolver into single address group. This means that
       // as far as load balancer is concerned, there's virtually one single server with multiple
       // addresses so the connection will be created only for the first address (pick first).
@@ -123,7 +119,7 @@ public final class PickFirstBalancerFactory2 extends LoadBalancer2.Factory {
           pickResult = PickResult.withError(stateInfo.getStatus());
           break;
         default:
-          throw new IllegalStateException();
+          throw new IllegalArgumentException("Unsupported state:" + currentState);
       }
 
       helper.updatePicker(new Picker(pickResult));
@@ -157,15 +153,15 @@ public final class PickFirstBalancerFactory2 extends LoadBalancer2.Factory {
    * received in constructor.
    */
   @VisibleForTesting
-  static class Picker extends LoadBalancer2.SubchannelPicker {
-    private final LoadBalancer2.PickResult result;
+  static final class Picker extends LoadBalancer.SubchannelPicker {
+    private final LoadBalancer.PickResult result;
 
-    Picker(LoadBalancer2.PickResult result) {
-      this.result = result;
+    Picker(LoadBalancer.PickResult result) {
+      this.result = checkNotNull(result, "result");
     }
 
     @Override
-    public LoadBalancer2.PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+    public LoadBalancer.PickResult pickSubchannel(Attributes affinity, Metadata headers) {
       return result;
     }
   }

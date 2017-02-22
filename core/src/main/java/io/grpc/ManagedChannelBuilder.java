@@ -155,9 +155,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T nameResolverFactory(NameResolver.Factory resolverFactory);
 
   /**
-   * Provides a custom {@link LoadBalancer2.Factory} for the channel.
+   * Provides a custom {@link LoadBalancer.Factory} for the channel.
    *
-   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory2}
+   * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
    * for the channel.
    *
    * <p>Calling this will make the channel to run the LBv2 code path. See <a
@@ -169,9 +169,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * this method will throw.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-  public T loadBalancerFactory(LoadBalancer2.Factory loadBalancerFactory) {
-    throw new UnsupportedOperationException("Not implemented by " + this.getClass().getName());
-  }
+  public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
    * Set the decompression registry for use in the channel.  This is an advanced API call and

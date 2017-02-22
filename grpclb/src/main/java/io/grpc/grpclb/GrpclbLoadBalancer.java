@@ -43,7 +43,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer2;
+import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.ResolvedServerInfoGroup;
@@ -67,13 +67,13 @@ import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
- * A {@link LoadBalancer2} that uses the GRPCLB protocol.
+ * A {@link LoadBalancer} that uses the GRPCLB protocol.
  *
  * <p>Optionally, when requested by the naming system, will delegate the work to a local pick-first
  * or round-robin balancer.
  */
-class GrpclbLoadBalancer2 extends LoadBalancer2 implements WithLogId {
-  private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer2.class.getName());
+class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
+  private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer.class.getName());
 
   @VisibleForTesting
   static final SubchannelPicker BUFFER_PICKER = new SubchannelPicker() {
@@ -104,7 +104,7 @@ class GrpclbLoadBalancer2 extends LoadBalancer2 implements WithLogId {
 
   // If not null, all work is delegated to it.
   @Nullable
-  private LoadBalancer2 delegate;
+  private LoadBalancer delegate;
   private LbPolicy lbPolicy;
 
   ///////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ class GrpclbLoadBalancer2 extends LoadBalancer2 implements WithLogId {
   // A null element indicate a simulated error for throttling purpose
   private List<EquivalentAddressGroup> roundRobinList = Collections.emptyList();
 
-  GrpclbLoadBalancer2(Helper helper, Factory pickFirstBalancerFactory,
+  GrpclbLoadBalancer(Helper helper, Factory pickFirstBalancerFactory,
       Factory roundRobinBalancerFactory) {
     this.helper = checkNotNull(helper, "helper");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
@@ -450,7 +450,7 @@ class GrpclbLoadBalancer2 extends LoadBalancer2 implements WithLogId {
   }
 
   @VisibleForTesting
-  LoadBalancer2 getDelegate() {
+  LoadBalancer getDelegate() {
     return delegate;
   }
 

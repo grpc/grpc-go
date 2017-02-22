@@ -44,11 +44,11 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
-import io.grpc.LoadBalancer2.Helper;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.Subchannel;
-import io.grpc.PickFirstBalancerFactory2.PickFirstBalancer;
-import io.grpc.PickFirstBalancerFactory2.Picker;
+import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.PickFirstBalancerFactory.PickFirstBalancer;
+import io.grpc.PickFirstBalancerFactory.Picker;
 import java.net.SocketAddress;
 import java.util.List;
 import org.junit.Before;
@@ -62,9 +62,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 
-/** Unit test for {@link PickFirstBalancerFactory2}. */
+/** Unit test for {@link PickFirstBalancerFactory}. */
 @RunWith(JUnit4.class)
-public class PickFirstLoadBalancer2Test {
+public class PickFirstLoadBalancerTest {
   private PickFirstBalancer loadBalancer;
   private List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
   private List<SocketAddress> socketAddresses = Lists.newArrayList();
@@ -96,7 +96,7 @@ public class PickFirstLoadBalancer2Test {
     when(mockHelper.createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class)))
         .thenReturn(mockSubchannel);
 
-    loadBalancer = (PickFirstBalancer) PickFirstBalancerFactory2.getInstance().newLoadBalancer(
+    loadBalancer = (PickFirstBalancer) PickFirstBalancerFactory.getInstance().newLoadBalancer(
         mockHelper);
   }
 

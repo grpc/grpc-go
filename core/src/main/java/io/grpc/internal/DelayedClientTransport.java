@@ -34,8 +34,8 @@ package io.grpc.internal;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallOptions;
 import io.grpc.Context;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -55,7 +55,7 @@ import javax.annotation.concurrent.GuardedBy;
  * for that stream, at which point the ownership of the stream is transferred to the real transport,
  * thus the delayed transport stops owning the stream.
  */
-final class DelayedClientTransport2 implements ManagedClientTransport {
+final class DelayedClientTransport implements ManagedClientTransport {
   private final LogId lodId = LogId.allocate(getClass().getName());
 
   private final Object lock = new Object();
@@ -96,7 +96,7 @@ final class DelayedClientTransport2 implements ManagedClientTransport {
    * @param channelExecutor all listener callbacks of the delayed transport will be run from this
    *        ChannelExecutor.
    */
-  DelayedClientTransport2(Executor defaultAppExecutor, ChannelExecutor channelExecutor) {
+  DelayedClientTransport(Executor defaultAppExecutor, ChannelExecutor channelExecutor) {
     this.defaultAppExecutor = defaultAppExecutor;
     this.channelExecutor = channelExecutor;
   }
@@ -188,13 +188,16 @@ final class DelayedClientTransport2 implements ManagedClientTransport {
     return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
   }
 
-  // Caller must call channelExecutor.drain() outside of lock because this method may schedule
-  // tasks on channelExecutor
+  /**
+   * Caller must call {@code channelExecutor.drain()} outside of lock because this method may
+   * schedule tasks on channelExecutor.
+   */
   @GuardedBy("lock")
-  private PendingStream createPendingStream(MethodDescriptor<?, ?> method, Metadata headers,
-      CallOptions callOptions, StatsTraceContext statsTraceCtx) {
-    PendingStream pendingStream = new PendingStream(method, headers, callOptions,
-        statsTraceCtx);
+  private PendingStream createPendingStream(
+      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions,
+      StatsTraceContext statsTraceCtx) {
+    PendingStream pendingStream =
+        new PendingStream(method, headers, callOptions, statsTraceCtx);
     pendingStreams.add(pendingStream);
     if (pendingStreams.size() == 1) {
       channelExecutor.executeLater(reportTransportInUse);

@@ -118,8 +118,8 @@ final class InternalSubchannel implements WithLogId {
       new ArrayList<ConnectionClientTransport>();
 
   // Must only be used from channelExecutor
-  private final InUseStateAggregator2<ConnectionClientTransport> inUseStateAggregator =
-      new InUseStateAggregator2<ConnectionClientTransport>() {
+  private final InUseStateAggregator<ConnectionClientTransport> inUseStateAggregator =
+      new InUseStateAggregator<ConnectionClientTransport>() {
         @Override
         void handleInUse() {
           callback.onInUse(InternalSubchannel.this);

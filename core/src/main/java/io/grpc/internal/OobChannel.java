@@ -41,9 +41,9 @@ import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -58,7 +58,7 @@ import java.util.logging.Logger;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * A ManagedChannel backed by a single {@link InternalSubchannel} and used for {@link LoadBalancer2}
+ * A ManagedChannel backed by a single {@link InternalSubchannel} and used for {@link LoadBalancer}
  * to its own RPC needs.
  */
 @ThreadSafe
@@ -71,7 +71,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
   private final LogId logId = LogId.allocate(getClass().getName());
   private final StatsContextFactory statsFactory;
   private final String authority;
-  private final DelayedClientTransport2 delayedTransport;
+  private final DelayedClientTransport delayedTransport;
   private final ObjectPool<? extends Executor> executorPool;
   private final Executor executor;
   private final ScheduledExecutorService deadlineCancellationExecutor;
@@ -100,7 +100,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
     this.deadlineCancellationExecutor = checkNotNull(
         deadlineCancellationExecutor, "deadlineCancellationExecutor");
     this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
-    this.delayedTransport = new DelayedClientTransport2(executor, channelExecutor);
+    this.delayedTransport = new DelayedClientTransport(executor, channelExecutor);
     this.delayedTransport.start(new ManagedClientTransport.Listener() {
         @Override
         public void transportShutdown(Status s) {

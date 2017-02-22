@@ -41,10 +41,10 @@ import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
-import io.grpc.LoadBalancer2;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.Subchannel;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.Subchannel;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
@@ -64,35 +64,30 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A {@link LoadBalancer2} that provides round-robin load balancing mechanism over the
+ * A {@link LoadBalancer} that provides round-robin load balancing mechanism over the
  * addresses from the {@link NameResolver}.  The sub-lists received from the name resolver
  * are considered to be an {@link EquivalentAddressGroup} and each of these sub-lists is
  * what is then balanced across.
- *
- * <p><strong>TECHNICAL PREVIEW: </strong>The name of this class is temporary. It will be renamed to
- * {@code RoundRobinLoadBalancerFactory} during the
- * <a href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">transition to LBv2</a>.
- * You should use it only if you want to experiment the LBv2 code path.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
-  private static final RoundRobinLoadBalancerFactory2 INSTANCE =
-      new RoundRobinLoadBalancerFactory2();
+public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
+  private static final RoundRobinLoadBalancerFactory INSTANCE =
+      new RoundRobinLoadBalancerFactory();
 
-  private RoundRobinLoadBalancerFactory2() {
+  private RoundRobinLoadBalancerFactory() {
   }
 
-  public static RoundRobinLoadBalancerFactory2 getInstance() {
+  public static RoundRobinLoadBalancerFactory getInstance() {
     return INSTANCE;
   }
 
   @Override
-  public LoadBalancer2 newLoadBalancer(LoadBalancer2.Helper helper) {
+  public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new RoundRobinLoadBalancer(helper);
   }
 
   @VisibleForTesting
-  static class RoundRobinLoadBalancer extends LoadBalancer2 {
+  static class RoundRobinLoadBalancer extends LoadBalancer {
     private final Helper helper;
     private final Map<EquivalentAddressGroup, Subchannel> subchannels =
         new HashMap<EquivalentAddressGroup, Subchannel>();
@@ -101,13 +96,13 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
     static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
         Attributes.Key.of("state-info");
 
-    public RoundRobinLoadBalancer(Helper helper) {
-      this.helper = helper;
+    RoundRobinLoadBalancer(Helper helper) {
+      this.helper = checkNotNull(helper, "helper");
     }
 
     @Override
-    public void handleResolvedAddresses(List<ResolvedServerInfoGroup> servers,
-        Attributes attributes) {
+    public void handleResolvedAddresses(
+        List<ResolvedServerInfoGroup> servers, Attributes attributes) {
       Set<EquivalentAddressGroup> currentAddrs = subchannels.keySet();
       Set<EquivalentAddressGroup> latestAddrs =
           resolvedServerInfoGroupToEquivalentAddressGroup(servers);
@@ -237,7 +232,7 @@ public class RoundRobinLoadBalancerFactory2 extends LoadBalancer2.Factory {
   }
 
   @VisibleForTesting
-  static class Picker extends SubchannelPicker {
+  static final class Picker extends SubchannelPicker {
     @Nullable
     private final Status status;
     private final List<Subchannel> list;

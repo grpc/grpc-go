@@ -51,8 +51,8 @@ import static org.mockito.Mockito.when;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
-import io.grpc.LoadBalancer2.PickResult;
-import io.grpc.LoadBalancer2.SubchannelPicker;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -76,10 +76,10 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 /**
- * Unit tests for {@link DelayedClientTransport2}.
+ * Unit tests for {@link DelayedClientTransport}.
  */
 @RunWith(JUnit4.class)
-public class DelayedClientTransport2Test {
+public class DelayedClientTransportTest {
   @Mock private ManagedClientTransport.Listener transportListener;
   @Mock private SubchannelPicker mockPicker;
   @Mock private SubchannelImpl mockSubchannel;
@@ -117,7 +117,7 @@ public class DelayedClientTransport2Test {
 
   private final FakeClock fakeExecutor = new FakeClock();
 
-  private final DelayedClientTransport2 delayedTransport = new DelayedClientTransport2(
+  private final DelayedClientTransport delayedTransport = new DelayedClientTransport(
       fakeExecutor.getScheduledExecutorService(), new ChannelExecutor());
 
   @Before public void setUp() {

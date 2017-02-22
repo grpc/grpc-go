@@ -32,36 +32,32 @@
 package io.grpc.grpclb;
 
 import io.grpc.ExperimentalApi;
-import io.grpc.LoadBalancer2;
-import io.grpc.PickFirstBalancerFactory2;
-import io.grpc.util.RoundRobinLoadBalancerFactory2;
+import io.grpc.LoadBalancer;
+import io.grpc.PickFirstBalancerFactory;
+import io.grpc.util.RoundRobinLoadBalancerFactory;
 
 /**
- * A factory for {@link LoadBalancer2}s that uses the GRPCLB protocol.
- *
- * <p><strong>TECHNICAL PREVIEW: </strong>The name of this class is temporary. It will be renamed to
- * {@code GrpclbLoadBalancerFactory} during <a href="https://github.com/grpc/grpc-java/issues/2656">
- * transition to LBv2</a>. You should use it only if you want to experiment the LBv2 code path.
+ * A factory for {@link LoadBalancer}s that uses the GRPCLB protocol.
  *
  * <p><b>Experimental:</b>This only works with the GRPCLB load-balancer service, which is not
  * available yet. Right now it's only good for internal testing.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1782")
-public class GrpclbLoadBalancerFactory2 extends LoadBalancer2.Factory {
+public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
-  private static final GrpclbLoadBalancerFactory2 instance = new GrpclbLoadBalancerFactory2();
+  private static final GrpclbLoadBalancerFactory instance = new GrpclbLoadBalancerFactory();
 
-  private GrpclbLoadBalancerFactory2() {
+  private GrpclbLoadBalancerFactory() {
   }
 
-  public static GrpclbLoadBalancerFactory2 getInstance() {
+  public static GrpclbLoadBalancerFactory getInstance() {
     return instance;
   }
 
   @Override
-  public LoadBalancer2 newLoadBalancer(LoadBalancer2.Helper helper) {
-    return new GrpclbLoadBalancer2(
-        helper, PickFirstBalancerFactory2.getInstance(),
-        RoundRobinLoadBalancerFactory2.getInstance());
+  public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
+    return new GrpclbLoadBalancer(
+        helper, PickFirstBalancerFactory.getInstance(),
+        RoundRobinLoadBalancerFactory.getInstance());
   }
 }

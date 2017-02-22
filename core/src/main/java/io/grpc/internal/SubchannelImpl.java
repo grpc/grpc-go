@@ -31,14 +31,14 @@
 
 package io.grpc.internal;
 
-import io.grpc.LoadBalancer2;
+import io.grpc.LoadBalancer;
 import javax.annotation.Nullable;
 
 /**
  * The base interface of the Subchannels returned by {@link
- * io.grpc.LoadBalancer2.Helper#createSubchannel}.
+ * io.grpc.LoadBalancer.Helper#createSubchannel}.
  */
-abstract class SubchannelImpl extends LoadBalancer2.Subchannel {
+abstract class SubchannelImpl extends LoadBalancer.Subchannel {
   /**
    * Same as {@link InternalSubchannel#obtainActiveTransport}.
    */
