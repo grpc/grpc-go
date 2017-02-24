@@ -31,8 +31,6 @@
 
 package io.grpc.android.integrationtest;
 
-import com.google.android.gms.security.ProviderInstaller;
-
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -44,7 +42,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-
+import com.google.android.gms.security.ProviderInstaller;
 import java.util.LinkedList;
 import java.util.List;
 

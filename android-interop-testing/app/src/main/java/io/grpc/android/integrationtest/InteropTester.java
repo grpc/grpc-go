@@ -36,12 +36,10 @@ import static junit.framework.Assert.assertNull;
 import static junit.framework.Assert.assertTrue;
 import static junit.framework.Assert.fail;
 
-import com.google.protobuf.nano.EmptyProtos;
-import com.google.protobuf.nano.MessageNano;
-
 import android.os.AsyncTask;
 import android.util.Log;
-
+import com.google.protobuf.nano.EmptyProtos;
+import com.google.protobuf.nano.MessageNano;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
@@ -60,7 +58,6 @@ import io.grpc.android.integrationtest.nano.TestServiceGrpc;
 import io.grpc.android.integrationtest.nano.UnimplementedServiceGrpc;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
-
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.RuntimeException;
@@ -758,8 +755,8 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     long actuallyFreeMemory = r.maxMemory() - usedMem;
     long wantedFreeMemory = 64 * 1024 * 1024;
     if (actuallyFreeMemory < wantedFreeMemory) {
-      Log.i(LOG_TAG, "Skipping due to lack of memory.  " + 
-          "Have: " + actuallyFreeMemory + " Want: " + wantedFreeMemory);
+      Log.i(LOG_TAG, "Skipping due to lack of memory.  "
+          + "Have: " + actuallyFreeMemory + " Want: " + wantedFreeMemory);
       return true;
     }
     return false;

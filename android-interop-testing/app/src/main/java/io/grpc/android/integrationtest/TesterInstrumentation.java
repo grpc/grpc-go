@@ -31,14 +31,12 @@
 
 package io.grpc.android.integrationtest;
 
-import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
-import com.google.android.gms.common.GooglePlayServicesRepairableException;
-import com.google.android.gms.security.ProviderInstaller;
-
 import android.app.Instrumentation;
 import android.os.Bundle;
 import android.util.Log;
-
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
+import com.google.android.gms.security.ProviderInstaller;
 import java.io.InputStream;
 import java.lang.Throwable;
 
