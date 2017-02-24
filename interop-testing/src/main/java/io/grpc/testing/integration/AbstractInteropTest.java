@@ -1254,7 +1254,7 @@ public abstract class AbstractInteropTest {
 
     HostAndPort remoteAddress = HostAndPort.fromString(serverCallCapture.get().getAttributes()
             .get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString());
-    assertEquals(expectedRemoteAddress, remoteAddress.getHost());
+    assertEquals(expectedRemoteAddress, remoteAddress.getHostText());
   }
 
   /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#getAttributes()} */

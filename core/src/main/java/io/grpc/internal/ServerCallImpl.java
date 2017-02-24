@@ -39,7 +39,6 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Compressor;
@@ -248,7 +247,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
         } finally {
           if (t != null) {
             // TODO(carl-mastrangelo): Maybe log e here.
-            Throwables.throwIfUnchecked(t);
+            MoreThrowables.throwIfUnchecked(t);
             throw new RuntimeException(t);
           }
         }

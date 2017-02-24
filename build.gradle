@@ -71,7 +71,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
-        guavaVersion = '20.0'
+        guavaVersion = '19.0'
         protobufVersion = '3.2.0'
         protobufNanoVersion = '3.0.0-alpha-5'
 

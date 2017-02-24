@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, Google Inc. All rights reserved.
+ * Copyright 2017, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,38 +31,26 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import com.google.common.base.Preconditions;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-/**
- * A simple wrapper for a {@link Runnable} that logs any exception thrown by it, before
- * re-throwing it.
- */
-public final class LogExceptionRunnable implements Runnable {
-
-  private static final Logger log = Logger.getLogger(LogExceptionRunnable.class.getName());
-
-  private final Runnable task;
-
-  public LogExceptionRunnable(Runnable task) {
-    this.task = checkNotNull(task, "task");
-  }
-
-  @Override
-  public void run() {
-    try {
-      task.run();
-    } catch (Throwable t) {
-      log.log(Level.SEVERE, "Exception while executing runnable " + task, t);
-      MoreThrowables.throwIfUnchecked(t);
-      throw new AssertionError(t);
+/** Utility functions when interacting with {@link Throwables}. */
+final class MoreThrowables {
+  /**
+   * Throws {code t} if it is an instance of {@link RuntimeException} or {@link Error}.
+   *
+   * <p>This is intended to mimic Guava's method by the same name, but which is unavailable to us
+   * due to compatibility with older Guava versions.
+   */
+  public static void throwIfUnchecked(Throwable t) {
+    Preconditions.checkNotNull(t);
+    if (t instanceof RuntimeException) {
+      throw (RuntimeException) t;
+    }
+    if (t instanceof Error) {
+      throw (Error) t;
     }
   }
 
-  @Override
-  public String toString() {
-    return "LogExceptionRunnable(" + task + ")";
-  }
+  // Prevent instantiation
+  private MoreThrowables() {}
 }
