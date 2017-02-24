@@ -31,7 +31,7 @@
  *
  */
 
-// Package proxy ...
+// Package proxy defines interfaces to support proxyies in gRPC.
 package proxy // import "google.golang.org/grpc/proxy"
 import (
 	"errors"

@@ -394,11 +394,11 @@ type TargetInfo struct {
 	Addr     string
 	Metadata interface{}
 
-	// UsingProxy indicates if the transport is connecting to a proxy (if http CONNECT is requred).
+	// UsingProxy indicates if the transport is connecting to a proxy.
 	UsingProxy bool
-	// When UsingProxy is true, ConnectTarget contains the host for http CONNECT.
-	ConnectTarget string
-	// When UsingProxy is true, Header contains headers to be sent with http CONNECT.
+	// When UsingProxy is true, RealTarget contains the host of the real server.
+	RealTarget string
+	// When UsingProxy is true, Header contains headers to be sent to proxy.
 	Header map[string][]string
 }
 

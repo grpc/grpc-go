@@ -350,7 +350,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	if cc.dopts.pm != nil {
-		// target, cc.proxyHeader, err = cc.dopts.pm.MapName(ctx, target)
 		t, h, err := cc.dopts.pm.MapName(ctx, target)
 		if err != nil && err != proxy.ErrIneffective {
 			return nil, err
@@ -777,20 +776,20 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 	}
 	if ac.cc.dopts.pm != nil {
 		sinfo.UsingProxy = ac.cc.usingProxy
-		sinfo.ConnectTarget = ac.cc.target
+		sinfo.RealTarget = ac.cc.target
 		sinfo.Header = ac.cc.proxyHeader
 
-		tempAddr, tempHeader, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr.Addr)
+		ta, th, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr.Addr)
 		if err != nil && err != proxy.ErrIneffective {
 			return err
 		} else if err == nil {
 			sinfo.UsingProxy = true
-			sinfo.Addr = tempAddr
-			sinfo.ConnectTarget = ac.addr.Addr
+			sinfo.Addr = ta
+			sinfo.RealTarget = ac.addr.Addr
 			if sinfo.Header == nil {
-				sinfo.Header = tempHeader
+				sinfo.Header = th
 			} else {
-				for k, v := range tempHeader {
+				for k, v := range th {
 					sinfo.Header[k] = append(sinfo.Header[k], v...)
 				}
 			}

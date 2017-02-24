@@ -3488,6 +3488,7 @@ func (p *proxyMapper) MapName(ctx context.Context, uri string) (string, map[stri
 	}
 	return p.newAddr, map[string][]string{"User-Agent": {"test-agent"}}, nil
 }
+
 func (p *proxyMapper) MapAddress(ctx context.Context, uri string, address string) (string, map[string][]string, error) {
 	if !p.mapAddress {
 		return "", nil, proxy.ErrIneffective
