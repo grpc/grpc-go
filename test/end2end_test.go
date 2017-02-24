@@ -1228,7 +1228,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1.Health")
+	want := grpc.Errorf(codes.Unimplemented, "unknown method /grpc.health.v1.Health/Check")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
