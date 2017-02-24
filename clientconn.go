@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -93,7 +94,7 @@ type dialOptions struct {
 	dc        Decompressor
 	bs        backoffStrategy
 	balancer  Balancer
-	pm        ProxyMapper
+	pm        proxy.Mapper
 	block     bool
 	insecure  bool
 	timeout   time.Duration
@@ -135,7 +136,7 @@ func WithBalancer(b Balancer) DialOption {
 }
 
 // WithProxyMapper returns a DialOption which sets the proxy mapper.
-func WithProxyMapper(pm ProxyMapper) DialOption {
+func WithProxyMapper(pm proxy.Mapper) DialOption {
 	return func(o *dialOptions) {
 		o.pm = pm
 	}
@@ -349,9 +350,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	if cc.dopts.pm != nil {
-		target, err = cc.dopts.pm.MapName(ctx, target)
-		if err != nil {
+		// target, cc.proxyHeader, err = cc.dopts.pm.MapName(ctx, target)
+		t, h, err := cc.dopts.pm.MapName(ctx, target)
+		if err != nil && err != proxy.ErrIneffective {
 			return nil, err
+		} else if err == nil {
+			target = t
+			cc.proxyHeader = h
+			cc.usingProxy = true
 		}
 	}
 	var ok bool
@@ -458,6 +464,10 @@ type ClientConn struct {
 	target    string
 	authority string
 	dopts     dialOptions
+
+	usingProxy bool
+	// The header to be sent to the proxy.
+	proxyHeader map[string][]string
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -766,17 +776,24 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		Metadata: ac.addr.Metadata,
 	}
 	if ac.cc.dopts.pm != nil {
-		sinfo.UsingProxy = true
+		sinfo.UsingProxy = ac.cc.usingProxy
 		sinfo.ConnectTarget = ac.cc.target
+		sinfo.Header = ac.cc.proxyHeader
 
-		tempAddr, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr)
-		// TODO sinfo.Header = blah
-		if err != nil {
+		tempAddr, tempHeader, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr.Addr)
+		if err != nil && err != proxy.ErrIneffective {
 			return err
-		}
-		if tempAddr != ac.addr {
-			sinfo.Addr = tempAddr.Addr
+		} else if err == nil {
+			sinfo.UsingProxy = true
+			sinfo.Addr = tempAddr
 			sinfo.ConnectTarget = ac.addr.Addr
+			if sinfo.Header == nil {
+				sinfo.Header = tempHeader
+			} else {
+				for k, v := range tempHeader {
+					sinfo.Header[k] = append(sinfo.Header[k], v...)
+				}
+			}
 		}
 	}
 	for retries := 0; ; retries++ {

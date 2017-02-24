@@ -136,16 +136,6 @@ func (d *gzipDecompressor) Type() string {
 	return "gzip"
 }
 
-// ProxyMapper defines the interface gRPC uses to map the proxy address.
-type ProxyMapper interface {
-	// MapName is called before the server name is resolved.
-	// It can be used to programmatically override the name that will be resolved.
-	MapName(ctx context.Context, uri string) (string, error)
-	// MapAddress is called before we connect to the target address.
-	// It can be used to programmatically override the address that we will connect to.
-	MapAddress(ctx context.Context, uri string, address Address) (Address, error)
-}
-
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
 	failFast  bool
