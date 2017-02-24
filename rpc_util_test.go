@@ -153,7 +153,7 @@ func TestToRPCErr(t *testing.T) {
 		errOut *rpcError
 	}{
 		{transport.StreamError{codes.Unknown, ""}, Errorf(codes.Unknown, "").(*rpcError)},
-		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc).(*rpcError)},
+		{transport.ErrConnClosing, Errorf(codes.Unavailable, transport.ErrConnClosing.Desc).(*rpcError)},
 	} {
 		err := toRPCErr(test.errIn)
 		rpcErr, ok := err.(*rpcError)

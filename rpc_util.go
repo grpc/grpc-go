@@ -428,7 +428,7 @@ func toRPCErr(err error) error {
 		}
 	case transport.ConnectionError:
 		return &rpcError{
-			code: codes.Internal,
+			code: codes.Unavailable,
 			desc: e.Desc,
 		}
 	default:
