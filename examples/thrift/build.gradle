@@ -1,15 +1,18 @@
-apply plugin: 'application'
+apply plugin: 'java'
 
 description = "Thrift Examples"
-
-startScripts.enabled = false
-
-def grpcVersion = '1.2.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 repositories {
   mavenCentral()
   mavenLocal()
 }
+
+// IMPORTANT: You probably want the non-SNAPSHOT version of gRPC. Make sure you
+// are looking at a tagged version of the example and not "master"!
+
+// Feel free to delete the comment at the next line. It is just for safely
+// updating the version in our release process.
+def grpcVersion = '1.2.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 dependencies {
   compile "io.grpc:grpc-stub:${grpcVersion}"
@@ -17,6 +20,7 @@ dependencies {
   compile "io.grpc:grpc-netty:${grpcVersion}"
 }
 
+// Add pre-generated code to build path
 String generatedSourcePath = "${projectDir}/src/generated"
 project.sourceSets {
   main {
@@ -26,6 +30,21 @@ project.sourceSets {
     }
   }
 }
+
+// Inform IntelliJ projects about the generated code.
+apply plugin: 'idea'
+
+idea {
+    module {
+        sourceDirs += file("${projectDir}/src/generated/main/java");
+        sourceDirs += file("${projectDir}/src/generated/main/grpc");
+    }
+}
+
+// Provide convenience executables for trying out the examples.
+apply plugin: 'application'
+
+startScripts.enabled = false
 
 task thriftHelloWorldServer(type: CreateStartScripts) {
     mainClassName = "io.grpc.examples.thrift.helloworld.HelloWorldServer"
@@ -45,11 +64,4 @@ applicationDistribution.into("bin") {
     from(thriftHelloWorldServer)
     from(thriftHelloWorldClient)
     fileMode = 0755
-}
-
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-    }
 }
