@@ -113,7 +113,7 @@ public class ProtocolNegotiatorsTest {
     thrown.expect(NullPointerException.class);
     thrown.expectMessage("ssl");
 
-    ProtocolNegotiators.serverTls(null);
+    Object unused = ProtocolNegotiators.serverTls(null);
   }
 
   @Test
@@ -264,7 +264,7 @@ public class ProtocolNegotiatorsTest {
   public void tls_failsOnNullSslContext() {
     thrown.expect(NullPointerException.class);
 
-    ProtocolNegotiators.tls(null, "authority");
+    Object unused = ProtocolNegotiators.tls(null, "authority");
   }
 
   @Test
@@ -299,13 +299,14 @@ public class ProtocolNegotiatorsTest {
   @Test
   public void httpProxy_nullAddressNpe() throws Exception {
     thrown.expect(NullPointerException.class);
-    ProtocolNegotiators.httpProxy(null, "user", "pass", ProtocolNegotiators.plaintext());
+    Object unused =
+        ProtocolNegotiators.httpProxy(null, "user", "pass", ProtocolNegotiators.plaintext());
   }
 
   @Test
   public void httpProxy_nullNegotiatorNpe() throws Exception {
     thrown.expect(NullPointerException.class);
-    ProtocolNegotiators.httpProxy(
+    Object unused = ProtocolNegotiators.httpProxy(
         InetSocketAddress.createUnresolved("localhost", 80), "user", "pass", null);
   }
 

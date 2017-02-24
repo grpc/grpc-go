@@ -202,7 +202,7 @@ public class ProxyTest {
   }
 
   // server with echo and streaming modes
-  private class Server implements Runnable {
+  private static class Server implements Runnable {
     private ServerSocket server;
     private Socket rcv;
     private boolean shutDown;

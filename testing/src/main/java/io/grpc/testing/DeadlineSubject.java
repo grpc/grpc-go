@@ -92,7 +92,7 @@ public final class DeadlineSubject extends ComparableSubject<DeadlineSubject, De
    * A partially specified proposition about an approximate relationship to a {@code deadline}
    * subject using a tolerance.
    */
-  public abstract class TolerantDeadlineComparison {
+  public abstract static class TolerantDeadlineComparison {
 
     private TolerantDeadlineComparison() {}
 

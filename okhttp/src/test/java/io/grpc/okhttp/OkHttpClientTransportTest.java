@@ -1605,6 +1605,8 @@ public class OkHttpClientTransportTest {
       }
     }
 
+    // The wait is safe; nextFrame is called in a loop and can have spurious wakeups
+    @SuppressWarnings("WaitNotInLoop")
     @Override
     public boolean nextFrame(Handler handler) throws IOException {
       Result result;
@@ -1692,6 +1694,7 @@ public class OkHttpClientTransportTest {
       }
     }
 
+    @SuppressWarnings("Finally") // We don't care about suppressed exceptions in the test
     static String getContent(InputStream message) {
       BufferedReader br = new BufferedReader(new InputStreamReader(message, UTF_8));
       try {

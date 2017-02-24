@@ -238,6 +238,9 @@ public final class GrpcUtil {
     }
 
     private final int code;
+    // Status is not guaranteed to be deeply immutable. Don't care though, since that's only true
+    // when there are exceptions in the Status, which is not true here.
+    @SuppressWarnings("ImmutableEnumChecker")
     private final Status status;
 
     Http2Error(int code, Status status) {

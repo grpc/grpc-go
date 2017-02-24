@@ -31,12 +31,14 @@
 
 package io.grpc.benchmarks;
 
+import com.google.errorprone.annotations.Immutable;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 
 /**
  * Verifies whether or not the given {@link SocketAddress} is valid.
  */
+@Immutable
 public interface SocketAddressValidator {
   /**
    * Verifier for {@link InetSocketAddress}es.

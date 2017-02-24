@@ -84,7 +84,8 @@ public class NettyChannelBuilderTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("Invalid host or port");
 
-    NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
+    Object unused =
+        NettyChannelBuilder.forAddress(new InetSocketAddress("invalid_authority", 1234));
   }
 
   @Test

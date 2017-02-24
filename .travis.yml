@@ -22,6 +22,7 @@ before_install:
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
   - echo "failOnWarnings=true" >> $HOME/.gradle/gradle.properties
+  - echo "errorProne=true" >> $HOME/.gradle/gradle.properties
 
 install:
   - ./gradlew assemble generateTestProto install

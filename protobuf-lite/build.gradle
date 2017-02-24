@@ -24,7 +24,8 @@ dependencies {
 
 compileTestJava {
   // Protobuf-generated Lite produces quite a few warnings.
-  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked", "-Xlint:-fallthrough"]
+  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked", "-Xlint:-fallthrough",
+        "-Xep:MissingOverride:OFF", "-Xep:ReferenceEquality:OFF"]
 }
 
 protobuf {

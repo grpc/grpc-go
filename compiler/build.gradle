@@ -142,12 +142,14 @@ sourceSets {
 }
 
 compileTestJava {
-  options.compilerArgs += ["-Xlint:-cast"]
+  options.compilerArgs += ["-Xlint:-cast", "-Xep:MissingOverride:OFF",
+      "-Xep:ReferenceEquality:OFF", "-Xep:FunctionalInterfaceClash:OFF"]
 }
 
 compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
-  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked"]
+  options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked",
+      "-Xep:MissingOverride:OFF", "-Xep:ReferenceEquality:OFF"]
 }
 
 compileTestNanoJava {

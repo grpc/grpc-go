@@ -88,6 +88,7 @@ public class ConnectivityStateInfoTest {
     assertNotEquals(info4, info6);
 
     assertFalse(info1.equals(null));
-    assertFalse(info1.equals(this));
+    // Extra cast to avoid ErrorProne EqualsIncompatibleType failure
+    assertFalse(((Object) info1).equals(this));
   }
 }

@@ -22,6 +22,12 @@ project.sourceSets {
   }
 }
 
+compileTestJava {
+  // Thrift-generated code produces some warnings.
+  options.compilerArgs += ["-Xep:MissingOverride:OFF",
+    "-Xep:NonOverridingEquals:OFF", "-Xep:TypeParameterUnusedInFormals:OFF"]
+}
+
 idea {
     module {
         sourceDirs += file("${projectDir}/src/generated/test/java");

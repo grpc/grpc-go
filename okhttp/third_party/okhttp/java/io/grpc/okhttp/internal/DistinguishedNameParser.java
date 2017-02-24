@@ -137,6 +137,7 @@ final class DistinguishedNameParser {
   }
 
   // gets hex string attribute value: "#" hexstring
+  @SuppressWarnings("NarrowingCompoundAssignment")
   private String hexAV() {
     if (pos + 4 >= length) {
       // encoded byte array  must be not less then 4 c

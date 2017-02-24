@@ -449,6 +449,7 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
   /**
    * Creates a buffer with data read from a file.
    */
+  @SuppressWarnings("Finally") // Not concerned about suppression; expected to be exceedingly rare
   private ByteString createBufferFromFile(String fileClassPath) {
     ByteString buffer = ByteString.EMPTY;
     InputStream inputStream = getClass().getResourceAsStream(fileClassPath);

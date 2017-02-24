@@ -220,6 +220,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
+    @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try
     @Override
     public void messageRead(final InputStream message) {
       Throwable t = null;

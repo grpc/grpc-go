@@ -171,6 +171,7 @@ class Huffman {
     }
   }
 
+  @SuppressWarnings("NarrowingCompoundAssignment")
   private void addCode(int sym, int code, byte len) {
     Node terminal = new Node(sym, len);
 

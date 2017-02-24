@@ -2,10 +2,14 @@ buildscript {
   repositories {
     mavenCentral()
     mavenLocal()
+    maven {
+      url "https://plugins.gradle.org/m2/"
+    }
   }
   dependencies {
     classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
-    classpath "ru.vyarus:gradle-animalsniffer-plugin:1.2.0"
+    classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.2.0'
+    classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.9'
   }
 }
 
@@ -20,6 +24,9 @@ subprojects {
     apply plugin: "com.google.osdetector"
     // The plugin only has an effect if a signature is specified
     apply plugin: "ru.vyarus.animalsniffer"
+    if (!rootProject.hasProperty('errorProne') || rootProject.errorProne.toBoolean()) {
+      apply plugin: "net.ltgt.errorprone"
+    }
 
     group = "io.grpc"
     version = "1.2.0-SNAPSHOT" // CURRENT_GRPC_VERSION
@@ -33,7 +40,7 @@ subprojects {
     }
 
     [compileJava, compileTestJava].each() {
-        it.options.compilerArgs += ["-Xlint:all", "-Xlint:-options"]
+        it.options.compilerArgs += ["-Xlint:all", "-Xlint:-options", "-Xlint:-path"]
         it.options.encoding = "UTF-8"
         if (rootProject.hasProperty('failOnWarnings') && rootProject.failOnWarnings.toBoolean()) {
             it.options.compilerArgs += ["-Werror"]
@@ -136,7 +143,9 @@ subprojects {
 
           [compileJava, compileTestJava].each() {
             // Protobuf-generated code produces some warnings.
-            it.options.compilerArgs += ["-Xlint:-cast"]
+            // https://github.com/google/protobuf/issues/2718
+            it.options.compilerArgs += ["-Xlint:-cast", "-Xep:MissingOverride:OFF",
+                "-Xep:ReferenceEquality:OFF", "-Xep:FunctionalInterfaceClash:OFF"]
           }
         }
 
@@ -198,6 +207,10 @@ subprojects {
 
         // Configuration for modules that use Netty tcnative (for OpenSSL).
         tcnative libraries.netty_tcnative
+
+        // The ErrorProne plugin defaults to the latest, which would break our
+        // build if error prone releases a new version with a new check
+        errorprone 'com.google.errorprone:error_prone_core:2.0.15'
     }
 
     signing {

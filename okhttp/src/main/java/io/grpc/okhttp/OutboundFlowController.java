@@ -217,7 +217,7 @@ class OutboundFlowController {
   /**
    * Simple status that keeps track of the number of writes performed.
    */
-  private final class WriteStatus {
+  private static final class WriteStatus {
     int numWrites;
 
     void incrementNumWrites() {

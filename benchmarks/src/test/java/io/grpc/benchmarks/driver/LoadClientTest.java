@@ -77,9 +77,9 @@ public class LoadClientTest {
 
     Stats.ClientStats stats = loadClient.getStats();
 
-    assertEquals(1.0, stats.getLatencies().getMinSeen());
-    assertEquals(1000.0, stats.getLatencies().getMaxSeen());
-    assertEquals(10.0, stats.getLatencies().getCount());
+    assertEquals(1.0, stats.getLatencies().getMinSeen(), 0.0);
+    assertEquals(1000.0, stats.getLatencies().getMaxSeen(), 0.0);
+    assertEquals(10.0, stats.getLatencies().getCount(), 0.0);
 
     double base = 0;
     double logBase = 1;

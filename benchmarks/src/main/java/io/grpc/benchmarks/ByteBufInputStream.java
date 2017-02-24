@@ -41,6 +41,7 @@ import java.io.OutputStream;
 /**
  * A {@link Drainable} {@code InputStream} that reads an {@link ByteBuf}.
  */
+@SuppressWarnings("InputStreamSlowMultibyteRead") // doesn't matter if slow. It'll throw
 public class ByteBufInputStream extends InputStream
     implements Drainable, KnownLength {
 

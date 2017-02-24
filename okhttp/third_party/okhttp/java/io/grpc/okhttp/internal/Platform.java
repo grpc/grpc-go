@@ -191,7 +191,8 @@ public class Platform {
   private static Provider getAppEngineProvider() {
     try {
       // Forcibly load conscrypt as it is unlikely to be an installed provider on AppEngine
-      return (Provider) Class.forName("org.conscrypt.OpenSSLProvider").newInstance();
+      return (Provider) Class.forName("org.conscrypt.OpenSSLProvider")
+          .getConstructor().newInstance();
     } catch (Throwable t) {
       throw new RuntimeException("Unable to load conscrypt security provider", t);
     }

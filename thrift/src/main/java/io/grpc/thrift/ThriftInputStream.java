@@ -45,6 +45,7 @@ import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
 
 /** InputStream for Thrift. */
+@SuppressWarnings("InputStreamSlowMultibyteRead") // TODO(ejona): would be good to fix
 final class ThriftInputStream extends InputStream implements Drainable, KnownLength {
 
   /**

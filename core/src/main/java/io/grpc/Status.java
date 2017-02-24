@@ -214,6 +214,7 @@ public final class Status {
     UNAUTHENTICATED(16);
 
     private final int value;
+    @SuppressWarnings("ImmutableEnumChecker") // we make sure the byte[] can't be modified
     private final byte[] valueAscii;
 
     private Code(int value) {
