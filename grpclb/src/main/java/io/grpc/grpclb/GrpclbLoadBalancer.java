@@ -356,13 +356,16 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
           EquivalentAddressGroup eag = new EquivalentAddressGroup(address);
           // TODO(zhangkun83): save the LB token and insert it to the application RPCs' headers.
           if (!newSubchannelMap.containsKey(eag)) {
-            Attributes subchannelAttrs = Attributes.newBuilder()
-                .set(STATE_INFO,
-                    new AtomicReference<ConnectivityStateInfo>(
-                        ConnectivityStateInfo.forNonError(IDLE)))
-                .build();
-            Subchannel subchannel = helper.createSubchannel(eag, subchannelAttrs);
-            subchannel.requestConnection();
+            Subchannel subchannel = subchannels.get(eag);
+            if (subchannel == null) {
+              Attributes subchannelAttrs = Attributes.newBuilder()
+                  .set(STATE_INFO,
+                      new AtomicReference<ConnectivityStateInfo>(
+                          ConnectivityStateInfo.forNonError(IDLE)))
+                  .build();
+              subchannel = helper.createSubchannel(eag, subchannelAttrs);
+              subchannel.requestConnection();
+            }
             newSubchannelMap.put(eag, subchannel);
           }
           newRoundRobinList.add(eag);

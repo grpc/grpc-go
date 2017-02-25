@@ -601,15 +601,20 @@ public class GrpclbLoadBalancerTest {
     assertSame(error1, picker6.result.getStatus());
 
     // Update backends, with a drop entry
-    List<InetSocketAddress> backends2 = Arrays.asList(
-        new InetSocketAddress("127.0.0.1", 2030), null);
+    List<InetSocketAddress> backends2 =
+        Arrays.asList(
+            new InetSocketAddress("127.0.0.1", 2030),  // New address
+            null,  // drop
+            new InetSocketAddress("127.0.0.1", 2010),  // Existing address
+            new InetSocketAddress("127.0.0.1", 2030));  // New address appearing second time
     verify(subchannel1, never()).shutdown();
-    verify(subchannel2, never()).shutdown();
 
     lbResponseObserver.onNext(buildLbResponse(backends2));
-    verify(subchannel1).shutdown();
-    verify(subchannel2).shutdown();
+    verify(subchannel1).shutdown();  // not in backends2, closed
+    verify(subchannel2, never()).shutdown();  // backends2[2], will be kept
 
+    inOrder.verify(helper, never()).createSubchannel(
+        eq(new EquivalentAddressGroup(backends2.get(2))), any(Attributes.class));
     inOrder.verify(helper).createSubchannel(
         eq(new EquivalentAddressGroup(backends2.get(0))), any(Attributes.class));
     assertEquals(1, mockSubchannels.size());
@@ -620,16 +625,23 @@ public class GrpclbLoadBalancerTest {
     RoundRobinPicker picker7 = (RoundRobinPicker) pickerCaptor.getValue();
     assertRoundRobinList(picker7, (Subchannel) null);
 
-    // State updates on obsolete subchannels will have no effect
+    // State updates on obsolete subchannel1 will have no effect
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(READY));
+    deliverSubchannelState(
+        subchannel1, ConnectivityStateInfo.forTransientFailure(Status.UNAVAILABLE));
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(SHUTDOWN));
-    deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(SHUTDOWN));
     inOrder.verifyNoMoreInteractions();
 
     deliverSubchannelState(subchannel3, ConnectivityStateInfo.forNonError(READY));
     inOrder.verify(helper).updatePicker(pickerCaptor.capture());
     RoundRobinPicker picker8 = (RoundRobinPicker) pickerCaptor.getValue();
-    assertRoundRobinList(picker8, subchannel3, null);
+    // subchannel2 is still IDLE, thus not in the active list
+    assertRoundRobinList(picker8, subchannel3, null, subchannel3);
+    // subchannel2 becomes READY and makes it into the list
+    deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
+    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    RoundRobinPicker picker9 = (RoundRobinPicker) pickerCaptor.getValue();
+    assertRoundRobinList(picker9, subchannel3, null, subchannel2, subchannel3);
 
     verify(subchannel3, never()).shutdown();
     assertFalse(oobChannel.isShutdown());
