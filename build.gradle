@@ -195,7 +195,6 @@ subprojects {
     // Define a separate configuration for managing the dependency on Jetty ALPN agent.
     configurations {
         alpnagent
-        tcnative
     }
 
     dependencies {
@@ -204,9 +203,6 @@ subprojects {
 
         // Configuration for modules that use Jetty ALPN agent
         alpnagent libraries.jetty_alpn_agent
-
-        // Configuration for modules that use Netty tcnative (for OpenSSL).
-        tcnative libraries.netty_tcnative
 
         // The ErrorProne plugin defaults to the latest, which would break our
         // build if error prone releases a new version with a new check

@@ -23,19 +23,6 @@ test {
     jvmArgs "-javaagent:" + configurations.alpnagent.asPath
 }
 
-// The application plugin uses the distribution plugin and configures the jars to be
-// placed into the "lib" folder. Since we don't include netty_tcnative as a dependency,
-// we have to manually copy it into the lib folder so that it's available to the scripts.
-distributions {
-    main {
-        contents {
-            from(configurations.tcnative) {
-                into "lib"
-            }
-        }
-    }
-}
-
 // For the generated scripts, use Netty tcnative (i.e. OpenSSL).
 // Note that OkHttp currently only supports ALPN, so OpenSSL version >= 1.0.2 is required.
 
@@ -43,28 +30,28 @@ task test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceClient"
     applicationName = "test-client"
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
+    classpath = jar.outputs.files + configurations.runtime
 }
 
 task test_server(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceServer"
     applicationName = "test-server"
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
+    classpath = jar.outputs.files + configurations.runtime
 }
 
 task reconnect_test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.ReconnectTestClient"
     applicationName = "reconnect-test-client"
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
+    classpath = jar.outputs.files + configurations.runtime
 }
 
 task stresstest_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.StressTestClient"
     applicationName = "stresstest-client"
     outputDir = new File(project.buildDir, 'tmp')
-    classpath = jar.outputs.files + configurations.runtime + configurations.tcnative
+    classpath = jar.outputs.files + configurations.runtime
     defaultJvmOpts = ["-verbose:gc", "-XX:+PrintFlagsFinal"]
 }
 
