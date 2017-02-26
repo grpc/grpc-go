@@ -135,10 +135,8 @@ func (x RpcType) String() string {
 }
 func (RpcType) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-// Parameters of poisson process distribution, which is a good representation
 // of activity coming in from independent identical stationary sources.
 type PoissonParams struct {
-	// The rate of arrivals (a.k.a. lambda parameter of the exp distribution).
 	OfferedLoad float64 `protobuf:"fixed64,1,opt,name=offered_load,json=offeredLoad" json:"offered_load,omitempty"`
 }
 
