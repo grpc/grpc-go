@@ -44,8 +44,6 @@ import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Abstract base class for {@link Stream} implementations.
- *
- * @param <IdT> type of the unique identifier of this stream.
  */
 public abstract class AbstractStream implements Stream {
   /**
