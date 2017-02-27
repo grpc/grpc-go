@@ -144,8 +144,7 @@ func TestStaggeredMarshalAndUnmarshalUsingSamePool(t *testing.T) {
 	}
 }
 
-func setupBenchmarkProtoCodecInputs(b *testing.B) [][]byte {
-	codec := protoCodec{}
+func setupBenchmarkProtoCodecInputs(b *testing.B) []proto.Message {
 	// small, arbitrary byte slices
 	protoBodies := [][]byte{
 		[]byte("one"),
@@ -154,29 +153,23 @@ func setupBenchmarkProtoCodecInputs(b *testing.B) [][]byte {
 		[]byte("four"),
 		[]byte("five"),
 	}
-
-	marshaled := make([][]byte, 0, len(protoBodies))
+	protoStructs := make([]proto.Message, 0)
 
 	for _, p := range protoBodies {
-		protoStruct := &codec_perf.Buffer{}
-		protoStruct.Body = p
-		marshaledBytes, err := codec.Marshal(protoStruct)
-		if err != nil {
-			b.Errorf("protoCodec.Marshal(_) returned an error")
-		}
-		marshaled = append(marshaled, marshaledBytes)
+		ps := &codec_perf.Buffer{}
+		ps.Body = p
+		protoStructs = append(protoStructs, ps)
 	}
 
-	return marshaled
+	return protoStructs
 }
 
 // The possible use of certain protobuf APIs like the proto.Buffer API potentially involves caching
 // on our side. This can add checks around memory allocations and possible contention.
 // Example run: go test -v -run=^$ -bench=BenchmarkProtoCodec -benchmem
-<<<<<<< HEAD
 func BenchmarkProtoCodec(b *testing.B) {
 	i := uint32(0)
-	marshaledBytes := setupBenchmarkProtoCodecInputs(b)
+	protoStructs := setupBenchmarkProtoCodecInputs(b)
 	for i < 20 {
 		i += 2
 		func(p int) {
@@ -184,7 +177,7 @@ func BenchmarkProtoCodec(b *testing.B) {
 				codec := &protoCodec{}
 				b.SetParallelism(p)
 				b.RunParallel(func(pb *testing.PB) {
-					benchmarkProtoCodec(codec, marshaledBytes, pb, b)
+					benchmarkProtoCodec(codec, protoStructs, pb, b)
 				})
 			})
 		}(1 << i)
@@ -207,23 +200,22 @@ func benchmarkProtoCodecWithParallelism(b *testing.B, p int, protos []proto.Mess
 	})
 }
 
-func benchmarkProtoCodec(codec *protoCodec, marshaledBytes [][]byte, pb *testing.PB, b *testing.B) {
-	protoStruct := &codec_perf.Buffer{}
+func benchmarkProtoCodec(codec *protoCodec, protoStructs []proto.Message, pb *testing.PB, b *testing.B) {
 	counter := 0
 	for pb.Next() {
 		counter++
-		m := marshaledBytes[counter%len(marshaledBytes)]
-		fastMarshalAndUnmarshal(codec, m, protoStruct, b)
+		ps := protoStructs[counter%len(protoStructs)]
+		fastMarshalAndUnmarshal(codec, ps, b)
 	}
 }
 
-func fastMarshalAndUnmarshal(protoCodec Codec, marshaledBytes []byte, protoStruct proto.Message, b *testing.B) {
-	if err := protoCodec.Unmarshal(marshaledBytes, protoStruct); err != nil {
-		b.Errorf("protoCodec.Unmarshal(_) returned an error")
-	}
-
-	_, err := protoCodec.Marshal(protoStruct)
+func fastMarshalAndUnmarshal(protoCodec Codec, protoStruct proto.Message, b *testing.B) {
+	marshaledBytes, err := protoCodec.Marshal(protoStruct)
 	if err != nil {
 		b.Errorf("protoCodec.Marshal(_) returned an error")
+	}
+
+	if err := protoCodec.Unmarshal(marshaledBytes, protoStruct); err != nil {
+		b.Errorf("protoCodec.Unmarshal(_) returned an error")
 	}
 }
