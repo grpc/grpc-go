@@ -51,7 +51,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.common.net.HostAndPort;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagValue;
@@ -1252,9 +1251,12 @@ public abstract class AbstractInteropTest {
 
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
-    HostAndPort remoteAddress = HostAndPort.fromString(serverCallCapture.get().getAttributes()
-            .get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString());
-    assertEquals(expectedRemoteAddress, remoteAddress.getHostText());
+    String inetSocketString = serverCallCapture.get().getAttributes()
+        .get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString();
+    // The substring is simply host:port, even if host is IPv6 as it fails to use []. Can't use
+    // standard parsing because the string isn't following any standard.
+    String host = inetSocketString.substring(0, inetSocketString.lastIndexOf(':'));
+    assertEquals(expectedRemoteAddress, host);
   }
 
   /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#getAttributes()} */

@@ -34,6 +34,7 @@ package io.grpc.internal;
 import com.google.common.base.Preconditions;
 
 /** Utility functions when interacting with {@link Throwables}. */
+// TODO(ejona): Delete this once we've upgraded to Guava 20 or later.
 final class MoreThrowables {
   /**
    * Throws {code t} if it is an instance of {@link RuntimeException} or {@link Error}.
