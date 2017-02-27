@@ -428,6 +428,7 @@ type test struct {
 	streamClientInt   grpc.StreamClientInterceptor
 	unaryServerInt    grpc.UnaryServerInterceptor
 	streamServerInt   grpc.StreamServerInterceptor
+	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
 
 	// srv and srvAddr are set once startServer is called.
@@ -492,6 +493,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.streamServerInt != nil {
 		sopts = append(sopts, grpc.StreamInterceptor(te.streamServerInt))
+	}
+	if te.unknownHandler != nil {
+		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
 	}
 	la := "localhost:0"
 	switch te.e.network {
@@ -1229,6 +1233,33 @@ func testHealthCheckOff(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1.Health")
+	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
+	}
+}
+
+func TestUnknownHandler(t *testing.T) {
+	defer leakCheck(t)()
+	// An example unknownHandler that returns a different code and a different method, making sure that we do not
+	// expose what methods are implemented to a client that is not authenticated.
+	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
+		return grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
+	}
+	for _, e := range listTestEnv() {
+		// TODO(bradfitz): Temporarily skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
+		testUnknownHandler(t, e, unknownHandler)
+	}
+}
+
+func testUnknownHandler(t *testing.T, e env, unknownHandler grpc.StreamHandler) {
+	te := newTest(t, e)
+	te.unknownHandler = unknownHandler
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	want := grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
