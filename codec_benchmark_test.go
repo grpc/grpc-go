@@ -31,6 +31,8 @@
  *
  */
 
+// +build go1.7
+
 package grpc
 
 import (
