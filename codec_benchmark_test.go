@@ -1,3 +1,5 @@
+// +build go1.7
+
 /*
  *
  * Copyright 2014, Google Inc.
@@ -30,8 +32,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-// +build go1.7
 
 package grpc
 
