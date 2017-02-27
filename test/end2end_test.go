@@ -3438,7 +3438,10 @@ func (p *proxyServer) run() {
 	}
 	p.in = in
 
+	p.t.Logf("received conn")
+
 	req, err := http.ReadRequest(bufio.NewReader(in))
+	p.t.Logf("received request: %+v", req)
 	if err != nil {
 		p.t.Errorf("failed to read CONNECT req: %v", err)
 		return
@@ -3450,13 +3453,14 @@ func (p *proxyServer) run() {
 		p.t.Errorf("get wrong CONNECT req: %+v", req)
 		return
 	}
+	p.t.Logf("req.URL.Host: %+v", req.URL.Host)
 
 	out, err := net.Dial("tcp", req.URL.Host)
 	if err != nil {
 		p.t.Errorf("failed to dial to server: %v", err)
 		return
 	}
-	resp := http.Response{StatusCode: 200}
+	resp := http.Response{StatusCode: 200, Proto: "HTTP/1.0"}
 	resp.Write(p.in)
 	p.out = out
 	go io.Copy(p.in, p.out)
@@ -3524,6 +3528,7 @@ func testProxyMapName(t *testing.T, e env) {
 		oldAddr: te.srvAddr,
 		newAddr: lis.Addr().String(),
 	}
+	t.Logf("oldAddr: %s, newAddr: %s", te.srvAddr, lis.Addr())
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

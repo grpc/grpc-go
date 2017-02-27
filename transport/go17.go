@@ -35,7 +35,12 @@
 package transport
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"net"
+	"net/http"
+	"net/url"
 
 	"golang.org/x/net/context"
 )
@@ -43,4 +48,67 @@ import (
 // dialContext connects to the address on the named network.
 func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return (&net.Dialer{}).DialContext(ctx, network, address)
+}
+
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) error {
+	if header == nil {
+		header = make(map[string][]string)
+	}
+	if ua := header.Get("User-Agent"); ua == "" {
+		header.Set("User-Agent", primaryUA)
+	}
+	if host := header.Get("Host"); host != "" {
+		// Use the user specified Host header if it's set.
+		addr = host
+	}
+	req := (&http.Request{
+		Method: "CONNECT",
+		URL:    &url.URL{Host: addr},
+		Header: header,
+	}).WithContext(ctx)
+	if err := req.Write(conn); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	var result []byte
+	buf := make([]byte, 4)
+	for {
+		fmt.Println(string(result))
+		_, err := conn.Read(buf[:1])
+		if err != nil {
+			panic(err.Error())
+		}
+
+		if buf[0] != '\r' {
+			result = append(result, buf[0])
+			continue
+		}
+
+		_, err = conn.Read(buf[1:])
+		if err != nil {
+			panic(err.Error())
+		}
+		result = append(result, buf...)
+		// fmt.Printf("%q\n", string(buf))
+		if string(buf) == "\r\n\r\n" {
+			break
+		}
+	}
+	fmt.Print(string(result))
+
+	fmt.Println("after loop")
+
+	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(result)), nil)
+	fmt.Println("after read response")
+	if err != nil {
+		return fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	resp.Body.Close()
+	fmt.Println("after close")
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+	}
+
+	fmt.Println("before return")
+	return nil
 }

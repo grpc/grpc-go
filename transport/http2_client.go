@@ -34,14 +34,11 @@
 package transport
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"net"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -150,38 +147,6 @@ func isTemporary(err error) bool {
 		return err.Timeout()
 	}
 	return false
-}
-
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) error {
-	if header == nil {
-		header = make(map[string][]string)
-	}
-	if ua := header.Get("User-Agent"); ua == "" {
-		header.Set("User-Agent", primaryUA)
-	}
-	if host := header.Get("Host"); host != "" {
-		// Use the user specified Host header if it's set.
-		addr = host
-	}
-	req := (&http.Request{
-		Method: "CONNECT",
-		URL:    &url.URL{Host: addr},
-		Header: header,
-	}).WithContext(ctx)
-	if err := req.Write(conn); err != nil {
-		return fmt.Errorf("failed to write the HTTP request: %v", err)
-	}
-
-	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	if err != nil {
-		return fmt.Errorf("reading server HTTP response: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
-	}
-
-	return nil
 }
 
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
@@ -1023,9 +988,11 @@ func (t *http2Client) reader() {
 		t.notifyError(err)
 		return
 	}
+	fmt.Printf("frame is: %T, %v\n", frame, frame)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.notifyError(err)
+		fmt.Printf("notifying a nil error because frame is not a settings frame: %T, %v\n", frame, frame)
+		t.notifyError(fmt.Errorf("Unexpected frame with type: %T, want *SettingsFrame", frame))
 		return
 	}
 	t.handleSettings(sf)
