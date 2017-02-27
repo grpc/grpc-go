@@ -41,7 +41,7 @@ import (
 	"google.golang.org/grpc/test/codec_perf"
 )
 
-func setupBenchmarkProtoCodecInputs(b *testing.B, payloadBaseSize int) []proto.Message {
+func setupBenchmarkProtoCodecInputs(b *testing.B, payloadBaseSize uint32) []proto.Message {
 	payloadBase := make([]byte, payloadBaseSize)
 	// arbitrary byte slices
 	payloadSuffixes := [][]byte{
@@ -66,13 +66,21 @@ func setupBenchmarkProtoCodecInputs(b *testing.B, payloadBaseSize int) []proto.M
 // on our side. This can add checks around memory allocations and possible contention.
 // Example run: go test -v -run=^$ -bench=BenchmarkProtoCodec -benchmem
 func BenchmarkProtoCodec(b *testing.B) {
+	// range of message sizes
+	payloadBaseSizes := make([]uint32, 0)
+	for i := uint32(0); i <= 12; i += 4 {
+		payloadBaseSizes = append(payloadBaseSizes, 1<<i)
+	}
 	// range of SetParallelism
-	for i := uint32(0); i <= 16; i += 2 {
-		// range of message sizes
-		for s := uint32(0); s <= 12; s += 4 {
-			func(parallelism int, payloadBaseSize int) {
+	parallelisms := make([]uint32, 0)
+	for i := uint32(0); i <= 16; i += 4 {
+		parallelisms = append(parallelisms, 1<<i)
+	}
+	for _, s := range payloadBaseSizes {
+		for _, p := range parallelisms {
+			func(parallelism int, payloadBaseSize uint32) {
 				protoStructs := setupBenchmarkProtoCodecInputs(b, payloadBaseSize)
-				name := fmt.Sprintf("SetParallelism(%v)/MinPayloadSize:%v", parallelism, payloadBaseSize)
+				name := fmt.Sprintf("MinPayloadSize:%v/SetParallelism(%v)", payloadBaseSize, parallelism)
 				b.Run(name, func(b *testing.B) {
 					codec := &protoCodec{}
 					b.SetParallelism(parallelism)
@@ -80,7 +88,7 @@ func BenchmarkProtoCodec(b *testing.B) {
 						benchmarkProtoCodec(codec, protoStructs, pb, b)
 					})
 				})
-			}(1<<i, 1<<s)
+			}(int(p), s)
 		}
 	}
 }

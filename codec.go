@@ -76,6 +76,8 @@ func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	out, err := p.marshal(v, cb)
+
+	// put back buffer and lose the ref to the slice
 	cb.buffer.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return out, err
