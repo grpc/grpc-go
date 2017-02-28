@@ -379,6 +379,9 @@ func newFramer(conn net.Conn) *framer {
 		writer: bufio.NewWriterSize(conn, http2IOBufSize),
 	}
 	f.fr = http2.NewFramer(f.writer, f.reader)
+	// Opt-in to Frame reuse API on framer to reduce garbage.
+	// Frames aren't safe to read from after a subsequent call to ReadFrame.
+	f.fr.SetReuseFrames()
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
 }
