@@ -121,11 +121,6 @@ type http2Client struct {
 	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
-
-	// Flag to keep track if the keepalive check was skipped because there
-	// were no active streams and PermitWithoutStream was false
-	// keepaliveSkipped = 1 means skipped
-	keepaliveSkipped uint32
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
