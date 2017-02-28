@@ -1,5 +1,4 @@
 /*
- *
  * Copyright 2014, Google Inc.
  * All rights reserved.
  *
@@ -486,7 +485,7 @@ type ServerTransport interface {
 
 	// WriteHeader sends the header metadata for the given stream.
 	// WriteHeader may not be called on all streams.
-	WriteHeader(s *Stream, md metadata.MD) error
+	WriteHeader(s *Stream, md metadata.MD, opts Options) error
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
@@ -495,7 +494,7 @@ type ServerTransport interface {
 	// WriteStatus sends the status of a stream to the client.
 	// WriteStatus is the final call made on a stream and always
 	// occurs.
-	WriteStatus(s *Stream, statusCode codes.Code, statusDesc string) error
+	WriteStatus(s *Stream, statusCode codes.Code, statusDesc string, opts Options) error
 
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their
@@ -507,6 +506,10 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain()
+
+	// Used from the server to keep track of concurrently completing unary
+	// calls, in order to get better batching
+	AdjustNumCompletingUnaryCalls(amount int32) int32
 }
 
 // streamErrorf creates an StreamError with the specified error code and description.

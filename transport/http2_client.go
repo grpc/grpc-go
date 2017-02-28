@@ -92,7 +92,8 @@ type http2Client struct {
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 	// streamsQuota limits the max number of concurrent streams.
-	streamsQuota *quotaPool
+	streamsQuota             *quotaPool
+	streamsInboundWindowSize uint32
 
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
@@ -112,6 +113,8 @@ type http2Client struct {
 	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
+
+	settingsAckRecvd chan int
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -193,24 +196,26 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		localAddr:  conn.LocalAddr(),
 		authInfo:   authInfo,
 		// The client initiated stream id is odd starting from 1.
-		nextID:          1,
-		writableChan:    make(chan int, 1),
-		shutdownChan:    make(chan struct{}),
-		errorChan:       make(chan struct{}),
-		goAway:          make(chan struct{}),
-		framer:          newFramer(conn),
-		hBuf:            &buf,
-		hEnc:            hpack.NewEncoder(&buf),
-		controlBuf:      newRecvBuffer(),
-		fc:              &inFlow{limit: initialConnWindowSize},
-		sendQuotaPool:   newQuotaPool(defaultWindowSize),
-		scheme:          scheme,
-		state:           reachable,
-		activeStreams:   make(map[uint32]*Stream),
-		creds:           opts.PerRPCCredentials,
-		maxStreams:      math.MaxInt32,
-		streamSendQuota: defaultWindowSize,
-		statsHandler:    opts.StatsHandler,
+		nextID:                   1,
+		writableChan:             make(chan int, 1),
+		shutdownChan:             make(chan struct{}),
+		errorChan:                make(chan struct{}),
+		goAway:                   make(chan struct{}),
+		framer:                   newFramer(conn),
+		hBuf:                     &buf,
+		hEnc:                     hpack.NewEncoder(&buf),
+		controlBuf:               newRecvBuffer(),
+		fc:                       &inFlow{limit: initialConnWindowSize},
+		sendQuotaPool:            newQuotaPool(defaultWindowSize),
+		scheme:                   scheme,
+		state:                    reachable,
+		activeStreams:            make(map[uint32]*Stream),
+		creds:                    opts.PerRPCCredentials,
+		maxStreams:               math.MaxInt32,
+		streamSendQuota:          defaultWindowSize,
+		statsHandler:             opts.StatsHandler,
+		streamsInboundWindowSize: initialWindowSize,
+		settingsAckRecvd:         make(chan int, 1),
 	}
 	if t.statsHandler != nil {
 		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -269,7 +274,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		method:        callHdr.Method,
 		sendCompress:  callHdr.SendCompress,
 		buf:           newRecvBuffer(),
-		fc:            &inFlow{limit: initialWindowSize},
+		fc:            &inFlow{limit: t.streamsInboundWindowSize},
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
 	}
@@ -828,6 +833,10 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 
 func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
+		select {
+		case t.settingsAckRecvd <- 0:
+		default:
+		}
 		return
 	}
 	var ss []http2.Setting
@@ -840,7 +849,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
-	if f.IsAck() { // Do nothing.
+	if f.IsAck() { // Do nothing
 		return
 	}
 	pingAck := &ping{ack: true}
