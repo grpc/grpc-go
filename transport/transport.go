@@ -41,10 +41,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"sync"
-	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -611,10 +609,3 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 		return i, nil
 	}
 }
-
-// keepalive related constants.
-const (
-	infinity                = time.Duration(math.MaxInt64)
-	defaultKeepaliveTime    = infinity
-	defaultKeepaliveTimeout = time.Duration(20 * time.Second)
-)
