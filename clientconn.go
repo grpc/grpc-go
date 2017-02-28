@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -250,12 +251,7 @@ func WithUserAgent(s string) DialOption {
 }
 
 // WithKeepaliveParams returns a DialOption that specifies keepalive paramaters for the client transport.
-func WithKeepaliveParams(k KeepaliveParameters) DialOption {
-	kp := transport.KeepaliveParameters{
-		Time:                k.Time,
-		Timeout:             k.Timeout,
-		PermitWithoutStream: k.PermitWithoutStream,
-	}
+func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
 	return func(o *dialOptions) {
 		o.copts.KeepaliveParams = kp
 	}

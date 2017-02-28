@@ -41,12 +41,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/tap"
@@ -383,7 +386,7 @@ type ConnectOptions struct {
 	// TransportCredentials stores the Authenticator required to setup a client connection.
 	TransportCredentials credentials.TransportCredentials
 	// KeepaliveParams stores the keepalive parameters.
-	KeepaliveParams KeepaliveParameters
+	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.
 	StatsHandler stats.Handler
 }
@@ -608,3 +611,10 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 		return i, nil
 	}
 }
+
+// keepalive related constants.
+const (
+	infinity                = time.Duration(math.MaxInt64)
+	defaultKeepaliveTime    = infinity
+	defaultKeepaliveTimeout = time.Duration(20 * time.Second)
+)
