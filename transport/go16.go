@@ -49,7 +49,7 @@ func dialContext(ctx context.Context, network, address string) (net.Conn, error)
 	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) error {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
 	if header == nil {
 		header = make(map[string][]string)
 	}
@@ -67,17 +67,17 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, hea
 		Cancel: ctx.Done(), // WithContext is not avilable before go 1.7.
 	})
 	if err := req.Write(conn); err != nil {
-		return fmt.Errorf("failed to write the HTTP request: %v", err)
+		return conn, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(conn), req)
 	if err != nil {
-		return fmt.Errorf("reading server HTTP response: %v", err)
+		return conn, fmt.Errorf("reading server HTTP response: %v", err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
 	}
 
-	return nil
+	return conn, nil
 }

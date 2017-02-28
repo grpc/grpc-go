@@ -169,7 +169,8 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}(conn)
 	if addr.UsingProxy {
 		// TODO support user provided proxy handshaker.
-		if err := doHTTPConnectHandshake(ctx, conn, addr.RealTarget, addr.Header); err != nil {
+		conn, err = doHTTPConnectHandshake(ctx, conn, addr.RealTarget, addr.Header)
+		if err != nil {
 			return nil, connectionErrorf(true, err, "failed to connect: %v", err)
 		}
 	}

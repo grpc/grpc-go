@@ -36,8 +36,8 @@ package transport
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -50,7 +50,16 @@ func dialContext(ctx context.Context, network, address string) (net.Conn, error)
 	return (&net.Dialer{}).DialContext(ctx, network, address)
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) error {
+type bufConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *bufConn) Read(b []byte) (int, error) {
+	return c.r.Read(b)
+}
+
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
 	if header == nil {
 		header = make(map[string][]string)
 	}
@@ -67,48 +76,58 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, hea
 		Header: header,
 	}).WithContext(ctx)
 	if err := req.Write(conn); err != nil {
-		return fmt.Errorf("failed to write the HTTP request: %v", err)
+		return conn, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
 
-	var result []byte
-	buf := make([]byte, 4)
-	for {
-		fmt.Println(string(result))
-		_, err := conn.Read(buf[:1])
-		if err != nil {
-			panic(err.Error())
-		}
+	// var result []byte
+	// done := make(chan error)
+	// go func() {
+	// 	defer close(done)
+	// 	buf := make([]byte, 4)
+	// 	for {
+	// 		_, err := conn.Read(buf[:1])
+	// 		if err != nil {
+	// 			fmt.Printf("err is not nil: %v\n", err)
+	// 			return
+	// 		}
 
-		if buf[0] != '\r' {
-			result = append(result, buf[0])
-			continue
-		}
+	// 		if buf[0] != '\r' {
+	// 			result = append(result, buf[0])
+	// 			continue
+	// 		}
 
-		_, err = conn.Read(buf[1:])
-		if err != nil {
-			panic(err.Error())
-		}
-		result = append(result, buf...)
-		// fmt.Printf("%q\n", string(buf))
-		if string(buf) == "\r\n\r\n" {
-			break
-		}
-	}
-	fmt.Print(string(result))
+	// 		_, err = conn.Read(buf[1:])
+	// 		if err != nil {
+	// 			fmt.Printf("err is not nil: %v\n", err)
+	// 			return
+	// 		}
+	// 		result = append(result, buf...)
+	// 		if string(buf) == "\r\n\r\n" {
+	// 			break
+	// 		}
+	// 	}
+	// }()
 
-	fmt.Println("after loop")
+	// select {
+	// case <-ctx.Done():
+	// 	conn.Close()
+	// 	return ctx.Err()
+	// case err := <-done:
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
-	resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(result)), nil)
-	fmt.Println("after read response")
+	r := bufio.NewReader(conn)
+	// resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(result)), nil)
+	resp, err := http.ReadResponse(r, nil)
 	if err != nil {
-		return fmt.Errorf("reading server HTTP response: %v", err)
+		return conn, fmt.Errorf("reading server HTTP response: %v", err)
 	}
 	resp.Body.Close()
-	fmt.Println("after close")
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
 	}
 
-	fmt.Println("before return")
-	return nil
+	return &bufConn{conn, r}, nil
 }

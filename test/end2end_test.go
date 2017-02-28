@@ -3462,9 +3462,11 @@ func (p *proxyServer) run() {
 	}
 	resp := http.Response{StatusCode: 200, Proto: "HTTP/1.0"}
 	resp.Write(p.in)
+	p.t.Logf("resp sent")
 	p.out = out
 	go io.Copy(p.in, p.out)
 	go io.Copy(p.out, p.in)
+	p.t.Logf("run return")
 }
 
 func (p *proxyServer) stop() {
@@ -3530,7 +3532,7 @@ func testProxyMapName(t *testing.T, e env) {
 	}
 	t.Logf("oldAddr: %s, newAddr: %s", te.srvAddr, lis.Addr())
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
 	if err != nil {
@@ -3570,7 +3572,7 @@ func testProxyMapAddress(t *testing.T, e env) {
 		newAddr:    lis.Addr().String(),
 	}
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
 	if err != nil {
