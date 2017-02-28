@@ -568,7 +568,7 @@ type StreamError struct {
 }
 
 func (e StreamError) Error() string {
-	return fmt.Sprintf("stream error: code = %d desc = %q", e.Code, e.Desc)
+	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
 // ContextErr converts the error from context package into a StreamError.
