@@ -1,3 +1,5 @@
+// +build !go1.6
+
 /*
  *
  * Copyright 2017, Google Inc.
@@ -31,51 +33,68 @@
  *
  */
 
-// Package proxy defines interfaces to support proxyies in gRPC.
-package proxy // import "google.golang.org/grpc/proxy"
+package proxy
+
 import (
-	"io"
+	"bufio"
+	"fmt"
 	"net"
-	"time"
+	"net/http"
+	"net/url"
 
 	"golang.org/x/net/context"
 )
 
-// Mapper defines the interface gRPC uses to map the proxy address.
-type Mapper interface {
-	// MapAddress is called before we connect to the target address.
-	// It can be used to programmatically override the address that we will connect to.
-	// It returns the address of the proxy, and the header to be sent in the request.
-	MapAddress(ctx context.Context, address string) (string, map[string][]string, error)
-}
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (_ net.Conn, err error) {
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
 
-// NewTCPDialerWithConnectHandshake returns a dialer with the provided Mapper.
-// The returned dialer uses Mapper to get the proxy's address, dial to the proxy,
-// does HTTP CONNECT handshake and returns the connection.
-func NewTCPDialerWithConnectHandshake(pm Mapper) func(ctx context.Context, addr string) (net.Conn, error) {
-	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
-		newAddr, h, err := pm.MapAddress(ctx, addr)
+	if header == nil {
+		header = make(map[string][]string)
+	}
+	if ua := header.Get("User-Agent"); ua == "" {
+		header.Set("User-Agent", "gRPC")
+	}
+	if host := header.Get("Host"); host != "" {
+		// Use the user specified Host header if it's set.
+		addr = host
+	}
+	req := (&http.Request{
+		Method: "CONNECT",
+		URL:    &url.URL{Host: addr},
+		Header: header,
+	})
+
+	waitC := make(chan error, 1)
+	go func() {
+		if err := req.Write(conn); err != nil {
+			waitC <- fmt.Errorf("failed to write the HTTP request: %v", err)
+			return
+		}
+		close(waitC)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-waitC:
 		if err != nil {
 			return nil, err
 		}
-
-		if deadline, ok := ctx.Deadline(); ok {
-			conn, err = net.DialTimeout("tcp", newAddr, deadline.Sub(time.Now()))
-		} else {
-			conn, err = net.DialTimeout("tcp", newAddr, 0)
-		}
-		if err != nil {
-			return
-		}
-		return doHTTPConnectHandshake(context.Background(), conn, addr, h)
 	}
-}
 
-type bufConn struct {
-	net.Conn
-	r io.Reader
-}
+	r := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(r, nil)
+	if err != nil {
+		return conn, fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+	}
 
-func (c *bufConn) Read(b []byte) (int, error) {
-	return c.r.Read(b)
+	return &bufConn{Conn: conn, r: r}, nil
 }
