@@ -572,6 +572,8 @@ func (te *test) clientConn() *grpc.ClientConn {
 
 	if te.dialer != nil {
 		opts = append(opts, grpc.WithDialer(te.dialer))
+	} else {
+		opts = append(opts, grpc.WithDialer(te.e.dialer))
 	}
 	if te.sc != nil {
 		opts = append(opts, grpc.WithServiceConfig(te.sc))
