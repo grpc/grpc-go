@@ -491,8 +491,17 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		return
 	}
 	t.mu.Unlock()
+	// rstStream is true in case the stream is being closed at the client-side
+	// and the server needs to be intimated about it by sending a RST_STREAM
+	// frame.
+	// To make sure this frame is written to the wire before the headers of the
+	// next stream waiting for streamsQuota, we add to streamsQuota pool only
+	// after having acquired the writableChan to send RST_STREAM out (look at
+	// the controller() routine).
 	var rstStream bool
 	defer func() {
+		// In case, the client doesn't have to send RST_STREAM to server
+		// we can safely add back to streamsQuota pool now.
 		if !rstStream {
 			t.streamsQuota.add(1)
 			return
@@ -1068,6 +1077,11 @@ func (t *http2Client) controller() {
 						t.framer.writeSettings(true, i.ss...)
 					}
 				case *resetStream:
+					// If the server needs to be to intimated about stream closing,
+					// then we need to make sure the RST_STREAM frame is written to
+					// the wire before the headers of the next stream waiting on
+					// streamQuota. We ensure this by adding to the streamsQuota pool
+					// only after having acquired the writableChan to send RST_STREAM.
 					t.streamsQuota.add(1)
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *flushIO:

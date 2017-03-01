@@ -2673,21 +2673,24 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 
 const defaultMaxStreamsClient = 100
 
-func TestClientExceedMaxStreamsLimit(t *testing.T) {
+func TestExceedDefaultMaxStreamsLimit(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		testClientExceedMaxStreamsLimit(t, e)
+		testExceedDefaultMaxStreamsLimit(t, e)
 	}
 }
 
-func testClientExceedMaxStreamsLimit(t *testing.T, e env) {
+func testExceedDefaultMaxStreamsLimit(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise(
 		"http2Client.notifyError got notified that the client transport was broken",
 		"Conn.resetTransport failed to create client transport",
 		"grpc: the connection is closing",
 	)
-	te.maxStream = 0 // Server allows infinite streams. The cap should be on client side.
+	// When masStream is set to 0 the server doesn't send a settings frame for
+	// MaxConcurrentStreams, essentially allowing infinite (math.MaxInt32) streams.
+	// In such a case, there should be a default cap on the client-side.
+	te.maxStream = 0
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 

@@ -213,8 +213,8 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
-	// rstStream is a flag that is true when a RST stream frame
-	// is sent to the server signifying that this stream is closing.
+	// rstStream indicates whether a RST_STREAM frame needs to be sent
+	// to the server to signify that this stream is closing.
 	rstStream bool
 }
 
