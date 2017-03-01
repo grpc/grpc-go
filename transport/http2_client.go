@@ -83,7 +83,7 @@ type http2Client struct {
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
 	// awakenKeepalive is used to tell keepalive goroutine to reset keepalive timer.
-	awakenKeepalive chan int
+	awakenKeepalive chan struct{}
 
 	framer *framer
 	hBuf   *bytes.Buffer  // the buffer for HPACK encoding
@@ -215,7 +215,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		shutdownChan:    make(chan struct{}),
 		errorChan:       make(chan struct{}),
 		goAway:          make(chan struct{}),
-		awakenKeepalive: make(chan int, 1),
+		awakenKeepalive: make(chan struct{}, 1),
 		framer:          newFramer(conn),
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
@@ -233,7 +233,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	// make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
-	t.awakenKeepalive <- 0
+	t.awakenKeepalive <- struct{}{}
 	if t.statsHandler != nil {
 		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
@@ -400,7 +400,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	// has gone dormant. If so, wake it up.
 	if len(t.activeStreams) == 1 {
 		select {
-		case t.awakenKeepalive <- 0:
+		case t.awakenKeepalive <- struct{}{}:
 			t.framer.writePing(true, false, [8]byte{})
 		default:
 		}
@@ -1140,7 +1140,7 @@ func (t *http2Client) controller() {
 
 // keepalive running in a separate goroutune makes sure the connection is alive by sending pings.
 func (t *http2Client) keepalive() {
-	if t.kp.Time == time.Duration(math.MaxInt64) {
+	if t.kp.Time == infinity {
 		return
 	}
 	p := &ping{data: [8]byte{}}

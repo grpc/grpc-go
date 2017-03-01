@@ -48,7 +48,8 @@ const (
 	// The initial window size for flow control.
 	initialWindowSize       = defaultWindowSize      // for an RPC
 	initialConnWindowSize   = defaultWindowSize * 16 // for a connection
-	defaultKeepaliveTime    = time.Duration(math.MaxInt64)
+	infinity                = time.Duration(math.MaxInt64)
+	defaultKeepaliveTime    = infinity
 	defaultKeepaliveTimeout = time.Duration(20 * time.Second)
 )
 
