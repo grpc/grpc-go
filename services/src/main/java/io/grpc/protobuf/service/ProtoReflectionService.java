@@ -79,49 +79,104 @@ import javax.annotation.concurrent.GuardedBy;
 public final class ProtoReflectionService extends ServerReflectionGrpc.ServerReflectionImplBase
     implements InternalNotifyOnServerBuild {
 
-  private volatile ServerReflectionIndex serverReflectionIndex;
+  private final Object lock = new Object();
+
+  @GuardedBy("lock")
+  private ServerReflectionIndex serverReflectionIndex;
+
+  private Server server;
 
   private ProtoReflectionService() {}
 
-  public static BindableService getInstance() {
+  public static BindableService newInstance() {
     return new ProtoReflectionService();
   }
 
   /**
-   * Receives a reference to the server at build time.
+   * Do not use this method.
+   *
+   * @deprecated use {@link ProtoReflectionService#newInstance()} instead.
    */
+  @Deprecated
+  public static BindableService getInstance() {
+    return newInstance();
+  }
+
+  /** Receives a reference to the server at build time. */
   @Override
   public void notifyOnBuild(Server server) {
-    checkState(serverReflectionIndex == null);
-    serverReflectionIndex = new ServerReflectionIndex(checkNotNull(server, "server"));
+    this.server = checkNotNull(server);
+  }
+
+  /**
+   * Checks for updates to the server's mutable services and updates the index if any changes are
+   * detected. A change is any addition or removal in the set of file descriptors attached to the
+   * mutable services or a change in the service names.
+   *
+   * @return The (potentially updated) index.
+   */
+  private ServerReflectionIndex updateIndexIfNecessary() {
+    synchronized (lock) {
+      if (serverReflectionIndex == null) {
+        serverReflectionIndex =
+            new ServerReflectionIndex(server.getImmutableServices(), server.getMutableServices());
+        return serverReflectionIndex;
+      }
+
+      Set<FileDescriptor> serverFileDescriptors = new HashSet<FileDescriptor>();
+      Set<String> serverServiceNames = new HashSet<String>();
+      List<ServerServiceDefinition> serverMutableServices = server.getMutableServices();
+      for (ServerServiceDefinition mutableService : serverMutableServices) {
+        io.grpc.ServiceDescriptor serviceDescriptor = mutableService.getServiceDescriptor();
+        if (serviceDescriptor.getSchemaDescriptor() instanceof ProtoFileDescriptorSupplier) {
+          String serviceName = serviceDescriptor.getName();
+          FileDescriptor fileDescriptor =
+              ((ProtoFileDescriptorSupplier) serviceDescriptor.getSchemaDescriptor())
+                  .getFileDescriptor();
+          serverFileDescriptors.add(fileDescriptor);
+          serverServiceNames.add(serviceName);
+        }
+      }
+
+      // Replace the index if the underlying mutable services have changed. Check both the file
+      // descriptors and the service names, because one file descriptor can define multiple
+      // services.
+      FileDescriptorIndex mutableServicesIndex = serverReflectionIndex.getMutableServicesIndex();
+      if (!mutableServicesIndex.getServiceFileDescriptors().equals(serverFileDescriptors)
+          || !mutableServicesIndex.getServiceNames().equals(serverServiceNames)) {
+        serverReflectionIndex =
+            new ServerReflectionIndex(server.getImmutableServices(), serverMutableServices);
+      }
+
+      return serverReflectionIndex;
+    }
   }
 
   @Override
   public StreamObserver<ServerReflectionRequest> serverReflectionInfo(
       final StreamObserver<ServerReflectionResponse> responseObserver) {
-
-    checkState(serverReflectionIndex != null);
-    serverReflectionIndex.initializeImmutableServicesIndex();
-
     final ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver =
         (ServerCallStreamObserver<ServerReflectionResponse>) responseObserver;
     ProtoReflectionStreamObserver requestObserver =
-        new ProtoReflectionStreamObserver(serverCallStreamObserver);
+        new ProtoReflectionStreamObserver(updateIndexIfNecessary(), serverCallStreamObserver);
     serverCallStreamObserver.setOnReadyHandler(requestObserver);
     serverCallStreamObserver.disableAutoInboundFlowControl();
     serverCallStreamObserver.request(1);
     return requestObserver;
   }
 
-  private class ProtoReflectionStreamObserver implements Runnable,
-      StreamObserver<ServerReflectionRequest> {
+  private static class ProtoReflectionStreamObserver
+      implements Runnable, StreamObserver<ServerReflectionRequest> {
+    private final ServerReflectionIndex serverReflectionIndex;
     private final ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver;
 
     private boolean closeAfterSend = false;
     private ServerReflectionRequest request;
 
     ProtoReflectionStreamObserver(
+        ServerReflectionIndex serverReflectionIndex,
         ServerCallStreamObserver<ServerReflectionResponse> serverCallStreamObserver) {
+      this.serverReflectionIndex = serverReflectionIndex;
       this.serverCallStreamObserver = checkNotNull(serverCallStreamObserver, "observer");
     }
 
@@ -141,8 +196,6 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
 
     private void handleReflectionRequest() {
       if (serverCallStreamObserver.isReady()) {
-        serverReflectionIndex.updateMutableIndexIfNecessary();
-
         switch (request.getMessageRequestCase()) {
           case FILE_BY_FILENAME:
             getFileByName(request);
@@ -250,8 +303,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
               .build());
     }
 
-    private void sendErrorResponse(
-        ServerReflectionRequest request, Status status, String message) {
+    private void sendErrorResponse(ServerReflectionRequest request, Status status, String message) {
       ServerReflectionResponse response =
           ServerReflectionResponse.newBuilder()
               .setValidHost(request.getHost())
@@ -299,71 +351,27 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
    * in the immutable service index are the mutable services checked.
    */
   private static final class ServerReflectionIndex {
-    private FileDescriptorIndex immutableServicesIndex;
-    private final Object lock = new Object();
-    /**
-     * Tracks mutable services. Accesses must be synchronized.
-     */
-    @GuardedBy("lock") private FileDescriptorIndex mutableServicesIndex
-        = new FileDescriptorIndex(Collections.<ServerServiceDefinition>emptyList());
+    private final FileDescriptorIndex immutableServicesIndex;
+    private final FileDescriptorIndex mutableServicesIndex;
 
-    private final Server server;
-
-    public ServerReflectionIndex(Server server) {
-      this.server = server;
+    public ServerReflectionIndex(
+        List<ServerServiceDefinition> immutableServices,
+        List<ServerServiceDefinition> mutableServices) {
+      immutableServicesIndex = new FileDescriptorIndex(immutableServices);
+      mutableServicesIndex = new FileDescriptorIndex(mutableServices);
     }
 
-    /**
-     * When first called, initializes the immutable services index. Subsequent calls have no effect.
-     *
-     * <p>This must be called by the reflection service before returning a new
-     * {@link ProtoReflectionStreamObserver}.
-     */
-    private synchronized void initializeImmutableServicesIndex() {
-      if (immutableServicesIndex == null) {
-        immutableServicesIndex = new FileDescriptorIndex(server.getImmutableServices());
-      }
-    }
-
-    /**
-     * Checks for updates to the server's mutable services and updates the index if any changes
-     * are detected. A change is any addition or removal in the set of file descriptors attached to
-     * the mutable services or a change in the service names.
-     */
-    private void updateMutableIndexIfNecessary() {
-      Set<FileDescriptor> currentFileDescriptors = new HashSet<FileDescriptor>();
-      Set<String> currentServiceNames = new HashSet<String>();
-      synchronized (lock) {
-        List<ServerServiceDefinition> currentMutableServices = server.getMutableServices();
-        for (ServerServiceDefinition mutableService : currentMutableServices) {
-          io.grpc.ServiceDescriptor serviceDescriptor = mutableService.getServiceDescriptor();
-          if (serviceDescriptor.getSchemaDescriptor() instanceof ProtoFileDescriptorSupplier) {
-            String serviceName = serviceDescriptor.getName();
-            FileDescriptor fileDescriptor =
-                ((ProtoFileDescriptorSupplier) serviceDescriptor.getSchemaDescriptor())
-                    .getFileDescriptor();
-            currentFileDescriptors.add(fileDescriptor);
-            checkState(!currentServiceNames.contains(serviceName),
-                "Service already defined: %s", serviceName);
-            currentServiceNames.add(serviceName);
-          }
-        }
-
-        // Replace the mutable index if the underlying services have changed. Check both the file
-        // descriptors and the service names, because one file descriptor can define multiple
-        // services.
-        if (!mutableServicesIndex.getServiceFileDescriptors().equals(currentFileDescriptors)
-            || !mutableServicesIndex.getServiceNames().equals(currentServiceNames)) {
-          mutableServicesIndex = new FileDescriptorIndex(currentMutableServices);
-        }
-      }
+    private FileDescriptorIndex getMutableServicesIndex() {
+      return mutableServicesIndex;
     }
 
     private Set<String> getServiceNames() {
-      Set<String> serviceNames = new HashSet<String>(immutableServicesIndex.getServiceNames());
-      synchronized (lock) {
-        serviceNames.addAll(mutableServicesIndex.getServiceNames());
-      }
+      Set<String> immutableServiceNames = immutableServicesIndex.getServiceNames();
+      Set<String> mutableServiceNames = mutableServicesIndex.getServiceNames();
+      Set<String> serviceNames =
+          new HashSet<String>(immutableServiceNames.size() + mutableServiceNames.size());
+      serviceNames.addAll(immutableServiceNames);
+      serviceNames.addAll(mutableServiceNames);
       return serviceNames;
     }
 
@@ -371,9 +379,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
     private FileDescriptor getFileDescriptorByName(String name) {
       FileDescriptor fd = immutableServicesIndex.getFileDescriptorByName(name);
       if (fd == null) {
-        synchronized (lock) {
-          fd = mutableServicesIndex.getFileDescriptorByName(name);
-        }
+        fd = mutableServicesIndex.getFileDescriptorByName(name);
       }
       return fd;
     }
@@ -382,21 +388,17 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
     private FileDescriptor getFileDescriptorBySymbol(String symbol) {
       FileDescriptor fd = immutableServicesIndex.getFileDescriptorBySymbol(symbol);
       if (fd == null) {
-        synchronized (lock) {
-          fd = mutableServicesIndex.getFileDescriptorBySymbol(symbol);
-        }
+        fd = mutableServicesIndex.getFileDescriptorBySymbol(symbol);
       }
       return fd;
     }
 
     @Nullable
     private FileDescriptor getFileDescriptorByExtensionAndNumber(String type, int extension) {
-      FileDescriptor fd
-          = immutableServicesIndex.getFileDescriptorByExtensionAndNumber(type, extension);
+      FileDescriptor fd =
+          immutableServicesIndex.getFileDescriptorByExtensionAndNumber(type, extension);
       if (fd == null) {
-        synchronized (lock) {
-          fd = mutableServicesIndex.getFileDescriptorByExtensionAndNumber(type, extension);
-        }
+        fd = mutableServicesIndex.getFileDescriptorByExtensionAndNumber(type, extension);
       }
       return fd;
     }
@@ -405,28 +407,26 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
     private Set<Integer> getExtensionNumbersOfType(String type) {
       Set<Integer> extensionNumbers = immutableServicesIndex.getExtensionNumbersOfType(type);
       if (extensionNumbers == null) {
-        synchronized (lock) {
-          extensionNumbers = mutableServicesIndex.getExtensionNumbersOfType(type);
-        }
+        extensionNumbers = mutableServicesIndex.getExtensionNumbersOfType(type);
       }
       return extensionNumbers;
     }
   }
 
   /**
-   * Provides a set of methods for answering reflection queries for the file descriptors
-   * underlying a set of services. Used by {@link ServerReflectionIndex} to separately index
-   * immutable and mutable services.
+   * Provides a set of methods for answering reflection queries for the file descriptors underlying
+   * a set of services. Used by {@link ServerReflectionIndex} to separately index immutable and
+   * mutable services.
    */
   private static final class FileDescriptorIndex {
     private final Set<String> serviceNames = new HashSet<String>();
     private final Set<FileDescriptor> serviceFileDescriptors = new HashSet<FileDescriptor>();
-    private final Map<String, FileDescriptor> fileDescriptorsByName
-        = new HashMap<String, FileDescriptor>();
-    private final Map<String, FileDescriptor> fileDescriptorsBySymbol
-        = new HashMap<String, FileDescriptor>();
-    private final Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber
-        = new HashMap<String, Map<Integer, FileDescriptor>>();
+    private final Map<String, FileDescriptor> fileDescriptorsByName =
+        new HashMap<String, FileDescriptor>();
+    private final Map<String, FileDescriptor> fileDescriptorsBySymbol =
+        new HashMap<String, FileDescriptor>();
+    private final Map<String, Map<Integer, FileDescriptor>> fileDescriptorsByExtensionAndNumber =
+        new HashMap<String, Map<Integer, FileDescriptor>>();
 
     FileDescriptorIndex(List<ServerServiceDefinition> services) {
       Queue<FileDescriptor> fileDescriptorsToProcess = new LinkedList<FileDescriptor>();
@@ -438,8 +438,8 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
               ((ProtoFileDescriptorSupplier) serviceDescriptor.getSchemaDescriptor())
                   .getFileDescriptor();
           String serviceName = serviceDescriptor.getName();
-          checkState(!serviceNames.contains(serviceName),
-              "Service already defined: %s", serviceName);
+          checkState(
+              !serviceNames.contains(serviceName), "Service already defined: %s", serviceName);
           serviceFileDescriptors.add(fileDescriptor);
           serviceNames.add(serviceName);
           if (!seenFiles.contains(fileDescriptor.getName())) {
@@ -501,8 +501,7 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
 
     private void processFileDescriptor(FileDescriptor fd) {
       String fdName = fd.getName();
-      checkState(!fileDescriptorsByName.containsKey(fdName),
-          "File name already used: %s", fdName);
+      checkState(!fileDescriptorsByName.containsKey(fdName), "File name already used: %s", fdName);
       fileDescriptorsByName.put(fdName, fd);
       for (ServiceDescriptor service : fd.getServices()) {
         processService(service, fd);
@@ -517,21 +516,25 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
 
     private void processService(ServiceDescriptor service, FileDescriptor fd) {
       String serviceName = service.getFullName();
-      checkState(!fileDescriptorsBySymbol.containsKey(serviceName),
-          "Service already defined: %s", serviceName);
+      checkState(
+          !fileDescriptorsBySymbol.containsKey(serviceName),
+          "Service already defined: %s",
+          serviceName);
       fileDescriptorsBySymbol.put(serviceName, fd);
       for (MethodDescriptor method : service.getMethods()) {
         String methodName = method.getFullName();
-        checkState(!fileDescriptorsBySymbol.containsKey(methodName),
-            "Method already defined: %s", methodName);
+        checkState(
+            !fileDescriptorsBySymbol.containsKey(methodName),
+            "Method already defined: %s",
+            methodName);
         fileDescriptorsBySymbol.put(methodName, fd);
       }
     }
 
     private void processType(Descriptor type, FileDescriptor fd) {
       String typeName = type.getFullName();
-      checkState(!fileDescriptorsBySymbol.containsKey(typeName),
-          "Type already defined: %s", typeName);
+      checkState(
+          !fileDescriptorsBySymbol.containsKey(typeName), "Type already defined: %s", typeName);
       fileDescriptorsBySymbol.put(typeName, fd);
       for (FieldDescriptor extension : type.getExtensions()) {
         processExtension(extension, fd);
@@ -550,7 +553,9 @@ public final class ProtoReflectionService extends ServerReflectionGrpc.ServerRef
       }
       checkState(
           !fileDescriptorsByExtensionAndNumber.get(extensionName).containsKey(extensionNumber),
-          "Extension name and number already defined: %s, %s", extensionName, extensionNumber);
+          "Extension name and number already defined: %s, %s",
+          extensionName,
+          extensionNumber);
       fileDescriptorsByExtensionAndNumber.get(extensionName).put(extensionNumber, fd);
     }
   }

@@ -74,9 +74,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/**
- * Tests for {@link ProtoReflectionService}.
- */
+/** Tests for {@link ProtoReflectionService}. */
 @RunWith(JUnit4.class)
 public class ProtoReflectionServiceTest {
   private static final String TEST_HOST = "localhost";
@@ -92,17 +90,16 @@ public class ProtoReflectionServiceTest {
 
   @Before
   public void setUp() throws Exception {
-    reflectionService = ProtoReflectionService.getInstance();
-    server = InProcessServerBuilder.forName("proto-reflection-test")
-        .directExecutor()
-        .addService(reflectionService)
-        .addService(new ReflectableServiceGrpc.ReflectableServiceImplBase() {})
-        .fallbackHandlerRegistry(handlerRegistry)
-        .build()
-        .start();
-    channel = InProcessChannelBuilder.forName("proto-reflection-test")
-        .directExecutor()
-        .build();
+    reflectionService = ProtoReflectionService.newInstance();
+    server =
+        InProcessServerBuilder.forName("proto-reflection-test")
+            .directExecutor()
+            .addService(reflectionService)
+            .addService(new ReflectableServiceGrpc.ReflectableServiceImplBase() {})
+            .fallbackHandlerRegistry(handlerRegistry)
+            .build()
+            .start();
+    channel = InProcessChannelBuilder.forName("proto-reflection-test").directExecutor().build();
     stub = ServerReflectionGrpc.newStub(channel);
   }
 
@@ -118,61 +115,61 @@ public class ProtoReflectionServiceTest {
 
   @Test
   public void listServices() throws Exception {
-    Set<ServiceResponse> originalServices = new HashSet<ServiceResponse>(
-        Arrays.asList(
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.v1alpha.ServerReflection")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.ReflectableService")
-                .build())
-    );
+    Set<ServiceResponse> originalServices =
+        new HashSet<ServiceResponse>(
+            Arrays.asList(
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.v1alpha.ServerReflection")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.ReflectableService")
+                    .build()));
     assertServiceResponseEquals(originalServices);
 
     handlerRegistry.addService(dynamicService);
-    assertServiceResponseEquals(new HashSet<ServiceResponse>(
-        Arrays.asList(
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.v1alpha.ServerReflection")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.ReflectableService")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.DynamicService")
-                .build())
-    ));
+    assertServiceResponseEquals(
+        new HashSet<ServiceResponse>(
+            Arrays.asList(
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.v1alpha.ServerReflection")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.ReflectableService")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.DynamicService")
+                    .build())));
 
     handlerRegistry.addService(anotherDynamicService);
-    assertServiceResponseEquals(new HashSet<ServiceResponse>(
-        Arrays.asList(
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.v1alpha.ServerReflection")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.ReflectableService")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.DynamicService")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.AnotherDynamicService")
-                .build())
-    ));
+    assertServiceResponseEquals(
+        new HashSet<ServiceResponse>(
+            Arrays.asList(
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.v1alpha.ServerReflection")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.ReflectableService")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.DynamicService")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.AnotherDynamicService")
+                    .build())));
 
     handlerRegistry.removeService(dynamicService);
-    assertServiceResponseEquals(new HashSet<ServiceResponse>(
-        Arrays.asList(
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.v1alpha.ServerReflection")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.ReflectableService")
-                .build(),
-            ServiceResponse.newBuilder()
-                .setName("grpc.reflection.testing.AnotherDynamicService")
-                .build())
-    ));
+    assertServiceResponseEquals(
+        new HashSet<ServiceResponse>(
+            Arrays.asList(
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.v1alpha.ServerReflection")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.ReflectableService")
+                    .build(),
+                ServiceResponse.newBuilder()
+                    .setName("grpc.reflection.testing.AnotherDynamicService")
+                    .build())));
 
     handlerRegistry.removeService(anotherDynamicService);
     assertServiceResponseEquals(originalServices);
@@ -207,7 +204,7 @@ public class ProtoReflectionServiceTest {
   }
 
   @Test
-  public void fileByFilenameForMutableServices() throws Exception {
+  public void fileByFilenameConsistentForMutableServices() throws Exception {
     ServerReflectionRequest request =
         ServerReflectionRequest.newBuilder()
             .setHost(TEST_HOST)
@@ -229,13 +226,26 @@ public class ProtoReflectionServiceTest {
         stub.serverReflectionInfo(responseObserver);
     handlerRegistry.addService(dynamicService);
     requestObserver.onNext(request);
-    handlerRegistry.removeService(dynamicService);
-    requestObserver.onNext(request);
     requestObserver.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver2 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver2 =
+        stub.serverReflectionInfo(responseObserver2);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver2.onNext(request);
+    requestObserver2.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver3 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver3 =
+        stub.serverReflectionInfo(responseObserver3);
+    requestObserver3.onNext(request);
+    requestObserver3.onCompleted();
 
-    assertEquals(goldenResponse, responseObserver.getValues().get(0));
-    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
-        responseObserver.getValues().get(1).getMessageResponseCase());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.firstValue().get().getMessageResponseCase());
+    assertEquals(goldenResponse, responseObserver2.firstValue().get());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver3.firstValue().get().getMessageResponseCase());
   }
 
   @Test
@@ -251,8 +261,7 @@ public class ProtoReflectionServiceTest {
             ReflectionTestProto.getDescriptor().toProto().toByteString(),
             ReflectionTestDepthTwoProto.getDescriptor().toProto().toByteString(),
             ReflectionTestDepthTwoAlternateProto.getDescriptor().toProto().toByteString(),
-            ReflectionTestDepthThreeProto.getDescriptor().toProto().toByteString()
-        );
+            ReflectionTestDepthThreeProto.getDescriptor().toProto().toByteString());
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
@@ -261,8 +270,11 @@ public class ProtoReflectionServiceTest {
     requestObserver.onCompleted();
 
     List<ByteString> response =
-        responseObserver.firstValue().get()
-            .getFileDescriptorResponse().getFileDescriptorProtoList();
+        responseObserver
+            .firstValue()
+            .get()
+            .getFileDescriptorResponse()
+            .getFileDescriptorProtoList();
     assertEquals(goldenResponse.size(), response.size());
     assertEquals(new HashSet<ByteString>(goldenResponse), new HashSet<ByteString>(response));
   }
@@ -317,13 +329,26 @@ public class ProtoReflectionServiceTest {
         stub.serverReflectionInfo(responseObserver);
     handlerRegistry.addService(dynamicService);
     requestObserver.onNext(request);
-    handlerRegistry.removeService(dynamicService);
-    requestObserver.onNext(request);
     requestObserver.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver2 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver2 =
+        stub.serverReflectionInfo(responseObserver2);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver2.onNext(request);
+    requestObserver2.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver3 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver3 =
+        stub.serverReflectionInfo(responseObserver3);
+    requestObserver3.onNext(request);
+    requestObserver3.onCompleted();
 
-    assertEquals(goldenResponse, responseObserver.getValues().get(0));
-    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
-        responseObserver.getValues().get(1).getMessageResponseCase());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.firstValue().get().getMessageResponseCase());
+    assertEquals(goldenResponse, responseObserver2.firstValue().get());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver3.firstValue().get().getMessageResponseCase());
   }
 
   @Test
@@ -343,8 +368,7 @@ public class ProtoReflectionServiceTest {
             ReflectionTestProto.getDescriptor().toProto().toByteString(),
             ReflectionTestDepthTwoProto.getDescriptor().toProto().toByteString(),
             ReflectionTestDepthTwoAlternateProto.getDescriptor().toProto().toByteString(),
-            ReflectionTestDepthThreeProto.getDescriptor().toProto().toByteString()
-        );
+            ReflectionTestDepthThreeProto.getDescriptor().toProto().toByteString());
 
     StreamRecorder<ServerReflectionResponse> responseObserver = StreamRecorder.create();
     StreamObserver<ServerReflectionRequest> requestObserver =
@@ -353,8 +377,11 @@ public class ProtoReflectionServiceTest {
     requestObserver.onCompleted();
 
     List<ByteString> response =
-        responseObserver.firstValue().get()
-            .getFileDescriptorResponse().getFileDescriptorProtoList();
+        responseObserver
+            .firstValue()
+            .get()
+            .getFileDescriptorResponse()
+            .getFileDescriptorProtoList();
     assertEquals(goldenResponse.size(), response.size());
     assertEquals(new HashSet<ByteString>(goldenResponse), new HashSet<ByteString>(response));
   }
@@ -419,13 +446,26 @@ public class ProtoReflectionServiceTest {
         stub.serverReflectionInfo(responseObserver);
     handlerRegistry.addService(dynamicService);
     requestObserver.onNext(request);
-    handlerRegistry.removeService(dynamicService);
-    requestObserver.onNext(request);
     requestObserver.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver2 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver2 =
+        stub.serverReflectionInfo(responseObserver2);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver2.onNext(request);
+    requestObserver2.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver3 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver3 =
+        stub.serverReflectionInfo(responseObserver3);
+    requestObserver3.onNext(request);
+    requestObserver3.onCompleted();
 
-    assertEquals(goldenResponse, responseObserver.getValues().get(0));
-    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
-        responseObserver.getValues().get(1).getMessageResponseCase());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.firstValue().get().getMessageResponseCase());
+    assertEquals(goldenResponse, responseObserver2.firstValue().get());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver3.firstValue().get().getMessageResponseCase());
   }
 
   @Test
@@ -477,13 +517,26 @@ public class ProtoReflectionServiceTest {
         stub.serverReflectionInfo(responseObserver);
     handlerRegistry.addService(dynamicService);
     requestObserver.onNext(request);
-    handlerRegistry.removeService(dynamicService);
-    requestObserver.onNext(request);
     requestObserver.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver2 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver2 =
+        stub.serverReflectionInfo(responseObserver2);
+    handlerRegistry.removeService(dynamicService);
+    requestObserver2.onNext(request);
+    requestObserver2.onCompleted();
+    StreamRecorder<ServerReflectionResponse> responseObserver3 = StreamRecorder.create();
+    StreamObserver<ServerReflectionRequest> requestObserver3 =
+        stub.serverReflectionInfo(responseObserver3);
+    requestObserver3.onNext(request);
+    requestObserver3.onCompleted();
 
-    assertEquals(goldenResponse, responseObserver.getValues().get(0));
-    assertEquals(ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
-        responseObserver.getValues().get(1).getMessageResponseCase());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver.firstValue().get().getMessageResponseCase());
+    assertEquals(goldenResponse, responseObserver2.firstValue().get());
+    assertEquals(
+        ServerReflectionResponse.MessageResponseCase.ERROR_RESPONSE,
+        responseObserver3.firstValue().get().getMessageResponseCase());
   }
 
   @Test
@@ -548,15 +601,14 @@ public class ProtoReflectionServiceTest {
                   .build())
           .build();
 
-  private static class FlowControlClientResponseObserver implements
-      ClientResponseObserver<ServerReflectionRequest, ServerReflectionResponse> {
+  private static class FlowControlClientResponseObserver
+      implements ClientResponseObserver<ServerReflectionRequest, ServerReflectionResponse> {
     private final List<ServerReflectionResponse> responses =
         new ArrayList<ServerReflectionResponse>();
     private boolean onCompleteCalled = false;
 
     @Override
-    public void beforeStart(
-        final ClientCallStreamObserver<ServerReflectionRequest> requestStream) {
+    public void beforeStart(final ClientCallStreamObserver<ServerReflectionRequest> requestStream) {
       requestStream.disableAutoInboundFlowControl();
     }
 
