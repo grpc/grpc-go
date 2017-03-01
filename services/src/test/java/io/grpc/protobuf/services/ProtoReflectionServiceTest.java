@@ -29,7 +29,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.protobuf.service;
+package io.grpc.protobuf.services;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -111,6 +111,14 @@ public class ProtoReflectionServiceTest {
     if (channel != null) {
       channel.shutdownNow();
     }
+  }
+
+  @Test
+  @Deprecated
+  public void deprecatedGetterReturnsCorrectType() throws Exception {
+    assertEquals(
+        io.grpc.protobuf.service.ProtoReflectionService.getInstance().getClass(),
+        ProtoReflectionService.class);
   }
 
   @Test
