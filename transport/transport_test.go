@@ -507,7 +507,10 @@ func TestMaxStreams(t *testing.T) {
 			case <-cc.streamsQuota.acquire():
 				t.Fatalf("streamsQuota.acquire() becomes readable mistakenly.")
 			default:
-				if cc.streamsQuota.quota != 0 {
+				cc.streamsQuota.mu.Lock()
+				quota := cc.streamsQuota.quota
+				cc.streamsQuota.mu.Unlock()
+				if quota != 0 {
 					t.Fatalf("streamsQuota.quota got non-zero quota mistakenly.")
 				}
 			}
