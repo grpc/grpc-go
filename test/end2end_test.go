@@ -34,6 +34,7 @@
 package grpc_test
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"errors"
@@ -43,6 +44,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"reflect"
 	"runtime"
@@ -67,6 +69,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -443,6 +446,7 @@ type test struct {
 	streamServerInt   grpc.StreamServerInterceptor
 	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
+	dialer            func(addr string, timeout time.Duration) (net.Conn, error)
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -563,10 +567,12 @@ func (te *test) clientConn() *grpc.ClientConn {
 		return te.cc
 	}
 	opts := []grpc.DialOption{
-		grpc.WithDialer(te.e.dialer),
 		grpc.WithUserAgent(te.userAgent),
 	}
 
+	if te.dialer != nil {
+		opts = append(opts, grpc.WithDialer(te.dialer))
+	}
 	if te.sc != nil {
 		opts = append(opts, grpc.WithServiceConfig(te.sc))
 	}
@@ -3485,6 +3491,118 @@ func (s *flowControlLogicalRaceServer) StreamingOutputCall(req *testpb.Streaming
 		}
 	}
 	return nil
+}
+
+type proxyServer struct {
+	t   *testing.T
+	lis net.Listener
+	in  net.Conn
+	out net.Conn
+}
+
+func (p *proxyServer) run() {
+	in, err := p.lis.Accept()
+	if err != nil {
+		p.t.Errorf("failed to accept: %v", err)
+		return
+	}
+	p.in = in
+
+	p.t.Logf("received conn")
+
+	req, err := http.ReadRequest(bufio.NewReader(in))
+	p.t.Logf("received request: %+v", req)
+	if err != nil {
+		p.t.Errorf("failed to read CONNECT req: %v", err)
+		return
+	}
+	if req.Method != "CONNECT" || req.UserAgent() != "test-agent" {
+		resp := http.Response{StatusCode: 405}
+		resp.Write(p.in)
+		p.in.Close()
+		p.t.Errorf("get wrong CONNECT req: %+v", req)
+		return
+	}
+	p.t.Logf("req.URL.Host: %+v", req.URL.Host)
+
+	out, err := net.Dial("tcp", req.URL.Host)
+	if err != nil {
+		p.t.Errorf("failed to dial to server: %v", err)
+		return
+	}
+	resp := http.Response{StatusCode: 200, Proto: "HTTP/1.0"}
+	resp.Write(p.in)
+	p.t.Logf("resp sent")
+	p.out = out
+	go io.Copy(p.in, p.out)
+	go io.Copy(p.out, p.in)
+	p.t.Logf("run return")
+}
+
+func (p *proxyServer) stop() {
+	p.lis.Close()
+	if p.in != nil {
+		p.in.Close()
+	}
+	if p.out != nil {
+		p.out.Close()
+	}
+}
+
+type proxyMapper struct {
+	oldAddr string
+	newAddr string
+}
+
+func (p *proxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
+	if address != p.oldAddr {
+		return "", nil, fmt.Errorf("in proxy MapAddress, got address: %s, want address: %s", address, p.oldAddr)
+	}
+	return p.newAddr, map[string][]string{"User-Agent": {"test-agent"}}, nil
+}
+
+func TestProxyMapAddress(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range []env{tcpClearEnv, tcpTLSEnv} {
+		testProxyMapAddress(t, e)
+	}
+}
+
+func testProxyMapAddress(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	p := &proxyServer{t: t, lis: lis}
+	go p.run()
+	defer p.stop()
+
+	te.dialer = func(addr string, timeout time.Duration) (conn net.Conn, err error) {
+		dialer := proxy.NewTCPDialerWithConnectHandshake(&proxyMapper{
+			oldAddr: te.srvAddr,
+			newAddr: lis.Addr().String(),
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return dialer(ctx, addr)
+	}
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+	}
 }
 
 // interestingGoroutines returns all goroutines we care about for the purpose
