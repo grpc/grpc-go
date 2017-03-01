@@ -31,8 +31,8 @@
 
 package io.grpc;
 
-import static io.grpc.DecompressorRegistry.ACCEPT_ENCODING_JOINER;
-
+import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.TransportFrameUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -84,21 +84,12 @@ public class DecompressorRegistryBenchmark {
   @Benchmark
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
-  public String dynamicAcceptEncoding() {
-    if (!reg.getAdvertisedMessageEncodings().isEmpty()) {
-      return ACCEPT_ENCODING_JOINER.join(reg.getAdvertisedMessageEncodings());
-    }
-    return "";
-  }
-
-  /**
-   * Javadoc comment.
-   */
-  @Benchmark
-  @BenchmarkMode(Mode.SampleTime)
-  @OutputTimeUnit(TimeUnit.NANOSECONDS)
-  public String staticAcceptEncoding() {
-    return reg.getRawAdvertisedMessageEncodings();
+  public byte[][] marshalOld() {
+    Metadata m = new Metadata();
+    m.put(
+        GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY,
+        InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(reg));
+    return TransportFrameUtil.toHttp2Headers(m);
   }
 }
 

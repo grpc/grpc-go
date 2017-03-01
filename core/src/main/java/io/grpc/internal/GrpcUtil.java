@@ -40,6 +40,8 @@ import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.grpc.InternalMetadata;
+import io.grpc.InternalMetadata.TrustedAsciiMarshaller;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Metadata;
@@ -49,6 +51,7 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.Charset;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -60,6 +63,8 @@ import javax.annotation.Nullable;
  * Common utilities for GRPC.
  */
 public final class GrpcUtil {
+
+  public static final Charset US_ASCII = Charset.forName("US-ASCII");
 
   // Certain production AppEngine runtimes have constraints on threading and socket handling
   // that need to be accommodated.
@@ -82,8 +87,20 @@ public final class GrpcUtil {
   /**
    * {@link io.grpc.Metadata.Key} for the accepted message encodings header.
    */
-  public static final Metadata.Key<String> MESSAGE_ACCEPT_ENCODING_KEY =
-          Metadata.Key.of(GrpcUtil.MESSAGE_ACCEPT_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
+  public static final Metadata.Key<byte[]> MESSAGE_ACCEPT_ENCODING_KEY =
+      InternalMetadata.keyOf(GrpcUtil.MESSAGE_ACCEPT_ENCODING, new AcceptEncodingMarshaller());
+
+  private static final class AcceptEncodingMarshaller implements TrustedAsciiMarshaller<byte[]> {
+    @Override
+    public byte[] toAsciiString(byte[] value) {
+      return value;
+    }
+
+    @Override
+    public byte[] parseAsciiString(byte[] serialized) {
+      return serialized;
+    }
+  }
 
   /**
    * {@link io.grpc.Metadata.Key} for the Content-Type request/response header.

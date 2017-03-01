@@ -54,6 +54,7 @@ import io.grpc.Context;
 import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
+import io.grpc.InternalDecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -147,8 +148,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     }
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
-    String advertisedEncodings = decompressorRegistry.getRawAdvertisedMessageEncodings();
-    if (!advertisedEncodings.isEmpty()) {
+    byte[] advertisedEncodings =
+        InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(decompressorRegistry);
+    if (advertisedEncodings.length != 0) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
     statsTraceCtx.propagateToHeaders(headers);

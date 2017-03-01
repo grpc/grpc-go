@@ -46,6 +46,7 @@ import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
+import io.grpc.InternalDecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -59,7 +60,7 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;
   private final Context.CancellableContext context;
-  private final String messageAcceptEncoding;
+  private final byte[] messageAcceptEncoding;
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
   private final StatsTraceContext statsTraceCtx;
@@ -108,8 +109,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       compressor = Codec.Identity.NONE;
     } else {
       if (messageAcceptEncoding != null) {
-        List<String> acceptedEncodingsList =
-            ACCEPT_ENCODING_SPLITTER.splitToList(messageAcceptEncoding);
+        // TODO(carl-mastrangelo): remove the string allocation.
+        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
+            new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
         if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
           // resort to using no compression.
           compressor = Codec.Identity.NONE;
@@ -125,8 +127,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     stream.setCompressor(compressor);
 
     headers.discardAll(MESSAGE_ACCEPT_ENCODING_KEY);
-    String advertisedEncodings = decompressorRegistry.getRawAdvertisedMessageEncodings();
-    if (!advertisedEncodings.isEmpty()) {
+    byte[] advertisedEncodings =
+        InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(decompressorRegistry);
+    if (advertisedEncodings.length != 0) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
     }
 

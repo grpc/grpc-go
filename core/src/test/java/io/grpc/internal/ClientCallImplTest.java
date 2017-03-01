@@ -304,8 +304,9 @@ public class ClientCallImplTest {
         same(statsTraceCtx));
     Metadata actual = metadataCaptor.getValue();
 
-    Set<String> acceptedEncodings =
-        ImmutableSet.copyOf(actual.getAll(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+    // there should only be one.
+    Set<String> acceptedEncodings = ImmutableSet.of(
+        new String(actual.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY), GrpcUtil.US_ASCII));
     assertEquals(decompressorRegistry.getAdvertisedMessageEncodings(), acceptedEncodings);
   }
 
@@ -417,8 +418,8 @@ public class ClientCallImplTest {
 
     ClientCallImpl.prepareHeaders(m, customRegistry, Codec.Identity.NONE, statsTraceCtx);
 
-    Iterable<String> acceptedEncodings =
-        ACCEPT_ENCODING_SPLITTER.split(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY));
+    Iterable<String> acceptedEncodings = ACCEPT_ENCODING_SPLITTER.split(
+        new String(m.get(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY), GrpcUtil.US_ASCII));
 
     // Order may be different, since decoder priorities have not yet been implemented.
     assertEquals(ImmutableSet.of("b", "a"), ImmutableSet.copyOf(acceptedEncodings));
@@ -428,7 +429,7 @@ public class ClientCallImplTest {
   public void prepareHeaders_removeReservedHeaders() {
     Metadata m = new Metadata();
     m.put(GrpcUtil.MESSAGE_ENCODING_KEY, "gzip");
-    m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip");
+    m.put(GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY, "gzip".getBytes(GrpcUtil.US_ASCII));
 
     ClientCallImpl.prepareHeaders(m, DecompressorRegistry.emptyInstance(), Codec.Identity.NONE,
         statsTraceCtx);
