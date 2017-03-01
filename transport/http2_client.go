@@ -495,7 +495,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	defer func() {
 		if !rstStream {
 			t.streamsQuota.add(1)
+			return
 		}
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}()
 	s.mu.Lock()
 	rstStream = s.rstStream
@@ -516,7 +518,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.mu.Unlock()
 	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
 		rstStream = true
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}
 }
 
@@ -761,7 +762,6 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
-			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
 			return
 		}
 		s.mu.Unlock()
