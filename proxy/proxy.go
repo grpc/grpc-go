@@ -34,12 +34,16 @@
 // Package proxy defines interfaces to support proxyies in gRPC.
 package proxy // import "google.golang.org/grpc/proxy"
 import (
+	"errors"
 	"io"
 	"net"
 	"time"
 
 	"golang.org/x/net/context"
 )
+
+// ErrIneffective indicates the mapper function is not effective.
+var ErrIneffective = errors.New("Mapper function is not effective")
 
 // Mapper defines the interface gRPC uses to map the proxy address.
 type Mapper interface {
@@ -56,9 +60,15 @@ func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration)
 	return func(addr string, d time.Duration) (conn net.Conn, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), d)
 		defer cancel()
+		var skipHandshake bool
+
 		newAddr, h, err := pm.MapAddress(ctx, addr)
 		if err != nil {
-			return nil, err
+			if err != ErrIneffective {
+				return nil, err
+			}
+			skipHandshake = true
+			newAddr = addr
 		}
 
 		if deadline, ok := ctx.Deadline(); ok {
@@ -69,7 +79,10 @@ func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration)
 		if err != nil {
 			return
 		}
-		return doHTTPConnectHandshake(context.Background(), conn, addr, h)
+		if !skipHandshake {
+			conn, err = doHTTPConnectHandshake(context.Background(), conn, addr, h)
+		}
+		return
 	}
 }
 

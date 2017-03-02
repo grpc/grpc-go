@@ -3552,11 +3552,15 @@ func (p *proxyServer) stop() {
 }
 
 type proxyMapper struct {
-	oldAddr string
-	newAddr string
+	oldAddr     string
+	newAddr     string
+	ineffective bool
 }
 
 func (p *proxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
+	if p.ineffective {
+		return "", nil, proxy.ErrIneffective
+	}
 	if address != p.oldAddr {
 		return "", nil, fmt.Errorf("in proxy MapAddress, got address: %s, want address: %s", address, p.oldAddr)
 	}
@@ -3588,6 +3592,39 @@ func testProxyMapAddress(t *testing.T, e env) {
 			oldAddr: te.srvAddr,
 			newAddr: lis.Addr().String(),
 		},
+		func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout(e.network, addr, timeout)
+		},
+	)
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx, grpc.FailFast(false))
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
+	}
+	if _, err := stream.Recv(); err != io.EOF {
+		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+	}
+}
+
+func TestProxyMapAddressIneffective(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range []env{tcpClearEnv, tcpTLSEnv} {
+		testProxyMapAddressIneffective(t, e)
+	}
+}
+
+func testProxyMapAddressIneffective(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	te.dialer = proxy.NewDialerWithConnectHandshake(
+		&proxyMapper{ineffective: true},
 		func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout(e.network, addr, timeout)
 		},
