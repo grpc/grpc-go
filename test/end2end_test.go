@@ -3583,15 +3583,15 @@ func testProxyMapAddress(t *testing.T, e env) {
 	go p.run()
 	defer p.stop()
 
-	te.dialer = func(addr string, timeout time.Duration) (conn net.Conn, err error) {
-		dialer := proxy.NewTCPDialerWithConnectHandshake(&proxyMapper{
+	te.dialer = proxy.NewDialerWithConnectHandshake(
+		&proxyMapper{
 			oldAddr: te.srvAddr,
 			newAddr: lis.Addr().String(),
-		})
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		return dialer(ctx, addr)
-	}
+		},
+		func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout(e.network, addr, timeout)
+		},
+	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()

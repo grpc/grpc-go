@@ -49,20 +49,22 @@ type Mapper interface {
 	MapAddress(ctx context.Context, address string) (string, map[string][]string, error)
 }
 
-// NewTCPDialerWithConnectHandshake returns a dialer with the provided Mapper.
-// The returned dialer uses Mapper to get the proxy's address, dial to the proxy,
-// does HTTP CONNECT handshake and returns the connection.
-func NewTCPDialerWithConnectHandshake(pm Mapper) func(ctx context.Context, addr string) (net.Conn, error) {
-	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
+// NewDialerWithConnectHandshake returns a dialer with the provided Mapper.
+// The returned dialer uses Mapper to get the proxy's address, dial to the proxy with the
+// provided dialer, does HTTP CONNECT handshake and returns the connection.
+func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
+	return func(addr string, d time.Duration) (conn net.Conn, err error) {
+		ctx, cancel := context.WithTimeout(context.Background(), d)
+		defer cancel()
 		newAddr, h, err := pm.MapAddress(ctx, addr)
 		if err != nil {
 			return nil, err
 		}
 
 		if deadline, ok := ctx.Deadline(); ok {
-			conn, err = net.DialTimeout("tcp", newAddr, deadline.Sub(time.Now()))
+			conn, err = dialer(newAddr, deadline.Sub(time.Now()))
 		} else {
-			conn, err = net.DialTimeout("tcp", newAddr, 0)
+			conn, err = dialer(newAddr, 0)
 		}
 		if err != nil {
 			return
