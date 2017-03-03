@@ -224,9 +224,6 @@ public class ManagedChannelImplTest {
     assertEquals(executor.getPendingTasks() + " should be empty", 0, executor.numPendingTasks());
   }
 
-  /**
-   * The counterpart of {@link ManagedChannelImplIdlenessTest#enterIdleModeAfterForceExit}.
-   */
   @Test
   @SuppressWarnings("unchecked")
   public void idleModeDisabled() {
