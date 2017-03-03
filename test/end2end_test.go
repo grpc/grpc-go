@@ -3510,10 +3510,7 @@ func (p *proxyServer) run() {
 	}
 	p.in = in
 
-	p.t.Logf("received conn")
-
 	req, err := http.ReadRequest(bufio.NewReader(in))
-	p.t.Logf("received request: %+v", req)
 	if err != nil {
 		p.t.Errorf("failed to read CONNECT req: %v", err)
 		return
@@ -3525,7 +3522,6 @@ func (p *proxyServer) run() {
 		p.t.Errorf("get wrong CONNECT req: %+v", req)
 		return
 	}
-	p.t.Logf("req.URL.Host: %+v", req.URL.Host)
 
 	out, err := net.Dial("tcp", req.URL.Host)
 	if err != nil {
@@ -3534,11 +3530,9 @@ func (p *proxyServer) run() {
 	}
 	resp := http.Response{StatusCode: 200, Proto: "HTTP/1.0"}
 	resp.Write(p.in)
-	p.t.Logf("resp sent")
 	p.out = out
 	go io.Copy(p.in, p.out)
 	go io.Copy(p.out, p.in)
-	p.t.Logf("run return")
 }
 
 func (p *proxyServer) stop() {
