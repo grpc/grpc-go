@@ -32,6 +32,28 @@ channel on Freenode](http://webchat.freenode.net/?channels=grpc), or send an
 email to [grpc-io@googlegroups.com](grpc-io@googlegroups.com) to discuss
 beforehand.
 
+## Pull Requests & Commits
+
+We have few conventions for keeping history clean and making code reviews easier
+for reviewers:
+
+* First line of commit messages should be in format of
+
+  `package-name: summary of change`
+
+  where the summary finishes the sentence: `This commit improves gRPC to ____________.`
+
+  for example:
+
+  `core,netty,interop-testing: add capacitive duractance to turbo encabulators`
+
+* Every time you receive a feedback on your pull request, push changes that
+  address it as a separate one or multiple commits with a descriptive commit
+  message (try avoid using vauge `addressed pr feedback` type of messages).
+
+  Project maintainers are obligated to squash those commits into one
+  merging.
+
 ## Proposing changes
 
 Make sure that `./gradlew build` (`gradlew build` on Windows) completes
