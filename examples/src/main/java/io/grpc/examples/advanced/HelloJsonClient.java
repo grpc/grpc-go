@@ -45,7 +45,6 @@ import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.examples.helloworld.HelloWorldClient;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.AbstractStub;
-
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;

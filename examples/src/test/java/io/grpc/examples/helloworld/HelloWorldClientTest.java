@@ -39,7 +39,6 @@ import io.grpc.Server;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

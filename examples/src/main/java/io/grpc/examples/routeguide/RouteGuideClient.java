@@ -33,7 +33,6 @@ package io.grpc.examples.routeguide;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.Message;
-
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -41,7 +40,6 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideBlockingStub;
 import io.grpc.examples.routeguide.RouteGuideGrpc.RouteGuideStub;
 import io.grpc.stub.StreamObserver;
-
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
