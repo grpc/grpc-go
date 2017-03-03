@@ -37,6 +37,8 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"time"
 
 	"golang.org/x/net/context"
@@ -51,6 +53,29 @@ type Mapper interface {
 	// It can be used to programmatically override the address that we will connect to.
 	// It returns the address of the proxy, and the header to be sent in the request.
 	MapAddress(ctx context.Context, address string) (string, map[string][]string, error)
+}
+
+// NewEnvironmentProxyMapper returns a Mapper that returns the address of the proxy
+// as indicated by the environment variables HTTP_PROXY, HTTPS_PROXY and NO_PROXY
+// (or the lowercase versions thereof).
+func NewEnvironmentProxyMapper() Mapper {
+	return &environmentProxyMapper{}
+}
+
+type environmentProxyMapper struct{}
+
+func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
+	req := &http.Request{
+		URL: &url.URL{Host: address},
+	}
+	url, err := http.ProxyFromEnvironment(req)
+	if err != nil {
+		return "", nil, err
+	}
+	if url == nil {
+		return "", nil, ErrIneffective
+	}
+	return url.String(), nil, nil
 }
 
 // NewDialerWithConnectHandshake returns a dialer with the provided Mapper.
