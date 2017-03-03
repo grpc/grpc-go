@@ -309,8 +309,7 @@ public class NettyClientTransportTest {
       fail("The stream should have been failed due to server received header exceeds header list"
           + " size limit!");
     } catch (Exception e) {
-      Throwable rootCause = getRootCause(e);
-      Status status = ((StatusException) rootCause).getStatus();
+      Status status = Status.fromThrowable(e);
       assertEquals(status.toString(), Status.Code.INTERNAL, status.getCode());
     }
   }
