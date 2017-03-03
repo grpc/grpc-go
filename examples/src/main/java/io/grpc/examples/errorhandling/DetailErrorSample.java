@@ -31,6 +31,8 @@
 
 package io.grpc.examples.errorhandling;
 
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+
 import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.util.concurrent.FutureCallback;
@@ -154,18 +156,21 @@ public class DetailErrorSample {
 
     final CountDownLatch latch = new CountDownLatch(1);
 
-    Futures.addCallback(response, new FutureCallback<HelloReply>() {
-      @Override
-      public void onSuccess(@Nullable HelloReply result) {
-        // Won't be called, since the server in this example always fails.
-      }
+    Futures.addCallback(
+        response,
+        new FutureCallback<HelloReply>() {
+          @Override
+          public void onSuccess(@Nullable HelloReply result) {
+            // Won't be called, since the server in this example always fails.
+          }
 
-      @Override
-      public void onFailure(Throwable t) {
-        verifyErrorReply(t);
-        latch.countDown();
-      }
-    });
+          @Override
+          public void onFailure(Throwable t) {
+            verifyErrorReply(t);
+            latch.countDown();
+          }
+        },
+        directExecutor());
 
     if (!Uninterruptibles.awaitUninterruptibly(latch, 1, TimeUnit.SECONDS)) {
       throw new RuntimeException("timeout!");
