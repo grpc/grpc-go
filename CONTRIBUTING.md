@@ -38,3 +38,16 @@ Make sure that `./gradlew build` (`gradlew build` on Windows) completes
 successfully without any new warnings. Then create a Pull Request with your
 changes. When the changes are accepted, they will be merged or cherry-picked by
 a gRPC core developer.
+
+## Running tests
+
+### Jetty ALPN setup for IntelliJ
+
+The tests in interop-testing project require jetty-alpn agent running in the background
+otherwise they'll fail. Here are instructions on how to setup IntellJ IDEA to enable running
+those tests in IDE:
+
+* Settings -> Build Tools -> Gradle -> Runner -> select Gradle Test Runner
+* View -> Tool Windows -> Gradle -> Edit Run Configuration -> Defaults -> JUnit -> Before lauch -> + -> Run Gradle task, enter the task in the build.gradle that sets the javaagent.
+
+Step 1 must be taken, otherwise by the default JUnit Test Runner running a single test in IDE will trigger all the tests.
