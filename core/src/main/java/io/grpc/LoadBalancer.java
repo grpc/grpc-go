@@ -199,7 +199,7 @@ public abstract class LoadBalancer {
     // subchannel being null and error being OK means RPC needs to wait
     private final Status status;
 
-    private PickResult(Subchannel subchannel, Status status) {
+    private PickResult(@Nullable Subchannel subchannel, Status status) {
       this.subchannel = subchannel;
       this.status = Preconditions.checkNotNull(status, "status");
     }
