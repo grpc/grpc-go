@@ -55,6 +55,7 @@ import io.grpc.Deadline;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.InternalDecompressorRegistry;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -125,8 +126,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   interface ClientTransportProvider {
     /**
      * Returns a transport for a new call.
+     *
+     * @param args object containing call arguments.
      */
-    ClientTransport get(CallOptions callOptions, Metadata headers);
+    ClientTransport get(PickSubchannelArgs args);
   }
 
   ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
@@ -215,7 +218,8 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     if (!deadlineExceeded) {
       updateTimeoutHeaders(effectiveDeadline, callOptions.getDeadline(),
           context.getDeadline(), headers);
-      ClientTransport transport = clientTransportProvider.get(callOptions, headers);
+      ClientTransport transport = clientTransportProvider.get(
+          new PickSubchannelArgsImpl(method, headers, callOptions));
       Context origContext = context.attach();
       try {
         stream = transport.newStream(method, headers, callOptions, statsTraceCtx);

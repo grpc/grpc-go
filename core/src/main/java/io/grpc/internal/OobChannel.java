@@ -43,9 +43,9 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientCallImpl.ClientTransportProvider;
@@ -81,7 +81,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ClientTransport get(CallOptions callOptions, Metadata headers) {
+    public ClientTransport get(PickSubchannelArgs args) {
       // delayed transport's newStream() always acquires a lock, but concurrent performance doesn't
       // matter here because OOB communication should be sparse, and it's not on application RPC's
       // critical path.
@@ -158,7 +158,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
         final PickResult result = PickResult.withSubchannel(subchannelImpl);
 
         @Override
-        public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+        public PickResult pickSubchannel(PickSubchannelArgs args) {
           return result;
         }
       };
@@ -227,7 +227,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
             final PickResult errorResult = PickResult.withError(newState.getStatus());
 
             @Override
-            public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+            public PickResult pickSubchannel(PickSubchannelArgs args) {
               return errorResult;
             }
           });

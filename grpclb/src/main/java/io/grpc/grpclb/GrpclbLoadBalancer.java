@@ -45,7 +45,6 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
@@ -78,7 +77,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @VisibleForTesting
   static final SubchannelPicker BUFFER_PICKER = new SubchannelPicker() {
       @Override
-      public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+      public PickResult pickSubchannel(PickSubchannelArgs args) {
         return PickResult.withNoResult();
       }
     };
@@ -471,7 +470,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     }
 
     @Override
-    public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
       return result;
     }
   }
@@ -487,7 +486,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     }
 
     @Override
-    public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
       synchronized (list) {
         PickResult result = list.get(index);
         index++;

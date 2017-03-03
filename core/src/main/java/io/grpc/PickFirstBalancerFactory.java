@@ -35,6 +35,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
+import io.grpc.LoadBalancer.SubchannelPicker;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,15 +156,15 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
    * received in constructor.
    */
   @VisibleForTesting
-  static final class Picker extends LoadBalancer.SubchannelPicker {
-    private final LoadBalancer.PickResult result;
+  static final class Picker extends SubchannelPicker {
+    private final PickResult result;
 
-    Picker(LoadBalancer.PickResult result) {
+    Picker(PickResult result) {
       this.result = checkNotNull(result, "result");
     }
 
     @Override
-    public LoadBalancer.PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
       return result;
     }
   }

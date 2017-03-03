@@ -43,9 +43,9 @@ import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
-import io.grpc.Metadata;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
@@ -247,7 +247,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
       if (size > 0) {
         return PickResult.withSubchannel(nextSubchannel());
       }

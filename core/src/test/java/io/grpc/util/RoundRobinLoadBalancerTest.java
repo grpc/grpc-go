@@ -55,8 +55,8 @@ import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.Helper;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
-import io.grpc.Metadata;
 import io.grpc.ResolvedServerInfo;
 import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
@@ -67,6 +67,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -96,6 +97,8 @@ public class RoundRobinLoadBalancerTest {
   private Helper mockHelper;
   @Mock
   private Subchannel mockSubchannel;
+  @Mock // This LoadBalancer doesn't use any of the arg fields, as verified in tearDown().
+  private PickSubchannelArgs mockArgs;
 
   @Before
   public void setUp() {
@@ -119,6 +122,11 @@ public class RoundRobinLoadBalancerTest {
 
     loadBalancer = (RoundRobinLoadBalancer) RoundRobinLoadBalancerFactory.getInstance()
         .newLoadBalancer(mockHelper);
+  }
+
+  @After
+  public void tearDown() throws Exception {
+    verifyNoMoreInteractions(mockArgs);
   }
 
   @Test
@@ -299,23 +307,19 @@ public class RoundRobinLoadBalancerTest {
 
     assertThat(picker.getList()).containsExactly(subchannel, subchannel1, subchannel2);
 
-    assertEquals(subchannel,
-        picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
-    assertEquals(subchannel1,
-        picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
-    assertEquals(subchannel2,
-        picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
-    assertEquals(subchannel,
-        picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
+    assertEquals(subchannel, picker.pickSubchannel(mockArgs).getSubchannel());
+    assertEquals(subchannel1, picker.pickSubchannel(mockArgs).getSubchannel());
+    assertEquals(subchannel2, picker.pickSubchannel(mockArgs).getSubchannel());
+    assertEquals(subchannel, picker.pickSubchannel(mockArgs).getSubchannel());
   }
 
   @Test
   public void pickerEmptyList() throws Exception {
     Picker picker = new Picker(Lists.<Subchannel>newArrayList(), Status.UNKNOWN);
 
-    assertEquals(null, picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
+    assertEquals(null, picker.pickSubchannel(mockArgs).getSubchannel());
     assertEquals(Status.UNKNOWN,
-        picker.pickSubchannel(Attributes.EMPTY, new Metadata()).getStatus());
+        picker.pickSubchannel(mockArgs).getStatus());
   }
 
   @Test
@@ -323,8 +327,7 @@ public class RoundRobinLoadBalancerTest {
     Status error = Status.NOT_FOUND.withDescription("nameResolutionError");
     loadBalancer.handleNameResolutionError(error);
     verify(mockHelper).updatePicker(pickerCaptor.capture());
-    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertNull(pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
     verifyNoMoreInteractions(mockHelper);
@@ -341,13 +344,11 @@ public class RoundRobinLoadBalancerTest {
         any(Attributes.class));
     verify(mockHelper, times(2)).updatePicker(pickerCaptor.capture());
 
-    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    LoadBalancer.PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(readySubchannel, pickResult.getSubchannel());
     assertEquals(Status.OK.getCode(), pickResult.getStatus().getCode());
 
-    LoadBalancer.PickResult pickResult2 = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    LoadBalancer.PickResult pickResult2 = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(readySubchannel, pickResult2.getSubchannel());
     verifyNoMoreInteractions(mockHelper);
   }

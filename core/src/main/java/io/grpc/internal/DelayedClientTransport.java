@@ -35,6 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -143,11 +144,12 @@ final class DelayedClientTransport implements ManagedClientTransport {
       CallOptions callOptions, StatsTraceContext statsTraceCtx) {
     try {
       SubchannelPicker picker = null;
+      PickSubchannelArgs args = new PickSubchannelArgsImpl(method, headers, callOptions);
       long pickerVersion = -1;
       synchronized (lock) {
         if (!shutdown) {
           if (lastPicker == null) {
-            return createPendingStream(method, headers, callOptions, statsTraceCtx);
+            return createPendingStream(args, statsTraceCtx);
           }
           picker = lastPicker;
           pickerVersion = lastPickerVersion;
@@ -155,11 +157,12 @@ final class DelayedClientTransport implements ManagedClientTransport {
       }
       if (picker != null) {
         while (true) {
-          PickResult pickResult = picker.pickSubchannel(callOptions.getAffinity(), headers);
-          ClientTransport transport = GrpcUtil.getTransportFromPickResult(
-              pickResult, callOptions.isWaitForReady());
+          PickResult pickResult = picker.pickSubchannel(args);
+          ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult,
+              callOptions.isWaitForReady());
           if (transport != null) {
-            return transport.newStream(method, headers, callOptions, statsTraceCtx);
+            return transport.newStream(args.getMethodDescriptor(), args.getHeaders(),
+                args.getCallOptions(), statsTraceCtx);
           }
           // This picker's conclusion is "buffer".  If there hasn't been a newer picker set
           // (possible race with reprocess()), we will buffer it.  Otherwise, will try with the new
@@ -169,7 +172,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
               break;
             }
             if (pickerVersion == lastPickerVersion) {
-              return createPendingStream(method, headers, callOptions, statsTraceCtx);
+              return createPendingStream(args, statsTraceCtx);
             }
             picker = lastPicker;
             pickerVersion = lastPickerVersion;
@@ -193,11 +196,9 @@ final class DelayedClientTransport implements ManagedClientTransport {
    * schedule tasks on channelExecutor.
    */
   @GuardedBy("lock")
-  private PendingStream createPendingStream(
-      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions,
+  private PendingStream createPendingStream(PickSubchannelArgs args,
       StatsTraceContext statsTraceCtx) {
-    PendingStream pendingStream =
-        new PendingStream(method, headers, callOptions, statsTraceCtx);
+    PendingStream pendingStream = new PendingStream(args, statsTraceCtx);
     pendingStreams.add(pendingStream);
     if (pendingStreams.size() == 1) {
       channelExecutor.executeLater(reportTransportInUse);
@@ -290,17 +291,17 @@ final class DelayedClientTransport implements ManagedClientTransport {
     }
 
     for (final PendingStream stream : toProcess) {
-      PickResult pickResult = picker.pickSubchannel(
-          stream.callOptions.getAffinity(), stream.headers);
-      final ClientTransport transport = GrpcUtil.getTransportFromPickResult(
-          pickResult, stream.callOptions.isWaitForReady());
+      PickResult pickResult = picker.pickSubchannel(stream.args);
+      CallOptions callOptions = stream.args.getCallOptions();
+      final ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult,
+          callOptions.isWaitForReady());
       if (transport != null) {
         Executor executor = defaultAppExecutor;
         // createRealStream may be expensive. It will start real streams on the transport. If
         // there are pending requests, they will be serialized too, which may be expensive. Since
         // we are now on transport thread, we need to offload the work to an executor.
-        if (stream.callOptions.getExecutor() != null) {
-          executor = stream.callOptions.getExecutor();
+        if (callOptions.getExecutor() != null) {
+          executor = callOptions.getExecutor();
         }
         executor.execute(new Runnable() {
             @Override
@@ -347,18 +348,12 @@ final class DelayedClientTransport implements ManagedClientTransport {
   }
 
   private class PendingStream extends DelayedStream {
-    private final MethodDescriptor<?, ?> method;
-    private final Metadata headers;
-    private final CallOptions callOptions;
-    private final Context context;
+    private final PickSubchannelArgs args;
     private final StatsTraceContext statsTraceCtx;
+    private final Context context = Context.current();
 
-    private PendingStream(MethodDescriptor<?, ?> method, Metadata headers,
-        CallOptions callOptions, StatsTraceContext statsTraceCtx) {
-      this.method = method;
-      this.headers = headers;
-      this.callOptions = callOptions;
-      this.context = Context.current();
+    private PendingStream(PickSubchannelArgs args, StatsTraceContext statsTraceCtx) {
+      this.args = args;
       this.statsTraceCtx = statsTraceCtx;
     }
 
@@ -366,7 +361,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
       ClientStream realStream;
       Context origContext = context.attach();
       try {
-        realStream = transport.newStream(method, headers, callOptions, statsTraceCtx);
+        realStream = transport.newStream(args.getMethodDescriptor(), args.getHeaders(),
+            args.getCallOptions(), statsTraceCtx);
       } finally {
         context.detach(origContext);
       }

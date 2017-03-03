@@ -52,6 +52,7 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -122,7 +123,7 @@ public class DelayedClientTransportTest {
 
   @Before public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(mockPicker.pickSubchannel(any(Attributes.class), any(Metadata.class)))
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(mockSubchannel));
     when(mockSubchannel.obtainActiveTransport()).thenReturn(mockRealTransport);
     when(mockRealTransport.newStream(same(method), same(headers), same(callOptions),
@@ -313,9 +314,9 @@ public class DelayedClientTransportTest {
     SubchannelImpl subchannel2 = mock(SubchannelImpl.class);
     SubchannelImpl subchannel3 = mock(SubchannelImpl.class);
     when(mockRealTransport.newStream(any(MethodDescriptor.class), any(Metadata.class),
-            any(CallOptions.class), same(statsTraceCtx))).thenReturn(mockRealStream);
+        any(CallOptions.class), same(statsTraceCtx))).thenReturn(mockRealStream);
     when(mockRealTransport2.newStream(any(MethodDescriptor.class), any(Metadata.class),
-            any(CallOptions.class), same(statsTraceCtx))).thenReturn(mockRealStream2);
+        any(CallOptions.class), same(statsTraceCtx))).thenReturn(mockRealStream2);
     when(subchannel1.obtainActiveTransport()).thenReturn(mockRealTransport);
     when(subchannel2.obtainActiveTransport()).thenReturn(mockRealTransport2);
     when(subchannel3.obtainActiveTransport()).thenReturn(null);
@@ -323,31 +324,48 @@ public class DelayedClientTransportTest {
     // Fail-fast streams
     DelayedStream ff1 = (DelayedStream) delayedTransport.newStream(
         method, headers, failFastCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl ff1args = new PickSubchannelArgsImpl(method, headers,
+        failFastCallOptions);
     verify(transportListener).transportInUse(true);
     DelayedStream ff2 = (DelayedStream) delayedTransport.newStream(
         method2, headers2, failFastCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl ff2args = new PickSubchannelArgsImpl(method2, headers2,
+        failFastCallOptions);
     DelayedStream ff3 = (DelayedStream) delayedTransport.newStream(
         method, headers, failFastCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl ff3args = new PickSubchannelArgsImpl(method, headers,
+        failFastCallOptions);
     DelayedStream ff4 = (DelayedStream) delayedTransport.newStream(
         method2, headers2, failFastCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl ff4args = new PickSubchannelArgsImpl(method2, headers2,
+        failFastCallOptions);
 
     // Wait-for-ready streams
     FakeClock wfr3Executor = new FakeClock();
     DelayedStream wfr1 = (DelayedStream) delayedTransport.newStream(
         method, headers, waitForReadyCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl wfr1args = new PickSubchannelArgsImpl(method, headers,
+        waitForReadyCallOptions);
     DelayedStream wfr2 = (DelayedStream) delayedTransport.newStream(
         method2, headers2, waitForReadyCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl wfr2args = new PickSubchannelArgsImpl(method2, headers2,
+        waitForReadyCallOptions);
+    CallOptions wfr3callOptions = waitForReadyCallOptions.withExecutor(
+        wfr3Executor.getScheduledExecutorService());
     DelayedStream wfr3 = (DelayedStream) delayedTransport.newStream(
-        method, headers,
-        waitForReadyCallOptions.withExecutor(wfr3Executor.getScheduledExecutorService()),
-        statsTraceCtx);
+        method, headers, wfr3callOptions, statsTraceCtx);
+    PickSubchannelArgsImpl wfr3args = new PickSubchannelArgsImpl(method, headers,
+        wfr3callOptions);
     DelayedStream wfr4 = (DelayedStream) delayedTransport.newStream(
         method2, headers2, waitForReadyCallOptions, statsTraceCtx);
+    PickSubchannelArgsImpl wfr4args = new PickSubchannelArgsImpl(method2, headers2,
+        waitForReadyCallOptions);
+
     assertEquals(8, delayedTransport.getPendingStreamsCount());
 
     // First reprocess(). Some will proceed, some will fail and the rest will stay buffered.
     SubchannelPicker picker = mock(SubchannelPicker.class);
-    when(picker.pickSubchannel(any(Attributes.class), any(Metadata.class))).thenReturn(
+    when(picker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         // For the fail-fast streams
         PickResult.withSubchannel(subchannel1),    // ff1: proceed
         PickResult.withError(Status.UNAVAILABLE),  // ff2: fail
@@ -361,14 +379,15 @@ public class DelayedClientTransportTest {
     delayedTransport.reprocess(picker);
 
     assertEquals(5, delayedTransport.getPendingStreamsCount());
-    inOrder.verify(picker).pickSubchannel(affinity1, headers);  // ff1
-    inOrder.verify(picker).pickSubchannel(affinity1, headers2);  // ff2
-    inOrder.verify(picker).pickSubchannel(affinity1, headers);  // ff3
-    inOrder.verify(picker).pickSubchannel(affinity1, headers2);  // ff4
-    inOrder.verify(picker).pickSubchannel(affinity2, headers);  // wfr1
-    inOrder.verify(picker).pickSubchannel(affinity2, headers2);  // wfr2
-    inOrder.verify(picker).pickSubchannel(affinity2, headers);  // wfr3
-    inOrder.verify(picker).pickSubchannel(affinity2, headers2);  // wfr4
+    inOrder.verify(picker).pickSubchannel(ff1args);
+    inOrder.verify(picker).pickSubchannel(ff2args);
+    inOrder.verify(picker).pickSubchannel(ff3args);
+    inOrder.verify(picker).pickSubchannel(ff4args);
+    inOrder.verify(picker).pickSubchannel(wfr1args);
+    inOrder.verify(picker).pickSubchannel(wfr2args);
+    inOrder.verify(picker).pickSubchannel(wfr3args);
+    inOrder.verify(picker).pickSubchannel(wfr4args);
+
     inOrder.verifyNoMoreInteractions();
     // Make sure that real transport creates streams in the executor
     verify(mockRealTransport, never()).newStream(any(MethodDescriptor.class),
@@ -393,7 +412,7 @@ public class DelayedClientTransportTest {
 
     // Second reprocess(). All existing streams will proceed.
     picker = mock(SubchannelPicker.class);
-    when(picker.pickSubchannel(any(Attributes.class), any(Metadata.class))).thenReturn(
+    when(picker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel1),  // ff3
         PickResult.withSubchannel(subchannel2),  // ff4
         PickResult.withSubchannel(subchannel2),  // wfr2
@@ -407,11 +426,11 @@ public class DelayedClientTransportTest {
     delayedTransport.reprocess(picker);
     assertEquals(0, delayedTransport.getPendingStreamsCount());
     verify(transportListener).transportInUse(false);
-    inOrder.verify(picker).pickSubchannel(affinity1, headers);  // ff3
-    inOrder.verify(picker).pickSubchannel(affinity1, headers2);  // ff4
-    inOrder.verify(picker).pickSubchannel(affinity2, headers2);  // wfr2
-    inOrder.verify(picker).pickSubchannel(affinity2, headers);  // wfr3
-    inOrder.verify(picker).pickSubchannel(affinity2, headers2);  // wfr4
+    inOrder.verify(picker).pickSubchannel(ff3args);  // ff3
+    inOrder.verify(picker).pickSubchannel(ff4args);  // ff4
+    inOrder.verify(picker).pickSubchannel(wfr2args);  // wfr2
+    inOrder.verify(picker).pickSubchannel(wfr3args);  // wfr3
+    inOrder.verify(picker).pickSubchannel(wfr4args);  // wfr4
     inOrder.verifyNoMoreInteractions();
     fakeExecutor.runDueTasks();
     assertEquals(0, fakeExecutor.numPendingTasks());
@@ -420,7 +439,7 @@ public class DelayedClientTransportTest {
     assertSame(mockRealStream2, wfr2.getRealStream());
     assertSame(mockRealStream2, wfr4.getRealStream());
 
-    // If there is an executor in the CallOptions, it will be used to create the real tream.
+    // If there is an executor in the CallOptions, it will be used to create the real stream.
     assertNull(wfr3.getRealStream());
     wfr3Executor.runDueTasks();
     assertSame(mockRealStream, wfr3.getRealStream());
@@ -429,7 +448,8 @@ public class DelayedClientTransportTest {
     DelayedStream wfr5 = (DelayedStream) delayedTransport.newStream(
         method, headers, waitForReadyCallOptions, statsTraceCtx);
     assertNull(wfr5.getRealStream());
-    inOrder.verify(picker).pickSubchannel(affinity2, headers);
+    inOrder.verify(picker).pickSubchannel(
+        new PickSubchannelArgsImpl(method, headers, waitForReadyCallOptions));
     inOrder.verifyNoMoreInteractions();
     assertEquals(1, delayedTransport.getPendingStreamsCount());
 
@@ -439,10 +459,11 @@ public class DelayedClientTransportTest {
     verify(transportListener, never()).transportTerminated();
     // ... until it's gone
     picker = mock(SubchannelPicker.class);
-    when(picker.pickSubchannel(any(Attributes.class), any(Metadata.class))).thenReturn(
+    when(picker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel1));
     delayedTransport.reprocess(picker);
-    verify(picker).pickSubchannel(affinity2, headers);
+    verify(picker).pickSubchannel(
+        new PickSubchannelArgsImpl(method, headers, waitForReadyCallOptions));
     fakeExecutor.runDueTasks();
     assertSame(mockRealStream, wfr5.getRealStream());
     assertEquals(0, delayedTransport.getPendingStreamsCount());
@@ -454,7 +475,7 @@ public class DelayedClientTransportTest {
     SubchannelPicker picker = mock(SubchannelPicker.class);
     SubchannelImpl subchannel = mock(SubchannelImpl.class);
     when(subchannel.obtainActiveTransport()).thenReturn(mockRealTransport);
-    when(picker.pickSubchannel(any(Attributes.class), any(Metadata.class))).thenReturn(
+    when(picker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel));
     when(mockRealTransport.newStream(any(MethodDescriptor.class), any(Metadata.class),
             any(CallOptions.class), same(statsTraceCtx))).thenReturn(mockRealStream);
@@ -465,7 +486,7 @@ public class DelayedClientTransportTest {
     // Though picker was not originally used, it will be saved and serve future streams.
     ClientStream stream = delayedTransport.newStream(
         method, headers, CallOptions.DEFAULT, statsTraceCtx);
-    verify(picker).pickSubchannel(CallOptions.DEFAULT.getAffinity(), headers);
+    verify(picker).pickSubchannel(new PickSubchannelArgsImpl(method, headers, CallOptions.DEFAULT));
     verify(subchannel).obtainActiveTransport();
     assertSame(mockRealStream, stream);
   }
@@ -491,11 +512,11 @@ public class DelayedClientTransportTest {
           }
           return PickResult.withNoResult();
         }
-      }).when(picker).pickSubchannel(any(Attributes.class), any(Metadata.class));
+    }).when(picker).pickSubchannel(any(PickSubchannelArgs.class));
 
     // Because there is no pending stream yet, it will do nothing but save the picker.
     delayedTransport.reprocess(picker);
-    verify(picker, never()).pickSubchannel(any(Attributes.class), any(Metadata.class));
+    verify(picker, never()).pickSubchannel(any(PickSubchannelArgs.class));
 
     Thread sideThread = new Thread("sideThread") {
         @Override
@@ -506,13 +527,16 @@ public class DelayedClientTransportTest {
       };
     sideThread.start();
 
+    PickSubchannelArgsImpl args = new PickSubchannelArgsImpl(method, headers, callOptions);
+    PickSubchannelArgsImpl args2 = new PickSubchannelArgsImpl(method, headers2, callOptions);
+
     // Is called from sideThread
-    verify(picker, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker, timeout(5000)).pickSubchannel(args);
 
     // Because stream has not been buffered (it's still stuck in newStream()), this will do nothing,
     // but incrementing the picker version.
     delayedTransport.reprocess(picker);
-    verify(picker).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker).pickSubchannel(args);
 
     // Now let the stuck newStream() through
     barrier.await(5, TimeUnit.SECONDS);
@@ -520,7 +544,7 @@ public class DelayedClientTransportTest {
     sideThread.join(5000);
     assertFalse("sideThread should've exited", sideThread.isAlive());
     // newStream() detects that there has been a new picker while it's stuck, thus will pick again.
-    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker, times(2)).pickSubchannel(args);
 
     barrier.reset();
     nextPickShouldWait.set(true);
@@ -536,19 +560,19 @@ public class DelayedClientTransportTest {
       };
     sideThread2.start();
     // The second stream will see the first picker
-    verify(picker, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers2);
+    verify(picker, timeout(5000)).pickSubchannel(args2);
     // While the first stream won't use the first picker any more.
-    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker, times(2)).pickSubchannel(args);
 
     // Now use a different picker
     SubchannelPicker picker2 = mock(SubchannelPicker.class);
-    when(picker2.pickSubchannel(any(Attributes.class), any(Metadata.class)))
+    when(picker2.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withNoResult());
     delayedTransport.reprocess(picker2);
     // The pending first stream uses the new picker
-    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers);
+    verify(picker2).pickSubchannel(args);
     // The second stream is still pending in creation, doesn't use the new picker.
-    verify(picker2, never()).pickSubchannel(callOptions.getAffinity(), headers2);
+    verify(picker2, never()).pickSubchannel(args2);
 
     // Now let the second stream finish creation
     barrier.await(5, TimeUnit.SECONDS);
@@ -556,12 +580,12 @@ public class DelayedClientTransportTest {
     sideThread2.join(5000);
     assertFalse("sideThread2 should've exited", sideThread2.isAlive());
     // The second stream should see the new picker
-    verify(picker2, timeout(5000)).pickSubchannel(callOptions.getAffinity(), headers2);
+    verify(picker2, timeout(5000)).pickSubchannel(args2);
 
     // Wrapping up
-    verify(picker, times(2)).pickSubchannel(callOptions.getAffinity(), headers);
-    verify(picker).pickSubchannel(callOptions.getAffinity(), headers2);
-    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers);
-    verify(picker2).pickSubchannel(callOptions.getAffinity(), headers2);
+    verify(picker, times(2)).pickSubchannel(args);
+    verify(picker).pickSubchannel(args2);
+    verify(picker2).pickSubchannel(args);
+    verify(picker2).pickSubchannel(args);
   }
 }

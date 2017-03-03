@@ -53,9 +53,9 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
-import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
 import io.grpc.ResolvedServerInfoGroup;
@@ -345,7 +345,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final ClientTransportProvider transportProvider = new ClientTransportProvider() {
     @Override
-    public ClientTransport get(CallOptions callOptions, Metadata headers) {
+    public ClientTransport get(PickSubchannelArgs args) {
       SubchannelPicker pickerCopy = subchannelPicker;
       if (shutdown.get()) {
         // If channel is shut down, delayedTransport is also shut down which will fail the stream
@@ -371,9 +371,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       // In most cases the idle timer is scheduled to fire after the transport has created the
       // stream, which would have reported in-use state to the channel that would have cancelled
       // the idle timer.
-      PickResult pickResult = pickerCopy.pickSubchannel(callOptions.getAffinity(), headers);
+      PickResult pickResult = pickerCopy.pickSubchannel(args);
       ClientTransport transport = GrpcUtil.getTransportFromPickResult(
-          pickResult, callOptions.isWaitForReady());
+          pickResult, args.getCallOptions().isWaitForReady());
       if (transport != null) {
         return transport;
       }

@@ -46,11 +46,13 @@ import static org.mockito.Mockito.when;
 import com.google.common.collect.Lists;
 import io.grpc.LoadBalancer.Helper;
 import io.grpc.LoadBalancer.PickResult;
+import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.PickFirstBalancerFactory.PickFirstBalancer;
 import io.grpc.PickFirstBalancerFactory.Picker;
 import java.net.SocketAddress;
 import java.util.List;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -82,6 +84,8 @@ public class PickFirstLoadBalancerTest {
   private Helper mockHelper;
   @Mock
   private Subchannel mockSubchannel;
+  @Mock // This LoadBalancer doesn't use any of the arg fields, as verified in tearDown().
+  private PickSubchannelArgs mockArgs;
 
   @Before
   public void setUp() {
@@ -100,6 +104,11 @@ public class PickFirstLoadBalancerTest {
         mockHelper);
   }
 
+  @After
+  public void tearDown() throws Exception {
+    verifyNoMoreInteractions(mockArgs);
+  }
+
   @Test
   public void pickAfterResolved() throws Exception {
     loadBalancer.handleResolvedAddresses(servers, affinity);
@@ -108,8 +117,8 @@ public class PickFirstLoadBalancerTest {
     verify(mockHelper).updatePicker(pickerCaptor.capture());
 
     assertEquals(new EquivalentAddressGroup(socketAddresses), eagCaptor.getValue());
-    assertEquals(pickerCaptor.getValue().pickSubchannel(affinity, new Metadata()),
-        pickerCaptor.getValue().pickSubchannel(affinity, new Metadata()));
+    assertEquals(pickerCaptor.getValue().pickSubchannel(mockArgs),
+        pickerCaptor.getValue().pickSubchannel(mockArgs));
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -156,12 +165,12 @@ public class PickFirstLoadBalancerTest {
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
     assertEquals(newSocketAddresses, eagCaptor.getValue().getAddresses());
 
-    Subchannel subchannel = pickerCaptor.getAllValues().get(0).pickSubchannel(
-        affinity, new Metadata()).getSubchannel();
+    Subchannel subchannel = pickerCaptor.getAllValues().get(0).pickSubchannel(mockArgs)
+        .getSubchannel();
     assertEquals(oldSubchannel, subchannel);
 
-    Subchannel subchannel2 = pickerCaptor.getAllValues().get(1).pickSubchannel(affinity,
-        new Metadata()).getSubchannel();
+    Subchannel subchannel2 = pickerCaptor.getAllValues().get(1).pickSubchannel(mockArgs)
+        .getSubchannel();
     assertEquals(newSubchannel, subchannel2);
     verify(subchannel2, never()).shutdown();
 
@@ -180,8 +189,7 @@ public class PickFirstLoadBalancerTest {
   public void pickAfterStateChangeAfterResolution() throws Exception {
     loadBalancer.handleResolvedAddresses(servers, affinity);
     verify(mockHelper).updatePicker(pickerCaptor.capture());
-    Subchannel subchannel = pickerCaptor.getValue().pickSubchannel(affinity,
-        new Metadata()).getSubchannel();
+    Subchannel subchannel = pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel();
     reset(mockHelper);
 
     InOrder inOrder = inOrder(mockHelper);
@@ -190,20 +198,18 @@ public class PickFirstLoadBalancerTest {
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forTransientFailure(error));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
-    assertEquals(error, pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-            new Metadata()).getStatus());
+    assertEquals(error, pickerCaptor.getValue().pickSubchannel(mockArgs).getStatus());
 
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forNonError(ConnectivityState.IDLE));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
-    assertEquals(Status.OK, pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata()).getStatus());
+    assertEquals(Status.OK, pickerCaptor.getValue().pickSubchannel(mockArgs).getStatus());
 
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forNonError(ConnectivityState.READY));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
     assertEquals(subchannel,
-        pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
+        pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -213,8 +219,7 @@ public class PickFirstLoadBalancerTest {
     Status error = Status.NOT_FOUND.withDescription("nameResolutionError");
     loadBalancer.handleNameResolutionError(error);
     verify(mockHelper).updatePicker(pickerCaptor.capture());
-    PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
     verifyNoMoreInteractions(mockHelper);
@@ -232,11 +237,11 @@ public class PickFirstLoadBalancerTest {
         eq(Attributes.EMPTY));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
 
-    assertEquals(mockSubchannel,
-        pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY, new Metadata()).getSubchannel());
+    assertEquals(mockSubchannel, pickerCaptor.getValue().pickSubchannel(mockArgs)
+        .getSubchannel());
 
-    assertEquals(pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY, new Metadata()),
-        pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY, new Metadata()));
+    assertEquals(pickerCaptor.getValue().pickSubchannel(mockArgs),
+        pickerCaptor.getValue().pickSubchannel(mockArgs));
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -251,8 +256,7 @@ public class PickFirstLoadBalancerTest {
     loadBalancer.handleNameResolutionError(error);
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
 
-    PickResult pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
 
@@ -262,8 +266,7 @@ public class PickFirstLoadBalancerTest {
     loadBalancer.handleNameResolutionError(error2);
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
 
-    pickResult = pickerCaptor.getValue().pickSubchannel(Attributes.EMPTY,
-        new Metadata());
+    pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());
     assertEquals(error2, pickResult.getStatus());
 
