@@ -109,19 +109,19 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
       Set<EquivalentAddressGroup> addedAddrs = setsDifference(latestAddrs, currentAddrs);
       Set<EquivalentAddressGroup> removedAddrs = setsDifference(currentAddrs, latestAddrs);
 
-      // NB(lukaszx0): we don't merge `attributes` with `subchannelAttr` because subchannel doesn't
-      // need them. They're describing the resolved server list but we're not taking any action
-      // based on this information.
-      Attributes subchannelAttrs = Attributes.newBuilder()
-          // NB(lukaszx0): because attributes are immutable we can't set new value for the key
-          // after creation but since we can mutate the values we leverge that and set
-          // AtomicReference which will allow mutating state info for given channel.
-          .set(STATE_INFO, new AtomicReference<ConnectivityStateInfo>(
-              ConnectivityStateInfo.forNonError(IDLE)))
-          .build();
-
       // Create new subchannels for new addresses.
       for (EquivalentAddressGroup addressGroup : addedAddrs) {
+        // NB(lukaszx0): we don't merge `attributes` with `subchannelAttr` because subchannel
+        // doesn't need them. They're describing the resolved server list but we're not taking
+        // any action based on this information.
+        Attributes subchannelAttrs = Attributes.newBuilder()
+            // NB(lukaszx0): because attributes are immutable we can't set new value for the key
+            // after creation but since we can mutate the values we leverge that and set
+            // AtomicReference which will allow mutating state info for given channel.
+            .set(STATE_INFO, new AtomicReference<ConnectivityStateInfo>(
+                ConnectivityStateInfo.forNonError(IDLE)))
+            .build();
+
         Subchannel subchannel = checkNotNull(helper.createSubchannel(addressGroup, subchannelAttrs),
             "subchannel");
         subchannels.put(addressGroup, subchannel);
