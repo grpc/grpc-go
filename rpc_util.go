@@ -380,6 +380,13 @@ func (e *rpcError) Error() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", e.code, e.desc)
 }
 
+// IsRPCError returns true for err if it was produced by the rpc system.
+// Useful for checking if a particular error was produced by the server applications.
+func IsRPCError(err) bool {
+	_, ok := err.(rpcError)
+	return ok
+}
+
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 func Code(err error) codes.Code {

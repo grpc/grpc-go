@@ -145,6 +145,24 @@ func TestCompress(t *testing.T) {
 	}
 }
 
+func TestIsRPCErr(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		errIn error
+		// outputs
+		expected bool
+	}{
+		{Errorf(codes.Unknown, ""), true},
+		{Errorf(codes.Internal, ""), true},
+		{fmt.Errorf(""), false},
+	} {
+		out := IsRPCError(test.errIn)
+		if out != test.expected {
+			t.Fatalf("IsRPCError{%v} = %v \nwant %v", test.errIn, out, test.expected)
+		}
+	}
+}
+
 func TestToRPCErr(t *testing.T) {
 	for _, test := range []struct {
 		// input
