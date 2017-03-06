@@ -22,7 +22,7 @@ repositories {
 
 // Feel free to delete the comment at the next line. It is just for safely
 // updating the version in our release process.
-def grpcVersion = '1.2.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+def grpcVersion = '1.3.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 
 dependencies {
   compile "io.grpc:grpc-netty:${grpcVersion}"
