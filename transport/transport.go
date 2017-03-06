@@ -214,6 +214,9 @@ type Stream struct {
 	// the status received from the server.
 	statusCode codes.Code
 	statusDesc string
+	// rstStream indicates whether a RST_STREAM frame needs to be sent
+	// to the server to signify that this stream is closing.
+	rstStream bool
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -375,6 +378,9 @@ func NewServerTransport(protocol string, conn net.Conn, config *ServerConfig) (S
 type ConnectOptions struct {
 	// UserAgent is the application user agent.
 	UserAgent string
+	// Authority is the :authority pseudo-header to use. This field has no effect if
+	// TransportCredentials is set.
+	Authority string
 	// Dialer specifies how to dial a network address.
 	Dialer func(context.Context, string) (net.Conn, error)
 	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
@@ -568,7 +574,7 @@ type StreamError struct {
 }
 
 func (e StreamError) Error() string {
-	return fmt.Sprintf("stream error: code = %d desc = %q", e.Code, e.Desc)
+	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
 // ContextErr converts the error from context package into a StreamError.

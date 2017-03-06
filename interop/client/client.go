@@ -52,7 +52,7 @@ var (
 	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
 	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
 	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
-	serverHost            = flag.String("server_host", "127.0.0.1", "The server host name")
+	serverHost            = flag.String("server_host", "localhost", "The server host name")
 	serverPort            = flag.Int("server_port", 10000, "The server port number")
 	tlsServerName         = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	testCase              = flag.String("test_case", "large_unary",

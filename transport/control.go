@@ -51,6 +51,7 @@ const (
 	infinity                = time.Duration(math.MaxInt64)
 	defaultKeepaliveTime    = infinity
 	defaultKeepaliveTimeout = time.Duration(20 * time.Second)
+	defaultMaxStreamsClient = 100
 )
 
 // The following defines various control items which could flow through

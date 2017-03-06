@@ -188,7 +188,7 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				},
 				RequestURI: "/service/foo.bar",
 			},
-			wantErr: `stream error: code = 13 desc = "malformed time-out: transport: timeout unit is not recognized: \"tomorrow\""`,
+			wantErr: `stream error: code = Internal desc = "malformed time-out: transport: timeout unit is not recognized: \"tomorrow\""`,
 		},
 		{
 			name: "with metadata",

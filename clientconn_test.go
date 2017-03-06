@@ -85,6 +85,34 @@ func TestTLSServerNameOverwrite(t *testing.T) {
 	}
 }
 
+func TestWithAuthority(t *testing.T) {
+	overwriteServerName := "over.write.server.name"
+	conn, err := Dial("Non-Existent.Server:80", WithInsecure(), WithAuthority(overwriteServerName))
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
+	}
+	conn.Close()
+	if conn.authority != overwriteServerName {
+		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
+	}
+}
+
+func TestWithAuthorityAndTLS(t *testing.T) {
+	overwriteServerName := "over.write.server.name"
+	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", overwriteServerName)
+	if err != nil {
+		t.Fatalf("Failed to create credentials %v", err)
+	}
+	conn, err := Dial("Non-Existent.Server:80", WithTransportCredentials(creds), WithAuthority("no.effect.authority"))
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
+	}
+	conn.Close()
+	if conn.authority != overwriteServerName {
+		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
+	}
+}
+
 func TestDialContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

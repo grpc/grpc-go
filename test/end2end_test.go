@@ -428,6 +428,7 @@ type test struct {
 	streamClientInt   grpc.StreamClientInterceptor
 	unaryServerInt    grpc.UnaryServerInterceptor
 	streamServerInt   grpc.StreamServerInterceptor
+	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
 
 	// srv and srvAddr are set once startServer is called.
@@ -493,10 +494,13 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	if te.streamServerInt != nil {
 		sopts = append(sopts, grpc.StreamInterceptor(te.streamServerInt))
 	}
+	if te.unknownHandler != nil {
+		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
+	}
 	la := "localhost:0"
 	switch te.e.network {
 	case "unix":
-		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now())
+		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
 		syscall.Unlink(la)
 	}
 	lis, err := net.Listen(te.e.network, la)
@@ -1234,6 +1238,33 @@ func testHealthCheckOff(t *testing.T, e env) {
 	}
 }
 
+func TestUnknownHandler(t *testing.T) {
+	defer leakCheck(t)()
+	// An example unknownHandler that returns a different code and a different method, making sure that we do not
+	// expose what methods are implemented to a client that is not authenticated.
+	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
+		return grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
+	}
+	for _, e := range listTestEnv() {
+		// TODO(bradfitz): Temporarily skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
+		testUnknownHandler(t, e, unknownHandler)
+	}
+}
+
+func testUnknownHandler(t *testing.T, e env, unknownHandler grpc.StreamHandler) {
+	te := newTest(t, e)
+	te.unknownHandler = unknownHandler
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	want := grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
+	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
+		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
+	}
+}
+
 func TestHealthCheckServingStatus(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -1437,6 +1468,43 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Internal {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.Internal)
+	}
+}
+
+func TestPeerClientSide(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerClientSide(t, e)
+	}
+}
+
+func testPeerClientSide(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	peer := new(peer.Peer)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(peer), grpc.FailFast(false)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	pa := peer.Addr.String()
+	if e.network == "unix" {
+		if pa != te.srvAddr {
+			t.Fatalf("peer.Addr = %v, want %v", pa, te.srvAddr)
+		}
+		return
+	}
+	_, pp, err := net.SplitHostPort(pa)
+	if err != nil {
+		t.Fatalf("Failed to parse address from peer.")
+	}
+	_, sp, err := net.SplitHostPort(te.srvAddr)
+	if err != nil {
+		t.Fatalf("Failed to parse address of test server.")
+	}
+	if pp != sp {
+		t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
 	}
 }
 
@@ -2630,6 +2698,48 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			break
 		}
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
+	}
+}
+
+const defaultMaxStreamsClient = 100
+
+func TestExceedDefaultMaxStreamsLimit(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testExceedDefaultMaxStreamsLimit(t, e)
+	}
+}
+
+func testExceedDefaultMaxStreamsLimit(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.declareLogNoise(
+		"http2Client.notifyError got notified that the client transport was broken",
+		"Conn.resetTransport failed to create client transport",
+		"grpc: the connection is closing",
+	)
+	// When masStream is set to 0 the server doesn't send a settings frame for
+	// MaxConcurrentStreams, essentially allowing infinite (math.MaxInt32) streams.
+	// In such a case, there should be a default cap on the client-side.
+	te.maxStream = 0
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	// Create as many streams as a client can.
+	for i := 0; i < defaultMaxStreamsClient; i++ {
+		if _, err := tc.StreamingInputCall(te.ctx); err != nil {
+			t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+		}
+	}
+
+	// Trying to create one more should timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := tc.StreamingInputCall(ctx)
+	if err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
 	}
 }

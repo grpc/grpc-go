@@ -226,7 +226,8 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		state:           reachable,
 		activeStreams:   make(map[uint32]*Stream),
 		creds:           opts.PerRPCCredentials,
-		maxStreams:      math.MaxInt32,
+		maxStreams:      defaultMaxStreamsClient,
+		streamsQuota:    newQuotaPool(defaultMaxStreamsClient),
 		streamSendQuota: defaultWindowSize,
 		kp:              kp,
 		statsHandler:    opts.StatsHandler,
@@ -362,21 +363,18 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		t.mu.Unlock()
 		return nil, ErrConnClosing
 	}
-	checkStreamsQuota := t.streamsQuota != nil
 	t.mu.Unlock()
-	if checkStreamsQuota {
-		sq, err := wait(ctx, nil, nil, t.shutdownChan, t.streamsQuota.acquire())
-		if err != nil {
-			return nil, err
-		}
-		// Returns the quota balance back.
-		if sq > 1 {
-			t.streamsQuota.add(sq - 1)
-		}
+	sq, err := wait(ctx, nil, nil, t.shutdownChan, t.streamsQuota.acquire())
+	if err != nil {
+		return nil, err
+	}
+	// Returns the quota balance back.
+	if sq > 1 {
+		t.streamsQuota.add(sq - 1)
 	}
 	if _, err := wait(ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
 		// Return the quota back now because there is no stream returned to the caller.
-		if _, ok := err.(StreamError); ok && checkStreamsQuota {
+		if _, ok := err.(StreamError); ok {
 			t.streamsQuota.add(1)
 		}
 		return nil, err
@@ -384,9 +382,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.mu.Lock()
 	if t.state == draining {
 		t.mu.Unlock()
-		if checkStreamsQuota {
-			t.streamsQuota.add(1)
-		}
+		t.streamsQuota.add(1)
 		// Need to make t writable again so that the rpc in flight can still proceed.
 		t.writableChan <- 0
 		return nil, ErrStreamDrain
@@ -408,16 +404,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		}
 	}
 
-	// This stream is not counted when applySetings(...) initialize t.streamsQuota.
-	// Reset t.streamsQuota to the right value.
-	var reset bool
-	if !checkStreamsQuota && t.streamsQuota != nil {
-		reset = true
-	}
 	t.mu.Unlock()
-	if reset {
-		t.streamsQuota.add(-1)
-	}
 
 	// HPACK encodes various headers. Note that once WriteField(...) is
 	// called, the corresponding headers/continuation frame has to be sent
@@ -525,14 +512,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 // CloseStream clears the footprint of a stream when the stream is not needed any more.
 // This must not be executed in reader's goroutine.
 func (t *http2Client) CloseStream(s *Stream, err error) {
-	var updateStreams bool
 	t.mu.Lock()
 	if t.activeStreams == nil {
 		t.mu.Unlock()
 		return
-	}
-	if t.streamsQuota != nil {
-		updateStreams = true
 	}
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
@@ -542,10 +525,25 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		return
 	}
 	t.mu.Unlock()
-	if updateStreams {
-		t.streamsQuota.add(1)
-	}
+	// rstStream is true in case the stream is being closed at the client-side
+	// and the server needs to be intimated about it by sending a RST_STREAM
+	// frame.
+	// To make sure this frame is written to the wire before the headers of the
+	// next stream waiting for streamsQuota, we add to streamsQuota pool only
+	// after having acquired the writableChan to send RST_STREAM out (look at
+	// the controller() routine).
+	var rstStream bool
+	defer func() {
+		// In case, the client doesn't have to send RST_STREAM to server
+		// we can safely add back to streamsQuota pool now.
+		if !rstStream {
+			t.streamsQuota.add(1)
+			return
+		}
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
+	}()
 	s.mu.Lock()
+	rstStream = s.rstStream
 	if q := s.fc.resetPendingData(); q > 0 {
 		if n := t.fc.onRead(q); n > 0 {
 			t.controlBuf.put(&windowUpdate{0, n})
@@ -562,7 +560,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.state = streamDone
 	s.mu.Unlock()
 	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
+		rstStream = true
 	}
 }
 
@@ -803,10 +801,10 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.state = streamDone
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
+			s.rstStream = true
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
-			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeFlowControl})
 			return
 		}
 		s.mu.Unlock()
@@ -1079,16 +1077,10 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 				s.Val = math.MaxInt32
 			}
 			t.mu.Lock()
-			reset := t.streamsQuota != nil
-			if !reset {
-				t.streamsQuota = newQuotaPool(int(s.Val) - len(t.activeStreams))
-			}
 			ms := t.maxStreams
 			t.maxStreams = int(s.Val)
 			t.mu.Unlock()
-			if reset {
-				t.streamsQuota.add(int(s.Val) - ms)
-			}
+			t.streamsQuota.add(int(s.Val) - ms)
 		case http2.SettingInitialWindowSize:
 			t.mu.Lock()
 			for _, stream := range t.activeStreams {
@@ -1121,6 +1113,12 @@ func (t *http2Client) controller() {
 						t.framer.writeSettings(true, i.ss...)
 					}
 				case *resetStream:
+					// If the server needs to be to intimated about stream closing,
+					// then we need to make sure the RST_STREAM frame is written to
+					// the wire before the headers of the next stream waiting on
+					// streamQuota. We ensure this by adding to the streamsQuota pool
+					// only after having acquired the writableChan to send RST_STREAM.
+					t.streamsQuota.add(1)
 					t.framer.writeRSTStream(true, i.streamID, i.code)
 				case *flushIO:
 					t.framer.flushWrite()
