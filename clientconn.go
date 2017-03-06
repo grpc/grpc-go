@@ -777,6 +777,8 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			Metadata: ac.addr.Metadata,
 		}
 		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
+		// Don't call cancel in success path due to a race in Go 1.6:
+		// https://github.com/golang/go/issues/15078.
 		if err != nil {
 			cancel()
 
