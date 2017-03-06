@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -208,6 +209,13 @@ func WithTransportCredentials(creds credentials.TransportCredentials) DialOption
 func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 	return func(o *dialOptions) {
 		o.copts.PerRPCCredentials = append(o.copts.PerRPCCredentials, creds)
+	}
+}
+
+// WithProxyer returns a DialOption which sets the proxyer to use.
+func WithProxyer(p proxy.Proxyer) DialOption {
+	return func(o *dialOptions) {
+		o.copts.Proxyer = p
 	}
 }
 

@@ -39,26 +39,28 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"time"
 
 	"golang.org/x/net/context"
 )
 
 // ErrIneffective indicates the mapper function is not effective.
-var ErrIneffective = errors.New("Mapper function is not effective")
+var ErrIneffective = errors.New("MapAddress function is not effective")
 
-// Mapper defines the interface gRPC uses to map the proxy address.
-type Mapper interface {
+// Proxyer defines the interface gRPC uses to map the proxy address.
+type Proxyer interface {
 	// MapAddress is called before we connect to the target address.
 	// It can be used to programmatically override the address that we will connect to.
 	// It returns the address of the proxy, and the header to be sent in the request.
 	MapAddress(ctx context.Context, address string) (string, map[string][]string, error)
+	// Handshake does the proxy handshake on the connection.
+	Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error)
 }
 
-// NewEnvironmentProxyMapper returns a Mapper that returns the address of the proxy
+// NewEnvironmentVariableHTTPConnectProxy returns a Proxyer that returns the address of the proxy
 // as indicated by the environment variables HTTP_PROXY, HTTPS_PROXY and NO_PROXY
-// (or the lowercase versions thereof).
-func NewEnvironmentProxyMapper() Mapper {
+// (or the lowercase versions thereof) when mapping address, and does HTTP connect handshake on
+// the connection.
+func NewEnvironmentVariableHTTPConnectProxy() Proxyer {
 	return &environmentProxyMapper{}
 }
 
@@ -78,37 +80,8 @@ func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string
 	return url.String(), nil, nil
 }
 
-// NewDialerWithConnectHandshake returns a dialer with the provided Mapper.
-// The returned dialer uses Mapper to get the proxy's address, dial to the proxy with the
-// provided dialer, does HTTP CONNECT handshake and returns the connection.
-func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
-	return func(addr string, d time.Duration) (conn net.Conn, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), d)
-		defer cancel()
-		var skipHandshake bool
-
-		newAddr, h, err := pm.MapAddress(ctx, addr)
-		if err != nil {
-			if err != ErrIneffective {
-				return nil, err
-			}
-			skipHandshake = true
-			newAddr = addr
-		}
-
-		if deadline, ok := ctx.Deadline(); ok {
-			conn, err = dialer(newAddr, deadline.Sub(time.Now()))
-		} else {
-			conn, err = dialer(newAddr, 0)
-		}
-		if err != nil {
-			return
-		}
-		if !skipHandshake {
-			conn, err = doHTTPConnectHandshake(context.Background(), conn, addr, h)
-		}
-		return
-	}
+func (pm *environmentProxyMapper) Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
+	return doHTTPConnectHandshake(ctx, conn, addr, header)
 }
 
 type bufConn struct {

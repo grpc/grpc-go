@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -126,11 +127,32 @@ type http2Client struct {
 	goAwayReason GoAwayReason
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
-	if fn != nil {
-		return fn(ctx, addr)
+func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), p proxy.Proxyer, addr string) (net.Conn, error) {
+	if fn == nil {
+		fn = func(ctx context.Context, addr string) (net.Conn, error) {
+			return dialContext(ctx, "tcp", addr)
+		}
 	}
-	return dialContext(ctx, "tcp", addr)
+
+	if p == nil {
+		p = proxy.NewEnvironmentVariableHTTPConnectProxy()
+	}
+
+	var skipHandshake bool
+	newAddr, h, err := p.MapAddress(ctx, addr)
+	if err != nil {
+		if err != proxy.ErrIneffective {
+			return nil, err
+		}
+		skipHandshake = true
+		newAddr = addr
+	}
+
+	conn, err := fn(ctx, newAddr)
+	if !skipHandshake {
+		conn, err = p.Handshake(ctx, conn, addr, h)
+	}
+	return conn, err
 }
 
 func isTemporary(err error) bool {
@@ -166,7 +188,7 @@ func isTemporary(err error) bool {
 // fails.
 func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
-	conn, err := dial(ctx, opts.Dialer, addr.Addr)
+	conn, err := dial(ctx, opts.Dialer, opts.Proxyer, addr.Addr)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: %v", err)
