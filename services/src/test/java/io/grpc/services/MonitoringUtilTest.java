@@ -205,8 +205,9 @@ public class MonitoringUtilTest {
   private static final Timestamp END_TIMESTAMP = Timestamp.create(END_SECONDS, END_NANOS);
   private static final CensusProto.Timestamp START_TIMESTAMP_PROTO =
       CensusProto.Timestamp.newBuilder().setSeconds(START_SECONDS).setNanos(START_NANOS).build();
-  private static final CensusProto.Timestamp END_TIMESTAMP_PROTO =
-      CensusProto.Timestamp.newBuilder().setSeconds(END_SECONDS).setNanos(END_NANOS).build();
+  // TODO(ericgribkoff) Re-enable once getter methods are public in instrumentation.
+  //private static final CensusProto.Timestamp END_TIMESTAMP_PROTO =
+  //    CensusProto.Timestamp.newBuilder().setSeconds(END_SECONDS).setNanos(END_NANOS).build();
 
   private static final String TAG_KEY = "tag key";
   private static final String TAG_VALUE = "tag value";

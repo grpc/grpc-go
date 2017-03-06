@@ -41,7 +41,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsManager;
-import com.google.instrumentation.stats.View;
 import com.google.instrumentation.stats.ViewDescriptor.DistributionViewDescriptor;
 import com.google.instrumentation.stats.ViewDescriptor.IntervalViewDescriptor;
 import com.google.protobuf.Empty;
@@ -52,7 +51,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -61,14 +59,11 @@ import org.mockito.MockitoAnnotations;
 public class MonitoringServiceTest {
   @Mock private StatsManager statsManager;
 
-  @Captor private ArgumentCaptor<StreamObserver<CanonicalRpcStats>> responseObserverCaptor;
-
   private MonitoringService monitoringService;
 
   @Before
   public void setup() {
     MockitoAnnotations.initMocks(this);
-    View view = mock(View.class);
     when(statsManager.getView(any(DistributionViewDescriptor.class)))
         .thenReturn(MonitoringUtilTest.DISTRIBUTION_VIEW);
     when(statsManager.getView(any(IntervalViewDescriptor.class)))
