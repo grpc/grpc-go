@@ -167,6 +167,13 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			conn.Close()
 		}
 	}(conn)
+	if addr.UsingProxy {
+		// TODO support user provided proxy handshaker.
+		conn, err = doHTTPConnectHandshake(ctx, conn, addr.RealTarget, addr.Header)
+		if err != nil {
+			return nil, connectionErrorf(true, err, "failed to connect: %v", err)
+		}
+	}
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
@@ -980,9 +987,11 @@ func (t *http2Client) reader() {
 		t.notifyError(err)
 		return
 	}
+	fmt.Printf("frame is: %T, %v\n", frame, frame)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		t.notifyError(err)
+		fmt.Printf("notifying a nil error because frame is not a settings frame: %T, %v\n", frame, frame)
+		t.notifyError(fmt.Errorf("Unexpected frame with type: %T, want *SettingsFrame", frame))
 		return
 	}
 	t.handleSettings(sf)

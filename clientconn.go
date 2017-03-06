@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -93,6 +94,7 @@ type dialOptions struct {
 	dc        Decompressor
 	bs        backoffStrategy
 	balancer  Balancer
+	pm        proxy.Mapper
 	block     bool
 	insecure  bool
 	timeout   time.Duration
@@ -130,6 +132,13 @@ func WithDecompressor(dc Decompressor) DialOption {
 func WithBalancer(b Balancer) DialOption {
 	return func(o *dialOptions) {
 		o.balancer = b
+	}
+}
+
+// WithProxyMapper returns a DialOption which sets the proxy mapper.
+func WithProxyMapper(pm proxy.Mapper) DialOption {
+	return func(o *dialOptions) {
+		o.pm = pm
 	}
 }
 
@@ -339,6 +348,17 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		cc.authority = target[:colonPos]
 	}
+
+	if cc.dopts.pm != nil {
+		t, h, err := cc.dopts.pm.MapName(ctx, target)
+		if err != nil && err != proxy.ErrIneffective {
+			return nil, err
+		} else if err == nil {
+			target = t
+			cc.proxyHeader = h
+			cc.usingProxy = true
+		}
+	}
 	var ok bool
 	waitC := make(chan error, 1)
 	go func() {
@@ -443,6 +463,10 @@ type ClientConn struct {
 	target    string
 	authority string
 	dopts     dialOptions
+
+	usingProxy bool
+	// The header to be sent to the proxy.
+	proxyHeader map[string][]string
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -746,6 +770,31 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 }
 
 func (ac *addrConn) resetTransport(closeTransport bool) error {
+	sinfo := transport.TargetInfo{
+		Addr:     ac.addr.Addr,
+		Metadata: ac.addr.Metadata,
+	}
+	if ac.cc.dopts.pm != nil {
+		sinfo.UsingProxy = ac.cc.usingProxy
+		sinfo.RealTarget = ac.cc.target
+		sinfo.Header = ac.cc.proxyHeader
+
+		ta, th, err := ac.cc.dopts.pm.MapAddress(ac.ctx, ac.cc.target, ac.addr.Addr)
+		if err != nil && err != proxy.ErrIneffective {
+			return err
+		} else if err == nil {
+			sinfo.UsingProxy = true
+			sinfo.Addr = ta
+			sinfo.RealTarget = ac.addr.Addr
+			if sinfo.Header == nil {
+				sinfo.Header = th
+			} else {
+				for k, v := range th {
+					sinfo.Header[k] = append(sinfo.Header[k], v...)
+				}
+			}
+		}
+	}
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
 		ac.printf("connecting")
@@ -772,10 +821,6 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 		}
 		ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 		connectTime := time.Now()
-		sinfo := transport.TargetInfo{
-			Addr:     ac.addr.Addr,
-			Metadata: ac.addr.Metadata,
-		}
 		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
 		// Don't call cancel in success path due to a race in Go 1.6:
 		// https://github.com/golang/go/issues/15078.

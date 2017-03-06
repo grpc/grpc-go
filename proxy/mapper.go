@@ -1,7 +1,6 @@
-// +build !go1.7
-
 /*
- * Copyright 2016, Google Inc.
+ *
+ * Copyright 2017, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,52 +31,27 @@
  *
  */
 
-package transport
-
+// Package proxy defines interfaces to support proxyies in gRPC.
+package proxy // import "google.golang.org/grpc/proxy"
 import (
-	"bufio"
-	"fmt"
-	"net"
-	"net/http"
-	"net/url"
+	"errors"
 
 	"golang.org/x/net/context"
 )
 
-// dialContext connects to the address on the named network.
-func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
-}
+// ErrIneffective indicates the mapper function is not effective.
+var ErrIneffective = errors.New("Mapper function is not effective")
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
-	if header == nil {
-		header = make(map[string][]string)
-	}
-	if ua := header.Get("User-Agent"); ua == "" {
-		header.Set("User-Agent", primaryUA)
-	}
-	if host := header.Get("Host"); host != "" {
-		// Use the user specified Host header if it's set.
-		addr = host
-	}
-	req := (&http.Request{
-		Method: "CONNECT",
-		URL:    &url.URL{Host: addr},
-		Header: header,
-		Cancel: ctx.Done(), // WithContext is not avilable before go 1.7.
-	})
-	if err := req.Write(conn); err != nil {
-		return conn, fmt.Errorf("failed to write the HTTP request: %v", err)
-	}
-
-	resp, err := http.ReadResponse(bufio.NewReader(conn), req)
-	if err != nil {
-		return conn, fmt.Errorf("reading server HTTP response: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
-	}
-
-	return conn, nil
+// Mapper defines the interface gRPC uses to map the proxy address.
+type Mapper interface {
+	// MapName is called before the server name is resolved.
+	// It can be used to programmatically override the name that will be resolved.
+	// It returns the URI of the proxy, and the header to be sent in the request.
+	// ErrIneffective should be returned if the function is not effective.
+	MapName(ctx context.Context, uri string) (string, map[string][]string, error)
+	// MapAddress is called before we connect to the target address.
+	// It can be used to programmatically override the address that we will connect to.
+	// It returns the address of the proxy, and the header to be sent in the request.
+	// ErrIneffective should be returned if the function is not effective.
+	MapAddress(ctx context.Context, uri string, address string) (string, map[string][]string, error)
 }

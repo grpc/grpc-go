@@ -35,7 +35,12 @@
 package transport
 
 import (
+	"bufio"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 
 	"golang.org/x/net/context"
 )
@@ -43,4 +48,86 @@ import (
 // dialContext connects to the address on the named network.
 func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return (&net.Dialer{}).DialContext(ctx, network, address)
+}
+
+type bufConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *bufConn) Read(b []byte) (int, error) {
+	return c.r.Read(b)
+}
+
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
+	if header == nil {
+		header = make(map[string][]string)
+	}
+	if ua := header.Get("User-Agent"); ua == "" {
+		header.Set("User-Agent", primaryUA)
+	}
+	if host := header.Get("Host"); host != "" {
+		// Use the user specified Host header if it's set.
+		addr = host
+	}
+	req := (&http.Request{
+		Method: "CONNECT",
+		URL:    &url.URL{Host: addr},
+		Header: header,
+	}).WithContext(ctx)
+	if err := req.Write(conn); err != nil {
+		return conn, fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	// var result []byte
+	// done := make(chan error)
+	// go func() {
+	// 	defer close(done)
+	// 	buf := make([]byte, 4)
+	// 	for {
+	// 		_, err := conn.Read(buf[:1])
+	// 		if err != nil {
+	// 			fmt.Printf("err is not nil: %v\n", err)
+	// 			return
+	// 		}
+
+	// 		if buf[0] != '\r' {
+	// 			result = append(result, buf[0])
+	// 			continue
+	// 		}
+
+	// 		_, err = conn.Read(buf[1:])
+	// 		if err != nil {
+	// 			fmt.Printf("err is not nil: %v\n", err)
+	// 			return
+	// 		}
+	// 		result = append(result, buf...)
+	// 		if string(buf) == "\r\n\r\n" {
+	// 			break
+	// 		}
+	// 	}
+	// }()
+
+	// select {
+	// case <-ctx.Done():
+	// 	conn.Close()
+	// 	return ctx.Err()
+	// case err := <-done:
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+
+	r := bufio.NewReader(conn)
+	// resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(result)), nil)
+	resp, err := http.ReadResponse(r, nil)
+	if err != nil {
+		return conn, fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+	}
+
+	return &bufConn{conn, r}, nil
 }
