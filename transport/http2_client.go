@@ -82,7 +82,7 @@ type http2Client struct {
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
-	// awakenKeepalive is used to tell keepalive goroutine to reset keepalive timer.
+	// awakenKeepalive is used to wake up keepalive when after it has gone dormant.
 	awakenKeepalive chan struct{}
 
 	framer *framer
@@ -231,7 +231,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		kp:              kp,
 		statsHandler:    opts.StatsHandler,
 	}
-	// make sure awakenKeepalive can't be written upon.
+	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
 	t.awakenKeepalive <- struct{}{}
 	if t.statsHandler != nil {
@@ -1147,7 +1147,7 @@ func (t *http2Client) keepalive() {
 	for {
 		select {
 		case <-timer.C:
-			if a := atomic.SwapUint32(&t.activity, 0); a == 1 {
+			if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
 				timer.Reset(t.kp.Time)
 				continue
 			}
@@ -1174,7 +1174,7 @@ func (t *http2Client) keepalive() {
 			timer.Reset(t.kp.Timeout)
 			select {
 			case <-timer.C:
-				if a := atomic.SwapUint32(&t.activity, 0); a == 1 {
+				if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
 					timer.Reset(t.kp.Time)
 					continue
 				}
