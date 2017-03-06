@@ -514,20 +514,21 @@ public final class GrpcUtil {
     @Override
     public String toAsciiString(Long timeoutNanos) {
       long cutoff = 100000000;
+      TimeUnit unit = TimeUnit.NANOSECONDS;
       if (timeoutNanos < 0) {
         throw new IllegalArgumentException("Timeout too small");
       } else if (timeoutNanos < cutoff) {
-        return TimeUnit.NANOSECONDS.toNanos(timeoutNanos) + "n";
+        return timeoutNanos + "n";
       } else if (timeoutNanos < cutoff * 1000L) {
-        return TimeUnit.NANOSECONDS.toMicros(timeoutNanos) + "u";
+        return unit.toMicros(timeoutNanos) + "u";
       } else if (timeoutNanos < cutoff * 1000L * 1000L) {
-        return TimeUnit.NANOSECONDS.toMillis(timeoutNanos) + "m";
+        return unit.toMillis(timeoutNanos) + "m";
       } else if (timeoutNanos < cutoff * 1000L * 1000L * 1000L) {
-        return TimeUnit.NANOSECONDS.toSeconds(timeoutNanos) + "S";
+        return unit.toSeconds(timeoutNanos) + "S";
       } else if (timeoutNanos < cutoff * 1000L * 1000L * 1000L * 60L) {
-        return TimeUnit.NANOSECONDS.toMinutes(timeoutNanos) + "M";
+        return unit.toMinutes(timeoutNanos) + "M";
       } else {
-        return TimeUnit.NANOSECONDS.toHours(timeoutNanos) + "H";
+        return unit.toHours(timeoutNanos) + "H";
       }
     }
 
@@ -539,7 +540,7 @@ public final class GrpcUtil {
       char unit = serialized.charAt(serialized.length() - 1);
       switch (unit) {
         case 'n':
-          return TimeUnit.NANOSECONDS.toNanos(value);
+          return value;
         case 'u':
           return TimeUnit.MICROSECONDS.toNanos(value);
         case 'm':
