@@ -172,7 +172,7 @@ public abstract class LoadBalancer {
      * @param affinity the affinity attributes provided via {@link CallOptions#withAffinity}
      * @param headers the headers container of the RPC. It can be mutated within this method.
      * @deprecated this signature is going to be removed in the next minor release. Implementations
-     *     should instead override the {@link #pickSubchannel(PickSubchannelArgs)}.
+     *     should instead override the {@link #pickSubchannel(LoadBalancer.PickSubchannelArgs)}.
      */
     @Deprecated
     public PickResult pickSubchannel(Attributes affinity, Metadata headers) {
@@ -191,7 +191,8 @@ public abstract class LoadBalancer {
   }
 
   /**
-   * Provides arguments for a {@link SubchannelPicker#pickSubchannel(PickSubchannelArgs)}.
+   * Provides arguments for a {@link SubchannelPicker#pickSubchannel(
+   * LoadBalancer.PickSubchannelArgs)}.
    */
   public abstract static class PickSubchannelArgs {
 
@@ -379,7 +380,7 @@ public abstract class LoadBalancer {
      *
      * <p>When a new picker is provided via {@code updatePicker()}, the channel will apply the
      * picker on all buffered RPCs, by calling {@link SubchannelPicker#pickSubchannel(
-     * PickSubchannelArgs)}.
+     * LoadBalancer.PickSubchannelArgs)}.
      *
      * <p>The channel will hold the picker and use it for all RPCs, until {@code updatePicker()} is
      * called again and a new picker replaces the old one.  If {@code updatePicker()} has never been
