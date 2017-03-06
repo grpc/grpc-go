@@ -69,13 +69,11 @@ public class OkHttpChannelBuilderTest {
 
   @Test
   public void failOverrideInvalidAuthority() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Invalid authority:");
     OkHttpChannelBuilder builder = new OkHttpChannelBuilder("good", 1234);
 
-    builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid authority:");
+    builder.overrideAuthority("[invalidauthority");
   }
 
   @Test

@@ -36,6 +36,7 @@ import io.grpc.testing.TestMethodDescriptors;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -77,23 +78,22 @@ public class ServiceDescriptorTest {
 
   @Test
   public void failsOnNonMatchingNames() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("service names");
-
-    new ServiceDescriptor("name", Collections.<MethodDescriptor<?, ?>>singletonList(
+    List<MethodDescriptor<?, ?>> descriptors = Collections.<MethodDescriptor<?, ?>>singletonList(
         MethodDescriptor.create(
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("wrongservice", "method"),
             TestMethodDescriptors.voidMarshaller(),
-            TestMethodDescriptors.voidMarshaller())));
+            TestMethodDescriptors.voidMarshaller()));
+
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("service names");
+
+    new ServiceDescriptor("name", descriptors);
   }
 
   @Test
   public void failsOnNonDuplicateNames() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("duplicate");
-
-    new ServiceDescriptor("name", Arrays.<MethodDescriptor<?, ?>>asList(
+    List<MethodDescriptor<?, ?>> descriptors = Arrays.<MethodDescriptor<?, ?>>asList(
         MethodDescriptor.create(
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("name", "method"),
@@ -103,6 +103,11 @@ public class ServiceDescriptorTest {
             MethodType.UNARY,
             MethodDescriptor.generateFullMethodName("name", "method"),
             TestMethodDescriptors.voidMarshaller(),
-            TestMethodDescriptors.voidMarshaller())));
+            TestMethodDescriptors.voidMarshaller()));
+
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("duplicate");
+
+    new ServiceDescriptor("name", descriptors);
   }
 }

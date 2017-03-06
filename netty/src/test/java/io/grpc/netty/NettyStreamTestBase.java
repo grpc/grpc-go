@@ -83,12 +83,16 @@ public abstract class NettyStreamTestBase<T extends Stream> {
   @Mock
   private ChannelPipeline pipeline;
 
+  // ChannelFuture has too many methods to implement; we stubbed all necessary methods of Future.
+  @SuppressWarnings("DoNotMock")
   @Mock
   protected ChannelFuture future;
 
   @Mock
   protected EventLoop eventLoop;
 
+  // ChannelPromise has too many methods to implement; we stubbed all necessary methods of Future.
+  @SuppressWarnings("DoNotMock")
   @Mock
   protected ChannelPromise promise;
 

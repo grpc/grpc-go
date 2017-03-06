@@ -69,14 +69,12 @@ public class NettyChannelBuilderTest {
 
   @Test
   public void failOverrideInvalidAuthority() {
+    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
+
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("Invalid authority:");
 
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
-
-    Object unused = builder.overrideAuthority("[invalidauthority")
-        .negotiationType(NegotiationType.PLAINTEXT)
-        .buildTransportFactory();
+    builder.overrideAuthority("[invalidauthority");
   }
 
   @Test
@@ -96,12 +94,12 @@ public class NettyChannelBuilderTest {
 
   @Test
   public void failIfSslContextIsNotClient() {
+    SslContext sslContext = mock(SslContext.class);
+    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
+
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("Server SSL context can not be used for client channel");
 
-    SslContext sslContext = mock(SslContext.class);
-
-    NettyChannelBuilder builder = new NettyChannelBuilder(new SocketAddress(){});
     builder.sslContext(sslContext);
   }
 

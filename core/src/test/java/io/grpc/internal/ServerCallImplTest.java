@@ -322,9 +322,11 @@ public class ServerCallImplTest {
         .when(callListener)
         .onMessage(any(Long.class));
 
+    InputStream inputStream = method.streamRequest(1234L);
+
     thrown.expect(RuntimeException.class);
     thrown.expectMessage("unexpected exception");
-    streamListener.messageRead(method.streamRequest(1234L));
+    streamListener.messageRead(inputStream);
   }
 
   private void checkStats(Status.Code statusCode) {

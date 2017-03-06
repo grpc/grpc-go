@@ -58,13 +58,13 @@ public class NettyServerBuilderTest {
 
   @Test
   public void failIfSslContextIsNotServer() {
-    thrown.expect(IllegalArgumentException.class);
-    thrown.expectMessage("Client SSL context can not be used for server");
-
     SslContext sslContext = mock(SslContext.class);
     when(sslContext.isClient()).thenReturn(true);
 
-    NettyServerBuilder builder = NettyServerBuilder.forPort(8080);;
+    NettyServerBuilder builder = NettyServerBuilder.forPort(8080);
+
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Client SSL context can not be used for server");
     builder.sslContext(sslContext);
   }
 }

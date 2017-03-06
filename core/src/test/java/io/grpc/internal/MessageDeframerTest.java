@@ -271,13 +271,14 @@ public class MessageDeframerTest {
     SizeEnforcingInputStream stream =
         new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
 
-    thrown.expect(StatusRuntimeException.class);
-    thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+    try {
+      thrown.expect(StatusRuntimeException.class);
+      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
 
-    while (stream.read() != -1) {}
-
-    // Never run, makes compiler nag go away
-    stream.close();
+      while (stream.read() != -1) {}
+    } finally {
+      stream.close();
+    }
   }
 
   @Test
@@ -317,13 +318,14 @@ public class MessageDeframerTest {
         new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
     byte[] buf = new byte[10];
 
-    thrown.expect(StatusRuntimeException.class);
-    thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+    try {
+      thrown.expect(StatusRuntimeException.class);
+      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
 
-    stream.read(buf, 0, buf.length);
-
-    // Never called
-    stream.close();
+      stream.read(buf, 0, buf.length);
+    } finally {
+      stream.close();
+    }
   }
 
   @Test
@@ -361,13 +363,14 @@ public class MessageDeframerTest {
     SizeEnforcingInputStream stream =
         new MessageDeframer.SizeEnforcingInputStream(in, 2, statsTraceCtx, "test");
 
-    thrown.expect(StatusRuntimeException.class);
-    thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+    try {
+      thrown.expect(StatusRuntimeException.class);
+      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
 
-    stream.skip(4);
-
-    // never run
-    stream.close();
+      stream.skip(4);
+    } finally {
+      stream.close();
+    }
   }
 
   @Test

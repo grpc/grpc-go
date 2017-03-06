@@ -42,6 +42,7 @@ import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
+import io.grpc.internal.AbstractClientStream2.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import org.junit.Before;
 import org.junit.Rule;
@@ -149,9 +150,11 @@ public class AbstractClientStream2Test {
     ClientStreamListener listener = new NoopClientStreamListener();
     AbstractClientStream2 stream = new BaseAbstractClientStream(allocator, statsTraceCtx);
     stream.start(listener);
-    thrown.expect(NullPointerException.class);
 
-    stream.transportState().inboundDataReceived(null);
+    TransportState state = stream.transportState();
+
+    thrown.expect(NullPointerException.class);
+    state.inboundDataReceived(null);
   }
 
   @Test
@@ -181,8 +184,10 @@ public class AbstractClientStream2Test {
     stream.start(mockListener);
     stream.transportState().transportReportStatus(Status.CANCELLED, false, new Metadata());
 
+    TransportState state = stream.transportState();
+
     thrown.expect(IllegalStateException.class);
-    stream.transportState().inboundHeadersReceived(new Metadata());
+    state.inboundHeadersReceived(new Metadata());
   }
 
   @Test

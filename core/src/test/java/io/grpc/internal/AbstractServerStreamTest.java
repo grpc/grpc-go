@@ -44,6 +44,7 @@ import static org.mockito.Mockito.verify;
 
 import io.grpc.Metadata;
 import io.grpc.Status;
+import io.grpc.internal.AbstractServerStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -105,19 +106,22 @@ public class AbstractServerStreamTest {
 
   @Test
   public void setListener_setOnlyOnce() {
-    stream.transportState().setListener(new ServerStreamListenerBase());
+    TransportState state = stream.transportState();
+    state.setListener(new ServerStreamListenerBase());
     thrown.expect(IllegalStateException.class);
 
-    stream.transportState().setListener(new ServerStreamListenerBase());
+    state.setListener(new ServerStreamListenerBase());
   }
 
   @Test
   public void listenerReady_onlyOnce() {
     stream.transportState().setListener(new ServerStreamListenerBase());
     stream.transportState().onStreamAllocated();
-    thrown.expect(IllegalStateException.class);
 
-    stream.transportState().onStreamAllocated();
+    TransportState state = stream.transportState();
+
+    thrown.expect(IllegalStateException.class);
+    state.onStreamAllocated();
   }
 
 
@@ -132,9 +136,10 @@ public class AbstractServerStreamTest {
 
   @Test
   public void setListener_failsOnNull() {
-    thrown.expect(NullPointerException.class);
+    TransportState state = stream.transportState();
 
-    stream.transportState().setListener(null);
+    thrown.expect(NullPointerException.class);
+    state.setListener(null);
   }
 
   @Test
