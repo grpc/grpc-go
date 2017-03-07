@@ -212,13 +212,6 @@ func WithPerRPCCredentials(creds credentials.PerRPCCredentials) DialOption {
 	}
 }
 
-// WithProxyer returns a DialOption which sets the proxyer to use.
-func WithProxyer(p proxy.Proxyer) DialOption {
-	return func(o *dialOptions) {
-		o.copts.Proxyer = p
-	}
-}
-
 // WithTimeout returns a DialOption that configures a timeout for dialing a ClientConn
 // initially. This is valid if and only if WithBlock() is present.
 func WithTimeout(d time.Duration) DialOption {

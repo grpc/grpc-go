@@ -447,7 +447,6 @@ type test struct {
 	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
 	dialer            func(addr string, timeout time.Duration) (net.Conn, error)
-	proxyer           proxy.Proxyer
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -575,9 +574,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithDialer(te.dialer))
 	} else {
 		opts = append(opts, grpc.WithDialer(te.e.dialer))
-	}
-	if te.proxyer != nil {
-		opts = append(opts, grpc.WithProxyer(te.proxyer))
 	}
 	if te.sc != nil {
 		opts = append(opts, grpc.WithServiceConfig(te.sc))
@@ -3549,14 +3545,13 @@ func (p *proxyServer) stop() {
 	}
 }
 
-type proxyer struct {
-	proxy.Proxyer
+type proxyMapper struct {
 	oldAddr     string
 	newAddr     string
 	ineffective bool
 }
 
-func (p *proxyer) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
+func (p *proxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
 	if p.ineffective {
 		return "", nil, proxy.ErrIneffective
 	}
@@ -3586,12 +3581,15 @@ func testProxyMapAddress(t *testing.T, e env) {
 	go p.run()
 	defer p.stop()
 
-	te.proxyer = &proxyer{
-		Proxyer: proxy.NewEnvironmentVariableHTTPConnectProxy(),
-		oldAddr: te.srvAddr,
-		newAddr: lis.Addr().String(),
-	}
-
+	te.dialer = proxy.NewDialerWithConnectHandshake(
+		&proxyMapper{
+			oldAddr: te.srvAddr,
+			newAddr: lis.Addr().String(),
+		},
+		func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout(e.network, addr, timeout)
+		},
+	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -3619,10 +3617,12 @@ func testProxyMapAddressIneffective(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	te.proxyer = &proxyer{
-		Proxyer:     proxy.NewEnvironmentVariableHTTPConnectProxy(),
-		ineffective: true,
-	}
+	te.dialer = proxy.NewDialerWithConnectHandshake(
+		&proxyMapper{ineffective: true},
+		func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout(e.network, addr, timeout)
+		},
+	)
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
