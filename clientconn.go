@@ -45,6 +45,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -246,6 +247,13 @@ func FailOnNonTempDialError(f bool) DialOption {
 func WithUserAgent(s string) DialOption {
 	return func(o *dialOptions) {
 		o.copts.UserAgent = s
+	}
+}
+
+// WithKeepaliveParams returns a DialOption that specifies keepalive paramaters for the client transport.
+func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
+	return func(o *dialOptions) {
+		o.copts.KeepaliveParams = kp
 	}
 }
 

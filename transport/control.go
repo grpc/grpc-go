@@ -35,7 +35,9 @@ package transport
 
 import (
 	"fmt"
+	"math"
 	"sync"
+	"time"
 
 	"golang.org/x/net/http2"
 )
@@ -46,6 +48,9 @@ const (
 	// The initial window size for flow control.
 	initialWindowSize       = defaultWindowSize      // for an RPC
 	initialConnWindowSize   = defaultWindowSize * 16 // for a connection
+	infinity                = time.Duration(math.MaxInt64)
+	defaultKeepaliveTime    = infinity
+	defaultKeepaliveTimeout = time.Duration(20 * time.Second)
 	defaultMaxStreamsClient = 100
 )
 

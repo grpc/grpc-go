@@ -41,6 +41,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -49,6 +50,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -80,6 +82,8 @@ type http2Client struct {
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
+	// awakenKeepalive is used to wake up keepalive when after it has gone dormant.
+	awakenKeepalive chan struct{}
 
 	framer *framer
 	hBuf   *bytes.Buffer  // the buffer for HPACK encoding
@@ -98,6 +102,11 @@ type http2Client struct {
 	scheme string
 
 	creds []credentials.PerRPCCredentials
+
+	// Boolean to keep track of reading activity on transport.
+	// 1 is true and 0 is false.
+	activity uint32 // Accessed atomically.
+	kp       keepalive.ClientParameters
 
 	statsHandler stats.Handler
 
@@ -182,6 +191,14 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.UserAgent != "" {
 		ua = opts.UserAgent + " " + ua
 	}
+	kp := opts.KeepaliveParams
+	// Validate keepalive parameters.
+	if kp.Time == 0 {
+		kp.Time = defaultKeepaliveTime
+	}
+	if kp.Timeout == 0 {
+		kp.Timeout = defaultKeepaliveTimeout
+	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		ctx:        ctx,
@@ -198,6 +215,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		shutdownChan:    make(chan struct{}),
 		errorChan:       make(chan struct{}),
 		goAway:          make(chan struct{}),
+		awakenKeepalive: make(chan struct{}, 1),
 		framer:          newFramer(conn),
 		hBuf:            &buf,
 		hEnc:            hpack.NewEncoder(&buf),
@@ -211,8 +229,12 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		maxStreams:      defaultMaxStreamsClient,
 		streamsQuota:    newQuotaPool(defaultMaxStreamsClient),
 		streamSendQuota: defaultWindowSize,
+		kp:              kp,
 		statsHandler:    opts.StatsHandler,
 	}
+	// Make sure awakenKeepalive can't be written upon.
+	// keepalive routine will make it writable, if need be.
+	t.awakenKeepalive <- struct{}{}
 	if t.statsHandler != nil {
 		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
@@ -257,6 +279,9 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		}
 	}
 	go t.controller()
+	if t.kp.Time != infinity {
+		go t.keepalive()
+	}
 	t.writableChan <- 0
 	return t, nil
 }
@@ -369,6 +394,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	s := t.newStream(ctx, callHdr)
 	s.clientStatsCtx = userCtx
 	t.activeStreams[s.id] = s
+	// If the number of active streams change from 0 to 1, then check if keepalive
+	// has gone dormant. If so, wake it up.
+	if len(t.activeStreams) == 1 {
+		select {
+		case t.awakenKeepalive <- struct{}{}:
+			t.framer.writePing(false, false, [8]byte{})
+		default:
+		}
+	}
 
 	t.mu.Unlock()
 
@@ -992,6 +1026,7 @@ func (t *http2Client) reader() {
 		t.notifyError(err)
 		return
 	}
+	atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		t.notifyError(err)
@@ -1002,6 +1037,7 @@ func (t *http2Client) reader() {
 	// loop to keep reading incoming messages on this transport.
 	for {
 		frame, err := t.framer.readFrame()
+		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
 			// http2.StreamError. This can happen only if the server's response
@@ -1109,6 +1145,61 @@ func (t *http2Client) controller() {
 				return
 			}
 		case <-t.shutdownChan:
+			return
+		}
+	}
+}
+
+// keepalive running in a separate goroutune makes sure the connection is alive by sending pings.
+func (t *http2Client) keepalive() {
+	p := &ping{data: [8]byte{}}
+	timer := time.NewTimer(t.kp.Time)
+	for {
+		select {
+		case <-timer.C:
+			if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
+				timer.Reset(t.kp.Time)
+				continue
+			}
+			// Check if keepalive should go dormant.
+			t.mu.Lock()
+			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
+				// Make awakenKeepalive writable.
+				<-t.awakenKeepalive
+				t.mu.Unlock()
+				select {
+				case <-t.awakenKeepalive:
+					// If the control gets here a ping has been sent
+					// need to reset the timer with keepalive.Timeout.
+				case <-t.shutdownChan:
+					return
+				}
+			} else {
+				t.mu.Unlock()
+				// Send ping.
+				t.controlBuf.put(p)
+			}
+
+			// By the time control gets here a ping has been sent one way or the other.
+			timer.Reset(t.kp.Timeout)
+			select {
+			case <-timer.C:
+				if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
+					timer.Reset(t.kp.Time)
+					continue
+				}
+				t.Close()
+				return
+			case <-t.shutdownChan:
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			}
+		case <-t.shutdownChan:
+			if !timer.Stop() {
+				<-timer.C
+			}
 			return
 		}
 	}
