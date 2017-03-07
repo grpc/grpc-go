@@ -253,3 +253,44 @@ func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
 		t.Fatalf("Dial(%q) = %v, want %v", "", err, context.DeadlineExceeded)
 	}
 }
+
+// emptyBalancer returns an empty set of servers.
+type emptyBalancer struct {
+	ch chan []Address
+}
+
+func newEmptyBalancer() Balancer {
+	return &emptyBalancer{ch: make(chan []Address, 1)}
+}
+func (b *emptyBalancer) Start(_ string, _ BalancerConfig) error {
+	b.ch <- nil
+	return nil
+}
+func (b *emptyBalancer) Up(_ Address) func(error) {
+	return nil
+}
+func (b *emptyBalancer) Get(_ context.Context, _ BalancerGetOptions) (Address, func(), error) {
+	return Address{}, nil, nil
+}
+func (b *emptyBalancer) Notify() <-chan []Address {
+	return b.ch
+}
+func (b *emptyBalancer) Close() error {
+	close(b.ch)
+	return nil
+}
+
+func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	dialDone := make(chan struct{})
+	go func() {
+		conn, err := DialContext(ctx, "Non-Existent.Server:80", WithInsecure(), WithBalancer(newEmptyBalancer()))
+		if err != nil {
+			t.Fatalf("unexpected error dialing connection: %v", err)
+		}
+		conn.Close()
+		close(dialDone)
+	}()
+	<-dialDone
+	cancel()
+}

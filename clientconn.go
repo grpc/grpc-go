@@ -78,7 +78,6 @@ var (
 	errConnClosing = errors.New("grpc: the connection is closing")
 	// errConnUnavailable indicates that the connection is unavailable.
 	errConnUnavailable = errors.New("grpc: the connection is unavailable")
-	errNoAddr          = errors.New("grpc: there is no address available to dial")
 	// minimum time to give a connection to complete
 	minConnectTimeout = 20 * time.Second
 )
@@ -339,17 +338,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		cc.authority = target[:colonPos]
 	}
-	var ok bool
 	waitC := make(chan error, 1)
 	go func() {
-		var addrs []Address
+		defer close(waitC)
 		if cc.dopts.balancer == nil && cc.sc.LB != nil {
 			cc.dopts.balancer = cc.sc.LB
 		}
-		if cc.dopts.balancer == nil {
-			// Connect to target directly if balancer is nil.
-			addrs = append(addrs, Address{Addr: target})
-		} else {
+		if cc.dopts.balancer != nil {
 			var credsClone credentials.TransportCredentials
 			if creds != nil {
 				credsClone = creds.Clone()
@@ -362,24 +357,22 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 				return
 			}
 			ch := cc.dopts.balancer.Notify()
-			if ch == nil {
-				// There is no name resolver installed.
-				addrs = append(addrs, Address{Addr: target})
-			} else {
-				addrs, ok = <-ch
-				if !ok || len(addrs) == 0 {
-					waitC <- errNoAddr
-					return
+			if ch != nil {
+				if cc.dopts.block {
+					doneChan := make(chan struct{})
+					go cc.lbWatcher(doneChan)
+					<-doneChan
+				} else {
+					go cc.lbWatcher(nil)
 				}
-			}
-		}
-		for _, a := range addrs {
-			if err := cc.resetAddrConn(a, false, nil); err != nil {
-				waitC <- err
 				return
 			}
 		}
-		close(waitC)
+		// No balancer, or no resolver within the balancer.  Connect directly.
+		if err := cc.resetAddrConn(Address{Addr: target}, cc.dopts.block, nil); err != nil {
+			waitC <- err
+			return
+		}
 	}()
 	select {
 	case <-ctx.Done():
@@ -390,15 +383,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 
-	// If balancer is nil or balancer.Notify() is nil, ok will be false here.
-	// The lbWatcher goroutine will not be created.
-	if ok {
-		go cc.lbWatcher()
-	}
-
 	if cc.dopts.scChan != nil {
 		go cc.scWatcher()
 	}
+
 	return cc, nil
 }
 
@@ -449,7 +437,10 @@ type ClientConn struct {
 	conns map[Address]*addrConn
 }
 
-func (cc *ClientConn) lbWatcher() {
+// lbWatcher watches the Notify channel of the balancer in cc and manages
+// connections accordingly.  If doneChan is not nil, it is closed after the
+// first successfull connection is made.
+func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 	for addrs := range cc.dopts.balancer.Notify() {
 		var (
 			add []Address   // Addresses need to setup connections.
@@ -476,7 +467,15 @@ func (cc *ClientConn) lbWatcher() {
 		}
 		cc.mu.Unlock()
 		for _, a := range add {
-			cc.resetAddrConn(a, true, nil)
+			if doneChan != nil {
+				err := cc.resetAddrConn(a, true, nil)
+				if err == nil {
+					close(doneChan)
+					doneChan = nil
+				}
+			} else {
+				cc.resetAddrConn(a, false, nil)
+			}
 		}
 		for _, c := range del {
 			c.tearDown(errConnDrain)
@@ -505,7 +504,7 @@ func (cc *ClientConn) scWatcher() {
 // resetAddrConn creates an addrConn for addr and adds it to cc.conns.
 // If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
 // If tearDownErr is nil, errConnDrain will be used instead.
-func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr error) error {
+func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error) error {
 	ac := &addrConn{
 		cc:    cc,
 		addr:  addr,
@@ -555,8 +554,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 			stale.tearDown(tearDownErr)
 		}
 	}
-	// skipWait may overwrite the decision in ac.dopts.block.
-	if ac.dopts.block && !skipWait {
+	if block {
 		if err := ac.resetTransport(false); err != nil {
 			if err != errConnClosing {
 				// Tear down ac and delete it from cc.conns.
@@ -857,9 +855,9 @@ func (ac *addrConn) transportMonitor() {
 			// In both cases, a new ac is created.
 			select {
 			case <-t.Error():
-				ac.cc.resetAddrConn(ac.addr, true, errNetworkIO)
+				ac.cc.resetAddrConn(ac.addr, false, errNetworkIO)
 			default:
-				ac.cc.resetAddrConn(ac.addr, true, errConnDrain)
+				ac.cc.resetAddrConn(ac.addr, false, errConnDrain)
 			}
 			return
 		case <-t.Error():
@@ -868,7 +866,7 @@ func (ac *addrConn) transportMonitor() {
 				t.Close()
 				return
 			case <-t.GoAway():
-				ac.cc.resetAddrConn(ac.addr, true, errNetworkIO)
+				ac.cc.resetAddrConn(ac.addr, false, errNetworkIO)
 				return
 			default:
 			}
@@ -921,17 +919,15 @@ func (ac *addrConn) wait(ctx context.Context, hasBalancer, failfast bool) (trans
 				return nil, errConnUnavailable
 			}
 		}
-		ready := ac.ready
-		if ready == nil {
-			ready = make(chan struct{})
-			ac.ready = ready
+		if ac.ready == nil {
+			ac.ready = make(chan struct{})
 		}
 		ac.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return nil, toRPCErr(ctx.Err())
 		// Wait until the new transport is ready or failed.
-		case <-ready:
+		case <-ac.ready:
 		}
 	}
 }
