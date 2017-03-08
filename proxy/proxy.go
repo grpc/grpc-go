@@ -163,8 +163,12 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, hea
 // provided dialer, does handshake with the Handshaker and returns the connection.
 func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
 	return func(addr string, d time.Duration) (conn net.Conn, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), d)
-		defer cancel()
+		ctx := context.Background()
+		var cancel context.CancelFunc
+		if d > 0 {
+			ctx, cancel = context.WithTimeout(context.Background(), d)
+			defer cancel()
+		}
 		var skipHandshake bool
 
 		newAddr, h, err := pm.MapAddress(ctx, addr)

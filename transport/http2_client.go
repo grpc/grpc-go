@@ -135,8 +135,12 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 		proxy.NewEnvironmentProxyMapper(),
 		proxy.NewHTTPConnectHandshaker(),
 		func(addr string, d time.Duration) (net.Conn, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), d)
-			defer cancel()
+			ctx := context.Background()
+			var cancel context.CancelFunc
+			if d > 0 {
+				ctx, cancel = context.WithTimeout(context.Background(), d)
+				defer cancel()
+			}
 			return dialContext(ctx, "tcp", addr)
 		},
 	)
