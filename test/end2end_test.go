@@ -3581,11 +3581,12 @@ func testProxyMapAddress(t *testing.T, e env) {
 	go p.run()
 	defer p.stop()
 
-	te.dialer = proxy.NewDialerWithConnectHandshake(
+	te.dialer = proxy.NewDialer(
 		&proxyMapper{
 			oldAddr: te.srvAddr,
 			newAddr: lis.Addr().String(),
 		},
+		proxy.NewHTTPConnectHandshaker(),
 		func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout(e.network, addr, timeout)
 		},
@@ -3617,8 +3618,9 @@ func testProxyMapAddressIneffective(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	te.dialer = proxy.NewDialerWithConnectHandshake(
+	te.dialer = proxy.NewDialer(
 		&proxyMapper{ineffective: true},
+		proxy.NewHTTPConnectHandshaker(),
 		func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout(e.network, addr, timeout)
 		},

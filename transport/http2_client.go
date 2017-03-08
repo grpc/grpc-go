@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -130,7 +131,20 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if fn != nil {
 		return fn(ctx, addr)
 	}
-	return dialContext(ctx, "tcp", addr)
+	dialer := proxy.NewDialer(
+		proxy.NewEnvironmentProxyMapper(),
+		proxy.NewHTTPConnectHandshaker(),
+		func(addr string, d time.Duration) (net.Conn, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), d)
+			defer cancel()
+			return dialContext(ctx, "tcp", addr)
+		},
+	)
+
+	if deadline, ok := ctx.Deadline(); ok {
+		return dialer(addr, deadline.Sub(time.Now()))
+	}
+	return dialer(addr, 0)
 }
 
 func isTemporary(err error) bool {

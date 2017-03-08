@@ -66,7 +66,10 @@ type environmentProxyMapper struct{}
 
 func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
 	req := &http.Request{
-		URL: &url.URL{Host: address},
+		URL: &url.URL{
+			Scheme: "https",
+			Host:   address,
+		},
 	}
 	url, err := http.ProxyFromEnvironment(req)
 	if err != nil {
@@ -75,13 +78,42 @@ func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string
 	if url == nil {
 		return "", nil, ErrIneffective
 	}
-	return url.String(), nil, nil
+	return url.Host, nil, nil
 }
 
-// NewDialerWithConnectHandshake returns a dialer with the provided Mapper.
+// Handshaker defines the interface to do proxy handshake.
+type Handshaker interface {
+	// Handshake takes the connection to do proxy handshake on, the addr of the real server behind the
+	// proxy and the header to be sent to the proxy server.
+	// It returns the new connection after handshake and error if there's any.
+	Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error)
+}
+
+// NewHTTPConnectHandshaker returns a Handshaker that does HTTP CONNECT handshake
+// on the given connection.
+func NewHTTPConnectHandshaker() Handshaker {
+	return &httpConnectHandshaker{}
+}
+
+type httpConnectHandshaker struct{}
+
+func (h *httpConnectHandshaker) Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
+	return doHTTPConnectHandshake(ctx, conn, addr, header)
+}
+
+type bufConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *bufConn) Read(b []byte) (int, error) {
+	return c.r.Read(b)
+}
+
+// NewDialer returns a dialer with the provided Mapper, Handshaker and dialer.
 // The returned dialer uses Mapper to get the proxy's address, dial to the proxy with the
-// provided dialer, does HTTP CONNECT handshake and returns the connection.
-func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
+// provided dialer, does handshake with the Handshaker and returns the connection.
+func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
 	return func(addr string, d time.Duration) (conn net.Conn, err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), d)
 		defer cancel()
@@ -105,17 +137,8 @@ func NewDialerWithConnectHandshake(pm Mapper, dialer func(string, time.Duration)
 			return
 		}
 		if !skipHandshake {
-			conn, err = doHTTPConnectHandshake(context.Background(), conn, addr, h)
+			conn, err = hs.Handshake(context.Background(), conn, addr, h)
 		}
 		return
 	}
-}
-
-type bufConn struct {
-	net.Conn
-	r io.Reader
-}
-
-func (c *bufConn) Read(b []byte) (int, error) {
-	return c.r.Read(b)
 }
