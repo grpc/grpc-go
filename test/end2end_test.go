@@ -3553,7 +3553,7 @@ type proxyMapper struct {
 
 func (p *proxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
 	if p.ineffective {
-		return "", nil, proxy.ErrIneffective
+		return "", nil, proxy.ErrDisabled
 	}
 	if address != p.oldAddr {
 		return "", nil, fmt.Errorf("in proxy MapAddress, got address: %s, want address: %s", address, p.oldAddr)
@@ -3602,7 +3602,7 @@ func testProxyMapAddress(t *testing.T, e env) {
 		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
 	if _, err := stream.Recv(); err != io.EOF {
-		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+		t.Fatalf("%v failed to complete the FullDuplexCall: %v", stream, err)
 	}
 }
 
@@ -3636,7 +3636,7 @@ func testProxyMapAddressIneffective(t *testing.T, e env) {
 		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)
 	}
 	if _, err := stream.Recv(); err != io.EOF {
-		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
+		t.Fatalf("%v failed to complete the FullDuplexCall: %v", stream, err)
 	}
 }
 

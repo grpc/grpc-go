@@ -31,10 +31,13 @@
  *
  */
 
-// Package proxy defines interfaces to support proxyies in gRPC.
+// Package proxy defines interfaces to support proxyies in gRPC, and provides
+// an implementation of a proxy that uses environment variable and HTTP CONNECT.
 package proxy // import "google.golang.org/grpc/proxy"
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -44,8 +47,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ErrIneffective indicates the mapper function is not effective.
-var ErrIneffective = errors.New("Mapper function is not effective")
+// ErrDisabled indicates that proxy is disabled for the address.
+var ErrDisabled = errors.New("proxy is disabled for the address")
 
 // Mapper defines the interface gRPC uses to map the proxy address.
 type Mapper interface {
@@ -76,7 +79,7 @@ func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string
 		return "", nil, err
 	}
 	if url == nil {
-		return "", nil, ErrIneffective
+		return "", nil, ErrDisabled
 	}
 	return url.Host, nil, nil
 }
@@ -86,7 +89,7 @@ type Handshaker interface {
 	// Handshake takes the connection to do proxy handshake on, the addr of the real server behind the
 	// proxy and the header to be sent to the proxy server.
 	// It returns the new connection after handshake and error if there's any.
-	Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error)
+	Handshake(ctx context.Context, conn net.Conn, addr string, header map[string][]string) (net.Conn, error)
 }
 
 // NewHTTPConnectHandshaker returns a Handshaker that does HTTP CONNECT handshake
@@ -97,10 +100,15 @@ func NewHTTPConnectHandshaker() Handshaker {
 
 type httpConnectHandshaker struct{}
 
-func (h *httpConnectHandshaker) Handshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (net.Conn, error) {
+func (h *httpConnectHandshaker) Handshake(ctx context.Context, conn net.Conn, addr string, header map[string][]string) (net.Conn, error) {
 	return doHTTPConnectHandshake(ctx, conn, addr, header)
 }
 
+// To read a response from a net.Conn, http.ReadResponse() takes a bufio.Reader.
+// It's possible that this reader reads more than what's need for the response and stores
+// those bytes in the buffer.
+// bufConn wraps the original net.Conn and the bufio.Reader to make sure we don't lose the
+// bytes in the buffer.
 type bufConn struct {
 	net.Conn
 	r io.Reader
@@ -108,6 +116,46 @@ type bufConn struct {
 
 func (c *bufConn) Read(b []byte) (int, error) {
 	return c.r.Read(b)
+}
+
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (_ net.Conn, err error) {
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
+
+	if header == nil {
+		header = make(map[string][]string)
+	}
+	if ua := header.Get("User-Agent"); ua == "" {
+		header.Set("User-Agent", "gRPC")
+	}
+	if host := header.Get("Host"); host != "" {
+		// Use the user specified Host header if it's set.
+		addr = host
+	}
+	req := (&http.Request{
+		Method: "CONNECT",
+		URL:    &url.URL{Host: addr},
+		Header: header,
+	})
+
+	if err := sendRequest(ctx, req, conn); err != nil {
+		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	r := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(r, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+	}
+
+	return &bufConn{Conn: conn, r: r}, nil
 }
 
 // NewDialer returns a dialer with the provided Mapper, Handshaker and dialer.
@@ -121,7 +169,7 @@ func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net
 
 		newAddr, h, err := pm.MapAddress(ctx, addr)
 		if err != nil {
-			if err != ErrIneffective {
+			if err != ErrDisabled {
 				return nil, err
 			}
 			skipHandshake = true

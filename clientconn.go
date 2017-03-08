@@ -46,7 +46,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )

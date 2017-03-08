@@ -36,38 +36,14 @@
 package proxy
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 
 	"golang.org/x/net/context"
 )
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (_ net.Conn, err error) {
-	defer func() {
-		if err != nil {
-			conn.Close()
-		}
-	}()
-
-	if header == nil {
-		header = make(map[string][]string)
-	}
-	if ua := header.Get("User-Agent"); ua == "" {
-		header.Set("User-Agent", "gRPC")
-	}
-	if host := header.Get("Host"); host != "" {
-		// Use the user specified Host header if it's set.
-		addr = host
-	}
-	req := (&http.Request{
-		Method: "CONNECT",
-		URL:    &url.URL{Host: addr},
-		Header: header,
-	})
-
+func sendRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
 	waitC := make(chan error, 1)
 	go func() {
 		if err := req.Write(conn); err != nil {
@@ -79,22 +55,11 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, hea
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return ctx.Err()
 	case err := <-waitC:
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	r := bufio.NewReader(conn)
-	resp, err := http.ReadResponse(r, nil)
-	if err != nil {
-		return conn, fmt.Errorf("reading server HTTP response: %v", err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return conn, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
-	}
-
-	return &bufConn{Conn: conn, r: r}, nil
+	return nil
 }
