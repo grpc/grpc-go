@@ -293,6 +293,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
 	if err != nil {
 		// Server clean-up.
+		lis.Close()
 		if conn, ok := <-done; ok {
 			conn.Close()
 		}
