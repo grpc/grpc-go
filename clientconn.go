@@ -919,15 +919,17 @@ func (ac *addrConn) wait(ctx context.Context, hasBalancer, failfast bool) (trans
 				return nil, errConnUnavailable
 			}
 		}
-		if ac.ready == nil {
-			ac.ready = make(chan struct{})
+		ready := ac.ready
+		if ready == nil {
+			ready = make(chan struct{})
+			ac.ready = ready
 		}
 		ac.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return nil, toRPCErr(ctx.Err())
 		// Wait until the new transport is ready or failed.
-		case <-ac.ready:
+		case <-ready:
 		}
 	}
 }
