@@ -194,10 +194,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	kp := opts.KeepaliveParams
 	// Validate keepalive parameters.
 	if kp.Time == 0 {
-		kp.Time = defaultKeepaliveTime
+		kp.Time = defaultClientKeepaliveTime
 	}
 	if kp.Timeout == 0 {
-		kp.Timeout = defaultKeepaliveTimeout
+		kp.Timeout = defaultClientKeepaliveTimeout
 	}
 	var buf bytes.Buffer
 	t := &http2Client{

@@ -41,6 +41,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -48,6 +49,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -90,11 +92,15 @@ type http2Server struct {
 
 	stats stats.Handler
 
+	// TODO(mmukhi): Documentation
+	kp keepalive.ServerParameters
+
 	mu            sync.Mutex // guard the following
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
+	idle            time.Time
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -128,6 +134,22 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
 	}
+	kp := config.keepaliveParams
+	if kp.MaxConnectionIdle == 0 {
+		kp.MaxConnectionIdle = defaultMaxConnectionIdle
+	}
+	if kp.MaxConnectionAge == 0 {
+		kp.MaxConnectionAge = defaultMaxConnectionAge
+	}
+	if kp.MaxConnectionAgeGrace == 0 {
+		kp.MaxConnectionAgeGrace = defaultMaxConnectionAgeGrace
+	}
+	if kp.Time == 0 {
+		kp.Time = defaultServerKeepaliveTime
+	}
+	if kp.Timeout == 0 {
+		kp.Timeout = defaultServerKeepaliveTimeout
+	}
 	var buf bytes.Buffer
 	t := &http2Server{
 		ctx:             context.Background(),
@@ -149,6 +171,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
 		stats:           config.StatsHandler,
+		kp:              kp,
+		idle:            time.Now(),
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -248,6 +272,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	t.maxStreamID = s.id
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
 	t.activeStreams[s.id] = s
+	if len(t.activeStreams) == 1 {
+		t.idle = time.Time{}
+	}
 	t.mu.Unlock()
 	s.windowHandler = func(n int) {
 		t.updateWindow(s, uint32(n))
@@ -735,6 +762,37 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 	}
 }
 
+// TODO(mmukhi): Documentation
+func (t *http2Server) keepalive() {
+	//p := &ping{data: [8]byte{}}
+	maxIdle := time.NewTimer(t.kp.MaxConnectionIdle)
+	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
+	keepalive := time.NewTimer(t.kp.Time)
+	t.mu.Lock()
+	idle := t.idle
+	t.mu.Unlock()
+	for {
+		select {
+		case <-maxIdle.C:
+			if idle == t.idle {
+				// send go away
+				continue
+			}
+			if idle.IsZero() {
+				maxIdle.Reset(t.kp.MaxConnectionIdle)
+				continue
+			}
+			maxIdle.Reset(t.kp.MaxConnectionIdle - time.Since(idle))
+		case <-maxAge.C:
+		case <-keepalive.C:
+		case <-t.shutdownChan:
+			// TODO(mmukhi): clean-up
+			return
+		}
+	}
+
+}
+
 // controller running in a separate goroutine takes charge of sending control
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Server) controller() {
@@ -816,6 +874,9 @@ func (t *http2Server) Close() (err error) {
 func (t *http2Server) closeStream(s *Stream) {
 	t.mu.Lock()
 	delete(t.activeStreams, s.id)
+	if len(t.activeStreams) == 0 {
+		t.idle = time.Now()
+	}
 	if t.state == draining && len(t.activeStreams) == 0 {
 		defer t.Close()
 	}

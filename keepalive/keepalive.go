@@ -16,3 +16,12 @@ type ClientParameters struct {
 	// If true, client runs keepalive checks even with no active RPCs.
 	PermitWithoutStream bool
 }
+
+// TODO(mmukhi) : documentation
+type ServerParameters struct {
+	MaxConnectionIdle     time.Duration
+	MaxConnectionAge      time.Duration
+	MaxConnectionAgeGrace time.Duration
+	Time                  time.Duration
+	Timeout               time.Duration
+}

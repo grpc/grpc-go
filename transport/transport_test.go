@@ -156,7 +156,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 }
 
 // start starts server. Other goroutines should block on s.readyChan for further operations.
-func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
+func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", "localhost:0")
@@ -180,10 +180,7 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		if err != nil {
 			return
 		}
-		config := &ServerConfig{
-			MaxStreams: maxStreams,
-		}
-		transport, err := NewServerTransport("http2", conn, config)
+		transport, err := NewServerTransport("http2", conn, serverConfig)
 		if err != nil {
 			return
 		}
@@ -252,12 +249,12 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
-	return setUpWithOptions(t, port, maxStreams, ht, ConnectOptions{})
+	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
 }
 
-func setUpWithOptions(t *testing.T, port int, maxStreams uint32, ht hType, copts ConnectOptions) (*server, ClientTransport) {
+func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, ClientTransport) {
 	server := &server{startedErr: make(chan error, 1)}
-	go server.start(t, port, maxStreams, ht)
+	go server.start(t, port, serverConfig, ht)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
 	var (
@@ -299,6 +296,18 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		t.Fatalf("Failed to dial: %v", err)
 	}
 	return tr
+}
+
+// TestMaxConnectionIdle tests that a server will send GoAway to a idle client.
+// An idle client is one who doesn't make any RPC calls for a duration of
+// MaxConnectionIdle time.
+func TestMaxConnectionIdle(t *testing.T) {
+	serverConfig := &ServerConfig{
+		keepaliveParams: keepalive.ServerParams{
+			MaxConnectionIdle: 2 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
@@ -377,7 +386,7 @@ func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 }
 
 func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
-	s, tr := setUpWithOptions(t, 0, math.MaxUint32, normal, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
+	s, tr := setUpWithOptions(t, 0, &ServerConfig{MaxStreams: math.MaxUint32}, normal, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
 		Time:                2 * time.Second, // Keepalive time = 2 sec.
 		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
 		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
