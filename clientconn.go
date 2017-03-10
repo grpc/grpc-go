@@ -307,6 +307,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
+	cc.dopts.maxMsgSize = defaultClientMaxMsgSize
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -314,9 +315,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
 		defer cancel()
-	}
-	if cc.dopts.maxMsgSize == 0 {
-		cc.dopts.maxMsgSize = defaultClientMaxMsgSize
 	}
 
 	defer func() {
