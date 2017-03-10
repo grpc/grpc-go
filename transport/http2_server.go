@@ -183,6 +183,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		t.stats.HandleConn(t.ctx, connBegin)
 	}
 	go t.controller()
+	go t.keepalive()
 	t.writableChan <- 0
 	return t, nil
 }
@@ -790,23 +791,29 @@ func (t *http2Server) keepalive() {
 		case <-maxIdle.C:
 			t.mu.Lock()
 			idle := t.idle
-			t.mu.Unlock()
 			if idle == oidle {
+				// The connection has been idle for a duration of keepalive.MaxConnectionIdle.
+				// Gracefully close the connection.
+				t.state = draining
+				t.mu.Unlock()
 				t.Drain()
-				//TODO: Graceful connection termination!?
 				// Reseting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
-				// New Stream might get created by the time GoAway is written on the wire.
-				continue
+				return
 			}
-			oidle = idle
+			t.mu.Unlock()
 			if idle.IsZero() {
 				maxIdle.Reset(t.kp.MaxConnectionIdle)
 				continue
 			}
+			oidle = idle
 			maxIdle.Reset(t.kp.MaxConnectionIdle - time.Since(idle))
 		case <-maxAge.C:
+			// Reseting the timer so that the clean-up doesn't deadlock.
+			maxAge.Reset(infinity)
 		case <-keepalive.C:
+			// Reseting the timer so that the clean-up doesn't deadlock.
+			keepalive.Reset(infinity)
 		case <-t.shutdownChan:
 			return
 		}
