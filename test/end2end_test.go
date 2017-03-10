@@ -1452,6 +1452,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 	// test on client side for unary RPC
 	req.ResponseSize = proto.Int32(int32(te.maxMsgSize) + 1)
+	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Internal {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.Internal)
 	}
