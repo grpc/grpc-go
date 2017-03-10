@@ -308,6 +308,17 @@ func TestMaxConnectionIdle(t *testing.T) {
 		},
 	}
 	server, client := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	stream, err := client.NewStream(context.Background(), &CallHdr{Host: "localhost", Method: "foo.small"})
+	if err != nil {
+		t.Fatalf("Client failed to create RPC request: %v", err)
+	}
+	stream.mu.Lock()
+	stream.rstStream = true
+	stream.mu.Unlock()
+	client.CloseStream()
+	// wait for server to see that closed stream and max age to send goaway after no new RPCs are mode
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
