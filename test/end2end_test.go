@@ -570,6 +570,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.streamClientInt != nil {
 		opts = append(opts, grpc.WithStreamInterceptor(te.streamClientInt))
 	}
+	if te.maxMsgSize > 0 {
+		opts = append(opts, grpc.WithMaxMsgSize(te.maxMsgSize))
+	}
 	switch te.e.security {
 	case "tls":
 		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
@@ -1427,22 +1430,34 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
 	argSize := int32(te.maxMsgSize + 1)
-	const respSize = 1
+	const smallSize = 1
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
 	if err != nil {
 		t.Fatal(err)
 	}
+	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	// test on server side for unary RPC
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseSize: proto.Int32(smallSize),
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Internal {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.Internal)
 	}
+	// test on client side for unary RPC
+	req.ResponseSize = proto.Int32(int32(te.maxMsgSize) + 1)
+	req.Payload = smallPayload
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Internal {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.Internal)
+	}
 
+	// test on server side for streaming RPC
 	stream, err := tc.FullDuplexCall(te.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -1469,6 +1484,21 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Internal {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.Internal)
 	}
+
+	// test on client side for streaming RPC
+	stream, err = tc.FullDuplexCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam[0].Size = proto.Int32(int32(te.maxMsgSize) + 1)
+	sreq.Payload = smallPayload
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Internal {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.Internal)
+	}
+
 }
 
 func TestPeerClientSide(t *testing.T) {
