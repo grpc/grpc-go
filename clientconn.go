@@ -36,6 +36,7 @@ package grpc
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -87,22 +88,32 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt  UnaryClientInterceptor
-	streamInt StreamClientInterceptor
-	codec     Codec
-	cp        Compressor
-	dc        Decompressor
-	bs        backoffStrategy
-	balancer  Balancer
-	block     bool
-	insecure  bool
-	timeout   time.Duration
-	scChan    <-chan ServiceConfig
-	copts     transport.ConnectOptions
+	unaryInt   UnaryClientInterceptor
+	streamInt  StreamClientInterceptor
+	codec      Codec
+	cp         Compressor
+	dc         Decompressor
+	bs         backoffStrategy
+	balancer   Balancer
+	block      bool
+	insecure   bool
+	timeout    time.Duration
+	scChan     <-chan ServiceConfig
+	copts      transport.ConnectOptions
+	maxMsgSize int
 }
+
+const defaultClientMaxMsgSize = math.MaxInt32
 
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
+
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
+func WithMaxMsgSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.maxMsgSize = s
+	}
+}
 
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
 func WithCodec(c Codec) DialOption {
@@ -303,6 +314,9 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, cc.dopts.timeout)
 		defer cancel()
+	}
+	if cc.dopts.maxMsgSize == 0 {
+		cc.dopts.maxMsgSize = defaultClientMaxMsgSize
 	}
 
 	defer func() {
