@@ -768,16 +768,38 @@ func (t *http2Server) keepalive() {
 	maxIdle := time.NewTimer(t.kp.MaxConnectionIdle)
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
 	keepalive := time.NewTimer(t.kp.Time)
+	// NOTE: All exit paths of this function should reset their
+	// respecitve timers. A failure to do so will cause the
+	// following clean-up to deadlock and eventually leak.
+	defer func() {
+		if !maxIdle.Stop() {
+			<-maxIdle.C
+		}
+		if !maxAge.Stop() {
+			<-maxAge.C
+		}
+		if !keepalive.Stop() {
+			<-keepalive.C
+		}
+	}()
 	t.mu.Lock()
-	idle := t.idle
+	oidle := t.idle
 	t.mu.Unlock()
 	for {
 		select {
 		case <-maxIdle.C:
-			if idle == t.idle {
-				// send go away
+			t.mu.Lock()
+			idle := t.idle
+			t.mu.Unlock()
+			if idle == oidle {
+				t.Drain()
+				//TODO: Graceful connection termination!?
+				// Reseting the timer so that the clean-up doesn't deadlock.
+				maxIdle.Reset(infinity)
+				// New Stream might get created by the time GoAway is written on the wire.
 				continue
 			}
+			oidle = idle
 			if idle.IsZero() {
 				maxIdle.Reset(t.kp.MaxConnectionIdle)
 				continue
@@ -786,7 +808,6 @@ func (t *http2Server) keepalive() {
 		case <-maxAge.C:
 		case <-keepalive.C:
 		case <-t.shutdownChan:
-			// TODO(mmukhi): clean-up
 			return
 		}
 	}

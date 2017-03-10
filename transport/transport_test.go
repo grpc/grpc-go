@@ -303,7 +303,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 // MaxConnectionIdle time.
 func TestMaxConnectionIdle(t *testing.T) {
 	serverConfig := &ServerConfig{
-		keepaliveParams: keepalive.ServerParams{
+		keepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
 		},
 	}
@@ -317,8 +317,14 @@ func TestMaxConnectionIdle(t *testing.T) {
 	stream.mu.Lock()
 	stream.rstStream = true
 	stream.mu.Unlock()
-	client.CloseStream()
+	client.CloseStream(stream, nil)
 	// wait for server to see that closed stream and max age to send goaway after no new RPCs are mode
+	timeout := time.NewTimer(time.Second * 4)
+	select {
+	case <-client.GoAway():
+	case <-timeout.C:
+		t.Fatalf("Test timed out, expected a GoAway from server")
+	}
 }
 
 func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
