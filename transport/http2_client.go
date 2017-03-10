@@ -108,6 +108,8 @@ type http2Client struct {
 	activity uint32 // Accessed atomically.
 	kp       keepalive.ClientParameters
 
+	bdp *bdpEstimator
+
 	statsHandler stats.Handler
 
 	mu            sync.Mutex     // guard the following variables
@@ -199,6 +201,12 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if kp.Timeout == 0 {
 		kp.Timeout = defaultKeepaliveTimeout
 	}
+	bdp := &bdpEstimator{
+		p: &ping{
+			data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+		},
+		maxWindow: maxWindowSize,
+	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		ctx:        ctx,
@@ -231,6 +239,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		streamSendQuota: defaultWindowSize,
 		kp:              kp,
 		statsHandler:    opts.StatsHandler,
+		bdp:             bdp,
 	}
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
@@ -779,6 +788,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		t.notifyError(connectionErrorf(true, err, "%v", err))
 		return
 	}
+	t.bdp.add(uint32(size))
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
@@ -885,6 +895,8 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
+		// See if it could be a bdp ping.
+		t.bdp.stop(f.Data)
 		return
 	}
 	pingAck := &ping{ack: true}
@@ -922,6 +934,10 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
+	if t.bdp.start() {
+		// send bdp ping
+		t.controlBuf.put(t.bdp.p)
+	}
 	id := f.Header().StreamID
 	incr := f.Increment
 	if id == 0 {

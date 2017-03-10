@@ -43,6 +43,7 @@ import (
 )
 
 const (
+	maxWindowSize = 1024 * 1024 * 4
 	// The default value of flow control window size in HTTP2 spec.
 	defaultWindowSize = 65535
 	// The initial window size for flow control.
