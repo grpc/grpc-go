@@ -303,7 +303,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 // MaxConnectionIdle time.
 func TestMaxConnectionIdle(t *testing.T) {
 	serverConfig := &ServerConfig{
-		keepaliveParams: keepalive.ServerParameters{
+		KeepaliveParams: keepalive.ServerParameters{
 			MaxConnectionIdle: 2 * time.Second,
 		},
 	}
@@ -318,12 +318,66 @@ func TestMaxConnectionIdle(t *testing.T) {
 	stream.rstStream = true
 	stream.mu.Unlock()
 	client.CloseStream(stream, nil)
-	// wait for server to see that closed stream and max age to send goaway after no new RPCs are mode
+	// wait for server to see that closed stream and max-age logic to send goaway after no new RPCs are mode
 	timeout := time.NewTimer(time.Second * 4)
 	select {
 	case <-client.GoAway():
 	case <-timeout.C:
-		t.Fatalf("Test timed out, expected a GoAway from server")
+		t.Fatalf("Test timed out, expected a GoAway from the server.")
+	}
+}
+
+// TestMaxConnectinoAge tests that a server will send GoAway after a duration of MaxConnectionAge.
+func TestMaxConnectionAge(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			MaxConnectionAge: 2 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	_, err := client.NewStream(context.Background(), &CallHdr{Host: "localhost", Method: "foo.small"})
+	if err != nil {
+		t.Fatalf("Client failed to create stream: %v", err)
+	}
+	// Wait for max-age logic to send GoAway.
+	timeout := time.NewTimer(4 * time.Second)
+	select {
+	case <-client.GoAway():
+	case <-timeout.C:
+		t.Fatalf("Test timer out, expected a GoAway from the server.")
+	}
+}
+
+// TestKeepaliveServer tests that a server closes a peer that doesn't respont to keepalive pings.
+func TestKeepaliveServer(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			Time:    2 * time.Second,
+			Timeout: 1 * time.Second,
+		},
+	}
+	server, c := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+	defer server.stop()
+	defer c.Close()
+	client, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer client.Close()
+	// Wait for keepalive logic to close the connection.
+	time.Sleep(4 * time.Second)
+	b := make([]byte, 24)
+	for {
+		_, err = client.Read(b)
+		if err == nil {
+			continue
+		}
+		if err != io.EOF {
+			t.Fatalf("client.Read(_) = _,%v, want io.EOF", err)
+		}
+		break
 	}
 }
 

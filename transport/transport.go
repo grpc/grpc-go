@@ -366,7 +366,7 @@ type ServerConfig struct {
 	AuthInfo        credentials.AuthInfo
 	InTapHandle     tap.ServerInHandle
 	StatsHandler    stats.Handler
-	keepaliveParams keepalive.ServerParameters
+	KeepaliveParams keepalive.ServerParameters
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error

@@ -17,11 +17,18 @@ type ClientParameters struct {
 	PermitWithoutStream bool
 }
 
-// TODO(mmukhi) : documentation
+// ServerParameters is used to set keepalive and max-age parameters on the server-side.
 type ServerParameters struct {
-	MaxConnectionIdle     time.Duration
-	MaxConnectionAge      time.Duration
+	// MaxConnectionIdle is a duration for the amount of time after which an idle connection would be closed by sending a GoAway.
+	// Idleness duration is defined since the most recent time the number of outstanding RPCs became zero or the connection establishment.
+	MaxConnectionIdle time.Duration
+	// MaxConnectionAge is a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway
+	MaxConnectionAge time.Duration
+	//MaxConnectinoAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 	MaxConnectionAgeGrace time.Duration
-	Time                  time.Duration
-	Timeout               time.Duration
+	// After a duration of this time if the server doesn't see any activity it pings the client to see if the transport is still alive.
+	Time time.Duration
+	// After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that
+	// the connection is closed.
+	Timeout time.Duration
 }

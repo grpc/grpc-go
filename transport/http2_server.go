@@ -38,9 +38,11 @@ import (
 	"errors"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/context"
@@ -92,7 +94,10 @@ type http2Server struct {
 
 	stats stats.Handler
 
-	// TODO(mmukhi): Documentation
+	// Flag to keep track of reading activity on transport.
+	// 1 is true and 0 is false.
+	activity uint32 // Accessed atomically.
+	// Keepalive and max-age parameters for the server.
 	kp keepalive.ServerParameters
 
 	mu            sync.Mutex // guard the following
@@ -134,13 +139,15 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
 	}
-	kp := config.keepaliveParams
+	kp := config.KeepaliveParams
 	if kp.MaxConnectionIdle == 0 {
 		kp.MaxConnectionIdle = defaultMaxConnectionIdle
 	}
 	if kp.MaxConnectionAge == 0 {
 		kp.MaxConnectionAge = defaultMaxConnectionAge
 	}
+	// Add a jitter to MaxConnectionAge.
+	kp.MaxConnectionAge += getJitter(kp.MaxConnectionAge)
 	if kp.MaxConnectionAgeGrace == 0 {
 		kp.MaxConnectionAgeGrace = defaultMaxConnectionAgeGrace
 	}
@@ -323,6 +330,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		t.Close()
 		return
 	}
+	atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
@@ -333,6 +341,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 
 	for {
 		frame, err := t.framer.readFrame()
+		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				t.mu.Lock()
@@ -763,9 +772,15 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 	}
 }
 
-// TODO(mmukhi): Documentation
+// keepalive running in a separate goroutine does the following:
+// 1. Gracefully closes an idle connection after a duration of keepalive.MaxConnectionIdle.
+// 2. Gracefully closes any connection after a duration of keepalive.MaxConnectionAge.
+// 3. Forcibly closes a connection after an additive period of keepalive.MaxConnectionAgeGrace over keepalive.MaxConnectionAge.
+// 4. Makes sure a connection is alive by sending pings with a frequency of keepalive.Time and closes a non-resposive connection
+// after an additional duration of keepalive.Timeout.
 func (t *http2Server) keepalive() {
-	//p := &ping{data: [8]byte{}}
+	p := &ping{data: [8]byte{}}
+	var pingSent bool
 	maxIdle := time.NewTimer(t.kp.MaxConnectionIdle)
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
 	keepalive := time.NewTimer(t.kp.Time)
@@ -809,16 +824,39 @@ func (t *http2Server) keepalive() {
 			oidle = idle
 			maxIdle.Reset(t.kp.MaxConnectionIdle - time.Since(idle))
 		case <-maxAge.C:
-			// Reseting the timer so that the clean-up doesn't deadlock.
-			maxAge.Reset(infinity)
+			t.mu.Lock()
+			t.state = draining
+			t.mu.Unlock()
+			t.Drain()
+			maxAge.Reset(t.kp.MaxConnectionAgeGrace)
+			select {
+			case <-maxAge.C:
+				// Close the connection after grace period.
+				t.Close()
+				// Reseting the timer so that the clean-up doesn't deadlock.
+				maxAge.Reset(infinity)
+			case <-t.shutdownChan:
+			}
+			return
 		case <-keepalive.C:
-			// Reseting the timer so that the clean-up doesn't deadlock.
-			keepalive.Reset(infinity)
+			if atomic.CompareAndSwapUint32(&t.activity, 1, 0) {
+				pingSent = false
+				keepalive.Reset(t.kp.Time)
+				continue
+			}
+			if pingSent {
+				t.Close()
+				// Reseting the timer so that the clean-up doesn't deadlock.
+				keepalive.Reset(infinity)
+				return
+			}
+			pingSent = true
+			t.controlBuf.put(p)
+			keepalive.Reset(t.kp.Timeout)
 		case <-t.shutdownChan:
 			return
 		}
 	}
-
 }
 
 // controller running in a separate goroutine takes charge of sending control
@@ -933,4 +971,15 @@ func (t *http2Server) RemoteAddr() net.Addr {
 
 func (t *http2Server) Drain() {
 	t.controlBuf.put(&goAway{})
+}
+
+func getJitter(v time.Duration) time.Duration {
+	if v == infinity {
+		return 0
+	}
+	rand.Seed(time.Now().UnixNano())
+	// Generate a jitter between +/- 10% of the value.
+	r := int64(v / 10)
+	j := rand.Int63n(2*r) - r
+	return time.Duration(j)
 }

@@ -126,7 +126,7 @@ var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size l
 // A ServerOption sets options.
 type ServerOption func(*options)
 
-// TODO(mmukhi) : Documentation
+// KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
 	return func(o *options) {
 		o.keepaliveParams = kp
@@ -478,7 +478,7 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		AuthInfo:        authInfo,
 		InTapHandle:     s.opts.inTapHandle,
 		StatsHandler:    s.opts.statsHandler,
-		keepaliveParams: s.opts.keepaliveParams,
+		KeepaliveParams: s.opts.keepaliveParams,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
