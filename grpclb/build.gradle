@@ -14,6 +14,7 @@ dependencies {
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             libraries.protobuf
+    testCompile libraries.truth
 }
 
 configureProtoCompilation()

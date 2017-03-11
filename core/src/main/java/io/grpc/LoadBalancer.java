@@ -31,6 +31,8 @@
 
 package io.grpc;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -202,7 +204,7 @@ public abstract class LoadBalancer {
     public abstract CallOptions getCallOptions();
 
     /**
-     * Call metadata.
+     * Headers of the call. {@code pickSubchannel()} may mutate it before before returning.
      */
     public abstract Metadata getHeaders();
 
@@ -345,7 +347,24 @@ public abstract class LoadBalancer {
 
     @Override
     public String toString() {
-      return "[subchannel=" + subchannel + " status=" + status + "]";
+      return MoreObjects.toStringHelper(this)
+          .add("subchannel", subchannel)
+          .add("status", status)
+          .toString();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(subchannel, status);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof PickResult)) {
+        return false;
+      }
+      PickResult that = (PickResult) other;
+      return Objects.equal(subchannel, that.subchannel) && Objects.equal(status, that.status);
     }
   }
 

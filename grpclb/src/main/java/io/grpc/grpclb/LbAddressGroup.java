@@ -38,7 +38,7 @@ import io.grpc.EquivalentAddressGroup;
 /**
  * Represents a balancer address entry.
  */
-class LbAddressGroup {
+final class LbAddressGroup {
   private final EquivalentAddressGroup addresses;
   private final String authority;
 
