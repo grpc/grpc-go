@@ -38,7 +38,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -353,11 +352,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	} else if cc.dopts.insecure && cc.dopts.copts.Authority != "" {
 		cc.authority = cc.dopts.copts.Authority
 	} else {
-		colonPos := strings.LastIndex(target, ":")
-		if colonPos == -1 {
-			colonPos = len(target)
-		}
-		cc.authority = target[:colonPos]
+		cc.authority = target
 	}
 	var ok bool
 	waitC := make(chan error, 1)
