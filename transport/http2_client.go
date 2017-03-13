@@ -201,12 +201,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if kp.Timeout == 0 {
 		kp.Timeout = defaultKeepaliveTimeout
 	}
-	bdp := &bdpEstimator{
-		p: &ping{
-			data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
-		},
-		maxWindow: maxWindowSize,
-	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		ctx:        ctx,
@@ -239,7 +233,16 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		streamSendQuota: defaultWindowSize,
 		kp:              kp,
 		statsHandler:    opts.StatsHandler,
-		bdp:             bdp,
+	}
+	t.bdp = &bdpEstimator{
+		p: &ping{
+			data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+		},
+		estimate:  initialConnWindowSize,
+		maxWindow: maxWindowSize,
+		send: func(p *ping) {
+			t.controlBuf.put(p)
+		},
 	}
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
@@ -549,7 +552,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 			t.streamsQuota.add(1)
 			return
 		}
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
+		t.controlBuf.put(&resetStream{s.id, s.rstError})
 	}()
 	s.mu.Lock()
 	rstStream = s.rstStream
@@ -568,8 +571,13 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
+	if se, ok := err.(StreamError); ok {
 		rstStream = true
+		if se.Code == codes.DeadlineExceeded {
+			rstError = http2.ErrCodeInternal
+			return
+		}
+		rstError = http2.ErrCodeCancel
 	}
 }
 
@@ -817,6 +825,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
 			s.rstStream = true
+			s.rstError = http2.ErrCodeFlowControl
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
@@ -896,7 +905,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 func (t *http2Client) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
 		// See if it could be a bdp ping.
-		t.bdp.stop(f.Data)
+		t.bdp.calculate(f.Data)
 		return
 	}
 	pingAck := &ping{ack: true}
@@ -934,10 +943,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
-	if t.bdp.start() {
-		// send bdp ping
-		t.controlBuf.put(t.bdp.p)
-	}
 	id := f.Header().StreamID
 	incr := f.Increment
 	if id == 0 {

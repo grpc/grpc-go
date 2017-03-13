@@ -41,6 +41,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	//"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -305,6 +306,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 
 	for {
 		frame, err := t.framer.readFrame()
+		//time.Sleep(160 * time.Millisecond)
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				t.mu.Lock()

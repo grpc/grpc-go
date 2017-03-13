@@ -217,6 +217,8 @@ type Stream struct {
 	// rstStream indicates whether a RST_STREAM frame needs to be sent
 	// to the server to signify that this stream is closing.
 	rstStream bool
+	// rstError indicates the error to be sent with the RST_STREAM frame.
+	rstError uint32
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
