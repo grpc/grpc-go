@@ -52,7 +52,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/proxy"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -131,9 +130,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if fn != nil {
 		return fn(ctx, addr)
 	}
-	dialer := proxy.NewDialer(
-		proxy.NewEnvironmentProxyMapper(),
-		proxy.NewHTTPConnectHandshaker(),
+	dialer := newDialer(
 		func(addr string, d time.Duration) (net.Conn, error) {
 			ctx := context.Background()
 			var cancel context.CancelFunc

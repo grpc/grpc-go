@@ -37,3 +37,24 @@ package grpc_test
 func init() {
 	raceMode = true
 }
+
+func sendRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	waitC := make(chan error, 1)
+	go func() {
+		if err := req.Write(conn); err != nil {
+			waitC <- fmt.Errorf("failed to write the HTTP request: %v", err)
+			return
+		}
+		close(waitC)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-waitC:
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

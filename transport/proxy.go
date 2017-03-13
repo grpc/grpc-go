@@ -31,9 +31,8 @@
  *
  */
 
-// Package proxy defines interfaces to support proxyies in gRPC, and provides
-// an implementation of a proxy that uses environment variable and HTTP CONNECT.
-package proxy // import "google.golang.org/grpc/proxy"
+package transport
+
 import (
 	"bufio"
 	"errors"
@@ -47,27 +46,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ErrDisabled indicates that proxy is disabled for the address.
-var ErrDisabled = errors.New("proxy is disabled for the address")
+// errDisabled indicates that proxy is disabled for the address.
+var errDisabled = errors.New("proxy is disabled for the address")
 
-// Mapper defines the interface gRPC uses to map the proxy address.
-type Mapper interface {
-	// MapAddress is called before we connect to the target address.
-	// It can be used to programmatically override the address that we will connect to.
-	// It returns the address of the proxy, and the header to be sent in the request.
-	MapAddress(ctx context.Context, address string) (string, map[string][]string, error)
-}
-
-// NewEnvironmentProxyMapper returns a Mapper that returns the address of the proxy
-// as indicated by the environment variables HTTP_PROXY, HTTPS_PROXY and NO_PROXY
-// (or the lowercase versions thereof).
-func NewEnvironmentProxyMapper() Mapper {
-	return &environmentProxyMapper{}
-}
-
-type environmentProxyMapper struct{}
-
-func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string) (string, map[string][]string, error) {
+func mapAddress(ctx context.Context, address string) (string, error) {
 	req := &http.Request{
 		URL: &url.URL{
 			Scheme: "https",
@@ -76,32 +58,12 @@ func (pm *environmentProxyMapper) MapAddress(ctx context.Context, address string
 	}
 	url, err := http.ProxyFromEnvironment(req)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	if url == nil {
-		return "", nil, ErrDisabled
+		return "", errDisabled
 	}
-	return url.Host, nil, nil
-}
-
-// Handshaker defines the interface to do proxy handshake.
-type Handshaker interface {
-	// Handshake takes the connection to do proxy handshake on, the addr of the real server behind the
-	// proxy and the header to be sent to the proxy server.
-	// It returns the new connection after handshake and error if there's any.
-	Handshake(ctx context.Context, conn net.Conn, addr string, header map[string][]string) (net.Conn, error)
-}
-
-// NewHTTPConnectHandshaker returns a Handshaker that does HTTP CONNECT handshake
-// on the given connection.
-func NewHTTPConnectHandshaker() Handshaker {
-	return &httpConnectHandshaker{}
-}
-
-type httpConnectHandshaker struct{}
-
-func (h *httpConnectHandshaker) Handshake(ctx context.Context, conn net.Conn, addr string, header map[string][]string) (net.Conn, error) {
-	return doHTTPConnectHandshake(ctx, conn, addr, header)
+	return url.Host, nil
 }
 
 // To read a response from a net.Conn, http.ReadResponse() takes a bufio.Reader.
@@ -118,27 +80,17 @@ func (c *bufConn) Read(b []byte) (int, error) {
 	return c.r.Read(b)
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, header http.Header) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
 		}
 	}()
 
-	if header == nil {
-		header = make(map[string][]string)
-	}
-	if ua := header.Get("User-Agent"); ua == "" {
-		header.Set("User-Agent", "gRPC")
-	}
-	if host := header.Get("Host"); host != "" {
-		// Use the user specified Host header if it's set.
-		addr = host
-	}
 	req := (&http.Request{
 		Method: "CONNECT",
 		URL:    &url.URL{Host: addr},
-		Header: header,
+		Header: map[string][]string{"User-Agent": {"gRPC"}},
 	})
 
 	if err := sendRequest(ctx, req, conn); err != nil {
@@ -158,10 +110,10 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string, hea
 	return &bufConn{Conn: conn, r: r}, nil
 }
 
-// NewDialer returns a dialer with the provided Mapper, Handshaker and dialer.
+// newDialer returns a dialer with the provided Mapper, Handshaker and dialer.
 // The returned dialer uses Mapper to get the proxy's address, dial to the proxy with the
 // provided dialer, does handshake with the Handshaker and returns the connection.
-func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
+func newDialer(dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
 	return func(addr string, d time.Duration) (conn net.Conn, err error) {
 		ctx := context.Background()
 		var cancel context.CancelFunc
@@ -171,9 +123,9 @@ func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net
 		}
 		var skipHandshake bool
 
-		newAddr, h, err := pm.MapAddress(ctx, addr)
+		newAddr, err := mapAddress(ctx, addr)
 		if err != nil {
-			if err != ErrDisabled {
+			if err != errDisabled {
 				return nil, err
 			}
 			skipHandshake = true
@@ -189,7 +141,7 @@ func NewDialer(pm Mapper, hs Handshaker, dialer func(string, time.Duration) (net
 			return
 		}
 		if !skipHandshake {
-			conn, err = hs.Handshake(context.Background(), conn, addr, h)
+			conn, err = doHTTPConnectHandshake(context.Background(), conn, addr)
 		}
 		return
 	}

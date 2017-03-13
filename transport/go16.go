@@ -35,7 +35,9 @@
 package transport
 
 import (
+	"fmt"
 	"net"
+	"net/http"
 
 	"golang.org/x/net/context"
 )
@@ -43,4 +45,12 @@ import (
 // dialContext connects to the address on the named network.
 func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
+}
+
+func sendRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	req.Cancel = ctx.Done()
+	if err := req.Write(conn); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+	return nil
 }
