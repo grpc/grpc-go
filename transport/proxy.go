@@ -90,7 +90,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	req := (&http.Request{
 		Method: "CONNECT",
 		URL:    &url.URL{Host: addr},
-		Header: map[string][]string{"User-Agent": {"gRPC"}},
+		Header: map[string][]string{"User-Agent": {"gRPC-go"}},
 	})
 
 	if err := sendRequest(ctx, req, conn); err != nil {
@@ -110,10 +110,10 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	return &bufConn{Conn: conn, r: r}, nil
 }
 
-// newDialer returns a dialer with the provided Mapper, Handshaker and dialer.
-// The returned dialer uses Mapper to get the proxy's address, dial to the proxy with the
-// provided dialer, does handshake with the Handshaker and returns the connection.
-func newDialer(dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
+// newProxyDialer returns a dialer that connects to proxy first if necessary.
+// The returned dialer checks if a proxy is necessary, dial to the proxy with the
+// provided dialer, does HTTP CONNECT handshake and returns the connection.
+func newProxyDialer(dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
 	return func(addr string, d time.Duration) (conn net.Conn, err error) {
 		ctx := context.Background()
 		var cancel context.CancelFunc

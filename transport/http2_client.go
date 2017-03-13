@@ -130,7 +130,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if fn != nil {
 		return fn(ctx, addr)
 	}
-	dialer := newDialer(
+	dialer := newProxyDialer(
 		func(addr string, d time.Duration) (net.Conn, error) {
 			ctx := context.Background()
 			var cancel context.CancelFunc
