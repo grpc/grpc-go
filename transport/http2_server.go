@@ -162,19 +162,13 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		send: func(p *ping) {
 			t.controlBuf.put(p)
 		},
-		updateInitialWindow: func(n uint32) {
+		updateConnWindow: func(delta uint32) {
 			// Update the limit on fc.
 			t.fc.mu.Lock()
-			t.fc.limit += (n - t.fc.limit)
+			t.fc.limit += delta
 			t.fc.mu.Unlock()
-			// Send a settings frame to update the initial window.
-			ss := []http2.Setting{
-				{
-					ID:  http2.SettingInitialWindowSize,
-					Val: uint32(n),
-				},
-			}
-			t.controlBuf.put(&settings{ack: false, ss: ss})
+			// Send a window update on connection.
+			t.controlBuf.put(&windowUpdate{0, delta})
 		},
 	}
 	if t.stats != nil {

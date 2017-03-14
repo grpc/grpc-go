@@ -243,20 +243,13 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		send: func(p *ping) {
 			t.controlBuf.put(p)
 		},
-		updateInitialWindow: func(n uint32) {
+		updateConnWindow: func(delta uint32) {
 			// Update the limit on fc.
 			t.fc.mu.Lock()
-			t.fc.limit += (n - t.fc.limit)
+			t.fc.limit += delta
 			t.fc.mu.Unlock()
-			// Send a settings frame to update the initial window.
-			t.controlBuf.put(&settings{ack: false,
-				ss: []http2.Setting{
-					{
-						ID:  http2.SettingInitialWindowSize,
-						Val: uint32(n),
-					},
-				},
-			})
+			// Send a window update on the connection.
+			t.controlBuf.put(&windowUpdate{0, delta})
 		},
 	}
 	// Make sure awakenKeepalive can't be written upon.
