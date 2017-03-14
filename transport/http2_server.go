@@ -824,6 +824,7 @@ func (t *http2Server) closeStream(s *Stream) {
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
+
 	s.mu.Lock()
 	if q := s.fc.resetPendingData(); q > 0 {
 		if w := t.fc.onRead(q); w > 0 {
