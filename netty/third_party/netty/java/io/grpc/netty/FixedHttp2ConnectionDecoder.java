@@ -450,10 +450,10 @@ public class FixedHttp2ConnectionDecoder implements Http2ConnectionDecoder {
 
         @Override
         public void onSettingsRead(ChannelHandlerContext ctx, Http2Settings settings) throws Http2Exception {
-            encoder.remoteSettings(settings);
-
             // Acknowledge receipt of the settings.
             encoder.writeSettingsAck(ctx, ctx.newPromise());
+
+            encoder.remoteSettings(settings);
 
             listener.onSettingsRead(ctx, settings);
         }
