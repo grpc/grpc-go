@@ -309,7 +309,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   void streamReadyToStart(OkHttpClientStream clientStream) {
     synchronized (lock) {
       if (goAwayStatus != null) {
-        clientStream.transportReportStatus(goAwayStatus, true, new Metadata());
+        clientStream.transportState().transportReportStatus(goAwayStatus, true, new Metadata());
       } else if (streams.size() >= maxConcurrentStreams) {
         pendingStreams.add(clientStream);
         setInUse();
@@ -325,8 +325,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         stream.id() == OkHttpClientStream.ABSENT_ID, "StreamId already assigned");
     streams.put(nextStreamId, stream);
     setInUse();
-    stream.start(nextStreamId);
-    stream.allocated();
+    stream.transportState().start(nextStreamId);
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
     if (stream.getType() != MethodType.UNARY
         && stream.getType() != MethodType.SERVER_STREAMING) {
@@ -380,7 +379,6 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
     frameWriter = new AsyncFrameWriter(this, serializingExecutor);
     outboundFlow = new OutboundFlowController(this, frameWriter);
-
     // Connecting in the serializingExecutor, so that some stream operations like synStream
     // will be executed after connected.
     serializingExecutor.execute(new Runnable() {
@@ -620,11 +618,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       while (it.hasNext()) {
         Map.Entry<Integer, OkHttpClientStream> entry = it.next();
         it.remove();
-        entry.getValue().transportReportStatus(reason, false, new Metadata());
+        entry.getValue().transportState().transportReportStatus(reason, false, new Metadata());
       }
 
       for (OkHttpClientStream stream : pendingStreams) {
-        stream.transportReportStatus(reason, true, new Metadata());
+        stream.transportState().transportReportStatus(reason, true, new Metadata());
       }
       pendingStreams.clear();
       maybeClearInUse();
@@ -694,12 +692,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         Map.Entry<Integer, OkHttpClientStream> entry = it.next();
         if (entry.getKey() > lastKnownStreamId) {
           it.remove();
-          entry.getValue().transportReportStatus(status, false, new Metadata());
+          entry.getValue().transportState().transportReportStatus(status, false, new Metadata());
         }
       }
 
       for (OkHttpClientStream stream : pendingStreams) {
-        stream.transportReportStatus(status, true, new Metadata());
+        stream.transportState().transportReportStatus(status, true, new Metadata());
       }
       pendingStreams.clear();
       maybeClearInUse();
@@ -720,8 +718,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
    * @param streamId the Id of the stream.
    * @param status the final status of this stream, null means no need to report.
    * @param errorCode reset the stream with this ErrorCode if not null.
+   * @param trailers the trailers received if not null
    */
-  void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode) {
+  void finishStream(int streamId, @Nullable Status status, @Nullable ErrorCode errorCode,
+      @Nullable Metadata trailers) {
     synchronized (lock) {
       OkHttpClientStream stream = streams.remove(streamId);
       if (stream != null) {
@@ -731,7 +731,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         if (status != null) {
           boolean isCancelled = (status.getCode() == Code.CANCELLED
               || status.getCode() == Code.DEADLINE_EXCEEDED);
-          stream.transportReportStatus(status, isCancelled, new Metadata());
+          stream.transportState().transportReportStatus(status, isCancelled,
+              trailers != null ? trailers : new Metadata());
         }
         if (!startPendingStreams()) {
           stopIfNecessary();
@@ -909,7 +910,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         Buffer buf = new Buffer();
         buf.write(in.buffer(), length);
         synchronized (lock) {
-          stream.transportDataReceived(buf, inFinished);
+          stream.transportState().transportDataReceived(buf, inFinished);
         }
       }
 
@@ -941,7 +942,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
             unknownStream = true;
           }
         } else {
-          stream.transportHeadersReceived(headerBlock, inFinished);
+          stream.transportState().transportHeadersReceived(headerBlock, inFinished);
         }
       }
       if (unknownStream) {
@@ -952,7 +953,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
     @Override
     public void rstStream(int streamId, ErrorCode errorCode) {
-      finishStream(streamId, toGrpcStatus(errorCode).augmentDescription("Rst Stream"), null);
+      finishStream(streamId, toGrpcStatus(errorCode).augmentDescription("Rst Stream"), null, null);
     }
 
     @Override
@@ -1037,7 +1038,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
           onError(ErrorCode.PROTOCOL_ERROR, errorMsg);
         } else {
           finishStream(streamId,
-              Status.INTERNAL.withDescription(errorMsg), ErrorCode.PROTOCOL_ERROR);
+              Status.INTERNAL.withDescription(errorMsg), ErrorCode.PROTOCOL_ERROR, null);
         }
         return;
       }

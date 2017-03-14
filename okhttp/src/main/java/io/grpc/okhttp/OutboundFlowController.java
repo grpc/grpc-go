@@ -396,7 +396,7 @@ class OutboundFlowController {
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
-            stream.onStreamSentBytes(bytesToWrite);
+            stream.transportState().onSentBytes(bytesToWrite);
 
             if (enqueued) {
               // It's enqueued - remove it from the head of the pending write queue.

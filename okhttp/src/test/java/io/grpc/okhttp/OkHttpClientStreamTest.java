@@ -97,7 +97,7 @@ public class OkHttpClientStreamTest {
   }
 
   @Test
-  public void sendCancel_notStarted() {
+  public void cancel_notStarted() {
     final AtomicReference<Status> statusRef = new AtomicReference<Status>();
     stream.start(new BaseClientStreamListener() {
       @Override
@@ -107,34 +107,34 @@ public class OkHttpClientStreamTest {
       }
     });
 
-    stream.sendCancel(Status.CANCELLED);
+    stream.cancel(Status.CANCELLED);
 
     assertEquals(Status.Code.CANCELLED, statusRef.get().getCode());
   }
 
   @Test
-  public void sendCancel_started() {
+  public void cancel_started() {
     stream.start(new BaseClientStreamListener());
-    stream.start(1234);
+    stream.transportState().start(1234);
     Mockito.doAnswer(new Answer<Void>() {
       @Override
       public Void answer(InvocationOnMock invocation) throws Throwable {
         assertTrue(Thread.holdsLock(lock));
         return null;
       }
-    }).when(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL);
+    }).when(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL, null);
 
-    stream.sendCancel(Status.CANCELLED);
+    stream.cancel(Status.CANCELLED);
 
-    verify(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL);
+    verify(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL, null);
   }
 
   @Test
   public void start_alreadyCancelled() {
     stream.start(new BaseClientStreamListener());
-    stream.sendCancel(Status.CANCELLED);
+    stream.cancel(Status.CANCELLED);
 
-    stream.start(1234);
+    stream.transportState().start(1234);
 
     verifyNoMoreInteractions(frameWriter);
   }
@@ -147,7 +147,7 @@ public class OkHttpClientStreamTest {
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
         StatsTraceContext.NOOP);
     stream.start(new BaseClientStreamListener());
-    stream.start(3);
+    stream.transportState().start(3);
 
     verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), headersCaptor.capture());
     assertThat(headersCaptor.getValue())
@@ -162,7 +162,7 @@ public class OkHttpClientStreamTest {
         flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
         StatsTraceContext.NOOP);
     stream.start(new BaseClientStreamListener());
-    stream.start(3);
+    stream.transportState().start(3);
 
     verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), headersCaptor.capture());
     assertThat(headersCaptor.getValue()).containsExactly(

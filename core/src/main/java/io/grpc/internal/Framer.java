@@ -35,7 +35,7 @@ import io.grpc.Compressor;
 import java.io.InputStream;
 
 /** Interface for framing gRPC messages. */
-interface Framer {
+public interface Framer {
   /**
    * Writes out a payload message.
    *

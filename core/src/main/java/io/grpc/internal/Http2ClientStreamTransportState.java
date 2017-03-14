@@ -147,6 +147,12 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
         http2ProcessingFailed(transportError, transportErrorMetadata);
       }
     } else {
+      if (!headersReceived) {
+        http2ProcessingFailed(
+            Status.INTERNAL.withDescription("headers not received before payload"),
+            new Metadata());
+        return;
+      }
       inboundDataReceived(frame);
       if (endOfStream) {
         // This is a protocol violation as we expect to receive trailers.

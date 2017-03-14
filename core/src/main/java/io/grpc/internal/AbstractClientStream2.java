@@ -190,7 +190,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
     private Runnable deliveryStalledTask;
 
-    private boolean headersReceived;
     /**
      * Whether the stream is closed from the transport's perspective. This can differ from {@link
      * #listenerClosed} because there may still be messages buffered to deliver to the application.
@@ -233,7 +232,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      */
     protected void inboundHeadersReceived(Metadata headers) {
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
-      headersReceived = true;
       listener().headersRead(headers);
     }
 
@@ -248,12 +246,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       try {
         if (statusReported) {
           log.log(Level.INFO, "Received data on closed stream");
-          return;
-        }
-        if (!headersReceived) {
-          transportReportStatus(
-              Status.INTERNAL.withDescription("headers not received before payload"),
-              false, new Metadata());
           return;
         }
 

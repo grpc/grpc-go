@@ -32,7 +32,6 @@
 package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -159,17 +158,6 @@ public class AbstractClientStream2Test {
 
     thrown.expect(NullPointerException.class);
     state.inboundDataReceived(null);
-  }
-
-  @Test
-  public void inboundDataReceived_failsOnNoHeaders() {
-    AbstractClientStream2 stream = new BaseAbstractClientStream(allocator, statsTraceCtx);
-    stream.start(mockListener);
-
-    stream.transportState().inboundDataReceived(ReadableBuffers.empty());
-
-    verify(mockListener).closed(statusCaptor.capture(), any(Metadata.class));
-    assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
   @Test

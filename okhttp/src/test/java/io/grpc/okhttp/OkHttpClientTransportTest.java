@@ -827,7 +827,7 @@ public class OkHttpClientTransportTest {
     Buffer sentFrame = captor.getValue();
     assertEquals(createMessageFrame(sentMessage), sentFrame);
     verify(frameWriter, timeout(TIME_OUT_MS)).data(eq(true), eq(5), any(Buffer.class), eq(0));
-    stream2.sendCancel(Status.CANCELLED);
+    stream2.cancel(Status.CANCELLED);
     shutdownAndVerify();
   }
 
@@ -839,9 +839,9 @@ public class OkHttpClientTransportTest {
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());
     stream.start(listener);
     waitForStreamPending(1);
-    stream.sendCancel(Status.CANCELLED);
+    stream.cancel(Status.CANCELLED);
     // The second cancel should be an no-op.
-    stream.sendCancel(Status.UNKNOWN);
+    stream.cancel(Status.UNKNOWN);
     listener.waitUntilStreamClosed();
     assertEquals(0, clientTransport.getPendingStreamSize());
     assertEquals(Status.CANCELLED.getCode(), listener.status.getCode());
@@ -872,7 +872,7 @@ public class OkHttpClientTransportTest {
 
     // active stream should not be affected.
     assertEquals(1, activeStreamCount());
-    getStream(3).sendCancel(Status.CANCELLED);
+    getStream(3).cancel(Status.CANCELLED);
     shutdownAndVerify();
   }
 
@@ -891,7 +891,7 @@ public class OkHttpClientTransportTest {
     verify(frameWriter, timeout(TIME_OUT_MS))
         .synStream(anyBoolean(), anyBoolean(), eq(3), anyInt(), anyListHeader());
     assertEquals(1, activeStreamCount());
-    stream.sendCancel(Status.CANCELLED);
+    stream.cancel(Status.CANCELLED);
     shutdownAndVerify();
   }
 
@@ -1013,7 +1013,7 @@ public class OkHttpClientTransportTest {
 
     listener.waitUntilStreamClosed();
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
-    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertTrue(listener.status.getDescription().startsWith("headers not received before payload"));
     assertEquals(0, listener.messages.size());
     shutdownAndVerify();
   }
@@ -1034,7 +1034,7 @@ public class OkHttpClientTransportTest {
 
     listener.waitUntilStreamClosed();
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
-    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertTrue(listener.status.getDescription().startsWith("headers not received before payload"));
     assertEquals(0, listener.messages.size());
     shutdownAndVerify();
   }
@@ -1054,7 +1054,7 @@ public class OkHttpClientTransportTest {
 
     listener.waitUntilStreamClosed();
     assertEquals(Status.INTERNAL.getCode(), listener.status.getCode());
-    assertTrue(listener.status.getDescription().startsWith("no headers received prior to data"));
+    assertTrue(listener.status.getDescription().startsWith("headers not received before payload"));
     assertEquals(0, listener.messages.size());
     shutdownAndVerify();
   }

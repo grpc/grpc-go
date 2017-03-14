@@ -201,6 +201,17 @@ public class Http2ClientStreamTransportStateTest {
   }
 
   @Test
+  public void transportDataReceived_noHeaderReceived() {
+    BaseTransportState state = new BaseTransportState();
+    state.setListener(mockListener);
+    String testString = "This is a test";
+    state.transportDataReceived(ReadableBuffers.wrap(testString.getBytes(US_ASCII)), true);
+
+    verify(mockListener).closed(statusCaptor.capture(), any(Metadata.class));
+    assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
+  }
+
+  @Test
   public void transportDataReceived_debugData() {
     BaseTransportState state = new BaseTransportState();
     state.setListener(mockListener);
