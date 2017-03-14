@@ -41,7 +41,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"time"
 
 	"golang.org/x/net/context"
 )
@@ -113,16 +112,9 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 // newProxyDialer returns a dialer that connects to proxy first if necessary.
 // The returned dialer checks if a proxy is necessary, dial to the proxy with the
 // provided dialer, does HTTP CONNECT handshake and returns the connection.
-func newProxyDialer(dialer func(string, time.Duration) (net.Conn, error)) func(string, time.Duration) (net.Conn, error) {
-	return func(addr string, d time.Duration) (conn net.Conn, err error) {
-		ctx := context.Background()
-		var cancel context.CancelFunc
-		if d > 0 {
-			ctx, cancel = context.WithTimeout(context.Background(), d)
-			defer cancel()
-		}
+func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func(context.Context, string) (net.Conn, error) {
+	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
 		var skipHandshake bool
-
 		newAddr, err := mapAddress(ctx, addr)
 		if err != nil {
 			if err != errDisabled {
@@ -132,11 +124,7 @@ func newProxyDialer(dialer func(string, time.Duration) (net.Conn, error)) func(s
 			newAddr = addr
 		}
 
-		if deadline, ok := ctx.Deadline(); ok {
-			conn, err = dialer(newAddr, deadline.Sub(time.Now()))
-		} else {
-			conn, err = dialer(newAddr, 0)
-		}
+		conn, err = dialer(ctx, newAddr)
 		if err != nil {
 			return
 		}

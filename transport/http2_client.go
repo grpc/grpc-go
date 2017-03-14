@@ -131,21 +131,11 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 		return fn(ctx, addr)
 	}
 	dialer := newProxyDialer(
-		func(addr string, d time.Duration) (net.Conn, error) {
-			ctx := context.Background()
-			var cancel context.CancelFunc
-			if d > 0 {
-				ctx, cancel = context.WithTimeout(context.Background(), d)
-				defer cancel()
-			}
+		func(ctx context.Context, addr string) (net.Conn, error) {
 			return dialContext(ctx, "tcp", addr)
 		},
 	)
-
-	if deadline, ok := ctx.Deadline(); ok {
-		return dialer(addr, deadline.Sub(time.Now()))
-	}
-	return dialer(addr, 0)
+	return dialer(ctx, addr)
 }
 
 func isTemporary(err error) bool {
