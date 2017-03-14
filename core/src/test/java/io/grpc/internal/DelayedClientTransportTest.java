@@ -48,7 +48,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer.PickResult;
@@ -93,7 +92,7 @@ public class DelayedClientTransportTest {
   @Captor private ArgumentCaptor<Status> statusCaptor;
   @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
 
-  private static final Attributes.Key<Integer> SHARD_ID = Attributes.Key.of("shard-id");
+  private static final CallOptions.Key<Integer> SHARD_ID = CallOptions.Key.of("shard-id", -1);
 
   private final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
@@ -304,11 +303,9 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void reprocessSemantics() {
-    Attributes affinity1 = Attributes.newBuilder().set(SHARD_ID, 1).build();
-    Attributes affinity2 = Attributes.newBuilder().set(SHARD_ID, 2).build();
-    CallOptions failFastCallOptions = CallOptions.DEFAULT.withAffinity(affinity1);
-    CallOptions waitForReadyCallOptions =
-        CallOptions.DEFAULT.withWaitForReady().withAffinity(affinity2);
+    CallOptions failFastCallOptions = CallOptions.DEFAULT.withOption(SHARD_ID, 1);
+    CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withOption(SHARD_ID, 2)
+        .withWaitForReady();
 
     SubchannelImpl subchannel1 = mock(SubchannelImpl.class);
     SubchannelImpl subchannel2 = mock(SubchannelImpl.class);

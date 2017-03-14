@@ -42,7 +42,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Objects;
-import io.grpc.Attributes.Key;
 import io.grpc.internal.SerializingExecutor;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -57,15 +56,12 @@ public class CallOptionsTest {
   private String sampleCompressor = "compressor";
   private Deadline.Ticker ticker = new FakeTicker();
   private Deadline sampleDeadline = Deadline.after(1, NANOSECONDS, ticker);
-  private Key<String> sampleKey = Attributes.Key.of("sample");
-  private Attributes sampleAffinity = Attributes.newBuilder().set(sampleKey, "blah").build();
   private CallCredentials sampleCreds = mock(CallCredentials.class);
   private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
   private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
-      .withAffinity(sampleAffinity)
       .withCallCredentials(sampleCreds)
       .withCompression(sampleCompressor)
       .withWaitForReady()
@@ -77,7 +73,6 @@ public class CallOptionsTest {
   public void defaultsAreAllNull() {
     assertThat(CallOptions.DEFAULT.getDeadline()).isNull();
     assertThat(CallOptions.DEFAULT.getAuthority()).isNull();
-    assertThat(CallOptions.DEFAULT.getAffinity()).isEqualTo(Attributes.EMPTY);
     assertThat(CallOptions.DEFAULT.getExecutor()).isNull();
     assertThat(CallOptions.DEFAULT.getCredentials()).isNull();
     assertThat(CallOptions.DEFAULT.getCompressor()).isNull();
@@ -95,7 +90,6 @@ public class CallOptionsTest {
   public void allWiths() {
     assertThat(allSet.getAuthority()).isSameAs(sampleAuthority);
     assertThat(allSet.getDeadline()).isSameAs(sampleDeadline);
-    assertThat(allSet.getAffinity()).isSameAs(sampleAffinity);
     assertThat(allSet.getCredentials()).isSameAs(sampleCreds);
     assertThat(allSet.getCompressor()).isSameAs(sampleCompressor);
     assertThat(allSet.getExecutor()).isSameAs(directExecutor());
@@ -111,10 +105,6 @@ public class CallOptionsTest {
     assertThat(
         equal(allSet,
             allSet.withDeadline(Deadline.after(314, NANOSECONDS)).withDeadline(sampleDeadline)))
-        .isTrue();
-    assertThat(
-        equal(allSet,
-            allSet.withAffinity(Attributes.EMPTY).withAffinity(sampleAffinity)))
         .isTrue();
     assertThat(
         equal(allSet,
@@ -168,7 +158,6 @@ public class CallOptionsTest {
     assertThat(actual).contains("deadline=null");
     assertThat(actual).contains("authority=authority");
     assertThat(actual).contains("callCredentials=null");
-    assertThat(actual).contains("affinity={sample=blah}");
     assertThat(actual).contains("executor=class io.grpc.internal.SerializingExecutor");
     assertThat(actual).contains("compressorName=compressor");
     assertThat(actual).contains("customOptions=[[option1, value1], [option2, value2]]");
@@ -217,7 +206,6 @@ public class CallOptionsTest {
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadline(), o2.getDeadline())
         && Objects.equal(o1.getAuthority(), o2.getAuthority())
-        && Objects.equal(o1.getAffinity(), o2.getAffinity())
         && Objects.equal(o1.getCredentials(), o2.getCredentials());
   }
 

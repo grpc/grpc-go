@@ -187,6 +187,7 @@ public abstract class LoadBalancer {
      * @param args the pick arguments
      */
     // TODO(lukaszx0) make it abstract once deprecated overload will be removed.
+    @SuppressWarnings("deprecation")
     public PickResult pickSubchannel(PickSubchannelArgs args) {
       return pickSubchannel(args.getCallOptions().getAffinity(), args.getHeaders());
     }
