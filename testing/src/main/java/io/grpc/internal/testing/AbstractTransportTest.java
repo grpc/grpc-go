@@ -490,8 +490,10 @@ public abstract class AbstractTransportTest {
     MockServerTransportListener serverTransportListener
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
+    // TODO(zdapeng): Increased timeout to 20 seconds to see if flakiness of #2328 persists. Take
+    // further action after sufficient observation.
     StreamCreation serverStreamCreation
-        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        = serverTransportListener.takeStreamOrFail(20 * TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverStreamCreation.stream.close(Status.OK, new Metadata());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
