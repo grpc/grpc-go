@@ -563,6 +563,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		return te.cc
 	}
 	opts := []grpc.DialOption{
+		grpc.WithDialer(te.e.dialer),
 		grpc.WithUserAgent(te.userAgent),
 	}
 

@@ -97,7 +97,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	}
 
 	r := bufio.NewReader(conn)
-	resp, err := http.ReadResponse(r, nil)
+	resp, err := http.ReadResponse(r, req)
 	if err != nil {
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
