@@ -45,6 +45,7 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -217,6 +218,8 @@ type Stream struct {
 	// rstStream indicates whether a RST_STREAM frame needs to be sent
 	// to the server to signify that this stream is closing.
 	rstStream bool
+	// rstError is the error that needs to be sent along with the RST_STREAM frame.
+	rstError http2.ErrCode
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound

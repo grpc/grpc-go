@@ -533,6 +533,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	// after having acquired the writableChan to send RST_STREAM out (look at
 	// the controller() routine).
 	var rstStream bool
+	var rstError http2.ErrCode
 	defer func() {
 		// In case, the client doesn't have to send RST_STREAM to server
 		// we can safely add back to streamsQuota pool now.
@@ -540,10 +541,11 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 			t.streamsQuota.add(1)
 			return
 		}
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
+		t.controlBuf.put(&resetStream{s.id, rstError})
 	}()
 	s.mu.Lock()
 	rstStream = s.rstStream
+	rstError = s.rstError
 	if q := s.fc.resetPendingData(); q > 0 {
 		if n := t.fc.onRead(q); n > 0 {
 			t.controlBuf.put(&windowUpdate{0, n})
@@ -559,8 +561,9 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
+	if _, ok := err.(StreamError); ok {
 		rstStream = true
+		rstError = http2.ErrCodeCancel
 	}
 }
 
@@ -807,6 +810,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
 			s.rstStream = true
+			s.rstError = http2.ErrCodeFlowControl
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})
