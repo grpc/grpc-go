@@ -39,3 +39,13 @@ at:
     * https://github.com/square/okhttp
   * LOCATION_IN_GRPC:
     * okhttp/third_party/okhttp
+
+This product contains a modified portion of 'Netty', an open source
+networking library, which can be obtained at:
+
+  * LICENSE:
+    * netty/third_party/netty/LICENSE.txt (Apache License 2.0)
+  * HOMEPAGE:
+    * https://netty.io
+  * LOCATION_IN_GRPC:
+    * netty/third_party/netty

@@ -56,7 +56,6 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
-import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -149,7 +148,8 @@ class NettyClientHandler extends AbstractNettyHandler {
     connection.local().flowController(
         new DefaultHttp2LocalFlowController(connection, DEFAULT_WINDOW_UPDATE_RATIO, true));
 
-    Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
+    // TODO(ejona): swap back to DefaultHttp2Connection with Netty-4.1.9
+    Http2ConnectionDecoder decoder = new FixedHttp2ConnectionDecoder(connection, encoder,
         frameReader);
 
     Http2Settings settings = new Http2Settings();
