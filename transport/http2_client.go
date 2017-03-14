@@ -243,6 +243,21 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		send: func(p *ping) {
 			t.controlBuf.put(p)
 		},
+		updateInitialWindow: func(n uint32) {
+			// Update the limit on fc.
+			t.fc.mu.Lock()
+			t.fc.limit += (n - t.fc.limit)
+			t.fc.mu.Unlock()
+			// Send a settings frame to update the initial window.
+			t.controlBuf.put(&settings{ack: false,
+				ss: []http2.Setting{
+					{
+						ID:  http2.SettingInitialWindowSize,
+						Val: uint32(n),
+					},
+				},
+			})
+		},
 	}
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
@@ -552,7 +567,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 			t.streamsQuota.add(1)
 			return
 		}
-		t.controlBuf.put(&resetStream{s.id, s.rstError})
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeCancel})
 	}()
 	s.mu.Lock()
 	rstStream = s.rstStream
@@ -571,13 +586,8 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	}
 	s.state = streamDone
 	s.mu.Unlock()
-	if se, ok := err.(StreamError); ok {
+	if se, ok := err.(StreamError); ok && se.Code != codes.DeadlineExceeded {
 		rstStream = true
-		if se.Code == codes.DeadlineExceeded {
-			rstError = http2.ErrCodeInternal
-			return
-		}
-		rstError = http2.ErrCodeCancel
 	}
 }
 
@@ -825,7 +835,6 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			s.statusCode = codes.Internal
 			s.statusDesc = err.Error()
 			s.rstStream = true
-			s.rstError = http2.ErrCodeFlowControl
 			close(s.done)
 			s.mu.Unlock()
 			s.write(recvMsg{err: io.EOF})

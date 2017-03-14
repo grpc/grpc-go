@@ -1,18 +1,18 @@
 package transport
 
 import (
-	"log"
 	"sync"
 )
 
 type bdpEstimator struct {
-	p           *ping
-	maxWindow   uint32
-	mu          sync.Mutex
-	estimate    uint32
-	accumulator uint32 // Number of bytes received.
-	isSent      bool
-	send        func(*ping) // Callback to send ping.
+	p                   *ping
+	maxWindow           uint32
+	mu                  sync.Mutex
+	estimate            uint32
+	accumulator         uint32 // Number of bytes received.
+	isSent              bool
+	send                func(*ping)    // Callback to send ping.
+	updateInitialWindow func(n uint32) // Callback to update window size.
 }
 
 func (b *bdpEstimator) add(n uint32) {
@@ -37,9 +37,10 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	if estimate > b.estimate {
 		if estimate > b.maxWindow {
 			estimate = b.maxWindow
-			log.Println("Max window limit reached, can't increase window more than ", b.maxWindow)
+			//log.Println("Max window limit reached, can't increase window more than ", b.maxWindow)
 		}
 		b.estimate = estimate
-		log.Println("The new estimate is ", b.estimate)
+		//log.Println("Updating the intial window with new estimate: ", b.estimate)
+		b.updateInitialWindow(b.estimate)
 	}
 }
