@@ -732,7 +732,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 	})
 }
 
-func TestServerStatsUnaryRPCError(t *testing.T) {
+func TestServerStatsUnaryError(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
@@ -764,7 +764,7 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, streaming: true}, checkFuncs)
 }
 
-func TestServerStatsStreamingRPCError(t *testing.T) {
+func TestServerStatsStreamingError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, streaming: true}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -944,7 +944,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsUnaryRPCError(t *testing.T) {
+func TestClientStatsUnaryError(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
@@ -968,7 +968,7 @@ func TestClientStatsStreamingRPC(t *testing.T) {
 	})
 }
 
-func TestClientStatsStreamingRPCError(t *testing.T) {
+func TestClientStatsStreamingError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},

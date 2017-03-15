@@ -45,6 +45,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -55,6 +56,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 )
 
@@ -227,13 +229,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	var state decodeState
 	for _, hf := range frame.Fields {
-		state.processHeaderField(hf)
-	}
-	if err := state.err; err != nil {
-		if se, ok := err.(StreamError); ok {
-			t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
+		if err := state.processHeaderField(hf); err != nil {
+			if se, ok := err.(StreamError); ok {
+				t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
+			}
+			return
 		}
-		return
 	}
 
 	if frame.StreamEnded() {
@@ -670,7 +671,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 // There is no further I/O operations being able to perform on this stream.
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
-func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc string) error {
+func (t *http2Server) WriteStatus(s *Stream, st status.Status) error {
 	var headersSent, hasHeader bool
 	s.mu.Lock()
 	if s.state == streamDone {
@@ -701,9 +702,24 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 	t.hEnc.WriteField(
 		hpack.HeaderField{
 			Name:  "grpc-status",
-			Value: strconv.Itoa(int(statusCode)),
+			Value: strconv.Itoa(int(st.Code())),
 		})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(statusDesc)})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
+
+	if p := st.Proto(); p != nil && len(p.Details) > 0 {
+		stBytes, err := proto.Marshal(p)
+		if err != nil {
+			// TODO: return error instead, when callers are able to handle it.
+			panic(err)
+		}
+
+		for k, v := range metadata.New(map[string]string{"grpc-status-details-bin": (string)(stBytes)}) {
+			for _, entry := range v {
+				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+			}
+		}
+	}
+
 	// Attach the trailer metadata.
 	for k, v := range s.trailer {
 		// Clients don't tolerate reading restricted headers after some non restricted ones were sent.
