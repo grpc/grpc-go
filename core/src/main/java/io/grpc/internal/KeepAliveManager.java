@@ -162,6 +162,21 @@ public class KeepAliveManager {
     // keep one sendPing task always in flight when there're active rpcs.
     if (state == State.PING_SCHEDULED) {
       state = State.PING_DELAYED;
+    } else if (state == State.PING_SENT || state == State.IDLE_AND_PING_SENT) {
+      // Ping acked or effectively ping acked. Cancel shutdown, and then if not idle,
+      // schedule a new keep-alive ping.
+      if (shutdownFuture != null) {
+        shutdownFuture.cancel(false);
+      }
+      if (state == State.IDLE_AND_PING_SENT) {
+        // not to schedule new pings until onTransportActive
+        state = State.IDLE;
+        return;
+      }
+      // schedule a new ping
+      state = State.PING_SCHEDULED;
+      pingFuture =
+          scheduler.schedule(sendPing, keepAliveDelayInNanos, TimeUnit.NANOSECONDS);
     }
   }
 
@@ -171,7 +186,7 @@ public class KeepAliveManager {
   public synchronized void onTransportActive() {
     if (state == State.IDLE) {
       // When the transport goes active, we do not reset the nextKeepaliveTime. This allows us to
-      // quickly check whether the conneciton is still working.
+      // quickly check whether the connection is still working.
       state = State.PING_SCHEDULED;
       pingFuture = scheduler.schedule(sendPing, nextKeepaliveTime - ticker.read(),
           TimeUnit.NANOSECONDS);
@@ -210,23 +225,7 @@ public class KeepAliveManager {
   private class KeepAlivePingCallback implements ClientTransport.PingCallback {
 
     @Override
-    public void onSuccess(long roundTripTimeNanos) {
-      synchronized (KeepAliveManager.this) {
-        shutdownFuture.cancel(false);
-        nextKeepaliveTime = ticker.read() + keepAliveDelayInNanos;
-        if (state == State.PING_SENT) {
-          // We have received the ping response so there's no need to shutdown the transport.
-          // Schedule a new keepalive ping.
-          pingFuture = scheduler.schedule(sendPing, keepAliveDelayInNanos, TimeUnit.NANOSECONDS);
-          state = State.PING_SCHEDULED;
-        }
-        if (state == State.IDLE_AND_PING_SENT) {
-          // Transport went idle after we had sent out the ping. We don't need to schedule a new
-          // ping.
-          state = State.IDLE;
-        }
-      }
-    }
+    public void onSuccess(long roundTripTimeNanos) {}
 
     @Override
     public void onFailure(Throwable cause) {

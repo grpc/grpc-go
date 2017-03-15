@@ -95,7 +95,6 @@ public final class KeepAliveManagerTest {
     ArgumentCaptor<ClientTransport.PingCallback> pingCallbackCaptor =
         ArgumentCaptor.forClass(ClientTransport.PingCallback.class);
     verify(transport).ping(pingCallbackCaptor.capture(), isA(Executor.class));
-    ClientTransport.PingCallback pingCallback = pingCallbackCaptor.getValue();
     verify(scheduler, times(2)).schedule(isA(Runnable.class), delayCaptor.capture(),
         isA(TimeUnit.class));
     delay = delayCaptor.getValue();
@@ -104,7 +103,7 @@ public final class KeepAliveManagerTest {
 
     // Ping succeeds. Reschedule another ping.
     ticker.time = 1100;
-    pingCallback.onSuccess(100);
+    keepAliveManager.onDataReceived();
     verify(scheduler, times(3)).schedule(isA(Runnable.class), delayCaptor.capture(),
         isA(TimeUnit.class));
     // Shutdown task has been cancelled.
@@ -280,13 +279,12 @@ public final class KeepAliveManagerTest {
     ArgumentCaptor<ClientTransport.PingCallback> pingCallbackCaptor =
         ArgumentCaptor.forClass(ClientTransport.PingCallback.class);
     verify(transport).ping(pingCallbackCaptor.capture(), isA(Executor.class));
-    ClientTransport.PingCallback pingCallback = pingCallbackCaptor.getValue();
     verify(scheduler, times(2)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
 
     // Transport becomes idle. No more ping should be scheduled after we receive a ping response.
     keepAliveManager.onTransportIdle();
     ticker.time = 1100;
-    pingCallback.onSuccess(100);
+    keepAliveManager.onDataReceived();
     verify(scheduler, times(2)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
     // Shutdown task has been cancelled.
     verify(shutdownFuture).cancel(isA(Boolean.class));
@@ -399,13 +397,12 @@ public final class KeepAliveManagerTest {
     ArgumentCaptor<ClientTransport.PingCallback> pingCallbackCaptor =
         ArgumentCaptor.forClass(ClientTransport.PingCallback.class);
     verify(transport).ping(pingCallbackCaptor.capture(), isA(Executor.class));
-    ClientTransport.PingCallback pingCallback = pingCallbackCaptor.getValue();
 
     keepAliveManager.onTransportIdle();
 
     keepAliveManager.onTransportActive();
 
-    pingCallback.onSuccess(100);
+    keepAliveManager.onDataReceived();
 
     // another ping scheduled
     verify(scheduler, times(3))
