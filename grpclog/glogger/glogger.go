@@ -20,8 +20,6 @@
 package glogger
 
 import (
-	"fmt"
-
 	"github.com/golang/glog"
 	"google.golang.org/grpc/grpclog"
 )
@@ -32,43 +30,52 @@ func init() {
 
 type glogger struct{}
 
-func (g *glogger) Print(l grpclog.Severity, args ...interface{}) {
-	switch l {
-	case grpclog.InfoLog:
-		glog.InfoDepth(2, args...)
-	case grpclog.WarningLog:
-		glog.WarningDepth(2, args...)
-	case grpclog.ErrorLog:
-		glog.ErrorDepth(2, args...)
-	case grpclog.FatalLog:
-		glog.FatalDepth(2, args...)
-	}
+func (g *glogger) Info(args ...interface{}) {
+	glog.Info(args...)
 }
 
-func (g *glogger) Println(l grpclog.Severity, args ...interface{}) {
-	switch l {
-	case grpclog.InfoLog:
-		glog.InfoDepth(2, fmt.Sprintln(args...))
-	case grpclog.WarningLog:
-		glog.WarningDepth(2, fmt.Sprintln(args...))
-	case grpclog.ErrorLog:
-		glog.ErrorDepth(2, fmt.Sprintln(args...))
-	case grpclog.FatalLog:
-		glog.FatalDepth(2, fmt.Sprintln(args...))
-	}
+func (g *glogger) Infoln(args ...interface{}) {
+	glog.Infoln(args...)
 }
 
-func (g *glogger) Printf(l grpclog.Severity, format string, args ...interface{}) {
-	switch l {
-	case grpclog.InfoLog:
-		glog.InfoDepth(2, fmt.Sprintf(format, args...))
-	case grpclog.WarningLog:
-		glog.WarningDepth(2, fmt.Sprintf(format, args...))
-	case grpclog.ErrorLog:
-		glog.ErrorDepth(2, fmt.Sprintf(format, args...))
-	case grpclog.FatalLog:
-		glog.FatalDepth(2, fmt.Sprintf(format, args...))
-	}
+func (g *glogger) Infof(format string, args ...interface{}) {
+	glog.Infof(format, args...)
+}
+
+func (g *glogger) Warning(args ...interface{}) {
+	glog.Warning(args...)
+}
+
+func (g *glogger) Warningln(args ...interface{}) {
+	glog.Warningln(args...)
+}
+
+func (g *glogger) Warningf(format string, args ...interface{}) {
+	glog.Warningf(format, args...)
+}
+
+func (g *glogger) Error(args ...interface{}) {
+	glog.Error(args...)
+}
+
+func (g *glogger) Errorln(args ...interface{}) {
+	glog.Errorln(args...)
+}
+
+func (g *glogger) Errorf(format string, args ...interface{}) {
+	glog.Errorf(format, args...)
+}
+
+func (g *glogger) Fatal(args ...interface{}) {
+	glog.Fatal(args...)
+}
+
+func (g *glogger) Fatalln(args ...interface{}) {
+	glog.Fatalln(args...)
+}
+
+func (g *glogger) Fatalf(format string, args ...interface{}) {
+	glog.Fatalf(format, args...)
 }
 
 func (g *glogger) V(l grpclog.VerboseLevel) bool {

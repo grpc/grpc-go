@@ -43,22 +43,22 @@ import (
 func TestLoggerSeverity(t *testing.T) {
 	var buffers []*bytes.Buffer
 	logger := newLogger().(*loggerT)
-	for i := 0; i < int(FatalLog); i++ {
+	for i := 0; i < int(fatalLog); i++ {
 		b := new(bytes.Buffer)
 		buffers = append(buffers, b)
 		logger.m[i].SetOutput(b)
 	}
 	SetLogger(logger)
 
-	Info(SeverityName[InfoLog])
-	Warning(SeverityName[WarningLog])
-	Error(SeverityName[ErrorLog])
+	Info(severityName[infoLog])
+	Warning(severityName[warningLog])
+	Error(severityName[errorLog])
 
-	for i := 0; i < int(FatalLog); i++ {
+	for i := 0; i < int(fatalLog); i++ {
 		b := buffers[i]
-		expected := regexp.MustCompile(fmt.Sprintf(`^%s: [0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} %s\n$`, SeverityName[i], SeverityName[i]))
+		expected := regexp.MustCompile(fmt.Sprintf(`^%s: [0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} %s\n$`, severityName[i], severityName[i]))
 		if m := expected.MatchReader(b); !m {
-			t.Errorf("got: %v, want string in format of: %v\n", b.String(), SeverityName[i]+": 2016/10/05 17:09:26 "+SeverityName[i])
+			t.Errorf("got: %v, want string in format of: %v\n", b.String(), severityName[i]+": 2016/10/05 17:09:26 "+severityName[i])
 		}
 	}
 }
