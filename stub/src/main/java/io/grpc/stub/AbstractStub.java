@@ -50,6 +50,7 @@ import javax.annotation.Nullable;
  * <p>This is the base class of the stub classes from the generated code. It allows for
  * reconfiguration, e.g., attaching interceptors to the stub.
  *
+ * @since 1.0.0
  * @param <S> the concrete type of this stub.
  */
 public abstract class AbstractStub<S extends AbstractStub<S>> {
@@ -59,6 +60,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   /**
    * Constructor for use by subclasses, with the default {@code CallOptions}.
    *
+   * @since 1.0.0
    * @param channel the channel that this stub will use to do communications
    */
   protected AbstractStub(Channel channel) {
@@ -68,6 +70,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   /**
    * Constructor for use by subclasses, with the default {@code CallOptions}.
    *
+   * @since 1.0.0
    * @param channel the channel that this stub will use to do communications
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
@@ -78,6 +81,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * The underlying channel of the stub.
+   *
+   * @since 1.0.0
    */
   public final Channel getChannel() {
     return channel;
@@ -85,6 +90,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * The {@code CallOptions} of the stub.
+   *
+   * @since 1.0.0
    */
   public final CallOptions getCallOptions() {
     return callOptions;
@@ -93,6 +100,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   /**
    * Returns a new stub with the given channel for the provided method configurations.
    *
+   * @since 1.0.0
    * @param channel the channel that this stub will use to do communications
    * @param callOptions the runtime call options to be applied to every call on this stub
    */
@@ -104,6 +112,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    * <p>This is mostly used for propagating an existing deadline. {@link #withDeadlineAfter} is the
    * recommended way of setting a new deadline,
    *
+   * @since 1.0.0
    * @param deadline the deadline or {@code null} for unsetting the deadline.
    */
   public final S withDeadline(@Nullable Deadline deadline) {
@@ -113,6 +122,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   /**
    * Returns a new stub with a deadline that is after the given {@code duration} from now.
    *
+   * @since 1.0.0
    * @see CallOptions#withDeadlineAfter
    */
   public final S withDeadlineAfter(long duration, TimeUnit unit) {
@@ -126,6 +136,7 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    *  compressed responses from the server, set the appropriate {@link io.grpc.DecompressorRegistry}
    *  on the {@link io.grpc.ManagedChannelBuilder}.
    *
+   * @since 1.0.0
    * @param compressorName the name (e.g. "gzip") of the compressor to use.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
@@ -135,7 +146,13 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * Returns a new stub that uses the given channel.
+   *
+   * <p>This method is vestigial and is unlikely to be useful.  Instead, users should prefer to
+   * use {@link #withInterceptors}.
+   *
+   * @since 1.0.0
    */
+  @Deprecated // use withInterceptors() instead
   public final S withChannel(Channel newChannel) {
     return build(newChannel, callOptions);
   }
@@ -143,6 +160,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
   /**
    * Sets a custom option to be passed to client interceptors on the channel
    * {@link io.grpc.ClientInterceptor} via the CallOptions parameter.
+   *
+   * @since 1.0.0
    * @param key the option being set
    * @param value the value for the key
    */
@@ -153,6 +172,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * Returns a new stub that has the given interceptors attached to the underlying channel.
+   *
+   * @since 1.0.0
    */
   public final S withInterceptors(ClientInterceptor... interceptors) {
     return build(ClientInterceptors.intercept(channel, interceptors), callOptions);
@@ -160,6 +181,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * Returns a new stub that uses the given call credentials.
+   *
+   * @since 1.0.0
    */
   @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
   public final S withCallCredentials(CallCredentials credentials) {
@@ -168,6 +191,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * Returns a new stub that uses the 'wait for ready' call option.
+   *
+   * @since 1.1.0
    */
   public final S withWaitForReady() {
     return build(channel, callOptions.withWaitForReady());
@@ -177,6 +202,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
    * Returns a new stub that limits the maximum acceptable message size from a remote peer.
    *
    * <p>If unset, the {@link ManagedChannelBuilder#maxInboundMessageSize(int)} limit is used.
+   *
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2563")
   public final S withMaxInboundMessageSize(int maxSize) {
@@ -185,6 +212,8 @@ public abstract class AbstractStub<S extends AbstractStub<S>> {
 
   /**
    * Returns a new stub that limits the maximum acceptable message size to send a remote peer.
+   *
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2563")
   public final S withMaxOutboundMessageSize(int maxSize) {
