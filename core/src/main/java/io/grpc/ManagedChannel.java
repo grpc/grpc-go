@@ -32,10 +32,12 @@
 package io.grpc;
 
 import java.util.concurrent.TimeUnit;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A {@link Channel} that provides lifecycle management.
  */
+@ThreadSafe
 public abstract class ManagedChannel extends Channel {
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
