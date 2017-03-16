@@ -32,6 +32,7 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -70,7 +71,8 @@ public final class KeepAliveManagerTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    keepAliveManager = new KeepAliveManager(transport, scheduler, ticker, 1000, 2000);
+    keepAliveManager = new KeepAliveManager(transport, scheduler, ticker, 1000, 2000, false);
+    keepAliveManager.onTransportStarted();
   }
 
   @Test
@@ -259,6 +261,33 @@ public final class KeepAliveManagerTest {
         isA(Executor.class));
     // No new ping got scheduled.
     verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+  }
+
+  @Test
+  public void transportGoesIdle_doesntCauseIdleWhenEnabled() {
+    keepAliveManager.onTransportShutdown();
+    keepAliveManager = new KeepAliveManager(transport, scheduler, ticker, 1000, 2000, true);
+    keepAliveManager.onTransportStarted();
+
+    // Keepalive scheduling should have started immediately.
+    ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(scheduler).schedule(runnableCaptor.capture(), isA(Long.class),
+        isA(TimeUnit.class));
+    Runnable sendPing = runnableCaptor.getValue();
+
+    keepAliveManager.onTransportActive();
+
+    // Transport becomes idle. Should not impact the sending of the ping.
+    keepAliveManager.onTransportIdle();
+    sendPing.run();
+    // Ping was sent.
+    verify(transport).ping(isA(ClientTransport.PingCallback.class), isA(Executor.class));
+    // Shutdown is scheduled.
+    verify(scheduler, times(2)).schedule(runnableCaptor.capture(), isA(Long.class),
+        isA(TimeUnit.class));
+    // Shutdown is triggered.
+    runnableCaptor.getValue().run();
+    verify(transport).shutdownNow(any(Status.class));
   }
 
   @Test
