@@ -38,7 +38,7 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
 
 func buildConnection() (s *stats.Stats, conn *grpc.ClientConn, tc testpb.BenchmarkServiceClient) {
 	s = stats.NewStats(256)
-	conn = benchmark.NewClientConn(*server)
+	conn = benchmark.NewClientConn(*server, nil)
 	tc = testpb.NewBenchmarkServiceClient(conn)
 	return s, conn, tc
 }

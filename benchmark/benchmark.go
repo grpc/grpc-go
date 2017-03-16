@@ -148,7 +148,13 @@ type ServerInfo struct {
 	// NewServerFunc is an optional configuration.
 	// It specifies the function used to create new grpc.Server.
 	// grpc.NewServer is used if it's nil.
-	NewServerFunc func(opt ...grpc.ServerOption) *grpc.Server
+	NewServerFunc func(opt ...grpc.ServerOption) (*grpc.Server, ListenerServer)
+}
+
+// ListenerServer can serve a net.Listener and stop serving.
+type ListenerServer interface {
+	Serve(net.Listener) error
+	Stop()
 }
 
 // StartServer starts a gRPC server serving a benchmark service according to info.
@@ -158,11 +164,15 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	var s *grpc.Server
+	var (
+		s  *grpc.Server
+		ss ListenerServer
+	)
 	if info.NewServerFunc == nil {
 		s = grpc.NewServer(opts...)
+		ss = s
 	} else {
-		s = info.NewServerFunc(opts...)
+		s, ss = info.NewServerFunc(opts...)
 	}
 	switch info.Type {
 	case "protobuf":
@@ -176,9 +186,9 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	default:
 		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
-	go s.Serve(lis)
+	go ss.Serve(lis)
 	return lis.Addr().String(), func() {
-		s.Stop()
+		ss.Stop()
 	}
 }
 

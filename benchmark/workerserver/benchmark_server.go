@@ -79,7 +79,7 @@ func printServerConfig(config *testpb.ServerConfig) {
 	grpclog.Printf(" - payload config: %v", config.PayloadConfig)
 }
 
-func startBenchmarkServer(newServerFunc func(opt ...grpc.ServerOption) *grpc.Server, config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
+func startBenchmarkServer(newServerFunc func(opt ...grpc.ServerOption) (*grpc.Server, benchmark.ListenerServer), config *testpb.ServerConfig, serverPort int) (*benchmarkServer, error) {
 	printServerConfig(config)
 
 	// Use all cpu cores available on machine by default.

@@ -31,6 +31,7 @@
  *
  */
 
+// Package workerserver implements WorkerServiceServer.
 package workerserver
 
 import (
@@ -40,6 +41,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/benchmark"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -80,7 +82,7 @@ func New(stop chan<- bool, serverPort int) testpb.WorkerServiceServer {
 }
 
 // NewWithCustomFunc returns a WorkerServiceServer with custom dial function and new server function.
-func NewWithCustomFunc(stop chan<- bool, serverPort int, dialFunc func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error), newServerFunc func(opt ...grpc.ServerOption) *grpc.Server) testpb.WorkerServiceServer {
+func NewWithCustomFunc(stop chan<- bool, serverPort int, dialFunc func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error), newServerFunc func(opt ...grpc.ServerOption) (*grpc.Server, benchmark.ListenerServer)) testpb.WorkerServiceServer {
 	return &workerServer{
 		stop:          stop,
 		serverPort:    serverPort,
@@ -95,7 +97,7 @@ type workerServer struct {
 	stop          chan<- bool
 	serverPort    int
 	dialFunc      func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
-	newServerFunc func(opt ...grpc.ServerOption) *grpc.Server
+	newServerFunc func(opt ...grpc.ServerOption) (*grpc.Server, benchmark.ListenerServer)
 }
 
 func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
