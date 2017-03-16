@@ -87,7 +87,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	}()
 
 	req := (&http.Request{
-		Method: "CONNECT",
+		Method: http.MethodConnect,
 		URL:    &url.URL{Host: addr},
 		Header: map[string][]string{"User-Agent": {"gRPC-go"}},
 	})
@@ -102,7 +102,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
 	}
 
@@ -129,7 +129,7 @@ func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func
 			return
 		}
 		if !skipHandshake {
-			conn, err = doHTTPConnectHandshake(context.Background(), conn, addr)
+			conn, err = doHTTPConnectHandshake(ctx, conn, addr)
 		}
 		return
 	}

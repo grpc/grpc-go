@@ -63,8 +63,8 @@ func (p *proxyServer) run() {
 		p.t.Errorf("failed to read CONNECT req: %v", err)
 		return
 	}
-	if req.Method != "CONNECT" || req.UserAgent() != "gRPC-go" {
-		resp := http.Response{StatusCode: 405}
+	if req.Method != http.MethodConnect || req.UserAgent() != "gRPC-go" {
+		resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
 		resp.Write(p.in)
 		p.in.Close()
 		p.t.Errorf("get wrong CONNECT req: %+v", req)
@@ -76,7 +76,7 @@ func (p *proxyServer) run() {
 		p.t.Errorf("failed to dial to server: %v", err)
 		return
 	}
-	resp := http.Response{StatusCode: 200, Proto: "HTTP/1.0"}
+	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
 	resp.Write(p.in)
 	p.out = out
 	go io.Copy(p.in, p.out)
