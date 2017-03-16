@@ -34,12 +34,15 @@
 package grpc
 
 import (
+	"math"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
 )
 
 // Codec defines the interface gRPC uses to encode and decode messages.
+// Note that implementations of this interface must be thread safe;
+// a Codec's methods can be called from concurrent goroutines.
 type Codec interface {
 	// Marshal returns the wire format of v.
 	Marshal(v interface{}) ([]byte, error)
@@ -55,21 +58,28 @@ type protoCodec struct {
 }
 
 type cachedProtoBuffer struct {
-	lastMarshaledSize int32
-	buffer            proto.Buffer
+	lastMarshaledSize uint32
+	proto.Buffer
+}
+
+func capToMaxInt32(val int) uint32 {
+	if val > math.MaxInt32 {
+		return uint32(math.MaxInt32)
+	}
+	return uint32(val)
 }
 
 func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
 	protoMsg := v.(proto.Message)
 	newSlice := make([]byte, 0, cb.lastMarshaledSize)
 
-	cb.buffer.SetBuf(newSlice)
-	cb.buffer.Reset()
-	if err := cb.buffer.Marshal(protoMsg); err != nil {
+	cb.SetBuf(newSlice)
+	cb.Reset()
+	if err := cb.Marshal(protoMsg); err != nil {
 		return nil, err
 	}
-	out := cb.buffer.Bytes()
-	cb.lastMarshaledSize = int32(len(out))
+	out := cb.Bytes()
+	cb.lastMarshaledSize = capToMaxInt32(len(out))
 	return out, nil
 }
 
@@ -78,16 +88,16 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 	out, err := p.marshal(v, cb)
 
 	// put back buffer and lose the ref to the slice
-	cb.buffer.SetBuf(nil)
+	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return out, err
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	cb.buffer.SetBuf(data)
-	err := cb.buffer.Unmarshal(v.(proto.Message))
-	cb.buffer.SetBuf(nil)
+	cb.SetBuf(data)
+	err := cb.Unmarshal(v.(proto.Message))
+	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return err
 }
@@ -100,7 +110,7 @@ var (
 	protoBufferPool = &sync.Pool{
 		New: func() interface{} {
 			return &cachedProtoBuffer{
-				buffer:            proto.Buffer{},
+				Buffer:            proto.Buffer{},
 				lastMarshaledSize: 16,
 			}
 		},
