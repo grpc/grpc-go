@@ -803,7 +803,7 @@ public class Context {
   /**
    * Key for indexing values stored in a context.
    */
-  public static class Key<T> {
+  public static final class Key<T> {
 
     private final String name;
     private final T defaultValue;

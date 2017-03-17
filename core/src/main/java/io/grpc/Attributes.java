@@ -85,6 +85,11 @@ public final class Attributes {
     return new Builder();
   }
 
+  /**
+   * Key for an key-value pair.
+   * @param <T> type of the value in the key-value pair
+   */
+  @Immutable
   public static final class Key<T> {
     private final String name;
 

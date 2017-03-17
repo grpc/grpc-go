@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -565,10 +566,14 @@ public final class Metadata {
    * <p>Note this has to be the subset of valid HTTP/2 token characters as defined in RFC7230
    * Section 3.2.6 and RFC5234 Section B.1
    *
+   * <p>Note that a key is immutable but it may not be deeply immutable, because the key depends on
+   * its marshaller, and the marshaller can be mutable though not recommended.
+   *
    * @see <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">Wire Spec</a>
    * @see <a href="https://tools.ietf.org/html/rfc7230#section-3.2.6">RFC7230</a>
    * @see <a href="https://tools.ietf.org/html/rfc5234#appendix-B.1">RFC5234</a>
    */
+  @Immutable
   public abstract static class Key<T> {
 
     /** Valid characters for field names as defined in RFC7230 and RFC5234. */
@@ -787,6 +792,7 @@ public final class Metadata {
    * A specialized plain ASCII marshaller. Both input and output are assumed to be valid header
    * ASCII.
    */
+  @Immutable
   interface TrustedAsciiMarshaller<T> {
     /**
      * Serialize a metadata value to a ASCII string that contains only the characters listed in the
