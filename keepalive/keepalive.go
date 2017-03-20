@@ -22,9 +22,10 @@ type ServerParameters struct {
 	// MaxConnectionIdle is a duration for the amount of time after which an idle connection would be closed by sending a GoAway.
 	// Idleness duration is defined since the most recent time the number of outstanding RPCs became zero or the connection establishment.
 	MaxConnectionIdle time.Duration
-	// MaxConnectionAge is a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway
+	// MaxConnectionAge is a duration for the maximum amount of time a connection may exist before it will be closed by sending a GoAway.
+	// A random jitter of +/-10% will be added to MAX_CONNECTION_AGE to spread out connection storms.
 	MaxConnectionAge time.Duration
-	//MaxConnectinoAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
+	// MaxConnectinoAgeGrace is an additive period after MaxConnectionAge after which the connection will be forcibly closed.
 	MaxConnectionAgeGrace time.Duration
 	// After a duration of this time if the server doesn't see any activity it pings the client to see if the transport is still alive.
 	Time time.Duration

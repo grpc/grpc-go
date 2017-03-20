@@ -105,7 +105,11 @@ type http2Server struct {
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	idle            time.Time
+	// idle is the time instant when the connection went idle.
+	// This is either the begining of the connection or when the number of
+	// RPCs go down to 0.
+	// When the connection is busy, this value is set to 0.
+	idle time.Time
 }
 
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
@@ -779,7 +783,7 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 // 4. Makes sure a connection is alive by sending pings with a frequency of keepalive.Time and closes a non-resposive connection
 // after an additional duration of keepalive.Timeout.
 func (t *http2Server) keepalive() {
-	p := &ping{data: [8]byte{}}
+	p := &ping{}
 	var pingSent bool
 	maxIdle := time.NewTimer(t.kp.MaxConnectionIdle)
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
@@ -798,16 +802,19 @@ func (t *http2Server) keepalive() {
 			<-keepalive.C
 		}
 	}()
-	t.mu.Lock()
-	oidle := t.idle
-	t.mu.Unlock()
 	for {
 		select {
 		case <-maxIdle.C:
 			t.mu.Lock()
 			idle := t.idle
-			if idle == oidle {
-				// The connection has been idle for a duration of keepalive.MaxConnectionIdle.
+			if idle.IsZero() { // The connection is non-idle.
+				t.mu.Unlock()
+				maxIdle.Reset(t.kp.MaxConnectionIdle)
+				continue
+			}
+			val := t.kp.MaxConnectionIdle - time.Since(idle)
+			if val <= 0 {
+				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
 				t.state = draining
 				t.mu.Unlock()
@@ -817,12 +824,7 @@ func (t *http2Server) keepalive() {
 				return
 			}
 			t.mu.Unlock()
-			if idle.IsZero() {
-				maxIdle.Reset(t.kp.MaxConnectionIdle)
-				continue
-			}
-			oidle = idle
-			maxIdle.Reset(t.kp.MaxConnectionIdle - time.Since(idle))
+			maxIdle.Reset(val)
 		case <-maxAge.C:
 			t.mu.Lock()
 			t.state = draining
