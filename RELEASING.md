@@ -377,6 +377,7 @@ git checkout gh-pages
 rm -r javadoc/
 wget -O grpc-all-javadoc.jar "http://search.maven.org/remotecontent?filepath=io/grpc/grpc-all/$MAJOR.$MINOR.$PATCH/grpc-all-$MAJOR.$MINOR.$PATCH-javadoc.jar"
 unzip -d javadoc grpc-all-javadoc.jar
+patch -p1 < ga.patch
 rm grpc-all-javadoc.jar
 rm -r javadoc/META-INF/
 git add -A javadoc
