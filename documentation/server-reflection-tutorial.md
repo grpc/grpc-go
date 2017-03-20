@@ -10,7 +10,7 @@ proto-based services.
 ## Enable Server Reflection
 
 gRPC-Java Server Reflection is implemented by
-`io.grpc.protobuf.service.ProtoReflectionService` in the `grpc-services`
+`io.grpc.protobuf.services.ProtoReflectionService` in the `grpc-services`
 package. To enable server reflection, you need to add the
 `ProtoReflectionService` to your gRPC server.
 
@@ -27,25 +27,23 @@ need to make the following changes:
    compile "io.grpc:grpc-protobuf:${grpcVersion}"
 +  compile "io.grpc:grpc-services:${grpcVersion}"
    compile "io.grpc:grpc-stub:${grpcVersion}"
-
+ 
    testCompile "junit:junit:4.11"
-diff --git a/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java b/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java
-index ce1158a4..788bcc62 100644
 --- a/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java
 +++ b/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java
 @@ -33,6 +33,7 @@ package io.grpc.examples.helloworld;
-
+ 
  import io.grpc.Server;
  import io.grpc.ServerBuilder;
-+import io.grpc.protobuf.service.ProtoReflectionService;
++import io.grpc.protobuf.services.ProtoReflectionService;
  import io.grpc.stub.StreamObserver;
-
  import java.io.IOException;
-@@ -51,6 +52,7 @@ public class HelloWorldServer {
+ import java.util.logging.Logger;
+@@ -50,6 +51,7 @@ public class HelloWorldServer {
      int port = 50051;
      server = ServerBuilder.forPort(port)
          .addService(new GreeterImpl())
-+        .addService(ProtoReflectionService.getInstance())
++        .addService(ProtoReflectionService.newInstance())
          .build()
          .start();
      logger.info("Server started, listening on " + port);
