@@ -45,8 +45,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-// errDisabled indicates that proxy is disabled for the address.
-var errDisabled = errors.New("proxy is disabled for the address")
+var (
+	// errDisabled indicates that proxy is disabled for the address.
+	errDisabled = errors.New("proxy is disabled for the address")
+	// The following variable will be overwritten in the tests.
+	httpProxyFromEnvironment = http.ProxyFromEnvironment
+)
 
 func mapAddress(ctx context.Context, address string) (string, error) {
 	req := &http.Request{
@@ -55,7 +59,7 @@ func mapAddress(ctx context.Context, address string) (string, error) {
 			Host:   address,
 		},
 	}
-	url, err := http.ProxyFromEnvironment(req)
+	url, err := httpProxyFromEnvironment(req)
 	if err != nil {
 		return "", err
 	}

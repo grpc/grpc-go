@@ -38,10 +38,50 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 )
+
+const (
+	envTestAddr  = "1.2.3.4:8080"
+	envProxyAddr = "2.3.4.5:7687"
+)
+
+// overwriteAndRestore overwrite function httpProxyFromEnvironment and
+// returns a function to restore the default values.
+func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
+	backHPFE := httpProxyFromEnvironment
+	httpProxyFromEnvironment = hpfe
+	return func() {
+		httpProxyFromEnvironment = backHPFE
+	}
+}
+
+func TestMapAddressEnv(t *testing.T) {
+	// Overwrite the function in the test and restore them in defer.
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		if req.URL.Host == envTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		return nil, nil
+	}
+	defer overwrite(hpfe)()
+
+	// envTestAddr should be handled by ProxyFromEnvironment.
+	got, err := mapAddress(context.Background(), envTestAddr)
+	if err != nil {
+		t.Error(err)
+	}
+	if got != envProxyAddr {
+		t.Errorf("want %v, got %v", envProxyAddr, got)
+	}
+}
 
 type proxyServer struct {
 	t   *testing.T
@@ -53,7 +93,6 @@ type proxyServer struct {
 func (p *proxyServer) run() {
 	in, err := p.lis.Accept()
 	if err != nil {
-		p.t.Errorf("failed to accept: %v", err)
 		return
 	}
 	p.in = in
@@ -121,14 +160,22 @@ func TestHTTPConnect(t *testing.T) {
 		close(done)
 	}()
 
-	// Dial to proxy server.
-	c, err := net.Dial("tcp", plis.Addr().String())
-	if err != nil {
-		t.Fatalf("failed to create http connect dialer")
+	// Overwrite the function in the test and restore them in defer.
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return nil, nil
 	}
-	defer c.Close()
-	// Do http connect handshake on the connection to proxy server.
-	c, err = doHTTPConnectHandshake(context.Background(), c, blis.Addr().String())
+	defer overwrite(hpfe)()
+
+	// Dial to proxy server.
+	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		if deadline, ok := ctx.Deadline(); ok {
+			return net.DialTimeout("tcp", addr, deadline.Sub(time.Now()))
+		}
+		return net.Dial("tcp", addr)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	c, err := dialer(ctx, blis.Addr().String())
 	if err != nil {
 		t.Fatalf("http connect Dial failed: %v", err)
 	}
