@@ -42,6 +42,6 @@ interface BackoffPolicy {
   /**
    * @return The number of milliseconds to wait.
    */
-  long nextBackoffMillis();
+  long nextBackoffNanos();
 }
 

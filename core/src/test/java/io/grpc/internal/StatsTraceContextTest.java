@@ -31,18 +31,20 @@
 
 package io.grpc.internal;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagValue;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils;
+import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,20 +69,20 @@ public class StatsTraceContextTest {
     StatsTraceContext ctx = StatsTraceContext.newClientContextForTesting(
         methodName, statsCtxFactory, statsCtxFactory.getDefault(),
         fakeClock.getStopwatchSupplier());
-    fakeClock.forwardMillis(30);
+    fakeClock.forwardTime(30, MILLISECONDS);
     ctx.clientHeadersSent();
 
-    fakeClock.forwardMillis(100);
+    fakeClock.forwardTime(100, MILLISECONDS);
     ctx.wireBytesSent(1028);
     ctx.uncompressedBytesSent(1128);
 
-    fakeClock.forwardMillis(16);
+    fakeClock.forwardTime(16, MILLISECONDS);
     ctx.wireBytesReceived(33);
     ctx.uncompressedBytesReceived(67);
     ctx.wireBytesSent(99);
     ctx.uncompressedBytesSent(865);
 
-    fakeClock.forwardMillis(24);
+    fakeClock.forwardTime(24, MILLISECONDS);
     ctx.wireBytesReceived(154);
     ctx.uncompressedBytesReceived(552);
     ctx.callEnded(Status.OK);
@@ -111,7 +113,7 @@ public class StatsTraceContextTest {
     StatsTraceContext ctx = StatsTraceContext.newClientContextForTesting(
         methodName, statsCtxFactory, statsCtxFactory.getDefault(),
         fakeClock.getStopwatchSupplier());
-    fakeClock.forwardMillis(3000);
+    fakeClock.forwardTime(3000, MILLISECONDS);
     ctx.callEnded(Status.DEADLINE_EXCEEDED.withDescription("3 seconds"));
 
     StatsTestUtils.MetricsRecord record = statsCtxFactory.pollRecord();
@@ -168,7 +170,7 @@ public class StatsTraceContextTest {
     assertNull(serverRecord.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
     TagValue serverPropagatedTag = serverRecord.tags.get(StatsTestUtils.EXTRA_TAG);
     assertEquals("extra-tag-value-897", serverPropagatedTag.toString());
-    
+
     StatsTestUtils.MetricsRecord clientRecord = statsCtxFactory.pollRecord();
     assertNotNull(clientRecord);
     assertNoServerContent(clientRecord);
@@ -189,17 +191,17 @@ public class StatsTraceContextTest {
     ctx.wireBytesReceived(34);
     ctx.uncompressedBytesReceived(67);
 
-    fakeClock.forwardMillis(100);
+    fakeClock.forwardTime(100, MILLISECONDS);
     ctx.wireBytesSent(1028);
     ctx.uncompressedBytesSent(1128);
 
-    fakeClock.forwardMillis(16);
+    fakeClock.forwardTime(16, MILLISECONDS);
     ctx.wireBytesReceived(154);
     ctx.uncompressedBytesReceived(552);
     ctx.wireBytesSent(99);
     ctx.uncompressedBytesSent(865);
 
-    fakeClock.forwardMillis(24);
+    fakeClock.forwardTime(24, MILLISECONDS);
     ctx.callEnded(Status.CANCELLED);
 
     StatsTestUtils.MetricsRecord record = statsCtxFactory.pollRecord();

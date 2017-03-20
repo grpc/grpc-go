@@ -1114,7 +1114,7 @@ public class ManagedChannelImplTest {
     public BackoffPolicy get() {
       return new BackoffPolicy() {
         @Override
-        public long nextBackoffMillis() {
+        public long nextBackoffNanos() {
           return 1;
         }
       };

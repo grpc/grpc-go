@@ -128,9 +128,9 @@ public class InternalSubchannelTest {
 
     when(mockBackoffPolicyProvider.get())
         .thenReturn(mockBackoffPolicy1, mockBackoffPolicy2, mockBackoffPolicy3);
-    when(mockBackoffPolicy1.nextBackoffMillis()).thenReturn(10L, 100L);
-    when(mockBackoffPolicy2.nextBackoffMillis()).thenReturn(10L, 100L);
-    when(mockBackoffPolicy3.nextBackoffMillis()).thenReturn(10L, 100L);
+    when(mockBackoffPolicy1.nextBackoffNanos()).thenReturn(10L, 100L);
+    when(mockBackoffPolicy2.nextBackoffNanos()).thenReturn(10L, 100L);
+    when(mockBackoffPolicy3.nextBackoffNanos()).thenReturn(10L, 100L);
     transports = TestUtils.captureTransports(mockTransportFactory);
   }
 
@@ -165,19 +165,19 @@ public class InternalSubchannelTest {
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertExactCallbackInvokes("onStateChange:" + UNAVAILABLE_STATE);
     // Backoff reset and using first back-off value interval
-    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffNanos();
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
 
     // Second attempt
     // Transport creation doesn't happen until time is due
-    fakeClock.forwardMillis(9);
+    fakeClock.forwardNanos(9);
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(transportsCreated))
         .newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
 
     assertNoCallbackInvoke();
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsCreated))
@@ -190,18 +190,18 @@ public class InternalSubchannelTest {
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertExactCallbackInvokes("onStateChange:" + RESOURCE_EXHAUSTED_STATE);
     // Second back-off interval
-    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffNanos();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
 
     // Third attempt
     // Transport creation doesn't happen until time is due
-    fakeClock.forwardMillis(99);
+    fakeClock.forwardNanos(99);
     assertNull(internalSubchannel.obtainActiveTransport());
     verify(mockTransportFactory, times(transportsCreated))
         .newClientTransport(addr, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertNull(internalSubchannel.obtainActiveTransport());
@@ -229,8 +229,8 @@ public class InternalSubchannelTest {
         .newClientTransport(addr, AUTHORITY, USER_AGENT);
 
     // Final checks for consultations on back-off policies
-    verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
-    verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffNanos();
+    verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffNanos();
   }
 
   @Test public void twoAddressesReconnect() {
@@ -273,7 +273,7 @@ public class InternalSubchannelTest {
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertExactCallbackInvokes("onStateChange:" + UNAVAILABLE_STATE);
     // Backoff reset and first back-off interval begins
-    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffNanos();
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
 
     // No reconnect during TRANSIENT_FAILURE even when requested.
@@ -282,12 +282,12 @@ public class InternalSubchannelTest {
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
 
     // Third attempt is the first address, thus controlled by the first back-off interval.
-    fakeClock.forwardMillis(9);
+    fakeClock.forwardNanos(9);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
@@ -309,17 +309,17 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:" + RESOURCE_EXHAUSTED_STATE);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     // Second back-off interval begins
-    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(++backoff1Consulted)).nextBackoffNanos();
     verify(mockBackoffPolicyProvider, times(backoffReset)).get();
 
     // Fifth attempt for the first address, thus controlled by the second back-off interval.
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
-    fakeClock.forwardMillis(99);
+    fakeClock.forwardNanos(99);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
@@ -360,25 +360,25 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:" + UNAVAILABLE_STATE);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     // Back-off reset and first back-off interval begins
-    verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy2, times(++backoff2Consulted)).nextBackoffNanos();
     verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
 
     // Third attempt is the first address, thus controlled by the first back-off interval.
-    fakeClock.forwardMillis(9);
+    fakeClock.forwardNanos(9);
     verify(mockTransportFactory, times(transportsAddr1))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
     assertEquals(ConnectivityState.TRANSIENT_FAILURE, internalSubchannel.getState());
     assertNoCallbackInvoke();
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     assertEquals(ConnectivityState.CONNECTING, internalSubchannel.getState());
     verify(mockTransportFactory, times(++transportsAddr1))
         .newClientTransport(addr1, AUTHORITY, USER_AGENT);
 
     // Final checks on invocations on back-off policies
-    verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffMillis();
-    verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffMillis();
-    verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffMillis();
+    verify(mockBackoffPolicy1, times(backoff1Consulted)).nextBackoffNanos();
+    verify(mockBackoffPolicy2, times(backoff2Consulted)).nextBackoffNanos();
+    verify(mockBackoffPolicy3, times(backoff3Consulted)).nextBackoffNanos();
   }
 
   @Test
@@ -404,7 +404,7 @@ public class InternalSubchannelTest {
     assertExactCallbackInvokes("onStateChange:" + UNAVAILABLE_STATE);
 
     // Will always reconnect after back-off
-    fakeClock.forwardMillis(10);
+    fakeClock.forwardNanos(10);
     assertExactCallbackInvokes("onStateChange:CONNECTING");
     verify(mockTransportFactory, times(++transportsCreated))
         .newClientTransport(addr, AUTHORITY, USER_AGENT);
@@ -491,7 +491,7 @@ public class InternalSubchannelTest {
     assertNoCallbackInvoke();
 
     // No more transports will be created.
-    fakeClock.forwardMillis(10000);
+    fakeClock.forwardNanos(10000);
     assertEquals(ConnectivityState.SHUTDOWN, internalSubchannel.getState());
     verifyNoMoreInteractions(mockTransportFactory);
     assertEquals(0, transports.size());
@@ -653,7 +653,7 @@ public class InternalSubchannelTest {
     // Addresses exhausted, waiting for back-off.
     assertEquals(2, runnableInvokes.get());
     // Run out the back-off period
-    fakeClock.forwardMillis(10);
+    fakeClock.forwardNanos(10);
     assertEquals(3, runnableInvokes.get());
 
     // This test doesn't care about scheduled InternalSubchannel callbacks.  Clear it up so that

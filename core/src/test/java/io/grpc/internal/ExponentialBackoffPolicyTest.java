@@ -54,16 +54,16 @@ public class ExponentialBackoffPolicyTest {
 
   @Test
   public void maxDelayReached() {
-    long maxBackoffMillis = 120 * 1000;
-    policy.setMaxBackoffMillis(maxBackoffMillis)
+    long maxBackoffNanos = 120 * 1000;
+    policy.setMaxBackoffNanos(maxBackoffNanos)
         .setJitter(0)
         .setRandom(notRandom);
     for (int i = 0; i < 50; i++) {
-      if (maxBackoffMillis == policy.nextBackoffMillis()) {
+      if (maxBackoffNanos == policy.nextBackoffNanos()) {
         return; // Success
       }
     }
-    assertEquals("max delay not reached", maxBackoffMillis, policy.nextBackoffMillis());
+    assertEquals("max delay not reached", maxBackoffNanos, policy.nextBackoffNanos());
   }
 
   @Test public void canProvide() {

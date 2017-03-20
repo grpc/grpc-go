@@ -336,7 +336,7 @@ public class ManagedChannelImplIdlenessTest {
     public BackoffPolicy get() {
       return new BackoffPolicy() {
         @Override
-        public long nextBackoffMillis() {
+        public long nextBackoffNanos() {
           return 1;
         }
       };

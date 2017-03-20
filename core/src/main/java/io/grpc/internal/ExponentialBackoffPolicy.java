@@ -52,19 +52,19 @@ final class ExponentialBackoffPolicy implements BackoffPolicy {
   }
 
   private Random random = new Random();
-  private long initialBackoffMillis = TimeUnit.SECONDS.toMillis(1);
-  private long maxBackoffMillis = TimeUnit.MINUTES.toMillis(2);
+  private long initialBackoffNanos = TimeUnit.SECONDS.toNanos(1);
+  private long maxBackoffNanos = TimeUnit.MINUTES.toNanos(2);
   private double multiplier = 1.6;
   private double jitter = .2;
 
-  private long nextBackoffMillis = initialBackoffMillis;
+  private long nextBackoffNanos = initialBackoffNanos;
 
   @Override
-  public long nextBackoffMillis() {
-    long currentBackoffMillis = nextBackoffMillis;
-    nextBackoffMillis = Math.min((long) (currentBackoffMillis * multiplier), maxBackoffMillis);
-    return currentBackoffMillis
-        + uniformRandom(-jitter * currentBackoffMillis, jitter * currentBackoffMillis);
+  public long nextBackoffNanos() {
+    long currentBackoffNanos = nextBackoffNanos;
+    nextBackoffNanos = Math.min((long) (currentBackoffNanos * multiplier), maxBackoffNanos);
+    return currentBackoffNanos
+        + uniformRandom(-jitter * currentBackoffNanos, jitter * currentBackoffNanos);
   }
 
   private long uniformRandom(double low, double high) {
@@ -85,14 +85,14 @@ final class ExponentialBackoffPolicy implements BackoffPolicy {
   }
 
   @VisibleForTesting
-  ExponentialBackoffPolicy setInitialBackoffMillis(long initialBackoffMillis) {
-    this.initialBackoffMillis = initialBackoffMillis;
+  ExponentialBackoffPolicy setInitialBackoffNanos(long initialBackoffNanos) {
+    this.initialBackoffNanos = initialBackoffNanos;
     return this;
   }
 
   @VisibleForTesting
-  ExponentialBackoffPolicy setMaxBackoffMillis(long maxBackoffMillis) {
-    this.maxBackoffMillis = maxBackoffMillis;
+  ExponentialBackoffPolicy setMaxBackoffNanos(long maxBackoffNanos) {
+    this.maxBackoffNanos = maxBackoffNanos;
     return this;
   }
 

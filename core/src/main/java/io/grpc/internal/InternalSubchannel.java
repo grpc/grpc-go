@@ -252,16 +252,16 @@ final class InternalSubchannel implements WithLogId {
     if (reconnectPolicy == null) {
       reconnectPolicy = backoffPolicyProvider.get();
     }
-    long delayMillis =
-        reconnectPolicy.nextBackoffMillis() - connectingTimer.elapsed(TimeUnit.MILLISECONDS);
+    long delayNanos =
+        reconnectPolicy.nextBackoffNanos() - connectingTimer.elapsed(TimeUnit.NANOSECONDS);
     if (log.isLoggable(Level.FINE)) {
-      log.log(Level.FINE, "[{0}] Scheduling backoff for {1} ms", new Object[]{logId, delayMillis});
+      log.log(Level.FINE, "[{0}] Scheduling backoff for {1} ns", new Object[]{logId, delayNanos});
     }
     Preconditions.checkState(reconnectTask == null, "previous reconnectTask is not done");
     reconnectTask = scheduledExecutor.schedule(
         new LogExceptionRunnable(new EndOfCurrentBackoff()),
-        delayMillis,
-        TimeUnit.MILLISECONDS);
+        delayNanos,
+        TimeUnit.NANOSECONDS);
   }
 
   @GuardedBy("lock")

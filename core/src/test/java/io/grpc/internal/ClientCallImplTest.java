@@ -703,17 +703,19 @@ public class ClientCallImplTest {
   @Test
   public void expiredDeadlineCancelsStream_CallOptions() {
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
+    // The deadline needs to be a number large enough to get encompass the call to start, otherwise
+    // the scheduled cancellation won't be created, and the call will fail early.
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
-        CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        CallOptions.DEFAULT.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
 
     call.start(callListener, new Metadata());
 
-    fakeClock.forwardMillis(1001);
+    fakeClock.forwardNanos(TimeUnit.SECONDS.toNanos(1) + 1);
 
     verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
@@ -724,7 +726,7 @@ public class ClientCallImplTest {
     fakeClock.forwardTime(System.nanoTime(), TimeUnit.NANOSECONDS);
 
     Context.current()
-        .withDeadlineAfter(1000, TimeUnit.MILLISECONDS, deadlineCancellationExecutor)
+        .withDeadlineAfter(1, TimeUnit.SECONDS, deadlineCancellationExecutor)
         .attach();
 
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
@@ -737,7 +739,7 @@ public class ClientCallImplTest {
 
     call.start(callListener, new Metadata());
 
-    fakeClock.forwardMillis(TimeUnit.SECONDS.toMillis(1001));
+    fakeClock.forwardNanos(TimeUnit.SECONDS.toNanos(1) + 1);
 
     verify(stream, times(1)).cancel(statusCaptor.capture());
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
@@ -750,7 +752,7 @@ public class ClientCallImplTest {
     ClientCallImpl<Void, Void> call = new ClientCallImpl<Void, Void>(
         method,
         MoreExecutors.directExecutor(),
-        CallOptions.DEFAULT.withDeadline(Deadline.after(1000, TimeUnit.MILLISECONDS)),
+        CallOptions.DEFAULT.withDeadline(Deadline.after(1, TimeUnit.SECONDS)),
         statsTraceCtx,
         provider,
         deadlineCancellationExecutor);
@@ -758,7 +760,7 @@ public class ClientCallImplTest {
     call.cancel("canceled", null);
 
     // Run the deadline timer, which should have been cancelled by the previous call to cancel()
-    fakeClock.forwardMillis(1001);
+    fakeClock.forwardNanos(TimeUnit.SECONDS.toNanos(1) + 1);
 
     verify(stream, times(1)).cancel(statusCaptor.capture());
 

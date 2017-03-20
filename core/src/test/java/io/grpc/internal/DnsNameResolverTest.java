@@ -180,11 +180,11 @@ public class DnsNameResolverTest {
 
     // First retry scheduled
     assertEquals(1, fakeClock.numPendingTasks());
-    fakeClock.forwardMillis(TimeUnit.MINUTES.toMillis(1) - 1);
+    fakeClock.forwardNanos(TimeUnit.MINUTES.toNanos(1) - 1);
     assertEquals(1, fakeClock.numPendingTasks());
 
     // First retry
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener, times(2)).onError(statusCaptor.capture());
     assertEquals(name, resolver.invocations.poll());
@@ -194,11 +194,11 @@ public class DnsNameResolverTest {
 
     // Second retry scheduled
     assertEquals(1, fakeClock.numPendingTasks());
-    fakeClock.forwardMillis(TimeUnit.MINUTES.toMillis(1) - 1);
+    fakeClock.forwardNanos(TimeUnit.MINUTES.toNanos(1) - 1);
     assertEquals(1, fakeClock.numPendingTasks());
 
     // Second retry
-    fakeClock.forwardMillis(1);
+    fakeClock.forwardNanos(1);
     assertEquals(0, fakeClock.numPendingTasks());
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
