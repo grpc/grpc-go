@@ -334,7 +334,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		t.Close()
 		return
 	}
-	atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+	atomic.StoreUint32(&t.activity, 1)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
@@ -345,7 +345,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 
 	for {
 		frame, err := t.framer.readFrame()
-		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
+		atomic.StoreUint32(&t.activity, 1)
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				t.mu.Lock()
