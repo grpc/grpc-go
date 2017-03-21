@@ -5,7 +5,8 @@ package io.grpc.instrumentation.v1alpha;
 
 /**
  * <pre>
- * TODO(aveitch): Complete definition of this type
+ * This message is sent when requesting a set of stats (Census Views) from
+ * a client system, as part of the MonitoringService API's.
  * </pre>
  *
  * Protobuf type {@code grpc.instrumentation.v1alpha.StatsRequest}
@@ -19,6 +20,9 @@ public  final class StatsRequest extends
     super(builder);
   }
   private StatsRequest() {
+    viewNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+    measurementNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+    dontIncludeDescriptorsInFirstResponse_ = false;
   }
 
   @java.lang.Override
@@ -31,6 +35,7 @@ public  final class StatsRequest extends
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
+    int mutable_bitField0_ = 0;
     try {
       boolean done = false;
       while (!done) {
@@ -45,6 +50,29 @@ public  final class StatsRequest extends
             }
             break;
           }
+          case 10: {
+            java.lang.String s = input.readStringRequireUtf8();
+            if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+              viewNames_ = new com.google.protobuf.LazyStringArrayList();
+              mutable_bitField0_ |= 0x00000001;
+            }
+            viewNames_.add(s);
+            break;
+          }
+          case 18: {
+            java.lang.String s = input.readStringRequireUtf8();
+            if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+              measurementNames_ = new com.google.protobuf.LazyStringArrayList();
+              mutable_bitField0_ |= 0x00000002;
+            }
+            measurementNames_.add(s);
+            break;
+          }
+          case 24: {
+
+            dontIncludeDescriptorsInFirstResponse_ = input.readBool();
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -53,6 +81,12 @@ public  final class StatsRequest extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+        viewNames_ = viewNames_.getUnmodifiableView();
+      }
+      if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+        measurementNames_ = measurementNames_.getUnmodifiableView();
+      }
       makeExtensionsImmutable();
     }
   }
@@ -68,6 +102,160 @@ public  final class StatsRequest extends
             io.grpc.instrumentation.v1alpha.StatsRequest.class, io.grpc.instrumentation.v1alpha.StatsRequest.Builder.class);
   }
 
+  private int bitField0_;
+  public static final int VIEW_NAMES_FIELD_NUMBER = 1;
+  private com.google.protobuf.LazyStringList viewNames_;
+  /**
+   * <pre>
+   * An optional set of ViewDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If measurement_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string view_names = 1;</code>
+   */
+  public com.google.protobuf.ProtocolStringList
+      getViewNamesList() {
+    return viewNames_;
+  }
+  /**
+   * <pre>
+   * An optional set of ViewDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If measurement_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string view_names = 1;</code>
+   */
+  public int getViewNamesCount() {
+    return viewNames_.size();
+  }
+  /**
+   * <pre>
+   * An optional set of ViewDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If measurement_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string view_names = 1;</code>
+   */
+  public java.lang.String getViewNames(int index) {
+    return viewNames_.get(index);
+  }
+  /**
+   * <pre>
+   * An optional set of ViewDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If measurement_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string view_names = 1;</code>
+   */
+  public com.google.protobuf.ByteString
+      getViewNamesBytes(int index) {
+    return viewNames_.getByteString(index);
+  }
+
+  public static final int MEASUREMENT_NAMES_FIELD_NUMBER = 2;
+  private com.google.protobuf.LazyStringList measurementNames_;
+  /**
+   * <pre>
+   * An optional set of MeasurementDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If view_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string measurement_names = 2;</code>
+   */
+  public com.google.protobuf.ProtocolStringList
+      getMeasurementNamesList() {
+    return measurementNames_;
+  }
+  /**
+   * <pre>
+   * An optional set of MeasurementDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If view_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string measurement_names = 2;</code>
+   */
+  public int getMeasurementNamesCount() {
+    return measurementNames_.size();
+  }
+  /**
+   * <pre>
+   * An optional set of MeasurementDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If view_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string measurement_names = 2;</code>
+   */
+  public java.lang.String getMeasurementNames(int index) {
+    return measurementNames_.get(index);
+  }
+  /**
+   * <pre>
+   * An optional set of MeasurementDescriptor names. Only Views using these
+   * descriptors will be sent back in the response. If no names are provided,
+   * then all Views present in the client system will be included in every
+   * response. If view_names is also provided, then Views matching the
+   * intersection of the two are returned.
+   * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+   * the future.
+   * </pre>
+   *
+   * <code>repeated string measurement_names = 2;</code>
+   */
+  public com.google.protobuf.ByteString
+      getMeasurementNamesBytes(int index) {
+    return measurementNames_.getByteString(index);
+  }
+
+  public static final int DONT_INCLUDE_DESCRIPTORS_IN_FIRST_RESPONSE_FIELD_NUMBER = 3;
+  private boolean dontIncludeDescriptorsInFirstResponse_;
+  /**
+   * <pre>
+   * By default, the MeasurementDescriptors and ViewDescriptors corresponding to
+   * the Views that are returned in a StatsResponse will be included in the
+   * first such response. Set this to true to have them not sent.
+   * </pre>
+   *
+   * <code>bool dont_include_descriptors_in_first_response = 3;</code>
+   */
+  public boolean getDontIncludeDescriptorsInFirstResponse() {
+    return dontIncludeDescriptorsInFirstResponse_;
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -80,6 +268,15 @@ public  final class StatsRequest extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    for (int i = 0; i < viewNames_.size(); i++) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, viewNames_.getRaw(i));
+    }
+    for (int i = 0; i < measurementNames_.size(); i++) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 2, measurementNames_.getRaw(i));
+    }
+    if (dontIncludeDescriptorsInFirstResponse_ != false) {
+      output.writeBool(3, dontIncludeDescriptorsInFirstResponse_);
+    }
   }
 
   public int getSerializedSize() {
@@ -87,6 +284,26 @@ public  final class StatsRequest extends
     if (size != -1) return size;
 
     size = 0;
+    {
+      int dataSize = 0;
+      for (int i = 0; i < viewNames_.size(); i++) {
+        dataSize += computeStringSizeNoTag(viewNames_.getRaw(i));
+      }
+      size += dataSize;
+      size += 1 * getViewNamesList().size();
+    }
+    {
+      int dataSize = 0;
+      for (int i = 0; i < measurementNames_.size(); i++) {
+        dataSize += computeStringSizeNoTag(measurementNames_.getRaw(i));
+      }
+      size += dataSize;
+      size += 1 * getMeasurementNamesList().size();
+    }
+    if (dontIncludeDescriptorsInFirstResponse_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(3, dontIncludeDescriptorsInFirstResponse_);
+    }
     memoizedSize = size;
     return size;
   }
@@ -103,6 +320,12 @@ public  final class StatsRequest extends
     io.grpc.instrumentation.v1alpha.StatsRequest other = (io.grpc.instrumentation.v1alpha.StatsRequest) obj;
 
     boolean result = true;
+    result = result && getViewNamesList()
+        .equals(other.getViewNamesList());
+    result = result && getMeasurementNamesList()
+        .equals(other.getMeasurementNamesList());
+    result = result && (getDontIncludeDescriptorsInFirstResponse()
+        == other.getDontIncludeDescriptorsInFirstResponse());
     return result;
   }
 
@@ -113,6 +336,17 @@ public  final class StatsRequest extends
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
+    if (getViewNamesCount() > 0) {
+      hash = (37 * hash) + VIEW_NAMES_FIELD_NUMBER;
+      hash = (53 * hash) + getViewNamesList().hashCode();
+    }
+    if (getMeasurementNamesCount() > 0) {
+      hash = (37 * hash) + MEASUREMENT_NAMES_FIELD_NUMBER;
+      hash = (53 * hash) + getMeasurementNamesList().hashCode();
+    }
+    hash = (37 * hash) + DONT_INCLUDE_DESCRIPTORS_IN_FIRST_RESPONSE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getDontIncludeDescriptorsInFirstResponse());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -197,7 +431,8 @@ public  final class StatsRequest extends
   }
   /**
    * <pre>
-   * TODO(aveitch): Complete definition of this type
+   * This message is sent when requesting a set of stats (Census Views) from
+   * a client system, as part of the MonitoringService API's.
    * </pre>
    *
    * Protobuf type {@code grpc.instrumentation.v1alpha.StatsRequest}
@@ -235,6 +470,12 @@ public  final class StatsRequest extends
     }
     public Builder clear() {
       super.clear();
+      viewNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      bitField0_ = (bitField0_ & ~0x00000001);
+      measurementNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      bitField0_ = (bitField0_ & ~0x00000002);
+      dontIncludeDescriptorsInFirstResponse_ = false;
+
       return this;
     }
 
@@ -257,6 +498,20 @@ public  final class StatsRequest extends
 
     public io.grpc.instrumentation.v1alpha.StatsRequest buildPartial() {
       io.grpc.instrumentation.v1alpha.StatsRequest result = new io.grpc.instrumentation.v1alpha.StatsRequest(this);
+      int from_bitField0_ = bitField0_;
+      int to_bitField0_ = 0;
+      if (((bitField0_ & 0x00000001) == 0x00000001)) {
+        viewNames_ = viewNames_.getUnmodifiableView();
+        bitField0_ = (bitField0_ & ~0x00000001);
+      }
+      result.viewNames_ = viewNames_;
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
+        measurementNames_ = measurementNames_.getUnmodifiableView();
+        bitField0_ = (bitField0_ & ~0x00000002);
+      }
+      result.measurementNames_ = measurementNames_;
+      result.dontIncludeDescriptorsInFirstResponse_ = dontIncludeDescriptorsInFirstResponse_;
+      result.bitField0_ = to_bitField0_;
       onBuilt();
       return result;
     }
@@ -298,6 +553,29 @@ public  final class StatsRequest extends
 
     public Builder mergeFrom(io.grpc.instrumentation.v1alpha.StatsRequest other) {
       if (other == io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()) return this;
+      if (!other.viewNames_.isEmpty()) {
+        if (viewNames_.isEmpty()) {
+          viewNames_ = other.viewNames_;
+          bitField0_ = (bitField0_ & ~0x00000001);
+        } else {
+          ensureViewNamesIsMutable();
+          viewNames_.addAll(other.viewNames_);
+        }
+        onChanged();
+      }
+      if (!other.measurementNames_.isEmpty()) {
+        if (measurementNames_.isEmpty()) {
+          measurementNames_ = other.measurementNames_;
+          bitField0_ = (bitField0_ & ~0x00000002);
+        } else {
+          ensureMeasurementNamesIsMutable();
+          measurementNames_.addAll(other.measurementNames_);
+        }
+        onChanged();
+      }
+      if (other.getDontIncludeDescriptorsInFirstResponse() != false) {
+        setDontIncludeDescriptorsInFirstResponse(other.getDontIncludeDescriptorsInFirstResponse());
+      }
       onChanged();
       return this;
     }
@@ -321,6 +599,419 @@ public  final class StatsRequest extends
           mergeFrom(parsedMessage);
         }
       }
+      return this;
+    }
+    private int bitField0_;
+
+    private com.google.protobuf.LazyStringList viewNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+    private void ensureViewNamesIsMutable() {
+      if (!((bitField0_ & 0x00000001) == 0x00000001)) {
+        viewNames_ = new com.google.protobuf.LazyStringArrayList(viewNames_);
+        bitField0_ |= 0x00000001;
+       }
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public com.google.protobuf.ProtocolStringList
+        getViewNamesList() {
+      return viewNames_.getUnmodifiableView();
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public int getViewNamesCount() {
+      return viewNames_.size();
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public java.lang.String getViewNames(int index) {
+      return viewNames_.get(index);
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public com.google.protobuf.ByteString
+        getViewNamesBytes(int index) {
+      return viewNames_.getByteString(index);
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public Builder setViewNames(
+        int index, java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureViewNamesIsMutable();
+      viewNames_.set(index, value);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public Builder addViewNames(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureViewNamesIsMutable();
+      viewNames_.add(value);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public Builder addAllViewNames(
+        java.lang.Iterable<java.lang.String> values) {
+      ensureViewNamesIsMutable();
+      com.google.protobuf.AbstractMessageLite.Builder.addAll(
+          values, viewNames_);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public Builder clearViewNames() {
+      viewNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      bitField0_ = (bitField0_ & ~0x00000001);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of ViewDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If measurement_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string view_names = 1;</code>
+     */
+    public Builder addViewNamesBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      ensureViewNamesIsMutable();
+      viewNames_.add(value);
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.LazyStringList measurementNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+    private void ensureMeasurementNamesIsMutable() {
+      if (!((bitField0_ & 0x00000002) == 0x00000002)) {
+        measurementNames_ = new com.google.protobuf.LazyStringArrayList(measurementNames_);
+        bitField0_ |= 0x00000002;
+       }
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public com.google.protobuf.ProtocolStringList
+        getMeasurementNamesList() {
+      return measurementNames_.getUnmodifiableView();
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public int getMeasurementNamesCount() {
+      return measurementNames_.size();
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public java.lang.String getMeasurementNames(int index) {
+      return measurementNames_.get(index);
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public com.google.protobuf.ByteString
+        getMeasurementNamesBytes(int index) {
+      return measurementNames_.getByteString(index);
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public Builder setMeasurementNames(
+        int index, java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureMeasurementNamesIsMutable();
+      measurementNames_.set(index, value);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public Builder addMeasurementNames(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  ensureMeasurementNamesIsMutable();
+      measurementNames_.add(value);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public Builder addAllMeasurementNames(
+        java.lang.Iterable<java.lang.String> values) {
+      ensureMeasurementNamesIsMutable();
+      com.google.protobuf.AbstractMessageLite.Builder.addAll(
+          values, measurementNames_);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public Builder clearMeasurementNames() {
+      measurementNames_ = com.google.protobuf.LazyStringArrayList.EMPTY;
+      bitField0_ = (bitField0_ & ~0x00000002);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional set of MeasurementDescriptor names. Only Views using these
+     * descriptors will be sent back in the response. If no names are provided,
+     * then all Views present in the client system will be included in every
+     * response. If view_names is also provided, then Views matching the
+     * intersection of the two are returned.
+     * TODO(aveitch): Consider making this a list of regexes or prefix matches in
+     * the future.
+     * </pre>
+     *
+     * <code>repeated string measurement_names = 2;</code>
+     */
+    public Builder addMeasurementNamesBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      ensureMeasurementNamesIsMutable();
+      measurementNames_.add(value);
+      onChanged();
+      return this;
+    }
+
+    private boolean dontIncludeDescriptorsInFirstResponse_ ;
+    /**
+     * <pre>
+     * By default, the MeasurementDescriptors and ViewDescriptors corresponding to
+     * the Views that are returned in a StatsResponse will be included in the
+     * first such response. Set this to true to have them not sent.
+     * </pre>
+     *
+     * <code>bool dont_include_descriptors_in_first_response = 3;</code>
+     */
+    public boolean getDontIncludeDescriptorsInFirstResponse() {
+      return dontIncludeDescriptorsInFirstResponse_;
+    }
+    /**
+     * <pre>
+     * By default, the MeasurementDescriptors and ViewDescriptors corresponding to
+     * the Views that are returned in a StatsResponse will be included in the
+     * first such response. Set this to true to have them not sent.
+     * </pre>
+     *
+     * <code>bool dont_include_descriptors_in_first_response = 3;</code>
+     */
+    public Builder setDontIncludeDescriptorsInFirstResponse(boolean value) {
+      
+      dontIncludeDescriptorsInFirstResponse_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * By default, the MeasurementDescriptors and ViewDescriptors corresponding to
+     * the Views that are returned in a StatsResponse will be included in the
+     * first such response. Set this to true to have them not sent.
+     * </pre>
+     *
+     * <code>bool dont_include_descriptors_in_first_response = 3;</code>
+     */
+    public Builder clearDontIncludeDescriptorsInFirstResponse() {
+      
+      dontIncludeDescriptorsInFirstResponse_ = false;
+      onChanged();
       return this;
     }
     public final Builder setUnknownFields(

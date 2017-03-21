@@ -52,7 +52,7 @@ import com.google.instrumentation.stats.View.IntervalView;
 import com.google.instrumentation.stats.ViewDescriptor.DistributionViewDescriptor;
 import com.google.instrumentation.stats.ViewDescriptor.IntervalViewDescriptor;
 import com.google.instrumentation.stats.proto.CensusProto;
-import io.grpc.instrumentation.v1alpha.CanonicalRpcStats;
+import io.grpc.instrumentation.v1alpha.StatsResponse;
 import java.util.Arrays;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -64,14 +64,14 @@ public class MonitoringUtilTest {
   @Test
   public void buildCanonicalRpcStatsViewForDistributionView() throws Exception {
     assertEquals(
-        DISTRIBUTION_CANONICAL_STATS_PROTO,
+        DISTRIBUTION_STATS_RESPONSE_PROTO,
         MonitoringUtil.buildCanonicalRpcStatsView(DISTRIBUTION_VIEW));
   }
 
   @Test
   public void buildCanonicalRpcStatsViewForIntervalView() throws Exception {
     assertEquals(
-        INTERVAL_CANONICAL_STATS_PROTO, MonitoringUtil.buildCanonicalRpcStatsView(INTERVAL_VIEW));
+        INTERVAL_STATS_RESPONSE_PROTO, MonitoringUtil.buildCanonicalRpcStatsView(INTERVAL_VIEW));
   }
 
   @Test
@@ -286,8 +286,8 @@ public class MonitoringUtilTest {
           .setViewName(DISTRIBUTION_VIEW_NAME)
           .setDistributionView(DISTRIBUTION_VIEW_PROTO)
           .build();
-  private static final CanonicalRpcStats.View DISTRIBUTION_CANONICAL_STATS_PROTO =
-      CanonicalRpcStats.View.newBuilder()
+  private static final StatsResponse DISTRIBUTION_STATS_RESPONSE_PROTO =
+      StatsResponse.newBuilder()
           .setMeasurementDescriptor(MEASUREMENT_DESC_PROTO)
           .setViewDescriptor(DISTRIBUTION_VIEW_DESC_PROTO)
           .setView(VIEW_WITH_DISTRIBUTION_VIEW_PROTO)
@@ -356,8 +356,8 @@ public class MonitoringUtilTest {
           .setViewName(INTERVAL_VIEW_NAME)
           .setIntervalView(INTERVAL_VIEW_PROTO)
           .build();
-  private static final CanonicalRpcStats.View INTERVAL_CANONICAL_STATS_PROTO =
-      CanonicalRpcStats.View.newBuilder()
+  private static final StatsResponse INTERVAL_STATS_RESPONSE_PROTO =
+      StatsResponse.newBuilder()
           .setMeasurementDescriptor(MEASUREMENT_DESC_PROTO)
           .setViewDescriptor(INTERVAL_VIEW_DESC_PROTO)
           .setView(VIEW_WITH_INTERVAL_VIEW_PROTO)

@@ -47,11 +47,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 10: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientErrors_ != null) {
               subBuilder = rpcClientErrors_.toBuilder();
             }
-            rpcClientErrors_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientErrors_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientErrors_);
               rpcClientErrors_ = subBuilder.buildPartial();
@@ -60,11 +60,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 18: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientCompletedRpcs_ != null) {
               subBuilder = rpcClientCompletedRpcs_.toBuilder();
             }
-            rpcClientCompletedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientCompletedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientCompletedRpcs_);
               rpcClientCompletedRpcs_ = subBuilder.buildPartial();
@@ -73,11 +73,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 26: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientStartedRpcs_ != null) {
               subBuilder = rpcClientStartedRpcs_.toBuilder();
             }
-            rpcClientStartedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientStartedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientStartedRpcs_);
               rpcClientStartedRpcs_ = subBuilder.buildPartial();
@@ -86,11 +86,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 34: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientElapsedTime_ != null) {
               subBuilder = rpcClientElapsedTime_.toBuilder();
             }
-            rpcClientElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientElapsedTime_);
               rpcClientElapsedTime_ = subBuilder.buildPartial();
@@ -99,11 +99,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 42: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientServerElapsedTime_ != null) {
               subBuilder = rpcClientServerElapsedTime_.toBuilder();
             }
-            rpcClientServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientServerElapsedTime_);
               rpcClientServerElapsedTime_ = subBuilder.buildPartial();
@@ -112,11 +112,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 50: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientRequestBytes_ != null) {
               subBuilder = rpcClientRequestBytes_.toBuilder();
             }
-            rpcClientRequestBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientRequestBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientRequestBytes_);
               rpcClientRequestBytes_ = subBuilder.buildPartial();
@@ -125,11 +125,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 58: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientResponseBytes_ != null) {
               subBuilder = rpcClientResponseBytes_.toBuilder();
             }
-            rpcClientResponseBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientResponseBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientResponseBytes_);
               rpcClientResponseBytes_ = subBuilder.buildPartial();
@@ -138,11 +138,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 66: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientRequestCount_ != null) {
               subBuilder = rpcClientRequestCount_.toBuilder();
             }
-            rpcClientRequestCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientRequestCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientRequestCount_);
               rpcClientRequestCount_ = subBuilder.buildPartial();
@@ -151,11 +151,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 74: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcClientResponseCount_ != null) {
               subBuilder = rpcClientResponseCount_.toBuilder();
             }
-            rpcClientResponseCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcClientResponseCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcClientResponseCount_);
               rpcClientResponseCount_ = subBuilder.buildPartial();
@@ -164,11 +164,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 82: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerErrors_ != null) {
               subBuilder = rpcServerErrors_.toBuilder();
             }
-            rpcServerErrors_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerErrors_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerErrors_);
               rpcServerErrors_ = subBuilder.buildPartial();
@@ -177,11 +177,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 90: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerCompletedRpcs_ != null) {
               subBuilder = rpcServerCompletedRpcs_.toBuilder();
             }
-            rpcServerCompletedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerCompletedRpcs_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerCompletedRpcs_);
               rpcServerCompletedRpcs_ = subBuilder.buildPartial();
@@ -190,11 +190,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 98: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerServerElapsedTime_ != null) {
               subBuilder = rpcServerServerElapsedTime_.toBuilder();
             }
-            rpcServerServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerServerElapsedTime_);
               rpcServerServerElapsedTime_ = subBuilder.buildPartial();
@@ -203,11 +203,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 106: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerRequestBytes_ != null) {
               subBuilder = rpcServerRequestBytes_.toBuilder();
             }
-            rpcServerRequestBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerRequestBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerRequestBytes_);
               rpcServerRequestBytes_ = subBuilder.buildPartial();
@@ -216,11 +216,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 114: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerResponseBytes_ != null) {
               subBuilder = rpcServerResponseBytes_.toBuilder();
             }
-            rpcServerResponseBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerResponseBytes_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerResponseBytes_);
               rpcServerResponseBytes_ = subBuilder.buildPartial();
@@ -229,11 +229,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 122: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerRequestCount_ != null) {
               subBuilder = rpcServerRequestCount_.toBuilder();
             }
-            rpcServerRequestCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerRequestCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerRequestCount_);
               rpcServerRequestCount_ = subBuilder.buildPartial();
@@ -242,11 +242,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 130: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerResponseCount_ != null) {
               subBuilder = rpcServerResponseCount_.toBuilder();
             }
-            rpcServerResponseCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerResponseCount_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerResponseCount_);
               rpcServerResponseCount_ = subBuilder.buildPartial();
@@ -255,11 +255,11 @@ public  final class CanonicalRpcStats extends
             break;
           }
           case 138: {
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder subBuilder = null;
+            io.grpc.instrumentation.v1alpha.StatsResponse.Builder subBuilder = null;
             if (rpcServerElapsedTime_ != null) {
               subBuilder = rpcServerElapsedTime_.toBuilder();
             }
-            rpcServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.parser(), extensionRegistry);
+            rpcServerElapsedTime_ = input.readMessage(io.grpc.instrumentation.v1alpha.StatsResponse.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(rpcServerElapsedTime_);
               rpcServerElapsedTime_ = subBuilder.buildPartial();
@@ -290,1306 +290,350 @@ public  final class CanonicalRpcStats extends
             io.grpc.instrumentation.v1alpha.CanonicalRpcStats.class, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.Builder.class);
   }
 
-  public interface ViewOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.instrumentation.v1alpha.CanonicalRpcStats.View)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    boolean hasMeasurementDescriptor();
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor getMeasurementDescriptor();
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder getMeasurementDescriptorOrBuilder();
-
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    boolean hasViewDescriptor();
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor getViewDescriptor();
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder getViewDescriptorOrBuilder();
-
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    boolean hasView();
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.View getView();
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder getViewOrBuilder();
-  }
-  /**
-   * <pre>
-   * Wrapper combining View and ViewDescriptor.
-   * </pre>
-   *
-   * Protobuf type {@code grpc.instrumentation.v1alpha.CanonicalRpcStats.View}
-   */
-  public  static final class View extends
-      com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:grpc.instrumentation.v1alpha.CanonicalRpcStats.View)
-      ViewOrBuilder {
-    // Use View.newBuilder() to construct.
-    private View(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
-      super(builder);
-    }
-    private View() {
-    }
-
-    @java.lang.Override
-    public final com.google.protobuf.UnknownFieldSet
-    getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
-    }
-    private View(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      int mutable_bitField0_ = 0;
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            default: {
-              if (!input.skipField(tag)) {
-                done = true;
-              }
-              break;
-            }
-            case 10: {
-              com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder subBuilder = null;
-              if (measurementDescriptor_ != null) {
-                subBuilder = measurementDescriptor_.toBuilder();
-              }
-              measurementDescriptor_ = input.readMessage(com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(measurementDescriptor_);
-                measurementDescriptor_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 18: {
-              com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder subBuilder = null;
-              if (viewDescriptor_ != null) {
-                subBuilder = viewDescriptor_.toBuilder();
-              }
-              viewDescriptor_ = input.readMessage(com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(viewDescriptor_);
-                viewDescriptor_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-            case 26: {
-              com.google.instrumentation.stats.proto.CensusProto.View.Builder subBuilder = null;
-              if (view_ != null) {
-                subBuilder = view_.toBuilder();
-              }
-              view_ = input.readMessage(com.google.instrumentation.stats.proto.CensusProto.View.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom(view_);
-                view_ = subBuilder.buildPartial();
-              }
-
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        makeExtensionsImmutable();
-      }
-    }
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.grpc.instrumentation.v1alpha.MonitoringProto.internal_static_grpc_instrumentation_v1alpha_CanonicalRpcStats_View_descriptor;
-    }
-
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.grpc.instrumentation.v1alpha.MonitoringProto.internal_static_grpc_instrumentation_v1alpha_CanonicalRpcStats_View_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.class, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder.class);
-    }
-
-    public static final int MEASUREMENT_DESCRIPTOR_FIELD_NUMBER = 1;
-    private com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor measurementDescriptor_;
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    public boolean hasMeasurementDescriptor() {
-      return measurementDescriptor_ != null;
-    }
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor getMeasurementDescriptor() {
-      return measurementDescriptor_ == null ? com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.getDefaultInstance() : measurementDescriptor_;
-    }
-    /**
-     * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder getMeasurementDescriptorOrBuilder() {
-      return getMeasurementDescriptor();
-    }
-
-    public static final int VIEW_DESCRIPTOR_FIELD_NUMBER = 2;
-    private com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor viewDescriptor_;
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    public boolean hasViewDescriptor() {
-      return viewDescriptor_ != null;
-    }
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor getViewDescriptor() {
-      return viewDescriptor_ == null ? com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.getDefaultInstance() : viewDescriptor_;
-    }
-    /**
-     * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder getViewDescriptorOrBuilder() {
-      return getViewDescriptor();
-    }
-
-    public static final int VIEW_FIELD_NUMBER = 3;
-    private com.google.instrumentation.stats.proto.CensusProto.View view_;
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    public boolean hasView() {
-      return view_ != null;
-    }
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.View getView() {
-      return view_ == null ? com.google.instrumentation.stats.proto.CensusProto.View.getDefaultInstance() : view_;
-    }
-    /**
-     * <code>.google.instrumentation.View view = 3;</code>
-     */
-    public com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder getViewOrBuilder() {
-      return getView();
-    }
-
-    private byte memoizedIsInitialized = -1;
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (measurementDescriptor_ != null) {
-        output.writeMessage(1, getMeasurementDescriptor());
-      }
-      if (viewDescriptor_ != null) {
-        output.writeMessage(2, getViewDescriptor());
-      }
-      if (view_ != null) {
-        output.writeMessage(3, getView());
-      }
-    }
-
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (measurementDescriptor_ != null) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(1, getMeasurementDescriptor());
-      }
-      if (viewDescriptor_ != null) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(2, getViewDescriptor());
-      }
-      if (view_ != null) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(3, getView());
-      }
-      memoizedSize = size;
-      return size;
-    }
-
-    private static final long serialVersionUID = 0L;
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View)) {
-        return super.equals(obj);
-      }
-      io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View other = (io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View) obj;
-
-      boolean result = true;
-      result = result && (hasMeasurementDescriptor() == other.hasMeasurementDescriptor());
-      if (hasMeasurementDescriptor()) {
-        result = result && getMeasurementDescriptor()
-            .equals(other.getMeasurementDescriptor());
-      }
-      result = result && (hasViewDescriptor() == other.hasViewDescriptor());
-      if (hasViewDescriptor()) {
-        result = result && getViewDescriptor()
-            .equals(other.getViewDescriptor());
-      }
-      result = result && (hasView() == other.hasView());
-      if (hasView()) {
-        result = result && getView()
-            .equals(other.getView());
-      }
-      return result;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      if (hasMeasurementDescriptor()) {
-        hash = (37 * hash) + MEASUREMENT_DESCRIPTOR_FIELD_NUMBER;
-        hash = (53 * hash) + getMeasurementDescriptor().hashCode();
-      }
-      if (hasViewDescriptor()) {
-        hash = (37 * hash) + VIEW_DESCRIPTOR_FIELD_NUMBER;
-        hash = (53 * hash) + getViewDescriptor().hashCode();
-      }
-      if (hasView()) {
-        hash = (37 * hash) + VIEW_FIELD_NUMBER;
-        hash = (53 * hash) + getView().hashCode();
-      }
-      hash = (29 * hash) + unknownFields.hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
-    /**
-     * <pre>
-     * Wrapper combining View and ViewDescriptor.
-     * </pre>
-     *
-     * Protobuf type {@code grpc.instrumentation.v1alpha.CanonicalRpcStats.View}
-     */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.instrumentation.v1alpha.CanonicalRpcStats.View)
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.grpc.instrumentation.v1alpha.MonitoringProto.internal_static_grpc_instrumentation_v1alpha_CanonicalRpcStats_View_descriptor;
-      }
-
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.grpc.instrumentation.v1alpha.MonitoringProto.internal_static_grpc_instrumentation_v1alpha_CanonicalRpcStats_View_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.class, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder.class);
-      }
-
-      // Construct using io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder()
-      private Builder() {
-        maybeForceBuilderInitialization();
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-        super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
-      }
-      public Builder clear() {
-        super.clear();
-        if (measurementDescriptorBuilder_ == null) {
-          measurementDescriptor_ = null;
-        } else {
-          measurementDescriptor_ = null;
-          measurementDescriptorBuilder_ = null;
-        }
-        if (viewDescriptorBuilder_ == null) {
-          viewDescriptor_ = null;
-        } else {
-          viewDescriptor_ = null;
-          viewDescriptorBuilder_ = null;
-        }
-        if (viewBuilder_ == null) {
-          view_ = null;
-        } else {
-          view_ = null;
-          viewBuilder_ = null;
-        }
-        return this;
-      }
-
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.grpc.instrumentation.v1alpha.MonitoringProto.internal_static_grpc_instrumentation_v1alpha_CanonicalRpcStats_View_descriptor;
-      }
-
-      public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getDefaultInstanceForType() {
-        return io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance();
-      }
-
-      public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View build() {
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
-        }
-        return result;
-      }
-
-      public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View buildPartial() {
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View result = new io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View(this);
-        if (measurementDescriptorBuilder_ == null) {
-          result.measurementDescriptor_ = measurementDescriptor_;
-        } else {
-          result.measurementDescriptor_ = measurementDescriptorBuilder_.build();
-        }
-        if (viewDescriptorBuilder_ == null) {
-          result.viewDescriptor_ = viewDescriptor_;
-        } else {
-          result.viewDescriptor_ = viewDescriptorBuilder_.build();
-        }
-        if (viewBuilder_ == null) {
-          result.view_ = view_;
-        } else {
-          result.view_ = viewBuilder_.build();
-        }
-        onBuilt();
-        return result;
-      }
-
-      public Builder clone() {
-        return (Builder) super.clone();
-      }
-      public Builder setField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.setField(field, value);
-      }
-      public Builder clearField(
-          com.google.protobuf.Descriptors.FieldDescriptor field) {
-        return (Builder) super.clearField(field);
-      }
-      public Builder clearOneof(
-          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
-        return (Builder) super.clearOneof(oneof);
-      }
-      public Builder setRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
-        return (Builder) super.setRepeatedField(field, index, value);
-      }
-      public Builder addRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.addRepeatedField(field, value);
-      }
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View) {
-          return mergeFrom((io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
-        }
-      }
-
-      public Builder mergeFrom(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View other) {
-        if (other == io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance()) return this;
-        if (other.hasMeasurementDescriptor()) {
-          mergeMeasurementDescriptor(other.getMeasurementDescriptor());
-        }
-        if (other.hasViewDescriptor()) {
-          mergeViewDescriptor(other.getViewDescriptor());
-        }
-        if (other.hasView()) {
-          mergeView(other.getView());
-        }
-        onChanged();
-        return this;
-      }
-
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View parsedMessage = null;
-        try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View) e.getUnfinishedMessage();
-          throw e.unwrapIOException();
-        } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
-        return this;
-      }
-
-      private com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor measurementDescriptor_ = null;
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder> measurementDescriptorBuilder_;
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public boolean hasMeasurementDescriptor() {
-        return measurementDescriptorBuilder_ != null || measurementDescriptor_ != null;
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor getMeasurementDescriptor() {
-        if (measurementDescriptorBuilder_ == null) {
-          return measurementDescriptor_ == null ? com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.getDefaultInstance() : measurementDescriptor_;
-        } else {
-          return measurementDescriptorBuilder_.getMessage();
-        }
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public Builder setMeasurementDescriptor(com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor value) {
-        if (measurementDescriptorBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          measurementDescriptor_ = value;
-          onChanged();
-        } else {
-          measurementDescriptorBuilder_.setMessage(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public Builder setMeasurementDescriptor(
-          com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder builderForValue) {
-        if (measurementDescriptorBuilder_ == null) {
-          measurementDescriptor_ = builderForValue.build();
-          onChanged();
-        } else {
-          measurementDescriptorBuilder_.setMessage(builderForValue.build());
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public Builder mergeMeasurementDescriptor(com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor value) {
-        if (measurementDescriptorBuilder_ == null) {
-          if (measurementDescriptor_ != null) {
-            measurementDescriptor_ =
-              com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.newBuilder(measurementDescriptor_).mergeFrom(value).buildPartial();
-          } else {
-            measurementDescriptor_ = value;
-          }
-          onChanged();
-        } else {
-          measurementDescriptorBuilder_.mergeFrom(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public Builder clearMeasurementDescriptor() {
-        if (measurementDescriptorBuilder_ == null) {
-          measurementDescriptor_ = null;
-          onChanged();
-        } else {
-          measurementDescriptor_ = null;
-          measurementDescriptorBuilder_ = null;
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder getMeasurementDescriptorBuilder() {
-        
-        onChanged();
-        return getMeasurementDescriptorFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder getMeasurementDescriptorOrBuilder() {
-        if (measurementDescriptorBuilder_ != null) {
-          return measurementDescriptorBuilder_.getMessageOrBuilder();
-        } else {
-          return measurementDescriptor_ == null ?
-              com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.getDefaultInstance() : measurementDescriptor_;
-        }
-      }
-      /**
-       * <code>.google.instrumentation.MeasurementDescriptor measurement_descriptor = 1;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder> 
-          getMeasurementDescriptorFieldBuilder() {
-        if (measurementDescriptorBuilder_ == null) {
-          measurementDescriptorBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptorOrBuilder>(
-                  getMeasurementDescriptor(),
-                  getParentForChildren(),
-                  isClean());
-          measurementDescriptor_ = null;
-        }
-        return measurementDescriptorBuilder_;
-      }
-
-      private com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor viewDescriptor_ = null;
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder> viewDescriptorBuilder_;
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public boolean hasViewDescriptor() {
-        return viewDescriptorBuilder_ != null || viewDescriptor_ != null;
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor getViewDescriptor() {
-        if (viewDescriptorBuilder_ == null) {
-          return viewDescriptor_ == null ? com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.getDefaultInstance() : viewDescriptor_;
-        } else {
-          return viewDescriptorBuilder_.getMessage();
-        }
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public Builder setViewDescriptor(com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor value) {
-        if (viewDescriptorBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          viewDescriptor_ = value;
-          onChanged();
-        } else {
-          viewDescriptorBuilder_.setMessage(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public Builder setViewDescriptor(
-          com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder builderForValue) {
-        if (viewDescriptorBuilder_ == null) {
-          viewDescriptor_ = builderForValue.build();
-          onChanged();
-        } else {
-          viewDescriptorBuilder_.setMessage(builderForValue.build());
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public Builder mergeViewDescriptor(com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor value) {
-        if (viewDescriptorBuilder_ == null) {
-          if (viewDescriptor_ != null) {
-            viewDescriptor_ =
-              com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.newBuilder(viewDescriptor_).mergeFrom(value).buildPartial();
-          } else {
-            viewDescriptor_ = value;
-          }
-          onChanged();
-        } else {
-          viewDescriptorBuilder_.mergeFrom(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public Builder clearViewDescriptor() {
-        if (viewDescriptorBuilder_ == null) {
-          viewDescriptor_ = null;
-          onChanged();
-        } else {
-          viewDescriptor_ = null;
-          viewDescriptorBuilder_ = null;
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder getViewDescriptorBuilder() {
-        
-        onChanged();
-        return getViewDescriptorFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder getViewDescriptorOrBuilder() {
-        if (viewDescriptorBuilder_ != null) {
-          return viewDescriptorBuilder_.getMessageOrBuilder();
-        } else {
-          return viewDescriptor_ == null ?
-              com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.getDefaultInstance() : viewDescriptor_;
-        }
-      }
-      /**
-       * <code>.google.instrumentation.ViewDescriptor view_descriptor = 2;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder> 
-          getViewDescriptorFieldBuilder() {
-        if (viewDescriptorBuilder_ == null) {
-          viewDescriptorBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewDescriptorOrBuilder>(
-                  getViewDescriptor(),
-                  getParentForChildren(),
-                  isClean());
-          viewDescriptor_ = null;
-        }
-        return viewDescriptorBuilder_;
-      }
-
-      private com.google.instrumentation.stats.proto.CensusProto.View view_ = null;
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.View, com.google.instrumentation.stats.proto.CensusProto.View.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder> viewBuilder_;
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public boolean hasView() {
-        return viewBuilder_ != null || view_ != null;
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.View getView() {
-        if (viewBuilder_ == null) {
-          return view_ == null ? com.google.instrumentation.stats.proto.CensusProto.View.getDefaultInstance() : view_;
-        } else {
-          return viewBuilder_.getMessage();
-        }
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public Builder setView(com.google.instrumentation.stats.proto.CensusProto.View value) {
-        if (viewBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          view_ = value;
-          onChanged();
-        } else {
-          viewBuilder_.setMessage(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public Builder setView(
-          com.google.instrumentation.stats.proto.CensusProto.View.Builder builderForValue) {
-        if (viewBuilder_ == null) {
-          view_ = builderForValue.build();
-          onChanged();
-        } else {
-          viewBuilder_.setMessage(builderForValue.build());
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public Builder mergeView(com.google.instrumentation.stats.proto.CensusProto.View value) {
-        if (viewBuilder_ == null) {
-          if (view_ != null) {
-            view_ =
-              com.google.instrumentation.stats.proto.CensusProto.View.newBuilder(view_).mergeFrom(value).buildPartial();
-          } else {
-            view_ = value;
-          }
-          onChanged();
-        } else {
-          viewBuilder_.mergeFrom(value);
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public Builder clearView() {
-        if (viewBuilder_ == null) {
-          view_ = null;
-          onChanged();
-        } else {
-          view_ = null;
-          viewBuilder_ = null;
-        }
-
-        return this;
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.View.Builder getViewBuilder() {
-        
-        onChanged();
-        return getViewFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      public com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder getViewOrBuilder() {
-        if (viewBuilder_ != null) {
-          return viewBuilder_.getMessageOrBuilder();
-        } else {
-          return view_ == null ?
-              com.google.instrumentation.stats.proto.CensusProto.View.getDefaultInstance() : view_;
-        }
-      }
-      /**
-       * <code>.google.instrumentation.View view = 3;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          com.google.instrumentation.stats.proto.CensusProto.View, com.google.instrumentation.stats.proto.CensusProto.View.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder> 
-          getViewFieldBuilder() {
-        if (viewBuilder_ == null) {
-          viewBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              com.google.instrumentation.stats.proto.CensusProto.View, com.google.instrumentation.stats.proto.CensusProto.View.Builder, com.google.instrumentation.stats.proto.CensusProto.ViewOrBuilder>(
-                  getView(),
-                  getParentForChildren(),
-                  isClean());
-          view_ = null;
-        }
-        return viewBuilder_;
-      }
-      public final Builder setUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-      public final Builder mergeUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-
-      // @@protoc_insertion_point(builder_scope:grpc.instrumentation.v1alpha.CanonicalRpcStats.View)
-    }
-
-    // @@protoc_insertion_point(class_scope:grpc.instrumentation.v1alpha.CanonicalRpcStats.View)
-    private static final io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View();
-    }
-
-    public static io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<View>
-        PARSER = new com.google.protobuf.AbstractParser<View>() {
-      public View parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-          return new View(input, extensionRegistry);
-      }
-    };
-
-    public static com.google.protobuf.Parser<View> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<View> getParserForType() {
-      return PARSER;
-    }
-
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
   public static final int RPC_CLIENT_ERRORS_FIELD_NUMBER = 1;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientErrors_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientErrors_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
    */
   public boolean hasRpcClientErrors() {
     return rpcClientErrors_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientErrors() {
-    return rpcClientErrors_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientErrors_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientErrors() {
+    return rpcClientErrors_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientErrors_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientErrorsOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientErrorsOrBuilder() {
     return getRpcClientErrors();
   }
 
   public static final int RPC_CLIENT_COMPLETED_RPCS_FIELD_NUMBER = 2;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientCompletedRpcs_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientCompletedRpcs_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
    */
   public boolean hasRpcClientCompletedRpcs() {
     return rpcClientCompletedRpcs_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientCompletedRpcs() {
-    return rpcClientCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientCompletedRpcs_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientCompletedRpcs() {
+    return rpcClientCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientCompletedRpcs_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientCompletedRpcsOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientCompletedRpcsOrBuilder() {
     return getRpcClientCompletedRpcs();
   }
 
   public static final int RPC_CLIENT_STARTED_RPCS_FIELD_NUMBER = 3;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientStartedRpcs_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientStartedRpcs_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
    */
   public boolean hasRpcClientStartedRpcs() {
     return rpcClientStartedRpcs_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientStartedRpcs() {
-    return rpcClientStartedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientStartedRpcs_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientStartedRpcs() {
+    return rpcClientStartedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientStartedRpcs_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientStartedRpcsOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientStartedRpcsOrBuilder() {
     return getRpcClientStartedRpcs();
   }
 
   public static final int RPC_CLIENT_ELAPSED_TIME_FIELD_NUMBER = 4;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientElapsedTime_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientElapsedTime_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
    */
   public boolean hasRpcClientElapsedTime() {
     return rpcClientElapsedTime_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientElapsedTime() {
-    return rpcClientElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientElapsedTime_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientElapsedTime() {
+    return rpcClientElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientElapsedTime_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientElapsedTimeOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientElapsedTimeOrBuilder() {
     return getRpcClientElapsedTime();
   }
 
   public static final int RPC_CLIENT_SERVER_ELAPSED_TIME_FIELD_NUMBER = 5;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientServerElapsedTime_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientServerElapsedTime_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
    */
   public boolean hasRpcClientServerElapsedTime() {
     return rpcClientServerElapsedTime_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientServerElapsedTime() {
-    return rpcClientServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientServerElapsedTime_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientServerElapsedTime() {
+    return rpcClientServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientServerElapsedTime_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientServerElapsedTimeOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientServerElapsedTimeOrBuilder() {
     return getRpcClientServerElapsedTime();
   }
 
   public static final int RPC_CLIENT_REQUEST_BYTES_FIELD_NUMBER = 6;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientRequestBytes_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientRequestBytes_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
    */
   public boolean hasRpcClientRequestBytes() {
     return rpcClientRequestBytes_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientRequestBytes() {
-    return rpcClientRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestBytes_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientRequestBytes() {
+    return rpcClientRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestBytes_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientRequestBytesOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientRequestBytesOrBuilder() {
     return getRpcClientRequestBytes();
   }
 
   public static final int RPC_CLIENT_RESPONSE_BYTES_FIELD_NUMBER = 7;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientResponseBytes_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientResponseBytes_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
    */
   public boolean hasRpcClientResponseBytes() {
     return rpcClientResponseBytes_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientResponseBytes() {
-    return rpcClientResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseBytes_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientResponseBytes() {
+    return rpcClientResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseBytes_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientResponseBytesOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientResponseBytesOrBuilder() {
     return getRpcClientResponseBytes();
   }
 
   public static final int RPC_CLIENT_REQUEST_COUNT_FIELD_NUMBER = 8;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientRequestCount_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientRequestCount_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
    */
   public boolean hasRpcClientRequestCount() {
     return rpcClientRequestCount_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientRequestCount() {
-    return rpcClientRequestCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestCount_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientRequestCount() {
+    return rpcClientRequestCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestCount_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientRequestCountOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientRequestCountOrBuilder() {
     return getRpcClientRequestCount();
   }
 
   public static final int RPC_CLIENT_RESPONSE_COUNT_FIELD_NUMBER = 9;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientResponseCount_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientResponseCount_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
    */
   public boolean hasRpcClientResponseCount() {
     return rpcClientResponseCount_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientResponseCount() {
-    return rpcClientResponseCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseCount_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientResponseCount() {
+    return rpcClientResponseCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseCount_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientResponseCountOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientResponseCountOrBuilder() {
     return getRpcClientResponseCount();
   }
 
   public static final int RPC_SERVER_ERRORS_FIELD_NUMBER = 10;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerErrors_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerErrors_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
    */
   public boolean hasRpcServerErrors() {
     return rpcServerErrors_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerErrors() {
-    return rpcServerErrors_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerErrors_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerErrors() {
+    return rpcServerErrors_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerErrors_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerErrorsOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerErrorsOrBuilder() {
     return getRpcServerErrors();
   }
 
   public static final int RPC_SERVER_COMPLETED_RPCS_FIELD_NUMBER = 11;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerCompletedRpcs_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerCompletedRpcs_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
    */
   public boolean hasRpcServerCompletedRpcs() {
     return rpcServerCompletedRpcs_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerCompletedRpcs() {
-    return rpcServerCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerCompletedRpcs_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerCompletedRpcs() {
+    return rpcServerCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerCompletedRpcs_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerCompletedRpcsOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerCompletedRpcsOrBuilder() {
     return getRpcServerCompletedRpcs();
   }
 
   public static final int RPC_SERVER_SERVER_ELAPSED_TIME_FIELD_NUMBER = 12;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerServerElapsedTime_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerServerElapsedTime_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
    */
   public boolean hasRpcServerServerElapsedTime() {
     return rpcServerServerElapsedTime_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerServerElapsedTime() {
-    return rpcServerServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerServerElapsedTime_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerServerElapsedTime() {
+    return rpcServerServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerServerElapsedTime_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerServerElapsedTimeOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerServerElapsedTimeOrBuilder() {
     return getRpcServerServerElapsedTime();
   }
 
   public static final int RPC_SERVER_REQUEST_BYTES_FIELD_NUMBER = 13;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerRequestBytes_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerRequestBytes_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
    */
   public boolean hasRpcServerRequestBytes() {
     return rpcServerRequestBytes_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerRequestBytes() {
-    return rpcServerRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestBytes_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerRequestBytes() {
+    return rpcServerRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestBytes_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerRequestBytesOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerRequestBytesOrBuilder() {
     return getRpcServerRequestBytes();
   }
 
   public static final int RPC_SERVER_RESPONSE_BYTES_FIELD_NUMBER = 14;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerResponseBytes_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerResponseBytes_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
    */
   public boolean hasRpcServerResponseBytes() {
     return rpcServerResponseBytes_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerResponseBytes() {
-    return rpcServerResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseBytes_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerResponseBytes() {
+    return rpcServerResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseBytes_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerResponseBytesOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerResponseBytesOrBuilder() {
     return getRpcServerResponseBytes();
   }
 
   public static final int RPC_SERVER_REQUEST_COUNT_FIELD_NUMBER = 15;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerRequestCount_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerRequestCount_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
    */
   public boolean hasRpcServerRequestCount() {
     return rpcServerRequestCount_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerRequestCount() {
-    return rpcServerRequestCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestCount_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerRequestCount() {
+    return rpcServerRequestCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestCount_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerRequestCountOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerRequestCountOrBuilder() {
     return getRpcServerRequestCount();
   }
 
   public static final int RPC_SERVER_RESPONSE_COUNT_FIELD_NUMBER = 16;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerResponseCount_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerResponseCount_;
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
    */
   public boolean hasRpcServerResponseCount() {
     return rpcServerResponseCount_ != null;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerResponseCount() {
-    return rpcServerResponseCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseCount_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerResponseCount() {
+    return rpcServerResponseCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseCount_;
   }
   /**
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerResponseCountOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerResponseCountOrBuilder() {
     return getRpcServerResponseCount();
   }
 
   public static final int RPC_SERVER_ELAPSED_TIME_FIELD_NUMBER = 17;
-  private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerElapsedTime_;
+  private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerElapsedTime_;
   /**
    * <pre>
    *TODO(ericgribkoff) Add minute-hour interval stats.
    * </pre>
    *
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
    */
   public boolean hasRpcServerElapsedTime() {
     return rpcServerElapsedTime_ != null;
@@ -1599,19 +643,19 @@ public  final class CanonicalRpcStats extends
    *TODO(ericgribkoff) Add minute-hour interval stats.
    * </pre>
    *
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerElapsedTime() {
-    return rpcServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerElapsedTime_;
+  public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerElapsedTime() {
+    return rpcServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerElapsedTime_;
   }
   /**
    * <pre>
    *TODO(ericgribkoff) Add minute-hour interval stats.
    * </pre>
    *
-   * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+   * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
    */
-  public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerElapsedTimeOrBuilder() {
+  public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerElapsedTimeOrBuilder() {
     return getRpcServerElapsedTime();
   }
 
@@ -2381,29 +1425,29 @@ public  final class CanonicalRpcStats extends
       return this;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientErrors_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientErrors_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientErrorsBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientErrorsBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
     public boolean hasRpcClientErrors() {
       return rpcClientErrorsBuilder_ != null || rpcClientErrors_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientErrors() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientErrors() {
       if (rpcClientErrorsBuilder_ == null) {
-        return rpcClientErrors_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientErrors_;
+        return rpcClientErrors_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientErrors_;
       } else {
         return rpcClientErrorsBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
-    public Builder setRpcClientErrors(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientErrors(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientErrorsBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -2417,10 +1461,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
     public Builder setRpcClientErrors(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientErrorsBuilder_ == null) {
         rpcClientErrors_ = builderForValue.build();
         onChanged();
@@ -2431,13 +1475,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
-    public Builder mergeRpcClientErrors(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientErrors(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientErrorsBuilder_ == null) {
         if (rpcClientErrors_ != null) {
           rpcClientErrors_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientErrors_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientErrors_).mergeFrom(value).buildPartial();
         } else {
           rpcClientErrors_ = value;
         }
@@ -2449,7 +1493,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
     public Builder clearRpcClientErrors() {
       if (rpcClientErrorsBuilder_ == null) {
@@ -2463,33 +1507,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientErrorsBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientErrorsBuilder() {
       
       onChanged();
       return getRpcClientErrorsFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientErrorsOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientErrorsOrBuilder() {
       if (rpcClientErrorsBuilder_ != null) {
         return rpcClientErrorsBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientErrors_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientErrors_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientErrors_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_errors = 1;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_errors = 1;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientErrorsFieldBuilder() {
       if (rpcClientErrorsBuilder_ == null) {
         rpcClientErrorsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientErrors(),
                 getParentForChildren(),
                 isClean());
@@ -2498,29 +1542,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientErrorsBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientCompletedRpcs_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientCompletedRpcs_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientCompletedRpcsBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientCompletedRpcsBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
     public boolean hasRpcClientCompletedRpcs() {
       return rpcClientCompletedRpcsBuilder_ != null || rpcClientCompletedRpcs_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientCompletedRpcs() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientCompletedRpcs() {
       if (rpcClientCompletedRpcsBuilder_ == null) {
-        return rpcClientCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientCompletedRpcs_;
+        return rpcClientCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientCompletedRpcs_;
       } else {
         return rpcClientCompletedRpcsBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
-    public Builder setRpcClientCompletedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientCompletedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientCompletedRpcsBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -2534,10 +1578,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
     public Builder setRpcClientCompletedRpcs(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientCompletedRpcsBuilder_ == null) {
         rpcClientCompletedRpcs_ = builderForValue.build();
         onChanged();
@@ -2548,13 +1592,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
-    public Builder mergeRpcClientCompletedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientCompletedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientCompletedRpcsBuilder_ == null) {
         if (rpcClientCompletedRpcs_ != null) {
           rpcClientCompletedRpcs_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientCompletedRpcs_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientCompletedRpcs_).mergeFrom(value).buildPartial();
         } else {
           rpcClientCompletedRpcs_ = value;
         }
@@ -2566,7 +1610,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
     public Builder clearRpcClientCompletedRpcs() {
       if (rpcClientCompletedRpcsBuilder_ == null) {
@@ -2580,33 +1624,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientCompletedRpcsBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientCompletedRpcsBuilder() {
       
       onChanged();
       return getRpcClientCompletedRpcsFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientCompletedRpcsOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientCompletedRpcsOrBuilder() {
       if (rpcClientCompletedRpcsBuilder_ != null) {
         return rpcClientCompletedRpcsBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientCompletedRpcs_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientCompletedRpcs_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientCompletedRpcs_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_completed_rpcs = 2;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_completed_rpcs = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientCompletedRpcsFieldBuilder() {
       if (rpcClientCompletedRpcsBuilder_ == null) {
         rpcClientCompletedRpcsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientCompletedRpcs(),
                 getParentForChildren(),
                 isClean());
@@ -2615,29 +1659,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientCompletedRpcsBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientStartedRpcs_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientStartedRpcs_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientStartedRpcsBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientStartedRpcsBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
     public boolean hasRpcClientStartedRpcs() {
       return rpcClientStartedRpcsBuilder_ != null || rpcClientStartedRpcs_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientStartedRpcs() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientStartedRpcs() {
       if (rpcClientStartedRpcsBuilder_ == null) {
-        return rpcClientStartedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientStartedRpcs_;
+        return rpcClientStartedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientStartedRpcs_;
       } else {
         return rpcClientStartedRpcsBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
-    public Builder setRpcClientStartedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientStartedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientStartedRpcsBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -2651,10 +1695,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
     public Builder setRpcClientStartedRpcs(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientStartedRpcsBuilder_ == null) {
         rpcClientStartedRpcs_ = builderForValue.build();
         onChanged();
@@ -2665,13 +1709,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
-    public Builder mergeRpcClientStartedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientStartedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientStartedRpcsBuilder_ == null) {
         if (rpcClientStartedRpcs_ != null) {
           rpcClientStartedRpcs_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientStartedRpcs_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientStartedRpcs_).mergeFrom(value).buildPartial();
         } else {
           rpcClientStartedRpcs_ = value;
         }
@@ -2683,7 +1727,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
     public Builder clearRpcClientStartedRpcs() {
       if (rpcClientStartedRpcsBuilder_ == null) {
@@ -2697,33 +1741,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientStartedRpcsBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientStartedRpcsBuilder() {
       
       onChanged();
       return getRpcClientStartedRpcsFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientStartedRpcsOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientStartedRpcsOrBuilder() {
       if (rpcClientStartedRpcsBuilder_ != null) {
         return rpcClientStartedRpcsBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientStartedRpcs_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientStartedRpcs_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientStartedRpcs_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_started_rpcs = 3;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_started_rpcs = 3;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientStartedRpcsFieldBuilder() {
       if (rpcClientStartedRpcsBuilder_ == null) {
         rpcClientStartedRpcsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientStartedRpcs(),
                 getParentForChildren(),
                 isClean());
@@ -2732,29 +1776,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientStartedRpcsBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientElapsedTime_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientElapsedTime_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientElapsedTimeBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientElapsedTimeBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
     public boolean hasRpcClientElapsedTime() {
       return rpcClientElapsedTimeBuilder_ != null || rpcClientElapsedTime_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientElapsedTime() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientElapsedTime() {
       if (rpcClientElapsedTimeBuilder_ == null) {
-        return rpcClientElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientElapsedTime_;
+        return rpcClientElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientElapsedTime_;
       } else {
         return rpcClientElapsedTimeBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
-    public Builder setRpcClientElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientElapsedTimeBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -2768,10 +1812,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
     public Builder setRpcClientElapsedTime(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientElapsedTimeBuilder_ == null) {
         rpcClientElapsedTime_ = builderForValue.build();
         onChanged();
@@ -2782,13 +1826,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
-    public Builder mergeRpcClientElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientElapsedTimeBuilder_ == null) {
         if (rpcClientElapsedTime_ != null) {
           rpcClientElapsedTime_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientElapsedTime_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientElapsedTime_).mergeFrom(value).buildPartial();
         } else {
           rpcClientElapsedTime_ = value;
         }
@@ -2800,7 +1844,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
     public Builder clearRpcClientElapsedTime() {
       if (rpcClientElapsedTimeBuilder_ == null) {
@@ -2814,33 +1858,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientElapsedTimeBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientElapsedTimeBuilder() {
       
       onChanged();
       return getRpcClientElapsedTimeFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientElapsedTimeOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientElapsedTimeOrBuilder() {
       if (rpcClientElapsedTimeBuilder_ != null) {
         return rpcClientElapsedTimeBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientElapsedTime_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientElapsedTime_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientElapsedTime_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_elapsed_time = 4;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_elapsed_time = 4;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientElapsedTimeFieldBuilder() {
       if (rpcClientElapsedTimeBuilder_ == null) {
         rpcClientElapsedTimeBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientElapsedTime(),
                 getParentForChildren(),
                 isClean());
@@ -2849,29 +1893,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientElapsedTimeBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientServerElapsedTime_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientServerElapsedTime_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientServerElapsedTimeBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientServerElapsedTimeBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
     public boolean hasRpcClientServerElapsedTime() {
       return rpcClientServerElapsedTimeBuilder_ != null || rpcClientServerElapsedTime_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientServerElapsedTime() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientServerElapsedTime() {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
-        return rpcClientServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientServerElapsedTime_;
+        return rpcClientServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientServerElapsedTime_;
       } else {
         return rpcClientServerElapsedTimeBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
-    public Builder setRpcClientServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -2885,10 +1929,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
     public Builder setRpcClientServerElapsedTime(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
         rpcClientServerElapsedTime_ = builderForValue.build();
         onChanged();
@@ -2899,13 +1943,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
-    public Builder mergeRpcClientServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
         if (rpcClientServerElapsedTime_ != null) {
           rpcClientServerElapsedTime_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientServerElapsedTime_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientServerElapsedTime_).mergeFrom(value).buildPartial();
         } else {
           rpcClientServerElapsedTime_ = value;
         }
@@ -2917,7 +1961,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
     public Builder clearRpcClientServerElapsedTime() {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
@@ -2931,33 +1975,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientServerElapsedTimeBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientServerElapsedTimeBuilder() {
       
       onChanged();
       return getRpcClientServerElapsedTimeFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientServerElapsedTimeOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientServerElapsedTimeOrBuilder() {
       if (rpcClientServerElapsedTimeBuilder_ != null) {
         return rpcClientServerElapsedTimeBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientServerElapsedTime_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientServerElapsedTime_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientServerElapsedTime_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_server_elapsed_time = 5;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_server_elapsed_time = 5;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientServerElapsedTimeFieldBuilder() {
       if (rpcClientServerElapsedTimeBuilder_ == null) {
         rpcClientServerElapsedTimeBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientServerElapsedTime(),
                 getParentForChildren(),
                 isClean());
@@ -2966,29 +2010,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientServerElapsedTimeBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientRequestBytes_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientRequestBytes_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientRequestBytesBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientRequestBytesBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
     public boolean hasRpcClientRequestBytes() {
       return rpcClientRequestBytesBuilder_ != null || rpcClientRequestBytes_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientRequestBytes() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientRequestBytes() {
       if (rpcClientRequestBytesBuilder_ == null) {
-        return rpcClientRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestBytes_;
+        return rpcClientRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestBytes_;
       } else {
         return rpcClientRequestBytesBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
-    public Builder setRpcClientRequestBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientRequestBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientRequestBytesBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3002,10 +2046,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
     public Builder setRpcClientRequestBytes(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientRequestBytesBuilder_ == null) {
         rpcClientRequestBytes_ = builderForValue.build();
         onChanged();
@@ -3016,13 +2060,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
-    public Builder mergeRpcClientRequestBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientRequestBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientRequestBytesBuilder_ == null) {
         if (rpcClientRequestBytes_ != null) {
           rpcClientRequestBytes_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientRequestBytes_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientRequestBytes_).mergeFrom(value).buildPartial();
         } else {
           rpcClientRequestBytes_ = value;
         }
@@ -3034,7 +2078,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
     public Builder clearRpcClientRequestBytes() {
       if (rpcClientRequestBytesBuilder_ == null) {
@@ -3048,33 +2092,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientRequestBytesBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientRequestBytesBuilder() {
       
       onChanged();
       return getRpcClientRequestBytesFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientRequestBytesOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientRequestBytesOrBuilder() {
       if (rpcClientRequestBytesBuilder_ != null) {
         return rpcClientRequestBytesBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientRequestBytes_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestBytes_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestBytes_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_bytes = 6;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_bytes = 6;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientRequestBytesFieldBuilder() {
       if (rpcClientRequestBytesBuilder_ == null) {
         rpcClientRequestBytesBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientRequestBytes(),
                 getParentForChildren(),
                 isClean());
@@ -3083,29 +2127,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientRequestBytesBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientResponseBytes_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientResponseBytes_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientResponseBytesBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientResponseBytesBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
     public boolean hasRpcClientResponseBytes() {
       return rpcClientResponseBytesBuilder_ != null || rpcClientResponseBytes_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientResponseBytes() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientResponseBytes() {
       if (rpcClientResponseBytesBuilder_ == null) {
-        return rpcClientResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseBytes_;
+        return rpcClientResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseBytes_;
       } else {
         return rpcClientResponseBytesBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
-    public Builder setRpcClientResponseBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientResponseBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientResponseBytesBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3119,10 +2163,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
     public Builder setRpcClientResponseBytes(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientResponseBytesBuilder_ == null) {
         rpcClientResponseBytes_ = builderForValue.build();
         onChanged();
@@ -3133,13 +2177,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
-    public Builder mergeRpcClientResponseBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientResponseBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientResponseBytesBuilder_ == null) {
         if (rpcClientResponseBytes_ != null) {
           rpcClientResponseBytes_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientResponseBytes_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientResponseBytes_).mergeFrom(value).buildPartial();
         } else {
           rpcClientResponseBytes_ = value;
         }
@@ -3151,7 +2195,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
     public Builder clearRpcClientResponseBytes() {
       if (rpcClientResponseBytesBuilder_ == null) {
@@ -3165,33 +2209,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientResponseBytesBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientResponseBytesBuilder() {
       
       onChanged();
       return getRpcClientResponseBytesFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientResponseBytesOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientResponseBytesOrBuilder() {
       if (rpcClientResponseBytesBuilder_ != null) {
         return rpcClientResponseBytesBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientResponseBytes_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseBytes_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseBytes_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_bytes = 7;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_bytes = 7;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientResponseBytesFieldBuilder() {
       if (rpcClientResponseBytesBuilder_ == null) {
         rpcClientResponseBytesBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientResponseBytes(),
                 getParentForChildren(),
                 isClean());
@@ -3200,29 +2244,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientResponseBytesBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientRequestCount_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientRequestCount_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientRequestCountBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientRequestCountBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
     public boolean hasRpcClientRequestCount() {
       return rpcClientRequestCountBuilder_ != null || rpcClientRequestCount_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientRequestCount() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientRequestCount() {
       if (rpcClientRequestCountBuilder_ == null) {
-        return rpcClientRequestCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestCount_;
+        return rpcClientRequestCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestCount_;
       } else {
         return rpcClientRequestCountBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
-    public Builder setRpcClientRequestCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientRequestCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientRequestCountBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3236,10 +2280,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
     public Builder setRpcClientRequestCount(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientRequestCountBuilder_ == null) {
         rpcClientRequestCount_ = builderForValue.build();
         onChanged();
@@ -3250,13 +2294,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
-    public Builder mergeRpcClientRequestCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientRequestCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientRequestCountBuilder_ == null) {
         if (rpcClientRequestCount_ != null) {
           rpcClientRequestCount_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientRequestCount_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientRequestCount_).mergeFrom(value).buildPartial();
         } else {
           rpcClientRequestCount_ = value;
         }
@@ -3268,7 +2312,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
     public Builder clearRpcClientRequestCount() {
       if (rpcClientRequestCountBuilder_ == null) {
@@ -3282,33 +2326,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientRequestCountBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientRequestCountBuilder() {
       
       onChanged();
       return getRpcClientRequestCountFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientRequestCountOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientRequestCountOrBuilder() {
       if (rpcClientRequestCountBuilder_ != null) {
         return rpcClientRequestCountBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientRequestCount_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientRequestCount_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientRequestCount_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_request_count = 8;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_request_count = 8;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientRequestCountFieldBuilder() {
       if (rpcClientRequestCountBuilder_ == null) {
         rpcClientRequestCountBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientRequestCount(),
                 getParentForChildren(),
                 isClean());
@@ -3317,29 +2361,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientRequestCountBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcClientResponseCount_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcClientResponseCount_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcClientResponseCountBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcClientResponseCountBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
     public boolean hasRpcClientResponseCount() {
       return rpcClientResponseCountBuilder_ != null || rpcClientResponseCount_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcClientResponseCount() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcClientResponseCount() {
       if (rpcClientResponseCountBuilder_ == null) {
-        return rpcClientResponseCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseCount_;
+        return rpcClientResponseCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseCount_;
       } else {
         return rpcClientResponseCountBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
-    public Builder setRpcClientResponseCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcClientResponseCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientResponseCountBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3353,10 +2397,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
     public Builder setRpcClientResponseCount(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcClientResponseCountBuilder_ == null) {
         rpcClientResponseCount_ = builderForValue.build();
         onChanged();
@@ -3367,13 +2411,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
-    public Builder mergeRpcClientResponseCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcClientResponseCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcClientResponseCountBuilder_ == null) {
         if (rpcClientResponseCount_ != null) {
           rpcClientResponseCount_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcClientResponseCount_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcClientResponseCount_).mergeFrom(value).buildPartial();
         } else {
           rpcClientResponseCount_ = value;
         }
@@ -3385,7 +2429,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
     public Builder clearRpcClientResponseCount() {
       if (rpcClientResponseCountBuilder_ == null) {
@@ -3399,33 +2443,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcClientResponseCountBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcClientResponseCountBuilder() {
       
       onChanged();
       return getRpcClientResponseCountFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcClientResponseCountOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcClientResponseCountOrBuilder() {
       if (rpcClientResponseCountBuilder_ != null) {
         return rpcClientResponseCountBuilder_.getMessageOrBuilder();
       } else {
         return rpcClientResponseCount_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcClientResponseCount_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcClientResponseCount_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_client_response_count = 9;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_client_response_count = 9;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcClientResponseCountFieldBuilder() {
       if (rpcClientResponseCountBuilder_ == null) {
         rpcClientResponseCountBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcClientResponseCount(),
                 getParentForChildren(),
                 isClean());
@@ -3434,29 +2478,29 @@ public  final class CanonicalRpcStats extends
       return rpcClientResponseCountBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerErrors_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerErrors_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerErrorsBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerErrorsBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
     public boolean hasRpcServerErrors() {
       return rpcServerErrorsBuilder_ != null || rpcServerErrors_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerErrors() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerErrors() {
       if (rpcServerErrorsBuilder_ == null) {
-        return rpcServerErrors_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerErrors_;
+        return rpcServerErrors_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerErrors_;
       } else {
         return rpcServerErrorsBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
-    public Builder setRpcServerErrors(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerErrors(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerErrorsBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3470,10 +2514,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
     public Builder setRpcServerErrors(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerErrorsBuilder_ == null) {
         rpcServerErrors_ = builderForValue.build();
         onChanged();
@@ -3484,13 +2528,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
-    public Builder mergeRpcServerErrors(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerErrors(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerErrorsBuilder_ == null) {
         if (rpcServerErrors_ != null) {
           rpcServerErrors_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerErrors_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerErrors_).mergeFrom(value).buildPartial();
         } else {
           rpcServerErrors_ = value;
         }
@@ -3502,7 +2546,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
     public Builder clearRpcServerErrors() {
       if (rpcServerErrorsBuilder_ == null) {
@@ -3516,33 +2560,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerErrorsBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerErrorsBuilder() {
       
       onChanged();
       return getRpcServerErrorsFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerErrorsOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerErrorsOrBuilder() {
       if (rpcServerErrorsBuilder_ != null) {
         return rpcServerErrorsBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerErrors_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerErrors_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerErrors_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_errors = 10;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_errors = 10;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerErrorsFieldBuilder() {
       if (rpcServerErrorsBuilder_ == null) {
         rpcServerErrorsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerErrors(),
                 getParentForChildren(),
                 isClean());
@@ -3551,29 +2595,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerErrorsBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerCompletedRpcs_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerCompletedRpcs_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerCompletedRpcsBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerCompletedRpcsBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
     public boolean hasRpcServerCompletedRpcs() {
       return rpcServerCompletedRpcsBuilder_ != null || rpcServerCompletedRpcs_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerCompletedRpcs() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerCompletedRpcs() {
       if (rpcServerCompletedRpcsBuilder_ == null) {
-        return rpcServerCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerCompletedRpcs_;
+        return rpcServerCompletedRpcs_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerCompletedRpcs_;
       } else {
         return rpcServerCompletedRpcsBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
-    public Builder setRpcServerCompletedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerCompletedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerCompletedRpcsBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3587,10 +2631,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
     public Builder setRpcServerCompletedRpcs(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerCompletedRpcsBuilder_ == null) {
         rpcServerCompletedRpcs_ = builderForValue.build();
         onChanged();
@@ -3601,13 +2645,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
-    public Builder mergeRpcServerCompletedRpcs(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerCompletedRpcs(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerCompletedRpcsBuilder_ == null) {
         if (rpcServerCompletedRpcs_ != null) {
           rpcServerCompletedRpcs_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerCompletedRpcs_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerCompletedRpcs_).mergeFrom(value).buildPartial();
         } else {
           rpcServerCompletedRpcs_ = value;
         }
@@ -3619,7 +2663,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
     public Builder clearRpcServerCompletedRpcs() {
       if (rpcServerCompletedRpcsBuilder_ == null) {
@@ -3633,33 +2677,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerCompletedRpcsBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerCompletedRpcsBuilder() {
       
       onChanged();
       return getRpcServerCompletedRpcsFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerCompletedRpcsOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerCompletedRpcsOrBuilder() {
       if (rpcServerCompletedRpcsBuilder_ != null) {
         return rpcServerCompletedRpcsBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerCompletedRpcs_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerCompletedRpcs_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerCompletedRpcs_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_completed_rpcs = 11;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_completed_rpcs = 11;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerCompletedRpcsFieldBuilder() {
       if (rpcServerCompletedRpcsBuilder_ == null) {
         rpcServerCompletedRpcsBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerCompletedRpcs(),
                 getParentForChildren(),
                 isClean());
@@ -3668,29 +2712,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerCompletedRpcsBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerServerElapsedTime_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerServerElapsedTime_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerServerElapsedTimeBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerServerElapsedTimeBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
     public boolean hasRpcServerServerElapsedTime() {
       return rpcServerServerElapsedTimeBuilder_ != null || rpcServerServerElapsedTime_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerServerElapsedTime() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerServerElapsedTime() {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
-        return rpcServerServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerServerElapsedTime_;
+        return rpcServerServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerServerElapsedTime_;
       } else {
         return rpcServerServerElapsedTimeBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
-    public Builder setRpcServerServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3704,10 +2748,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
     public Builder setRpcServerServerElapsedTime(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
         rpcServerServerElapsedTime_ = builderForValue.build();
         onChanged();
@@ -3718,13 +2762,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
-    public Builder mergeRpcServerServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
         if (rpcServerServerElapsedTime_ != null) {
           rpcServerServerElapsedTime_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerServerElapsedTime_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerServerElapsedTime_).mergeFrom(value).buildPartial();
         } else {
           rpcServerServerElapsedTime_ = value;
         }
@@ -3736,7 +2780,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
     public Builder clearRpcServerServerElapsedTime() {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
@@ -3750,33 +2794,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerServerElapsedTimeBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerServerElapsedTimeBuilder() {
       
       onChanged();
       return getRpcServerServerElapsedTimeFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerServerElapsedTimeOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerServerElapsedTimeOrBuilder() {
       if (rpcServerServerElapsedTimeBuilder_ != null) {
         return rpcServerServerElapsedTimeBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerServerElapsedTime_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerServerElapsedTime_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerServerElapsedTime_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_server_elapsed_time = 12;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_server_elapsed_time = 12;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerServerElapsedTimeFieldBuilder() {
       if (rpcServerServerElapsedTimeBuilder_ == null) {
         rpcServerServerElapsedTimeBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerServerElapsedTime(),
                 getParentForChildren(),
                 isClean());
@@ -3785,29 +2829,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerServerElapsedTimeBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerRequestBytes_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerRequestBytes_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerRequestBytesBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerRequestBytesBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
     public boolean hasRpcServerRequestBytes() {
       return rpcServerRequestBytesBuilder_ != null || rpcServerRequestBytes_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerRequestBytes() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerRequestBytes() {
       if (rpcServerRequestBytesBuilder_ == null) {
-        return rpcServerRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestBytes_;
+        return rpcServerRequestBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestBytes_;
       } else {
         return rpcServerRequestBytesBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
-    public Builder setRpcServerRequestBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerRequestBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerRequestBytesBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3821,10 +2865,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
     public Builder setRpcServerRequestBytes(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerRequestBytesBuilder_ == null) {
         rpcServerRequestBytes_ = builderForValue.build();
         onChanged();
@@ -3835,13 +2879,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
-    public Builder mergeRpcServerRequestBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerRequestBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerRequestBytesBuilder_ == null) {
         if (rpcServerRequestBytes_ != null) {
           rpcServerRequestBytes_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerRequestBytes_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerRequestBytes_).mergeFrom(value).buildPartial();
         } else {
           rpcServerRequestBytes_ = value;
         }
@@ -3853,7 +2897,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
     public Builder clearRpcServerRequestBytes() {
       if (rpcServerRequestBytesBuilder_ == null) {
@@ -3867,33 +2911,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerRequestBytesBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerRequestBytesBuilder() {
       
       onChanged();
       return getRpcServerRequestBytesFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerRequestBytesOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerRequestBytesOrBuilder() {
       if (rpcServerRequestBytesBuilder_ != null) {
         return rpcServerRequestBytesBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerRequestBytes_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestBytes_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestBytes_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_bytes = 13;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_bytes = 13;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerRequestBytesFieldBuilder() {
       if (rpcServerRequestBytesBuilder_ == null) {
         rpcServerRequestBytesBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerRequestBytes(),
                 getParentForChildren(),
                 isClean());
@@ -3902,29 +2946,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerRequestBytesBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerResponseBytes_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerResponseBytes_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerResponseBytesBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerResponseBytesBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
     public boolean hasRpcServerResponseBytes() {
       return rpcServerResponseBytesBuilder_ != null || rpcServerResponseBytes_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerResponseBytes() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerResponseBytes() {
       if (rpcServerResponseBytesBuilder_ == null) {
-        return rpcServerResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseBytes_;
+        return rpcServerResponseBytes_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseBytes_;
       } else {
         return rpcServerResponseBytesBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
-    public Builder setRpcServerResponseBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerResponseBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerResponseBytesBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -3938,10 +2982,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
     public Builder setRpcServerResponseBytes(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerResponseBytesBuilder_ == null) {
         rpcServerResponseBytes_ = builderForValue.build();
         onChanged();
@@ -3952,13 +2996,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
-    public Builder mergeRpcServerResponseBytes(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerResponseBytes(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerResponseBytesBuilder_ == null) {
         if (rpcServerResponseBytes_ != null) {
           rpcServerResponseBytes_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerResponseBytes_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerResponseBytes_).mergeFrom(value).buildPartial();
         } else {
           rpcServerResponseBytes_ = value;
         }
@@ -3970,7 +3014,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
     public Builder clearRpcServerResponseBytes() {
       if (rpcServerResponseBytesBuilder_ == null) {
@@ -3984,33 +3028,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerResponseBytesBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerResponseBytesBuilder() {
       
       onChanged();
       return getRpcServerResponseBytesFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerResponseBytesOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerResponseBytesOrBuilder() {
       if (rpcServerResponseBytesBuilder_ != null) {
         return rpcServerResponseBytesBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerResponseBytes_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseBytes_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseBytes_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_bytes = 14;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_bytes = 14;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerResponseBytesFieldBuilder() {
       if (rpcServerResponseBytesBuilder_ == null) {
         rpcServerResponseBytesBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerResponseBytes(),
                 getParentForChildren(),
                 isClean());
@@ -4019,29 +3063,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerResponseBytesBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerRequestCount_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerRequestCount_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerRequestCountBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerRequestCountBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
     public boolean hasRpcServerRequestCount() {
       return rpcServerRequestCountBuilder_ != null || rpcServerRequestCount_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerRequestCount() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerRequestCount() {
       if (rpcServerRequestCountBuilder_ == null) {
-        return rpcServerRequestCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestCount_;
+        return rpcServerRequestCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestCount_;
       } else {
         return rpcServerRequestCountBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
-    public Builder setRpcServerRequestCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerRequestCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerRequestCountBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -4055,10 +3099,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
     public Builder setRpcServerRequestCount(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerRequestCountBuilder_ == null) {
         rpcServerRequestCount_ = builderForValue.build();
         onChanged();
@@ -4069,13 +3113,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
-    public Builder mergeRpcServerRequestCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerRequestCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerRequestCountBuilder_ == null) {
         if (rpcServerRequestCount_ != null) {
           rpcServerRequestCount_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerRequestCount_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerRequestCount_).mergeFrom(value).buildPartial();
         } else {
           rpcServerRequestCount_ = value;
         }
@@ -4087,7 +3131,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
     public Builder clearRpcServerRequestCount() {
       if (rpcServerRequestCountBuilder_ == null) {
@@ -4101,33 +3145,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerRequestCountBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerRequestCountBuilder() {
       
       onChanged();
       return getRpcServerRequestCountFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerRequestCountOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerRequestCountOrBuilder() {
       if (rpcServerRequestCountBuilder_ != null) {
         return rpcServerRequestCountBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerRequestCount_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerRequestCount_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerRequestCount_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_request_count = 15;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_request_count = 15;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerRequestCountFieldBuilder() {
       if (rpcServerRequestCountBuilder_ == null) {
         rpcServerRequestCountBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerRequestCount(),
                 getParentForChildren(),
                 isClean());
@@ -4136,29 +3180,29 @@ public  final class CanonicalRpcStats extends
       return rpcServerRequestCountBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerResponseCount_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerResponseCount_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerResponseCountBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerResponseCountBuilder_;
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
     public boolean hasRpcServerResponseCount() {
       return rpcServerResponseCountBuilder_ != null || rpcServerResponseCount_ != null;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerResponseCount() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerResponseCount() {
       if (rpcServerResponseCountBuilder_ == null) {
-        return rpcServerResponseCount_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseCount_;
+        return rpcServerResponseCount_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseCount_;
       } else {
         return rpcServerResponseCountBuilder_.getMessage();
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
-    public Builder setRpcServerResponseCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerResponseCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerResponseCountBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -4172,10 +3216,10 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
     public Builder setRpcServerResponseCount(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerResponseCountBuilder_ == null) {
         rpcServerResponseCount_ = builderForValue.build();
         onChanged();
@@ -4186,13 +3230,13 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
-    public Builder mergeRpcServerResponseCount(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerResponseCount(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerResponseCountBuilder_ == null) {
         if (rpcServerResponseCount_ != null) {
           rpcServerResponseCount_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerResponseCount_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerResponseCount_).mergeFrom(value).buildPartial();
         } else {
           rpcServerResponseCount_ = value;
         }
@@ -4204,7 +3248,7 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
     public Builder clearRpcServerResponseCount() {
       if (rpcServerResponseCountBuilder_ == null) {
@@ -4218,33 +3262,33 @@ public  final class CanonicalRpcStats extends
       return this;
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerResponseCountBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerResponseCountBuilder() {
       
       onChanged();
       return getRpcServerResponseCountFieldBuilder().getBuilder();
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerResponseCountOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerResponseCountOrBuilder() {
       if (rpcServerResponseCountBuilder_ != null) {
         return rpcServerResponseCountBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerResponseCount_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerResponseCount_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerResponseCount_;
       }
     }
     /**
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_response_count = 16;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_response_count = 16;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerResponseCountFieldBuilder() {
       if (rpcServerResponseCountBuilder_ == null) {
         rpcServerResponseCountBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerResponseCount(),
                 getParentForChildren(),
                 isClean());
@@ -4253,15 +3297,15 @@ public  final class CanonicalRpcStats extends
       return rpcServerResponseCountBuilder_;
     }
 
-    private io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpcServerElapsedTime_ = null;
+    private io.grpc.instrumentation.v1alpha.StatsResponse rpcServerElapsedTime_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> rpcServerElapsedTimeBuilder_;
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> rpcServerElapsedTimeBuilder_;
     /**
      * <pre>
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
     public boolean hasRpcServerElapsedTime() {
       return rpcServerElapsedTimeBuilder_ != null || rpcServerElapsedTime_ != null;
@@ -4271,11 +3315,11 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View getRpcServerElapsedTime() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse getRpcServerElapsedTime() {
       if (rpcServerElapsedTimeBuilder_ == null) {
-        return rpcServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerElapsedTime_;
+        return rpcServerElapsedTime_ == null ? io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerElapsedTime_;
       } else {
         return rpcServerElapsedTimeBuilder_.getMessage();
       }
@@ -4285,9 +3329,9 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
-    public Builder setRpcServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder setRpcServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerElapsedTimeBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -4305,10 +3349,10 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
     public Builder setRpcServerElapsedTime(
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder builderForValue) {
+        io.grpc.instrumentation.v1alpha.StatsResponse.Builder builderForValue) {
       if (rpcServerElapsedTimeBuilder_ == null) {
         rpcServerElapsedTime_ = builderForValue.build();
         onChanged();
@@ -4323,13 +3367,13 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
-    public Builder mergeRpcServerElapsedTime(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View value) {
+    public Builder mergeRpcServerElapsedTime(io.grpc.instrumentation.v1alpha.StatsResponse value) {
       if (rpcServerElapsedTimeBuilder_ == null) {
         if (rpcServerElapsedTime_ != null) {
           rpcServerElapsedTime_ =
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.newBuilder(rpcServerElapsedTime_).mergeFrom(value).buildPartial();
+            io.grpc.instrumentation.v1alpha.StatsResponse.newBuilder(rpcServerElapsedTime_).mergeFrom(value).buildPartial();
         } else {
           rpcServerElapsedTime_ = value;
         }
@@ -4345,7 +3389,7 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
     public Builder clearRpcServerElapsedTime() {
       if (rpcServerElapsedTimeBuilder_ == null) {
@@ -4363,9 +3407,9 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder getRpcServerElapsedTimeBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponse.Builder getRpcServerElapsedTimeBuilder() {
       
       onChanged();
       return getRpcServerElapsedTimeFieldBuilder().getBuilder();
@@ -4375,14 +3419,14 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
-    public io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder getRpcServerElapsedTimeOrBuilder() {
+    public io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder getRpcServerElapsedTimeOrBuilder() {
       if (rpcServerElapsedTimeBuilder_ != null) {
         return rpcServerElapsedTimeBuilder_.getMessageOrBuilder();
       } else {
         return rpcServerElapsedTime_ == null ?
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.getDefaultInstance() : rpcServerElapsedTime_;
+            io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance() : rpcServerElapsedTime_;
       }
     }
     /**
@@ -4390,14 +3434,14 @@ public  final class CanonicalRpcStats extends
      *TODO(ericgribkoff) Add minute-hour interval stats.
      * </pre>
      *
-     * <code>.grpc.instrumentation.v1alpha.CanonicalRpcStats.View rpc_server_elapsed_time = 17;</code>
+     * <code>.grpc.instrumentation.v1alpha.StatsResponse rpc_server_elapsed_time = 17;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder> 
+        io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder> 
         getRpcServerElapsedTimeFieldBuilder() {
       if (rpcServerElapsedTimeBuilder_ == null) {
         rpcServerElapsedTimeBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.View.Builder, io.grpc.instrumentation.v1alpha.CanonicalRpcStats.ViewOrBuilder>(
+            io.grpc.instrumentation.v1alpha.StatsResponse, io.grpc.instrumentation.v1alpha.StatsResponse.Builder, io.grpc.instrumentation.v1alpha.StatsResponseOrBuilder>(
                 getRpcServerElapsedTime(),
                 getParentForChildren(),
                 isClean());
