@@ -39,6 +39,7 @@ package grpclb
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -105,6 +106,7 @@ type balancer struct {
 	waitCh   chan struct{}
 	done     bool
 	expTimer *time.Timer
+	rand     *rand.Rand
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo) error {
@@ -175,6 +177,11 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 			select {
 			case <-ch:
 			default:
+			}
+			// Pick a random one from the list, instead of always using the first one.
+			if l := len(b.rbs); l > 1 {
+				tmpIdx := b.rand.Intn(l - 1)
+				b.rbs[0], b.rbs[tmpIdx] = b.rbs[tmpIdx], b.rbs[0]
 			}
 			ch <- b.rbs[0]
 		}
@@ -310,6 +317,7 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 }
 
 func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
+	b.rand = rand.New(rand.NewSource(time.Now().Unix()))
 	// TODO: Fall back to the basic direct connection if there is no name resolver.
 	if b.r == nil {
 		return errors.New("there is no name resolver installed")
