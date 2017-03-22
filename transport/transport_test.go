@@ -350,7 +350,7 @@ func TestMaxConnectionIdleNegative(t *testing.T) {
 
 }
 
-// TestMaxConnectinoAge tests that a server will send GoAway after a duration of MaxConnectionAge.
+// TestMaxConnectionAge tests that a server will send GoAway after a duration of MaxConnectionAge.
 func TestMaxConnectionAge(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
