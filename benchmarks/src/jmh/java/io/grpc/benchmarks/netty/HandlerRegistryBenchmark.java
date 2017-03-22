@@ -37,7 +37,6 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerServiceDefinition;
-import io.grpc.ServiceDescriptor;
 import io.grpc.testing.TestMethodDescriptors;
 import io.grpc.util.MutableHandlerRegistry;
 import java.util.ArrayList;
@@ -83,8 +82,7 @@ public class HandlerRegistryBenchmark {
     fullMethodNames = new ArrayList<String>(serviceCount * methodCountPerService);
     for (int serviceIndex = 0; serviceIndex < serviceCount; ++serviceIndex) {
       String serviceName = randomString();
-      ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(
-          new ServiceDescriptor(serviceName));
+      ServerServiceDefinition.Builder serviceBuilder = ServerServiceDefinition.builder(serviceName);
       for (int methodIndex = 0; methodIndex < methodCountPerService; ++methodIndex) {
         String methodName = randomString();
 
