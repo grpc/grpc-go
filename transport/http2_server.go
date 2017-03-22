@@ -975,13 +975,14 @@ func (t *http2Server) Drain() {
 	t.controlBuf.put(&goAway{})
 }
 
+var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func getJitter(v time.Duration) time.Duration {
 	if v == infinity {
 		return 0
 	}
-	rand.Seed(time.Now().UnixNano())
 	// Generate a jitter between +/- 10% of the value.
 	r := int64(v / 10)
-	j := rand.Int63n(2*r) - r
+	j := rgen.Int63n(2*r) - r
 	return time.Duration(j)
 }
