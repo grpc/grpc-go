@@ -363,15 +363,15 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
-		if err != nil && cs.statsHandler != nil {
-			// Only generate End if err != nil.
-			// If err == nil, it's not the last RecvMsg.
-			// The last RecvMsg gets either an RPC error or io.EOF.
+		// if this is a client stream, there will be no more messages coming through
+		// to produce an EOF error. Therefore, we need to check whether  the stream is
+		// closed and generate the End event.
+		if cs.statsHandler != nil && (err != nil || (cs.closed && !cs.desc.ServerStreams)) {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
 			}
-			if err != io.EOF {
+			if err != nil && err != io.EOF {
 				end.Error = toRPCErr(err)
 			}
 			cs.statsHandler.HandleRPC(cs.statsCtx, end)

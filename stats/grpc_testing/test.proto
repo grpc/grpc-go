@@ -20,4 +20,10 @@ service TestService {
   // As one request could lead to multiple responses, this interface
   // demonstrates the idea of full duplexing.
   rpc FullDuplexCall(stream SimpleRequest) returns (stream SimpleResponse);
+
+  // Client stream 
+  rpc ClientStreamCall(stream SimpleRequest) returns (SimpleResponse);
+
+  // Server stream
+  rpc ServerStreamCall(SimpleRequest) returns (stream SimpleResponse);
 }
