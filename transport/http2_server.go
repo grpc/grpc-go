@@ -41,6 +41,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	//"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -85,6 +86,8 @@ type http2Server struct {
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *recvBuffer
 	fc         *inFlow
+	// bdp estimates the flow control window dynamically.
+	bdp *bdpEstimator
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 
@@ -102,24 +105,24 @@ type http2Server struct {
 func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
-	var settings []http2.Setting
+	var initsettings []http2.Setting
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
 	maxStreams := config.MaxStreams
 	if maxStreams == 0 {
 		maxStreams = math.MaxUint32
 	} else {
-		settings = append(settings, http2.Setting{
+		initsettings = append(initsettings, http2.Setting{
 			ID:  http2.SettingMaxConcurrentStreams,
 			Val: maxStreams,
 		})
 	}
 	if initialWindowSize != defaultWindowSize {
-		settings = append(settings, http2.Setting{
+		initsettings = append(initsettings, http2.Setting{
 			ID:  http2.SettingInitialWindowSize,
 			Val: uint32(initialWindowSize)})
 	}
-	if err := framer.writeSettings(true, settings...); err != nil {
+	if err := framer.writeSettings(true, initsettings...); err != nil {
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
@@ -149,6 +152,24 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		activeStreams:   make(map[uint32]*Stream),
 		streamSendQuota: defaultWindowSize,
 		stats:           config.StatsHandler,
+	}
+	t.bdp = &bdpEstimator{
+		p: &ping{
+			data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+		},
+		estimate:  initialConnWindowSize,
+		maxWindow: maxWindowSize,
+		send: func(p *ping) {
+			t.controlBuf.put(p)
+		},
+		updateConnWindow: func(delta uint32) {
+			// Update the limit on fc.
+			t.fc.mu.Lock()
+			t.fc.limit += delta
+			t.fc.mu.Unlock()
+			// Send a window update on connection.
+			t.controlBuf.put(&windowUpdate{0, delta})
+		},
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -305,6 +326,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 
 	for {
 		frame, err := t.framer.readFrame()
+		//time.Sleep(160 * time.Millisecond)
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				t.mu.Lock()
@@ -387,6 +409,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		t.Close()
 		return
 	}
+	t.bdp.add(size)
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
@@ -465,6 +488,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
+		t.bdp.calculate(f.Data)
 		return
 	}
 	pingAck := &ping{ack: true}
