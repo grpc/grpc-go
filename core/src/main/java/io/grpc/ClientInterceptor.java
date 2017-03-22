@@ -53,6 +53,10 @@ public interface ClientInterceptor {
    * around the result of {@code next.newCall()}, whereas a simpler implementation may just modify
    * the header metadata prior to returning the result of {@code next.newCall()}.
    *
+   * <p>{@code next.newCall()} <strong>must not</strong> be called under a different {@link Context}
+   * other than the current {@code Context}. The outcome of such usage is undefined and may cause
+   * memory leak due to unbounded chain of {@code Context}s.
+   *
    * @param method the remote method to be called.
    * @param callOptions the runtime options to be applied to this call.
    * @param next the channel which is being intercepted.
