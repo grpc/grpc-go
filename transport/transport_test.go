@@ -626,9 +626,9 @@ func TestMaxStreams(t *testing.T) {
 			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
 		}
 		cc.mu.Lock()
-		// cc.streamsQuota should be initialized once receiving the 1st setting frame from
-		// the server.
-		if cc.streamsQuota != nil {
+		// cc.maxStreams should be equal to 1 after having received settings frame from
+		// server.
+		if cc.maxStreams == 1 {
 			cc.mu.Unlock()
 			select {
 			case <-cc.streamsQuota.acquire():
