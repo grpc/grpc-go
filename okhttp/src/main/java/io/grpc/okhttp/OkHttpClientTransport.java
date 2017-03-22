@@ -605,11 +605,6 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       goAwayStatus = Status.UNAVAILABLE.withDescription("Transport stopped");
       listener.transportShutdown(goAwayStatus);
       stopIfNecessary();
-      if (keepAliveManager != null) {
-        keepAliveManager.onTransportShutdown();
-        // KeepAliveManager should stop using the scheduler after onTransportShutdown gets called.
-        scheduler = SharedResourceHolder.release(TIMER_SERVICE, scheduler);
-      }
     }
   }
 
@@ -746,7 +741,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
    * When the transport is in goAway state, we should stop it once all active streams finish.
    */
   @GuardedBy("lock")
-  void stopIfNecessary() {
+  private void stopIfNecessary() {
     if (!(goAwayStatus != null && streams.isEmpty() && pendingStreams.isEmpty())) {
       return;
     }
@@ -754,6 +749,12 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       return;
     }
     stopped = true;
+
+    if (keepAliveManager != null) {
+      keepAliveManager.onTransportTermination();
+      // KeepAliveManager should stop using the scheduler after onTransportTermination gets called.
+      scheduler = SharedResourceHolder.release(TIMER_SERVICE, scheduler);
+    }
 
     if (ping != null) {
       ping.failed(getPingFailure());

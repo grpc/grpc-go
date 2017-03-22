@@ -265,7 +265,7 @@ public final class KeepAliveManagerTest {
 
   @Test
   public void transportGoesIdle_doesntCauseIdleWhenEnabled() {
-    keepAliveManager.onTransportShutdown();
+    keepAliveManager.onTransportTermination();
     keepAliveManager = new KeepAliveManager(transport, scheduler, ticker, 1000, 2000, true);
     keepAliveManager.onTransportStarted();
 
@@ -368,7 +368,7 @@ public final class KeepAliveManagerTest {
     verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class),
         isA(TimeUnit.class));
     // Transport is shutting down.
-    keepAliveManager.onTransportShutdown();
+    keepAliveManager.onTransportTermination();
     // Ping future should have been cancelled.
     verify(pingFuture).cancel(isA(Boolean.class));
   }
@@ -394,7 +394,7 @@ public final class KeepAliveManagerTest {
         isA(TimeUnit.class));
 
     // Transport is shutting down.
-    keepAliveManager.onTransportShutdown();
+    keepAliveManager.onTransportTermination();
     // Shutdown task has been cancelled.
     verify(shutdownFuture).cancel(isA(Boolean.class));
 

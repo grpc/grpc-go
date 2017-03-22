@@ -334,7 +334,7 @@ class NettyClientHandler extends AbstractNettyHandler {
       // Close any open streams
       super.channelInactive(ctx);
       if (keepAliveManager != null) {
-        keepAliveManager.onTransportShutdown();
+        keepAliveManager.onTransportTermination();
       }
     }
   }

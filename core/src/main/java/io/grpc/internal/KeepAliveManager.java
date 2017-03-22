@@ -220,9 +220,9 @@ public class KeepAliveManager {
   }
 
   /**
-   * Transport is shutting down. We no longer need to do keepalives.
+   * Transport is being terminated. We no longer need to do keepalives.
    */
-  public synchronized void onTransportShutdown() {
+  public synchronized void onTransportTermination() {
     if (state != State.DISCONNECTED) {
       state = State.DISCONNECTED;
       if (shutdownFuture != null) {

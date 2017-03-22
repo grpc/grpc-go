@@ -366,7 +366,7 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     handler().channelInactive(ctx());
     assertTrue(future.isDone());
     assertFalse(future.isSuccess());
-    verify(mockKeepAliveManager, times(1)).onTransportShutdown(); // channelInactive
+    verify(mockKeepAliveManager, times(1)).onTransportTermination(); // channelInactive
     verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
