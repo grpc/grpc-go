@@ -187,10 +187,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			return nil, connectionErrorf(temp, err, "transport: %v", err)
 		}
 	}
-	ua := primaryUA
-	if opts.UserAgent != "" {
-		ua = opts.UserAgent + " " + ua
-	}
 	kp := opts.KeepaliveParams
 	// Validate keepalive parameters.
 	if kp.Time == 0 {
@@ -203,7 +199,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	t := &http2Client{
 		ctx:        ctx,
 		target:     addr.Addr,
-		userAgent:  ua,
+		userAgent:  opts.UserAgent,
 		md:         addr.Metadata,
 		conn:       conn,
 		remoteAddr: conn.RemoteAddr(),
