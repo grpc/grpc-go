@@ -48,6 +48,7 @@ import java.util.List;
 public final class EquivalentAddressGroup {
 
   private final List<SocketAddress> addrs;
+  private final Attributes attrs;
 
   /**
    * {@link SocketAddress} docs say that the addresses are immutable, so we cache the hashCode.
@@ -55,20 +56,36 @@ public final class EquivalentAddressGroup {
   private final int hashCode;
 
   /**
-   * List constructor.
+   * List constructor without {@link Attributes}.
    */
   public EquivalentAddressGroup(List<SocketAddress> addrs) {
+    this(addrs, Attributes.EMPTY);
+  }
+
+  /**
+   * List constructor with {@link Attributes}.
+   */
+  public EquivalentAddressGroup(List<SocketAddress> addrs, Attributes attrs) {
     Preconditions.checkArgument(!addrs.isEmpty(), "addrs is empty");
     this.addrs = Collections.unmodifiableList(new ArrayList<SocketAddress>(addrs));
+    this.attrs = Preconditions.checkNotNull(attrs, "attrs");
+    // Attributes may contain mutable objects, which means Attributes' hashCode may change over
+    // time, thus we don't cache Attributes' hashCode.
     hashCode = this.addrs.hashCode();
   }
 
   /**
-   * Singleton constructor.
+   * Singleton constructor without Attributes.
    */
   public EquivalentAddressGroup(SocketAddress addr) {
-    this.addrs = Collections.singletonList(addr);
-    hashCode = addrs.hashCode();
+    this(addr, Attributes.EMPTY);
+  }
+
+  /**
+   * Singleton constructor with Attributes.
+   */
+  public EquivalentAddressGroup(SocketAddress addr, Attributes attrs) {
+    this(Collections.singletonList(addr), attrs);
   }
 
   /**
@@ -78,9 +95,16 @@ public final class EquivalentAddressGroup {
     return addrs;
   }
 
+  /**
+   * Returns the attributes.
+   */
+  public Attributes getAttributes() {
+    return attrs;
+  }
+
   @Override
   public String toString() {
-    return addrs.toString();
+    return "[addrs=" + addrs + ", attrs=" + attrs + "]";
   }
 
   @Override
@@ -89,6 +113,14 @@ public final class EquivalentAddressGroup {
     return hashCode;
   }
 
+  /**
+   * Returns true if the given object is also an {@link EquivalentAddressGroup} with an equal
+   * address list and equal attribute values.
+   *
+   * <p>Note that if the attributes include mutable values, it is possible for two objects to be
+   * considered equal at one point in time and not equal at another (due to concurrent mutation of
+   * attribute values).
+   */
   @Override
   public boolean equals(Object other) {
     if (!(other instanceof EquivalentAddressGroup)) {
@@ -103,6 +135,9 @@ public final class EquivalentAddressGroup {
       if (!addrs.get(i).equals(that.addrs.get(i))) {
         return false;
       }
+    }
+    if (!attrs.equals(that.attrs)) {
+      return false;
     }
     return true;
   }

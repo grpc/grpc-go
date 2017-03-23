@@ -47,8 +47,6 @@ import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
-import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -101,11 +99,10 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public void handleResolvedAddresses(
-        List<ResolvedServerInfoGroup> servers, Attributes attributes) {
+    public void handleResolvedAddressGroups(
+        List<EquivalentAddressGroup> servers, Attributes attributes) {
       Set<EquivalentAddressGroup> currentAddrs = subchannels.keySet();
-      Set<EquivalentAddressGroup> latestAddrs =
-          resolvedServerInfoGroupToEquivalentAddressGroup(servers);
+      Set<EquivalentAddressGroup> latestAddrs = stripAttrs(servers);
       Set<EquivalentAddressGroup> addedAddrs = setsDifference(latestAddrs, currentAddrs);
       Set<EquivalentAddressGroup> removedAddrs = setsDifference(currentAddrs, latestAddrs);
 
@@ -184,15 +181,13 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     /**
-     * Converts list of {@link ResolvedServerInfoGroup} to {@link EquivalentAddressGroup} set.
+     * Converts list of {@link EquivalentAddressGroup} to {@link EquivalentAddressGroup} set and
+     * remove all attributes.
      */
-    private static Set<EquivalentAddressGroup> resolvedServerInfoGroupToEquivalentAddressGroup(
-        List<ResolvedServerInfoGroup> groupList) {
+    private static Set<EquivalentAddressGroup> stripAttrs(List<EquivalentAddressGroup> groupList) {
       Set<EquivalentAddressGroup> addrs = new HashSet<EquivalentAddressGroup>();
-      for (ResolvedServerInfoGroup group : groupList) {
-        for (ResolvedServerInfo server : group.getResolvedServerInfoList()) {
-          addrs.add(new EquivalentAddressGroup(server.getAddress()));
-        }
+      for (EquivalentAddressGroup group : groupList) {
+        addrs.add(new EquivalentAddressGroup(group.getAddresses()));
       }
       return addrs;
     }

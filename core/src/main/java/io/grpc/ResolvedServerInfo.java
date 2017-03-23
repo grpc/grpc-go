@@ -39,7 +39,10 @@ import javax.annotation.concurrent.Immutable;
 
 /**
  * The information about a server from a {@link NameResolver}.
+ *
+ * @deprecated This class will be removed along with {@link ResolvedServerInfoGroup}.
  */
+@Deprecated
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @Immutable
 public final class ResolvedServerInfo {

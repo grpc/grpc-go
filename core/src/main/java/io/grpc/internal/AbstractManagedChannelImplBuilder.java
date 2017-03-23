@@ -43,14 +43,13 @@ import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
 import io.grpc.PickFirstBalancerFactory;
-import io.grpc.ResolvedServerInfo;
-import io.grpc.ResolvedServerInfoGroup;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -373,8 +372,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
         @Override
         public void start(final Listener listener) {
-          listener.onUpdate(Collections.singletonList(
-              ResolvedServerInfoGroup.builder().add(new ResolvedServerInfo(address)).build()),
+          listener.onAddresses(
+              Collections.singletonList(new EquivalentAddressGroup(address)),
               Attributes.EMPTY);
         }
 

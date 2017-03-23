@@ -34,15 +34,15 @@ package io.grpc.internal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
-import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,6 +53,9 @@ import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A DNS-based {@link NameResolver}.
+ *
+ * <p>Each {@code A} or {@code AAAA} record emits an {@link EquivalentAddressGroup} in the list
+ * passed to {@link NameResolver.Listener#onUpdate}
  *
  * @see DnsNameResolverFactory
  */
@@ -141,11 +144,9 @@ class DnsNameResolver extends NameResolver {
         }
         try {
           if (System.getenv("GRPC_PROXY_EXP") != null) {
-            ResolvedServerInfoGroup servers = ResolvedServerInfoGroup.builder()
-                .add(new ResolvedServerInfo(
-                    InetSocketAddress.createUnresolved(host, port), Attributes.EMPTY))
-                .build();
-            savedListener.onUpdate(Collections.singletonList(servers), Attributes.EMPTY);
+            EquivalentAddressGroup server =
+                new EquivalentAddressGroup(InetSocketAddress.createUnresolved(host, port));
+            savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
             return;
           }
 
@@ -165,13 +166,13 @@ class DnsNameResolver extends NameResolver {
             savedListener.onError(Status.UNAVAILABLE.withCause(e));
             return;
           }
-          ResolvedServerInfoGroup.Builder servers = ResolvedServerInfoGroup.builder();
+          // Each address forms an EAG
+          ArrayList<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
           for (int i = 0; i < inetAddrs.length; i++) {
             InetAddress inetAddr = inetAddrs[i];
-            servers.add(
-                new ResolvedServerInfo(new InetSocketAddress(inetAddr, port), Attributes.EMPTY));
+            servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
           }
-          savedListener.onUpdate(Collections.singletonList(servers.build()), Attributes.EMPTY);
+          savedListener.onAddresses(servers, Attributes.EMPTY);
         } finally {
           synchronized (DnsNameResolver.this) {
             resolving = false;

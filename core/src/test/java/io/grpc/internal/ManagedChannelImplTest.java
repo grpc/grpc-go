@@ -82,8 +82,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfo;
-import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
 import io.grpc.StringMarshaller;
@@ -140,7 +138,6 @@ public class ManagedChannelImplTest {
   private URI expectedUri;
   private final SocketAddress socketAddress = new SocketAddress() {};
   private final EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(socketAddress);
-  private final ResolvedServerInfo server = new ResolvedServerInfo(socketAddress, Attributes.EMPTY);
   private final FakeClock timer = new FakeClock();
   private final FakeClock executor = new FakeClock();
   private final FakeClock oobExecutor = new FakeClock();
@@ -515,8 +512,8 @@ public class ManagedChannelImplTest {
     createChannel(nameResolverFactory, NO_INTERCEPTOR);
 
     verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
-    doThrow(ex).when(mockLoadBalancer).handleResolvedAddresses(
-        Matchers.<List<ResolvedServerInfoGroup>>anyObject(), any(Attributes.class));
+    doThrow(ex).when(mockLoadBalancer).handleResolvedAddressGroups(
+        Matchers.<List<EquivalentAddressGroup>>anyObject(), any(Attributes.class));
 
     // NameResolver returns addresses.
     nameResolverFactory.allResolved();
@@ -561,16 +558,10 @@ public class ManagedChannelImplTest {
           return "badAddress";
         }
       };
-    final ResolvedServerInfo goodServer = new ResolvedServerInfo(goodAddress, Attributes.EMPTY);
-    final ResolvedServerInfo badServer = new ResolvedServerInfo(badAddress, Attributes.EMPTY);
     InOrder inOrder = inOrder(mockLoadBalancer);
 
-    ResolvedServerInfoGroup serverInfoGroup = ResolvedServerInfoGroup.builder()
-        .add(badServer)
-        .add(goodServer)
-        .build();
-    FakeNameResolverFactory nameResolverFactory =
-        new FakeNameResolverFactory(serverInfoGroup.getResolvedServerInfoList());
+    List<SocketAddress> resolvedAddrs = Arrays.asList(badAddress, goodAddress);
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(resolvedAddrs);
     createChannel(nameResolverFactory, NO_INTERCEPTOR);
 
     // Start the call
@@ -580,10 +571,10 @@ public class ManagedChannelImplTest {
     executor.runDueTasks();
 
     // Simulate name resolution results
-    inOrder.verify(mockLoadBalancer).handleResolvedAddresses(
-        eq(Arrays.asList(serverInfoGroup)), eq(Attributes.EMPTY));
-    Subchannel subchannel = helper.createSubchannel(
-        serverInfoGroup.toEquivalentAddressGroup(), Attributes.EMPTY);
+    EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(resolvedAddrs);
+    inOrder.verify(mockLoadBalancer).handleResolvedAddressGroups(
+        eq(Arrays.asList(addressGroup)), eq(Attributes.EMPTY));
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(subchannel));
     subchannel.requestConnection();
@@ -644,17 +635,11 @@ public class ManagedChannelImplTest {
           return "addr2";
         }
       };
-    final ResolvedServerInfo server1 = new ResolvedServerInfo(addr1, Attributes.EMPTY);
-    final ResolvedServerInfo server2 = new ResolvedServerInfo(addr2, Attributes.EMPTY);
     InOrder inOrder = inOrder(mockLoadBalancer);
 
-    ResolvedServerInfoGroup serverInfoGroup = ResolvedServerInfoGroup.builder()
-        .add(server1)
-        .add(server2)
-        .build();
+    List<SocketAddress> resolvedAddrs = Arrays.asList(addr1, addr2);
 
-    FakeNameResolverFactory nameResolverFactory =
-        new FakeNameResolverFactory(serverInfoGroup.getResolvedServerInfoList());
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(resolvedAddrs);
     createChannel(nameResolverFactory, NO_INTERCEPTOR);
 
     // Start a wait-for-ready call
@@ -669,10 +654,10 @@ public class ManagedChannelImplTest {
     executor.runDueTasks();
 
     // Simulate name resolution results
-    inOrder.verify(mockLoadBalancer).handleResolvedAddresses(
-        eq(Arrays.asList(serverInfoGroup)), eq(Attributes.EMPTY));
-    Subchannel subchannel = helper.createSubchannel(
-        serverInfoGroup.toEquivalentAddressGroup(), Attributes.EMPTY);
+    EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(resolvedAddrs);
+    inOrder.verify(mockLoadBalancer).handleResolvedAddressGroups(
+        eq(Arrays.asList(addressGroup)), eq(Attributes.EMPTY));
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(subchannel));
     subchannel.requestConnection();
@@ -1005,8 +990,6 @@ public class ManagedChannelImplTest {
    */
   @Test
   public void informationPropagatedToNewStreamAndCallCredentials() {
-    ResolvedServerInfoGroup serverInfoGroup = ResolvedServerInfoGroup.builder()
-        .add(server).build();
     createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
     CallOptions callOptions = CallOptions.DEFAULT.withCallCredentials(creds);
     final Context.Key<String> testKey = Context.key("testing");
@@ -1034,8 +1017,8 @@ public class ManagedChannelImplTest {
     call.start(mockCallListener, new Metadata());
 
     // Simulate name resolution results
-    Subchannel subchannel = helper.createSubchannel(
-        serverInfoGroup.toEquivalentAddressGroup(), Attributes.EMPTY);
+    EquivalentAddressGroup addressGroup = new EquivalentAddressGroup(socketAddress);
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
     subchannel.requestConnection();
     verify(mockTransportFactory).newClientTransport(
         same(socketAddress), eq(authority), eq(userAgent));
@@ -1122,19 +1105,18 @@ public class ManagedChannelImplTest {
   }
 
   private class FakeNameResolverFactory extends NameResolver.Factory {
-    final List<ResolvedServerInfoGroup> servers;
+    final List<EquivalentAddressGroup> servers;
     final boolean resolvedAtStart;
     final ArrayList<FakeNameResolver> resolvers = new ArrayList<FakeNameResolver>();
 
     FakeNameResolverFactory(boolean resolvedAtStart) {
       this.resolvedAtStart = resolvedAtStart;
-      servers = Collections.singletonList(ResolvedServerInfoGroup.builder().add(server).build());
+      servers = Collections.singletonList(new EquivalentAddressGroup(socketAddress));
     }
 
-    FakeNameResolverFactory(List<ResolvedServerInfo> servers) {
+    FakeNameResolverFactory(List<SocketAddress> servers) {
       resolvedAtStart = true;
-      this.servers = Collections.singletonList(
-          ResolvedServerInfoGroup.builder().addAll(servers).build());
+      this.servers = Collections.singletonList(new EquivalentAddressGroup(servers));
     }
 
     public FakeNameResolverFactory() {
@@ -1180,7 +1162,7 @@ public class ManagedChannelImplTest {
       }
 
       void resolved() {
-        listener.onUpdate(servers, Attributes.EMPTY);
+        listener.onAddresses(servers, Attributes.EMPTY);
       }
 
       @Override public void shutdown() {

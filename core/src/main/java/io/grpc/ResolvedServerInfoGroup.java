@@ -44,7 +44,10 @@ import javax.annotation.concurrent.Immutable;
 
 /**
  * A group of {@link ResolvedServerInfo}s that is returned from a {@link NameResolver}.
+ *
+ * @deprecated This class will be removed. Use {@link EquivalentAddressGroup} instead.
  */
+@Deprecated
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @Immutable
 public final class ResolvedServerInfoGroup {
@@ -88,7 +91,7 @@ public final class ResolvedServerInfoGroup {
     for (ResolvedServerInfo resolvedServerInfo : resolvedServerInfoList) {
       addrs.add(resolvedServerInfo.getAddress());
     }
-    return new EquivalentAddressGroup(addrs);
+    return new EquivalentAddressGroup(addrs, attributes);
   }
 
   /**

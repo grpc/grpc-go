@@ -42,8 +42,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.google.common.collect.Iterables;
 import io.grpc.Attributes;
+import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
-import io.grpc.ResolvedServerInfoGroup;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import java.net.InetAddress;
@@ -104,7 +104,7 @@ public class DnsNameResolverTest {
   @Mock
   private NameResolver.Listener mockListener;
   @Captor
-  private ArgumentCaptor<List<ResolvedServerInfoGroup>> resultCaptor;
+  private ArgumentCaptor<List<EquivalentAddressGroup>> resultCaptor;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
 
@@ -149,16 +149,16 @@ public class DnsNameResolverTest {
     MockResolver resolver = new MockResolver(name, 81, answer1, answer2);
     resolver.start(mockListener);
     assertEquals(1, fakeExecutor.runDueTasks());
-    verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
+    verify(mockListener).onAddresses(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer1, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
+    assertAnswerMatches(answer1, 81, resultCaptor.getValue());
     assertEquals(0, fakeClock.numPendingTasks());
 
     resolver.refresh();
     assertEquals(1, fakeExecutor.runDueTasks());
-    verify(mockListener, times(2)).onUpdate(resultCaptor.capture(), any(Attributes.class));
+    verify(mockListener, times(2)).onAddresses(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer2, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
+    assertAnswerMatches(answer2, 81, resultCaptor.getValue());
     assertEquals(0, fakeClock.numPendingTasks());
 
     resolver.shutdown();
@@ -201,9 +201,9 @@ public class DnsNameResolverTest {
     fakeClock.forwardNanos(1);
     assertEquals(0, fakeClock.numPendingTasks());
     assertEquals(1, fakeExecutor.runDueTasks());
-    verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
+    verify(mockListener).onAddresses(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
+    assertAnswerMatches(answer, 81, resultCaptor.getValue());
 
     verifyNoMoreInteractions(mockListener);
   }
@@ -229,9 +229,9 @@ public class DnsNameResolverTest {
     assertEquals(1, fakeExecutor.runDueTasks());
     // Refresh cancelled the retry
     assertEquals(0, fakeClock.numPendingTasks());
-    verify(mockListener).onUpdate(resultCaptor.capture(), any(Attributes.class));
+    verify(mockListener).onAddresses(resultCaptor.capture(), any(Attributes.class));
     assertEquals(name, resolver.invocations.poll());
-    assertAnswerMatches(answer, 81, Iterables.getOnlyElement(resultCaptor.getValue()));
+    assertAnswerMatches(answer, 81, resultCaptor.getValue());
 
     verifyNoMoreInteractions(mockListener);
   }
@@ -286,12 +286,13 @@ public class DnsNameResolverTest {
     return list;
   }
 
-  private static void assertAnswerMatches(InetAddress[] addrs, int port,
-      ResolvedServerInfoGroup result) {
-    assertEquals(addrs.length, result.getResolvedServerInfoList().size());
+  private static void assertAnswerMatches(
+      InetAddress[] addrs, int port, List<EquivalentAddressGroup> results) {
+    assertEquals(addrs.length, results.size());
     for (int i = 0; i < addrs.length; i++) {
-      InetSocketAddress socketAddr = (InetSocketAddress) result.getResolvedServerInfoList().get(
-          i).getAddress();
+      EquivalentAddressGroup addrGroup = results.get(i);
+      InetSocketAddress socketAddr =
+          (InetSocketAddress) Iterables.getOnlyElement(addrGroup.getAddresses());
       assertEquals("Addr " + i, port, socketAddr.getPort());
       assertEquals("Addr " + i, addrs[i], socketAddr.getAddress());
     }

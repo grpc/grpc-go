@@ -34,6 +34,8 @@ package io.grpc;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -117,11 +119,44 @@ public abstract class LoadBalancer {
    *
    * <p>Implementations should not modify the given {@code servers}.
    *
+   * @deprecated Implement {@link #handleResolvedAddressGroups} instead.  As it is deprecated, the
+   *             {@link ResolvedServerInfo}s from the passed-in {@link ResolvedServerInfoGroup}s
+   *             lose all their attributes.
+   *
    * @param servers the resolved server addresses, never empty.
    * @param attributes extra metadata from naming system.
    */
-  public abstract void handleResolvedAddresses(
-      List<ResolvedServerInfoGroup> servers, Attributes attributes);
+  @Deprecated
+  public void handleResolvedAddresses(
+      List<ResolvedServerInfoGroup> servers, Attributes attributes) {
+    throw new UnsupportedOperationException("This is deprecated and should not be called");
+  }
+
+  /**
+   * Handles newly resolved server groups and metadata attributes from name resolution system.
+   * {@code servers} contained in {@link EquivalentAddressGroup} should be considered equivalent
+   * but may be flattened into a single list if needed.
+   *
+   * <p>Implementations should not modify the given {@code servers}.
+   *
+   * @param servers the resolved server addresses, never empty.
+   * @param attributes extra metadata from naming system.
+   */
+  @SuppressWarnings("deprecation")
+  public void handleResolvedAddressGroups(
+      List<EquivalentAddressGroup> servers, Attributes attributes) {
+    ArrayList<ResolvedServerInfoGroup> serverInfoGroups =
+        new ArrayList<ResolvedServerInfoGroup>(servers.size());
+    for (EquivalentAddressGroup eag : servers) {
+      ResolvedServerInfoGroup.Builder serverInfoGroupBuilder =
+          ResolvedServerInfoGroup.builder(eag.getAttributes());
+      for (SocketAddress addr : eag.getAddresses()) {
+        serverInfoGroupBuilder.add(new ResolvedServerInfo(addr));
+      }
+      serverInfoGroups.add(serverInfoGroupBuilder.build());
+    }
+    handleResolvedAddresses(serverInfoGroups, attributes);
+  }
 
   /**
    * Handles an error from the name resolution system.

@@ -68,7 +68,7 @@ import org.mockito.MockitoAnnotations;
 @RunWith(JUnit4.class)
 public class PickFirstLoadBalancerTest {
   private PickFirstBalancer loadBalancer;
-  private List<ResolvedServerInfoGroup> servers = Lists.newArrayList();
+  private List<EquivalentAddressGroup> servers = Lists.newArrayList();
   private List<SocketAddress> socketAddresses = Lists.newArrayList();
 
   private static final Attributes.Key<String> FOO = Attributes.Key.of("foo");
@@ -92,7 +92,7 @@ public class PickFirstLoadBalancerTest {
     MockitoAnnotations.initMocks(this);
     for (int i = 0; i < 3; i++) {
       SocketAddress addr = new FakeSocketAddress("server" + i);
-      servers.add(ResolvedServerInfoGroup.builder().add(new ResolvedServerInfo(addr)).build());
+      servers.add(new EquivalentAddressGroup(addr));
       socketAddresses.add(addr);
     }
 
@@ -111,7 +111,7 @@ public class PickFirstLoadBalancerTest {
 
   @Test
   public void pickAfterResolved() throws Exception {
-    loadBalancer.handleResolvedAddresses(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
 
     verify(mockHelper).createSubchannel(eagCaptor.capture(), attrsCaptor.capture());
     verify(mockHelper).updatePicker(pickerCaptor.capture());
@@ -125,8 +125,8 @@ public class PickFirstLoadBalancerTest {
 
   @Test
   public void pickAfterResolvedAndUnchanged() throws Exception {
-    loadBalancer.handleResolvedAddresses(servers, affinity);
-    loadBalancer.handleResolvedAddresses(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
 
     verify(mockHelper).createSubchannel(any(EquivalentAddressGroup.class),
         any(Attributes.class));
@@ -139,8 +139,8 @@ public class PickFirstLoadBalancerTest {
   public void pickAfterResolvedAndChanged() throws Exception {
     SocketAddress socketAddr = new FakeSocketAddress("newserver");
     List<SocketAddress> newSocketAddresses = Lists.newArrayList(socketAddr);
-    List<ResolvedServerInfoGroup> newServers = Lists.newArrayList(
-        ResolvedServerInfoGroup.builder().add(new ResolvedServerInfo(socketAddr)).build());
+    List<EquivalentAddressGroup> newServers =
+        Lists.newArrayList(new EquivalentAddressGroup(socketAddr));
 
     final Subchannel oldSubchannel = mock(Subchannel.class);
     final EquivalentAddressGroup oldEag = new EquivalentAddressGroup(socketAddresses);
@@ -155,12 +155,12 @@ public class PickFirstLoadBalancerTest {
 
     InOrder inOrder = inOrder(mockHelper);
 
-    loadBalancer.handleResolvedAddresses(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
     inOrder.verify(mockHelper).createSubchannel(eagCaptor.capture(), any(Attributes.class));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
     assertEquals(socketAddresses, eagCaptor.getValue().getAddresses());
 
-    loadBalancer.handleResolvedAddresses(newServers, affinity);
+    loadBalancer.handleResolvedAddressGroups(newServers, affinity);
     inOrder.verify(mockHelper).createSubchannel(eagCaptor.capture(), any(Attributes.class));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
     assertEquals(newSocketAddresses, eagCaptor.getValue().getAddresses());
@@ -187,7 +187,7 @@ public class PickFirstLoadBalancerTest {
 
   @Test
   public void pickAfterStateChangeAfterResolution() throws Exception {
-    loadBalancer.handleResolvedAddresses(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
     verify(mockHelper).updatePicker(pickerCaptor.capture());
     Subchannel subchannel = pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel();
     reset(mockHelper);
@@ -232,7 +232,7 @@ public class PickFirstLoadBalancerTest {
     loadBalancer.handleNameResolutionError(Status.NOT_FOUND.withDescription("nameResolutionError"));
     inOrder.verify(mockHelper).updatePicker(any(Picker.class));
 
-    loadBalancer.handleResolvedAddresses(servers, affinity);
+    loadBalancer.handleResolvedAddressGroups(servers, affinity);
     inOrder.verify(mockHelper).createSubchannel(eq(new EquivalentAddressGroup(socketAddresses)),
         eq(Attributes.EMPTY));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());

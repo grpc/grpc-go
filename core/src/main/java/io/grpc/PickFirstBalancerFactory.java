@@ -74,13 +74,12 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     }
 
     @Override
-    public void handleResolvedAddresses(
-        List<ResolvedServerInfoGroup> servers, Attributes attributes) {
+    public void handleResolvedAddressGroups(
+        List<EquivalentAddressGroup> servers, Attributes attributes) {
       // Flatten servers list received from name resolver into single address group. This means that
       // as far as load balancer is concerned, there's virtually one single server with multiple
       // addresses so the connection will be created only for the first address (pick first).
-      EquivalentAddressGroup newEag =
-          flattenResolvedServerInfoGroupsIntoEquivalentAddressGroup(servers);
+      EquivalentAddressGroup newEag = flattenEquivalentAddressGroup(servers);
       if (subchannel == null || !newEag.equals(subchannel.getAddresses())) {
         if (subchannel != null) {
           subchannel.shutdown();
@@ -136,19 +135,18 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     }
 
     /**
-     * Flattens list of ResolvedServerInfoGroup objects into one EquivalentAddressGroup object.
+     * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
      */
-    private static EquivalentAddressGroup flattenResolvedServerInfoGroupsIntoEquivalentAddressGroup(
-        List<ResolvedServerInfoGroup> groupList) {
+    private static EquivalentAddressGroup flattenEquivalentAddressGroup(
+        List<EquivalentAddressGroup> groupList) {
       List<SocketAddress> addrs = new ArrayList<SocketAddress>();
-      for (ResolvedServerInfoGroup group : groupList) {
-        for (ResolvedServerInfo srv : group.getResolvedServerInfoList()) {
-          addrs.add(srv.getAddress());
+      for (EquivalentAddressGroup group : groupList) {
+        for (SocketAddress addr : group.getAddresses()) {
+          addrs.add(addr);
         }
       }
       return new EquivalentAddressGroup(addrs);
     }
-
   }
 
   /**
