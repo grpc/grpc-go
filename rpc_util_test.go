@@ -121,7 +121,7 @@ func TestEncode(t *testing.T) {
 	}
 }
 
-func TestCompress(t *testing.T) {
+func TestGZIPCompress(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		data []byte
@@ -137,7 +137,31 @@ func TestCompress(t *testing.T) {
 			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
 		}
 		if b.Len() >= len(test.data) {
-			t.Fatalf("The compressor fails to compress data.")
+			t.Fatalf("The gzip compressor fails to compress data.")
+		}
+		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
+			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
+		}
+	}
+}
+
+func TestSnappyCompress(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		data []byte
+		cp   Compressor
+		dc   Decompressor
+		// outputs
+		err error
+	}{
+		{make([]byte, 1024), &snappyCompressor{}, &snappyDecompressor{}, nil},
+	} {
+		b := new(bytes.Buffer)
+		if err := test.cp.Do(b, test.data); err != test.err {
+			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
+		}
+		if b.Len() >= len(test.data) {
+			t.Fatalf("The snappy compressor fails to compress data.")
 		}
 		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
 			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
