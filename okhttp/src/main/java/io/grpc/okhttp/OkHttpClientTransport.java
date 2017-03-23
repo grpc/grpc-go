@@ -55,6 +55,7 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.LogId;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.internal.SharedResourceHolder;
@@ -369,8 +370,9 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
     if (enableKeepAlive) {
       scheduler = SharedResourceHolder.get(TIMER_SERVICE);
-      keepAliveManager = new KeepAliveManager(this, scheduler, keepAliveDelayNanos,
-          keepAliveTimeoutNanos, false);
+      keepAliveManager = new KeepAliveManager(
+          new ClientKeepAlivePinger(this), scheduler, keepAliveDelayNanos, keepAliveTimeoutNanos,
+          false);
       keepAliveManager.onTransportStarted();
     }
 

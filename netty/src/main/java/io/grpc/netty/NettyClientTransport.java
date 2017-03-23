@@ -46,6 +46,7 @@ import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
 import io.netty.bootstrap.Bootstrap;
@@ -231,7 +232,8 @@ class NettyClientTransport implements ConnectionClientTransport {
     });
 
     if (enableKeepAlive) {
-      keepAliveManager = new KeepAliveManager(this, channel.eventLoop(), keepAliveDelayNanos,
+      keepAliveManager = new KeepAliveManager(
+          new ClientKeepAlivePinger(this), channel.eventLoop(), keepAliveDelayNanos,
           keepAliveTimeoutNanos, false);
       keepAliveManager.onTransportStarted();
     }

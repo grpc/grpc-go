@@ -31,8 +31,9 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Status;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,8 +48,8 @@ public class KeepAliveManager {
   private static final long MIN_KEEPALIVE_DELAY_NANOS = TimeUnit.MINUTES.toNanos(1);
 
   private final ScheduledExecutorService scheduler;
-  private final ManagedClientTransport transport;
   private final Ticker ticker;
+  private final KeepAlivePinger keepAlivePinger;
   private final boolean keepAliveDuringTransportIdle;
   private State state = State.IDLE;
   private long nextKeepaliveTime;
@@ -67,8 +68,7 @@ public class KeepAliveManager {
         }
       }
       if (shouldShutdown) {
-        transport.shutdownNow(Status.UNAVAILABLE.withDescription(
-            "Keepalive failed. The connection is likely gone"));
+        keepAlivePinger.onPingTimeout();
       }
     }
   };
@@ -92,11 +92,11 @@ public class KeepAliveManager {
       }
       if (shouldSendPing) {
         // Send the ping.
-        transport.ping(pingCallback, MoreExecutors.directExecutor());
+        keepAlivePinger.ping();
       }
     }
   };
-  private final KeepAlivePingCallback pingCallback = new KeepAlivePingCallback();
+
   private long keepAliveDelayInNanos;
   private long keepAliveTimeoutInNanos;
 
@@ -132,22 +132,22 @@ public class KeepAliveManager {
   /**
    * Creates a KeepAliverManager.
    */
-  public KeepAliveManager(ManagedClientTransport transport, ScheduledExecutorService scheduler,
+  public KeepAliveManager(KeepAlivePinger keepAlivePinger, ScheduledExecutorService scheduler,
                           long keepAliveDelayInNanos, long keepAliveTimeoutInNanos,
                           boolean keepAliveDuringTransportIdle) {
-    this(transport, scheduler, SYSTEM_TICKER,
+    this(keepAlivePinger, scheduler, SYSTEM_TICKER,
         // Set a minimum cap on keepalive dealy.
         Math.max(MIN_KEEPALIVE_DELAY_NANOS, keepAliveDelayInNanos), keepAliveTimeoutInNanos,
         keepAliveDuringTransportIdle);
   }
 
   @VisibleForTesting
-  KeepAliveManager(ManagedClientTransport transport, ScheduledExecutorService scheduler,
+  KeepAliveManager(KeepAlivePinger keepAlivePinger, ScheduledExecutorService scheduler,
                    Ticker ticker, long keepAliveDelayInNanos, long keepAliveTimeoutInNanos,
                    boolean keepAliveDuringTransportIdle) {
-    this.transport = Preconditions.checkNotNull(transport, "transport");
-    this.scheduler = Preconditions.checkNotNull(scheduler, "scheduler");
-    this.ticker = Preconditions.checkNotNull(ticker, "ticker");
+    this.keepAlivePinger = checkNotNull(keepAlivePinger, "keepAlivePinger");
+    this.scheduler = checkNotNull(scheduler, "scheduler");
+    this.ticker = checkNotNull(ticker, "ticker");
     this.keepAliveDelayInNanos = keepAliveDelayInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
     this.keepAliveDuringTransportIdle = keepAliveDuringTransportIdle;
@@ -234,18 +234,46 @@ public class KeepAliveManager {
     }
   }
 
-  private class KeepAlivePingCallback implements ClientTransport.PingCallback {
+  public interface KeepAlivePinger {
+    /**
+     * Sends out a keep-alive ping.
+     */
+    void ping();
+
+    /**
+     * Callback when Ping Ack was not received in KEEPALIVE_TIMEOUT. Should shutdown the transport.
+     */
+    void onPingTimeout();
+  }
+
+  /**
+   * Default client side {@link KeepAlivePinger}.
+   */
+  public static final class ClientKeepAlivePinger implements KeepAlivePinger {
+    private final ConnectionClientTransport transport;
+
+    public ClientKeepAlivePinger(ConnectionClientTransport transport) {
+      this.transport = transport;
+    }
 
     @Override
-    public void onSuccess(long roundTripTimeNanos) {}
+    public void ping() {
+      transport.ping(new ClientTransport.PingCallback() {
+        @Override
+        public void onSuccess(long roundTripTimeNanos) {}
+
+        @Override
+        public void onFailure(Throwable cause) {
+          transport.shutdownNow(Status.UNAVAILABLE.withDescription(
+              "Keepalive failed. The connection is likely gone"));
+        }
+      }, MoreExecutors.directExecutor());
+    }
 
     @Override
-    public void onFailure(Throwable cause) {
-      // Keepalive ping has failed. Shutdown the transport now.
-      synchronized (KeepAliveManager.this) {
-        shutdownFuture.cancel(false);
-      }
-      shutdown.run();
+    public void onPingTimeout() {
+      transport.shutdownNow(Status.UNAVAILABLE.withDescription(
+          "Keepalive failed. The connection is likely gone"));
     }
   }
 
@@ -264,6 +292,5 @@ public class KeepAliveManager {
       return System.nanoTime();
     }
   }
-
 }
 
