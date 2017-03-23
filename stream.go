@@ -361,12 +361,18 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	return err
 }
 
+func (cs *clientStream) isClosedClientStream() bool {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return (!cs.desc.ServerStreams) && cs.closed
+}
+
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	defer func() {
 		// if this is a client stream, there will be no more messages coming through
 		// to produce an EOF error. Therefore, we need to check whether  the stream is
 		// closed and generate the End event.
-		if cs.statsHandler != nil && (err != nil || (cs.closed && !cs.desc.ServerStreams)) {
+		if cs.statsHandler != nil && (err != nil || cs.isClosedClientStream()) {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
