@@ -392,8 +392,6 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.SimpleRequest, []*test
 		}
 		resps = append(resps, resp)
 	}
-
-	return req, resps, nil
 }
 
 type expectedData struct {
