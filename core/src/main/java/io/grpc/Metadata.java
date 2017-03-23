@@ -195,7 +195,12 @@ public final class Metadata {
     return size;
   }
 
-  /** Returns true if a value is defined for the given key. */
+  /**
+   * Returns true if a value is defined for the given key.
+   *
+   * <p>This is done by linear search, so if it is followed by {@link #get} or {@link #getAll},
+   * prefer calling them directly and checking the return value against {@code null}.
+   */
   public boolean containsKey(Key<?> key) {
     for (int i = 0; i < size; i++) {
       if (bytesEqual(key.asciiName(), name(i))) {
@@ -267,10 +272,11 @@ public final class Metadata {
   }
 
   /**
-   * Returns all the metadata entries named 'name', in the order they were received, parsed as T or
+   * Returns all the metadata entries named 'name', in the order they were received, parsed as T, or
    * null if there are none. The iterator is not guaranteed to be "live." It may or may not be
    * accurate if Metadata is mutated.
    */
+  @Nullable
   public <T> Iterable<T> getAll(final Key<T> key) {
     for (int i = 0; i < size; i++) {
       if (bytesEqual(key.asciiName(), name(i))) {
