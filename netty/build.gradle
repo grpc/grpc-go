@@ -11,6 +11,11 @@ dependencies {
     signature "org.codehaus.mojo.signature:java17:+@signature"
 }
 
+[compileJava, compileTestJava].each() {
+  // Netty retuns a lot of futures that we mostly don't care about.
+  it.options.compilerArgs += ["-Xep:FutureReturnValueIgnored:OFF"]
+}
+
 javadoc.options.links 'http://netty.io/4.1/api/'
 
 project.sourceSets {

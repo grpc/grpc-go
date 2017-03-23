@@ -149,7 +149,8 @@ compileTestJava {
 compileTestLiteJava {
   // Protobuf-generated Lite produces quite a few warnings.
   options.compilerArgs += ["-Xlint:-rawtypes", "-Xlint:-unchecked",
-      "-Xep:MissingOverride:OFF", "-Xep:ReferenceEquality:OFF"]
+      "-Xep:MissingOverride:OFF", "-Xep:ReferenceEquality:OFF",
+      "-Xep:FallThrough:OFF"]
 }
 
 compileTestNanoJava {

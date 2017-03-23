@@ -99,6 +99,7 @@ public class AsyncServer {
     });
   }
 
+  @SuppressWarnings("LiteralClassName") // Epoll is not available on windows
   static Server newServer(ServerConfiguration config) throws IOException {
     SslContext sslContext = null;
     if (config.tls) {

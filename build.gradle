@@ -155,7 +155,7 @@ subprojects {
             epoll_suffix = ":" + osdetector.classifier
         }
         libraries = [
-                errorprone: "com.google.errorprone:error_prone_annotations:2.0.11",
+                errorprone: "com.google.errorprone:error_prone_annotations:2.0.19",
                 guava: "com.google.guava:guava:${guavaVersion}",
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
@@ -207,7 +207,7 @@ subprojects {
 
         // The ErrorProne plugin defaults to the latest, which would break our
         // build if error prone releases a new version with a new check
-        errorprone 'com.google.errorprone:error_prone_core:2.0.15'
+        errorprone 'com.google.errorprone:error_prone_core:2.0.19'
     }
 
     signing {

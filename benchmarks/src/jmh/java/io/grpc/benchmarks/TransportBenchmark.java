@@ -86,6 +86,7 @@ public class TransportBenchmark {
   private volatile EventLoopGroup groupToShutdown;
 
   @Setup
+  @SuppressWarnings("LiteralClassName") // Epoll is not available on windows
   public void setUp() throws Exception {
     AbstractServerImplBuilder<?> serverBuilder;
     AbstractManagedChannelImplBuilder<?> channelBuilder;
