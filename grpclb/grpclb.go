@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"sync"
 	"time"
 
@@ -96,6 +97,7 @@ type addrInfo struct {
 
 type balancer struct {
 	r        naming.Resolver
+	target   string
 	mu       sync.Mutex
 	seq      int // a sequence number to make sure addrCh does not get stale addresses.
 	w        naming.Watcher
@@ -224,7 +226,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	for _, s := range servers {
 		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
 		addr := grpc.Address{
-			Addr:     fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
+			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
 			Metadata: &md,
 		}
 		sl = append(sl, &addrInfo{
@@ -272,7 +274,9 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 	b.mu.Unlock()
 	initReq := &lbpb.LoadBalanceRequest{
 		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-			InitialRequest: new(lbpb.InitialLoadBalanceRequest),
+			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+				Name: b.target,
+			},
 		},
 	}
 	if err := stream.Send(initReq); err != nil {
@@ -322,6 +326,7 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 	if b.r == nil {
 		return errors.New("there is no name resolver installed")
 	}
+	b.target = target
 	b.mu.Lock()
 	if b.done {
 		b.mu.Unlock()
