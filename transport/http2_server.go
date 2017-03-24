@@ -521,7 +521,7 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 const (
-	MaxPingStrikes = 2
+	maxPingStrikes = 2
 )
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
@@ -559,7 +559,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 		}
 	}
 
-	if t.pingStrikes > MaxPingStrikes {
+	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
 		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings")})
 	}
