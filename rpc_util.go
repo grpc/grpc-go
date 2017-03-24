@@ -527,3 +527,6 @@ type ServiceConfig struct {
 // requires a synchronised update of grpc-go and protoc-gen-go. This constant
 // should not be referenced from any other code.
 const SupportPackageIsVersion4 = true
+
+// Version is the current grpc version.
+const Version = "1.3.0-dev"
