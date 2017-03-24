@@ -100,6 +100,17 @@ type http2Server struct {
 	// Keepalive and max-age parameters for the server.
 	kp keepalive.ServerParameters
 
+	// Keepalive enforcement policy.
+	kep keepalive.EnforcementPolicy
+	// The time instance last ping was received.
+	lastPingAt time.Time
+	// Number of times the client has violated keepalive ping policy so far.
+	pingStrikes uint8
+	// Flag to signify that number of ping strikes should be reset to 0.
+	// This is set whenever data or header frames are sent.
+	// 1 means yes.
+	resetPingStrikes uint32 // Accessed atomically.
+
 	mu            sync.Mutex // guard the following
 	state         transportState
 	activeStreams map[uint32]*Stream
@@ -161,6 +172,10 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if kp.Timeout == 0 {
 		kp.Timeout = defaultServerKeepaliveTimeout
 	}
+	kep := config.KeepalivePolicy
+	if kep.MinTime == 0 {
+		kep.MinTime = defaultKeepalivePolicyMinTime
+	}
 	var buf bytes.Buffer
 	t := &http2Server{
 		ctx:             context.Background(),
@@ -184,6 +199,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		stats:           config.StatsHandler,
 		kp:              kp,
 		idle:            time.Now(),
+		kep:             kep,
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -504,6 +520,10 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	t.controlBuf.put(&settings{ack: true, ss: ss})
 }
 
+const (
+	MaxPingStrikes = 2
+)
+
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
 		return
@@ -511,6 +531,38 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	pingAck := &ping{ack: true}
 	copy(pingAck.data[:], f.Data[:])
 	t.controlBuf.put(pingAck)
+
+	now := time.Now()
+	defer func() {
+		t.lastPingAt = now
+	}()
+	// A reset ping strikes means that we don't need to check for policy
+	// violation for this ping and the pingStrikes counter should be set
+	// to 0.
+	if atomic.CompareAndSwapUint32(&t.resetPingStrikes, 1, 0) {
+		t.pingStrikes = 0
+		return
+	}
+	t.mu.Lock()
+	ns := len(t.activeStreams)
+	t.mu.Unlock()
+	if ns < 1 && !t.kep.PermitWithoutStream {
+		// Keepalive shouldn't be active thus, this new ping should
+		// have come after atleast two hours.
+		if t.lastPingAt.Add(2 * time.Hour).After(now) {
+			t.pingStrikes++
+		}
+	} else {
+		// Check if keepalive policy is respected.
+		if t.lastPingAt.Add(t.kep.MinTime).After(now) {
+			t.pingStrikes++
+		}
+	}
+
+	if t.pingStrikes > MaxPingStrikes {
+		// Send goaway and close the connection.
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings")})
+	}
 }
 
 func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
@@ -529,6 +581,13 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 	first := true
 	endHeaders := false
 	var err error
+	defer func() {
+		if err == nil {
+			// Reset ping strikes when seding headers since that might cause the
+			// peer to send ping.
+			atomic.StoreUint32(&t.resetPingStrikes, 1)
+		}
+	}()
 	// Sends the headers in a single batch.
 	for !endHeaders {
 		size := t.hBuf.Len()
@@ -672,7 +731,7 @@ func (t *http2Server) WriteStatus(s *Stream, statusCode codes.Code, statusDesc s
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
+func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 	// TODO(zhaoq): Support multi-writers for a single stream.
 	var writeHeaderFrame bool
 	s.mu.Lock()
@@ -687,6 +746,13 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) error {
 	if writeHeaderFrame {
 		t.WriteHeader(s, nil)
 	}
+	defer func() {
+		if err == nil {
+			// Reset ping strikes when sending data since this might cause
+			// the peer to send ping.
+			atomic.StoreUint32(&t.resetPingStrikes, 1)
+		}
+	}()
 	r := bytes.NewBuffer(data)
 	for {
 		if r.Len() == 0 {
@@ -892,7 +958,10 @@ func (t *http2Server) controller() {
 					sid := t.maxStreamID
 					t.state = draining
 					t.mu.Unlock()
-					t.framer.writeGoAway(true, sid, http2.ErrCodeNo, nil)
+					t.framer.writeGoAway(true, sid, i.code, i.debugData)
+					if i.code == http2.ErrCodeEnhanceYourCalm {
+						t.Close()
+					}
 				case *flushIO:
 					t.framer.flushWrite()
 				case *ping:
@@ -972,7 +1041,7 @@ func (t *http2Server) RemoteAddr() net.Addr {
 }
 
 func (t *http2Server) Drain() {
-	t.controlBuf.put(&goAway{})
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo})
 }
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))

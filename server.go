@@ -119,6 +119,7 @@ type options struct {
 	useHandlerImpl       bool // use http.Handler-based server
 	unknownStreamDesc    *StreamDesc
 	keepaliveParams      keepalive.ServerParameters
+	keepalivePolicy      keepalive.EnforcementPolicy
 }
 
 var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
@@ -130,6 +131,13 @@ type ServerOption func(*options)
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
 	return func(o *options) {
 		o.keepaliveParams = kp
+	}
+}
+
+// KeepaliveEnforcementPolicy returns a ServerOption that sets keepalive enforcement policy for the server.
+func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
+	return func(o *options) {
+		o.keepalivePolicy = kep
 	}
 }
 
@@ -479,6 +487,7 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		InTapHandle:     s.opts.inTapHandle,
 		StatsHandler:    s.opts.statsHandler,
 		KeepaliveParams: s.opts.keepaliveParams,
+		KeepalivePolicy: s.opts.keepalivePolicy,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {

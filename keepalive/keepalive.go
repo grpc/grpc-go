@@ -67,3 +67,12 @@ type ServerParameters struct {
 	// the connection is closed.
 	Timeout time.Duration
 }
+
+// EnforcementPolicy is used to set keepalive enforcement policy on the server-side.
+// Server will close connection with a client that violates this policy.
+type EnforcementPolicy struct {
+	// MinTime is the minimum amount of time a client should wait before sending a keepalive ping.
+	MinTime time.Duration
+	// If true, server expects keepalive pings even when there are no active streams(RPCs).
+	PermitWithoutStream bool
+}

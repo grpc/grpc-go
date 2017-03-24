@@ -370,6 +370,7 @@ type ServerConfig struct {
 	InTapHandle     tap.ServerInHandle
 	StatsHandler    stats.Handler
 	KeepaliveParams keepalive.ServerParameters
+	KeepalivePolicy keepalive.EnforcementPolicy
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
