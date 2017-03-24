@@ -49,6 +49,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The stats and tracing information for a call.
@@ -59,13 +60,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * #wireBytesReceived} and {@link #wireBytesSent} can be called concurrently.  {@link #callEnded}
  * can be called concurrently with itself and the other methods.
  */
-@SuppressWarnings("NonAtomicVolatileUpdate")
 public final class StatsTraceContext {
   public static final StatsTraceContext NOOP = StatsTraceContext.newClientContext(
       "noopservice/noopmethod", NoopStatsContextFactory.INSTANCE,
       GrpcUtil.STOPWATCH_SUPPLIER);
 
-  private static final double NANOS_PER_MILLI = 1000 * 1000;
+  private static final double NANOS_PER_MILLI = TimeUnit.MILLISECONDS.toNanos(1);
+  private static final long UNSET_CLIENT_PENDING_NANOS = -1;
 
   private enum Side {
     CLIENT, SERVER
@@ -75,11 +76,11 @@ public final class StatsTraceContext {
   private final Stopwatch stopwatch;
   private final Side side;
   private final Metadata.Key<StatsContext> statsHeader;
-  private volatile long clientPendingNanos = -1;
-  private volatile long wireBytesSent;
-  private volatile long wireBytesReceived;
-  private volatile long uncompressedBytesSent;
-  private volatile long uncompressedBytesReceived;
+  private final AtomicLong clientPendingNanos = new AtomicLong(UNSET_CLIENT_PENDING_NANOS);
+  private final AtomicLong wireBytesSent = new AtomicLong();
+  private final AtomicLong wireBytesReceived = new AtomicLong();
+  private final AtomicLong uncompressedBytesSent = new AtomicLong();
+  private final AtomicLong uncompressedBytesReceived = new AtomicLong();
   private final AtomicBoolean callEnded = new AtomicBoolean(false);
 
   private StatsTraceContext(Side side, String fullMethodName, StatsContext parentCtx,
@@ -180,14 +181,14 @@ public final class StatsTraceContext {
    * Record the outgoing number of payload bytes as on the wire.
    */
   void wireBytesSent(long bytes) {
-    wireBytesSent += bytes;
+    wireBytesSent.addAndGet(bytes);
   }
 
   /**
    * Record the incoming number of payload bytes as on the wire.
    */
   void wireBytesReceived(long bytes) {
-    wireBytesReceived += bytes;
+    wireBytesReceived.addAndGet(bytes);
   }
 
   /**
@@ -196,7 +197,7 @@ public final class StatsTraceContext {
    * <p>The time this method is called is unrelated to the actual time when those byte are sent.
    */
   void uncompressedBytesSent(long bytes) {
-    uncompressedBytesSent += bytes;
+    uncompressedBytesSent.addAndGet(bytes);
   }
 
   /**
@@ -205,7 +206,7 @@ public final class StatsTraceContext {
    * <p>The time this method is called is unrelated to the actual time when those byte are received.
    */
   void uncompressedBytesReceived(long bytes) {
-    uncompressedBytesReceived += bytes;
+    uncompressedBytesReceived.addAndGet(bytes);
   }
 
   /**
@@ -215,8 +216,9 @@ public final class StatsTraceContext {
    */
   public void clientHeadersSent() {
     Preconditions.checkState(side == Side.CLIENT, "Must be called on client-side");
-    if (clientPendingNanos < 0) {
-      clientPendingNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
+    if (clientPendingNanos.get() == UNSET_CLIENT_PENDING_NANOS) {
+      clientPendingNanos.compareAndSet(
+          UNSET_CLIENT_PENDING_NANOS, stopwatch.elapsed(TimeUnit.NANOSECONDS));
     }
   }
 
@@ -255,18 +257,19 @@ public final class StatsTraceContext {
     long roundtripNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
     MeasurementMap.Builder builder = MeasurementMap.builder()
         .put(latencyMetric, roundtripNanos / NANOS_PER_MILLI)  // in double
-        .put(wireBytesSentMetric, wireBytesSent)
-        .put(wireBytesReceivedMetric, wireBytesReceived)
-        .put(uncompressedBytesSentMetric, uncompressedBytesSent)
-        .put(uncompressedBytesReceivedMetric, uncompressedBytesReceived);
+        .put(wireBytesSentMetric, wireBytesSent.get())
+        .put(wireBytesReceivedMetric, wireBytesReceived.get())
+        .put(uncompressedBytesSentMetric, uncompressedBytesSent.get())
+        .put(uncompressedBytesReceivedMetric, uncompressedBytesReceived.get());
     if (!status.isOk()) {
       builder.put(errorCountMetric, 1.0);
     }
     if (side == Side.CLIENT) {
-      if (clientPendingNanos >= 0) {
+      long localClientPendingNanos = clientPendingNanos.get();
+      if (localClientPendingNanos != UNSET_CLIENT_PENDING_NANOS) {
         builder.put(
             RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME,
-            (roundtripNanos - clientPendingNanos) / NANOS_PER_MILLI);  // in double
+            (roundtripNanos - localClientPendingNanos) / NANOS_PER_MILLI);  // in double
       }
     }
     statsCtx.with(RpcConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
