@@ -117,8 +117,10 @@ subprojects {
             }
 
             sourceSets.each { sourceSet ->
-              task "deleteGeneratedSource${sourceSet.name}" << {
-                project.delete project.fileTree(dir: generatedSourcePath + '/' + sourceSet.name)
+              task "deleteGeneratedSource${sourceSet.name}" {
+                doLast {
+                  project.delete project.fileTree(dir: generatedSourcePath + '/' + sourceSet.name)
+                }
               }
             }
           } else {
