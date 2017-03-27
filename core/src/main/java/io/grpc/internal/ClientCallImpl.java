@@ -249,7 +249,9 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     context.addListener(this, directExecutor());
     if (effectiveDeadline != null
         // If the context has the effective deadline, we don't need to schedule an extra task.
-        && context.getDeadline() != effectiveDeadline) {
+        && context.getDeadline() != effectiveDeadline
+        // If the channel has been terminated, we don't need to schedule an extra task.
+        && deadlineCancellationExecutor != null) {
       deadlineCancellationFuture = startDeadlineTimer(effectiveDeadline);
     }
     if (cancelListenersShouldBeRemoved) {
