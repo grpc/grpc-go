@@ -36,6 +36,7 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -107,6 +108,26 @@ func (c *gzipCompressor) Type() string {
 	return "gzip"
 }
 
+// NewDEFLATECompressor creates a Compressor based on DEFLATE/ZLIB
+func NewDEFLATECompressor() Compressor {
+	return &deflateCompressor{}
+}
+
+type deflateCompressor struct {
+}
+
+func (c *deflateCompressor) Do(w io.Writer, p []byte) error {
+	z := zlib.NewWriter(w)
+	if _, err := z.Write(p); err != nil {
+		return err
+	}
+	return z.Close()
+}
+
+func (c *deflateCompressor) Type() string {
+	return "deflate"
+}
+
 // Decompressor defines the interface gRPC uses to decompress a message.
 type Decompressor interface {
 	// Do reads the data from r and uncompress them.
@@ -115,12 +136,12 @@ type Decompressor interface {
 	Type() string
 }
 
-type gzipDecompressor struct {
-}
-
 // NewGZIPDecompressor creates a Decompressor based on GZIP.
 func NewGZIPDecompressor() Decompressor {
 	return &gzipDecompressor{}
+}
+
+type gzipDecompressor struct {
 }
 
 func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
@@ -134,6 +155,31 @@ func (d *gzipDecompressor) Do(r io.Reader) ([]byte, error) {
 
 func (d *gzipDecompressor) Type() string {
 	return "gzip"
+}
+
+// NewDEFLATEDecompressor creates a Decompressor based on DEFLATE/ZLIB.
+func NewDEFLATEDecompressor() Decompressor {
+	return &deflateDecompressor{}
+}
+
+type deflateDecompressor struct {
+}
+
+func (d *deflateDecompressor) Do(r io.Reader) ([]byte, error) {
+	z, err := zlib.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+
+	a, err := ioutil.ReadAll(z)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func (d *deflateDecompressor) Type() string {
+	return "deflate"
 }
 
 // callInfo contains all related configuration and information about an RPC.
