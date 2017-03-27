@@ -46,8 +46,8 @@ const (
 	// The default value of flow control window size in HTTP2 spec.
 	defaultWindowSize = 65535
 	// The initial window size for flow control.
-	initialWindowSize             = defaultWindowSize      // for an RPC
-	initialConnWindowSize         = defaultWindowSize * 16 // for a connection
+	initialWindowSize             = defaultWindowSize * 32      // for an RPC
+	initialConnWindowSize         = defaultWindowSize * 16 * 32 // for a connection
 	infinity                      = time.Duration(math.MaxInt64)
 	defaultClientKeepaliveTime    = infinity
 	defaultClientKeepaliveTimeout = time.Duration(20 * time.Second)
