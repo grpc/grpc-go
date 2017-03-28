@@ -48,7 +48,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	spb "github.com/google/go-genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Status provides access to grpc status details and is implemented by all
@@ -112,7 +111,7 @@ func (se *statusError) Err() error {
 }
 
 // New returns a Status representing c and msg.
-func New(c codes.Code, msg string) status.Status {
+func New(c codes.Code, msg string) Status {
 	if c == codes.OK {
 		return okStatus{}
 	}
@@ -141,7 +140,7 @@ func ErrorProto(s *spb.Status) error {
 
 // FromProto returns a Status representing s.  If s.Code is OK, Message and
 // Details may be lost.
-func FromProto(s *spb.Status) status.Status {
+func FromProto(s *spb.Status) Status {
 	if s.GetCode() == int32(codes.OK) {
 		return okStatus{}
 	}
