@@ -897,6 +897,9 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
+	if f.ErrCode == http2.ErrCodeEnhanceYourCalm {
+		grpclog.Printf("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
+	}
 	t.mu.Lock()
 	if t.state == reachable || t.state == draining {
 		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
