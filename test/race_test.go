@@ -34,6 +34,14 @@
 
 package grpc_test
 
+import (
+	"fmt"
+	"net"
+	"net/http"
+
+	"golang.org/x/net/context"
+)
+
 func init() {
 	raceMode = true
 }
