@@ -96,6 +96,9 @@ response, err := client.SomeRPC(ctx, someRequest)
 // or make streaming RPC
 stream, err := client.SomeStreamingRPC(ctx)
 ```
+
+To read this back from the context on the client (e.g. in an interceptor) before the RPC is sent, use `FromOutgoingContext`.
+
 ### Receiving metadata
 
 Metadata that a client can receive includes header and trailer.
