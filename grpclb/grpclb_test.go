@@ -180,6 +180,14 @@ func (b *remoteBalancer) stop() {
 }
 
 func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	initReq := req.GetInitialRequest()
+	if initReq.Name != besn {
+		return grpc.Errorf(codes.InvalidArgument, "invalid service name: %v", initReq.Name)
+	}
 	resp := &lbpb.LoadBalanceResponse{
 		LoadBalanceResponseType: &lbpb.LoadBalanceResponse_InitialResponse{
 			InitialResponse: new(lbpb.InitialLoadBalanceResponse),
@@ -264,7 +272,7 @@ func TestGRPCLB(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 	}
@@ -334,12 +342,12 @@ func TestDropRequest(t *testing.T) {
 	}
 	sls := []*lbpb.ServerList{{
 		Servers: []*lbpb.Server{{
-			IpAddress:        []byte(beAddr1[0]),
+			IpAddress:        beLis1.Addr().(*net.TCPAddr).IP,
 			Port:             int32(bePort1),
 			LoadBalanceToken: lbToken,
 			DropRequest:      true,
 		}, {
-			IpAddress:        []byte(beAddr2[0]),
+			IpAddress:        beLis2.Addr().(*net.TCPAddr).IP,
 			Port:             int32(bePort2),
 			LoadBalanceToken: lbToken,
 			DropRequest:      false,
@@ -410,7 +418,7 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 		DropRequest:      true,
@@ -473,7 +481,7 @@ func TestServerExpiration(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 	}
