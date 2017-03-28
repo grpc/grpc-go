@@ -558,6 +558,13 @@ func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 	case <-timeout.C:
 		t.Fatalf("Test failed: Expected a GoAway from server.")
 	}
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
 }
 
 func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
@@ -588,7 +595,13 @@ func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	case <-timeout.C:
 		t.Fatalf("Test failed: Expected a GoAway from server.")
 	}
-
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
 }
 
 func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
@@ -649,7 +662,6 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	if ct.state != reachable {
 		t.Fatalf("Test failed: Expected connection to be healthy.")
 	}
-
 }
 
 func TestClientSendAndReceive(t *testing.T) {
