@@ -109,7 +109,7 @@ type testServer struct {
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 }
 
-var detailedError = status.FromProto(&spb.Status{
+var detailedError = status.ErrorProto(&spb.Status{
 	Code:    int32(codes.DataLoss),
 	Message: "missing expected user-agent",
 	Details: []*anypb.Any{{

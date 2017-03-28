@@ -119,7 +119,7 @@ func New(c codes.Code, msg string) Status {
 }
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
-func Newf(c codes.Code, format string, a ...interface{}) error {
+func Newf(c codes.Code, format string, a ...interface{}) Status {
 	return New(c, fmt.Sprintf(format, a...))
 }
 

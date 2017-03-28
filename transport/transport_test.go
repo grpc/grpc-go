@@ -1075,8 +1075,8 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF {
 		t.Fatalf("%v got err %v want <EOF>", s, err)
 	}
-	if st := statusFromError(s.status); st.Code() != code {
-		t.Fatalf("%v got status %v; want Code=%v", s, st, code)
+	if s.status.Code() != code {
+		t.Fatalf("%v got status %v; want Code=%v", s.status, code)
 	}
 
 	if ss.fc.pendingData != 0 || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != 0 || sc.fc.pendingUpdate <= initialWindowSize {

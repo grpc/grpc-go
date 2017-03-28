@@ -156,7 +156,7 @@ func validContentType(t string) bool {
 	return true
 }
 
-func (d *decodeState) status() error {
+func (d *decodeState) status() status.Status {
 	if d.statusGen == nil {
 		// No status-details were provided; generate status using code/msg.
 		d.statusGen = status.New(codes.Code(d.rawStatusCode), d.rawStatusMsg)
