@@ -47,7 +47,7 @@ func TestErrorsWithSameParameters(t *testing.T) {
 	e1 := Errorf(codes.AlreadyExists, description)
 	e2 := Errorf(codes.AlreadyExists, description)
 	if e1 == e2 || !reflect.DeepEqual(e1, e2) {
-		t.Fatalf("Errors should be equivalent but unique - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
+		t.Fatalf("Errors should be equivalent but unique - e1: %v, %v  e2: %p, %v", e1.(*statusError), e1, e2.(*statusError), e2)
 	}
 }
 
