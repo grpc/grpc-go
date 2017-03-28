@@ -69,6 +69,18 @@ func TestTLSDialTimeout(t *testing.T) {
 	}
 }
 
+func TestDefaultAuthority(t *testing.T) {
+	target := "Non-Existent.Server:8080"
+	conn, err := Dial(target, WithInsecure())
+	if err != nil {
+		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
+	}
+	conn.Close()
+	if conn.authority != target {
+		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, target)
+	}
+}
+
 func TestTLSServerNameOverwrite(t *testing.T) {
 	overwriteServerName := "over.write.server.name"
 	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", overwriteServerName)
