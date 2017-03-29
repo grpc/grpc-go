@@ -353,8 +353,7 @@ public class MessageDeframer implements Closeable {
   }
 
   /**
-   * Processes the body of the GRPC compression frame. A single compression frame may contain
-   * several GRPC messages within it.
+   * Processes the GRPC message body, which depending on frame header flags may be compressed.
    */
   private void processBody() {
     InputStream stream = compressedFlag ? getCompressedBody() : getUncompressedBody();
