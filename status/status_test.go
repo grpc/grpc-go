@@ -81,7 +81,7 @@ func TestError(t *testing.T) {
 func TestErrorOK(t *testing.T) {
 	err := Error(codes.OK, "foo")
 	if err != nil {
-		t.Fatalf("Error(codes.OK, _) = %p; want nil", err)
+		t.Fatalf("Error(codes.OK, _) = %p; want nil", err.(*statusError))
 	}
 }
 
