@@ -118,8 +118,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Provides a custom {@code User-Agent} for the application.
    *
-   * <p>It's an optional parameter. If provided, the given agent will be prepended by the
-   * grpc {@code User-Agent}.
+   * <p>It's an optional parameter. The library will provide a user agent independent of this
+   * option. If provided, the given agent will prepend the library's user agent information.
    */
   public abstract T userAgent(String userAgent);
 
