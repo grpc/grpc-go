@@ -613,7 +613,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:                100 * time.Millisecond,
+			Time:                101 * time.Millisecond,
 			Timeout:             50 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
@@ -624,7 +624,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 
 	// Give keepalive enough time.
 	time.Sleep(2 * time.Second)
-	// Asser that connection is healthy
+	// Assert that connection is healthy.
 	ct := client.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()
@@ -641,7 +641,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    100 * time.Millisecond,
+			Time:    101 * time.Millisecond,
 			Timeout: 50 * time.Millisecond,
 		},
 	}
@@ -655,7 +655,7 @@ func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 
 	// Give keepalive enough time.
 	time.Sleep(2 * time.Second)
-	// Asser that connection is healthy
+	// Assert that connection is healthy.
 	ct := client.(*http2Client)
 	ct.mu.Lock()
 	defer ct.mu.Unlock()

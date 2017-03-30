@@ -521,7 +521,8 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 const (
-	maxPingStrikes = 2
+	maxPingStrikes     = 2
+	defaultPingTimeout = 2 * time.Hour
 )
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
@@ -548,8 +549,8 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	t.mu.Unlock()
 	if ns < 1 && !t.kep.PermitWithoutStream {
 		// Keepalive shouldn't be active thus, this new ping should
-		// have come after atleast two hours.
-		if t.lastPingAt.Add(2 * time.Hour).After(now) {
+		// have come after atleast defaultPingTimeout.
+		if t.lastPingAt.Add(defaultPingTimeout).After(now) {
 			t.pingStrikes++
 		}
 	} else {
