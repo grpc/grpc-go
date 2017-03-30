@@ -55,7 +55,7 @@ public class KeepAliveManager {
   private long nextKeepaliveTime;
   private ScheduledFuture<?> shutdownFuture;
   private ScheduledFuture<?> pingFuture;
-  private final Runnable shutdown = new Runnable() {
+  private final Runnable shutdown = new LogExceptionRunnable(new Runnable() {
     @Override
     public void run() {
       boolean shouldShutdown = false;
@@ -71,8 +71,8 @@ public class KeepAliveManager {
         keepAlivePinger.onPingTimeout();
       }
     }
-  };
-  private final Runnable sendPing = new Runnable() {
+  });
+  private final Runnable sendPing = new LogExceptionRunnable(new Runnable() {
     @Override
     public void run() {
       boolean shouldSendPing = false;
@@ -95,7 +95,7 @@ public class KeepAliveManager {
         keepAlivePinger.ping();
       }
     }
-  };
+  });
 
   private long keepAliveDelayInNanos;
   private long keepAliveTimeoutInNanos;
