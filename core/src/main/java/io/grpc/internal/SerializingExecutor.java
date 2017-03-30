@@ -31,13 +31,16 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Preconditions;
-import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.Nullable;
 
 /**
  * Executor ensuring that all {@link Runnable} tasks submitted are executed in order
@@ -45,7 +48,7 @@ import javax.annotation.concurrent.GuardedBy;
  * running at the same time.
  */
 // TODO(madongfly): figure out a way to not expose it or move it to transport package.
-public final class SerializingExecutor implements Executor {
+public final class SerializingExecutor implements Executor, Runnable {
   private static final Logger log =
       Logger.getLogger(SerializingExecutor.class.getName());
 
@@ -53,24 +56,9 @@ public final class SerializingExecutor implements Executor {
   private final Executor executor;
 
   /** A list of Runnables to be run in order. */
-  // Initial size set to 4 because it is a nice number and at least the size necessary for handling
-  // a unary response: onHeaders + onPayload + onClose
-  @GuardedBy("internalLock")
-  private final Queue<Runnable> waitQueue = new ArrayDeque<Runnable>(4);
+  private final Queue<Runnable> runQueue = new ConcurrentLinkedQueue<Runnable>();
 
-  /**
-   * We explicitly keep track of if the TaskRunner is currently scheduled to
-   * run.  If it isn't, we start it.  We can't just use
-   * waitQueue.isEmpty() as a proxy because we need to ensure that only one
-   * Runnable submitted is running at a time so even if waitQueue is empty
-   * the isThreadScheduled isn't set to false until after the Runnable is
-   * finished.
-   */
-  @GuardedBy("internalLock")
-  private boolean isThreadScheduled = false;
-
-  /** The object that actually runs the Runnables submitted, reused. */
-  private final TaskRunner taskRunner = new TaskRunner();
+  private final AtomicBoolean running = new AtomicBoolean();
 
   /**
    * Creates a SerializingExecutor, running tasks using {@code executor}.
@@ -82,90 +70,62 @@ public final class SerializingExecutor implements Executor {
     this.executor = executor;
   }
 
-  private final Object internalLock = new Object() {
-    @Override public String toString() {
-      return "SerializingExecutor lock: " + super.toString();
-    }
-  };
-
   /**
    * Runs the given runnable strictly after all Runnables that were submitted
    * before it, and using the {@code executor} passed to the constructor.     .
    */
   @Override
   public void execute(Runnable r) {
-    Preconditions.checkNotNull(r, "'r' must not be null.");
-    boolean scheduleTaskRunner = false;
-    synchronized (internalLock) {
-      waitQueue.add(r);
+    runQueue.add(checkNotNull(r, "'r' must not be null."));
+    schedule(r);
+  }
 
-      if (!isThreadScheduled) {
-        isThreadScheduled = true;
-        scheduleTaskRunner = true;
-      }
-    }
-    if (scheduleTaskRunner) {
-      boolean threw = true;
+  private void schedule(@Nullable Runnable removable) {
+    if (running.compareAndSet(false, true)) {
+      boolean success = false;
       try {
-        executor.execute(taskRunner);
-        threw = false;
+        executor.execute(this);
+        success = true;
       } finally {
-        if (threw) {
-          synchronized (internalLock) {
-            // It is possible that at this point that there are still tasks in
-            // the queue, it would be nice to keep trying but the error may not
-            // be recoverable.  So we update our state and propogate so that if
-            // our caller deems it recoverable we won't be stuck.
-            isThreadScheduled = false;
+        // It is possible that at this point that there are still tasks in
+        // the queue, it would be nice to keep trying but the error may not
+        // be recoverable.  So we update our state and propagate so that if
+        // our caller deems it recoverable we won't be stuck.
+        if (!success) {
+          if (removable != null) {
+            // This case can only be reached if 'this' was not currently running, and we failed to
+            // reschedule.  The item should still be in the queue for removal.
+            // ConcurrentLinkedQueue claims that null elements are not allowed, but seems to not
+            // throw if the item to remove is null.  If removable is present in the queue twice,
+            // the wrong one may be removed.  It doesn't seem possible for this case to exist today.
+            // This is important to run in case of RejectedExectuionException, so that future calls
+            // to execute don't succeed and accidentally run a previous runnable.
+            runQueue.remove(removable);
           }
+          running.set(false);
         }
       }
     }
   }
 
-  /**
-   * Task that actually runs the Runnables.  It takes the Runnables off of the
-   * queue one by one and runs them.  After it is done with all Runnables and
-   * there are no more to run, puts the SerializingExecutor in the state where
-   * isThreadScheduled = false and returns.  This allows the current worker
-   * thread to return to the original pool.
-   */
-  private class TaskRunner implements Runnable {
-    @Override
-    public void run() {
-      boolean stillRunning = true;
-      try {
-        while (true) {
-          Runnable nextToRun;
-          synchronized (internalLock) {
-            Preconditions.checkState(isThreadScheduled);
-            nextToRun = waitQueue.poll();
-            if (nextToRun == null) {
-              isThreadScheduled = false;
-              stillRunning = false;
-              break;
-            }
-          }
-
-          // Always run while not holding the lock, to avoid deadlocks.
-          try {
-            nextToRun.run();
-          } catch (RuntimeException e) {
-            // Log it and keep going.
-            log.log(Level.SEVERE, "Exception while executing runnable "
-                + nextToRun, e);
-          }
-        }
-      } finally {
-        if (stillRunning) {
-          // An Error is bubbling up, we should mark ourselves as no longer
-          // running, that way if anyone tries to keep using us we won't be
-          // corrupted.
-          synchronized (internalLock) {
-            isThreadScheduled = false;
-          }
+  @Override
+  public void run() {
+    Runnable r;
+    try {
+      while ((r = runQueue.poll()) != null) {
+        try {
+          r.run();
+        } catch (RuntimeException e) {
+          // Log it and keep going.
+          log.log(Level.SEVERE, "Exception while executing runnable " + r, e);
         }
       }
+    } finally {
+      running.set(false);
+    }
+    if (!runQueue.isEmpty()) {
+      // we didn't enqueue anything but someone else did.
+      schedule(null);
     }
   }
 }
