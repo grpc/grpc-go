@@ -31,7 +31,7 @@
  *
  */
 
-package main
+package qpsworker
 
 import (
 	"math"
@@ -119,25 +119,14 @@ func setupClientEnv(config *testpb.ClientConfig) {
 	}
 }
 
-// createConns creates connections according to given config.
-// It returns the connections and corresponding function to close them.
-// It returns non-nil error if there is anything wrong.
-func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
+func createNewClientConn(config *testpb.ClientConfig, serverTarget string, customDopts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
-
-	// Sanity check for client type.
-	switch config.ClientType {
-	case testpb.ClientType_SYNC_CLIENT:
-	case testpb.ClientType_ASYNC_CLIENT:
-	default:
-		return nil, nil, grpc.Errorf(codes.InvalidArgument, "unknow client type: %v", config.ClientType)
-	}
 
 	// Check and set security options.
 	if config.SecurityParams != nil {
 		creds, err := credentials.NewClientTLSFromFile(abs(caFile), config.SecurityParams.ServerHostOverride)
 		if err != nil {
-			return nil, nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
+			return nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
@@ -151,15 +140,44 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 			opts = append(opts, grpc.WithCodec(byteBufCodec{}))
 		case *testpb.PayloadConfig_SimpleParams:
 		default:
-			return nil, nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
+			return nil, grpc.Errorf(codes.InvalidArgument, "unknow payload config: %v", config.PayloadConfig)
 		}
+	}
+
+	// append custom benchmark client dial options
+	for _, dopt := range customDopts {
+		opts = append(opts, dopt)
+	}
+
+	return benchmark.NewClientConn(serverTarget, opts...), nil
+}
+
+// createConns creates connections according to given config.
+// It returns the connections and corresponding function to close them.
+// It returns non-nil error if there is anything wrong.
+func createConns(config *testpb.ClientConfig, newClientConnDopts func() []grpc.DialOption) ([]*grpc.ClientConn, func(), error) {
+	// Sanity check for client type.
+	switch config.ClientType {
+	case testpb.ClientType_SYNC_CLIENT:
+	case testpb.ClientType_ASYNC_CLIENT:
+	default:
+		return nil, nil, grpc.Errorf(codes.InvalidArgument, "unknow client type: %v", config.ClientType)
 	}
 
 	// Create connections.
 	connCount := int(config.ClientChannels)
 	conns := make([]*grpc.ClientConn, connCount, connCount)
 	for connIndex := 0; connIndex < connCount; connIndex++ {
-		conns[connIndex] = benchmark.NewClientConn(config.ServerTargets[connIndex%len(config.ServerTargets)], opts...)
+		var customDopts []grpc.DialOption
+		var err error
+
+		if newClientConnDopts != nil {
+			customDopts = newClientConnDopts()
+		}
+		serverTarget := config.ServerTargets[connIndex%len(config.ServerTargets)]
+		if conns[connIndex], err = createNewClientConn(config, serverTarget, customDopts...); err != nil {
+			grpclog.Fatalf("Failed to create client conn to server target: %s. Error: %v", serverTarget, err)
+		}
 	}
 
 	return conns, func() {
@@ -215,13 +233,13 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 	return nil
 }
 
-func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error) {
+func startBenchmarkClient(config *testpb.ClientConfig, newClientConnDopts func() []grpc.DialOption) (*benchmarkClient, error) {
 	printClientConfig(config)
 
 	// Set running environment like how many cores to use.
 	setupClientEnv(config)
 
-	conns, closeConns, err := createConns(config)
+	conns, closeConns, err := createConns(config, newClientConnDopts)
 	if err != nil {
 		return nil, err
 	}

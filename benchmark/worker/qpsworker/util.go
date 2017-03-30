@@ -30,7 +30,7 @@
  *
  */
 
-package main
+package qpsworker
 
 import (
 	"log"

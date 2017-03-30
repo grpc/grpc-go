@@ -31,7 +31,7 @@
  *
  */
 
-package main
+package qpsworker
 
 import (
 	"runtime"
