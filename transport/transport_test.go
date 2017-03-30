@@ -1134,7 +1134,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if err != io.EOF {
 		t.Fatalf("Got err %v, want <EOF>", err)
 	}
-	if st, ok := s.status.(status.Status); !ok || st.Code() != codes.Internal {
+	if s.status.Code() != codes.Internal {
 		t.Fatalf("Got s.status %v, want s.status.Code()=Internal", s.status)
 	}
 
