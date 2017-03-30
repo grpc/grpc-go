@@ -49,6 +49,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -58,6 +59,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
@@ -103,6 +105,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
 
   private NettyServerStream stream;
+  private KeepAliveManager spyKeepAliveManager;
 
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int maxConcurrentStreams = Integer.MAX_VALUE;
@@ -135,6 +138,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     MockitoAnnotations.initMocks(this);
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
+
+    // replace the keepAliveManager with spyKeepAliveManager
+    spyKeepAliveManager = spy(handler().getKeepAliveManagerForTest());
+    handler().setKeepAliveManagerForTest(spyKeepAliveManager);
 
     // Simulate receipt of the connection preface
     handler().handleProtocolNegotiationCompleted(Attributes.EMPTY);
@@ -341,6 +348,75 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     stream = streamCaptor.getValue();
   }
 
+  @Test
+  public void keepAliveManagerStarted() {
+    verify(spyKeepAliveManager).onTransportStarted();
+    verify(spyKeepAliveManager, never()).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAlivemanagerOnDataReceived_headersRead() throws Exception {
+    ByteBuf headersFrame = headersFrame(STREAM_ID, new DefaultHttp2Headers());
+    channelRead(headersFrame);
+
+    verify(spyKeepAliveManager).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAlivemanagerOnDataReceived_dataRead() throws Exception {
+    createStream();
+    verify(spyKeepAliveManager).onDataReceived(); // received headers
+
+    channelRead(grpcDataFrame(STREAM_ID, false, contentAsArray()));
+
+    verify(spyKeepAliveManager, times(2)).onDataReceived();
+
+    channelRead(grpcDataFrame(STREAM_ID, false, contentAsArray()));
+
+    verify(spyKeepAliveManager, times(3)).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAlivemanagerOnDataReceived_rstStreamRead() throws Exception {
+    createStream();
+    verify(spyKeepAliveManager).onDataReceived(); // received headers
+
+    channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
+
+    verify(spyKeepAliveManager, times(2)).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAliveManagerOnDataReceived_pingRead() throws Exception {
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1234L);
+    channelRead(pingFrame(false /* isAct */, payload));
+
+    verify(spyKeepAliveManager).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAliveManagerOnDataReceived_pingActRead() throws Exception {
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1234L);
+    channelRead(pingFrame(true /* isAct */, payload));
+
+    verify(spyKeepAliveManager).onDataReceived();
+    verify(spyKeepAliveManager, never()).onTransportTermination();
+  }
+
+  @Test
+  public void keepAliveManagerOnTransportTermination() throws Exception {
+    handler().channelInactive(handler().ctx());
+
+    verify(spyKeepAliveManager).onTransportTermination();
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
@@ -370,7 +446,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Override
   protected NettyServerHandler newHandler() {
     return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
-        maxConcurrentStreams, flowControlWindow, maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE);
+        maxConcurrentStreams, flowControlWindow, maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
+        2000L, 100L);
   }
 
   @Override
