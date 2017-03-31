@@ -92,8 +92,7 @@ var (
 type decodeState struct {
 	err error // first error encountered decoding
 
-	acceptEncoding []string
-	encoding       string
+	encoding string
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.
 	statusCode codes.Code
@@ -116,7 +115,6 @@ func isReservedHeader(hdr string) bool {
 	switch hdr {
 	case "content-type",
 		"grpc-message-type",
-		"grpc-accept-encoding",
 		"grpc-encoding",
 		"grpc-message",
 		"grpc-status",
@@ -165,8 +163,6 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 			d.setErr(streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value))
 			return
 		}
-	case "grpc-accept-encoding":
-		d.acceptEncoding = strings.Split(f.Value, ",")
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":

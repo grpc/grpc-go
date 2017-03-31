@@ -71,14 +71,8 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 			Client: true,
 		}
 	}
-	var dc Decompressor
-	if c.decompressor != nil {
-		dc = c.decompressor
-	} else {
-		dc = dopts.dc
-	}
 	for {
-		if err = recv(p, dopts.codec, stream, dc, reply, dopts.maxMsgSize, inPayload); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, dopts.maxMsgSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -228,13 +222,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
-		}
-		// Add compression algorithms to grpc-accept-encoding header
-		// if a Decompressor is attached to the RPC or channel
-		if c.decompressor != nil {
-			callHdr.AcceptEncoding = c.decompressor.Type()
-		} else if cc.dopts.dc != nil {
-			callHdr.AcceptEncoding = cc.dopts.dc.Type()
 		}
 
 		gopts := BalancerGetOptions{
