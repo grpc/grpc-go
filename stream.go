@@ -131,6 +131,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
 	}
+	// Add compression algorithms to grpc-accept-encoding header
+	// if a Decompressor is attached to the RPC or channel
+	if c.decompressor != nil {
+		callHdr.AcceptEncoding = c.decompressor.Type()
+	} else if cc.dopts.dc != nil {
+		callHdr.AcceptEncoding = cc.dopts.dc.Type()
+	}
+
 	var trInfo traceInfo
 	if EnableTracing {
 		trInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
@@ -206,13 +214,19 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}
 		break
 	}
+	var dc Decompressor
+	if c.decompressor != nil {
+		dc = c.decompressor
+	} else {
+		dc = cc.dopts.dc
+	}
 	cs := &clientStream{
 		opts:       opts,
 		c:          c,
 		desc:       desc,
 		codec:      cc.dopts.codec,
 		cp:         cc.dopts.cp,
-		dc:         cc.dopts.dc,
+		dc:         dc,
 		maxMsgSize: cc.dopts.maxMsgSize,
 		cancel:     cancel,
 

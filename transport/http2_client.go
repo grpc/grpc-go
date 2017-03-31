@@ -410,6 +410,14 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":scheme", Value: t.scheme})
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
+
+	if callHdr.AcceptEncoding != "" {
+		encodings := "identity," + callHdr.AcceptEncoding
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-accept-encoding", Value: encodings})
+	} else {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-accept-encoding", Value: "identity"})
+	}
+
 	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
 	t.hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
