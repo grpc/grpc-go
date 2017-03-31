@@ -35,6 +35,7 @@ package grpc_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -53,7 +54,6 @@ import (
 	"testing"
 	"time"
 
-	"context"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"

@@ -34,6 +34,7 @@
 package stats_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -42,7 +43,6 @@ import (
 	"testing"
 	"time"
 
-	"context"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

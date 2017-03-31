@@ -34,13 +34,13 @@
 package interop
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"strings"
 	"time"
 
-	"context"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"

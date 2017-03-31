@@ -1,10 +1,10 @@
 package mock_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"context"
 	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/proto"
 	helloworld "google.golang.org/grpc/examples/helloworld/helloworld"

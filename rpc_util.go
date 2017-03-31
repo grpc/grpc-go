@@ -36,6 +36,7 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -44,7 +45,6 @@ import (
 	"os"
 	"time"
 
-	"context"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

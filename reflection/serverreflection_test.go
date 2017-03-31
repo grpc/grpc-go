@@ -34,13 +34,13 @@
 package reflection
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
 	"sort"
 	"testing"
 
-	"context"
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
