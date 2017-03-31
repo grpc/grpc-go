@@ -323,6 +323,9 @@ func TestMaxConnectionIdle(t *testing.T) {
 	timeout := time.NewTimer(time.Second * 4)
 	select {
 	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
 	case <-timeout.C:
 		t.Fatalf("Test timed out, expected a GoAway from the server.")
 	}
@@ -345,6 +348,9 @@ func TestMaxConnectionIdleNegative(t *testing.T) {
 	timeout := time.NewTimer(time.Second * 4)
 	select {
 	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
 		t.Fatalf("A non-idle client received a GoAway.")
 	case <-timeout.C:
 	}
@@ -369,6 +375,9 @@ func TestMaxConnectionAge(t *testing.T) {
 	timeout := time.NewTimer(4 * time.Second)
 	select {
 	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
 	case <-timeout.C:
 		t.Fatalf("Test timer out, expected a GoAway from the server.")
 	}
@@ -520,6 +529,138 @@ func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	defer ct.mu.Unlock()
 	if ct.state != reachable {
 		t.Fatalf("Test failed: Expected client transport to be healthy.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 2 * time.Second,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                50 * time.Millisecond,
+			Timeout:             50 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	timeout := time.NewTimer(2 * time.Second)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test failed: Expected a GoAway from server.")
+	}
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 2 * time.Second,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    50 * time.Millisecond,
+			Timeout: 50 * time.Millisecond,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+		t.Fatalf("Client failed to create stream.")
+	}
+	timeout := time.NewTimer(2 * time.Second)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test failed: Expected a GoAway from server.")
+	}
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:             100 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                101 * time.Millisecond,
+			Timeout:             50 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	// Give keepalive enough time.
+	time.Sleep(2 * time.Second)
+	// Assert that connection is healthy.
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected connection to be healthy.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 100 * time.Millisecond,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    101 * time.Millisecond,
+			Timeout: 50 * time.Millisecond,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+		t.Fatalf("Client failed to create stream.")
+	}
+
+	// Give keepalive enough time.
+	time.Sleep(2 * time.Second)
+	// Assert that connection is healthy.
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected connection to be healthy.")
 	}
 }
 
