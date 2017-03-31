@@ -138,11 +138,12 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-	peer      *peer.Peer
-	traceInfo traceInfo // in trace.go
+	failFast     bool
+	headerMD     metadata.MD
+	trailerMD    metadata.MD
+	peer         *peer.Peer
+	decompressor Decompressor
+	traceInfo    traceInfo // in trace.go
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -169,7 +170,7 @@ type afterCall func(c *callInfo)
 func (o afterCall) before(c *callInfo) error { return nil }
 func (o afterCall) after(c *callInfo)        { o(c) }
 
-// Header returns a CallOptions that retrieves the header metadata
+// Header returns a CallOption that retrieves the header metadata
 // for a unary RPC.
 func Header(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
@@ -177,7 +178,7 @@ func Header(md *metadata.MD) CallOption {
 	})
 }
 
-// Trailer returns a CallOptions that retrieves the trailer metadata
+// Trailer returns a CallOption that retrieves the trailer metadata
 // for a unary RPC.
 func Trailer(md *metadata.MD) CallOption {
 	return afterCall(func(c *callInfo) {
@@ -202,6 +203,17 @@ func Peer(peer *peer.Peer) CallOption {
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
+		return nil
+	})
+}
+
+// WithRPCDecompressor configures per-RPC decompression.  If this CallOption is omitted
+// in a unary or streaming RPC, the Decompressor specified at channel creation will be used.
+// (See func WithCompressor()).  Please refer to
+// https://github.com/grpc/grpc/blomaster/doc/compression.md.
+func WithRPCDecompressor(dc Decompressor) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.decompressor = dc
 		return nil
 	})
 }
