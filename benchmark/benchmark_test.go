@@ -1,12 +1,12 @@
 package benchmark
 
 import (
+	"context"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"

@@ -45,8 +45,8 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"

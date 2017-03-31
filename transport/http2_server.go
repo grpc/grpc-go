@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"math"
@@ -45,7 +46,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"

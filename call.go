@@ -35,10 +35,10 @@ package grpc
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"

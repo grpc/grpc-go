@@ -34,6 +34,7 @@
 package grpclb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -43,7 +44,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

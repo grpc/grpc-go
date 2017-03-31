@@ -3,9 +3,9 @@
 package health
 
 import (
+	"context"
 	"sync"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"

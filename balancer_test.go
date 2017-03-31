@@ -34,13 +34,13 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/naming"
 )

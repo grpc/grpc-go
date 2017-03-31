@@ -36,11 +36,10 @@
 package metadata // import "google.golang.org/grpc/metadata"
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
-
-	"golang.org/x/net/context"
 )
 
 const (
