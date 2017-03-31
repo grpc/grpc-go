@@ -33,6 +33,9 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
+import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
@@ -47,6 +50,7 @@ import io.netty.handler.ssl.SslContext;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLException;
@@ -58,6 +62,10 @@ import javax.net.ssl.SSLException;
 @CanIgnoreReturnValue
 public final class NettyServerBuilder extends AbstractServerImplBuilder<NettyServerBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
+
+  private static final long MIN_KEEPALIVE_TIME_NANO = TimeUnit.MILLISECONDS.toNanos(1L);
+  private static final long MIN_KEEPALIVE_TIMEOUT_NANO = TimeUnit.MICROSECONDS.toNanos(499L);
+  private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
 
   private final SocketAddress address;
   private Class<? extends ServerChannel> channelType = NioServerSocketChannel.class;
@@ -71,6 +79,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
+  private long keepAliveTimeInNanos =  DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
+  private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 
   /**
    * Creates a server builder that will bind to the given port.
@@ -227,6 +237,43 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return this;
   }
 
+  /**
+   * Sets a custom keepalive time, the delay time for sending next keepalive ping. An unreasonably
+   * small value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably
+   * large value will disable keepalive.
+   *
+   * @since 1.3.0
+   */
+  public NettyServerBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    checkArgument(keepAliveTime > 0L, "keepalive time must be positive");
+    keepAliveTimeInNanos = timeUnit.toNanos(keepAliveTime);
+    if (keepAliveTimeInNanos >= AS_LARGE_AS_INFINITE) {
+      // Bump keepalive time to infinite. This disables keep alive.
+      keepAliveTimeInNanos = SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
+    }
+    if (keepAliveTimeInNanos < MIN_KEEPALIVE_TIME_NANO) {
+      // Bump keepalive time.
+      keepAliveTimeInNanos = MIN_KEEPALIVE_TIME_NANO;
+    }
+    return this;
+  }
+
+  /**
+   * Sets a custom keepalive timeout, the timeout for keepalive ping requests. An unreasonably small
+   * value might be increased.
+   *
+   * @since 1.3.0
+   */
+  public NettyServerBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
+    keepAliveTimeoutInNanos = timeUnit.toNanos(keepAliveTimeout);
+    if (keepAliveTimeoutInNanos < MIN_KEEPALIVE_TIMEOUT_NANO) {
+      // Bump keepalive timeout.
+      keepAliveTimeoutInNanos = MIN_KEEPALIVE_TIMEOUT_NANO;
+    }
+    return this;
+  }
+
   @Override
   @CheckReturnValue
   protected NettyServer buildTransportServer() {
@@ -237,7 +284,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     }
     return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, maxConcurrentCallsPerConnection, flowControlWindow, maxMessageSize,
-        maxHeaderListSize);
+        maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos);
   }
 
   @Override

@@ -75,12 +75,15 @@ class NettyServer implements InternalServer {
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
+  private final long keepAliveTimeInNanos;
+  private final long keepAliveTimeoutInNanos;
   private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
               ProtocolNegotiator protocolNegotiator, int maxStreamsPerConnection,
-              int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
+              int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+              long keepAliveTimeInNanos, long keepAliveTimeoutInNanos) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     this.bossGroup = bossGroup;
@@ -92,6 +95,8 @@ class NettyServer implements InternalServer {
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
+    this.keepAliveTimeInNanos = keepAliveTimeInNanos;
+    this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
   }
 
   @Override
@@ -124,7 +129,8 @@ class NettyServer implements InternalServer {
       @Override
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport = new NettyServerTransport(ch, protocolNegotiator,
-            maxStreamsPerConnection, flowControlWindow, maxMessageSize, maxHeaderListSize);
+            maxStreamsPerConnection, flowControlWindow, maxMessageSize, maxHeaderListSize,
+            keepAliveTimeInNanos, keepAliveTimeoutInNanos);
         ServerTransportListener transportListener;
         // This is to order callbacks on the listener, not to guard access to channel.
         synchronized (NettyServer.this) {

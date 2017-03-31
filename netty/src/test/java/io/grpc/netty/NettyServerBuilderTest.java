@@ -35,6 +35,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.netty.handler.ssl.SslContext;
+import java.util.concurrent.TimeUnit;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -66,5 +67,21 @@ public class NettyServerBuilderTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("Client SSL context can not be used for server");
     builder.sslContext(sslContext);
+  }
+
+  @Test
+  public void failIfKeepAliveTimeNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("keepalive time must be positive");
+
+    NettyServerBuilder.forPort(8080).keepAliveTime(-10L, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void failIfKeepAliveTimeoutNegative() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("keepalive timeout must be positive");
+
+    NettyServerBuilder.forPort(8080).keepAliveTimeout(-10L, TimeUnit.HOURS);
   }
 }

@@ -57,6 +57,8 @@ public class NettyServerTest {
         1, // ignore
         1, // ignore
         1, // ignore
+        1, // ignore
+        1, // ignore
         1); // ignore
     ns.start(new ServerListener() {
       @Override
@@ -84,6 +86,8 @@ public class NettyServerTest {
         null, // no boss group
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
+        1, // ignore
+        1, // ignore
         1, // ignore
         1, // ignore
         1, // ignore

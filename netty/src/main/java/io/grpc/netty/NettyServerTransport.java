@@ -40,7 +40,6 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -59,18 +58,20 @@ class NettyServerTransport implements ServerTransport {
   private final int flowControlWindow;
   private final int maxMessageSize;
   private final int maxHeaderListSize;
-  // TODO(zdapeng): allow custom keep alive config values by NettyServerBuilder
-  private final long keepAliveTimeInNanos = Long.MAX_VALUE; // this disables keepalive
-  private final long keepAliveTimeoutInNanos = TimeUnit.NANOSECONDS.convert(20L, TimeUnit.SECONDS);
+  private final long keepAliveTimeInNanos;
+  private final long keepAliveTimeoutInNanos;
 
   NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator, int maxStreams,
-      int flowControlWindow, int maxMessageSize, int maxHeaderListSize) {
+      int flowControlWindow, int maxMessageSize, int maxHeaderListSize, long keepAliveTimeInNanos,
+      long keepAliveTimeoutInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
+    this.keepAliveTimeInNanos = keepAliveTimeInNanos;
+    this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
   }
 
   public void start(ServerTransportListener listener) {

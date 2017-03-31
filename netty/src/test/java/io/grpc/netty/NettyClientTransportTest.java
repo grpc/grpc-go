@@ -34,6 +34,8 @@ package io.grpc.netty;
 import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.Status.Code.INTERNAL;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
@@ -411,7 +413,8 @@ public class NettyClientTransportTest {
     ProtocolNegotiator negotiator = ProtocolNegotiators.serverTls(serverContext);
     server = new NettyServer(TestUtils.testServerAddress(0),
         NioServerSocketChannel.class, group, group, negotiator,
-        maxStreamsPerConnection, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize);
+        maxStreamsPerConnection, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize,
+        DEFAULT_SERVER_KEEPALIVE_TIME_NANOS, DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS);
     server.start(serverListener);
     address = TestUtils.testServerAddress(server.getPort());
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());

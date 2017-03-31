@@ -33,6 +33,7 @@ package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
@@ -186,7 +187,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
     serverWriteQueue = new WriteQueue(ctx.channel());
-    if (keepAliveTimeInNanos != Long.MAX_VALUE) {
+    if (keepAliveTimeInNanos != SERVER_KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(new KeepAlivePinger(ctx), ctx.executor(),
           keepAliveTimeInNanos, keepAliveTimeoutInNanos, true /* keepAliveDuringTransportIdle */);
     }
