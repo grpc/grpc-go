@@ -61,10 +61,10 @@ func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float6
 		stimeDiffus = latest.Stime.Usec - first.Stime.Usec
 	)
 
-	elapseUtime := float64(utimeDiffs) + float64(utimeDiffus)*1.0e-6
-	elapseStime := float64(stimeDiffs) + float64(stimeDiffus)*1.0e-6
+	uTimeElapsed := float64(utimeDiffs) + float64(utimeDiffus)*1.0e-6
+	sTimeElapsed := float64(stimeDiffs) + float64(stimeDiffus)*1.0e-6
 
-	return elapseUtime, elapseStime
+	return uTimeElapsed, sTimeElapsed
 }
 
 func goPackagePath(pkg string) (path string, err error) {
