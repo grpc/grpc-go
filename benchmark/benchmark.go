@@ -144,6 +144,17 @@ type ServerInfo struct {
 	// For "protobuf", it's ignored.
 	// For "bytebuf", it should be an int representing response size.
 	Metadata interface{}
+
+	// NewServerFunc is an optional configuration.
+	// It specifies the function used to create new grpc.Server.
+	// grpc.NewServer is used if it's nil.
+	NewServerFunc func(opt ...grpc.ServerOption) (*grpc.Server, ListenerServer)
+}
+
+// ListenerServer can serve a net.Listener and stop serving.
+type ListenerServer interface {
+	Serve(net.Listener) error
+	Stop()
 }
 
 // StartServer starts a gRPC server serving a benchmark service according to info.
@@ -153,7 +164,16 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(opts...)
+	var (
+		s  *grpc.Server
+		ss ListenerServer
+	)
+	if info.NewServerFunc == nil {
+		s = grpc.NewServer(opts...)
+		ss = s
+	} else {
+		s, ss = info.NewServerFunc(opts...)
+	}
 	switch info.Type {
 	case "protobuf":
 		testpb.RegisterBenchmarkServiceServer(s, &testServer{})
@@ -166,9 +186,9 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	default:
 		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
-	go s.Serve(lis)
+	go ss.Serve(lis)
 	return lis.Addr().String(), func() {
-		s.Stop()
+		ss.Stop()
 	}
 }
 
@@ -225,8 +245,16 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 }
 
 // NewClientConn creates a gRPC client connection to addr.
-func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
-	conn, err := grpc.Dial(addr, opts...)
+func NewClientConn(addr string, dialFunc func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error), opts ...grpc.DialOption) *grpc.ClientConn {
+	var (
+		conn *grpc.ClientConn
+		err  error
+	)
+	if dialFunc == nil {
+		conn, err = grpc.Dial(addr, opts...)
+	} else {
+		conn, err = dialFunc(addr, opts...)
+	}
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}

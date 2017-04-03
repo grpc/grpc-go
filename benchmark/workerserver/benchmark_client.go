@@ -31,7 +31,7 @@
  *
  */
 
-package main
+package workerserver
 
 import (
 	"math"
@@ -122,7 +122,7 @@ func setupClientEnv(config *testpb.ClientConfig) {
 // createConns creates connections according to given config.
 // It returns the connections and corresponding function to close them.
 // It returns non-nil error if there is anything wrong.
-func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
+func createConns(dialFunc func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error), config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error) {
 	var opts []grpc.DialOption
 
 	// Sanity check for client type.
@@ -159,7 +159,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	connCount := int(config.ClientChannels)
 	conns := make([]*grpc.ClientConn, connCount, connCount)
 	for connIndex := 0; connIndex < connCount; connIndex++ {
-		conns[connIndex] = benchmark.NewClientConn(config.ServerTargets[connIndex%len(config.ServerTargets)], opts...)
+		conns[connIndex] = benchmark.NewClientConn(config.ServerTargets[connIndex%len(config.ServerTargets)], dialFunc, opts...)
 	}
 
 	return conns, func() {
@@ -215,13 +215,13 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 	return nil
 }
 
-func startBenchmarkClient(config *testpb.ClientConfig) (*benchmarkClient, error) {
+func startBenchmarkClient(dialFunc func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error), config *testpb.ClientConfig) (*benchmarkClient, error) {
 	printClientConfig(config)
 
 	// Set running environment like how many cores to use.
 	setupClientEnv(config)
 
-	conns, closeConns, err := createConns(config)
+	conns, closeConns, err := createConns(dialFunc, config)
 	if err != nil {
 		return nil, err
 	}
