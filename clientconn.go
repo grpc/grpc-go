@@ -40,6 +40,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"strings"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
