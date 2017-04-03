@@ -106,22 +106,22 @@ type Server struct {
 }
 
 type options struct {
-	creds                credentials.TransportCredentials
-	codec                Codec
-	cp                   Compressor
-	dc                   Decompressor
-	maxMsgSize           int
-	unaryInt             UnaryServerInterceptor
-	streamInt            StreamServerInterceptor
-	inTapHandle          tap.ServerInHandle
-	statsHandler         stats.Handler
-	maxConcurrentStreams uint32
+	creds                 credentials.TransportCredentials
+	codec                 Codec
+	cp                    Compressor
+	dc                    Decompressor
+	maxMsgSize            int
+	unaryInt              UnaryServerInterceptor
+	streamInt             StreamServerInterceptor
+	inTapHandle           tap.ServerInHandle
+	statsHandler          stats.Handler
+	maxConcurrentStreams  uint32
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	useHandlerImpl       bool // use http.Handler-based server
-	unknownStreamDesc    *StreamDesc
-	keepaliveParams      keepalive.ServerParameters
-	keepalivePolicy      keepalive.EnforcementPolicy
+	useHandlerImpl        bool // use http.Handler-based server
+	unknownStreamDesc     *StreamDesc
+	keepaliveParams       keepalive.ServerParameters
+	keepalivePolicy       keepalive.EnforcementPolicy
 }
 
 const defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4 // Use 4MB as the default receive message size limit.

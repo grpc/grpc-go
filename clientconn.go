@@ -38,9 +38,9 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"

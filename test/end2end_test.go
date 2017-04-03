@@ -1441,7 +1441,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
 	if err := stream.Send(sreq); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, err)
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	sreq.Payload = extraLargePayload
 	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
