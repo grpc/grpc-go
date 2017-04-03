@@ -88,19 +88,20 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt   UnaryClientInterceptor
-	streamInt  StreamClientInterceptor
-	codec      Codec
-	cp         Compressor
-	dc         Decompressor
-	bs         backoffStrategy
-	balancer   Balancer
-	block      bool
-	insecure   bool
-	timeout    time.Duration
-	scChan     <-chan ServiceConfig
-	copts      transport.ConnectOptions
-	maxMsgSize int
+	unaryInt              UnaryClientInterceptor
+	streamInt             StreamClientInterceptor
+	codec                 Codec
+	cp                    Compressor
+	dc                    Decompressor
+	bs                    backoffStrategy
+	balancer              Balancer
+	block                 bool
+	insecure              bool
+	timeout               time.Duration
+	scChan                <-chan ServiceConfig
+	copts                 transport.ConnectOptions
+	maxReceiveMessageSize int
+	maxSendMessageSize    int
 }
 
 const defaultClientMaxMsgSize = math.MaxInt32
@@ -108,10 +109,24 @@ const defaultClientMaxMsgSize = math.MaxInt32
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. This function is for backward API compatibility. It has essentially the same functionality as WithMaxReceiveMessageSize.
 func WithMaxMsgSize(s int) DialOption {
 	return func(o *dialOptions) {
-		o.maxMsgSize = s
+		o.maxReceiveMessageSize = s
+	}
+}
+
+// WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive. Negative input is invalid and has the same effect as not setting the field.
+func WithMaxReceiveMessageSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.maxReceiveMessageSize = s
+	}
+}
+
+// WithMaxSendMessageSize returns a DialOption which sets the maximum message size the client can send. Negative input is invalid and has the same effect as not seeting the field.
+func WithMaxSendMessageSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.maxSendMessageSize = s
 	}
 }
 
@@ -307,7 +322,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
-	cc.dopts.maxMsgSize = defaultClientMaxMsgSize
+
+	// initialize maxReceiveMessageSize and maxSendMessageSize to -1 before applying DialOption functions to distinguish whether the user set the message limit or not.
+	cc.dopts.maxReceiveMessageSize = -1
+	cc.dopts.maxSendMessageSize = -1
+
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -609,11 +628,16 @@ func (cc *ClientConn) resetAddrConn(addr Address, skipWait bool, tearDownErr err
 	return nil
 }
 
+// GetMethodConfig gets the method config of the input method. If there's no exact match for the input method (i.e. /service/method), we will return the default config for all methods under the service (/service/).
 // TODO: Avoid the locking here.
-func (cc *ClientConn) getMethodConfig(method string) (m MethodConfig, ok bool) {
+func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig, ok bool) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
 	m, ok = cc.sc.Methods[method]
+	if !ok {
+		i := strings.LastIndex(method, "/")
+		m, ok = cc.sc.Methods[method[:i+1]]
+	}
 	return
 }
 

@@ -112,12 +112,40 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cancel context.CancelFunc
 	)
 	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
-		if mc.Timeout > 0 {
-			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
+	maxReceiveMessageSize := defaultClientMaxReceiveMessageSize
+	maxSendMessageSize := defaultClientMaxSendMessageSize
+
+	if mc, ok := cc.GetMethodConfig(method); ok {
+		if mc.WaitForReady != nil {
+			c.failFast = !*mc.WaitForReady
+		}
+
+		if mc.Timeout != nil && *mc.Timeout >= 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
+			defer cancel()
+		}
+
+		if mc.MaxReqSize != nil && cc.dopts.maxSendMessageSize >= 0 {
+			maxSendMessageSize = min(*mc.MaxReqSize, cc.dopts.maxSendMessageSize)
+		} else if mc.MaxReqSize != nil {
+			maxSendMessageSize = *mc.MaxReqSize
+		}
+
+		if mc.MaxRespSize != nil && cc.dopts.maxReceiveMessageSize >= 0 {
+			maxReceiveMessageSize = min(*mc.MaxRespSize, cc.dopts.maxReceiveMessageSize)
+		} else if mc.MaxRespSize != nil {
+			maxReceiveMessageSize = *mc.MaxRespSize
+		}
+	} else {
+		if cc.dopts.maxSendMessageSize >= 0 {
+			maxSendMessageSize = cc.dopts.maxSendMessageSize
+		}
+		if cc.dopts.maxReceiveMessageSize >= 0 {
+			maxReceiveMessageSize = cc.dopts.maxReceiveMessageSize
 		}
 	}
+
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return nil, toRPCErr(err)
@@ -207,14 +235,15 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		break
 	}
 	cs := &clientStream{
-		opts:       opts,
-		c:          c,
-		desc:       desc,
-		codec:      cc.dopts.codec,
-		cp:         cc.dopts.cp,
-		dc:         cc.dopts.dc,
-		maxMsgSize: cc.dopts.maxMsgSize,
-		cancel:     cancel,
+		opts:  opts,
+		c:     c,
+		desc:  desc,
+		codec: cc.dopts.codec,
+		cp:    cc.dopts.cp,
+		dc:    cc.dopts.dc,
+		maxReceiveMessageSize: maxReceiveMessageSize,
+		maxSendMessageSize:    maxSendMessageSize,
+		cancel:                cancel,
 
 		put: put,
 		t:   t,
@@ -259,18 +288,19 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	opts       []CallOption
-	c          callInfo
-	t          transport.ClientTransport
-	s          *transport.Stream
-	p          *parser
-	desc       *StreamDesc
-	codec      Codec
-	cp         Compressor
-	cbuf       *bytes.Buffer
-	dc         Decompressor
-	maxMsgSize int
-	cancel     context.CancelFunc
+	opts                  []CallOption
+	c                     callInfo
+	t                     transport.ClientTransport
+	s                     *transport.Stream
+	p                     *parser
+	desc                  *StreamDesc
+	codec                 Codec
+	cp                    Compressor
+	cbuf                  *bytes.Buffer
+	dc                    Decompressor
+	maxReceiveMessageSize int
+	maxSendMessageSize    int
+	cancel                context.CancelFunc
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -353,6 +383,9 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
+	if len(out) > cs.maxSendMessageSize {
+		return Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(out), cs.maxSendMessageSize)
+	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
@@ -383,7 +416,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxMsgSize, inPayload)
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxReceiveMessageSize, inPayload)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -406,7 +439,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 		// Special handling for client streaming rpc.
 		// This recv expects EOF or errors, so we don't collect inPayload.
-		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxMsgSize, nil)
+		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxReceiveMessageSize, nil)
 		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
@@ -512,17 +545,18 @@ type ServerStream interface {
 
 // serverStream implements a server side Stream.
 type serverStream struct {
-	t          transport.ServerTransport
-	s          *transport.Stream
-	p          *parser
-	codec      Codec
-	cp         Compressor
-	dc         Decompressor
-	cbuf       *bytes.Buffer
-	maxMsgSize int
-	statusCode codes.Code
-	statusDesc string
-	trInfo     *traceInfo
+	t                     transport.ServerTransport
+	s                     *transport.Stream
+	p                     *parser
+	codec                 Codec
+	cp                    Compressor
+	dc                    Decompressor
+	cbuf                  *bytes.Buffer
+	maxReceiveMessageSize int
+	maxSendMessageSize    int
+	statusCode            codes.Code
+	statusDesc            string
+	trInfo                *traceInfo
 
 	statsHandler stats.Handler
 
@@ -581,6 +615,9 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		err = Errorf(codes.Internal, "grpc: %v", err)
 		return err
 	}
+	if len(out) > ss.maxSendMessageSize {
+		return Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(out), ss.maxSendMessageSize)
+	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
@@ -610,7 +647,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		inPayload = &stats.InPayload{}
 	}
-	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxMsgSize, inPayload); err != nil {
+	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, inPayload); err != nil {
 		if err == io.EOF {
 			return err
 		}
