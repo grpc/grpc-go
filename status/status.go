@@ -52,6 +52,8 @@ import (
 
 // Status provides access to grpc status details and is implemented by all
 // errors returned from this package except nil errors, which are not typed.
+// Note: gRPC users should not implement their own Statuses.  Custom data may
+// be attached to the spb.Status proto's Details field.
 type Status interface {
 	// Code returns the status code.
 	Code() codes.Code
