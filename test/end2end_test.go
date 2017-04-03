@@ -95,8 +95,16 @@ var (
 	malformedHTTP2Metadata = metadata.MD{
 		"Key": []string{"foo"},
 	}
-	testAppUA = "myApp1/1.0 myApp2/0.9"
-	failAppUA = "fail-this-RPC"
+	testAppUA     = "myApp1/1.0 myApp2/0.9"
+	failAppUA     = "fail-this-RPC"
+	detailedError = status.ErrorProto(&spb.Status{
+		Code:    int32(codes.DataLoss),
+		Message: "missing expected user-agent",
+		Details: []*anypb.Any{{
+			TypeUrl: "url",
+			Value:   []byte{6, 0, 0, 6, 1, 3},
+		}},
+	})
 )
 
 var raceMode bool // set by race_test.go in race mode
@@ -108,15 +116,6 @@ type testServer struct {
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 }
-
-var detailedError = status.ErrorProto(&spb.Status{
-	Code:    int32(codes.DataLoss),
-	Message: "missing expected user-agent",
-	Details: []*anypb.Any{{
-		TypeUrl: "url",
-		Value:   []byte{6, 0, 0, 6, 1, 3},
-	}},
-})
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	if md, ok := metadata.FromContext(ctx); ok {
