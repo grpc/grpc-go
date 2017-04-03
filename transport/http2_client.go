@@ -187,23 +187,19 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			return nil, connectionErrorf(temp, err, "transport: %v", err)
 		}
 	}
-	ua := primaryUA
-	if opts.UserAgent != "" {
-		ua = opts.UserAgent + " " + ua
-	}
 	kp := opts.KeepaliveParams
 	// Validate keepalive parameters.
 	if kp.Time == 0 {
-		kp.Time = defaultKeepaliveTime
+		kp.Time = defaultClientKeepaliveTime
 	}
 	if kp.Timeout == 0 {
-		kp.Timeout = defaultKeepaliveTimeout
+		kp.Timeout = defaultClientKeepaliveTimeout
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
 		ctx:        ctx,
 		target:     addr.Addr,
-		userAgent:  ua,
+		userAgent:  opts.UserAgent,
 		md:         addr.Metadata,
 		conn:       conn,
 		remoteAddr: conn.RemoteAddr(),
@@ -897,6 +893,9 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
+	if f.ErrCode == http2.ErrCodeEnhanceYourCalm {
+		grpclog.Printf("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
+	}
 	t.mu.Lock()
 	if t.state == reachable || t.state == draining {
 		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {

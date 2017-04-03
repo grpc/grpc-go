@@ -53,6 +53,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/tap"
@@ -105,19 +106,22 @@ type Server struct {
 }
 
 type options struct {
-	creds                 credentials.TransportCredentials
-	codec                 Codec
-	cp                    Compressor
-	dc                    Decompressor
+	creds                credentials.TransportCredentials
+	codec                Codec
+	cp                   Compressor
+	dc                   Decompressor
+	maxMsgSize           int
+	unaryInt             UnaryServerInterceptor
+	streamInt            StreamServerInterceptor
+	inTapHandle          tap.ServerInHandle
+	statsHandler         stats.Handler
+	maxConcurrentStreams uint32
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	unaryInt              UnaryServerInterceptor
-	streamInt             StreamServerInterceptor
-	inTapHandle           tap.ServerInHandle
-	statsHandler          stats.Handler
-	maxConcurrentStreams  uint32
-	useHandlerImpl        bool // use http.Handler-based server
-	unknownStreamDesc     *StreamDesc
+	useHandlerImpl       bool // use http.Handler-based server
+	unknownStreamDesc    *StreamDesc
+	keepaliveParams      keepalive.ServerParameters
+	keepalivePolicy      keepalive.EnforcementPolicy
 }
 
 const defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4 // Use 4MB as the default receive message size limit.
@@ -125,6 +129,20 @@ const defaultServerMaxSendMessageSize = 1024 * 1024 * 4    // Use 4MB as the def
 
 // A ServerOption sets options.
 type ServerOption func(*options)
+
+// KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
+func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
+	return func(o *options) {
+		o.keepaliveParams = kp
+	}
+}
+
+// KeepaliveEnforcementPolicy returns a ServerOption that sets keepalive enforcement policy for the server.
+func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
+	return func(o *options) {
+		o.keepalivePolicy = kep
+	}
+}
 
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
 func CustomCodec(codec Codec) ServerOption {
@@ -484,10 +502,12 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 // transport.NewServerTransport).
 func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
 	config := &transport.ServerConfig{
-		MaxStreams:   s.opts.maxConcurrentStreams,
-		AuthInfo:     authInfo,
-		InTapHandle:  s.opts.inTapHandle,
-		StatsHandler: s.opts.statsHandler,
+		MaxStreams:      s.opts.maxConcurrentStreams,
+		AuthInfo:        authInfo,
+		InTapHandle:     s.opts.inTapHandle,
+		StatsHandler:    s.opts.statsHandler,
+		KeepaliveParams: s.opts.keepaliveParams,
+		KeepalivePolicy: s.opts.keepalivePolicy,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {

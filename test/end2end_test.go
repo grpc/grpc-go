@@ -93,6 +93,7 @@ var (
 		"Key": []string{"foo"},
 	}
 	testAppUA = "myApp1/1.0 myApp2/0.9"
+	failAppUA = "fail-this-RPC"
 )
 
 var raceMode bool // set by race_test.go in race mode
@@ -107,10 +108,10 @@ type testServer struct {
 
 func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 	if md, ok := metadata.FromContext(ctx); ok {
-		// For testing purpose, returns an error if there is attached metadata other than
-		// the user agent set by the client application.
-		if _, ok := md["user-agent"]; !ok {
-			return nil, grpc.Errorf(codes.DataLoss, "missing expected user-agent")
+		// For testing purpose, returns an error if user-agent is failAppUA.
+		// To test that client gets the correct error.
+		if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
+			return nil, grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
 		}
 		var str []string
 		for _, entry := range md["user-agent"] {
@@ -215,9 +216,10 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 		if _, exists := md[":authority"]; !exists {
 			return grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
 		}
-		// For testing purpose, returns an error if there is attached metadata except for authority.
-		if len(md) > 1 {
-			return grpc.Errorf(codes.DataLoss, "got extra metadata")
+		// For testing purpose, returns an error if user-agent is failAppUA.
+		// To test that client gets the correct error.
+		if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
+			return grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
 		}
 	}
 	cs := args.GetResponseParameters()
@@ -1950,8 +1952,8 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 	if err != nil || !proto.Equal(&testpb.Empty{}, reply) {
 		t.Fatalf("TestService/EmptyCall(_, _) = %v, %v, want %v, <nil>", reply, err, &testpb.Empty{})
 	}
-	if v, ok := header["ua"]; !ok || v[0] != testAppUA {
-		t.Fatalf("header[\"ua\"] = %q, %t, want %q, true", v, ok, testAppUA)
+	if v, ok := header["ua"]; !ok || !strings.HasPrefix(v[0], testAppUA) {
+		t.Fatalf("header[\"ua\"] = %q, %t, want string with prefix %q, true", v, ok, testAppUA)
 	}
 
 	te.srv.Stop()
@@ -1966,12 +1968,13 @@ func TestFailedEmptyUnary(t *testing.T) {
 
 func testFailedEmptyUnary(t *testing.T, e env) {
 	te := newTest(t, e)
+	te.userAgent = failAppUA
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
 	ctx := metadata.NewContext(context.Background(), testMetadata)
-	wantErr := grpc.Errorf(codes.DataLoss, "missing expected user-agent")
+	wantErr := grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !equalErrors(err, wantErr) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, wantErr)
 	}
@@ -2173,6 +2176,7 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	if header != nil {
 		delete(header, "trailer") // RFC 2616 says server SHOULD (but optional) declare trailers
 		delete(header, "date")    // the Date header is also optional
+		delete(header, "user-agent")
 	}
 	if !reflect.DeepEqual(header, testMetadata) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
@@ -2288,6 +2292,7 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2331,6 +2336,7 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err != nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2373,6 +2379,7 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.FailFast(false)); err == nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <non-nil>", ctx, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2416,6 +2423,7 @@ func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2478,6 +2486,7 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2535,6 +2544,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
+	delete(header, "user-agent")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2911,12 +2921,14 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 			delete(headerMD, "transport_security_type")
 		}
 		delete(headerMD, "trailer") // ignore if present
+		delete(headerMD, "user-agent")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
 		// test the cached value.
 		headerMD, err = stream.Header()
 		delete(headerMD, "trailer") // ignore if present
+		delete(headerMD, "user-agent")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -3022,6 +3034,7 @@ func TestFailedServerStreaming(t *testing.T) {
 
 func testFailedServerStreaming(t *testing.T, e env) {
 	te := newTest(t, e)
+	te.userAgent = failAppUA
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
@@ -3041,7 +3054,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
-	wantErr := grpc.Errorf(codes.DataLoss, "got extra metadata")
+	wantErr := grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
 	if _, err := stream.Recv(); !equalErrors(err, wantErr) {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, wantErr)
 	}

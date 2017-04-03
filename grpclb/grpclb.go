@@ -39,6 +39,8 @@ package grpclb
 import (
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
 	"sync"
 	"time"
 
@@ -95,6 +97,7 @@ type addrInfo struct {
 
 type balancer struct {
 	r        naming.Resolver
+	target   string
 	mu       sync.Mutex
 	seq      int // a sequence number to make sure addrCh does not get stale addresses.
 	w        naming.Watcher
@@ -105,6 +108,7 @@ type balancer struct {
 	waitCh   chan struct{}
 	done     bool
 	expTimer *time.Timer
+	rand     *rand.Rand
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo) error {
@@ -176,6 +180,11 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan remoteBalancerInfo
 			case <-ch:
 			default:
 			}
+			// Pick a random one from the list, instead of always using the first one.
+			if l := len(b.rbs); l > 1 {
+				tmpIdx := b.rand.Intn(l - 1)
+				b.rbs[0], b.rbs[tmpIdx] = b.rbs[tmpIdx], b.rbs[0]
+			}
 			ch <- b.rbs[0]
 		}
 	}
@@ -217,7 +226,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	for _, s := range servers {
 		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
 		addr := grpc.Address{
-			Addr:     fmt.Sprintf("%s:%d", s.IpAddress, s.Port),
+			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
 			Metadata: &md,
 		}
 		sl = append(sl, &addrInfo{
@@ -265,7 +274,9 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 	b.mu.Unlock()
 	initReq := &lbpb.LoadBalanceRequest{
 		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-			InitialRequest: new(lbpb.InitialLoadBalanceRequest),
+			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+				Name: b.target,
+			},
 		},
 	}
 	if err := stream.Send(initReq); err != nil {
@@ -310,10 +321,12 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 }
 
 func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
+	b.rand = rand.New(rand.NewSource(time.Now().Unix()))
 	// TODO: Fall back to the basic direct connection if there is no name resolver.
 	if b.r == nil {
 		return errors.New("there is no name resolver installed")
 	}
+	b.target = target
 	b.mu.Lock()
 	if b.done {
 		b.mu.Unlock()

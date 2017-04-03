@@ -52,8 +52,6 @@ import (
 )
 
 const (
-	// The primary user agent
-	primaryUA = "grpc-go/1.0"
 	// http2MaxFrameLen specifies the max length of a HTTP2 frame.
 	http2MaxFrameLen = 16384 // 16KB frame
 	// http://http2.github.io/http2-spec/#SettingValues
@@ -188,15 +186,6 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		d.method = f.Value
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
-			if f.Name == "user-agent" {
-				i := strings.LastIndex(f.Value, " ")
-				if i == -1 {
-					// There is no application user agent string being set.
-					return
-				}
-				// Extract the application user agent string.
-				f.Value = f.Value[:i]
-			}
 			if d.mdata == nil {
 				d.mdata = make(map[string][]string)
 			}

@@ -180,6 +180,14 @@ func (b *remoteBalancer) stop() {
 }
 
 func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	initReq := req.GetInitialRequest()
+	if initReq.Name != besn {
+		return grpc.Errorf(codes.InvalidArgument, "invalid service name: %v", initReq.Name)
+	}
 	resp := &lbpb.LoadBalanceResponse{
 		LoadBalanceResponseType: &lbpb.LoadBalanceResponse_InitialResponse{
 			InitialResponse: new(lbpb.InitialLoadBalanceResponse),
@@ -264,7 +272,7 @@ func TestGRPCLB(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 	}
@@ -332,25 +340,19 @@ func TestDropRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
-	var bes []*lbpb.Server
-	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr1[0]),
-		Port:             int32(bePort1),
-		LoadBalanceToken: lbToken,
-		DropRequest:      true,
-	}
-	bes = append(bes, be)
-	be = &lbpb.Server{
-		IpAddress:        []byte(beAddr2[0]),
-		Port:             int32(bePort2),
-		LoadBalanceToken: lbToken,
-		DropRequest:      false,
-	}
-	bes = append(bes, be)
-	sl := &lbpb.ServerList{
-		Servers: bes,
-	}
-	sls := []*lbpb.ServerList{sl}
+	sls := []*lbpb.ServerList{{
+		Servers: []*lbpb.Server{{
+			IpAddress:        beLis1.Addr().(*net.TCPAddr).IP,
+			Port:             int32(bePort1),
+			LoadBalanceToken: lbToken,
+			DropRequest:      true,
+		}, {
+			IpAddress:        beLis2.Addr().(*net.TCPAddr).IP,
+			Port:             int32(bePort2),
+			LoadBalanceToken: lbToken,
+			DropRequest:      false,
+		}},
+	}}
 	intervals := []time.Duration{0}
 	ls := newRemoteBalancer(sls, intervals)
 	lbpb.RegisterLoadBalancerServer(lb, ls)
@@ -371,19 +373,23 @@ func TestDropRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
-	// The 1st fail-fast RPC should fail because the 1st backend has DropRequest set to true.
 	helloC := hwpb.NewGreeterClient(cc)
-	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); grpc.Code(err) != codes.Unavailable {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, %s", helloC, err, codes.Unavailable)
-	}
-	// The 2nd fail-fast RPC should succeed since it chooses the non-drop-request backend according
-	// to the round robin policy.
-	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
-	}
-	// The 3nd non-fail-fast RPC should succeed.
+	// The 1st, non-fail-fast RPC should succeed.  This ensures both server
+	// connections are made, because the first one has DropRequest set to true.
 	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	}
+	for i := 0; i < 3; i++ {
+		// Odd fail-fast RPCs should fail, because the 1st backend has DropRequest
+		// set to true.
+		if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); grpc.Code(err) != codes.Unavailable {
+			t.Fatalf("%v.SayHello(_, _) = _, %v, want _, %s", helloC, err, codes.Unavailable)
+		}
+		// Even fail-fast RPCs should succeed since they choose the
+		// non-drop-request backend according to the round robin policy.
+		if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+			t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+		}
 	}
 	cc.Close()
 }
@@ -412,7 +418,7 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 		DropRequest:      true,
@@ -475,7 +481,7 @@ func TestServerExpiration(t *testing.T) {
 		t.Fatalf("Failed to generate the port number %v", err)
 	}
 	be := &lbpb.Server{
-		IpAddress:        []byte(beAddr[0]),
+		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
 		Port:             int32(bePort),
 		LoadBalanceToken: lbToken,
 	}
