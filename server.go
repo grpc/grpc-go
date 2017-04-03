@@ -726,9 +726,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				var err error
 				req, err = s.opts.dc.Do(bytes.NewReader(req))
 				if err != nil {
-					if e := t.WriteStatus(stream, status.New(codes.Internal, err.Error())); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-					}
 					return Errorf(codes.Internal, err.Error())
 				}
 			}
@@ -738,7 +735,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
-				return err
+				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 			}
 			if inPayload != nil {
 				inPayload.Payload = v
@@ -777,6 +774,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 			// TODO: Translate error into a status.Status error if necessary?
+			// TODO: Write status when appropriate.
 			return err
 		}
 		if trInfo != nil {

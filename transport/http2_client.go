@@ -35,7 +35,6 @@ package transport
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -858,7 +857,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		grpclog.Println("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error ", f.ErrCode)
 		statusCode = codes.Unknown
 	}
-	s.finish(status.New(statusCode, fmt.Sprintf("stream terminated by RST_STREAM with error code: %d", f.ErrCode)))
+	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %d", f.ErrCode))
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
