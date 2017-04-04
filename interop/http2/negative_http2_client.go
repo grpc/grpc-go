@@ -41,6 +41,7 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -91,10 +92,10 @@ func rstAfterHeader(tc testpb.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		grpclog.Fatalf("Client received reply despite server sending rst stream after header")
+		fatalf("Client received reply despite server sending rst stream after header")
 	}
 	if grpc.Code(err) != codes.Internal {
-		grpclog.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Internal)
+		fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Internal)
 	}
 }
 
@@ -102,10 +103,10 @@ func rstDuringData(tc testpb.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		grpclog.Fatalf("Client received reply despite server sending rst stream during data")
+		fatalf("Client received reply despite server sending rst stream during data")
 	}
 	if grpc.Code(err) != codes.Unknown {
-		grpclog.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unknown)
+		fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Unknown)
 	}
 }
 
@@ -113,10 +114,10 @@ func rstAfterData(tc testpb.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		grpclog.Fatalf("Client received reply despite server sending rst stream after data")
+		fatalf("Client received reply despite server sending rst stream after data")
 	}
 	if grpc.Code(err) != codes.Internal {
-		grpclog.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Internal)
+		fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, grpc.Code(err), codes.Internal)
 	}
 }
 
@@ -145,7 +146,7 @@ func main() {
 	opts = append(opts, grpc.WithInsecure())
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("Fail to dial: %v", err)
+		fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
@@ -169,6 +170,11 @@ func main() {
 		maxStreams(tc)
 		grpclog.Println("max_streams done")
 	default:
-		grpclog.Fatal("Unsupported test case: ", *testCase)
+		fatalf("Unsupported test case: %v", *testCase)
 	}
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

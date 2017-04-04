@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -210,7 +211,7 @@ func (s *server) createGauge(name string) *gauge {
 func startServer(server *server, port int) {
 	lis, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		fatalf("failed to listen: %v", err)
 	}
 
 	s := grpc.NewServer()
@@ -294,7 +295,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -322,7 +323,7 @@ func main() {
 		for connIndex := 0; connIndex < *numChannelsPerServer; connIndex++ {
 			conn, err := newConn(address, *useTLS, *testCA, *tlsServerName)
 			if err != nil {
-				grpclog.Fatalf("Fail to dial: %v", err)
+				fatalf("Fail to dial: %v", err)
 			}
 			defer conn.Close()
 			for clientIndex := 0; clientIndex < *numStubsPerChannel; clientIndex++ {
@@ -344,4 +345,9 @@ func main() {
 	wg.Wait()
 	grpclog.Printf(" ===== ALL DONE ===== ")
 
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

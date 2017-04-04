@@ -45,6 +45,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net"
+	"os"
 	"time"
 
 	"golang.org/x/net/context"
@@ -159,10 +160,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		fatalf("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		grpclog.Fatalf("Failed to load default features: %v", err)
+		fatalf("Failed to load default features: %v", err)
 	}
 }
 
@@ -223,17 +224,22 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *tls {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			fatalf("Failed to generate credentials %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterRouteGuideServer(grpcServer, newServer())
 	grpcServer.Serve(lis)
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

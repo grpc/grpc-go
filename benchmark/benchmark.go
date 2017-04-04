@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -50,15 +51,15 @@ import (
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {
-		grpclog.Fatalf("Requested a response with invalid length %d", size)
+		fatalf("Requested a response with invalid length %d", size)
 	}
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
 	case testpb.PayloadType_UNCOMPRESSABLE:
-		grpclog.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
+		fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
-		grpclog.Fatalf("Unsupported payload type: %d", t)
+		fatalf("Unsupported payload type: %d", t)
 	}
 	p.Type = t
 	p.Body = body
@@ -151,7 +152,7 @@ type ServerInfo struct {
 func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", info.Addr)
 	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
+		fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(opts...)
 	switch info.Type {
@@ -160,11 +161,11 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
-			grpclog.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
+			fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
 		testpb.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	default:
-		grpclog.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
+		fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
 	go s.Serve(lis)
 	return lis.Addr().String(), func() {
@@ -228,7 +229,12 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
-		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

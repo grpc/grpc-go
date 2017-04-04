@@ -294,7 +294,7 @@ func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	ht := reflect.TypeOf(sd.HandlerType).Elem()
 	st := reflect.TypeOf(ss)
 	if !st.Implements(ht) {
-		grpclog.Fatalf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht)
+		panic(fmt.Errorf("grpc: Server.RegisterService found the handler of type %v that does not satisfy %v", st, ht))
 	}
 	s.register(sd, ss)
 }
@@ -304,7 +304,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	defer s.mu.Unlock()
 	s.printf("RegisterService(%q)", sd.ServiceName)
 	if _, ok := s.m[sd.ServiceName]; ok {
-		grpclog.Fatalf("grpc: Server.RegisterService found duplicate service registration for %q", sd.ServiceName)
+		panic(fmt.Errorf("grpc: Server.RegisterService found duplicate service registration for %q", sd.ServiceName))
 	}
 	srv := &service{
 		server: ss,
@@ -626,7 +626,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		// TODO(zhaoq): There exist other options also such as only closing the
 		// faulty stream locally and remotely (Other streams can keep going). Find
 		// the optimal option.
-		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
+		panic(fmt.Errorf("grpc: Server failed to encode response %v", err))
 	}
 	err = t.Write(stream, p, opts)
 	if err == nil && outPayload != nil {
@@ -1082,7 +1082,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	}
 	t := stream.ServerTransport()
 	if t == nil {
-		grpclog.Fatalf("grpc: SendHeader: %v has no ServerTransport to send header metadata.", stream)
+		panic(fmt.Errorf("grpc: SendHeader: %v has no ServerTransport to send header metadata", stream))
 	}
 	if err := t.WriteHeader(stream, md); err != nil {
 		return toRPCErr(err)

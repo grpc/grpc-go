@@ -40,6 +40,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
 	"strconv"
 	"time"
@@ -212,7 +213,7 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", ":"+strconv.Itoa(*driverPort))
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		fatalf("failed to listen: %v", err)
 	}
 	grpclog.Printf("worker listening at port %v", *driverPort)
 
@@ -241,4 +242,9 @@ func main() {
 	}
 
 	s.Serve(lis)
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }
