@@ -80,6 +80,7 @@ import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -110,6 +111,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private int flowControlWindow = DEFAULT_WINDOW_SIZE;
   private int maxConcurrentStreams = Integer.MAX_VALUE;
   private int maxHeaderListSize = Integer.MAX_VALUE;
+  private boolean permitKeepAliveWithoutCalls = true;
+  private long permitKeepAliveTimeInNanos = 0;
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -394,7 +397,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveManagerOnDataReceived_pingRead() throws Exception {
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1234L);
-    channelRead(pingFrame(false /* isAct */, payload));
+    channelRead(pingFrame(false /* isAck */, payload));
 
     verify(spyKeepAliveManager).onDataReceived();
     verify(spyKeepAliveManager, never()).onTransportTermination();
@@ -404,7 +407,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveManagerOnDataReceived_pingActRead() throws Exception {
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1234L);
-    channelRead(pingFrame(true /* isAct */, payload));
+    channelRead(pingFrame(true /* isAck */, payload));
 
     verify(spyKeepAliveManager).onDataReceived();
     verify(spyKeepAliveManager, never()).onTransportTermination();
@@ -415,6 +418,98 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     handler().channelInactive(handler().ctx());
 
     verify(spyKeepAliveManager).onTransportTermination();
+  }
+
+  @Test
+  public void keepAliveEnforcer_enforcesPings() throws Exception {
+    permitKeepAliveWithoutCalls = false;
+    permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);
+    setUp();
+
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1);
+    for (int i = 0; i < 10; i++) {
+      channelRead(pingFrame(false /* isAck */, payload.slice()));
+    }
+    payload.release();
+    verifyWrite().writeGoAway(eq(ctx()), eq(0), eq(Http2Error.ENHANCE_YOUR_CALM.code()),
+        any(ByteBuf.class), any(ChannelPromise.class));
+  }
+
+  @Test(timeout = 1000)
+  public void keepAliveEnforcer_sendingDataResetsCounters() throws Exception {
+    permitKeepAliveWithoutCalls = false;
+    permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);
+    setUp();
+
+    createStream();
+    Http2Headers headers = Utils.convertServerHeaders(new Metadata());
+    ChannelFuture future = enqueue(
+        new SendResponseHeadersCommand(stream.transportState(), headers, false));
+    future.get();
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1);
+    for (int i = 0; i < 10; i++) {
+      future = enqueue(
+          new SendGrpcFrameCommand(stream.transportState(), content().retainedSlice(), false));
+      future.get();
+      channel().releaseOutbound();
+      channelRead(pingFrame(false /* isAck */, payload.slice()));
+    }
+    payload.release();
+    verifyWrite(never()).writeGoAway(eq(ctx()), eq(STREAM_ID),
+        eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void keepAliveEnforcer_initialIdle() throws Exception {
+    permitKeepAliveWithoutCalls = false;
+    permitKeepAliveTimeInNanos = 0;
+    setUp();
+
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1);
+    for (int i = 0; i < 10; i++) {
+      channelRead(pingFrame(false /* isAck */, payload.slice()));
+    }
+    payload.release();
+    verifyWrite().writeGoAway(eq(ctx()), eq(0),
+        eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void keepAliveEnforcer_noticesActive() throws Exception {
+    permitKeepAliveWithoutCalls = false;
+    permitKeepAliveTimeInNanos = 0;
+    setUp();
+
+    createStream();
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1);
+    for (int i = 0; i < 10; i++) {
+      channelRead(pingFrame(false /* isAck */, payload.slice()));
+    }
+    payload.release();
+    verifyWrite(never()).writeGoAway(eq(ctx()), eq(STREAM_ID),
+        eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
+  }
+
+  @Test
+  public void keepAliveEnforcer_noticesInactive() throws Exception {
+    permitKeepAliveWithoutCalls = false;
+    permitKeepAliveTimeInNanos = 0;
+    setUp();
+
+    createStream();
+    channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
+    ByteBuf payload = handler().ctx().alloc().buffer(8);
+    payload.writeLong(1);
+    for (int i = 0; i < 10; i++) {
+      channelRead(pingFrame(false /* isAck */, payload.slice()));
+    }
+    payload.release();
+    verifyWrite().writeGoAway(eq(ctx()), eq(STREAM_ID),
+        eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
   }
 
   private void createStream() throws Exception {
@@ -447,7 +542,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   protected NettyServerHandler newHandler() {
     return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
         maxConcurrentStreams, flowControlWindow, maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
-        2000L, 100L);
+        2000L, 100L, permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @Override
