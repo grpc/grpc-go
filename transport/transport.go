@@ -441,6 +441,11 @@ type CallHdr struct {
 	// outbound message.
 	SendCompress string
 
+	// AcceptEncoding specifies the compression algorithm to
+	// populate the grpc-accept-encoding header on the outbound
+	// message.
+	AcceptEncoding string
+
 	// Flush indicates whether a new stream command should be sent
 	// to the peer without waiting for the first data. This is
 	// only a hint. The transport may modify the flush decision
