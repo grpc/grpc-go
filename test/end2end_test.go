@@ -1541,6 +1541,29 @@ func testPeerClientSide(t *testing.T, e env) {
 	}
 }
 
+// TestPeerNegative tests that if call fails setting peer
+// doesn't cause a segmentation fault.
+// issue#1141 https://github.com/grpc/grpc-go/issues/1141
+func TestPeerNegative(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerNegative(t, e)
+	}
+}
+
+func testPeerNegative(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	peer := new(peer.Peer)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tc.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
+}
+
 func TestMetadataUnaryRPC(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {

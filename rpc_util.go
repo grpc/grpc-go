@@ -189,7 +189,9 @@ func Trailer(md *metadata.MD) CallOption {
 // unary RPC.
 func Peer(peer *peer.Peer) CallOption {
 	return afterCall(func(c *callInfo) {
-		*peer = *c.peer
+		if c.peer != nil {
+			*peer = *c.peer
+		}
 	})
 }
 
