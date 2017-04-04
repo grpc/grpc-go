@@ -39,12 +39,12 @@ package transport // import "google.golang.org/grpc/transport"
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

@@ -36,7 +36,7 @@
 package tap
 
 import (
-	"golang.org/x/net/context"
+	"context"
 )
 
 // Info defines the relevant information needed by the handles.

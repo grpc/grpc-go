@@ -37,6 +37,7 @@
 package grpclb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -44,7 +45,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"

@@ -34,13 +34,13 @@
 package main
 
 import (
+	"context"
 	"math"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"

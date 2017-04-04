@@ -35,13 +35,13 @@ package grpc
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"math"
 	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	perfpb "google.golang.org/grpc/test/codec_perf"
 	"google.golang.org/grpc/transport"

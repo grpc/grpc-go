@@ -38,6 +38,7 @@
 package credentials // import "google.golang.org/grpc/credentials"
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -45,8 +46,6 @@ import (
 	"io/ioutil"
 	"net"
 	"strings"
-
-	"golang.org/x/net/context"
 )
 
 var (
