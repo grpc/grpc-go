@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -93,6 +94,12 @@ type decodeState struct {
 	err error // first error encountered decoding
 
 	encoding string
+	// hstatusExists records if status field (http status) exists.
+	hstatusExists bool
+	// hstatusCode records http status code from the header.
+	hstatusCode int
+	// statusExists records if grpc-status field exists.
+	statusExists bool
 	// statusCode caches the stream status received from the trailer
 	// the server sent. Client side only.
 	statusCode codes.Code
@@ -156,6 +163,40 @@ func validContentType(t string) bool {
 	return true
 }
 
+// decodeHeader reads header fields from a header frame and returns decodeState.
+func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) {
+	for _, hf := range frame.Fields {
+		d.processHeaderField(hf)
+	}
+	if d.err != nil {
+		return
+	}
+	// If gRPC status exists, no need to check further.
+	if d.statusExists {
+		return
+	}
+	// If gRPC status doesn't exist and http status doesn't exist then set error.
+	if !d.hstatusExists {
+		d.setErr(streamErrorf(codes.Internal, "Malformed http header"))
+		return
+	}
+	// If https status exists but status code is not OK then set error.
+	if d.hstatusCode != http.StatusOK {
+		gcode, ok := httpStatusConvTab[d.hstatusCode]
+		if !ok {
+			gcode = codes.Unknown
+		}
+		d.setErr(streamErrorf(gcode, http.StatusText(d.hstatusCode)))
+		return
+	}
+	// gRPC status doesn't exist and https status is OK.
+	// Set state.statusCode to UNKNOWN.
+	// If the stream hasn't ended this status code will be ignored.
+	// If the stream has ended missing grpc-status puts state to be UNKNOWN.
+	d.statusCode = codes.Unknown
+	return
+}
+
 func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	switch f.Name {
 	case "content-type":
@@ -166,6 +207,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":
+		d.statusExists = true
 		code, err := strconv.Atoi(f.Value)
 		if err != nil {
 			d.setErr(streamErrorf(codes.Internal, "transport: malformed grpc-status: %v", err))
@@ -184,6 +226,14 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		}
 	case ":path":
 		d.method = f.Value
+	case ":status":
+		d.hstatusExists = true
+		hcode, err := strconv.Atoi(f.Value)
+		if err != nil {
+			d.setErr(streamErrorf(codes.Internal, "transport: malformed http-status: %v", err))
+			return
+		}
+		d.hstatusCode = hcode
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
 			if d.mdata == nil {

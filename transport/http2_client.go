@@ -943,9 +943,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	var state decodeState
-	for _, hf := range frame.Fields {
-		state.processHeaderField(hf)
-	}
+	state.decodeHeader(frame)
 	if state.err != nil {
 		s.mu.Lock()
 		if !s.headerDone {
