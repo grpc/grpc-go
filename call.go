@@ -274,6 +274,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				}
 				continue
 			}
+			if err == transport.ErrRSTStream {
+				if c.failFast {
+					return Errorf(stream.StatusCode(), "%s", stream.StatusDesc())
+				}
+				continue
+			}
 			return toRPCErr(err)
 		}
 		if c.traceInfo.tr != nil {

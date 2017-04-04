@@ -706,8 +706,12 @@ func testServerGoAway(t *testing.T, e env) {
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
+		if err == nil {
 			continue
+		}
+		if grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 		}
 		break
 	}
@@ -759,8 +763,12 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
+		if err == nil {
 			continue
+		}
+		if grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 		}
 		break
 	}
