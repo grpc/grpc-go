@@ -152,7 +152,7 @@ func TestToRPCErr(t *testing.T) {
 		// outputs
 		errOut error
 	}{
-		{transport.StreamError{codes.Unknown, ""}, status.Error(codes.Unknown, "")},
+		{transport.StreamError{Code: codes.Unknown, Desc: ""}, status.Error(codes.Unknown, "")},
 		{transport.ErrConnClosing, status.Error(codes.Internal, transport.ErrConnClosing.Desc)},
 	} {
 		err := toRPCErr(test.errIn)
