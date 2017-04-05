@@ -36,6 +36,7 @@ import static io.grpc.Status.Code.INTERNAL;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
+import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertEquals;
@@ -168,7 +169,7 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
-        authority, null /* user agent */);
+        KEEPALIVE_TIME_NANOS_DISABLED, 1L, authority, null /* user agent */);
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -391,12 +392,14 @@ public class NettyClientTransportTest {
 
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize,
       int maxHeaderListSize, String userAgent, boolean enableKeepAlive) {
+    long keepAliveTimeNano = KEEPALIVE_TIME_NANOS_DISABLED;
+    if (enableKeepAlive) {
+      keepAliveTimeNano = 1000L;
+    }
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
-        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, authority, userAgent);
-    if (enableKeepAlive) {
-      transport.enableKeepAlive(true, 1000, 1000);
-    }
+        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, keepAliveTimeNano, 1L, authority,
+        userAgent);
     transports.add(transport);
     return transport;
   }

@@ -40,6 +40,7 @@ import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.handler.ssl.SslContext;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 import org.junit.Rule;
 import org.junit.Test;
@@ -163,5 +164,23 @@ public class NettyChannelBuilderTest {
 
     assertEquals("bad_authority", n.getHost());
     assertEquals(-1, n.getPort());
+  }
+
+  @Test
+  public void negativeKeepAliveTime() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forTarget("fakeTarget");
+
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("keepalive time must be positive");
+    builder.keepAliveTime(-1L, TimeUnit.HOURS);
+  }
+
+  @Test
+  public void negativeKeepAliveTimeout() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forTarget("fakeTarget");
+
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("keepalive timeout must be positive");
+    builder.keepAliveTimeout(-1L, TimeUnit.HOURS);
   }
 }

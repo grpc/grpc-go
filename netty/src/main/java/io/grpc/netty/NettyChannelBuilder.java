@@ -36,6 +36,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -71,6 +72,9 @@ public final class NettyChannelBuilder
     extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
+  private static final long MIN_KEEPALIVE_TIMEOUT_NANO = TimeUnit.MICROSECONDS.toNanos(499L);
+  private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
+
   private final Map<ChannelOption<?>, Object> channelOptions =
       new HashMap<ChannelOption<?>, Object>();
 
@@ -83,9 +87,8 @@ public final class NettyChannelBuilder
   private SslContext sslContext;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
-  private boolean enableKeepAlive;
-  private long keepAliveDelayNanos;
-  private long keepAliveTimeoutNanos;
+  private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
+  private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
   private TransportCreationParamsFilterFactory dynamicParamsFactory;
 
   /**
@@ -241,28 +244,63 @@ public final class NettyChannelBuilder
     return this;
   }
 
-
   /**
    * Enable keepalive with default delay and timeout.
+   *
+   * @deprecated Please use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead
    */
+  @Deprecated
   public final NettyChannelBuilder enableKeepAlive(boolean enable) {
-    enableKeepAlive = enable;
     if (enable) {
-      keepAliveDelayNanos = DEFAULT_KEEPALIVE_DELAY_NANOS;
-      keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+      return keepAliveTime(DEFAULT_KEEPALIVE_DELAY_NANOS, TimeUnit.NANOSECONDS);
+    }
+    return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   *
+   * @deprecated Please use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead
+   */
+  @Deprecated
+  public final NettyChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
+    if (enable) {
+      return keepAliveTime(keepAliveDelay, delayUnit)
+          .keepAliveTimeout(keepAliveTimeout, timeoutUnit);
+    }
+    return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
+  }
+
+  /**
+   * Sets a custom keepalive time, the delay time for sending next keepalive ping. An unreasonably
+   * small value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably
+   * large value will disable keepalive.
+   *
+   * @since 1.3.0
+   */
+  public NettyChannelBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    checkArgument(keepAliveTime > 0L, "keepalive time must be positive");
+    keepAliveTimeNanos = timeUnit.toNanos(keepAliveTime);
+    if (keepAliveTimeNanos >= AS_LARGE_AS_INFINITE) {
+      // Bump keepalive time to infinite. This disables keepalive.
+      keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
     }
     return this;
   }
 
   /**
-   * Enable keepalive with custom delay and timeout.
+   * Sets a custom keepalive timeout, the timeout for keepalive ping requests. An unreasonably small
+   * value might be increased.
+   *
+   * @since 1.3.0
    */
-  public final NettyChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
-      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
-    enableKeepAlive = enable;
-    if (enable) {
-      keepAliveDelayNanos = delayUnit.toNanos(keepAliveDelay);
-      keepAliveTimeoutNanos = timeoutUnit.toNanos(keepAliveTimeout);
+  public NettyChannelBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
+    keepAliveTimeoutNanos = timeUnit.toNanos(keepAliveTimeout);
+    if (keepAliveTimeoutNanos < MIN_KEEPALIVE_TIMEOUT_NANO) {
+      // Bump keepalive timeout.
+      keepAliveTimeoutNanos = MIN_KEEPALIVE_TIMEOUT_NANO;
     }
     return this;
   }
@@ -272,7 +310,7 @@ public final class NettyChannelBuilder
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
         negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
-        maxHeaderListSize, enableKeepAlive, keepAliveDelayNanos, keepAliveTimeoutNanos);
+        maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos);
   }
 
   @Override
@@ -393,7 +431,6 @@ public final class NettyChannelBuilder
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
-    private final boolean enableKeepAlive;
     private final long keepAliveDelayNanos;
     private final long keepAliveTimeoutNanos;
 
@@ -402,7 +439,7 @@ public final class NettyChannelBuilder
     NettyTransportFactory(TransportCreationParamsFilterFactory transportCreationParamsFilterFactory,
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
         NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
-        int flowControlWindow, int maxMessageSize, int maxHeaderListSize, boolean enableKeepAlive,
+        int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
         long keepAliveDelayNanos, long keepAliveTimeoutNanos) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
@@ -423,7 +460,6 @@ public final class NettyChannelBuilder
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
       this.maxHeaderListSize = maxHeaderListSize;
-      this.enableKeepAlive = enableKeepAlive;
       this.keepAliveDelayNanos = keepAliveDelayNanos;
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       usingSharedGroup = group == null;
@@ -446,10 +482,8 @@ public final class NettyChannelBuilder
       NettyClientTransport transport = new NettyClientTransport(
           dparams.getTargetServerAddress(), channelType, channelOptions, group,
           dparams.getProtocolNegotiator(), flowControlWindow,
-          maxMessageSize, maxHeaderListSize, dparams.getAuthority(), dparams.getUserAgent());
-      if (enableKeepAlive) {
-        transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
-      }
+          maxMessageSize, maxHeaderListSize, keepAliveDelayNanos, keepAliveTimeoutNanos,
+          dparams.getAuthority(), dparams.getUserAgent());
       return transport;
     }
 

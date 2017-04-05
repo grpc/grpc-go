@@ -31,6 +31,7 @@
 
 package io.grpc.netty;
 
+import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -82,7 +83,6 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final int maxMessageSize;
   private final int maxHeaderListSize;
   private KeepAliveManager keepAliveManager;
-  private boolean enableKeepAlive;
   private long keepAliveDelayNanos;
   private long keepAliveTimeoutNanos;
 
@@ -98,7 +98,8 @@ class NettyClientTransport implements ConnectionClientTransport {
       SocketAddress address, Class<? extends Channel> channelType,
       Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
-      int maxHeaderListSize, String authority, @Nullable String userAgent) {
+      int maxHeaderListSize, long keepAliveDelayNanos, long keepAliveTimeoutNanos,
+      String authority, @Nullable String userAgent) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -107,17 +108,10 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
-    this.authority = new AsciiString(authority);
-    this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
-  }
-
-  /**
-   * Enable keepalive with custom delay and timeout.
-   */
-  void enableKeepAlive(boolean enable, long keepAliveDelayNanos, long keepAliveTimeoutNanos) {
-    enableKeepAlive = enable;
     this.keepAliveDelayNanos = keepAliveDelayNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
+    this.authority = new AsciiString(authority);
+    this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
   }
 
   @Override
@@ -167,7 +161,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     lifecycleManager = new ClientTransportLifecycleManager(
         Preconditions.checkNotNull(transportListener, "listener"));
     EventLoop eventLoop = group.next();
-    if (enableKeepAlive) {
+    if (keepAliveDelayNanos != KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(
           new ClientKeepAlivePinger(this), eventLoop, keepAliveDelayNanos, keepAliveTimeoutNanos,
           false);
