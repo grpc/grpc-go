@@ -454,11 +454,6 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		return
 	}
 	if size > 0 {
-		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
-		}
 		s.mu.Lock()
 		if s.state == streamDone {
 			s.mu.Unlock()
@@ -475,6 +470,9 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
+			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
+				t.controlBuf.put(&windowUpdate{0, w})
+			}
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
 				t.controlBuf.put(&windowUpdate{s.id, w})
 			}
