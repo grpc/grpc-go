@@ -99,7 +99,7 @@ var (
 	failAppUA     = "fail-this-RPC"
 	detailedError = status.ErrorProto(&spb.Status{
 		Code:    int32(codes.DataLoss),
-		Message: "missing expected user-agent",
+		Message: "error for testing: " + failAppUA,
 		Details: []*anypb.Any{{
 			TypeUrl: "url",
 			Value:   []byte{6, 0, 0, 6, 1, 3},
