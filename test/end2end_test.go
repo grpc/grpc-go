@@ -54,6 +54,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	spb "github.com/google/go-genproto/googleapis/rpc/status"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
@@ -65,6 +67,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -92,8 +95,16 @@ var (
 	malformedHTTP2Metadata = metadata.MD{
 		"Key": []string{"foo"},
 	}
-	testAppUA = "myApp1/1.0 myApp2/0.9"
-	failAppUA = "fail-this-RPC"
+	testAppUA     = "myApp1/1.0 myApp2/0.9"
+	failAppUA     = "fail-this-RPC"
+	detailedError = status.ErrorProto(&spb.Status{
+		Code:    int32(codes.DataLoss),
+		Message: "error for testing: " + failAppUA,
+		Details: []*anypb.Any{{
+			TypeUrl: "url",
+			Value:   []byte{6, 0, 0, 6, 1, 3},
+		}},
+	})
 )
 
 var raceMode bool // set by race_test.go in race mode
@@ -111,7 +122,7 @@ func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.E
 		// For testing purpose, returns an error if user-agent is failAppUA.
 		// To test that client gets the correct error.
 		if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
-			return nil, grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
+			return nil, detailedError
 		}
 		var str []string
 		for _, entry := range md["user-agent"] {
@@ -1815,7 +1826,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	wantErr := grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded")
-	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !equalErrors(err, wantErr) {
+	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
 	}
 	awaitNewConnLogOutput()
@@ -1837,7 +1848,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1.Health")
-	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
+	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !reflect.DeepEqual(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
 }
@@ -1864,7 +1875,7 @@ func testUnknownHandler(t *testing.T, e env, unknownHandler grpc.StreamHandler) 
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	want := grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
-	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !equalErrors(err, want) {
+	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !reflect.DeepEqual(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
 }
@@ -1892,7 +1903,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
 	wantErr := grpc.Errorf(codes.NotFound, "unknown service")
-	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !equalErrors(err, wantErr) {
+	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.NotFound)
 	}
 	hs.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
@@ -1974,8 +1985,8 @@ func testFailedEmptyUnary(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
 	ctx := metadata.NewContext(context.Background(), testMetadata)
-	wantErr := grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !equalErrors(err, wantErr) {
+	wantErr := detailedError
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, wantErr)
 	}
 }
@@ -2139,6 +2150,29 @@ func testPeerClientSide(t *testing.T, e env) {
 	if pp != sp {
 		t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
 	}
+}
+
+// TestPeerNegative tests that if call fails setting peer
+// doesn't cause a segmentation fault.
+// issue#1141 https://github.com/grpc/grpc-go/issues/1141
+func TestPeerNegative(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerNegative(t, e)
+	}
+}
+
+func testPeerNegative(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	peer := new(peer.Peer)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tc.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
 }
 
 func TestMetadataUnaryRPC(t *testing.T) {
@@ -3055,7 +3089,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
 	wantErr := grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
-	if _, err := stream.Recv(); !equalErrors(err, wantErr) {
+	if _, err := stream.Recv(); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, wantErr)
 	}
 }
@@ -4244,8 +4278,4 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 	return fw.dst.Write(p)
-}
-
-func equalErrors(l, r error) bool {
-	return grpc.Code(l) == grpc.Code(r) && grpc.ErrorDesc(l) == grpc.ErrorDesc(r)
 }

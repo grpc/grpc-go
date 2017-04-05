@@ -45,6 +45,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
 )
 
@@ -205,7 +206,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := err.(*rpcError); ok {
+			if _, ok := err.(status.Status); ok {
 				return nil, err
 			}
 			if err == errConnClosing || err == errConnUnavailable {
@@ -268,11 +269,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		case <-s.Done():
 			// TODO: The trace of the RPC is terminated here when there is no pending
 			// I/O, which is probably not the optimal solution.
-			if s.StatusCode() == codes.OK {
-				cs.finish(nil)
-			} else {
-				cs.finish(Errorf(s.StatusCode(), "%s", s.StatusDesc()))
-			}
+			cs.finish(s.Status().Err())
 			cs.closeTransportStream(nil)
 		case <-s.GoAway():
 			cs.finish(errConnDrain)
@@ -445,11 +442,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
 		}
 		if err == io.EOF {
-			if cs.s.StatusCode() == codes.OK {
-				cs.finish(err)
-				return nil
+			if se := cs.s.Status().Err(); se != nil {
+				return se
 			}
-			return Errorf(cs.s.StatusCode(), "%s", cs.s.StatusDesc())
+			cs.finish(err)
+			return nil
 		}
 		return toRPCErr(err)
 	}
@@ -457,11 +454,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		cs.closeTransportStream(err)
 	}
 	if err == io.EOF {
-		if cs.s.StatusCode() == codes.OK {
-			// Returns io.EOF to indicate the end of the stream.
-			return
+		if statusErr := cs.s.Status().Err(); statusErr != nil {
+			return statusErr
 		}
-		return Errorf(cs.s.StatusCode(), "%s", cs.s.StatusDesc())
+		// Returns io.EOF to indicate the end of the stream.
+		return
 	}
 	return toRPCErr(err)
 }
@@ -545,18 +542,16 @@ type ServerStream interface {
 
 // serverStream implements a server side Stream.
 type serverStream struct {
-	t                     transport.ServerTransport
-	s                     *transport.Stream
-	p                     *parser
-	codec                 Codec
-	cp                    Compressor
-	dc                    Decompressor
-	cbuf                  *bytes.Buffer
+	t          transport.ServerTransport
+	s          *transport.Stream
+	p          *parser
+	codec      Codec
+	cp         Compressor
+	dc         Decompressor
+	cbuf       *bytes.Buffer
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	statusCode            codes.Code
-	statusDesc            string
-	trInfo                *traceInfo
+	trInfo     *traceInfo
 
 	statsHandler stats.Handler
 
