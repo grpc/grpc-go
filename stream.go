@@ -542,16 +542,16 @@ type ServerStream interface {
 
 // serverStream implements a server side Stream.
 type serverStream struct {
-	t          transport.ServerTransport
-	s          *transport.Stream
-	p          *parser
-	codec      Codec
-	cp         Compressor
-	dc         Decompressor
-	cbuf       *bytes.Buffer
+	t                     transport.ServerTransport
+	s                     *transport.Stream
+	p                     *parser
+	codec                 Codec
+	cp                    Compressor
+	dc                    Decompressor
+	cbuf                  *bytes.Buffer
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
-	trInfo     *traceInfo
+	trInfo                *traceInfo
 
 	statsHandler stats.Handler
 
