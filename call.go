@@ -231,7 +231,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := err.(status.Status); ok {
+			if _, ok := status.FromError(err); ok {
 				return err
 			}
 			if err == errConnClosing || err == errConnUnavailable {

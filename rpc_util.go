@@ -404,9 +404,10 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 
 // toRPCErr converts an error into an error from the status package.
 func toRPCErr(err error) error {
-	switch e := err.(type) {
-	case status.Status:
+	if _, ok := status.FromError(err); ok {
 		return err
+	}
+	switch e := err.(type) {
 	case transport.StreamError:
 		return status.Error(e.Code, e.Desc)
 	case transport.ConnectionError:

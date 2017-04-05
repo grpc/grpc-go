@@ -156,7 +156,7 @@ func TestToRPCErr(t *testing.T) {
 		{transport.ErrConnClosing, status.Error(codes.Internal, transport.ErrConnClosing.Desc)},
 	} {
 		err := toRPCErr(test.errIn)
-		if _, ok := err.(status.Status); !ok {
+		if _, ok := status.FromError(err); !ok {
 			t.Fatalf("toRPCErr{%v} returned type %T, want %T", test.errIn, err, status.Error(codes.Unknown, ""))
 		}
 		if !reflect.DeepEqual(err, test.errOut) {

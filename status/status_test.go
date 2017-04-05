@@ -69,7 +69,7 @@ func TestError(t *testing.T) {
 	if got, want := err.Error(), "rpc error: code = Internal desc = test description"; got != want {
 		t.Fatalf("err.Error() = %q; want %q", got, want)
 	}
-	s := err.(Status)
+	s, _ := FromError(err)
 	if got, want := s.Code(), codes.Internal; got != want {
 		t.Fatalf("err.Code() = %s; want %s", got, want)
 	}

@@ -178,7 +178,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := err.(status.Status); ok {
+			if _, ok := status.FromError(err); ok {
 				return nil, err
 			}
 			if err == errConnClosing || err == errConnUnavailable {

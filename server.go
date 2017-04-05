@@ -682,25 +682,27 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
 		}
 		if err != nil {
-			switch st := err.(type) {
-			case status.Status:
+			if st, ok := status.FromError(err); ok {
 				if e := t.WriteStatus(stream, st); e != nil {
 					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
-			case transport.ConnectionError:
-				// Nothing to do here.
-			case transport.StreamError:
-				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+			} else {
+				switch st := err.(type) {
+				case transport.ConnectionError:
+					// Nothing to do here.
+				case transport.StreamError:
+					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+					}
+				default:
+					panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
 				}
-			default:
-				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
 			}
 			return err
 		}
 
 		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
-			if st, ok := err.(status.Status); ok {
+			if st, ok := status.FromError(err); ok {
 				if e := t.WriteStatus(stream, st); e != nil {
 					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
@@ -852,15 +854,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		appErr = s.opts.streamInt(server, ss, info, sd.Handler)
 	}
 	if appErr != nil {
-		switch err := appErr.(type) {
-		case status.Status:
-			// Do nothing
-		case transport.StreamError:
-			appErr = status.Error(err.Code, err.Desc)
-		default:
-			appErr = status.Error(convertCode(appErr), appErr.Error())
+		appStatus, ok := status.FromError(appErr)
+		if !ok {
+			switch err := appErr.(type) {
+			case transport.StreamError:
+				appStatus = status.New(err.Code, err.Desc)
+			default:
+				appStatus = status.New(convertCode(appErr), appErr.Error())
+			}
+			appErr = appStatus.Err()
 		}
-		appStatus, _ := status.FromError(appErr)
 		if trInfo != nil {
 			ss.mu.Lock()
 			ss.trInfo.tr.LazyLog(stringer(appStatus.Message()), true)

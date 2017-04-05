@@ -183,7 +183,7 @@ func (ht *serverHandlerTransport) do(fn func()) error {
 	}
 }
 
-func (ht *serverHandlerTransport) WriteStatus(s *Stream, st status.Status) error {
+func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) error {
 	err := ht.do(func() {
 		ht.writeCommonHeaders(s)
 
