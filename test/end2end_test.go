@@ -1450,12 +1450,12 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	wg.Wait()
 }
 
-func TestMsgSizeDefaultAndApi(t *testing.T) {
+func TestMsgSizeDefaultAndAPI(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
-		testMaxMsgSizeClientApi(t, e)
-		testMaxMsgSizeServerApi(t, e)
+		testMaxMsgSizeClientAPI(t, e)
+		testMaxMsgSizeServerAPI(t, e)
 	}
 }
 
@@ -1538,7 +1538,7 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	}
 }
 
-func testMaxMsgSizeClientApi(t *testing.T, e env) {
+func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	// To avoid error on server side.
@@ -1619,7 +1619,7 @@ func testMaxMsgSizeClientApi(t *testing.T, e env) {
 	}
 }
 
-func testMaxMsgSizeServerApi(t *testing.T, e env) {
+func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	te.maxServerReceiveMsgSize = 1024

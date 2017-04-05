@@ -356,14 +356,13 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}()
 
 	if cc.dopts.scChan != nil {
-		// Wait for the initial service config.
+		// Try to get an initial service config.
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = sc
 			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		default:
 		}
 	}
 	// Set defaults.
