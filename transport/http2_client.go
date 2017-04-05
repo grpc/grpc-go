@@ -121,6 +121,9 @@ type http2Client struct {
 	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
+	// goAwayReason records the http2.ErrCode and debug data received with the
+	// GoAway frame.
+	goAwayReason *GoAwayReason
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -917,11 +920,26 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			t.mu.Unlock()
 			return
 		default:
+			t.goAwayReason = &GoAwayReason{
+				Err:       f.ErrCode,
+				DebugData: f.DebugData(),
+			}
 		}
 		t.goAwayID = f.LastStreamID
 		close(t.goAway)
 	}
 	t.mu.Unlock()
+}
+
+func (t *http2Client) GetGoAwayReason() *GoAwayReason {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	returnVal := t.goAwayReason
+	if returnVal != nil {
+		returnVal = &GoAwayReason{}
+		*returnVal = *t.goAwayReason
+	}
+	return returnVal
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {

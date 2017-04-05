@@ -41,6 +41,8 @@ import (
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/transport"
 )
 
 const tlsDir = "testdata/"
@@ -305,4 +307,71 @@ func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
 	}()
 	<-dialDone
 	cancel()
+}
+
+type testserver struct {
+	tr   transport.ServerTransport
+	done chan struct{}
+}
+
+func (s *testserver) start(t *testing.T) string {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Error: %v", err)
+	}
+	go func() {
+		defer func() {
+			s.done <- struct{}{}
+		}()
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Server failed to accept. Error: %v", err)
+			return
+		}
+		lis.Close()
+		if s.tr, err = transport.NewServerTransport("http2", conn, &transport.ServerConfig{
+			KeepalivePolicy: keepalive.EnforcementPolicy{
+				MinTime:             100 * time.Millisecond,
+				PermitWithoutStream: true,
+			},
+		}); err != nil {
+			conn.Close()
+			t.Errorf("Failed to create server transport. Error: %v", err)
+			return
+		}
+		go s.tr.HandleStreams(func(stream *transport.Stream) {
+		}, func(ctx context.Context, method string) context.Context {
+			return ctx
+		})
+	}()
+	return lis.Addr().String()
+}
+
+func (s *testserver) stop() {
+	if s.tr != nil {
+		s.tr.Close()
+	}
+}
+
+func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+	server := testserver{done: make(chan struct{}, 1)}
+	addr := server.start(t)
+	defer server.stop()
+	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                50 * time.Millisecond,
+		Timeout:             1 * time.Millisecond,
+		PermitWithoutStream: true,
+	}))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	<-server.done
+	time.Sleep(1 * time.Second)
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	v := cc.mkp.Time
+	if v < 100*time.Millisecond {
+		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	}
 }

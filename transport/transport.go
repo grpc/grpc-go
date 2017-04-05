@@ -484,6 +484,9 @@ type ClientTransport interface {
 	// receives the draining signal from the server (e.g., GOAWAY frame in
 	// HTTP/2).
 	GoAway() <-chan struct{}
+
+	// GetGoAwayReason returns the reason why GoAway frame was received.
+	GetGoAwayReason() *GoAwayReason
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -619,4 +622,10 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 	case i := <-proceed:
 		return i, nil
 	}
+}
+
+// GoAwayReason contains the reason for the GoAway frame received.
+type GoAwayReason struct {
+	Err       http2.ErrCode
+	DebugData []byte
 }
