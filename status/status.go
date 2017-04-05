@@ -63,8 +63,8 @@ func (se *statusError) status() *Status {
 	return &Status{s: (*spb.Status)(se)}
 }
 
-// Status represents an RPC status code, message, and details.  It is immutable
-// and should be created with New, Newf, or FromProto.
+// Status represents an RPC status code, message, and details.  It should be
+// created with New, Newf, or FromProto.
 type Status struct {
 	s *spb.Status
 }
@@ -81,16 +81,16 @@ func (s *Status) Message() string {
 
 // Proto returns s's status as an spb.Status proto message.
 func (s *Status) Proto() *spb.Status {
-	return proto.Clone(s.s).(*spb.Status)
+	return s.s
 }
 
-// Err returns an error representing the current status; returns nil if
-// s.Code() is OK.
+// Err returns an immutable error representing s; returns nil if s.Code() is
+// OK.
 func (s *Status) Err() error {
-	if s == nil || s.s.GetCode() == int32(codes.OK) {
+	if s.Code() == codes.OK {
 		return nil
 	}
-	return (*statusError)(s.s)
+	return (*statusError)(proto.Clone(s.s).(*spb.Status))
 }
 
 // New returns a Status representing c and msg.
@@ -120,7 +120,7 @@ func ErrorProto(s *spb.Status) error {
 
 // FromProto returns a Status representing s.
 func FromProto(s *spb.Status) *Status {
-	return &Status{s: proto.Clone(s).(*spb.Status)}
+	return &Status{s: s}
 }
 
 // FromError returns a Status representing err if it was produced from this
