@@ -123,7 +123,7 @@ type http2Client struct {
 	prevGoAwayID uint32
 	// goAwayReason records the http2.ErrCode and debug data received with the
 	// GoAway frame.
-	goAwayReason *GoAwayReason
+	goAwayReason GoAwayReason
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
@@ -920,10 +920,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			t.mu.Unlock()
 			return
 		default:
-			t.goAwayReason = &GoAwayReason{
-				Err:       f.ErrCode,
-				DebugData: f.DebugData(),
-			}
+			t.setGoAwayReason(f)
 		}
 		t.goAwayID = f.LastStreamID
 		close(t.goAway)
@@ -931,15 +928,24 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.mu.Unlock()
 }
 
-func (t *http2Client) GetGoAwayReason() *GoAwayReason {
+// setGoAwayReason sets the value of t.goAwayReason based
+// on the GoAway frame received.
+// It expects a lock on transport's mutext to be held by
+// the caller.
+func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
+	t.goAwayReason = NoReason
+	switch f.ErrCode {
+	case http2.ErrCodeEnhanceYourCalm:
+		if string(f.DebugData()) == "too_many_pings" {
+			t.goAwayReason = TooManyPings
+		}
+	}
+}
+
+func (t *http2Client) GetGoAwayReason() GoAwayReason {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	returnVal := t.goAwayReason
-	if returnVal != nil {
-		returnVal = &GoAwayReason{}
-		*returnVal = *t.goAwayReason
-	}
-	return returnVal
+	return t.goAwayReason
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {

@@ -486,7 +486,7 @@ type ClientTransport interface {
 	GoAway() <-chan struct{}
 
 	// GetGoAwayReason returns the reason why GoAway frame was received.
-	GetGoAwayReason() *GoAwayReason
+	GetGoAwayReason() GoAwayReason
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -625,7 +625,14 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 }
 
 // GoAwayReason contains the reason for the GoAway frame received.
-type GoAwayReason struct {
-	Err       http2.ErrCode
-	DebugData []byte
-}
+type GoAwayReason uint8
+
+const (
+	// Invalid indicates that no GoAway frame is received.
+	Invalid GoAwayReason = 0
+	// NoReason is the default value when GoAway frame is received.
+	NoReason GoAwayReason = 1
+	// TooManyPings indicates that a GoAway frame with ErrCodeEnhanceYourCalm
+	// was recieved and that the debug data said "too_many_pings".
+	TooManyPings GoAwayReason = 2
+)

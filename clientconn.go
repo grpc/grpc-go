@@ -42,7 +42,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -724,11 +723,9 @@ type addrConn struct {
 
 // adjustParams updates parameters used to create transports upon
 // receiving a GoAway.
-func (ac *addrConn) adjustParams(r *transport.GoAwayReason) {
-	if r == nil {
-		return
-	}
-	if r.Err == http2.ErrCodeEnhanceYourCalm && string(r.DebugData) == "too_many_pings" {
+func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
+	switch r {
+	case transport.TooManyPings:
 		v := 2 * ac.dopts.copts.KeepaliveParams.Time
 		ac.cc.mu.Lock()
 		if v > ac.cc.mkp.Time {
