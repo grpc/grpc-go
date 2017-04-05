@@ -91,6 +91,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import org.junit.After;
@@ -579,12 +580,9 @@ public class GrpclbLoadBalancerTest {
     assertEquals(new EquivalentAddressGroup(backends1.get(0).addr), subchannel1.getAddresses());
     assertEquals(new EquivalentAddressGroup(backends1.get(1).addr), subchannel2.getAddresses());
 
-    // Before any subchannel is READY, a buffer picker will be provided
-    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
-
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(CONNECTING));
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(CONNECTING));
-    inOrder.verify(helper, times(2)).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
+    inOrder.verifyNoMoreInteractions();
 
     // Let subchannels be connected
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
@@ -608,16 +606,12 @@ public class GrpclbLoadBalancerTest {
     assertThat(picker3.list).containsExactly(new RoundRobinEntry(subchannel2, "token0002"));
 
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(CONNECTING));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
-    RoundRobinPicker picker4 = (RoundRobinPicker) pickerCaptor.getValue();
-    assertThat(picker4.list).containsExactly(new RoundRobinEntry(subchannel2, "token0002"));
+    inOrder.verifyNoMoreInteractions();
 
     // As long as there is at least one READY subchannel, round robin will work.
     Status error1 = Status.UNAVAILABLE.withDescription("error1");
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forTransientFailure(error1));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
-    RoundRobinPicker picker5 = (RoundRobinPicker) pickerCaptor.getValue();
-    assertThat(picker5.list).containsExactly(new RoundRobinEntry(subchannel2, "token0002"));
+    inOrder.verifyNoMoreInteractions();
 
     // If no subchannel is READY, will propagate an error from an arbitrary subchannel (but here
     // only subchannel1 has error).
@@ -678,8 +672,14 @@ public class GrpclbLoadBalancerTest {
         GrpclbLoadBalancer.DROP_ENTRY,
         new RoundRobinEntry(subchannel2, "token0004"),
         new RoundRobinEntry(subchannel3, "token0005")).inOrder();
-
     verify(subchannel3, never()).shutdown();
+
+    // Update backends, with no entry
+    lbResponseObserver.onNext(buildLbResponse(Collections.<ServerEntry>emptyList()));
+    verify(subchannel2).shutdown();
+    verify(subchannel3).shutdown();
+    inOrder.verify(helper).updatePicker((GrpclbLoadBalancer.BUFFER_PICKER));
+
     assertFalse(oobChannel.isShutdown());
     assertEquals(1, lbRequestObservers.size());
     verify(lbRequestObservers.peek(), never()).onCompleted();
@@ -754,6 +754,8 @@ public class GrpclbLoadBalancerTest {
 
     // Finally it works.
     lbResponseObserver.onNext(buildInitialResponse());
+    verify(helper, never()).createSubchannel(
+        any(EquivalentAddressGroup.class), any(Attributes.class));
     List<ServerEntry> backends = Arrays.asList(
         new ServerEntry("127.0.0.1", 2000, "token001"),
         new ServerEntry("127.0.0.1", 2010, "token002"));
@@ -762,7 +764,6 @@ public class GrpclbLoadBalancerTest {
         eq(new EquivalentAddressGroup(backends.get(0).addr)), any(Attributes.class));
     inOrder.verify(helper).createSubchannel(
         eq(new EquivalentAddressGroup(backends.get(1).addr)), any(Attributes.class));
-    inOrder.verify(helper).updatePicker(same(GrpclbLoadBalancer.BUFFER_PICKER));
     inOrder.verifyNoMoreInteractions();
   }
 

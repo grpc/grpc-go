@@ -133,6 +133,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Collections.emptyMap();
 
   private List<RoundRobinEntry> roundRobinList = Collections.emptyList();
+  private SubchannelPicker currentPicker = BUFFER_PICKER;
 
   GrpclbLoadBalancer(Helper helper, Factory pickFirstBalancerFactory,
       Factory roundRobinBalancerFactory) {
@@ -162,7 +163,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       subchannel.requestConnection();
     }
     subchannel.getAttributes().get(STATE_INFO).set(newState);
-    helper.updatePicker(makePicker());
+    maybeUpdatePicker();
   }
 
   @Override
@@ -306,7 +307,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     logger.log(Level.FINE, "[{0}] Had an error: {1}; roundRobinList={2}",
         new Object[] {logId, status, roundRobinList});
     if (roundRobinList.isEmpty()) {
-      helper.updatePicker(new ErrorPicker(status));
+      maybeUpdatePicker(new ErrorPicker(status));
     }
   }
 
@@ -385,7 +386,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
       subchannels = newSubchannelMap;
       roundRobinList = newRoundRobinList;
-      helper.updatePicker(makePicker());
+      maybeUpdatePicker();
     }
 
     @Override public void onError(final Throwable error) {
@@ -421,9 +422,10 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   }
 
   /**
-   * Make a picker out of the current roundRobinList and the states of subchannels.
+   * Make and use a picker out of the current roundRobinList and the states of subchannels if they
+   * have changed since the last picker created.
    */
-  private SubchannelPicker makePicker() {
+  private void maybeUpdatePicker() {
     List<RoundRobinEntry> resultList = new ArrayList<RoundRobinEntry>();
     Status error = null;
     for (RoundRobinEntry entry : roundRobinList) {
@@ -445,15 +447,36 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       if (error != null) {
         logger.log(Level.FINE, "[{0}] No ready Subchannel. Using error: {1}",
             new Object[] {logId, error});
-        return new ErrorPicker(error);
+        maybeUpdatePicker(new ErrorPicker(error));
       } else {
         logger.log(Level.FINE, "[{0}] No ready Subchannel and no error", logId);
-        return BUFFER_PICKER;
+        maybeUpdatePicker(BUFFER_PICKER);
       }
     } else {
       logger.log(Level.FINE, "[{0}] Using list {1}", new Object[] {logId, resultList});
-      return new RoundRobinPicker(resultList);
+      maybeUpdatePicker(new RoundRobinPicker(resultList));
     }
+  }
+
+  /**
+   * Update the given picker to the helper if it's different from the current one.
+   */
+  private void maybeUpdatePicker(SubchannelPicker picker) {
+    // Discard the new picker if we are sure it won't make any difference, in order to save
+    // re-processing pending streams, and avoid unnecessary resetting of the pointer in
+    // RoundRobinPicker.
+    if (picker == BUFFER_PICKER && currentPicker == BUFFER_PICKER) {
+      return;
+    }
+    if (picker instanceof RoundRobinPicker && currentPicker instanceof RoundRobinPicker) {
+      if (((RoundRobinPicker) picker).list.equals(((RoundRobinPicker) currentPicker).list)) {
+        return;
+      }
+    }
+    // No need to skip ErrorPicker. If the current picker is ErrorPicker, there won't be any pending
+    // stream thus no time is wasted in re-process.
+    currentPicker = picker;
+    helper.updatePicker(picker);
   }
 
   @VisibleForTesting
