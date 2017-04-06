@@ -214,7 +214,7 @@ type Stream struct {
 	// multiple times.
 	headerDone bool
 	// the status error received from the server.
-	status status.Status
+	status *status.Status
 	// rstStream indicates whether a RST_STREAM frame needs to be sent
 	// to the server to signify that this stream is closing.
 	rstStream bool
@@ -285,7 +285,7 @@ func (s *Stream) Method() string {
 }
 
 // Status returns the status received from the server.
-func (s *Stream) Status() status.Status {
+func (s *Stream) Status() *status.Status {
 	return s.status
 }
 
@@ -334,8 +334,8 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 }
 
 // finish sets the stream's state and status, and closes the done channel.
-// s.mu must be held by the caller.
-func (s *Stream) finish(st status.Status) {
+// s.mu must be held by the caller.  st must always be non-nil.
+func (s *Stream) finish(st *status.Status) {
 	s.status = st
 	s.state = streamDone
 	close(s.done)
@@ -508,7 +508,7 @@ type ServerTransport interface {
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.
-	WriteStatus(s *Stream, st status.Status) error
+	WriteStatus(s *Stream, st *status.Status) error
 
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their

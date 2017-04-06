@@ -97,7 +97,7 @@ type decodeState struct {
 	// statusGen caches the stream status received from the trailer the server
 	// sent.  Client side only.  Do not access directly.  After all trailers are
 	// parsed, use the status method to retrieve the status.
-	statusGen status.Status
+	statusGen *status.Status
 	// rawStatusCode and rawStatusMsg are set from the raw trailer fields and are not
 	// intended for direct access outside of parsing.
 	rawStatusCode int32
@@ -156,7 +156,7 @@ func validContentType(t string) bool {
 	return true
 }
 
-func (d *decodeState) status() status.Status {
+func (d *decodeState) status() *status.Status {
 	if d.statusGen == nil {
 		// No status-details were provided; generate status using code/msg.
 		d.statusGen = status.New(codes.Code(d.rawStatusCode), d.rawStatusMsg)
