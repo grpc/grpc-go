@@ -39,7 +39,7 @@ import io.grpc.Status;
  * An implementation of {@link ClientStream} that fails (by calling {@link
  * ClientStreamListener#closed}) when started, and silently does nothing for the other operations.
  */
-class FailingClientStream extends NoopClientStream {
+public final class FailingClientStream extends NoopClientStream {
   private boolean started;
   private final Status error;
 

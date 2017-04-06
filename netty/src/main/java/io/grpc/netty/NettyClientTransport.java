@@ -44,6 +44,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ConnectionClientTransport;
+import io.grpc.internal.FailingClientStream;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2Ping;
 import io.grpc.internal.KeepAliveManager;
@@ -91,6 +92,8 @@ class NettyClientTransport implements ConnectionClientTransport {
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
   private Channel channel;
+  /** If {@link #start} has been called, non-{@code null} if channel is {@code null}. */
+  private Status statusExplainingWhyTheChannelIsNull;
   /** Since not thread-safe, may only be used from event loop. */
   private ClientTransportLifecycleManager lifecycleManager;
 
@@ -116,6 +119,15 @@ class NettyClientTransport implements ConnectionClientTransport {
 
   @Override
   public void ping(final PingCallback callback, final Executor executor) {
+    if (channel == null) {
+      executor.execute(new Runnable() {
+        @Override
+        public void run() {
+          callback.onFailure(statusExplainingWhyTheChannelIsNull.asException());
+        }
+      });
+      return;
+    }
     // The promise and listener always succeed in NettyClientHandler. So this listener handles the
     // error case, when the channel is closed and the NettyClientHandler no longer in the pipeline.
     ChannelFutureListener failureListener = new ChannelFutureListener() {
@@ -139,6 +151,9 @@ class NettyClientTransport implements ConnectionClientTransport {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
     Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    if (channel == null) {
+      return new FailingClientStream(statusExplainingWhyTheChannelIsNull);
+    }
     return new NettyClientStream(
         new NettyClientStream.TransportState(handler, maxMessageSize, statsTraceCtx) {
           @Override
@@ -192,7 +207,28 @@ class NettyClientTransport implements ConnectionClientTransport {
      * that it may begin buffering writes.
      */
     b.handler(negotiationHandler);
-    channel = b.register().channel();
+    ChannelFuture regFuture = b.register();
+    channel = regFuture.channel();
+    if (channel == null) {
+      // Initialization has failed badly. All new streams should be made to fail.
+      Throwable t = regFuture.cause();
+      if (t == null) {
+        t = new IllegalStateException("Channel is null, but future doesn't have a cause");
+      }
+      statusExplainingWhyTheChannelIsNull = Utils.statusFromThrowable(t);
+      // Use a Runnable since lifecycleManager calls transportListener
+      return new Runnable() {
+        @Override
+        public void run() {
+          // NOTICE: we not are calling lifecycleManager from the event loop. But there isn't really
+          // an event loop in this case, so nothing should be accessing the lifecycleManager. We
+          // could use GlobalEventExecutor (which is what regFuture would use for notifying
+          // listeners in this case), but avoiding on-demand thread creation in an error case seems
+          // a good idea and is probably clearer threading.
+          lifecycleManager.notifyTerminated(statusExplainingWhyTheChannelIsNull);
+        }
+      };
+    }
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
     // Start the connection operation to the server.
@@ -242,6 +278,10 @@ class NettyClientTransport implements ConnectionClientTransport {
 
   @Override
   public void shutdown() {
+    // start() could have failed
+    if (channel == null) {
+      return;
+    }
     // Notifying of termination is automatically done when the channel closes.
     if (channel.isOpen()) {
       Status status

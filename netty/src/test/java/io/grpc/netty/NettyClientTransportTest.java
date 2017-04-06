@@ -58,6 +58,8 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
+import io.grpc.internal.ClientTransport;
+import io.grpc.internal.FakeClock;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.ServerListener;
@@ -273,6 +275,68 @@ public class NettyClientTransportTest {
         // Make sure that the Http2ChannelClosedException got replaced with the real cause of
         // the shutdown.
         assertFalse(t instanceof StreamBufferingEncoder.Http2ChannelClosedException);
+      }
+    }
+  }
+
+  public static class CantConstructChannel extends NioSocketChannel {
+    /** Constructor. It doesn't work. Feel free to try. But it doesn't work. */
+    public CantConstructChannel() {
+      // Use an Error because we've seen cases of channels failing to construct due to classloading
+      // problems (like mixing different versions of Netty), and those involve Errors.
+      throw new CantConstructChannelError();
+    }
+  }
+
+  private static class CantConstructChannelError extends Error {}
+
+  @Test
+  public void failingToConstructChannelShouldFailGracefully() throws Exception {
+    address = TestUtils.testServerAddress(12345);
+    authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
+    NettyClientTransport transport = new NettyClientTransport(
+        address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
+        newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
+        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, authority, null);
+    transports.add(transport);
+
+    // Should not throw
+    callMeMaybe(transport.start(clientTransportListener));
+
+    // And RPCs and PINGs should fail cleanly, reporting the failure
+    Rpc rpc = new Rpc(transport);
+    try {
+      rpc.waitForResponse();
+      fail("Expected exception");
+    } catch (Exception ex) {
+      if (!(getRootCause(ex) instanceof CantConstructChannelError)) {
+        throw new AssertionError("Could not find expected error", ex);
+      }
+    }
+
+    final SettableFuture<Object> pingResult = SettableFuture.create();
+    FakeClock clock = new FakeClock();
+    ClientTransport.PingCallback pingCallback = new ClientTransport.PingCallback() {
+      @Override
+      public void onSuccess(long roundTripTimeNanos) {
+        pingResult.set(roundTripTimeNanos);
+      }
+
+      @Override
+      public void onFailure(Throwable cause) {
+        pingResult.setException(cause);
+      }
+    };
+    transport.ping(pingCallback, clock.getScheduledExecutorService());
+    assertFalse(pingResult.isDone());
+    clock.runDueTasks();
+    assertTrue(pingResult.isDone());
+    try {
+      pingResult.get();
+      fail("Expected exception");
+    } catch (Exception ex) {
+      if (!(getRootCause(ex) instanceof CantConstructChannelError)) {
+        throw new AssertionError("Could not find expected error", ex);
       }
     }
   }
