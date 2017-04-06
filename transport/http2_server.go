@@ -671,7 +671,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 // There is no further I/O operations being able to perform on this stream.
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
-func (t *http2Server) WriteStatus(s *Stream, st status.Status) error {
+func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	var headersSent, hasHeader bool
 	s.mu.Lock()
 	if s.state == streamDone {

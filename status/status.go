@@ -50,78 +50,56 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// Status provides access to grpc status details and is implemented by all
-// errors returned from this package except nil errors, which are not typed.
-// Note: gRPC users should not implement their own Statuses.  Custom data may
-// be attached to the spb.Status proto's Details field.
-type Status interface {
-	// Code returns the status code.
-	Code() codes.Code
-	// Message returns the status message.
-	Message() string
-	// Proto returns a copy of the status in proto form.
-	Proto() *spb.Status
-	// Err returns an error representing the status.
-	Err() error
-}
-
-// okStatus is a Status whose Code method returns codes.OK, but does not
-// implement error.  To represent an OK code as an error, use an untyped nil.
-type okStatus struct{}
-
-func (okStatus) Code() codes.Code {
-	return codes.OK
-}
-
-func (okStatus) Message() string {
-	return ""
-}
-
-func (okStatus) Proto() *spb.Status {
-	return nil
-}
-
-func (okStatus) Err() error {
-	return nil
-}
-
-// statusError contains a status proto.  It is embedded and not aliased to
-// allow for accessor functions of the same name.  It implements error and
-// Status, and a nil statusError should never be returned by this package.
-type statusError struct {
-	*spb.Status
-}
+// statusError is an alias of a status proto.  It implements error and Status,
+// and a nil statusError should never be returned by this package.
+type statusError spb.Status
 
 func (se *statusError) Error() string {
-	return fmt.Sprintf("rpc error: code = %s desc = %s", se.Code(), se.Message())
+	p := (*spb.Status)(se)
+	return fmt.Sprintf("rpc error: code = %s desc = %s", codes.Code(p.GetCode()), p.GetMessage())
 }
 
-func (se *statusError) Code() codes.Code {
-	return codes.Code(se.Status.Code)
+func (se *statusError) status() *Status {
+	return &Status{s: (*spb.Status)(se)}
 }
 
-func (se *statusError) Message() string {
-	return se.Status.Message
+// Status represents an RPC status code, message, and details.  It is immutable
+// and should be created with New, Newf, or FromProto.
+type Status struct {
+	s *spb.Status
 }
 
-func (se *statusError) Proto() *spb.Status {
-	return proto.Clone(se.Status).(*spb.Status)
+// Code returns the status code contained in s.
+func (s *Status) Code() codes.Code {
+	return codes.Code(s.s.Code)
 }
 
-func (se *statusError) Err() error {
-	return se
+// Message returns the message contained in s.
+func (s *Status) Message() string {
+	return s.s.Message
+}
+
+// Proto returns s's status as an spb.Status proto message.
+func (s *Status) Proto() *spb.Status {
+	return proto.Clone(s.s).(*spb.Status)
+}
+
+// Err returns an immutable error representing s; returns nil if s.Code() is
+// OK.
+func (s *Status) Err() error {
+	if s.Code() == codes.OK {
+		return nil
+	}
+	return (*statusError)(s.s)
 }
 
 // New returns a Status representing c and msg.
-func New(c codes.Code, msg string) Status {
-	if c == codes.OK {
-		return okStatus{}
-	}
-	return &statusError{Status: &spb.Status{Code: int32(c), Message: msg}}
+func New(c codes.Code, msg string) *Status {
+	return &Status{s: &spb.Status{Code: int32(c), Message: msg}}
 }
 
 // Newf returns New(c, fmt.Sprintf(format, a...)).
-func Newf(c codes.Code, format string, a ...interface{}) Status {
+func Newf(c codes.Code, format string, a ...interface{}) *Status {
 	return New(c, fmt.Sprintf(format, a...))
 }
 
@@ -140,21 +118,19 @@ func ErrorProto(s *spb.Status) error {
 	return FromProto(s).Err()
 }
 
-// FromProto returns a Status representing s.  If s.Code is OK, Message and
-// Details may be lost.
-func FromProto(s *spb.Status) Status {
-	if s.GetCode() == int32(codes.OK) {
-		return okStatus{}
-	}
-	return &statusError{Status: proto.Clone(s).(*spb.Status)}
+// FromProto returns a Status representing s.
+func FromProto(s *spb.Status) *Status {
+	return &Status{s: proto.Clone(s).(*spb.Status)}
 }
 
 // FromError returns a Status representing err if it was produced from this
 // package, otherwise it returns nil, false.
-func FromError(err error) (s Status, ok bool) {
+func FromError(err error) (s *Status, ok bool) {
 	if err == nil {
-		return okStatus{}, true
+		return &Status{s: &spb.Status{Code: int32(codes.OK)}}, true
 	}
-	s, ok = err.(Status)
-	return s, ok
+	if s, ok := err.(*statusError); ok {
+		return s.status(), true
+	}
+	return nil, false
 }
