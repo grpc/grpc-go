@@ -459,7 +459,6 @@ type ClientConn struct {
 	mu    sync.RWMutex
 	sc    ServiceConfig
 	conns map[Address]*addrConn
-
 	// Keepalive parameter can be udated if a GoAway is received.
 	mkp keepalive.ClientParameters
 }
