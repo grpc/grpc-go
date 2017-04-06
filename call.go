@@ -150,16 +150,6 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	return invoke(ctx, method, args, reply, cc, opts...)
 }
 
-const defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
-const defaultClientMaxSendMessageSize = 1024 * 1024 * 4
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
 	maxReceiveMessageSize := defaultClientMaxReceiveMessageSize
@@ -179,12 +169,16 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			maxSendMessageSize = min(*mc.MaxReqSize, cc.dopts.maxSendMessageSize)
 		} else if mc.MaxReqSize != nil {
 			maxSendMessageSize = *mc.MaxReqSize
+		} else if mc.MaxReqSize == nil && cc.dopts.maxSendMessageSize >= 0 {
+			maxSendMessageSize = cc.dopts.maxSendMessageSize
 		}
 
 		if mc.MaxRespSize != nil && cc.dopts.maxReceiveMessageSize >= 0 {
 			maxReceiveMessageSize = min(*mc.MaxRespSize, cc.dopts.maxReceiveMessageSize)
 		} else if mc.MaxRespSize != nil {
 			maxReceiveMessageSize = *mc.MaxRespSize
+		} else if mc.MaxRespSize == nil && cc.dopts.maxReceiveMessageSize >= 0 {
+			maxReceiveMessageSize = cc.dopts.maxReceiveMessageSize
 		}
 	} else {
 		if cc.dopts.maxSendMessageSize >= 0 {

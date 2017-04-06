@@ -36,7 +36,6 @@ package grpc
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"strings"
 	"sync"
@@ -103,16 +102,19 @@ type dialOptions struct {
 	maxSendMessageSize    int
 }
 
-const defaultClientMaxMsgSize = math.MaxInt32
+const (
+	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
+	defaultClientMaxSendMessageSize    = 1024 * 1024 * 4
+	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
+	defaultServerMaxSendMessageSize    = 1024 * 1024 * 4
+)
 
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. This function is for backward API compatibility. It has essentially the same functionality as WithMaxReceiveMessageSize.
+// WithMaxMsgSize Deprecated: use WithMaxReceiveMessageSize instead.
 func WithMaxMsgSize(s int) DialOption {
-	return func(o *dialOptions) {
-		o.maxReceiveMessageSize = s
-	}
+	return WithMaxReceiveMessageSize(s)
 }
 
 // WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive. Negative input is invalid and has the same effect as not setting the field.

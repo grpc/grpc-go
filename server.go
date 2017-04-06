@@ -125,9 +125,6 @@ type options struct {
 	keepalivePolicy       keepalive.EnforcementPolicy
 }
 
-const defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4 // Use 4MB as the default receive message size limit.
-const defaultServerMaxSendMessageSize = 1024 * 1024 * 4    // Use 4MB as the default send message size limit.
-
 // A ServerOption sets options.
 type ServerOption func(*options)
 
@@ -166,12 +163,9 @@ func RPCDecompressor(dc Decompressor) ServerOption {
 	}
 }
 
-// MaxMsgSize returns a ServerOption to set the max message size in bytes for inbound mesages.
-// If this is not set, gRPC uses the default 4MB. This function is for backward compatability. It has essentially the same functionality as MaxReceiveMessageSize.
+// MaxMsgSize Deprecated: use MaxReceiveMessageSize instead.
 func MaxMsgSize(m int) ServerOption {
-	return func(o *options) {
-		o.maxReceiveMessageSize = m
-	}
+	return MaxReceiveMessageSize(m)
 }
 
 // MaxReceiveMessageSize returns a ServerOption to set the max message size in bytes for inbound mesages.
@@ -650,7 +644,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	if len(p) > s.opts.maxSendMessageSize {
-		return Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
+		return status.Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, p, opts)
 	if err == nil && outPayload != nil {
@@ -755,7 +749,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if len(req) > s.opts.maxReceiveMessageSize {
 				// TODO: Revisit the error code. Currently keep it consistent with
 				// java implementation.
-				return status.Errorf(codes.InvalidArgument, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxReceiveMessageSize)
+				return status.Errorf(codes.InvalidArgument, "Received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
@@ -798,6 +792,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 			// TODO: Translate error into a status.Status error if necessary?
 			// TODO: Write status when appropriate.
+			switch e := err.(type) {
+			case status.Status:
+				if se := t.WriteStatus(stream, e); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", se)
+				}
+			default:
+			}
 			return err
 		}
 		if trInfo != nil {

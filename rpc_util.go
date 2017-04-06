@@ -485,6 +485,9 @@ type ServiceConfig struct {
 	// via grpc.WithBalancer will override this.
 	LB Balancer
 	// Methods contains a map for the methods in this service.
+	// If there is an exact match for a method (i.e. /service/method) in the map, use the corresponding MethodConfig.
+	// If there's no exact match, look for the default config for all methods under the service (/service/) and use the corresponding MethodConfig.
+	// Otherwise, the method has no MethodConfig to use.
 	Methods map[string]MethodConfig
 }
 
@@ -498,3 +501,10 @@ const SupportPackageIsVersion4 = true
 
 // Version is the current grpc version.
 const Version = "1.3.0-dev"
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
