@@ -63,8 +63,8 @@ func (se *statusError) status() *Status {
 	return &Status{s: (*spb.Status)(se)}
 }
 
-// Status represents an RPC status code, message, and details.  It should be
-// created with New, Newf, or FromProto.
+// Status represents an RPC status code, message, and details.  It is immutable
+// and should be created with New, Newf, or FromProto.
 type Status struct {
 	s *spb.Status
 }
