@@ -334,7 +334,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 }
 
 // finish sets the stream's state and status, and closes the done channel.
-// s.mu must be held by the caller.
+// s.mu must be held by the caller.  st must always be non-nil.
 func (s *Stream) finish(st *status.Status) {
 	s.status = st
 	s.state = streamDone
