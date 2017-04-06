@@ -33,6 +33,7 @@ package io.grpc.okhttp;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -85,6 +86,7 @@ public class OkHttpChannelBuilder extends
           .supportsTlsExtensions(true)
           .build();
 
+  private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
   private static final Resource<ExecutorService> SHARED_EXECUTOR =
       new Resource<ExecutorService>() {
         @Override
@@ -116,9 +118,8 @@ public class OkHttpChannelBuilder extends
   private SSLSocketFactory sslSocketFactory;
   private ConnectionSpec connectionSpec = DEFAULT_CONNECTION_SPEC;
   private NegotiationType negotiationType = NegotiationType.TLS;
-  private boolean enableKeepAlive;
-  private long keepAliveDelayNanos;
-  private long keepAliveTimeoutNanos;
+  private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
+  private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
 
   protected OkHttpChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
@@ -156,26 +157,68 @@ public class OkHttpChannelBuilder extends
 
   /**
    * Enable keepalive with default delay and timeout.
+   *
+   * @deprecated Use {@link #keepAliveTime} instead
    */
+  @Deprecated
   public final OkHttpChannelBuilder enableKeepAlive(boolean enable) {
-    enableKeepAlive = enable;
     if (enable) {
-      keepAliveDelayNanos = DEFAULT_KEEPALIVE_DELAY_NANOS;
-      keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+      return keepAliveTime(DEFAULT_KEEPALIVE_DELAY_NANOS, TimeUnit.NANOSECONDS);
+    } else {
+      return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
+    }
+  }
+
+  /**
+   * Enable keepalive with custom delay and timeout.
+   *
+   * @deprecated Use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead
+   */
+  @Deprecated
+  public final OkHttpChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
+    if (enable) {
+      return keepAliveTime(keepAliveDelay, delayUnit)
+          .keepAliveTimeout(keepAliveTimeout, timeoutUnit);
+    } else {
+      return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
+    }
+  }
+
+  /**
+   * Sets the time without read activity before sending a keepalive ping. An unreasonably small
+   * value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably large
+   * value will disable keepalive. Defaults to infinite.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives can increase the load on services and are commonly "invisible" making it hard to
+   * notice when they are causing excessive load. Clients are strongly encouraged to use only as
+   * small of a value as necessary.
+   *
+   * @since 1.3.0
+   */
+  public OkHttpChannelBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    Preconditions.checkArgument(keepAliveTime > 0L, "keepalive time must be positive");
+    keepAliveTimeNanos = timeUnit.toNanos(keepAliveTime);
+    if (keepAliveTimeNanos >= AS_LARGE_AS_INFINITE) {
+      // Bump keepalive time to infinite. This disables keepalive.
+      keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
     }
     return this;
   }
 
   /**
-   * Enable keepalive with custom delay and timeout.
+   * Sets the time waiting for read activity after sending a keepalive ping. If the time expires
+   * without any read activity on the connection, the connection is considered dead. An unreasonably
+   * small value might be increased. Defaults to 20 seconds.
+   *
+   * <p>This value should be at least multiple times the RTT to allow for lost packets.
+   *
+   * @since 1.3.0
    */
-  public final OkHttpChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
-      TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
-    enableKeepAlive = enable;
-    if (enable) {
-      keepAliveDelayNanos = delayUnit.toNanos(keepAliveDelay);
-      keepAliveTimeoutNanos = timeoutUnit.toNanos(keepAliveTimeout);
-    }
+  public OkHttpChannelBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    Preconditions.checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
+    keepAliveTimeoutNanos = timeUnit.toNanos(keepAliveTimeout);
     return this;
   }
 
@@ -226,9 +269,10 @@ public class OkHttpChannelBuilder extends
 
   @Override
   protected final ClientTransportFactory buildTransportFactory() {
+    boolean enableKeepAlive = keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED;
     return new OkHttpTransportFactory(transportExecutor,
         createSocketFactory(), connectionSpec, maxInboundMessageSize(), enableKeepAlive,
-        keepAliveDelayNanos, keepAliveTimeoutNanos);
+        keepAliveTimeNanos, keepAliveTimeoutNanos);
   }
 
   @Override

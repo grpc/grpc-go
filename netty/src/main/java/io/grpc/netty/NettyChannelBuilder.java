@@ -72,7 +72,6 @@ public final class NettyChannelBuilder
     extends AbstractManagedChannelImplBuilder<NettyChannelBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
-  private static final long MIN_KEEPALIVE_TIMEOUT_NANO = TimeUnit.MICROSECONDS.toNanos(499L);
   private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
 
   private final Map<ChannelOption<?>, Object> channelOptions =
@@ -273,9 +272,14 @@ public final class NettyChannelBuilder
   }
 
   /**
-   * Sets a custom keepalive time, the delay time for sending next keepalive ping. An unreasonably
-   * small value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably
-   * large value will disable keepalive.
+   * Sets the time without read activity before sending a keepalive ping. An unreasonably small
+   * value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably large
+   * value will disable keepalive. Defaults to infinite.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives can increase the load on services and are commonly "invisible" making it hard to
+   * notice when they are causing excessive load. Clients are strongly encouraged to use only as
+   * small of a value as necessary.
    *
    * @since 1.3.0
    */
@@ -290,18 +294,17 @@ public final class NettyChannelBuilder
   }
 
   /**
-   * Sets a custom keepalive timeout, the timeout for keepalive ping requests. An unreasonably small
-   * value might be increased.
+   * Sets the time waiting for read activity after sending a keepalive ping. If the time expires
+   * without any read activity on the connection, the connection is considered dead. An unreasonably
+   * small value might be increased. Defaults to 20 seconds.
+   *
+   * <p>This value should be at least multiple times the RTT to allow for lost packets.
    *
    * @since 1.3.0
    */
   public NettyChannelBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
     checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
     keepAliveTimeoutNanos = timeUnit.toNanos(keepAliveTimeout);
-    if (keepAliveTimeoutNanos < MIN_KEEPALIVE_TIMEOUT_NANO) {
-      // Bump keepalive timeout.
-      keepAliveTimeoutNanos = MIN_KEEPALIVE_TIMEOUT_NANO;
-    }
     return this;
   }
 
