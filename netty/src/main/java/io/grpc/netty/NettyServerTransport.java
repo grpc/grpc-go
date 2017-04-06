@@ -60,10 +60,13 @@ class NettyServerTransport implements ServerTransport {
   private final int maxHeaderListSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final boolean permitKeepAliveWithoutCalls;
+  private final long permitKeepAliveTimeInNanos;
 
   NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator, int maxStreams,
       int flowControlWindow, int maxMessageSize, int maxHeaderListSize, long keepAliveTimeInNanos,
-      long keepAliveTimeoutInNanos) {
+      long keepAliveTimeoutInNanos, boolean permitKeepAliveWithoutCalls,
+      long permitKeepAliveTimeInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.maxStreams = maxStreams;
@@ -72,6 +75,8 @@ class NettyServerTransport implements ServerTransport {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
+    this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
   }
 
   public void start(ServerTransportListener listener) {
@@ -135,6 +140,7 @@ class NettyServerTransport implements ServerTransport {
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     return NettyServerHandler.newHandler(transportListener, maxStreams, flowControlWindow,
-        maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos);
+        maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 }

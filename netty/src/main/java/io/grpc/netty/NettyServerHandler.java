@@ -118,7 +118,9 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        int maxHeaderListSize,
                                        int maxMessageSize,
                                        long keepAliveTimeInNanos,
-                                       long keepAliveTimeoutInNanos) {
+                                       long keepAliveTimeoutInNanos,
+                                       boolean permitKeepAliveWithoutCalls,
+                                       long permitKeepAliveTimeInNanos) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class);
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ServerHeadersDecoder(maxHeaderListSize);
@@ -127,7 +129,8 @@ class NettyServerHandler extends AbstractNettyHandler {
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
     return newHandler(frameReader, frameWriter, transportListener, maxStreams, flowControlWindow,
-        maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos, true, 0);
+        maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @VisibleForTesting

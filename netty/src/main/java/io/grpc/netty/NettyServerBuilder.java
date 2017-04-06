@@ -81,6 +81,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
   private long keepAliveTimeInNanos =  DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+  private boolean permitKeepAliveWithoutCalls;
+  private long permitKeepAliveTimeInNanos = TimeUnit.MINUTES.toNanos(5);
 
   /**
    * Creates a server builder that will bind to the given port.
@@ -274,6 +276,54 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return this;
   }
 
+  /**
+   * Specify the most aggressive keep-alive time clients are permitted to configure. The server will
+   * try to detect clients exceeding this rate and when detected will forcefully close the
+   * connection. The default is 5 minutes.
+   *
+   * <p>Even though a default is defined that allows some keep-alives, clients must not use
+   * keep-alive without approval from the service owner. Otherwise, they may experience failures in
+   * the future if the service becomes more restrictive. When unthrottled, keep-alives can cause a
+   * significant amount of traffic and CPU usage, so clients and servers should be conservative in
+   * what they use and accept.
+   *
+   * @see #denyKeepAliveWithoutCalls()
+   * @see #permitKeepAliveWithoutCalls()
+   * @since 1.3.0
+   */
+  public NettyServerBuilder permitKeepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    checkArgument(keepAliveTime >= 0, "permit keepalive time must be non-negative");
+    permitKeepAliveTimeInNanos = timeUnit.toNanos(keepAliveTime);
+    return this;
+  }
+
+  /**
+   * Allow clients to send keep-alive HTTP/2 PINGs even if there are no outstanding RPCs on the
+   * connection.
+   *
+   * @see #denyKeepAliveWithoutCalls()
+   * @see #permitKeepAliveTime(long, TimeUnit)
+   * @since 1.3.0
+   */
+  public NettyServerBuilder permitKeepAliveWithoutCalls() {
+    permitKeepAliveWithoutCalls = true;
+    return this;
+  }
+
+  /**
+   * Only allow clients to send keep-alive HTTP/2 PINGs when there are outstanding RPCs on the
+   * connection. This reduces the resources idle connections may consume, reducing the impact of
+   * permitting keep-alive. This is the default.
+   *
+   * @see #permitKeepAliveWithoutCalls()
+   * @see #permitKeepAliveTime(long, TimeUnit)
+   * @since 1.3.0
+   */
+  public NettyServerBuilder denyKeepAliveWithoutCalls() {
+    permitKeepAliveWithoutCalls = false;
+    return this;
+  }
+
   @Override
   @CheckReturnValue
   protected NettyServer buildTransportServer() {
@@ -284,7 +334,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     }
     return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, maxConcurrentCallsPerConnection, flowControlWindow, maxMessageSize,
-        maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos);
+        maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @Override

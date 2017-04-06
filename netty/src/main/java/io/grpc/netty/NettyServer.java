@@ -77,13 +77,16 @@ class NettyServer implements InternalServer {
   private final int maxHeaderListSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final boolean permitKeepAliveWithoutCalls;
+  private final long permitKeepAliveTimeInNanos;
   private final ReferenceCounted eventLoopReferenceCounter = new EventLoopReferenceCounter();
 
   NettyServer(SocketAddress address, Class<? extends ServerChannel> channelType,
               @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
               ProtocolNegotiator protocolNegotiator, int maxStreamsPerConnection,
               int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-              long keepAliveTimeInNanos, long keepAliveTimeoutInNanos) {
+              long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+              boolean permitKeepAliveWithoutCalls, long permitKeepAliveTimeInNanos) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     this.bossGroup = bossGroup;
@@ -97,6 +100,8 @@ class NettyServer implements InternalServer {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
+    this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
   }
 
   @Override
@@ -130,7 +135,8 @@ class NettyServer implements InternalServer {
       public void initChannel(Channel ch) throws Exception {
         NettyServerTransport transport = new NettyServerTransport(ch, protocolNegotiator,
             maxStreamsPerConnection, flowControlWindow, maxMessageSize, maxHeaderListSize,
-            keepAliveTimeInNanos, keepAliveTimeoutInNanos);
+            keepAliveTimeInNanos, keepAliveTimeoutInNanos, permitKeepAliveWithoutCalls,
+            permitKeepAliveTimeInNanos);
         ServerTransportListener transportListener;
         // This is to order callbacks on the listener, not to guard access to channel.
         synchronized (NettyServer.this) {
