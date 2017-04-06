@@ -392,7 +392,7 @@ func DoPerRPCCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScop
 	}
 	token := GetToken(serviceAccountKeyFile, oauthScope)
 	kv := map[string]string{"authorization": token.TokenType + " " + token.AccessToken}
-	ctx := metadata.NewContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
 	reply, err := tc.UnaryCall(ctx, req)
 	if err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
@@ -416,7 +416,7 @@ var (
 
 // DoCancelAfterBegin cancels the RPC after metadata has been sent but before payloads are sent.
 func DoCancelAfterBegin(tc testpb.TestServiceClient, args ...grpc.CallOption) {
-	ctx, cancel := context.WithCancel(metadata.NewContext(context.Background(), testMetadata))
+	ctx, cancel := context.WithCancel(metadata.NewOutgoingContext(context.Background(), testMetadata))
 	stream, err := tc.StreamingInputCall(ctx, args...)
 	if err != nil {
 		grpclog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
@@ -491,7 +491,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 		ResponseSize: proto.Int32(int32(1)),
 		Payload:      pl,
 	}
-	ctx := metadata.NewContext(context.Background(), customMetadata)
+	ctx := metadata.NewOutgoingContext(context.Background(), customMetadata)
 	var header, trailer metadata.MD
 	args = append(args, grpc.Header(&header), grpc.Trailer(&trailer))
 	reply, err := tc.UnaryCall(
@@ -627,7 +627,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	status := in.GetResponseStatus()
-	if md, ok := metadata.FromContext(ctx); ok {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
 			grpc.SendHeader(ctx, header)
@@ -686,7 +686,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	if md, ok := metadata.FromContext(stream.Context()); ok {
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
 			stream.SendHeader(header)
