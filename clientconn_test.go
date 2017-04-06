@@ -42,7 +42,6 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/transport"
 )
 
 const tlsDir = "testdata/"
@@ -309,54 +308,16 @@ func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
 	cancel()
 }
 
-type testserver struct {
-	tr   transport.ServerTransport
-	done chan struct{}
-}
-
-func (s *testserver) start(t *testing.T) string {
+func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to listen. Error: %v", err)
+		t.Fatalf("Failed to listen. Err: %v", err)
 	}
-	go func() {
-		defer func() {
-			s.done <- struct{}{}
-		}()
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("Server failed to accept. Error: %v", err)
-			return
-		}
-		lis.Close()
-		if s.tr, err = transport.NewServerTransport("http2", conn, &transport.ServerConfig{
-			KeepalivePolicy: keepalive.EnforcementPolicy{
-				MinTime:             100 * time.Millisecond,
-				PermitWithoutStream: true,
-			},
-		}); err != nil {
-			conn.Close()
-			t.Errorf("Failed to create server transport. Error: %v", err)
-			return
-		}
-		go s.tr.HandleStreams(func(stream *transport.Stream) {
-		}, func(ctx context.Context, method string) context.Context {
-			return ctx
-		})
-	}()
-	return lis.Addr().String()
-}
-
-func (s *testserver) stop() {
-	if s.tr != nil {
-		s.tr.Close()
-	}
-}
-
-func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
-	server := testserver{done: make(chan struct{}, 1)}
-	addr := server.start(t)
-	defer server.stop()
+	defer lis.Close()
+	addr := lis.Addr().String()
+	s := NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
 	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                50 * time.Millisecond,
 		Timeout:             1 * time.Millisecond,
@@ -366,7 +327,6 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	<-server.done
 	time.Sleep(1 * time.Second)
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
