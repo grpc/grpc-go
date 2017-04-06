@@ -3,7 +3,7 @@ apply plugin: 'com.google.protobuf'
 
 android {
     compileSdkVersion 22
-    buildToolsVersion '22.0.1'
+    buildToolsVersion '25.0.2'
 
     defaultConfig {
         applicationId "io.grpc.android.integrationtest"
