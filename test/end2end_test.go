@@ -1423,8 +1423,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 func TestMsgSizeDefaultAndAPI(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
-		// testMaxMsgSizeClientDefault(t, e)
-		// testMaxMsgSizeClientAPI(t, e)
+		testMaxMsgSizeClientDefault(t, e)
+		testMaxMsgSizeClientAPI(t, e)
 		testMaxMsgSizeServerAPI(t, e)
 	}
 }
