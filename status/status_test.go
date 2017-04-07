@@ -38,7 +38,7 @@ import (
 	"testing"
 
 	apb "github.com/golang/protobuf/ptypes/any"
-	spb "github.com/google/go-genproto/googleapis/rpc/status"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 )
 
