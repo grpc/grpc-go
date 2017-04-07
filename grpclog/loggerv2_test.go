@@ -71,7 +71,7 @@ func TestLoggerv2Severity(t *testing.T) {
 func checkLogForSeverity(s int, b []byte) error {
 	expected := regexp.MustCompile(fmt.Sprintf(`^%s: [0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} %s\n$`, severityName[s], severityName[s]))
 	if m := expected.Match(b); !m {
-		return fmt.Errorf("got: %v, want string in format of: %v\n", string(b), severityName[s]+": 2016/10/05 17:09:26 "+severityName[s])
+		return fmt.Errorf("got: %v, want string in format of: %v", string(b), severityName[s]+": 2016/10/05 17:09:26 "+severityName[s])
 	}
 	return nil
 }
