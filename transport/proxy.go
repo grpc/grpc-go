@@ -40,6 +40,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 
 	"golang.org/x/net/context"
@@ -107,7 +108,11 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		}
+		return nil, fmt.Errorf("failed to do connect handshake, response: %q", dump)
 	}
 
 	return &bufConn{Conn: conn, r: r}, nil
