@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2015, Google Inc.
+ * Copyright 2017, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,42 +46,42 @@ import (
 // VerboseLevel identifies the verbose level used in grpclog.V() function.
 type VerboseLevel int32
 
-// Loggerv2 does underlying logging work for grpclog.
-type Loggerv2 interface {
-	// Info logs args. Arguments are handled in the manner of fmt.Print.
+// LoggerV2 does underlying logging work for grpclog.
+type LoggerV2 interface {
+	// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
 	Info(args ...interface{})
-	// Infoln logs args. Arguments are handled in the manner of fmt.Println.
+	// Infoln logs to INFO log. Arguments are handled in the manner of fmt.Println.
 	Infoln(args ...interface{})
-	// Infof logs args. Arguments are handled in the manner of fmt.Printf.
+	// Infof logs to INFO log. Arguments are handled in the manner of fmt.Printf.
 	Infof(format string, args ...interface{})
-	// Warning logs args. Arguments are handled in the manner of fmt.Print.
+	// Warning logs to WARNING log. Arguments are handled in the manner of fmt.Print.
 	Warning(args ...interface{})
-	// Warningln logs args. Arguments are handled in the manner of fmt.Println.
+	// Warningln logs to WARNING log. Arguments are handled in the manner of fmt.Println.
 	Warningln(args ...interface{})
-	// Warningf logs args. Arguments are handled in the manner of fmt.Printf.
+	// Warningf logs to WARNING log. Arguments are handled in the manner of fmt.Printf.
 	Warningf(format string, args ...interface{})
-	// Error logs args. Arguments are handled in the manner of fmt.Print.
+	// Error logs to ERROR log. Arguments are handled in the manner of fmt.Print.
 	Error(args ...interface{})
-	// Errorln logs args. Arguments are handled in the manner of fmt.Println.
+	// Errorln logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 	Errorln(args ...interface{})
-	// Errorf logs args. Arguments are handled in the manner of fmt.Printf.
+	// Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 	Errorf(format string, args ...interface{})
-	// Fatal logs args. Arguments are handled in the manner of fmt.Print.
+	// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Print.
 	// This function should call os.Exit() with a non-zero exit code.
 	Fatal(args ...interface{})
-	// Fatalln logs args. Arguments are handled in the manner of fmt.Println.
+	// Fatalln logs to ERROR log. Arguments are handled in the manner of fmt.Println.
 	// This function should call os.Exit() with a non-zero exit code.
 	Fatalln(args ...interface{})
-	// Fatalf logs args. Arguments are handled in the manner of fmt.Printf.
+	// Fatalf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 	// This function should call os.Exit() with a non-zero exit code.
 	Fatalf(format string, args ...interface{})
 	// V reports whether verbosity level l is at least the requested verbose level.
 	V(l VerboseLevel) bool
 }
 
-// SetLoggerv2 sets logger that is used in grpc to a v2 logger.
+// SetLoggerV2 sets logger that is used in grpc to a V2 logger.
 // Not mutex-protected, should be called before any gRPC functions.
-func SetLoggerv2(l Loggerv2) {
+func SetLoggerV2(l LoggerV2) {
 	logger = l
 }
 
@@ -109,12 +109,12 @@ type loggerT struct {
 	m []*log.Logger
 }
 
-// NewLoggerv2 creates a loggerv2 with the provided writers.
+// NewLoggerV2 creates a loggerV2 with the provided writers.
 // Fatal logs will be written to errorW, warningW, infoW, followed by exit(1).
 // Error logs will be written to errorW, warningW and infoW.
 // Warning logs will be written to warningW and infoW.
 // Info logs will be written to infoW.
-func NewLoggerv2(infoW io.Writer, warningW io.Writer, errorW io.Writer) Loggerv2 {
+func NewLoggerV2(infoW, warningW, errorW io.Writer) LoggerV2 {
 	var m []*log.Logger
 	m = append(m, log.New(infoW, severityName[infoLog]+": ", log.LstdFlags))
 	m = append(m, log.New(io.MultiWriter(infoW, warningW), severityName[warningLog]+": ", log.LstdFlags))
@@ -124,10 +124,10 @@ func NewLoggerv2(infoW io.Writer, warningW io.Writer, errorW io.Writer) Loggerv2
 	return &loggerT{m: m}
 }
 
-// newLoggerv2 creates a loggerv2 to be used as default logger.
+// newLoggerV2 creates a loggerV2 to be used as default logger.
 // All logs are written to stderr.
-func newLoggerv2() Loggerv2 {
-	return NewLoggerv2(os.Stderr, ioutil.Discard, ioutil.Discard)
+func newLoggerV2() LoggerV2 {
+	return NewLoggerV2(os.Stderr, ioutil.Discard, ioutil.Discard)
 }
 
 func (g *loggerT) Info(args ...interface{}) {

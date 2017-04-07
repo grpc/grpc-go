@@ -20,7 +20,7 @@
 package grpclog // import "google.golang.org/grpc/grpclog"
 
 // Logger mimics golang's standard Logger as an interface.
-// Deprecated: use Loggerv2.
+// Deprecated: use LoggerV2.
 type Logger interface {
 	Fatal(args ...interface{})
 	Fatalf(format string, args ...interface{})
@@ -32,12 +32,12 @@ type Logger interface {
 
 // SetLogger sets the logger that is used in grpc. Call only from
 // init() functions.
-// Deprecated: use SetLoggerv2.
+// Deprecated: use SetLoggerV2.
 func SetLogger(l Logger) {
 	logger = &loggerWrapper{Logger: l}
 }
 
-// loggerWrapper wraps Logger into a Loggerv2.
+// loggerWrapper wraps Logger into a LoggerV2.
 type loggerWrapper struct {
 	Logger
 }

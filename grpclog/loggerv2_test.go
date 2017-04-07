@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2016, Google Inc.
+ * Copyright 2017, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,9 +40,9 @@ import (
 	"testing"
 )
 
-func TestLoggerv2Severity(t *testing.T) {
+func TestLoggerV2Severity(t *testing.T) {
 	buffers := []*bytes.Buffer{new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)}
-	SetLoggerv2(NewLoggerv2(buffers[infoLog], buffers[warningLog], buffers[errorLog]))
+	SetLoggerV2(NewLoggerV2(buffers[infoLog], buffers[warningLog], buffers[errorLog]))
 
 	Info(severityName[infoLog])
 	Warning(severityName[warningLog])

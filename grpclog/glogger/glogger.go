@@ -17,6 +17,7 @@
  */
 
 // Package glogger defines glog-based logging for grpc.
+// Importing this package will install glog as the logger used by grpclog.
 package glogger
 
 import (
@@ -25,7 +26,7 @@ import (
 )
 
 func init() {
-	grpclog.SetLoggerv2(&glogger{})
+	grpclog.SetLoggerV2(&glogger{})
 }
 
 type glogger struct{}

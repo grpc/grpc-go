@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2015, Google Inc.
+ * Copyright 2017, Google Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,7 @@
 
 package grpclog
 
-var logger = newLoggerv2()
+var logger = newLoggerV2()
 
 // V reports whether verbosity level l is at least the requested verbose level.
 func V(l VerboseLevel) bool {
