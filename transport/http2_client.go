@@ -432,7 +432,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		hasMD      bool
 		endHeaders bool
 	)
-	if md, ok := metadata.FromContext(ctx); ok {
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
 		hasMD = true
 		for k, v := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.

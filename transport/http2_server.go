@@ -261,7 +261,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	s.ctx = newContextWithStream(s.ctx, s)
 	// Attach the received metadata to the context.
 	if len(state.mdata) > 0 {
-		s.ctx = metadata.NewContext(s.ctx, state.mdata)
+		s.ctx = metadata.NewIncomingContext(s.ctx, state.mdata)
 	}
 
 	s.dec = &recvBufferReader{
