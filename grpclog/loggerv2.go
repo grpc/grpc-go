@@ -37,6 +37,8 @@ Package grpclog defines logging for grpc.
 package grpclog // import "google.golang.org/grpc/grpclog"
 
 import (
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 )
@@ -107,17 +109,25 @@ type loggerT struct {
 	m []*log.Logger
 }
 
-// newLoggerv2 creates a loggerv2 to be used as default logger.
-func newLoggerv2() Loggerv2 {
+// NewLoggerv2 creates a loggerv2 with the provided writers.
+// Fatal logs will be written to errorW, warningW, infoW, followed by exit(1).
+// Error logs will be written to errorW, warningW and infoW.
+// Warning logs will be written to warningW and infoW.
+// Info logs will be written to infoW.
+func NewLoggerv2(infoW io.Writer, warningW io.Writer, errorW io.Writer) Loggerv2 {
 	var m []*log.Logger
-	for s := range severityName {
-		if s == int(fatalLog) {
-			// Don't create logger for FatalLog, use InfoLog instead.
-			break
-		}
-		m = append(m, log.New(os.Stderr, severityName[s]+": ", log.LstdFlags))
-	}
+	m = append(m, log.New(infoW, severityName[infoLog]+": ", log.LstdFlags))
+	m = append(m, log.New(io.MultiWriter(infoW, warningW), severityName[warningLog]+": ", log.LstdFlags))
+	ew := io.MultiWriter(infoW, warningW, errorW) // ew will be used for error and fatal.
+	m = append(m, log.New(ew, severityName[errorLog]+": ", log.LstdFlags))
+	m = append(m, log.New(ew, severityName[fatalLog]+": ", log.LstdFlags))
 	return &loggerT{m: m}
+}
+
+// newLoggerv2 creates a loggerv2 to be used as default logger.
+// All logs are written to stderr.
+func newLoggerv2() Loggerv2 {
+	return NewLoggerv2(os.Stderr, ioutil.Discard, ioutil.Discard)
 }
 
 func (g *loggerT) Info(args ...interface{}) {
