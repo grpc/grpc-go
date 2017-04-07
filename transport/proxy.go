@@ -106,7 +106,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	if err != nil {
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		dump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
