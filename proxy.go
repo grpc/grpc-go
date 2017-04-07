@@ -94,7 +94,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 	req := (&http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: addr},
-		Header: map[string][]string{"User-Agent": {"gRPC-go"}},
+		Header: map[string][]string{"User-Agent": {grpcUA}},
 	})
 
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
