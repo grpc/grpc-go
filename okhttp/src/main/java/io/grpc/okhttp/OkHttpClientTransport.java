@@ -183,6 +183,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private boolean enableKeepAlive;
   private long keepAliveDelayNanos;
   private long keepAliveTimeoutNanos;
+  private boolean keepAliveWithoutCalls;
   @Nullable
   private final InetSocketAddress proxyAddress;
   @Nullable
@@ -246,10 +247,11 @@ class OkHttpClientTransport implements ConnectionClientTransport {
    * Enable keepalive with custom delay and timeout.
    */
   void enableKeepAlive(boolean enable, long keepAliveDelayNanos,
-      long keepAliveTimeoutNanos) {
+      long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
     enableKeepAlive = enable;
     this.keepAliveDelayNanos = keepAliveDelayNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
+    this.keepAliveWithoutCalls = keepAliveWithoutCalls;
   }
 
   private boolean isForTest() {
@@ -372,7 +374,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       scheduler = SharedResourceHolder.get(TIMER_SERVICE);
       keepAliveManager = new KeepAliveManager(
           new ClientKeepAlivePinger(this), scheduler, keepAliveDelayNanos, keepAliveTimeoutNanos,
-          false);
+          keepAliveWithoutCalls);
       keepAliveManager.onTransportStarted();
     }
 

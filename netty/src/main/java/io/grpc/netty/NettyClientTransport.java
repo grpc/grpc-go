@@ -84,8 +84,9 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final int maxMessageSize;
   private final int maxHeaderListSize;
   private KeepAliveManager keepAliveManager;
-  private long keepAliveDelayNanos;
-  private long keepAliveTimeoutNanos;
+  private final long keepAliveDelayNanos;
+  private final long keepAliveTimeoutNanos;
+  private final boolean keepAliveWithoutCalls;
 
   private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
@@ -102,7 +103,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
       int maxHeaderListSize, long keepAliveDelayNanos, long keepAliveTimeoutNanos,
-      String authority, @Nullable String userAgent) {
+      boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -113,6 +114,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveDelayNanos = keepAliveDelayNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
+    this.keepAliveWithoutCalls = keepAliveWithoutCalls;
     this.authority = new AsciiString(authority);
     this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
   }
@@ -178,7 +180,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     if (keepAliveDelayNanos != KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(
           new ClientKeepAlivePinger(this), eventLoop, keepAliveDelayNanos, keepAliveTimeoutNanos,
-          false);
+          keepAliveWithoutCalls);
     }
 
     handler = NettyClientHandler.newHandler(lifecycleManager, keepAliveManager, flowControlWindow,

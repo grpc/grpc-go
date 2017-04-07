@@ -88,6 +88,7 @@ public final class NettyChannelBuilder
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
   private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+  private boolean keepAliveWithoutCalls;
   private TransportCreationParamsFilterFactory dynamicParamsFactory;
 
   /**
@@ -308,12 +309,28 @@ public final class NettyChannelBuilder
     return this;
   }
 
+  /**
+   * Sets whether keepalive will be performed when there are no outstanding RPC on a connection.
+   * Defaults to {@code false}.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives on unused connections can easilly accidentally consume a considerable amount of
+   * bandwidth and CPU.
+   *
+   * @since 1.3.0
+   * @see #keepAliveTime(long, TimeUnit)
+   */
+  public NettyChannelBuilder keepAliveWithoutCalls(boolean enable) {
+    keepAliveWithoutCalls = enable;
+    return this;
+  }
+
   @Override
   @CheckReturnValue
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
         negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
-        maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos);
+        maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
   }
 
   @Override
@@ -436,6 +453,7 @@ public final class NettyChannelBuilder
     private final int maxHeaderListSize;
     private final long keepAliveDelayNanos;
     private final long keepAliveTimeoutNanos;
+    private final boolean keepAliveWithoutCalls;
 
     private boolean closed;
 
@@ -443,7 +461,7 @@ public final class NettyChannelBuilder
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
         NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
         int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-        long keepAliveDelayNanos, long keepAliveTimeoutNanos) {
+        long keepAliveDelayNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
@@ -465,6 +483,7 @@ public final class NettyChannelBuilder
       this.maxHeaderListSize = maxHeaderListSize;
       this.keepAliveDelayNanos = keepAliveDelayNanos;
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
+      this.keepAliveWithoutCalls = keepAliveWithoutCalls;
       usingSharedGroup = group == null;
       if (usingSharedGroup) {
         // The group was unspecified, using the shared group.
@@ -486,7 +505,7 @@ public final class NettyChannelBuilder
           dparams.getTargetServerAddress(), channelType, channelOptions, group,
           dparams.getProtocolNegotiator(), flowControlWindow,
           maxMessageSize, maxHeaderListSize, keepAliveDelayNanos, keepAliveTimeoutNanos,
-          dparams.getAuthority(), dparams.getUserAgent());
+          keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent());
       return transport;
     }
 

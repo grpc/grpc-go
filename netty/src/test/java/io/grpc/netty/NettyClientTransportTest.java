@@ -173,7 +173,7 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
-        KEEPALIVE_TIME_NANOS_DISABLED, 1L, authority, null /* user agent */);
+        KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */);
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -299,7 +299,8 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = new NettyClientTransport(
         address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
-        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, authority, null);
+        GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
+        null);
     transports.add(transport);
 
     // Should not throw
@@ -464,7 +465,7 @@ public class NettyClientTransportTest {
     }
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
-        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, keepAliveTimeNano, 1L, authority,
+        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, keepAliveTimeNano, 1L, false, authority,
         userAgent);
     transports.add(transport);
     return transport;

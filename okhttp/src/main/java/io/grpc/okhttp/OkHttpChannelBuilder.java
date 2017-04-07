@@ -120,6 +120,7 @@ public class OkHttpChannelBuilder extends
   private NegotiationType negotiationType = NegotiationType.TLS;
   private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
   private long keepAliveTimeoutNanos = DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+  private boolean keepAliveWithoutCalls;
 
   protected OkHttpChannelBuilder(String host, int port) {
     this(GrpcUtil.authorityFromHostAndPort(host, port));
@@ -223,6 +224,22 @@ public class OkHttpChannelBuilder extends
   }
 
   /**
+   * Sets whether keepalive will be performed when there are no outstanding RPC on a connection.
+   * Defaults to {@code false}.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives on unused connections can easilly accidentally consume a considerable amount of
+   * bandwidth and CPU.
+   *
+   * @since 1.3.0
+   * @see #keepAliveTime(long, TimeUnit)
+   */
+  public OkHttpChannelBuilder keepAliveWithoutCalls(boolean enable) {
+    keepAliveWithoutCalls = enable;
+    return this;
+  }
+
+  /**
    * Override the default {@link SSLSocketFactory} and enable {@link NegotiationType#TLS}
    * negotiation.
    *
@@ -272,7 +289,7 @@ public class OkHttpChannelBuilder extends
     boolean enableKeepAlive = keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED;
     return new OkHttpTransportFactory(transportExecutor,
         createSocketFactory(), connectionSpec, maxInboundMessageSize(), enableKeepAlive,
-        keepAliveTimeNanos, keepAliveTimeoutNanos);
+        keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
   }
 
   @Override
@@ -342,9 +359,10 @@ public class OkHttpChannelBuilder extends
     private final SSLSocketFactory socketFactory;
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
-    private boolean enableKeepAlive;
-    private long keepAliveDelayNanos;
-    private long keepAliveTimeoutNanos;
+    private final boolean enableKeepAlive;
+    private final long keepAliveDelayNanos;
+    private final long keepAliveTimeoutNanos;
+    private final boolean keepAliveWithoutCalls;
     private boolean closed;
 
     private OkHttpTransportFactory(Executor executor,
@@ -353,13 +371,15 @@ public class OkHttpChannelBuilder extends
         int maxMessageSize,
         boolean enableKeepAlive,
         long keepAliveDelayNanos,
-        long keepAliveTimeoutNanos) {
+        long keepAliveTimeoutNanos,
+        boolean keepAliveWithoutCalls) {
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
       this.enableKeepAlive = enableKeepAlive;
       this.keepAliveDelayNanos = keepAliveDelayNanos;
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
+      this.keepAliveWithoutCalls = keepAliveWithoutCalls;
 
       usingSharedExecutor = executor == null;
       if (usingSharedExecutor) {
@@ -391,7 +411,8 @@ public class OkHttpChannelBuilder extends
           userAgent, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize,
           proxyAddress, null, null);
       if (enableKeepAlive) {
-        transport.enableKeepAlive(true, keepAliveDelayNanos, keepAliveTimeoutNanos);
+        transport.enableKeepAlive(
+            true, keepAliveDelayNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
       }
       return transport;
     }
