@@ -25,7 +25,7 @@ import (
 )
 
 func init() {
-	grpclog.SetLogger(&glogger{})
+	grpclog.SetLoggerv2(&glogger{})
 }
 
 type glogger struct{}

@@ -40,15 +40,15 @@ import (
 	"testing"
 )
 
-func TestLoggerSeverity(t *testing.T) {
+func TestLoggerv2Severity(t *testing.T) {
 	var buffers []*bytes.Buffer
-	logger := newLogger().(*loggerT)
+	loggerv2 := newLoggerv2().(*loggerT)
 	for i := 0; i < int(fatalLog); i++ {
 		b := new(bytes.Buffer)
 		buffers = append(buffers, b)
-		logger.m[i].SetOutput(b)
+		loggerv2.m[i].SetOutput(b)
 	}
-	SetLogger(logger)
+	SetLoggerv2(loggerv2)
 
 	Info(severityName[infoLog])
 	Warning(severityName[warningLog])

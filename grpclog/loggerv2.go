@@ -44,8 +44,8 @@ import (
 // VerboseLevel identifies the verbose level used in grpclog.V() function.
 type VerboseLevel int32
 
-// Logger does underlying logging work for grpclog.
-type Logger interface {
+// Loggerv2 does underlying logging work for grpclog.
+type Loggerv2 interface {
 	// Info logs args. Arguments are handled in the manner of fmt.Print.
 	Info(args ...interface{})
 	// Infoln logs args. Arguments are handled in the manner of fmt.Println.
@@ -77,9 +77,9 @@ type Logger interface {
 	V(l VerboseLevel) bool
 }
 
-// SetLogger sets the logger that is used in grpc.
+// SetLoggerv2 sets logger that is used in grpc to a v2 logger.
 // Not mutex-protected, should be called before any gRPC functions.
-func SetLogger(l Logger) {
+func SetLoggerv2(l Loggerv2) {
 	logger = l
 }
 
@@ -107,8 +107,8 @@ type loggerT struct {
 	m []*log.Logger
 }
 
-// newLogger creates a default logger.
-func newLogger() Logger {
+// newLoggerv2 creates a loggerv2 to be used as default logger.
+func newLoggerv2() Loggerv2 {
 	var m []*log.Logger
 	for s := range severityName {
 		if s == int(fatalLog) {
@@ -172,89 +172,4 @@ func (g *loggerT) V(l VerboseLevel) bool {
 	// Returns true for all verbose level.
 	// TODO support verbose level in the default logger.
 	return true
-}
-
-var logger = newLogger()
-
-// V reports whether verbosity level l is at least the requested verbose level.
-func V(l VerboseLevel) bool {
-	return logger.V(l)
-}
-
-// Info logs to the INFO log.
-func Info(args ...interface{}) {
-	logger.Info(args...)
-}
-
-// Infof logs to the INFO log. Arguments are handled in the manner of fmt.Printf.
-func Infof(format string, args ...interface{}) {
-	logger.Infof(format, args...)
-}
-
-// Infoln logs to the INFO log. Arguments are handled in the manner of fmt.Println.
-func Infoln(args ...interface{}) {
-	logger.Infoln(args...)
-}
-
-// Warning logs to the WARNING log.
-func Warning(args ...interface{}) {
-	logger.Warning(args...)
-}
-
-// Warningf logs to the WARNING log. Arguments are handled in the manner of fmt.Printf.
-func Warningf(format string, args ...interface{}) {
-	logger.Warningf(format, args...)
-}
-
-// Warningln logs to the WARNING log. Arguments are handled in the manner of fmt.Println.
-func Warningln(args ...interface{}) {
-	logger.Warningln(args...)
-}
-
-// Error logs to the ERROR log.
-func Error(args ...interface{}) {
-	logger.Error(args...)
-}
-
-// Errorf logs to the ERROR log. Arguments are handled in the manner of fmt.Printf.
-func Errorf(format string, args ...interface{}) {
-	logger.Errorf(format, args...)
-}
-
-// Errorln logs to the ERROR log. Arguments are handled in the manner of fmt.Println.
-func Errorln(args ...interface{}) {
-	logger.Errorln(args...)
-}
-
-// Fatal is equivalent to Info() followed by a call to os.Exit() with a non-zero exit code.
-func Fatal(args ...interface{}) {
-	logger.Fatal(args...)
-}
-
-// Fatalf is equivalent to Infof() followed by a call to os.Exit() with a non-zero exit code.
-func Fatalf(format string, args ...interface{}) {
-	logger.Fatalf(format, args...)
-}
-
-// Fatalln is equivalent to Infoln() followed by a call to os.Exit()) with a non-zero exit code.
-func Fatalln(args ...interface{}) {
-	logger.Fatalln(args...)
-}
-
-// Print prints to the logger. Arguments are handled in the manner of fmt.Print.
-// Print is deprecated, please use Info.
-func Print(args ...interface{}) {
-	logger.Info(args...)
-}
-
-// Printf prints to the logger. Arguments are handled in the manner of fmt.Printf.
-// Printf is deprecated, please use Infof.
-func Printf(format string, args ...interface{}) {
-	logger.Infof(format, args...)
-}
-
-// Println prints to the logger. Arguments are handled in the manner of fmt.Println.
-// Println is deprecated, please use Infoln.
-func Println(args ...interface{}) {
-	logger.Infoln(args...)
 }
