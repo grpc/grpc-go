@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class KeepAliveManager {
   private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
-  private static final long MIN_KEEPALIVE_DELAY_NANOS = TimeUnit.MINUTES.toNanos(1);
+  private static final long MIN_KEEPALIVE_DELAY_NANOS = TimeUnit.SECONDS.toNanos(10);
   private static final long MIN_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MICROSECONDS.toNanos(499L);
 
   private final ScheduledExecutorService scheduler;
