@@ -33,6 +33,8 @@
 
 package grpclog
 
+import "os"
+
 var logger = newLoggerV2()
 
 // V reports whether verbosity level l is at least the requested verbose level.
@@ -88,16 +90,19 @@ func Errorln(args ...interface{}) {
 // Fatal is equivalent to Info() followed by a call to os.Exit() with a non-zero exit code.
 func Fatal(args ...interface{}) {
 	logger.Fatal(args...)
+	os.Exit(1)
 }
 
 // Fatalf is equivalent to Infof() followed by a call to os.Exit() with a non-zero exit code.
 func Fatalf(format string, args ...interface{}) {
 	logger.Fatalf(format, args...)
+	os.Exit(1)
 }
 
 // Fatalln is equivalent to Infoln() followed by a call to os.Exit()) with a non-zero exit code.
 func Fatalln(args ...interface{}) {
 	logger.Fatalln(args...)
+	os.Exit(1)
 }
 
 // Print prints to the logger. Arguments are handled in the manner of fmt.Print.
