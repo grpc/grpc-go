@@ -529,4 +529,4 @@ type ServiceConfig struct {
 const SupportPackageIsVersion4 = true
 
 // Version is the current grpc version.
-const Version = "1.3.0-dev"
+const Version = "1.2.2-dev"
