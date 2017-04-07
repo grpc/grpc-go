@@ -338,6 +338,12 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	return
 }
 
+// GoString is implemented by Stream so context.String() won't
+// race when printing %#v.
+func (s *Stream) GoString() string {
+	return fmt.Sprintf("<stream: %p, %v>", s, s.method)
+}
+
 // The key to save transport.Stream in the context.
 type streamKey struct{}
 
