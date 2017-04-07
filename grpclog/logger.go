@@ -34,60 +34,48 @@ type Logger interface {
 // init() functions.
 // Deprecated: use SetLoggerv2.
 func SetLogger(l Logger) {
-	logger = &loggerWrapper{l: l}
+	logger = &loggerWrapper{Logger: l}
 }
 
 // loggerWrapper wraps Logger into a Loggerv2.
 type loggerWrapper struct {
-	l Logger
+	Logger
 }
 
 func (g *loggerWrapper) Info(args ...interface{}) {
-	g.l.Print(args...)
+	g.Logger.Print(args...)
 }
 
 func (g *loggerWrapper) Infoln(args ...interface{}) {
-	g.l.Println(args...)
+	g.Logger.Println(args...)
 }
 
 func (g *loggerWrapper) Infof(format string, args ...interface{}) {
-	g.l.Printf(format, args...)
+	g.Logger.Printf(format, args...)
 }
 
 func (g *loggerWrapper) Warning(args ...interface{}) {
-	g.l.Print(args...)
+	g.Logger.Print(args...)
 }
 
 func (g *loggerWrapper) Warningln(args ...interface{}) {
-	g.l.Println(args...)
+	g.Logger.Println(args...)
 }
 
 func (g *loggerWrapper) Warningf(format string, args ...interface{}) {
-	g.l.Printf(format, args...)
+	g.Logger.Printf(format, args...)
 }
 
 func (g *loggerWrapper) Error(args ...interface{}) {
-	g.l.Print(args...)
+	g.Logger.Print(args...)
 }
 
 func (g *loggerWrapper) Errorln(args ...interface{}) {
-	g.l.Println(args...)
+	g.Logger.Println(args...)
 }
 
 func (g *loggerWrapper) Errorf(format string, args ...interface{}) {
-	g.l.Printf(format, args...)
-}
-
-func (g *loggerWrapper) Fatal(args ...interface{}) {
-	g.l.Fatal(args...)
-}
-
-func (g *loggerWrapper) Fatalln(args ...interface{}) {
-	g.l.Fatalln(args...)
-}
-
-func (g *loggerWrapper) Fatalf(format string, args ...interface{}) {
-	g.l.Fatalf(format, args...)
+	g.Logger.Printf(format, args...)
 }
 
 func (g *loggerWrapper) V(l VerboseLevel) bool {
