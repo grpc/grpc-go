@@ -31,7 +31,7 @@
  *
  */
 
-package transport
+package grpc
 
 import (
 	"bufio"
@@ -97,7 +97,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 		Header: map[string][]string{"User-Agent": {"gRPC-go"}},
 	})
 
-	if err := sendRequest(ctx, req, conn); err != nil {
+	if err := sendHTTPRequest(ctx, req, conn); err != nil {
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
 

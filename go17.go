@@ -1,4 +1,4 @@
-// +build go1.6,!go1.7
+// +build go1.7
 
 /*
  * Copyright 2016, Google Inc.
@@ -32,10 +32,9 @@
  *
  */
 
-package transport
+package grpc
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 
@@ -44,13 +43,13 @@ import (
 
 // dialContext connects to the address on the named network.
 func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
+	return (&net.Dialer{}).DialContext(ctx, network, address)
 }
 
-func sendRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
-	req.Cancel = ctx.Done()
+func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	req = req.WithContext(ctx)
 	if err := req.Write(conn); err != nil {
-		return fmt.Errorf("failed to write the HTTP request: %v", err)
+		return err
 	}
 	return nil
 }

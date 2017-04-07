@@ -126,18 +126,6 @@ type http2Client struct {
 	goAwayReason GoAwayReason
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr string) (net.Conn, error) {
-	if fn != nil {
-		return fn(ctx, addr)
-	}
-	dialer := newProxyDialer(
-		func(ctx context.Context, addr string) (net.Conn, error) {
-			return dialContext(ctx, "tcp", addr)
-		},
-	)
-	return dialer(ctx, addr)
-}
-
 func isTemporary(err error) bool {
 	switch err {
 	case io.EOF:
@@ -171,7 +159,7 @@ func isTemporary(err error) bool {
 // fails.
 func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (_ ClientTransport, err error) {
 	scheme := "http"
-	conn, err := dial(ctx, opts.Dialer, addr.Addr)
+	conn, err := opts.Dialer(ctx, addr.Addr)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: %v", err)
