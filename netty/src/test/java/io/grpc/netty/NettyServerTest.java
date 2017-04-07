@@ -33,11 +33,13 @@ package io.grpc.netty;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import java.net.InetSocketAddress;
+import java.util.Collections;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -54,6 +56,7 @@ public class NettyServerTest {
         null, // no boss group
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
+        Collections.<ServerStreamTracer.Factory>emptyList(),
         1, // ignore
         1, // ignore
         1, // ignore
@@ -88,6 +91,7 @@ public class NettyServerTest {
         null, // no boss group
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
+        Collections.<ServerStreamTracer.Factory>emptyList(),
         1, // ignore
         1, // ignore
         1, // ignore

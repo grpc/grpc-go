@@ -40,7 +40,6 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
-import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -118,7 +117,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   private final Supplier<Stopwatch> stopwatchSupplier;
   /** The timout before entering idle mode. */
   private final long idleTimeoutMillis;
-  private final StatsContextFactory statsFactory;
 
   /**
    * Executor that runs deadline timers for requests.
@@ -389,7 +387,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       ObjectPool<? extends Executor> executorPool, ObjectPool<? extends Executor> oobExecutorPool,
       Supplier<Stopwatch> stopwatchSupplier, long idleTimeoutMillis,
       @Nullable String userAgent,
-      List<ClientInterceptor> interceptors, StatsContextFactory statsFactory) {
+      List<ClientInterceptor> interceptors) {
     this.target = checkNotNull(target, "target");
     this.nameResolverFactory = checkNotNull(nameResolverFactory, "nameResolverFactory");
     this.nameResolverParams = checkNotNull(nameResolverParams, "nameResolverParams");
@@ -418,7 +416,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.decompressorRegistry = checkNotNull(decompressorRegistry, "decompressorRegistry");
     this.compressorRegistry = checkNotNull(compressorRegistry, "compressorRegistry");
     this.userAgent = userAgent;
-    this.statsFactory = checkNotNull(statsFactory, "statsFactory");
 
     log.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
@@ -549,13 +546,10 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       if (executor == null) {
         executor = ManagedChannelImpl.this.executor;
       }
-      StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
-          method.getFullMethodName(), statsFactory, stopwatchSupplier);
       return new ClientCallImpl<ReqT, RespT>(
           method,
           executor,
           callOptions,
-          statsTraceCtx,
           transportProvider,
           scheduledExecutor)
               .setDecompressorRegistry(decompressorRegistry)
@@ -664,8 +658,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       checkState(scheduledExecutorCopy != null,
           "scheduledExecutor is already cleared. Looks like you are calling this method after "
           + "you've already shut down");
-      final OobChannel oobChannel = new OobChannel(statsFactory, authority,
-          oobExecutorPool, scheduledExecutorCopy, stopwatchSupplier, channelExecutor);
+      final OobChannel oobChannel = new OobChannel(
+          authority, oobExecutorPool, scheduledExecutorCopy, stopwatchSupplier, channelExecutor);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           scheduledExecutorCopy, stopwatchSupplier, channelExecutor,

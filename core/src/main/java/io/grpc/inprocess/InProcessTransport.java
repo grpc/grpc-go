@@ -131,8 +131,7 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
   @Override
   public synchronized ClientStream newStream(
-      final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions,
-      StatsTraceContext clientStatsTraceContext) {
+      final MethodDescriptor<?, ?> method, final Metadata headers, final CallOptions callOptions) {
     if (shutdownStatus != null) {
       final Status capturedStatus = shutdownStatus;
       return new NoopClientStream() {
@@ -142,15 +141,13 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
         }
       };
     }
-    StatsTraceContext serverStatsTraceContext = serverTransportListener.methodDetermined(
-        method.getFullMethodName(), headers);
-    return new InProcessStream(method, headers, serverStatsTraceContext, authority).clientStream;
+    return new InProcessStream(method, headers, authority).clientStream;
   }
 
   @Override
   public synchronized ClientStream newStream(
       final MethodDescriptor<?, ?> method, final Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @Override
@@ -239,17 +236,13 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
   private class InProcessStream {
     private final InProcessServerStream serverStream = new InProcessServerStream();
     private final InProcessClientStream clientStream = new InProcessClientStream();
-    private final StatsTraceContext serverStatsTraceContext;
     private final Metadata headers;
     private final MethodDescriptor<?, ?> method;
     private volatile String authority;
 
-    private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers,
-        StatsTraceContext serverStatsTraceContext, String authority) {
+    private InProcessStream(MethodDescriptor<?, ?> method, Metadata headers, String authority) {
       this.method = checkNotNull(method, "method");
       this.headers = checkNotNull(headers, "headers");
-      this.serverStatsTraceContext =
-          checkNotNull(serverStatsTraceContext, "serverStatsTraceContext");
       this.authority = authority;
     }
 
@@ -434,7 +427,10 @@ class InProcessTransport implements ServerTransport, ConnectionClientTransport {
 
       @Override
       public StatsTraceContext statsTraceContext() {
-        return serverStatsTraceContext;
+        // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses
+        // are not counted.  Therefore Stats is currently disabled.
+        // (https://github.com/grpc/grpc-java/issues/2284)
+        return StatsTraceContext.NOOP;
       }
     }
 

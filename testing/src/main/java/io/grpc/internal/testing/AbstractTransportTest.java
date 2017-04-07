@@ -42,24 +42,34 @@ import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
+import io.grpc.ClientStreamTracer;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -75,6 +85,8 @@ import io.grpc.internal.StatsTraceContext;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -106,12 +118,14 @@ public abstract class AbstractTransportTest {
    * Returns a new server that when started will be able to be connected to from the client. Each
    * returned instance should be new and yet be accessible by new client transports.
    */
-  protected abstract InternalServer newServer();
+  protected abstract InternalServer newServer(
+      List<ServerStreamTracer.Factory> streamTracerFactories);
 
   /**
    * Builds a new server that is listening on the same location as the given server instance does.
    */
-  protected abstract InternalServer newServer(InternalServer server);
+  protected abstract InternalServer newServer(
+      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories);
 
   /**
    * Returns a new transport that when started will be able to connect to {@code server}.
@@ -122,6 +136,12 @@ public abstract class AbstractTransportTest {
    * Returns the authority string used by a client to connect to {@code server}.
    */
   protected abstract String testAuthority(InternalServer server);
+
+  /**
+   * Returns true if the transport creates {@link StatsTraceContext} for each stream and records
+   * measurements with it.
+   */
+  protected abstract boolean metricsExpected();
 
   /**
    * When non-null, will be shut down during tearDown(). However, it _must_ have been started with
@@ -138,6 +158,7 @@ public abstract class AbstractTransportTest {
           .setRequestMarshaller(StringMarshaller.INSTANCE)
           .setResponseMarshaller(StringMarshaller.INSTANCE)
           .build();
+  private CallOptions callOptions;
 
   private Metadata.Key<String> asciiKey = Metadata.Key.of(
       "ascii-key", Metadata.ASCII_STRING_MARSHALLER);
@@ -153,16 +174,32 @@ public abstract class AbstractTransportTest {
   private ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
   private ArgumentCaptor<InputStream> inputStreamCaptor
       = ArgumentCaptor.forClass(InputStream.class);
+  private final ClientStreamTracer.Factory clientStreamTracerFactory =
+      mock(ClientStreamTracer.Factory.class);
+  private final ClientStreamTracer clientStreamTracer = spy(new ClientStreamTracer() {});
+  private final ServerStreamTracer.Factory serverStreamTracerFactory =
+      mock(ServerStreamTracer.Factory.class);
+  private final ServerStreamTracer serverStreamTracer = spy(new ServerStreamTracer() {});
+
   @Rule
   public ExpectedException thrown = ExpectedException.none();
 
   @Before
   public void setUp() {
-    server = newServer();
+    server = newServer(Arrays.asList(serverStreamTracerFactory));
+    when(clientStreamTracerFactory.newClientStreamTracer(any(Metadata.class)))
+        .thenReturn(clientStreamTracer);
+    when(serverStreamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
+        .thenReturn(serverStreamTracer);
+    callOptions = CallOptions.DEFAULT.withStreamTracerFactory(clientStreamTracerFactory);
   }
 
   @After
   public void tearDown() throws InterruptedException {
+    if (!metricsExpected()) {
+      verifyZeroInteractions(clientStreamTracerFactory);
+      verifyZeroInteractions(serverStreamTracerFactory);
+    }
     if (client != null) {
       client.shutdownNow(Status.UNKNOWN.withDescription("teardown"));
     }
@@ -204,7 +241,7 @@ public abstract class AbstractTransportTest {
     // after having sent a RST_STREAM to the server. Previously, this would have broken the
     // Netty channel.
 
-    ClientStream stream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -225,7 +262,7 @@ public abstract class AbstractTransportTest {
 
     // Test that the channel is still usable i.e. we can receive headers from the server on a
     // new stream.
-    stream = client.newStream(methodDescriptor, new Metadata());
+    stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener2);
     serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -292,7 +329,7 @@ public abstract class AbstractTransportTest {
   public void serverAlreadyListening() throws Exception {
     client = null;
     server.start(serverListener);
-    InternalServer server2 = newServer(server);
+    InternalServer server2 = newServer(server, Arrays.asList(serverStreamTracerFactory));
     thrown.expect(IOException.class);
     server2.start(new MockServerListener());
   }
@@ -306,7 +343,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
@@ -327,7 +364,7 @@ public abstract class AbstractTransportTest {
     // resources. There may be cases this is impossible in the future, but for now it is a useful
     // property.
     serverListener = new MockServerListener();
-    server = newServer(server);
+    server = newServer(server, Arrays.asList(serverStreamTracerFactory));
     server.start(serverListener);
 
     // Try to "flush" out any listener notifications on client and server. This also ensures that
@@ -357,7 +394,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
@@ -376,7 +413,12 @@ public abstract class AbstractTransportTest {
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(same(status), any(Metadata.class));
-    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
+    verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
+    assertFalse(statusCaptor.getValue().isOk());
+    if (metricsExpected()) {
+      verify(clientStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(status));
+      verify(serverStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(statusCaptor.getValue()));
+    }
   }
 
   @Test
@@ -388,14 +430,15 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    serverTransport.shutdownNow(Status.UNKNOWN.withDescription("test shutdownNow"));
+    Status shutdownStatus = Status.UNKNOWN.withDescription("test shutdownNow");
+    serverTransport.shutdownNow(shutdownStatus);
     serverTransport = null;
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
@@ -405,7 +448,13 @@ public abstract class AbstractTransportTest {
     assertTrue(serverTransportListener.isTerminated());
 
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(any(Status.class), any(Metadata.class));
+        .closed(statusCaptor.capture(), any(Metadata.class));
+    assertFalse(statusCaptor.getValue().isOk());
+    if (metricsExpected()) {
+      verify(clientStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracer, timeout(TIMEOUT_MS)).streamClosed(same(shutdownStatus));
+    }
+
     // Generally will be same status provided to shutdownNow, but InProcessTransport can't
     // differentiate between client and server shutdownNow. The status is not really used on
     // server-side, so we don't care much.
@@ -434,7 +483,7 @@ public abstract class AbstractTransportTest {
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
     // Stream prevents termination
-    ClientStream stream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
     client.shutdown();
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
@@ -471,20 +520,31 @@ public abstract class AbstractTransportTest {
 
   @Test
   public void newStream_duringShutdown() throws Exception {
+    InOrder inOrder = inOrder(clientStreamTracerFactory, clientStreamTracer, serverStreamTracer);
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
     // Stream prevents termination
-    ClientStream stream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
+    if (metricsExpected()) {
+      inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
+    }
     stream.start(mockClientStreamListener);
     client.shutdown();
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
-    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
+
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
+    if (metricsExpected()) {
+      inOrder.verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
+    }
     ClientStreamListener mockClientStreamListener2 = mock(ClientStreamListener.class);
     stream2.start(mockClientStreamListener2);
     verify(mockClientStreamListener2, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
+    if (metricsExpected()) {
+      inOrder.verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+    }
 
     // Make sure earlier stream works.
     MockServerTransportListener serverTransportListener
@@ -511,12 +571,17 @@ public abstract class AbstractTransportTest {
     client.shutdown();
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     Thread.sleep(100);
-    ClientStream stream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), any(Metadata.class));
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
     assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
+    if (metricsExpected()) {
+      verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verifyZeroInteractions(serverStreamTracerFactory);
+    }
   }
 
   @Test
@@ -524,14 +589,14 @@ public abstract class AbstractTransportTest {
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
-    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream1.start(mockClientStreamListener);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
     MockServerTransportListener serverTransportListener
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     StreamCreation serverStreamCreation1
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream2.start(mockClientStreamListener);
     StreamCreation serverStreamCreation2
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -552,10 +617,10 @@ public abstract class AbstractTransportTest {
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
-    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream1 = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream1.start(mockClientStreamListener);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportInUse(true);
-    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata());
+    ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream2.start(mockClientStreamListener);
 
     stream1.cancel(Status.CANCELLED);
@@ -570,6 +635,8 @@ public abstract class AbstractTransportTest {
   @Test
   @SuppressWarnings("deprecation")
   public void basicStream() throws Exception {
+    InOrder clientInOrder = inOrder(clientStreamTracerFactory, clientStreamTracer);
+    InOrder serverInOrder = inOrder(serverStreamTracerFactory, serverStreamTracer);
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
@@ -585,10 +652,17 @@ public abstract class AbstractTransportTest {
     Metadata clientHeadersCopy = new Metadata();
 
     clientHeadersCopy.merge(clientHeaders);
-    ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders);
+    ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders, callOptions);
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracerFactory).newClientStreamTracer(same(clientHeaders));
+    }
+
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracer).headersSent();
+    }
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
     assertEquals(Lists.newArrayList(clientHeadersCopy.getAll(asciiKey)),
         Lists.newArrayList(serverStreamCreation.headers.getAll(asciiKey)));
@@ -596,6 +670,11 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(serverStreamCreation.headers.getAll(binaryKey)));
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
+
+    if (metricsExpected()) {
+      serverInOrder.verify(serverStreamTracerFactory).newServerStreamTracer(
+          eq(methodDescriptor.getFullMethodName()), any(Metadata.class));
+    }
 
     assertEquals("additional attribute value",
         serverStream.getAttributes().get(ADDITIONAL_TRANSPORT_ATTR_KEY));
@@ -605,13 +684,27 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(clientStream.isReady());
     clientStream.writeMessage(methodDescriptor.streamRequest("Hello!"));
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracer).outboundMessage();
+    }
+
     clientStream.flush();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).messageRead(inputStreamCaptor.capture());
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracer).outboundWireSize(anyLong());
+      clientInOrder.verify(clientStreamTracer).outboundUncompressedSize(anyLong());
+      serverInOrder.verify(serverStreamTracer).inboundMessage();
+    }
     assertEquals("Hello!", methodDescriptor.parseRequest(inputStreamCaptor.getValue()));
     inputStreamCaptor.getValue().close();
 
     clientStream.halfClose();
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).halfClosed();
+
+    if (metricsExpected()) {
+      serverInOrder.verify(serverStreamTracer).inboundWireSize(anyLong());
+      serverInOrder.verify(serverStreamTracer, atLeast(1)).inboundUncompressedSize(anyLong());
+    }
 
     Metadata serverHeaders = new Metadata();
     serverHeaders.put(asciiKey, "server");
@@ -631,9 +724,22 @@ public abstract class AbstractTransportTest {
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).onReady();
     assertTrue(serverStream.isReady());
     serverStream.writeMessage(methodDescriptor.streamResponse("Hi. Who are you?"));
+    if (metricsExpected()) {
+      serverInOrder.verify(serverStreamTracer).outboundMessage();
+    }
+
     serverStream.flush();
     verify(mockClientStreamListener, timeout(TIMEOUT_MS)).messageRead(inputStreamCaptor.capture());
+    if (metricsExpected()) {
+      serverInOrder.verify(serverStreamTracer).outboundWireSize(anyLong());
+      serverInOrder.verify(serverStreamTracer, atLeast(1)).outboundUncompressedSize(anyLong());
+      clientInOrder.verify(clientStreamTracer).inboundMessage();
+    }
     assertEquals("Hi. Who are you?", methodDescriptor.parseResponse(inputStreamCaptor.getValue()));
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracer).inboundWireSize(anyLong());
+      clientInOrder.verify(clientStreamTracer, atLeast(1)).inboundUncompressedSize(anyLong());
+    }
     inputStreamCaptor.getValue().close();
 
     Status status = Status.OK.withDescription("That was normal");
@@ -643,10 +749,16 @@ public abstract class AbstractTransportTest {
     trailers.put(asciiKey, "dupvalue");
     trailers.put(binaryKey, "äbinarytrailers");
     serverStream.close(status, trailers);
+    if (metricsExpected()) {
+      serverInOrder.verify(serverStreamTracer).streamClosed(same(status));
+    }
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(statusCaptor.capture(), metadataCaptor.capture());
+    if (metricsExpected()) {
+      clientInOrder.verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+    }
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
     assertEquals(Lists.newArrayList(trailers.getAll(asciiKey)),
@@ -665,7 +777,7 @@ public abstract class AbstractTransportTest {
             = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
     Metadata clientHeaders = new Metadata();
-    ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders);
+    ClientStream clientStream = client.newStream(methodDescriptor, clientHeaders, callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
             = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -683,7 +795,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -704,6 +816,13 @@ public abstract class AbstractTransportTest {
         .closed(statusCaptor.capture(), any(Metadata.class));
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracer).streamClosed(same(status));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -715,7 +834,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -734,6 +853,13 @@ public abstract class AbstractTransportTest {
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals("Hello. Goodbye.", statusCaptor.getValue().getDescription());
     assertNull(statusCaptor.getValue().getCause());
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracer).streamClosed(same(status));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -745,7 +871,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -771,6 +897,13 @@ public abstract class AbstractTransportTest {
         Lists.newArrayList(metadataCaptor.getValue().getAll(asciiKey)));
     assertEquals(Lists.newArrayList(trailers.getAll(binaryKey)),
         Lists.newArrayList(metadataCaptor.getValue().getAll(binaryKey)));
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracer).streamClosed(same(status));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -782,7 +915,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -799,6 +932,13 @@ public abstract class AbstractTransportTest {
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
     assertNull(statusCaptor.getValue().getCause());
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracer).streamClosed(same(status));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -810,7 +950,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -830,6 +970,13 @@ public abstract class AbstractTransportTest {
     clientStream.cancel(status);
     verify(mockServerStreamListener, never()).closed(any(Status.class));
     verify(mockClientStreamListener, never()).closed(any(Status.class), any(Metadata.class));
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(status));
+      verify(serverStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -842,7 +989,9 @@ public abstract class AbstractTransportTest {
     serverTransport = serverTransportListener.transport;
 
     final SettableFuture<Boolean> closedCalled = SettableFuture.create();
-    final ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    final ClientStream clientStream =
+        client.newStream(methodDescriptor, new Metadata(), callOptions);
+    final Status status = Status.CANCELLED.withDescription("nevermind");
     clientStream.start(new ClientStreamListener() {
       @Override
       public void headersRead(Metadata headers) {
@@ -858,7 +1007,7 @@ public abstract class AbstractTransportTest {
       @Override
       public void messageRead(InputStream message) {
         assertEquals("foo", methodDescriptor.parseResponse(message));
-        clientStream.cancel(Status.CANCELLED.withDescription("nevermind"));
+        clientStream.cancel(status);
       }
 
       @Override
@@ -884,6 +1033,21 @@ public abstract class AbstractTransportTest {
     closedCalled.get(5, TimeUnit.SECONDS);
 
     serverStream.close(Status.OK, new Metadata());
+    if (metricsExpected()) {
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).inboundMessage();
+      verify(clientStreamTracer).inboundWireSize(anyLong());
+      verify(clientStreamTracer, atLeast(1)).inboundUncompressedSize(anyLong());
+      verify(clientStreamTracer).streamClosed(same(status));
+      verify(serverStreamTracer).outboundMessage();
+      verify(serverStreamTracer).outboundWireSize(anyLong());
+      verify(serverStreamTracer, atLeast(1)).outboundUncompressedSize(anyLong());
+      // There is a race between client cancelling and server closing.  The final status seen by the
+      // server is non-deterministic.
+      verify(serverStreamTracer).streamClosed(any(Status.class));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
   }
 
   @Test
@@ -895,7 +1059,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -913,6 +1077,16 @@ public abstract class AbstractTransportTest {
     assertCodeEquals(Status.CANCELLED, statusCaptor.getValue());
     // Cause should not be transmitted between server and client
     assertNull(statusCaptor.getValue().getCause());
+
+    if (metricsExpected()) {
+      verify(clientStreamTracerFactory).newClientStreamTracer(any(Metadata.class));
+      verify(clientStreamTracer).headersSent();
+      verify(clientStreamTracer).streamClosed(same(statusCaptor.getValue()));
+      verify(serverStreamTracerFactory).newServerStreamTracer(anyString(), any(Metadata.class));
+      verify(serverStreamTracer).streamClosed(same(status));
+      verifyNoMoreInteractions(clientStreamTracer);
+      verifyNoMoreInteractions(serverStreamTracer);
+    }
 
     // Second cancellation shouldn't trigger additional callbacks
     reset(mockServerStreamListener);
@@ -932,7 +1106,7 @@ public abstract class AbstractTransportTest {
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     serverTransport = serverTransportListener.transport;
 
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     clientStream.start(mockClientStreamListener);
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -1091,7 +1265,7 @@ public abstract class AbstractTransportTest {
   private void doPingPong(MockServerListener serverListener) throws InterruptedException {
     ManagedClientTransport client = newClientTransport(server);
     runIfNotNull(client.start(mock(ManagedClientTransport.Listener.class)));
-    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata());
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     ClientStreamListener mockClientStreamListener = mock(ClientStreamListener.class);
     clientStream.start(mockClientStreamListener);
 
@@ -1182,11 +1356,6 @@ public abstract class AbstractTransportTest {
 
     public MockServerTransportListener(ServerTransport transport) {
       this.transport = transport;
-    }
-
-    @Override
-    public StatsTraceContext methodDetermined(String method, Metadata headers) {
-      return StatsTraceContext.NOOP;
     }
 
     @Override

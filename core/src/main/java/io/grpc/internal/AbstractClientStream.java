@@ -51,6 +51,7 @@ public abstract class AbstractClientStream extends AbstractStream
 
   private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
 
+  private final StatsTraceContext statsTraceCtx;
   private ClientStreamListener listener;
   private boolean listenerClosed;
 
@@ -64,6 +65,7 @@ public abstract class AbstractClientStream extends AbstractStream
   protected AbstractClientStream(WritableBufferAllocator bufferAllocator, int maxMessageSize,
       StatsTraceContext statsTraceCtx) {
     super(bufferAllocator, maxMessageSize, statsTraceCtx);
+    this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
   }
 
   @Override
@@ -273,6 +275,7 @@ public abstract class AbstractClientStream extends AbstractStream
     if (!listenerClosed) {
       listenerClosed = true;
       closeDeframer();
+      statsTraceCtx.streamClosed(newStatus);
       listener.closed(newStatus, trailers);
     }
   }

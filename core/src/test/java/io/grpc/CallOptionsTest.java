@@ -39,6 +39,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Objects;
@@ -59,6 +60,8 @@ public class CallOptionsTest {
   private CallCredentials sampleCreds = mock(CallCredentials.class);
   private CallOptions.Key<String> option1 = CallOptions.Key.of("option1", "default");
   private CallOptions.Key<String> option2 = CallOptions.Key.of("option2", "default");
+  private ClientStreamTracer.Factory tracerFactory1 = new FakeTracerFactory("tracerFactory1");
+  private ClientStreamTracer.Factory tracerFactory2 = new FakeTracerFactory("tracerFactory2");
   private CallOptions allSet = CallOptions.DEFAULT
       .withAuthority(sampleAuthority)
       .withDeadline(sampleDeadline)
@@ -67,7 +70,9 @@ public class CallOptionsTest {
       .withWaitForReady()
       .withExecutor(directExecutor())
       .withOption(option1, "value1")
-      .withOption(option2, "value2");
+      .withStreamTracerFactory(tracerFactory1)
+      .withOption(option2, "value2")
+      .withStreamTracerFactory(tracerFactory2);
 
   @Test
   public void defaultsAreAllNull() {
@@ -77,6 +82,7 @@ public class CallOptionsTest {
     assertThat(CallOptions.DEFAULT.getCredentials()).isNull();
     assertThat(CallOptions.DEFAULT.getCompressor()).isNull();
     assertThat(CallOptions.DEFAULT.isWaitForReady()).isFalse();
+    assertThat(CallOptions.DEFAULT.getStreamTracerFactories()).isEmpty();
   }
 
   @Test
@@ -164,6 +170,7 @@ public class CallOptionsTest {
     assertThat(actual).contains("waitForReady=true");
     assertThat(actual).contains("maxInboundMessageSize=44");
     assertThat(actual).contains("maxOutboundMessageSize=55");
+    assertThat(actual).contains("streamTracerFactories=[tracerFactory1, tracerFactory2]");
   }
 
   @Test
@@ -202,6 +209,34 @@ public class CallOptionsTest {
     assertThat(opts.getOption(option2)).isEqualTo("v2");
   }
 
+  @Test
+  public void withStreamTracerFactory() {
+    CallOptions opts1 = CallOptions.DEFAULT.withStreamTracerFactory(tracerFactory1);
+    CallOptions opts2 = opts1.withStreamTracerFactory(tracerFactory2);
+    CallOptions opts3 = opts2.withStreamTracerFactory(tracerFactory2);
+
+    assertThat(opts1.getStreamTracerFactories()).containsExactly(tracerFactory1);
+    assertThat(opts2.getStreamTracerFactories()).containsExactly(tracerFactory1, tracerFactory2)
+        .inOrder();
+    assertThat(opts3.getStreamTracerFactories())
+        .containsExactly(tracerFactory1, tracerFactory2, tracerFactory2).inOrder();
+
+    try {
+      CallOptions.DEFAULT.getStreamTracerFactories().add(tracerFactory1);
+      fail("Should have thrown. The list should be unmodifiable.");
+    } catch (UnsupportedOperationException e) {
+      // Expected
+    }
+
+    try {
+      opts2.getStreamTracerFactories().clear();
+      fail("Should have thrown. The list should be unmodifiable.");
+    } catch (UnsupportedOperationException e) {
+      // Expected
+    }
+  }
+
+  // Only used in noStrayModifications()
   // TODO(carl-mastrangelo): consider making a CallOptionsSubject for Truth.
   private static boolean equal(CallOptions o1, CallOptions o2) {
     return Objects.equal(o1.getDeadline(), o2.getDeadline())
@@ -226,6 +261,24 @@ public class CallOptionsTest {
         throw new IllegalArgumentException();
       }
       this.time += unit.toNanos(period);
+    }
+  }
+
+  private static class FakeTracerFactory extends ClientStreamTracer.Factory {
+    final String name;
+
+    FakeTracerFactory(String name) {
+      this.name = name;
+    }
+
+    @Override
+    public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+      return new ClientStreamTracer() {};
+    }
+
+    @Override
+    public String toString() {
+      return name;
     }
   }
 }

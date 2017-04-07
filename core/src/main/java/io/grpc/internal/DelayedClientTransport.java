@@ -140,8 +140,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
    * returned; if the transport is shutdown, then a {@link FailingClientStream} is returned.
    */
   @Override
-  public final ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers,
-      CallOptions callOptions, StatsTraceContext statsTraceCtx) {
+  public final ClientStream newStream(
+      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
     try {
       SubchannelPicker picker = null;
       PickSubchannelArgs args = new PickSubchannelArgsImpl(method, headers, callOptions);
@@ -149,7 +149,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
       synchronized (lock) {
         if (!shutdown) {
           if (lastPicker == null) {
-            return createPendingStream(args, statsTraceCtx);
+            return createPendingStream(args);
           }
           picker = lastPicker;
           pickerVersion = lastPickerVersion;
@@ -161,8 +161,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
           ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult,
               callOptions.isWaitForReady());
           if (transport != null) {
-            return transport.newStream(args.getMethodDescriptor(), args.getHeaders(),
-                args.getCallOptions(), statsTraceCtx);
+            return transport.newStream(
+                args.getMethodDescriptor(), args.getHeaders(), args.getCallOptions());
           }
           // This picker's conclusion is "buffer".  If there hasn't been a newer picker set
           // (possible race with reprocess()), we will buffer it.  Otherwise, will try with the new
@@ -172,7 +172,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
               break;
             }
             if (pickerVersion == lastPickerVersion) {
-              return createPendingStream(args, statsTraceCtx);
+              return createPendingStream(args);
             }
             picker = lastPicker;
             pickerVersion = lastPickerVersion;
@@ -188,7 +188,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   @Override
   public final ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   /**
@@ -196,9 +196,8 @@ final class DelayedClientTransport implements ManagedClientTransport {
    * schedule tasks on channelExecutor.
    */
   @GuardedBy("lock")
-  private PendingStream createPendingStream(PickSubchannelArgs args,
-      StatsTraceContext statsTraceCtx) {
-    PendingStream pendingStream = new PendingStream(args, statsTraceCtx);
+  private PendingStream createPendingStream(PickSubchannelArgs args) {
+    PendingStream pendingStream = new PendingStream(args);
     pendingStreams.add(pendingStream);
     if (pendingStreams.size() == 1) {
       channelExecutor.executeLater(reportTransportInUse);
@@ -349,20 +348,18 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   private class PendingStream extends DelayedStream {
     private final PickSubchannelArgs args;
-    private final StatsTraceContext statsTraceCtx;
     private final Context context = Context.current();
 
-    private PendingStream(PickSubchannelArgs args, StatsTraceContext statsTraceCtx) {
+    private PendingStream(PickSubchannelArgs args) {
       this.args = args;
-      this.statsTraceCtx = statsTraceCtx;
     }
 
     private void createRealStream(ClientTransport transport) {
       ClientStream realStream;
       Context origContext = context.attach();
       try {
-        realStream = transport.newStream(args.getMethodDescriptor(), args.getHeaders(),
-            args.getCallOptions(), statsTraceCtx);
+        realStream = transport.newStream(
+            args.getMethodDescriptor(), args.getHeaders(), args.getCallOptions());
       } finally {
         context.detach(origContext);
       }

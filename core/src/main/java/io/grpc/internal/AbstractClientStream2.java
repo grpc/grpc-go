@@ -184,6 +184,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   /** This should only called from the transport thread. */
   protected abstract static class TransportState extends AbstractStream2.TransportState {
     /** Whether listener.closed() has been called. */
+    private final StatsTraceContext statsTraceCtx;
     private boolean listenerClosed;
     private ClientStreamListener listener;
 
@@ -198,6 +199,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
+      this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
     @VisibleForTesting
@@ -328,6 +330,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       if (!listenerClosed) {
         listenerClosed = true;
         closeDeframer();
+        statsTraceCtx.streamClosed(status);
         listener().closed(status, trailers);
       }
     }
@@ -371,7 +374,6 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       Preconditions.checkState(payload != null,
           "Lack of request message. GET request is only supported for unary requests");
       abstractClientStreamSink().writeHeaders(headers, payload);
-      statsTraceCtx.wireBytesSent(payload.length);
       payload = null;
       headers = null;
     }

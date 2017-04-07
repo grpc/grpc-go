@@ -39,8 +39,12 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
@@ -58,16 +62,23 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 import com.google.protobuf.MessageLite;
 import io.grpc.CallOptions;
+import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientStreamTracer;
+import io.grpc.Context;
 import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
+import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.StreamTracer;
 import io.grpc.auth.MoreCallCredentials;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
@@ -99,6 +110,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -129,10 +141,34 @@ public abstract class AbstractInteropTest {
       new AtomicReference<Metadata>();
   private static ScheduledExecutorService testServiceExecutor;
   private static Server server;
-  private static final FakeStatsContextFactory clientStatsFactory =
+  private static final FakeStatsContextFactory clientStatsCtxFactory =
       new FakeStatsContextFactory();
-  private static final FakeStatsContextFactory serverStatsFactory =
+  private static final FakeStatsContextFactory serverStatsCtxFactory =
       new FakeStatsContextFactory();
+
+  private static final LinkedBlockingQueue<ServerStreamTracerInfo> serverStreamTracers =
+      new LinkedBlockingQueue<ServerStreamTracerInfo>();
+
+  private static class ServerStreamTracerInfo {
+    final String fullMethodName;
+    final ServerStreamTracer tracer;
+
+    ServerStreamTracerInfo(String fullMethodName, ServerStreamTracer tracer) {
+      this.fullMethodName = fullMethodName;
+      this.tracer = tracer;
+    }
+  }
+
+  private static final ServerStreamTracer.Factory serverStreamTracerFactory =
+      new ServerStreamTracer.Factory() {
+        @Override
+        public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
+          ServerStreamTracer tracer = spy(new ServerStreamTracer() {});
+          serverStreamTracers.add(new ServerStreamTracerInfo(fullMethodName, tracer));
+          return tracer;
+        }
+      };
+
   protected static final Empty EMPTY = Empty.getDefaultInstance();
 
   protected static void startStaticServer(
@@ -146,10 +182,13 @@ public abstract class AbstractInteropTest {
         .add(interceptors)
         .build();
 
-    builder.addService(ServerInterceptors.intercept(
-        new TestServiceImpl(testServiceExecutor),
-        allInterceptors));
-    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, serverStatsFactory);
+    builder
+        .addService(
+            ServerInterceptors.intercept(
+                new TestServiceImpl(testServiceExecutor),
+                allInterceptors))
+        .addStreamTracerFactory(serverStreamTracerFactory);
+    io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, serverStatsCtxFactory);
     try {
       server = builder.build().start();
     } catch (IOException ex) {
@@ -171,17 +210,41 @@ public abstract class AbstractInteropTest {
   protected TestServiceGrpc.TestServiceBlockingStub blockingStub;
   protected TestServiceGrpc.TestServiceStub asyncStub;
 
+  private final LinkedBlockingQueue<ClientStreamTracer> clientStreamTracers =
+      new LinkedBlockingQueue<ClientStreamTracer>();
+
+  private final ClientStreamTracer.Factory clientStreamTracerFactory =
+      new ClientStreamTracer.Factory() {
+        @Override
+        public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+          ClientStreamTracer tracer = spy(new ClientStreamTracer() {});
+          clientStreamTracers.add(tracer);
+          return tracer;
+        }
+      };
+  private final ClientInterceptor tracerSetupInterceptor = new ClientInterceptor() {
+        @Override
+        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+            MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+          return next.newCall(
+              method, callOptions.withStreamTracerFactory(clientStreamTracerFactory));
+        }
+      };
+
   /**
    * Must be called by the subclass setup method if overridden.
    */
   @Before
   public void setUp() {
     channel = createChannel();
-    blockingStub = TestServiceGrpc.newBlockingStub(channel);
-    asyncStub = TestServiceGrpc.newStub(channel);
+
+    blockingStub =
+        TestServiceGrpc.newBlockingStub(channel).withInterceptors(tracerSetupInterceptor);
+    asyncStub = TestServiceGrpc.newStub(channel).withInterceptors(tracerSetupInterceptor);
     requestHeadersCapture.set(null);
-    clientStatsFactory.rolloverRecords();
-    serverStatsFactory.rolloverRecords();
+    clientStatsCtxFactory.rolloverRecords();
+    serverStatsCtxFactory.rolloverRecords();
+    serverStreamTracers.clear();
   }
 
   /** Clean up. */
@@ -190,12 +253,16 @@ public abstract class AbstractInteropTest {
     if (channel != null) {
       channel.shutdown();
     }
+    if (!metricsExpected()) {
+      assertEquals(0, clientStreamTracers.size());
+      assertEquals(0, serverStreamTracers.size());
+    }
   }
 
   protected abstract ManagedChannel createChannel();
 
   protected final StatsContextFactory getClientStatsFactory() {
-    return clientStatsFactory;
+    return clientStatsCtxFactory;
   }
 
   protected boolean metricsExpected() {
@@ -404,7 +471,13 @@ public abstract class AbstractInteropTest {
         Status.fromThrowable(responseObserver.getError()).getCode());
 
     if (metricsExpected()) {
-      assertClientMetrics("grpc.testing.TestService/StreamingInputCall", Status.Code.CANCELLED);
+      // CensusStreamTracerModule record final status in the interceptor, thus is guaranteed to be
+      // recorded.  The tracer stats rely on the stream being created, which is not always the case
+      // in this test.  Therefore we don't check the tracer stats.
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/StreamingInputCall",
+          Status.CANCELLED.getCode());
       // Do not check server-side metrics, because the status on the server side is undetermined.
     }
   }
@@ -611,8 +684,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void exchangeMetadataUnaryCall() throws Exception {
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(channel);
+    TestServiceGrpc.TestServiceBlockingStub stub = blockingStub;
 
     // Capture the metadata exchange
     Metadata fixedHeaders = new Metadata();
@@ -635,7 +707,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void exchangeMetadataStreamingCall() throws Exception {
-    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    TestServiceGrpc.TestServiceStub stub = asyncStub;
 
     // Capture the metadata exchange
     Metadata fixedHeaders = new Metadata();
@@ -683,8 +755,8 @@ public abstract class AbstractInteropTest {
   @Test(timeout = 10000)
   public void sendsTimeoutHeader() {
     long configuredTimeoutMinutes = 100;
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
     stub.emptyCall(EMPTY);
     long transferredTimeoutMinutes = TimeUnit.NANOSECONDS.toMinutes(
         requestHeadersCapture.get().get(GrpcUtil.TIMEOUT_KEY));
@@ -699,7 +771,7 @@ public abstract class AbstractInteropTest {
   public void deadlineNotExceeded() {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
-    TestServiceGrpc.newBlockingStub(channel)
+    blockingStub
         .withDeadlineAfter(10, TimeUnit.SECONDS)
         .streamingOutputCall(StreamingOutputCallRequest.newBuilder()
             .addResponseParameters(ResponseParameters.newBuilder()
@@ -711,8 +783,8 @@ public abstract class AbstractInteropTest {
   public void deadlineExceeded() {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withDeadlineAfter(10, TimeUnit.MILLISECONDS);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withDeadlineAfter(10, TimeUnit.MILLISECONDS);
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder()
             .setIntervalUs(20000))
@@ -725,7 +797,11 @@ public abstract class AbstractInteropTest {
     }
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
-      assertClientMetrics("grpc.testing.TestService/StreamingOutputCall",
+      // Stream may not have been created before deadline is exceeded, thus we don't test the tracer
+      // stats.
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/StreamingOutputCall",
           Status.Code.DEADLINE_EXCEEDED);
       // Do not check server-side metrics, because the status on the server side is undetermined.
     }
@@ -746,7 +822,7 @@ public abstract class AbstractInteropTest {
         .addResponseParameters(responseParameters)
         .build();
     StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
-    TestServiceGrpc.newStub(channel)
+    asyncStub
         .withDeadlineAfter(30, TimeUnit.MILLISECONDS)
         .streamingOutputCall(request, recorder);
     recorder.awaitCompletion();
@@ -754,7 +830,11 @@ public abstract class AbstractInteropTest {
         Status.fromThrowable(recorder.getError()).getCode());
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
-      assertClientMetrics("grpc.testing.TestService/StreamingOutputCall",
+      // Stream may not have been created when deadline is exceeded, thus we don't check tracer
+      // stats.
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/StreamingOutputCall",
           Status.Code.DEADLINE_EXCEEDED);
       // Do not check server-side metrics, because the status on the server side is undetermined.
     }
@@ -764,21 +844,28 @@ public abstract class AbstractInteropTest {
   public void deadlineInPast() throws Exception {
     // Test once with idle channel and once with active channel
     try {
-      TestServiceGrpc.newBlockingStub(channel)
+      blockingStub
           .withDeadlineAfter(-10, TimeUnit.SECONDS)
           .emptyCall(Empty.getDefaultInstance());
       fail("Should have thrown");
     } catch (StatusRuntimeException ex) {
       assertEquals(Status.Code.DEADLINE_EXCEEDED, ex.getStatus().getCode());
     }
+
+    // CensusStreamTracerModule record final status in the interceptor, thus is guaranteed to be
+    // recorded.  The tracer stats rely on the stream being created, which is not the case if
+    // deadline is exceeded before the call is created. Therefore we don't check the tracer stats.
     if (metricsExpected()) {
-      assertClientMetrics("grpc.testing.TestService/EmptyCall", Status.Code.DEADLINE_EXCEEDED);
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/EmptyCall",
+          Status.DEADLINE_EXCEEDED.getCode());
     }
 
     // warm up the channel
     blockingStub.emptyCall(Empty.getDefaultInstance());
     try {
-      TestServiceGrpc.newBlockingStub(channel)
+      blockingStub
           .withDeadlineAfter(-10, TimeUnit.SECONDS)
           .emptyCall(Empty.getDefaultInstance());
       fail("Should have thrown");
@@ -787,7 +874,11 @@ public abstract class AbstractInteropTest {
     }
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
-      assertClientMetrics("grpc.testing.TestService/EmptyCall", Status.Code.DEADLINE_EXCEEDED);
+
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/EmptyCall",
+          Status.DEADLINE_EXCEEDED.getCode());
     }
   }
 
@@ -798,8 +889,8 @@ public abstract class AbstractInteropTest {
         .build();
     int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
 
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withMaxInboundMessageSize(size);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withMaxInboundMessageSize(size);
 
     stub.streamingOutputCall(request).next();
   }
@@ -811,8 +902,8 @@ public abstract class AbstractInteropTest {
         .build();
     int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
 
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withMaxInboundMessageSize(size - 1);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withMaxInboundMessageSize(size - 1);
 
     try {
       stub.streamingOutputCall(request).next();
@@ -833,8 +924,8 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withMaxOutboundMessageSize(request.getSerializedSize());
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withMaxOutboundMessageSize(request.getSerializedSize());
 
     stub.streamingOutputCall(request).next();
   }
@@ -847,8 +938,8 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-        .withMaxOutboundMessageSize(request.getSerializedSize() - 1);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withMaxOutboundMessageSize(request.getSerializedSize() - 1);
     try {
       stub.streamingOutputCall(request).next();
       fail();
@@ -953,7 +1044,7 @@ public abstract class AbstractInteropTest {
     Metadata metadata = new Metadata();
     metadata.put(Util.ECHO_INITIAL_METADATA_KEY, "test_initial_metadata_value");
     metadata.put(Util.ECHO_TRAILING_METADATA_KEY, trailingBytes);
-    TestServiceGrpc.TestServiceBlockingStub blockingStub = TestServiceGrpc.newBlockingStub(channel);
+    TestServiceGrpc.TestServiceBlockingStub blockingStub = this.blockingStub;
     blockingStub = MetadataUtils.attachHeaders(blockingStub, metadata);
     AtomicReference<Metadata> headersCapture = new AtomicReference<Metadata>();
     AtomicReference<Metadata> trailersCapture = new AtomicReference<Metadata>();
@@ -974,7 +1065,7 @@ public abstract class AbstractInteropTest {
     metadata = new Metadata();
     metadata.put(Util.ECHO_INITIAL_METADATA_KEY, "test_initial_metadata_value");
     metadata.put(Util.ECHO_TRAILING_METADATA_KEY, trailingBytes);
-    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel);
+    TestServiceGrpc.TestServiceStub stub = asyncStub;
     stub = MetadataUtils.attachHeaders(stub, metadata);
     headersCapture = new AtomicReference<Metadata>();
     trailersCapture = new AtomicReference<Metadata>();
@@ -1023,7 +1114,7 @@ public abstract class AbstractInteropTest {
       assertEquals(errorMessage, e.getStatus().getDescription());
     }
     if (metricsExpected()) {
-      assertClientMetrics("grpc.testing.TestService/UnaryCall", Status.Code.UNKNOWN);
+      assertMetrics("grpc.testing.TestService/UnaryCall", Status.Code.UNKNOWN);
     }
 
     // Test FullDuplexCall
@@ -1041,7 +1132,7 @@ public abstract class AbstractInteropTest {
     assertEquals(errorMessage, Status.fromThrowable(captor.getValue()).getDescription());
     verifyNoMoreInteractions(responseObserver);
     if (metricsExpected()) {
-      assertClientMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.UNKNOWN);
+      assertMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.UNKNOWN);
     }
   }
 
@@ -1065,7 +1156,7 @@ public abstract class AbstractInteropTest {
   @Test(timeout = 10000)
   public void unimplementedService() {
     UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
-        UnimplementedServiceGrpc.newBlockingStub(channel);
+        UnimplementedServiceGrpc.newBlockingStub(channel).withInterceptors(tracerSetupInterceptor);
     try {
       stub.unimplementedCall(Empty.getDefaultInstance());
       fail();
@@ -1082,8 +1173,8 @@ public abstract class AbstractInteropTest {
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   @Test(timeout = 10000)
   public void timeoutOnSleepingServer() throws Exception {
-    TestServiceGrpc.TestServiceStub stub = TestServiceGrpc.newStub(channel)
-        .withDeadlineAfter(1, TimeUnit.MILLISECONDS);
+    TestServiceGrpc.TestServiceStub stub =
+        asyncStub.withDeadlineAfter(1, TimeUnit.MILLISECONDS);
 
     StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
@@ -1105,8 +1196,13 @@ public abstract class AbstractInteropTest {
                  Status.fromThrowable(responseObserver.getError()).getCode());
 
     if (metricsExpected()) {
-      assertClientMetrics("grpc.testing.TestService/FullDuplexCall", Status.Code.DEADLINE_EXCEEDED);
-      // Do not check server-side metrics, because the status on the server side is undetermined.
+      // CensusStreamTracerModule record final status in the interceptor, thus is guaranteed to be
+      // recorded.  The tracer stats rely on the stream being created, which is not always the case
+      // in this test, thus we will not check that.
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      checkTags(
+          clientRecord, false, "grpc.testing.TestService/FullDuplexCall",
+          Status.DEADLINE_EXCEEDED.getCode());
     }
   }
 
@@ -1246,8 +1342,8 @@ public abstract class AbstractInteropTest {
 
   /** Helper for asserting remote address {@link io.grpc.ServerCall#getAttributes()} */
   protected void assertRemoteAddr(String expectedRemoteAddress) {
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(5, TimeUnit.SECONDS);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS);
 
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
@@ -1261,8 +1357,8 @@ public abstract class AbstractInteropTest {
 
   /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#getAttributes()} */
   protected void assertX500SubjectDn(String tlsInfo) {
-    TestServiceGrpc.TestServiceBlockingStub stub = TestServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(5, TimeUnit.SECONDS);
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS);
 
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
@@ -1311,7 +1407,10 @@ public abstract class AbstractInteropTest {
       }
       throw e;
     }
+  }
 
+  private static <T> T verify(T mock) {
+    return verify(mock, times(1));
   }
 
   /**
@@ -1350,11 +1449,24 @@ public abstract class AbstractInteropTest {
 
   private void assertClientMetrics(String method, Status.Code status,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
-    MetricsRecord clientRecord = clientStatsFactory.pollRecord();
-    assertNotNull("clientRecord is not null", clientRecord);
+    // Tracer-based stats
+    ClientStreamTracer tracer = clientStreamTracers.poll();
+    assertNotNull(tracer);
+    verify(tracer).headersSent();
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    // assertClientMetrics() is called right after application receives status,
+    // but streamClosed() may be called slightly later than that.  So we need a timeout.
+    verify(tracer, timeout(5000)).streamClosed(statusCaptor.capture());
+    assertEquals(status, statusCaptor.getValue().getCode());
+
+    // CensusStreamTracerModule records final status in interceptor, which is guaranteed to be done
+    // before application receives status.
+    MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
     checkTags(clientRecord, false, method, status);
+
     if (requests != null && responses != null) {
-      checkMetrics(clientRecord, false, requests, responses);
+      checkTracerMetrics(tracer, requests, responses);
+      checkCensusMetrics(clientRecord, false, requests, responses);
     }
   }
 
@@ -1365,6 +1477,7 @@ public abstract class AbstractInteropTest {
   private void assertServerMetrics(String method, Status.Code status,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     AssertionError checkFailure = null;
+    boolean passed = false;
     // Because the server doesn't restart between tests, it may still be processing the requests
     // from the previous tests when a new test starts, thus the test may see metrics from previous
     // tests.  The best we can do here is to exhaust all records and find one that matches the given
@@ -1374,7 +1487,7 @@ public abstract class AbstractInteropTest {
       try {
         // On the server, the stats is finalized in ServerStreamListener.closed(), which can be run
         // after the client receives the final status.  So we use a timeout.
-        serverRecord = serverStatsFactory.pollRecord(1, TimeUnit.SECONDS);
+        serverRecord = serverStatsCtxFactory.pollRecord(1, TimeUnit.SECONDS);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -1384,22 +1497,59 @@ public abstract class AbstractInteropTest {
       try {
         checkTags(serverRecord, true, method, status);
         if (requests != null && responses != null) {
-          checkMetrics(serverRecord, true, requests, responses);
+          checkCensusMetrics(serverRecord, true, requests, responses);
         }
-        return;  // passed
+        passed = true;
+        break;
       } catch (AssertionError e) {
         // May be the fallout from a previous test, continue trying
         checkFailure = e;
       }
     }
-    if (checkFailure == null) {
-      throw new AssertionError("No record found");
+    if (!passed) {
+      if (checkFailure == null) {
+        throw new AssertionError("No record found");
+      }
+      throw checkFailure;
     }
-    throw checkFailure;
+
+    // Use the same trick to check ServerStreamTracer records
+    passed = false;
+    while (true) {
+      ServerStreamTracerInfo tracerInfo;
+      tracerInfo = serverStreamTracers.poll();
+      if (tracerInfo == null) {
+        break;
+      }
+      try {
+        assertEquals(method, tracerInfo.fullMethodName);
+        verify(tracerInfo.tracer).filterContext(any(Context.class));
+        ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+        // On the server, streamClosed() may be called after the client receives the final status.
+        // So we use a timeout.
+        verify(tracerInfo.tracer, timeout(1000)).streamClosed(statusCaptor.capture());
+        assertEquals(status, statusCaptor.getValue().getCode());
+        if (requests != null && responses != null) {
+          checkTracerMetrics(tracerInfo.tracer, responses, requests);
+        }
+        passed = true;
+        break;
+      } catch (AssertionError e) {
+        // May be the fallout from a previous test, continue trying
+        checkFailure = e;
+      }
+    }
+    if (!passed) {
+      if (checkFailure == null) {
+        throw new AssertionError("No ServerStreamTracer found");
+      }
+      throw checkFailure;
+    }
   }
 
   private static void checkTags(
       MetricsRecord record, boolean server, String methodName, Status.Code status) {
+    assertNotNull("record is not null", record);
     TagValue methodNameTag = record.tags.get(
         server ? RpcConstants.RPC_SERVER_METHOD : RpcConstants.RPC_CLIENT_METHOD);
     assertNotNull("method name tagged", methodNameTag);
@@ -1409,7 +1559,38 @@ public abstract class AbstractInteropTest {
     assertEquals(status.toString(), statusTag.toString());
   }
 
-  private static void checkMetrics(MetricsRecord record, boolean server,
+  private static void checkTracerMetrics(
+      StreamTracer tracer,
+      Collection<? extends MessageLite> sentMessages,
+      Collection<? extends MessageLite> receivedMessages) {
+    verify(tracer, times(sentMessages.size())).outboundMessage();
+    verify(tracer, times(receivedMessages.size())).inboundMessage();
+
+    long uncompressedSentSize = 0;
+    for (MessageLite msg : sentMessages) {
+      uncompressedSentSize += msg.getSerializedSize();
+    }
+    long uncompressedReceivedSize = 0;
+    for (MessageLite msg : receivedMessages) {
+      uncompressedReceivedSize += msg.getSerializedSize();
+    }
+    ArgumentCaptor<Long> outboundSizeCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<Long> inboundSizeCaptor = ArgumentCaptor.forClass(Long.class);
+    verify(tracer, atLeast(0)).outboundUncompressedSize(outboundSizeCaptor.capture());
+    verify(tracer, atLeast(0)).inboundUncompressedSize(inboundSizeCaptor.capture());
+    long recordedUncompressedOutboundSize = 0;
+    for (Long size : outboundSizeCaptor.getAllValues()) {
+      recordedUncompressedOutboundSize += size;
+    }
+    long recordedUncompressedInboundSize = 0;
+    for (Long size : inboundSizeCaptor.getAllValues()) {
+      recordedUncompressedInboundSize += size;
+    }
+    assertEquals(uncompressedSentSize, recordedUncompressedOutboundSize);
+    assertEquals(uncompressedReceivedSize, recordedUncompressedInboundSize);
+  }
+
+  private static void checkCensusMetrics(MetricsRecord record, boolean server,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     int uncompressedRequestsSize = 0;
     for (MessageLite request : requests) {
@@ -1424,6 +1605,7 @@ public abstract class AbstractInteropTest {
           record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES));
       assertEquals(uncompressedResponsesSize,
           record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES));
+      assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_SERVER_LATENCY));
       // It's impossible to get the expected wire sizes because it may be compressed, so we just
       // check if they are recorded.
       assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_BYTES));
@@ -1433,6 +1615,7 @@ public abstract class AbstractInteropTest {
           record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
       assertEquals(uncompressedResponsesSize,
           record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
+      assertNotNull(record.getMetric(RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY));
       assertNotNull(record.getMetric(RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME));
       // It's impossible to get the expected wire sizes because it may be compressed, so we just
       // check if they are recorded.

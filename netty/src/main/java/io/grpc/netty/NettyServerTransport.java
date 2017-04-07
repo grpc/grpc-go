@@ -32,6 +32,7 @@
 package io.grpc.netty;
 
 import com.google.common.base.Preconditions;
+import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ServerTransport;
@@ -40,6 +41,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -62,13 +64,17 @@ class NettyServerTransport implements ServerTransport {
   private final long keepAliveTimeoutInNanos;
   private final boolean permitKeepAliveWithoutCalls;
   private final long permitKeepAliveTimeInNanos;
+  private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
-  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator, int maxStreams,
+  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator,
+      List<ServerStreamTracer.Factory> streamTracerFactories, int maxStreams,
       int flowControlWindow, int maxMessageSize, int maxHeaderListSize, long keepAliveTimeInNanos,
       long keepAliveTimeoutInNanos, boolean permitKeepAliveWithoutCalls,
       long permitKeepAliveTimeInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
+    this.streamTracerFactories =
+        Preconditions.checkNotNull(streamTracerFactories, "streamTracerFactories");
     this.maxStreams = maxStreams;
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
@@ -139,8 +145,8 @@ class NettyServerTransport implements ServerTransport {
    * Creates the Netty handler to be used in the channel pipeline.
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
-    return NettyServerHandler.newHandler(transportListener, maxStreams, flowControlWindow,
-        maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
-        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+    return NettyServerHandler.newHandler(transportListener, streamTracerFactories, maxStreams,
+        flowControlWindow, maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos,
+        keepAliveTimeoutInNanos, permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 }

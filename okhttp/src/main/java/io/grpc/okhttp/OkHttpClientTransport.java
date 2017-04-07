@@ -289,10 +289,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @Override
   public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method,
-      final Metadata headers, CallOptions callOptions, StatsTraceContext statsTraceCtx) {
+      final Metadata headers, CallOptions callOptions) {
     Preconditions.checkNotNull(method, "method");
     Preconditions.checkNotNull(headers, "headers");
-    Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
     return new OkHttpClientStream(method, headers, frameWriter, OkHttpClientTransport.this,
         outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent, statsTraceCtx);
   }
@@ -300,7 +300,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   @Override
   public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
       headers) {
-    return newStream(method, headers, CallOptions.DEFAULT, StatsTraceContext.NOOP);
+    return newStream(method, headers, CallOptions.DEFAULT);
   }
 
   @GuardedBy("lock")

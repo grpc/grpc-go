@@ -31,6 +31,7 @@
 
 package io.grpc.okhttp;
 
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AccessProtectedHack;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.InternalServer;
@@ -38,6 +39,7 @@ import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
 import io.grpc.netty.NettyServerBuilder;
 import java.net.InetSocketAddress;
+import java.util.List;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -59,20 +61,23 @@ public class OkHttpTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected InternalServer newServer() {
+  protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
     return AccessProtectedHack.serverBuilderBuildTransportServer(
         NettyServerBuilder
           .forPort(0)
-          .flowControlWindow(65 * 1024));
+          .flowControlWindow(65 * 1024),
+        streamTracerFactories);
   }
 
   @Override
-  protected InternalServer newServer(InternalServer server) {
+  protected InternalServer newServer(
+      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories) {
     int port = server.getPort();
     return AccessProtectedHack.serverBuilderBuildTransportServer(
         NettyServerBuilder
             .forPort(port)
-            .flowControlWindow(65 * 1024));
+            .flowControlWindow(65 * 1024),
+        streamTracerFactories);
   }
 
   @Override
@@ -87,6 +92,11 @@ public class OkHttpTransportTest extends AbstractTransportTest {
         new InetSocketAddress("127.0.0.1", port),
         testAuthority(server),
         null /* agent */);
+  }
+
+  @Override
+  protected boolean metricsExpected() {
+    return true;
   }
 
   // TODO(ejona): Flaky/Broken

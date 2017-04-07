@@ -33,9 +33,9 @@ package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -46,14 +46,11 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import com.google.common.base.Charsets;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
-import com.google.instrumentation.stats.RpcConstants;
 import io.grpc.Codec;
-import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.StreamTracer;
 import io.grpc.internal.MessageDeframer.Listener;
 import io.grpc.internal.MessageDeframer.SizeEnforcingInputStream;
-import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
-import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -78,11 +75,10 @@ public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private Listener listener = mock(Listener.class);
-  private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
-  // MessageFramerTest tests with a server-side StatsTraceContext, so here we test with a
-  // client-side StatsTraceContext.
-  private StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(
-      "service/method", statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+  private StreamTracer tracer = mock(StreamTracer.class);
+  private StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
+  private ArgumentCaptor<Long> wireSizeCaptor = ArgumentCaptor.forClass(Long.class);
+  private ArgumentCaptor<Long> uncompressedSizeCaptor = ArgumentCaptor.forClass(Long.class);
 
   private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
       DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
@@ -97,7 +93,7 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(2, 2);
+    checkStats(1, 2, 2);
   }
 
   @Test
@@ -111,7 +107,7 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertEquals(Bytes.asList(new byte[] {14, 15}), bytes(streams.get(1)));
     verifyNoMoreInteractions(listener);
-    checkStats(3, 3);
+    checkStats(2, 3, 3);
   }
 
   @Test
@@ -123,7 +119,7 @@ public class MessageDeframerTest {
     verify(listener).endOfStream();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1);
+    checkStats(1, 1, 1);
   }
 
   @Test
@@ -131,7 +127,7 @@ public class MessageDeframerTest {
     deframer.deframe(buffer(new byte[0]), true);
     verify(listener).endOfStream();
     verifyNoMoreInteractions(listener);
-    checkStats(0, 0);
+    checkStats(0, 0, 0);
   }
 
   @Test
@@ -146,7 +142,7 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertTrue(deframer.isStalled());
     verifyNoMoreInteractions(listener);
-    checkStats(7, 7);
+    checkStats(1, 7, 7);
   }
 
   @Test
@@ -162,7 +158,7 @@ public class MessageDeframerTest {
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     assertTrue(deframer.isStalled());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1);
+    checkStats(1, 1, 1);
   }
 
   @Test
@@ -173,7 +169,7 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(0, 0);
+    checkStats(1, 0, 0);
   }
 
   @Test
@@ -185,7 +181,7 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1000, 1000);
+    checkStats(1, 1000, 1000);
   }
 
   @Test
@@ -199,7 +195,7 @@ public class MessageDeframerTest {
     verify(listener).endOfStream();
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(1, 1);
+    checkStats(1, 1, 1);
   }
 
   @Test
@@ -216,7 +212,7 @@ public class MessageDeframerTest {
     assertEquals(Bytes.asList(new byte[1000]), bytes(messages));
     verify(listener, atLeastOnce()).bytesRead(anyInt());
     verifyNoMoreInteractions(listener);
-    checkStats(payload.length, 1000);
+    checkStats(1, payload.length, 1000);
   }
 
   @Test
@@ -249,7 +245,7 @@ public class MessageDeframerTest {
 
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -262,7 +258,7 @@ public class MessageDeframerTest {
 
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -293,7 +289,7 @@ public class MessageDeframerTest {
     assertEquals(3, read);
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -308,7 +304,7 @@ public class MessageDeframerTest {
     assertEquals(3, read);
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -340,7 +336,7 @@ public class MessageDeframerTest {
 
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -354,7 +350,7 @@ public class MessageDeframerTest {
     assertEquals(3, skipped);
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
   @Test
@@ -388,24 +384,28 @@ public class MessageDeframerTest {
     assertEquals(2, skipped);
     stream.close();
     // SizeEnforcingInputStream only reports uncompressed bytes
-    checkStats(0, 3);
+    checkStats(0, 0, 3);
   }
 
-  private void checkStats(long wireBytesReceived, long uncompressedBytesReceived) {
-    statsTraceCtx.callEnded(Status.OK);
-    MetricsRecord record = statsCtxFactory.pollRecord();
-    assertEquals(0, record.getMetricAsLongOrFail(
-            RpcConstants.RPC_CLIENT_REQUEST_BYTES));
-    assertEquals(0, record.getMetricAsLongOrFail(
-            RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
-    assertEquals(wireBytesReceived,
-        record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
-    assertEquals(uncompressedBytesReceived,
-        record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
-    assertNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_BYTES));
-    assertNull(record.getMetric(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
-    assertNull(record.getMetric(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES));
-    assertNull(record.getMetric(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES));
+  private void checkStats(
+      int messagesReceived, long wireBytesReceived, long uncompressedBytesReceived) {
+    long actualWireSize = 0;
+    long actualUncompressedSize = 0;
+
+    verify(tracer, times(messagesReceived)).inboundMessage();
+    verify(tracer, atLeast(0)).inboundWireSize(wireSizeCaptor.capture());
+    for (Long portion : wireSizeCaptor.getAllValues()) {
+      actualWireSize += portion;
+    }
+
+    verify(tracer, atLeast(0)).inboundUncompressedSize(uncompressedSizeCaptor.capture());
+    for (Long portion : uncompressedSizeCaptor.getAllValues()) {
+      actualUncompressedSize += portion;
+    }
+
+    verifyNoMoreInteractions(tracer);
+    assertEquals(wireBytesReceived, actualWireSize);
+    assertEquals(uncompressedBytesReceived, actualUncompressedSize);
   }
 
   private static List<Byte> bytes(ArgumentCaptor<InputStream> captor) {

@@ -35,7 +35,10 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -71,6 +74,9 @@ public final class CallOptions {
   private String compressorName;
 
   private Object[][] customOptions = new Object[0][2];
+
+  // Unmodifiable list
+  private List<ClientStreamTracer.Factory> streamTracerFactories = Collections.emptyList();
 
   /**
    * Opposite to fail fast.
@@ -238,6 +244,31 @@ public final class CallOptions {
     return newOptions;
   }
 
+  /**
+   * Returns a new {@code CallOptions} with a {@code ClientStreamTracerFactory} in addition to
+   * the existing factories.
+   *
+   * <p>This method doesn't replace existing factories, or try to de-duplicate factories.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2861")
+  public CallOptions withStreamTracerFactory(ClientStreamTracer.Factory factory) {
+    CallOptions newOptions = new CallOptions(this);
+    ArrayList<ClientStreamTracer.Factory> newList =
+        new ArrayList<ClientStreamTracer.Factory>(streamTracerFactories.size() + 1);
+    newList.addAll(streamTracerFactories);
+    newList.add(factory);
+    newOptions.streamTracerFactories = Collections.unmodifiableList(newList);
+    return newOptions;
+  }
+
+  /**
+   * Returns an immutable list of {@code ClientStreamTracerFactory}s.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2861")
+  public List<ClientStreamTracer.Factory> getStreamTracerFactories() {
+    return streamTracerFactories;
+  }
+
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1869")
   public static final class Key<T> {
     private final String name;
@@ -393,6 +424,7 @@ public final class CallOptions {
     waitForReady = other.waitForReady;
     maxInboundMessageSize = other.maxInboundMessageSize;
     maxOutboundMessageSize = other.maxOutboundMessageSize;
+    streamTracerFactories = other.streamTracerFactories;
   }
 
   @Override
@@ -408,6 +440,7 @@ public final class CallOptions {
         .add("waitForReady", isWaitForReady())
         .add("maxInboundMessageSize", maxInboundMessageSize)
         .add("maxOutboundMessageSize", maxOutboundMessageSize)
+        .add("streamTracerFactories", streamTracerFactories)
         .toString();
   }
 }

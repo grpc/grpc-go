@@ -42,7 +42,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Supplier;
-import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.Attributes;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -90,7 +89,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
   private final List<ServerTransportFilter> transportFilters;
-  private final StatsContextFactory statsFactory;
   @GuardedBy("lock") private boolean started;
   @GuardedBy("lock") private boolean shutdown;
   /** non-{@code null} if immediate shutdown has been requested. */
@@ -127,7 +125,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
       InternalServer transportServer, Context rootContext,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
-      List<ServerTransportFilter> transportFilters, StatsContextFactory statsFactory,
+      List<ServerTransportFilter> transportFilters,
       Supplier<Stopwatch> stopwatchSupplier) {
     this.executorPool = Preconditions.checkNotNull(executorPool, "executorPool");
     this.timeoutServicePool = Preconditions.checkNotNull(timeoutServicePool, "timeoutServicePool");
@@ -141,7 +139,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     this.compressorRegistry = compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
         new ArrayList<ServerTransportFilter>(transportFilters));
-    this.statsFactory = Preconditions.checkNotNull(statsFactory, "statsFactory");
     this.stopwatchSupplier = Preconditions.checkNotNull(stopwatchSupplier, "stopwatchSupplier");
   }
 
@@ -383,19 +380,13 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public StatsTraceContext methodDetermined(String methodName, Metadata headers) {
-      return StatsTraceContext.newServerContext(
-          methodName, statsFactory, headers, stopwatchSupplier);
-    }
-
-    @Override
     public void streamCreated(
         final ServerStream stream, final String methodName, final Metadata headers) {
 
       final StatsTraceContext statsTraceCtx = Preconditions.checkNotNull(
           stream.statsTraceContext(), "statsTraceCtx not present from stream");
 
-      final Context.CancellableContext context = createContext(stream, headers);
+      final Context.CancellableContext context = createContext(stream, headers, statsTraceCtx);
       final Executor wrappedExecutor;
       // This is a performance optimization that avoids the synchronization and queuing overhead
       // that comes with SerializingExecutor.
@@ -423,15 +414,16 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
               if (method == null) {
                 Status status = Status.UNIMPLEMENTED.withDescription(
                     "Method not found: " + methodName);
-                stream.close(status, new Metadata());
-                // TODO(zhangkun83): this would allow a misbehaving client to blow up the server
-                // in-memory stats storage by sending large number of distinct unimplemented method
+                // TODO(zhangkun83): this error may be recorded by the tracer, and if it's kept in
+                // memory as a map whose key is the method name, this would allow a misbehaving
+                // client to blow up the server in-memory stats storage by sending large number of
+                // distinct unimplemented method
                 // names. (https://github.com/grpc/grpc-java/issues/2285)
-                statsTraceCtx.callEnded(status);
+                stream.close(status, new Metadata());
                 context.cancel(null);
                 return;
               }
-              listener = startCall(stream, methodName, method, headers, context);
+              listener = startCall(stream, methodName, method, headers, context, statsTraceCtx);
             } catch (RuntimeException e) {
               stream.close(Status.fromThrowable(e), new Metadata());
               context.cancel(null);
@@ -448,11 +440,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     private Context.CancellableContext createContext(
-        final ServerStream stream, Metadata headers) {
+        final ServerStream stream, Metadata headers, StatsTraceContext statsTraceCtx) {
       Long timeoutNanos = headers.get(TIMEOUT_KEY);
 
-      // TODO(zhangkun83): attach the StatsContext from StatsTraceContext to baseContext
-      Context baseContext = rootContext;
+      Context baseContext = statsTraceCtx.serverFilterContext(rootContext);
 
       if (timeoutNanos == null) {
         return baseContext.withCancellation();
@@ -478,10 +469,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
-        Context.CancellableContext context) {
+        Context.CancellableContext context, StatsTraceContext statsTraceCtx) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
-          stream, methodDef.getMethodDescriptor(), headers, context, stream.statsTraceContext(),
+          stream, methodDef.getMethodDescriptor(), headers, context,
           decompressorRegistry, compressorRegistry);
       ServerCall.Listener<ReqT> listener =
           methodDef.getServerCallHandler().startCall(call, headers);

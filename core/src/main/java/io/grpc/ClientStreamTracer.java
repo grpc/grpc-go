@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, Google Inc. All rights reserved.
+ * Copyright 2017, Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,46 +29,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import io.grpc.CallOptions;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.Status;
-import java.util.concurrent.Executor;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * A client transport that creates streams that will immediately fail when started.
+ * {@link StreamTracer} for the client-side.
  */
-class FailingClientTransport implements ClientTransport {
-
-  @VisibleForTesting
-  final Status error;
-
-  FailingClientTransport(Status error) {
-    Preconditions.checkArgument(!error.isOk(), "error must not be OK");
-    this.error = error;
+@ExperimentalApi("https://github.com/grpc/grpc-java/issues/2861")
+@ThreadSafe
+public abstract class ClientStreamTracer extends StreamTracer {
+  /**
+   * Headers has been sent to the socket.
+   */
+  public void headersSent() {
   }
 
-  @Override
-  public ClientStream newStream(
-      MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
-    return new FailingClientStream(error);
-  }
-
-  @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
-  @Override
-  public void ping(final PingCallback callback, Executor executor) {
-    executor.execute(new Runnable() {
-        @Override public void run() {
-          callback.onFailure(error.asException());
-        }
-      });
+  /**
+   * Factory class for {@link ClientStreamTracer}.
+   */
+  public abstract static class Factory {
+    /**
+     * Creates a {@link ClientStreamTracer} for a new client stream.
+     *
+     * @param headers the mutable headers of the stream. It can be safely mutated within this
+     *        method.  It should not be saved because it is not safe for read or write after the
+     *        method returns.
+     */
+    public abstract ClientStreamTracer newClientStreamTracer(Metadata headers);
   }
 }

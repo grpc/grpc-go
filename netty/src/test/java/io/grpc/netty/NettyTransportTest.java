@@ -31,11 +31,13 @@
 
 package io.grpc.netty;
 
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
 import java.net.InetSocketAddress;
+import java.util.List;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -61,20 +63,21 @@ public class NettyTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected InternalServer newServer() {
+  protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
     return NettyServerBuilder
         .forPort(0)
         .flowControlWindow(65 * 1024)
-        .buildTransportServer();
+        .buildTransportServer(streamTracerFactories);
   }
 
   @Override
-  protected InternalServer newServer(InternalServer server) {
+  protected InternalServer newServer(
+      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories) {
     int port = server.getPort();
     return NettyServerBuilder
         .forPort(port)
         .flowControlWindow(65 * 1024)
-        .buildTransportServer();
+        .buildTransportServer(streamTracerFactories);
   }
 
   @Override
@@ -89,6 +92,11 @@ public class NettyTransportTest extends AbstractTransportTest {
         new InetSocketAddress("localhost", port),
         testAuthority(server),
         null /* agent */);
+  }
+
+  @Override
+  protected boolean metricsExpected() {
+    return true;
   }
 
   @Test

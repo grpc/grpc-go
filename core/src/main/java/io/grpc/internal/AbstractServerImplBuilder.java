@@ -48,6 +48,7 @@ import io.grpc.InternalNotifyOnServerBuild;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
+import io.grpc.ServerStreamTracer;
 import io.grpc.ServerTransportFilter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -84,6 +85,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   private final List<InternalNotifyOnServerBuild> notifyOnBuildList =
       new ArrayList<InternalNotifyOnServerBuild>();
+
+  private final List<ServerStreamTracer.Factory> streamTracerFactories =
+      new ArrayList<ServerStreamTracer.Factory>();
 
   @Nullable
   private HandlerRegistry fallbackRegistry;
@@ -132,6 +136,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
+  public final T addStreamTracerFactory(ServerStreamTracer.Factory factory) {
+    streamTracerFactories.add(checkNotNull(factory, "factory"));
+    return thisT();
+  }
+
+  @Override
   public final T fallbackHandlerRegistry(HandlerRegistry registry) {
     this.fallbackRegistry = registry;
     return thisT();
@@ -160,15 +170,24 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   @Override
   public ServerImpl build() {
-    io.grpc.internal.InternalServer transportServer = buildTransportServer();
+    ArrayList<ServerStreamTracer.Factory> tracerFactories =
+        new ArrayList<ServerStreamTracer.Factory>();
+    StatsContextFactory statsFactory =
+        this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
+    if (statsFactory != null) {
+      CensusStreamTracerModule census =
+          new CensusStreamTracerModule(statsFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+      tracerFactories.add(census.getServerTracerFactory());
+    }
+    tracerFactories.addAll(streamTracerFactories);
+    io.grpc.internal.InternalServer transportServer =
+        buildTransportServer(Collections.unmodifiableList(tracerFactories));
     ServerImpl server = new ServerImpl(getExecutorPool(),
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE), registryBuilder.build(),
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
         transportFilters,
-        firstNonNull(statsFactory,
-            firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)),
         GrpcUtil.STOPWATCH_SUPPLIER);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
       notifyTarget.notifyOnBuild(server);
@@ -198,9 +217,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    * Children of AbstractServerBuilder should override this method to provide transport specific
    * information for the server.  This method is mean for Transport implementors and should not be
    * used by normal users.
+   *
+   * @param streamTracerFactories an immutable list of stream tracer factories
    */
   @Internal
-  protected abstract io.grpc.internal.InternalServer buildTransportServer();
+  protected abstract io.grpc.internal.InternalServer buildTransportServer(
+      List<ServerStreamTracer.Factory> streamTracerFactories);
 
   private T thisT() {
     @SuppressWarnings("unchecked")

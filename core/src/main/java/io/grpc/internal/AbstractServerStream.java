@@ -138,6 +138,7 @@ public abstract class AbstractServerStream extends AbstractStream2
     Preconditions.checkNotNull(trailers, "trailers");
     if (!outboundClosed) {
       outboundClosed = true;
+      statsTraceCtx.streamClosed(status);
       endOfMessages();
       addStatusToTrailers(trailers, status);
       abstractServerStreamSink().writeTrailers(trailers, headersSent);
@@ -187,9 +188,11 @@ public abstract class AbstractServerStream extends AbstractStream2
     /** Whether listener.closed() has been called. */
     private boolean listenerClosed;
     private ServerStreamListener listener;
+    private final StatsTraceContext statsTraceCtx;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
+      this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
     /**
@@ -262,6 +265,10 @@ public abstract class AbstractServerStream extends AbstractStream2
      */
     private void closeListener(Status newStatus) {
       if (!listenerClosed) {
+        // If status is OK, close() is guaranteed to be called which should decide the final status
+        if (!newStatus.isOk()) {
+          statsTraceCtx.streamClosed(newStatus);
+        }
         listenerClosed = true;
         onStreamDeallocated();
         closeDeframer();

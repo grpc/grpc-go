@@ -130,6 +130,7 @@ public class MessageFramer implements Framer {
   @Override
   public void writePayload(InputStream message) {
     verifyNotClosed();
+    statsTraceCtx.outboundMessage();
     boolean compressed = messageCompression && compressor != Codec.Identity.NONE;
     int written = -1;
     int messageLength = -2;
@@ -157,12 +158,12 @@ public class MessageFramer implements Framer {
       String err = String.format("Message length inaccurate %s != %s", written, messageLength);
       throw Status.INTERNAL.withDescription(err).asRuntimeException();
     }
-    statsTraceCtx.uncompressedBytesSent(written);
+    statsTraceCtx.outboundUncompressedSize(written);
   }
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {
     if (messageLength != -1) {
-      statsTraceCtx.wireBytesSent(messageLength);
+      statsTraceCtx.outboundWireSize(messageLength);
       return writeKnownLengthUncompressed(message, messageLength);
     }
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
@@ -255,7 +256,7 @@ public class MessageFramer implements Framer {
     // Assign the current buffer to the last in the chain so it can be used
     // for future writes or written with end-of-stream=true on close.
     buffer = bufferList.get(bufferList.size() - 1);
-    statsTraceCtx.wireBytesSent(messageLength);
+    statsTraceCtx.outboundWireSize(messageLength);
   }
 
   private static int writeToOutputStream(InputStream message, OutputStream outputStream)

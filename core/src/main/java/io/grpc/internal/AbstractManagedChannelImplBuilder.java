@@ -241,9 +241,21 @@ public abstract class AbstractManagedChannelImplBuilder
    * Override the default stats implementation.
    */
   @VisibleForTesting
-  protected T statsContextFactory(StatsContextFactory statsFactory) {
+  protected final T statsContextFactory(StatsContextFactory statsFactory) {
     this.statsFactory = statsFactory;
     return thisT();
+  }
+
+  /**
+   * Indicates whether this transport will record stats with {@link ClientStreamTracer}.
+   *
+   * <p>By default it returns {@code true}.  If the transport doesn't record stats, it may override
+   * this method to return {@code false} so that the builder won't install the Census interceptor.
+   *
+   * <p>If it returns true when it shouldn't be, Census will receive incomplete stats.
+   */
+  protected boolean recordsStats() {
+    return true;
   }
 
   @VisibleForTesting
@@ -274,6 +286,20 @@ public abstract class AbstractManagedChannelImplBuilder
       // getResource(), then this shouldn't be a problem unless called on the UI thread.
       nameResolverFactory = NameResolverProvider.asFactory();
     }
+
+    List<ClientInterceptor> interceptors = this.interceptors;
+    if (recordsStats()) {
+      StatsContextFactory statsCtxFactory =
+          this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
+      if (statsCtxFactory != null) {
+        interceptors = new ArrayList<ClientInterceptor>(this.interceptors);
+        CensusStreamTracerModule census =
+            new CensusStreamTracerModule(statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+        // First interceptor runs last (see ClientInterceptors.intercept()), so that no
+        // other interceptor can override the tracer factory we set in CallOptions.
+        interceptors.add(0, census.getClientInterceptor());
+      }
+    }
     return new ManagedChannelImpl(
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
@@ -290,10 +316,7 @@ public abstract class AbstractManagedChannelImplBuilder
         GrpcUtil.STOPWATCH_SUPPLIER,
         idleTimeoutMillis,
         userAgent,
-        interceptors,
-        firstNonNull(
-            statsFactory,
-            firstNonNull(Stats.getStatsContextFactory(), NoopStatsContextFactory.INSTANCE)));
+        interceptors);
   }
 
   /**

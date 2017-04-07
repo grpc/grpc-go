@@ -31,10 +31,12 @@
 
 package io.grpc.internal;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.base.Supplier;
+import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ServerStreamTracer;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -51,15 +53,9 @@ public class StatsTraceContextBenchmark {
 
   private final String methodName = MethodDescriptor.generateFullMethodName("service", "method");
 
-  private final Supplier<Stopwatch> stopWatches = new Supplier<Stopwatch>() {
-
-    @Override
-    public Stopwatch get() {
-      return Stopwatch.createUnstarted();
-    }
-  };
-
   private final Metadata emptyMetadata = new Metadata();
+  private final List<ServerStreamTracer.Factory> serverStreamTracerFactories =
+      Collections.<ServerStreamTracer.Factory>emptyList();
 
   /**
    * Javadoc comment.
@@ -68,8 +64,7 @@ public class StatsTraceContextBenchmark {
   @BenchmarkMode(Mode.SampleTime)
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public StatsTraceContext newClientContext() {
-    return StatsTraceContext.newClientContext(
-        methodName, NoopStatsContextFactory.INSTANCE, stopWatches);
+    return StatsTraceContext.newClientContext(CallOptions.DEFAULT, emptyMetadata);
   }
 
   /**
@@ -80,6 +75,6 @@ public class StatsTraceContextBenchmark {
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   public StatsTraceContext newServerContext_empty() {
     return StatsTraceContext.newServerContext(
-        methodName, NoopStatsContextFactory.INSTANCE, emptyMetadata, stopWatches);
+        serverStreamTracerFactories, methodName, emptyMetadata);
   }
 }

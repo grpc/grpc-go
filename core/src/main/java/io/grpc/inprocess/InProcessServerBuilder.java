@@ -32,12 +32,11 @@
 package io.grpc.inprocess;
 
 import com.google.common.base.Preconditions;
-import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.ExperimentalApi;
-import io.grpc.Internal;
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
-import io.grpc.internal.NoopStatsContextFactory;
 import java.io.File;
+import java.util.List;
 
 /**
  * Builder for a server that services in-process requests. Clients identify the in-process server by
@@ -62,29 +61,19 @@ public final class InProcessServerBuilder
 
   private InProcessServerBuilder(String name) {
     this.name = Preconditions.checkNotNull(name, "name");
-    // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
-    // not counted.  Therefore, we disable stats for now.
-    // (https://github.com/grpc/grpc-java/issues/2284)
-    super.statsContextFactory(NoopStatsContextFactory.INSTANCE);
   }
 
   @Override
-  protected InProcessServer buildTransportServer() {
+  protected InProcessServer buildTransportServer(
+      List<ServerStreamTracer.Factory> streamTracerFactories) {
+    // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
+    // not counted.  Therefore, we disable stats for now.
+    // (https://github.com/grpc/grpc-java/issues/2284)
     return new InProcessServer(name);
   }
 
   @Override
   public InProcessServerBuilder useTransportSecurity(File certChain, File privateKey) {
     throw new UnsupportedOperationException("TLS not supported in InProcessServer");
-  }
-
-  @Internal
-  @Override
-  public InProcessServerBuilder statsContextFactory(StatsContextFactory statsFactory) {
-    // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
-    // not counted.  Stats is disabled by using a NOOP stats factory in the constructor, and here
-    // we prevent the user from overriding it.
-    // (https://github.com/grpc/grpc-java/issues/2284)
-    return this;
   }
 }

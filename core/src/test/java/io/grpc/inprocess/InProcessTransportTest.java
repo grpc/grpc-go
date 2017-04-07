@@ -31,9 +31,11 @@
 
 package io.grpc.inprocess;
 
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
+import java.util.List;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -44,13 +46,14 @@ public class InProcessTransportTest extends AbstractTransportTest {
   private static final String authority = "a-testing-authority";
 
   @Override
-  protected InternalServer newServer() {
+  protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
     return new InProcessServer(transportName);
   }
 
   @Override
-  protected InternalServer newServer(InternalServer server) {
-    return newServer();
+  protected InternalServer newServer(
+      InternalServer server, List<ServerStreamTracer.Factory> streamTracerFactories) {
+    return newServer(streamTracerFactories);
   }
 
   @Override
@@ -61,5 +64,12 @@ public class InProcessTransportTest extends AbstractTransportTest {
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
     return new InProcessTransport(transportName, testAuthority(server));
+  }
+
+  @Override
+  protected boolean metricsExpected() {
+    // TODO(zhangkun83): InProcessTransport doesn't record metrics for now
+    // (https://github.com/grpc/grpc-java/issues/2284)
+    return false;
   }
 }

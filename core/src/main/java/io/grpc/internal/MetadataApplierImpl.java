@@ -50,7 +50,6 @@ final class MetadataApplierImpl implements MetadataApplier {
   private final Metadata origHeaders;
   private final CallOptions callOptions;
   private final Context ctx;
-  private final StatsTraceContext statsTraceCtx;
 
   private final Object lock = new Object();
 
@@ -65,14 +64,14 @@ final class MetadataApplierImpl implements MetadataApplier {
   // not null if returnStream() was called before apply()
   DelayedStream delayedStream;
 
-  MetadataApplierImpl(ClientTransport transport, MethodDescriptor<?, ?> method,
-      Metadata origHeaders, CallOptions callOptions, StatsTraceContext statsTraceCtx) {
+  MetadataApplierImpl(
+      ClientTransport transport, MethodDescriptor<?, ?> method, Metadata origHeaders,
+      CallOptions callOptions) {
     this.transport = transport;
     this.method = method;
     this.origHeaders = origHeaders;
     this.callOptions = callOptions;
     this.ctx = Context.current();
-    this.statsTraceCtx = statsTraceCtx;
   }
 
   @Override
@@ -83,7 +82,7 @@ final class MetadataApplierImpl implements MetadataApplier {
     ClientStream realStream;
     Context origCtx = ctx.attach();
     try {
-      realStream = transport.newStream(method, origHeaders, callOptions, statsTraceCtx);
+      realStream = transport.newStream(method, origHeaders, callOptions);
     } finally {
       ctx.detach(origCtx);
     }
