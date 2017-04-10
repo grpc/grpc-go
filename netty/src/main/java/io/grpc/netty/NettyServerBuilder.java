@@ -286,8 +286,9 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
 
   /**
    * Sets a custom max connection age, connection lasting longer than which will be gracefully
-   * terminated. An unreasonably small value might be increased. {@code Long.MAX_VALUE} nano seconds
-   * or an unreasonably large value will disable max connection age.
+   * terminated. An unreasonably small value might be increased.  A random jitter of +/-10% will be
+   * added to it. {@code Long.MAX_VALUE} nano seconds or an unreasonably large value will disable
+   * max connection age.
    *
    * @since 1.3.0
    */
@@ -362,6 +363,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
       negotiator = sslContext != null ? ProtocolNegotiators.serverTls(sslContext) :
               ProtocolNegotiators.serverPlaintext();
     }
+
     return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, streamTracerFactories, maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,

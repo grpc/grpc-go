@@ -32,6 +32,7 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
@@ -143,6 +144,14 @@ class NettyServer implements InternalServer {
     b.childHandler(new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
+
+        long maxConnectionAgeInNanos = NettyServer.this.maxConnectionAgeInNanos;
+        if (maxConnectionAgeInNanos != MAX_CONNECTION_AGE_NANOS_DISABLED) {
+          // apply a random jitter of +/-10% to max connection age
+          maxConnectionAgeInNanos =
+              (long) ((.9D + Math.random() * .2D) * maxConnectionAgeInNanos);
+        }
+
         NettyServerTransport transport =
             new NettyServerTransport(
                 ch, protocolNegotiator, streamTracerFactories, maxStreamsPerConnection,
