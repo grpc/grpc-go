@@ -34,8 +34,8 @@ package io.grpc.netty;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -252,7 +252,7 @@ public final class NettyChannelBuilder
   @Deprecated
   public final NettyChannelBuilder enableKeepAlive(boolean enable) {
     if (enable) {
-      return keepAliveTime(DEFAULT_KEEPALIVE_DELAY_NANOS, TimeUnit.NANOSECONDS);
+      return keepAliveTime(DEFAULT_KEEPALIVE_TIME_NANOS, TimeUnit.NANOSECONDS);
     }
     return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
   }
@@ -263,10 +263,10 @@ public final class NettyChannelBuilder
    * @deprecated Please use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead
    */
   @Deprecated
-  public final NettyChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+  public final NettyChannelBuilder enableKeepAlive(boolean enable, long keepAliveTime,
       TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
     if (enable) {
-      return keepAliveTime(keepAliveDelay, delayUnit)
+      return keepAliveTime(keepAliveTime, delayUnit)
           .keepAliveTimeout(keepAliveTimeout, timeoutUnit);
     }
     return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
@@ -451,7 +451,7 @@ public final class NettyChannelBuilder
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
-    private final long keepAliveDelayNanos;
+    private final long keepAliveTimeNanos;
     private final long keepAliveTimeoutNanos;
     private final boolean keepAliveWithoutCalls;
 
@@ -461,7 +461,7 @@ public final class NettyChannelBuilder
         Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
         NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
         int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
-        long keepAliveDelayNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
+        long keepAliveTimeNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
@@ -481,7 +481,7 @@ public final class NettyChannelBuilder
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
       this.maxHeaderListSize = maxHeaderListSize;
-      this.keepAliveDelayNanos = keepAliveDelayNanos;
+      this.keepAliveTimeNanos = keepAliveTimeNanos;
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
       usingSharedGroup = group == null;
@@ -504,7 +504,7 @@ public final class NettyChannelBuilder
       NettyClientTransport transport = new NettyClientTransport(
           dparams.getTargetServerAddress(), channelType, channelOptions, group,
           dparams.getProtocolNegotiator(), flowControlWindow,
-          maxMessageSize, maxHeaderListSize, keepAliveDelayNanos, keepAliveTimeoutNanos,
+          maxMessageSize, maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos,
           keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent());
       return transport;
     }

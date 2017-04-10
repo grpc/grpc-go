@@ -181,7 +181,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private ScheduledExecutorService scheduler;
   private KeepAliveManager keepAliveManager;
   private boolean enableKeepAlive;
-  private long keepAliveDelayNanos;
+  private long keepAliveTimeNanos;
   private long keepAliveTimeoutNanos;
   private boolean keepAliveWithoutCalls;
   @Nullable
@@ -246,10 +246,10 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   /**
    * Enable keepalive with custom delay and timeout.
    */
-  void enableKeepAlive(boolean enable, long keepAliveDelayNanos,
+  void enableKeepAlive(boolean enable, long keepAliveTimeNanos,
       long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
     enableKeepAlive = enable;
-    this.keepAliveDelayNanos = keepAliveDelayNanos;
+    this.keepAliveTimeNanos = keepAliveTimeNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
     this.keepAliveWithoutCalls = keepAliveWithoutCalls;
   }
@@ -373,7 +373,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     if (enableKeepAlive) {
       scheduler = SharedResourceHolder.get(TIMER_SERVICE);
       keepAliveManager = new KeepAliveManager(
-          new ClientKeepAlivePinger(this), scheduler, keepAliveDelayNanos, keepAliveTimeoutNanos,
+          new ClientKeepAlivePinger(this), scheduler, keepAliveTimeNanos, keepAliveTimeoutNanos,
           keepAliveWithoutCalls);
       keepAliveManager.onTransportStarted();
     }

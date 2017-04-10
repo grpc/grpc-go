@@ -31,8 +31,8 @@
 
 package io.grpc.okhttp;
 
-import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_DELAY_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_KEEPALIVE_TIME_NANOS;
 import static io.grpc.internal.GrpcUtil.KEEPALIVE_TIME_NANOS_DISABLED;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -164,7 +164,7 @@ public class OkHttpChannelBuilder extends
   @Deprecated
   public final OkHttpChannelBuilder enableKeepAlive(boolean enable) {
     if (enable) {
-      return keepAliveTime(DEFAULT_KEEPALIVE_DELAY_NANOS, TimeUnit.NANOSECONDS);
+      return keepAliveTime(DEFAULT_KEEPALIVE_TIME_NANOS, TimeUnit.NANOSECONDS);
     } else {
       return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
     }
@@ -176,10 +176,10 @@ public class OkHttpChannelBuilder extends
    * @deprecated Use {@link #keepAliveTime} and {@link #keepAliveTimeout} instead
    */
   @Deprecated
-  public final OkHttpChannelBuilder enableKeepAlive(boolean enable, long keepAliveDelay,
+  public final OkHttpChannelBuilder enableKeepAlive(boolean enable, long keepAliveTime,
       TimeUnit delayUnit, long keepAliveTimeout, TimeUnit timeoutUnit) {
     if (enable) {
-      return keepAliveTime(keepAliveDelay, delayUnit)
+      return keepAliveTime(keepAliveTime, delayUnit)
           .keepAliveTimeout(keepAliveTimeout, timeoutUnit);
     } else {
       return keepAliveTime(KEEPALIVE_TIME_NANOS_DISABLED, TimeUnit.NANOSECONDS);
@@ -360,7 +360,7 @@ public class OkHttpChannelBuilder extends
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
     private final boolean enableKeepAlive;
-    private final long keepAliveDelayNanos;
+    private final long keepAliveTimeNanos;
     private final long keepAliveTimeoutNanos;
     private final boolean keepAliveWithoutCalls;
     private boolean closed;
@@ -370,14 +370,14 @@ public class OkHttpChannelBuilder extends
         ConnectionSpec connectionSpec,
         int maxMessageSize,
         boolean enableKeepAlive,
-        long keepAliveDelayNanos,
+        long keepAliveTimeNanos,
         long keepAliveTimeoutNanos,
         boolean keepAliveWithoutCalls) {
       this.socketFactory = socketFactory;
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
       this.enableKeepAlive = enableKeepAlive;
-      this.keepAliveDelayNanos = keepAliveDelayNanos;
+      this.keepAliveTimeNanos = keepAliveTimeNanos;
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
 
@@ -412,7 +412,7 @@ public class OkHttpChannelBuilder extends
           proxyAddress, null, null);
       if (enableKeepAlive) {
         transport.enableKeepAlive(
-            true, keepAliveDelayNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
+            true, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
       }
       return transport;
     }

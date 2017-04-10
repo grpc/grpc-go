@@ -84,7 +84,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final int maxMessageSize;
   private final int maxHeaderListSize;
   private KeepAliveManager keepAliveManager;
-  private final long keepAliveDelayNanos;
+  private final long keepAliveTimeNanos;
   private final long keepAliveTimeoutNanos;
   private final boolean keepAliveWithoutCalls;
 
@@ -102,7 +102,7 @@ class NettyClientTransport implements ConnectionClientTransport {
       SocketAddress address, Class<? extends Channel> channelType,
       Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
-      int maxHeaderListSize, long keepAliveDelayNanos, long keepAliveTimeoutNanos,
+      int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
       boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
@@ -112,7 +112,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.flowControlWindow = flowControlWindow;
     this.maxMessageSize = maxMessageSize;
     this.maxHeaderListSize = maxHeaderListSize;
-    this.keepAliveDelayNanos = keepAliveDelayNanos;
+    this.keepAliveTimeNanos = keepAliveTimeNanos;
     this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
     this.keepAliveWithoutCalls = keepAliveWithoutCalls;
     this.authority = new AsciiString(authority);
@@ -177,9 +177,9 @@ class NettyClientTransport implements ConnectionClientTransport {
     lifecycleManager = new ClientTransportLifecycleManager(
         Preconditions.checkNotNull(transportListener, "listener"));
     EventLoop eventLoop = group.next();
-    if (keepAliveDelayNanos != KEEPALIVE_TIME_NANOS_DISABLED) {
+    if (keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(
-          new ClientKeepAlivePinger(this), eventLoop, keepAliveDelayNanos, keepAliveTimeoutNanos,
+          new ClientKeepAlivePinger(this), eventLoop, keepAliveTimeNanos, keepAliveTimeoutNanos,
           keepAliveWithoutCalls);
     }
 
