@@ -266,7 +266,7 @@ public class CensusStreamTracerModuleTest {
     ClientCallTracer callTracer = census.newClientCallTracer(clientCtx, methodName);
     Metadata headers = new Metadata();
     // This propagates clientCtx to headers
-    ClientStreamTracer clientTracer = callTracer.newClientStreamTracer(headers);
+    callTracer.newClientStreamTracer(headers);
 
     ServerStreamTracer serverTracer =
         census.getServerTracerFactory().newServerStreamTracer(methodName, headers);

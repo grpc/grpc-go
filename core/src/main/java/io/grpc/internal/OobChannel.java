@@ -33,8 +33,6 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.base.Supplier;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -73,7 +71,6 @@ final class OobChannel extends ManagedChannel implements WithLogId {
   private final ObjectPool<? extends Executor> executorPool;
   private final Executor executor;
   private final ScheduledExecutorService deadlineCancellationExecutor;
-  private final Supplier<Stopwatch> stopwatchSupplier;
   private final CountDownLatch terminatedLatch = new CountDownLatch(1);
   private volatile boolean shutdown;
 
@@ -89,14 +86,12 @@ final class OobChannel extends ManagedChannel implements WithLogId {
 
   OobChannel(
       String authority, ObjectPool<? extends Executor> executorPool,
-      ScheduledExecutorService deadlineCancellationExecutor, Supplier<Stopwatch> stopwatchSupplier,
-      ChannelExecutor channelExecutor) {
+      ScheduledExecutorService deadlineCancellationExecutor, ChannelExecutor channelExecutor) {
     this.authority = checkNotNull(authority, "authority");
     this.executorPool = checkNotNull(executorPool, "executorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
     this.deadlineCancellationExecutor = checkNotNull(
         deadlineCancellationExecutor, "deadlineCancellationExecutor");
-    this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
     this.delayedTransport = new DelayedClientTransport(executor, channelExecutor);
     this.delayedTransport.start(new ManagedClientTransport.Listener() {
         @Override

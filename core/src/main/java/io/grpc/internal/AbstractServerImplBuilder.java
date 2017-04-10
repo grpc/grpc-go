@@ -187,8 +187,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-        transportFilters,
-        GrpcUtil.STOPWATCH_SUPPLIER);
+        transportFilters);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
       notifyTarget.notifyOnBuild(server);
     }

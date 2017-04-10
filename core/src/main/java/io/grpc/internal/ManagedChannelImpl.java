@@ -659,7 +659,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           "scheduledExecutor is already cleared. Looks like you are calling this method after "
           + "you've already shut down");
       final OobChannel oobChannel = new OobChannel(
-          authority, oobExecutorPool, scheduledExecutorCopy, stopwatchSupplier, channelExecutor);
+          authority, oobExecutorPool, scheduledExecutorCopy, channelExecutor);
       final InternalSubchannel internalSubchannel = new InternalSubchannel(
           addressGroup, authority, userAgent, backoffPolicyProvider, transportFactory,
           scheduledExecutorCopy, stopwatchSupplier, channelExecutor,

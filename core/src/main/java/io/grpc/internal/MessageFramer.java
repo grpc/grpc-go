@@ -178,7 +178,7 @@ public class MessageFramer implements Framer {
     return written;
   }
 
-  private int writeCompressed(InputStream message, int messageLength) throws IOException {
+  private int writeCompressed(InputStream message, int unusedMessageLength) throws IOException {
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
 
     OutputStream compressingStream = compressor.compress(bufferChain);

@@ -43,7 +43,6 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 
 import io.grpc.Codec;
 import io.grpc.StreamTracer;
-import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -77,14 +76,12 @@ public class MessageFramerTest {
   private ArgumentCaptor<Long> uncompressedSizeCaptor;
   private BytesWritableBufferAllocator allocator =
       new BytesWritableBufferAllocator(1000, 1000);
-  private FakeStatsContextFactory statsCtxFactory;
   private StatsTraceContext statsTraceCtx;
 
   /** Set up for test. */
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    statsCtxFactory = new FakeStatsContextFactory();
     // MessageDeframerTest tests with a client-side StatsTraceContext, so here we test with a
     // server-side StatsTraceContext.
     statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});

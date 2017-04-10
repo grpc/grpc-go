@@ -1033,8 +1033,7 @@ public class ServerImplTest {
   private void createServer(List<ServerTransportFilter> filters) {
     assertNull(server);
     server = new ServerImpl(executorPool, timerPool, registry, fallbackRegistry,
-        transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry, filters,
-        GrpcUtil.STOPWATCH_SUPPLIER);
+        transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry, filters);
   }
 
   private void verifyExecutorsAcquired() {

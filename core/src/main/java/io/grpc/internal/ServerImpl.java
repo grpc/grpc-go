@@ -40,8 +40,6 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
-import com.google.common.base.Supplier;
 import io.grpc.Attributes;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -110,7 +108,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
-  private final Supplier<Stopwatch> stopwatchSupplier;
 
   /**
    * Construct a server.
@@ -125,8 +122,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
       InternalServer transportServer, Context rootContext,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
-      List<ServerTransportFilter> transportFilters,
-      Supplier<Stopwatch> stopwatchSupplier) {
+      List<ServerTransportFilter> transportFilters) {
     this.executorPool = Preconditions.checkNotNull(executorPool, "executorPool");
     this.timeoutServicePool = Preconditions.checkNotNull(timeoutServicePool, "timeoutServicePool");
     this.registry = Preconditions.checkNotNull(registry, "registry");
@@ -139,7 +135,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     this.compressorRegistry = compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
         new ArrayList<ServerTransportFilter>(transportFilters));
-    this.stopwatchSupplier = Preconditions.checkNotNull(stopwatchSupplier, "stopwatchSupplier");
   }
 
   /**
@@ -423,7 +418,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
                 context.cancel(null);
                 return;
               }
-              listener = startCall(stream, methodName, method, headers, context, statsTraceCtx);
+              listener = startCall(stream, methodName, method, headers, context);
             } catch (RuntimeException e) {
               stream.close(Status.fromThrowable(e), new Metadata());
               context.cancel(null);
@@ -469,7 +464,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
-        Context.CancellableContext context, StatsTraceContext statsTraceCtx) {
+        Context.CancellableContext context) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor(), headers, context,

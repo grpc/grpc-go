@@ -132,7 +132,7 @@ final class CensusStreamTracerModule {
    * Returns the server tracer factory.
    */
   ServerStreamTracer.Factory getServerTracerFactory() {
-    return new ServerTracerFactory();
+    return serverTracerFactory;
   }
 
   /**
