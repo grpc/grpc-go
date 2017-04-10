@@ -289,8 +289,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
    * significant amount of traffic and CPU usage, so clients and servers should be conservative in
    * what they use and accept.
    *
-   * @see #denyKeepAliveWithoutCalls()
-   * @see #permitKeepAliveWithoutCalls()
+   * @see #permitKeepAliveWithoutCalls(boolean)
    * @since 1.3.0
    */
   public NettyServerBuilder permitKeepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
@@ -300,29 +299,14 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   /**
-   * Allow clients to send keep-alive HTTP/2 PINGs even if there are no outstanding RPCs on the
-   * connection.
+   * Sets whether to allow clients to send keep-alive HTTP/2 PINGs even if there are no outstanding
+   * RPCs on the connection. Defaults to {@code false}.
    *
-   * @see #denyKeepAliveWithoutCalls()
    * @see #permitKeepAliveTime(long, TimeUnit)
    * @since 1.3.0
    */
-  public NettyServerBuilder permitKeepAliveWithoutCalls() {
-    permitKeepAliveWithoutCalls = true;
-    return this;
-  }
-
-  /**
-   * Only allow clients to send keep-alive HTTP/2 PINGs when there are outstanding RPCs on the
-   * connection. This reduces the resources idle connections may consume, reducing the impact of
-   * permitting keep-alive. This is the default.
-   *
-   * @see #permitKeepAliveWithoutCalls()
-   * @see #permitKeepAliveTime(long, TimeUnit)
-   * @since 1.3.0
-   */
-  public NettyServerBuilder denyKeepAliveWithoutCalls() {
-    permitKeepAliveWithoutCalls = false;
+  public NettyServerBuilder permitKeepAliveWithoutCalls(boolean permit) {
+    permitKeepAliveWithoutCalls = permit;
     return this;
   }
 
