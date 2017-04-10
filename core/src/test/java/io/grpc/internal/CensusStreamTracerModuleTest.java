@@ -234,8 +234,6 @@ public class CensusStreamTracerModuleTest {
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
     assertEquals(30 + 100 + 16 + 24,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY));
-    assertEquals(100 + 16 + 24,
-        record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME));
   }
 
   @Test

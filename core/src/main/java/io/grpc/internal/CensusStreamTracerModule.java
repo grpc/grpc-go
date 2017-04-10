@@ -77,7 +77,6 @@ import javax.annotation.Nullable;
  */
 final class CensusStreamTracerModule {
   private static final double NANOS_PER_MILLI = TimeUnit.MILLISECONDS.toNanos(1);
-  private static final long UNSET_CLIENT_PENDING_NANOS = -1;
   private static final ClientTracer BLANK_CLIENT_TRACER = new ClientTracer();
 
   // TODO(zhangkun): point to Census's StatsContext key once they've made it public
@@ -149,26 +148,6 @@ final class CensusStreamTracerModule {
     final AtomicLong outboundUncompressedSize = new AtomicLong();
     final AtomicLong inboundUncompressedSize = new AtomicLong();
 
-    final AtomicLong clientPendingNanos = new AtomicLong(UNSET_CLIENT_PENDING_NANOS);
-    @Nullable
-    private final Stopwatch stopwatch;
-
-    ClientTracer() {
-      this.stopwatch = null;
-    }
-
-    ClientTracer(Stopwatch stopwatch) {
-      this.stopwatch = checkNotNull(stopwatch, "stopwatch");
-    }
-
-    @Override
-    public void headersSent() {
-      if (stopwatch != null && clientPendingNanos.get() == UNSET_CLIENT_PENDING_NANOS) {
-        clientPendingNanos.compareAndSet(
-            UNSET_CLIENT_PENDING_NANOS, stopwatch.elapsed(TimeUnit.NANOSECONDS));
-      }
-    }
-
     @Override
     public void outboundWireSize(long bytes) {
       outboundWireSize.addAndGet(bytes);
@@ -207,7 +186,7 @@ final class CensusStreamTracerModule {
 
     @Override
     public ClientStreamTracer newClientStreamTracer(Metadata headers) {
-      ClientTracer tracer = new ClientTracer(stopwatch);
+      ClientTracer tracer = new ClientTracer();
       // TODO(zhangkun83): Once retry or hedging is implemented, a ClientCall may start more than
       // one streams.  We will need to update this file to support them.
       checkState(streamTracer.compareAndSet(null, tracer),
@@ -246,12 +225,6 @@ final class CensusStreamTracerModule {
               tracer.inboundUncompressedSize.get());
       if (!status.isOk()) {
         builder.put(RpcConstants.RPC_CLIENT_ERROR_COUNT, 1.0);
-      }
-      long localClientPendingNanos = tracer.clientPendingNanos.get();
-      if (localClientPendingNanos != UNSET_CLIENT_PENDING_NANOS) {
-        builder.put(
-            RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME,
-            (roundtripNanos - localClientPendingNanos) / NANOS_PER_MILLI);  // in double
       }
       parentCtx
           .with(
