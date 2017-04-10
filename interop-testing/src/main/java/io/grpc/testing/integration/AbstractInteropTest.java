@@ -253,10 +253,6 @@ public abstract class AbstractInteropTest {
     if (channel != null) {
       channel.shutdown();
     }
-    if (!metricsExpected()) {
-      assertEquals(0, clientStreamTracers.size());
-      assertEquals(0, serverStreamTracers.size());
-    }
   }
 
   protected abstract ManagedChannel createChannel();
