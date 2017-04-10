@@ -39,7 +39,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.instrumentation.stats.RpcConstants;
@@ -54,7 +53,6 @@ import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.MethodDescriptor;
-import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.CensusStreamTracerModule.ClientCallTracer;
@@ -96,10 +94,6 @@ public class CensusStreamTracerModuleTest {
   private ArgumentCaptor<CallOptions> callOptionsCaptor;
   @Captor
   private ArgumentCaptor<ClientCall.Listener<Void>> clientCallListenerCaptor;
-  @Mock
-  private ServerCall.Listener<String> mockServerCallListener;
-  @Mock
-  private ServerCall<String, String> mockServerCall;
 
   @Before
   @SuppressWarnings("unchecked")
@@ -112,9 +106,6 @@ public class CensusStreamTracerModuleTest {
   @After
   public void wrapUp() {
     assertNull(statsCtxFactory.pollRecord());
-    // These mocks are not stubbed, thus shouldn't be called.
-    verifyNoMoreInteractions(mockServerCallListener);
-    verifyNoMoreInteractions(mockServerCall);
   }
 
   @Test
