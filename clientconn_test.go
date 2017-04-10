@@ -41,6 +41,7 @@ import (
 	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 const tlsDir = "testdata/"
@@ -305,4 +306,32 @@ func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
 	}()
 	<-dialDone
 	cancel()
+}
+
+func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	addr := lis.Addr().String()
+	s := NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
+	cc, err := Dial(addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
+		Time:                50 * time.Millisecond,
+		Timeout:             1 * time.Millisecond,
+		PermitWithoutStream: true,
+	}))
+	if err != nil {
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+	time.Sleep(1 * time.Second)
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	v := cc.mkp.Time
+	if v < 100*time.Millisecond {
+		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	}
 }
