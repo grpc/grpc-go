@@ -102,7 +102,7 @@ func (p *proxyServer) run() {
 		p.t.Errorf("failed to read CONNECT req: %v", err)
 		return
 	}
-	if req.Method != http.MethodConnect || req.UserAgent() != "gRPC-go" {
+	if req.Method != http.MethodConnect || req.UserAgent() != grpcUA {
 		resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
 		resp.Write(p.in)
 		p.in.Close()
