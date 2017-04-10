@@ -62,15 +62,19 @@ class NettyServerTransport implements ServerTransport {
   private final int maxHeaderListSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final long maxConnectionAgeInNanos;
+  private final long maxConnectionAgeGraceInNanos;
   private final boolean permitKeepAliveWithoutCalls;
   private final long permitKeepAliveTimeInNanos;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
-  NettyServerTransport(Channel channel, ProtocolNegotiator protocolNegotiator,
+  NettyServerTransport(
+      Channel channel, ProtocolNegotiator protocolNegotiator,
       List<ServerStreamTracer.Factory> streamTracerFactories, int maxStreams,
-      int flowControlWindow, int maxMessageSize, int maxHeaderListSize, long keepAliveTimeInNanos,
-      long keepAliveTimeoutInNanos, boolean permitKeepAliveWithoutCalls,
-      long permitKeepAliveTimeInNanos) {
+      int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+      long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+      long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
+      boolean permitKeepAliveWithoutCalls,long permitKeepAliveTimeInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
     this.protocolNegotiator = Preconditions.checkNotNull(protocolNegotiator, "protocolNegotiator");
     this.streamTracerFactories =
@@ -81,6 +85,8 @@ class NettyServerTransport implements ServerTransport {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.maxConnectionAgeInNanos = maxConnectionAgeInNanos;
+    this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
     this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
   }
@@ -145,8 +151,11 @@ class NettyServerTransport implements ServerTransport {
    * Creates the Netty handler to be used in the channel pipeline.
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
-    return NettyServerHandler.newHandler(transportListener, streamTracerFactories, maxStreams,
-        flowControlWindow, maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos,
-        keepAliveTimeoutInNanos, permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+    return NettyServerHandler.newHandler(
+        transportListener, streamTracerFactories, maxStreams,
+        flowControlWindow, maxHeaderListSize, maxMessageSize,
+        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 }

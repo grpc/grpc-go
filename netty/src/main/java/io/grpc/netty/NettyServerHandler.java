@@ -34,6 +34,7 @@ package io.grpc.netty;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
@@ -50,6 +51,7 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
@@ -87,6 +89,7 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
 import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -106,6 +109,8 @@ class NettyServerHandler extends AbstractNettyHandler {
   private final int maxMessageSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final long maxConnectionAgeInNanos;
+  private final long maxConnectionAgeGraceInNanos;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private final KeepAliveEnforcer keepAliveEnforcer;
   private Attributes attributes;
@@ -114,6 +119,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   private WriteQueue serverWriteQueue;
   private AsciiString lastKnownAuthority;
   private KeepAliveManager keepAliveManager;
+  private ScheduledFuture<?> maxConnectionAgeMonitor;
 
   static NettyServerHandler newHandler(
       ServerTransportListener transportListener,
@@ -124,6 +130,8 @@ class NettyServerHandler extends AbstractNettyHandler {
       int maxMessageSize,
       long keepAliveTimeInNanos,
       long keepAliveTimeoutInNanos,
+      long maxConnectionAgeInNanos,
+      long maxConnectionAgeGraceInNanos,
       boolean permitKeepAliveWithoutCalls,
       long permitKeepAliveTimeInNanos) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
@@ -133,9 +141,12 @@ class NettyServerHandler extends AbstractNettyHandler {
         new DefaultHttp2FrameReader(headersDecoder), frameLogger);
     Http2FrameWriter frameWriter =
         new Http2OutboundFrameLogger(new DefaultHttp2FrameWriter(), frameLogger);
-    return newHandler(frameReader, frameWriter, transportListener, streamTracerFactories,
-        maxStreams, flowControlWindow, maxHeaderListSize, maxMessageSize, keepAliveTimeInNanos,
-        keepAliveTimeoutInNanos, permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+    return newHandler(
+        frameReader, frameWriter, transportListener, streamTracerFactories,
+        maxStreams, flowControlWindow, maxHeaderListSize, maxMessageSize,
+        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @VisibleForTesting
@@ -149,6 +160,8 @@ class NettyServerHandler extends AbstractNettyHandler {
       int maxMessageSize,
       long keepAliveTimeInNanos,
       long keepAliveTimeoutInNanos,
+      long maxConnectionAgeInNanos,
+      long maxConnectionAgeGraceInNanos,
       boolean permitKeepAliveWithoutCalls,
       long permitKeepAliveTimeInNanos) {
     Preconditions.checkArgument(maxStreams > 0, "maxStreams must be positive");
@@ -191,8 +204,11 @@ class NettyServerHandler extends AbstractNettyHandler {
     settings.maxConcurrentStreams(maxStreams);
     settings.maxHeaderListSize(maxHeaderListSize);
 
-    return new NettyServerHandler(transportListener, streamTracerFactories, decoder, encoder,
-        settings, maxMessageSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos, keepAliveEnforcer);
+    return new NettyServerHandler(
+        transportListener, streamTracerFactories, decoder, encoder, settings, maxMessageSize,
+        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        keepAliveEnforcer);
   }
 
   private NettyServerHandler(
@@ -203,12 +219,16 @@ class NettyServerHandler extends AbstractNettyHandler {
       int maxMessageSize,
       long keepAliveTimeInNanos,
       long keepAliveTimeoutInNanos,
+      long maxConnectionAgeInNanos,
+      long maxConnectionAgeGraceInNanos,
       KeepAliveEnforcer keepAliveEnforcer) {
     super(decoder, encoder, settings);
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.maxConnectionAgeInNanos = maxConnectionAgeInNanos;
+    this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.keepAliveEnforcer = checkNotNull(keepAliveEnforcer, "keepAliveEnforcer");
 
     streamKey = encoder.connection().newKey();
@@ -225,8 +245,41 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   @Override
-  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+  public void handlerAdded(final ChannelHandlerContext ctx) throws Exception {
     serverWriteQueue = new WriteQueue(ctx.channel());
+
+    // init max connection age monitor
+    if (maxConnectionAgeInNanos != MAX_CONNECTION_AGE_NANOS_DISABLED) {
+      maxConnectionAgeMonitor = ctx.executor().schedule(
+          new LogExceptionRunnable(new Runnable() {
+            @Override
+            public void run() {
+              // send GO_AWAY
+              ByteBuf debugData = ByteBufUtil.writeAscii(ctx.alloc(), "max_age");
+              goAway(
+                  ctx,
+                  Integer.MAX_VALUE,
+                  Http2Error.NO_ERROR.code(),
+                  debugData,
+                  ctx.newPromise());
+
+              // gracefully shutdown with specified grace time
+              long savedGracefulShutdownTime = gracefulShutdownTimeoutMillis();
+              try {
+                gracefulShutdownTimeoutMillis(
+                    TimeUnit.NANOSECONDS.toMillis(maxConnectionAgeGraceInNanos));
+                close(ctx, ctx.newPromise());
+              } catch (Exception e) {
+                onError(ctx, e);
+              } finally {
+                gracefulShutdownTimeoutMillis(savedGracefulShutdownTime);
+              }
+            }
+          }),
+          maxConnectionAgeInNanos,
+          TimeUnit.NANOSECONDS);
+    }
+
     if (keepAliveTimeInNanos != SERVER_KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(new KeepAlivePinger(ctx), ctx.executor(),
           keepAliveTimeInNanos, keepAliveTimeoutInNanos, true /* keepAliveDuringTransportIdle */);
@@ -360,6 +413,9 @@ class NettyServerHandler extends AbstractNettyHandler {
     try {
       if (keepAliveManager != null) {
         keepAliveManager.onTransportTermination();
+      }
+      if (maxConnectionAgeMonitor != null) {
+        maxConnectionAgeMonitor.cancel(false);
       }
       final Status status =
           Status.UNAVAILABLE.withDescription("connection terminated for unknown reason");

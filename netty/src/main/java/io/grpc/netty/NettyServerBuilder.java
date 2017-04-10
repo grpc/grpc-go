@@ -65,8 +65,12 @@ import javax.net.ssl.SSLException;
 public final class NettyServerBuilder extends AbstractServerImplBuilder<NettyServerBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
+  static final long MAX_CONNECTION_AGE_NANOS_DISABLED = Long.MAX_VALUE;
+  static final long MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE = Long.MAX_VALUE;
+
   private static final long MIN_KEEPALIVE_TIME_NANO = TimeUnit.MILLISECONDS.toNanos(1L);
   private static final long MIN_KEEPALIVE_TIMEOUT_NANO = TimeUnit.MICROSECONDS.toNanos(499L);
+  private static final long MIN_MAX_CONNECTION_AGE_NANO = TimeUnit.SECONDS.toNanos(1L);
   private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
 
   private final SocketAddress address;
@@ -83,6 +87,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
   private long keepAliveTimeInNanos =  DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+  private long maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
+  private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
   private boolean permitKeepAliveWithoutCalls;
   private long permitKeepAliveTimeInNanos = TimeUnit.MINUTES.toNanos(5);
 
@@ -279,6 +285,43 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   /**
+   * Sets a custom max connection age, connection lasting longer than which will be gracefully
+   * terminated. An unreasonably small value might be increased. {@code Long.MAX_VALUE} nano seconds
+   * or an unreasonably large value will disable max connection age.
+   *
+   * @since 1.3.0
+   */
+  public NettyServerBuilder maxConnectionAge(long maxConnectionAge, TimeUnit timeUnit) {
+    checkArgument(maxConnectionAge > 0L, "max connection age must be positive");
+    maxConnectionAgeInNanos = timeUnit.toNanos(maxConnectionAge);
+    if (maxConnectionAgeInNanos >= AS_LARGE_AS_INFINITE) {
+      maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
+    }
+    if (maxConnectionAgeInNanos < MIN_MAX_CONNECTION_AGE_NANO) {
+      maxConnectionAgeInNanos = MIN_MAX_CONNECTION_AGE_NANO;
+    }
+    return this;
+  }
+
+  /**
+   * Sets a custom grace time for the graceful connection termination. Once the max connection age
+   * is reached, RPCs have the grace time to complete. RPCs that do not complete in time will be
+   * cancelled, allowing the connection to terminate. {@code Long.MAX_VALUE} nano seconds or an
+   * unreasonably large value are considered infinite.
+   *
+   * @see #maxConnectionAge(long, TimeUnit)
+   * @since 1.3.0
+   */
+  public NettyServerBuilder maxConnectionAgeGrace(long maxConnectionAgeGrace, TimeUnit timeUnit) {
+    checkArgument(maxConnectionAgeGrace >= 0L, "max connection age grace must be non-negative");
+    maxConnectionAgeGraceInNanos = timeUnit.toNanos(maxConnectionAgeGrace);
+    if (maxConnectionAgeGraceInNanos >= AS_LARGE_AS_INFINITE) {
+      maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
+    }
+    return this;
+  }
+
+  /**
    * Specify the most aggressive keep-alive time clients are permitted to configure. The server will
    * try to detect clients exceeding this rate and when detected will forcefully close the
    * connection. The default is 5 minutes.
@@ -322,6 +365,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, streamTracerFactories, maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 

@@ -61,10 +61,9 @@ public class NettyServerTest {
         1, // ignore
         1, // ignore
         1, // ignore
-        1, // ignore
-        1, // ignore
-        true, // ignore
-        0); // ignore
+        1, 1, // ignore
+        1, 1, // ignore
+        true, 0); // ignore
     ns.start(new ServerListener() {
       @Override
       public ServerTransportListener transportCreated(ServerTransport transport) {
@@ -96,10 +95,9 @@ public class NettyServerTest {
         1, // ignore
         1, // ignore
         1, // ignore
-        1, // ignore
-        1, // ignore
-        true, // ignore
-        0); // ignore
+        1, 1, // ignore
+        1, 1, // ignore
+        true, 0); // ignore
 
     assertThat(ns.getPort()).isEqualTo(-1);
   }

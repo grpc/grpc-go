@@ -33,6 +33,8 @@ package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
@@ -122,6 +124,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private int maxHeaderListSize = Integer.MAX_VALUE;
   private boolean permitKeepAliveWithoutCalls = true;
   private long permitKeepAliveTimeInNanos = 0;
+  private long maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
+  private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -529,6 +533,84 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
   }
 
+  @Test
+  public void noGoAwaySentBeforeMaxConnectionAgeReached() throws Exception {
+    maxConnectionAgeInNanos = TimeUnit.MINUTES.toNanos(30L);
+    setUp();
+
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY not sent yet
+    verifyWrite(never()).writeGoAway(
+        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
+        any(ChannelPromise.class));
+    assertTrue(channel().isOpen());
+  }
+
+  @Test
+  public void maxConnectionAge_goAwaySent() throws Exception {
+    maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    setUp();
+    assertTrue(channel().isOpen());
+
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY sent
+    verifyWrite().writeGoAway(
+        eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
+        any(ChannelPromise.class));
+
+    // channel closed
+    assertTrue(!channel().isOpen());
+  }
+
+  @Test
+  public void maxConnectionAgeGrace_channelStillOpenDuringGracePeriod() throws Exception {
+    maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    maxConnectionAgeGraceInNanos = TimeUnit.MINUTES.toNanos(30L);
+    setUp();
+    createStream();
+
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    verifyWrite().writeGoAway(
+        eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
+        any(ChannelPromise.class));
+
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    // channel not closed yet
+    assertTrue(channel().isOpen());
+  }
+
+  @Test
+  public void maxConnectionAgeGrace_channelClosedAfterGracePeriod() throws Exception {
+    maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    maxConnectionAgeGraceInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    setUp();
+    createStream();
+
+    // runPendingTasks so that GO_AWAY is sent and the forceful shutdown is scheduled
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    verifyWrite().writeGoAway(
+        eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
+        any(ChannelPromise.class));
+    assertTrue(channel().isOpen());
+
+    // need runPendingTasks again so that the forceful shutdown can be executed
+    Thread.sleep(10L);
+    channel().runPendingTasks();
+
+    // channel closed
+    assertTrue(!channel().isOpen());
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
@@ -560,7 +642,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
         Arrays.asList(streamTracerFactory), maxConcurrentStreams, flowControlWindow,
         maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
-        2000L, 100L, permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
+        2000L, 100L, maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @Override
