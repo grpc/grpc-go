@@ -55,6 +55,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
@@ -65,6 +66,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientStreamTracer;
 import io.grpc.CompressorRegistry;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
@@ -147,6 +149,8 @@ public class ManagedChannelImplTest {
   private Helper helper;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
+  @Captor
+  private ArgumentCaptor<CallOptions> callOptionsCaptor;
   @Mock
   private LoadBalancer.Factory mockLoadBalancerFactory;
   @Mock
@@ -1070,6 +1074,74 @@ public class ManagedChannelImplTest {
     assertEquals("testValue", testKey.get(newStreamContexts.poll()));
 
     assertNull(testKey.get());
+  }
+
+  @Test
+  public void pickerReturnsStreamTracer_noDelay() {
+    ClientStream mockStream = mock(ClientStream.class);
+    ClientStreamTracer.Factory factory1 = mock(ClientStreamTracer.Factory.class);
+    ClientStreamTracer.Factory factory2 = mock(ClientStreamTracer.Factory.class);
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    transportInfo.listener.transportReady();
+    ClientTransport mockTransport = transportInfo.transport;
+    when(mockTransport.newStream(
+            any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream);
+
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
+        PickResult.withSubchannel(subchannel, factory2));
+    helper.updatePicker(mockPicker);
+
+    CallOptions callOptions = CallOptions.DEFAULT.withStreamTracerFactory(factory1);
+    ClientCall<String, Integer> call = channel.newCall(method, callOptions);
+    call.start(mockCallListener, new Metadata());
+
+    verify(mockPicker).pickSubchannel(any(PickSubchannelArgs.class));
+    verify(mockTransport).newStream(same(method), any(Metadata.class), callOptionsCaptor.capture());
+    assertEquals(
+        Arrays.asList(factory1, factory2),
+        callOptionsCaptor.getValue().getStreamTracerFactories());
+    // The factories are safely not stubbed because we do not expect any usage of them.
+    verifyZeroInteractions(factory1);
+    verifyZeroInteractions(factory2);
+  }
+
+  @Test
+  public void pickerReturnsStreamTracer_delayed() {
+    ClientStream mockStream = mock(ClientStream.class);
+    ClientStreamTracer.Factory factory1 = mock(ClientStreamTracer.Factory.class);
+    ClientStreamTracer.Factory factory2 = mock(ClientStreamTracer.Factory.class);
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    CallOptions callOptions = CallOptions.DEFAULT.withStreamTracerFactory(factory1);
+    ClientCall<String, Integer> call = channel.newCall(method, callOptions);
+    call.start(mockCallListener, new Metadata());
+
+    Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel.requestConnection();
+    MockClientTransportInfo transportInfo = transports.poll();
+    transportInfo.listener.transportReady();
+    ClientTransport mockTransport = transportInfo.transport;
+    when(mockTransport.newStream(
+            any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class)))
+        .thenReturn(mockStream);
+    when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
+        PickResult.withSubchannel(subchannel, factory2));
+
+    helper.updatePicker(mockPicker);
+    assertEquals(1, executor.runDueTasks());
+
+    verify(mockPicker).pickSubchannel(any(PickSubchannelArgs.class));
+    verify(mockTransport).newStream(same(method), any(Metadata.class), callOptionsCaptor.capture());
+    assertEquals(
+        Arrays.asList(factory1, factory2),
+        callOptionsCaptor.getValue().getStreamTracerFactories());
+    // The factories are safely not stubbed because we do not expect any usage of them.
+    verifyZeroInteractions(factory1);
+    verifyZeroInteractions(factory2);
   }
 
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {

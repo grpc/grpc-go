@@ -251,16 +251,20 @@ public abstract class LoadBalancer {
    */
   @Immutable
   public static final class PickResult {
-    private static final PickResult NO_RESULT = new PickResult(null, Status.OK);
+    private static final PickResult NO_RESULT = new PickResult(null, null, Status.OK);
 
     @Nullable private final Subchannel subchannel;
+    @Nullable private final ClientStreamTracer.Factory streamTracerFactory;
     // An error to be propagated to the application if subchannel == null
     // Or OK if there is no error.
     // subchannel being null and error being OK means RPC needs to wait
     private final Status status;
 
-    private PickResult(@Nullable Subchannel subchannel, Status status) {
+    private PickResult(
+        @Nullable Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory,
+        Status status) {
       this.subchannel = subchannel;
+      this.streamTracerFactory = streamTracerFactory;
       this.status = Preconditions.checkNotNull(status, "status");
     }
 
@@ -323,9 +327,23 @@ public abstract class LoadBalancer {
      *       new state is SHUTDOWN. See {@code handleSubchannelState}'s javadoc for more
      *       details.</li>
      * </ol>
+     *
+     * @param subchannel the picked Subchannel
+     * @param streamTracerFactory if not null, will be used to trace the activities of the stream
+     *                            created as a result of this pick. Note it's possible that no
+     *                            stream is created at all in some cases.
+     */
+    public static PickResult withSubchannel(
+        Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory) {
+      return new PickResult(
+          Preconditions.checkNotNull(subchannel, "subchannel"), streamTracerFactory, Status.OK);
+    }
+
+    /**
+     * Equivalent to {@code withSubchannel(subchannel, null)}.
      */
     public static PickResult withSubchannel(Subchannel subchannel) {
-      return new PickResult(Preconditions.checkNotNull(subchannel, "subchannel"), Status.OK);
+      return withSubchannel(subchannel, null);
     }
 
     /**
@@ -337,7 +355,7 @@ public abstract class LoadBalancer {
      */
     public static PickResult withError(Status error) {
       Preconditions.checkArgument(!error.isOk(), "error status shouldn't be OK");
-      return new PickResult(null, error);
+      return new PickResult(null, null, error);
     }
 
     /**
@@ -357,6 +375,14 @@ public abstract class LoadBalancer {
     }
 
     /**
+     * The stream tracer factory this result was created with.
+     */
+    @Nullable
+    public ClientStreamTracer.Factory getStreamTracerFactory() {
+      return streamTracerFactory;
+    }
+
+    /**
      * The status associated with this result.  Non-{@code OK} if created with {@link #withError
      * withError}, or {@code OK} otherwise.
      */
@@ -368,6 +394,7 @@ public abstract class LoadBalancer {
     public String toString() {
       return MoreObjects.toStringHelper(this)
           .add("subchannel", subchannel)
+          .add("streamTracerFactory", streamTracerFactory)
           .add("status", status)
           .toString();
     }
