@@ -381,7 +381,6 @@ public final class MethodDescriptor<ReqT, RespT> {
    * @since 1.1.0
    */
   @CheckReturnValue
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
   public static <ReqT, RespT> Builder<ReqT, RespT> newBuilder() {
     return newBuilder(null, null);
   }
@@ -392,7 +391,6 @@ public final class MethodDescriptor<ReqT, RespT> {
    * @since 1.1.0
    */
   @CheckReturnValue
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
   public static <ReqT, RespT> Builder<ReqT, RespT> newBuilder(
       Marshaller<ReqT> requestMarshaller, Marshaller<RespT> responseMarshaller) {
     return new Builder<ReqT, RespT>()
@@ -406,7 +404,6 @@ public final class MethodDescriptor<ReqT, RespT> {
    * @since 1.1.0
    */
   @CheckReturnValue
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
   public Builder<ReqT, RespT> toBuilder() {
     return toBuilder(requestMarshaller, responseMarshaller);
   }
@@ -417,7 +414,6 @@ public final class MethodDescriptor<ReqT, RespT> {
    * @since 1.1.0
    */
   @CheckReturnValue
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
   public <NewReqT, NewRespT> Builder<NewReqT, NewRespT> toBuilder(
       Marshaller<NewReqT> requestMarshaller, Marshaller<NewRespT> responseMarshaller) {
     return MethodDescriptor.<NewReqT, NewRespT>newBuilder()
@@ -434,7 +430,6 @@ public final class MethodDescriptor<ReqT, RespT> {
    *
    * @since 1.1.0
    */
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2641")
   public static final class Builder<ReqT, RespT> {
 
     private Marshaller<ReqT> requestMarshaller;
@@ -497,6 +492,7 @@ public final class MethodDescriptor<ReqT, RespT> {
      *
      * @since 1.1.0
      */
+    @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1775")
     public Builder<ReqT, RespT> setIdempotent(boolean idempotent) {
       this.idempotent = idempotent;
       return this;
@@ -508,6 +504,7 @@ public final class MethodDescriptor<ReqT, RespT> {
      *
      * @since 1.1.0
      */
+    @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1775")
     public Builder<ReqT, RespT> setSafe(boolean safe) {
       this.safe = safe;
       return this;
