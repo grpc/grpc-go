@@ -169,6 +169,12 @@ public class OptionalMethod<T> {
   private static Method getPublicMethod(Class<?> clazz, String methodName, Class[] parameterTypes) {
     Method method = null;
     try {
+      if (clazz == null) {
+        return null;
+      }
+      if ((clazz.getModifiers() & Modifier.PUBLIC) == 0) {
+        return getPublicMethod(clazz.getSuperclass(), methodName, parameterTypes);
+      }
       method = clazz.getMethod(methodName, parameterTypes);
       if ((method.getModifiers() & Modifier.PUBLIC) == 0) {
         method = null;
