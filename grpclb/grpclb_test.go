@@ -227,7 +227,7 @@ func (s *helloServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwp
 	}, nil
 }
 
-func startBackends(t *testing.T, sn string, lis ...net.Listener) (servers []*grpc.Server) {
+func startBackends(sn string, lis ...net.Listener) (servers []*grpc.Server) {
 	for _, l := range lis {
 		creds := &serverNameCheckCreds{
 			sn: sn,
@@ -248,32 +248,66 @@ func stopBackends(servers []*grpc.Server) {
 	}
 }
 
-func TestGRPCLB(t *testing.T) {
-	// Start a backend.
-	beLis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen %v", err)
+func newLoadBalancer(numberOfBackends int) (lbAddr string, ls *remoteBalancer, beIPs []net.IP, bePorts []int, cleanup func(), err error) {
+	var beListeners []net.Listener
+	for i := 0; i < numberOfBackends; i++ {
+		// Start a backend.
+		beLis, e := net.Listen("tcp", "localhost:0")
+		if e != nil {
+			err = fmt.Errorf("Failed to listen %v", err)
+			return
+		}
+		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
+
+		beAddr := strings.Split(beLis.Addr().String(), ":")
+		bePort, _ := strconv.Atoi(beAddr[1])
+		bePorts = append(bePorts, bePort)
+
+		beListeners = append(beListeners, beLis)
 	}
-	beAddr := strings.Split(beLis.Addr().String(), ":")
-	bePort, err := strconv.Atoi(beAddr[1])
-	backends := startBackends(t, besn, beLis)
-	defer stopBackends(backends)
+	backends := startBackends(besn, beListeners...)
 
 	// Start a load balancer.
 	lbLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to create the listener for the load balancer %v", err)
+		err = fmt.Errorf("Failed to create the listener for the load balancer %v", err)
+		return
 	}
 	lbCreds := &serverNameCheckCreds{
 		sn: lbsn,
 	}
 	lb := grpc.NewServer(grpc.Creds(lbCreds))
 	if err != nil {
-		t.Fatalf("Failed to generate the port number %v", err)
+		err = fmt.Errorf("Failed to generate the port number %v", err)
+		return
 	}
+	ls = newRemoteBalancer(nil, nil)
+	lbpb.RegisterLoadBalancerServer(lb, ls)
+	go func() {
+		lb.Serve(lbLis)
+	}()
+
+	lbAddr = lbLis.Addr().String()
+	cleanup = func() {
+		defer stopBackends(backends)
+		defer func() {
+			ls.stop()
+			lb.Stop()
+		}()
+	}
+	return
+}
+
+func TestGRPCLB(t *testing.T) {
+	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
 	be := &lbpb.Server{
-		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
-		Port:             int32(bePort),
+		IpAddress:        beIPs[0],
+		Port:             int32(bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}
 	var bes []*lbpb.Server
@@ -281,23 +315,14 @@ func TestGRPCLB(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: bes,
 	}
-	sls := []*lbpb.ServerList{sl}
-	intervals := []time.Duration{0}
-	ls := newRemoteBalancer(sls, intervals)
-	lbpb.RegisterLoadBalancerServer(lb, ls)
-	go func() {
-		lb.Serve(lbLis)
-	}()
-	defer func() {
-		ls.stop()
-		lb.Stop()
-	}()
+	ls.sls = []*lbpb.ServerList{sl}
+	ls.intervals = []time.Duration{0}
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbLis.Addr().String(),
+		addr: lbAddr,
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -310,65 +335,31 @@ func TestGRPCLB(t *testing.T) {
 }
 
 func TestDropRequest(t *testing.T) {
-	// Start 2 backends.
-	beLis1, err := net.Listen("tcp", "localhost:0")
+	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(2)
 	if err != nil {
-		t.Fatalf("Failed to listen %v", err)
+		t.Fatalf("failed to create new load balancer: %v", err)
 	}
-	beAddr1 := strings.Split(beLis1.Addr().String(), ":")
-	bePort1, err := strconv.Atoi(beAddr1[1])
-
-	beLis2, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen %v", err)
-	}
-	beAddr2 := strings.Split(beLis2.Addr().String(), ":")
-	bePort2, err := strconv.Atoi(beAddr2[1])
-
-	backends := startBackends(t, besn, beLis1, beLis2)
-	defer stopBackends(backends)
-
-	// Start a load balancer.
-	lbLis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to create the listener for the load balancer %v", err)
-	}
-	lbCreds := &serverNameCheckCreds{
-		sn: lbsn,
-	}
-	lb := grpc.NewServer(grpc.Creds(lbCreds))
-	if err != nil {
-		t.Fatalf("Failed to generate the port number %v", err)
-	}
-	sls := []*lbpb.ServerList{{
+	defer cleanup()
+	ls.sls = []*lbpb.ServerList{{
 		Servers: []*lbpb.Server{{
-			IpAddress:        beLis1.Addr().(*net.TCPAddr).IP,
-			Port:             int32(bePort1),
+			IpAddress:        beIPs[0],
+			Port:             int32(bePorts[0]),
 			LoadBalanceToken: lbToken,
 			DropRequest:      true,
 		}, {
-			IpAddress:        beLis2.Addr().(*net.TCPAddr).IP,
-			Port:             int32(bePort2),
+			IpAddress:        beIPs[1],
+			Port:             int32(bePorts[1]),
 			LoadBalanceToken: lbToken,
 			DropRequest:      false,
 		}},
 	}}
-	intervals := []time.Duration{0}
-	ls := newRemoteBalancer(sls, intervals)
-	lbpb.RegisterLoadBalancerServer(lb, ls)
-	go func() {
-		lb.Serve(lbLis)
-	}()
-	defer func() {
-		ls.stop()
-		lb.Stop()
-	}()
+	ls.intervals = []time.Duration{0}
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbLis.Addr().String(),
+		addr: lbAddr,
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -395,31 +386,14 @@ func TestDropRequest(t *testing.T) {
 }
 
 func TestDropRequestFailedNonFailFast(t *testing.T) {
-	// Start a backend.
-	beLis, err := net.Listen("tcp", "localhost:0")
+	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
 	if err != nil {
-		t.Fatalf("Failed to listen %v", err)
+		t.Fatalf("failed to create new load balancer: %v", err)
 	}
-	beAddr := strings.Split(beLis.Addr().String(), ":")
-	bePort, err := strconv.Atoi(beAddr[1])
-	backends := startBackends(t, besn, beLis)
-	defer stopBackends(backends)
-
-	// Start a load balancer.
-	lbLis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to create the listener for the load balancer %v", err)
-	}
-	lbCreds := &serverNameCheckCreds{
-		sn: lbsn,
-	}
-	lb := grpc.NewServer(grpc.Creds(lbCreds))
-	if err != nil {
-		t.Fatalf("Failed to generate the port number %v", err)
-	}
+	defer cleanup()
 	be := &lbpb.Server{
-		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
-		Port:             int32(bePort),
+		IpAddress:        beIPs[0],
+		Port:             int32(bePorts[0]),
 		LoadBalanceToken: lbToken,
 		DropRequest:      true,
 	}
@@ -428,23 +402,14 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	sl := &lbpb.ServerList{
 		Servers: bes,
 	}
-	sls := []*lbpb.ServerList{sl}
-	intervals := []time.Duration{0}
-	ls := newRemoteBalancer(sls, intervals)
-	lbpb.RegisterLoadBalancerServer(lb, ls)
-	go func() {
-		lb.Serve(lbLis)
-	}()
-	defer func() {
-		ls.stop()
-		lb.Stop()
-	}()
+	ls.sls = []*lbpb.ServerList{sl}
+	ls.intervals = []time.Duration{0}
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbLis.Addr().String(),
+		addr: lbAddr,
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -458,31 +423,14 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 }
 
 func TestServerExpiration(t *testing.T) {
-	// Start a backend.
-	beLis, err := net.Listen("tcp", "localhost:0")
+	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
 	if err != nil {
-		t.Fatalf("Failed to listen %v", err)
+		t.Fatalf("failed to create new load balancer: %v", err)
 	}
-	beAddr := strings.Split(beLis.Addr().String(), ":")
-	bePort, err := strconv.Atoi(beAddr[1])
-	backends := startBackends(t, besn, beLis)
-	defer stopBackends(backends)
-
-	// Start a load balancer.
-	lbLis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to create the listener for the load balancer %v", err)
-	}
-	lbCreds := &serverNameCheckCreds{
-		sn: lbsn,
-	}
-	lb := grpc.NewServer(grpc.Creds(lbCreds))
-	if err != nil {
-		t.Fatalf("Failed to generate the port number %v", err)
-	}
+	defer cleanup()
 	be := &lbpb.Server{
-		IpAddress:        beLis.Addr().(*net.TCPAddr).IP,
-		Port:             int32(bePort),
+		IpAddress:        beIPs[0],
+		Port:             int32(bePorts[0]),
 		LoadBalanceToken: lbToken,
 	}
 	var bes []*lbpb.Server
@@ -504,21 +452,14 @@ func TestServerExpiration(t *testing.T) {
 	var intervals []time.Duration
 	intervals = append(intervals, 0)
 	intervals = append(intervals, 500*time.Millisecond)
-	ls := newRemoteBalancer(sls, intervals)
-	lbpb.RegisterLoadBalancerServer(lb, ls)
-	go func() {
-		lb.Serve(lbLis)
-	}()
-	defer func() {
-		ls.stop()
-		lb.Stop()
-	}()
+	ls.sls = sls
+	ls.intervals = intervals
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbLis.Addr().String(),
+		addr: lbAddr,
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
