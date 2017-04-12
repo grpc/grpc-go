@@ -30,12 +30,15 @@ public final class LoadBalancerGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.grpclb.LoadBalanceRequest,
       io.grpc.grpclb.LoadBalanceResponse> METHOD_BALANCE_LOAD =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          generateFullMethodName(
-              "grpc.lb.v1.LoadBalancer", "BalanceLoad"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.grpclb.LoadBalanceRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.grpclb.LoadBalanceResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.grpclb.LoadBalanceRequest, io.grpc.grpclb.LoadBalanceResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.lb.v1.LoadBalancer", "BalanceLoad"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.grpclb.LoadBalanceRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.grpclb.LoadBalanceResponse.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

@@ -30,12 +30,15 @@ public final class ServerReflectionGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.reflection.v1alpha.ServerReflectionRequest,
       io.grpc.reflection.v1alpha.ServerReflectionResponse> METHOD_SERVER_REFLECTION_INFO =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          generateFullMethodName(
-              "grpc.reflection.v1alpha.ServerReflection", "ServerReflectionInfo"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.v1alpha.ServerReflectionRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.v1alpha.ServerReflectionResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.reflection.v1alpha.ServerReflectionRequest, io.grpc.reflection.v1alpha.ServerReflectionResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.reflection.v1alpha.ServerReflection", "ServerReflectionInfo"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.v1alpha.ServerReflectionRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.v1alpha.ServerReflectionResponse.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

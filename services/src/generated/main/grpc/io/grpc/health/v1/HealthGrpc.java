@@ -30,12 +30,15 @@ public final class HealthGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
       io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.health.v1.Health", "Check"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.health.v1.HealthCheckRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.health.v1.HealthCheckResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.health.v1.HealthCheckRequest, io.grpc.health.v1.HealthCheckResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.health.v1.Health", "Check"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.health.v1.HealthCheckRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.health.v1.HealthCheckResponse.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

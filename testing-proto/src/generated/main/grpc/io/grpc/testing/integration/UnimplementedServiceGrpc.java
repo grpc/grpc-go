@@ -34,12 +34,15 @@ public final class UnimplementedServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_UNIMPLEMENTED_CALL =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.testing.UnimplementedService", "UnimplementedCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.UnimplementedService", "UnimplementedCall"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

@@ -30,12 +30,15 @@ public final class ReflectableServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.reflection.testing.Request,
       io.grpc.reflection.testing.Reply> METHOD_METHOD =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.reflection.testing.ReflectableService", "Method"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.testing.Request.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.testing.Reply.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.reflection.testing.Request, io.grpc.reflection.testing.Reply>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.reflection.testing.ReflectableService", "Method"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.testing.Request.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.testing.Reply.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

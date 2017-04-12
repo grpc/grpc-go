@@ -33,21 +33,27 @@ public final class ReconnectServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       com.google.protobuf.EmptyProtos.Empty> METHOD_START =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.testing.ReconnectService", "Start"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<com.google.protobuf.EmptyProtos.Empty, com.google.protobuf.EmptyProtos.Empty>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.ReconnectService", "Start"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
       io.grpc.testing.integration.Messages.ReconnectInfo> METHOD_STOP =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.testing.ReconnectService", "Stop"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<com.google.protobuf.EmptyProtos.Empty, io.grpc.testing.integration.Messages.ReconnectInfo>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.ReconnectService", "Stop"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

@@ -30,21 +30,27 @@ public final class BenchmarkServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_UNARY_CALL =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.testing.BenchmarkService", "UnaryCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.BenchmarkService", "UnaryCall"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Messages.SimpleRequest,
       io.grpc.benchmarks.proto.Messages.SimpleResponse> METHOD_STREAMING_CALL =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING,
-          generateFullMethodName(
-              "grpc.testing.BenchmarkService", "StreamingCall"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.benchmarks.proto.Messages.SimpleRequest, io.grpc.benchmarks.proto.Messages.SimpleResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.BenchmarkService", "StreamingCall"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.benchmarks.proto.Messages.SimpleResponse.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

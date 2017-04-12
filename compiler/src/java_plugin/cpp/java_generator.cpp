@@ -339,15 +339,15 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
-          "    $MethodDescriptor$.create(\n"
-          "        $MethodType$.$method_type$,\n"
-          "        generateFullMethodName(\n"
-          "            \"$Package$$service_name$\", \"$method_name$\"),\n"
-          "        $NanoUtils$.<$input_type$>marshaller(\n"
-          "            new NanoFactory<$input_type$>(ARG_IN_$method_field_name$)),\n"
-          "        $NanoUtils$.<$output_type$>marshaller(\n"
-          "            new NanoFactory<$output_type$>(ARG_OUT_$method_field_name$))\n"
-          "        );\n");
+          "    $MethodDescriptor$.<$input_type$, $output_type$>newBuilder()\n"
+          "        .setType($MethodType$.$method_type$)\n"
+          "        .setFullMethodName(generateFullMethodName(\n"
+          "            \"$Package$$service_name$\", \"$method_name$\"))\n"
+          "        .setRequestMarshaller($NanoUtils$.<$input_type$>marshaller(\n"
+          "            new NanoFactory<$input_type$>(ARG_IN_$method_field_name$)))\n"
+          "        .setResponseMarshaller($NanoUtils$.<$output_type$>marshaller(\n"
+          "            new NanoFactory<$output_type$>(ARG_OUT_$method_field_name$)))\n"
+          "        .build();\n");
     } else {
       if (flavor == ProtoFlavor::LITE) {
         (*vars)["ProtoUtils"] = "io.grpc.protobuf.lite.ProtoLiteUtils";
@@ -359,12 +359,15 @@ static void PrintMethodFields(
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ =\n"
-          "    $MethodDescriptor$.create(\n"
-          "        $MethodType$.$method_type$,\n"
-          "        generateFullMethodName(\n"
-          "            \"$Package$$service_name$\", \"$method_name$\"),\n"
-          "        $ProtoUtils$.marshaller($input_type$.getDefaultInstance()),\n"
-          "        $ProtoUtils$.marshaller($output_type$.getDefaultInstance()));\n");
+          "    $MethodDescriptor$.<$input_type$, $output_type$>newBuilder()\n"
+          "        .setType($MethodType$.$method_type$)\n"
+          "        .setFullMethodName(generateFullMethodName(\n"
+          "            \"$Package$$service_name$\", \"$method_name$\"))\n"
+          "        .setRequestMarshaller($ProtoUtils$.marshaller(\n"
+          "            $input_type$.getDefaultInstance()))\n"
+          "        .setResponseMarshaller($ProtoUtils$.marshaller(\n"
+          "            $output_type$.getDefaultInstance()))\n"
+          "        .build();\n");
     }
   }
   p->Print("\n");

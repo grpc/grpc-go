@@ -33,12 +33,15 @@ public final class AnotherDynamicServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.reflection.testing.DynamicRequest,
       io.grpc.reflection.testing.DynamicReply> METHOD_METHOD =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.reflection.testing.AnotherDynamicService", "Method"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.testing.DynamicRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.reflection.testing.DynamicReply.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.reflection.testing.DynamicRequest, io.grpc.reflection.testing.DynamicReply>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.reflection.testing.AnotherDynamicService", "Method"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.testing.DynamicRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.reflection.testing.DynamicReply.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

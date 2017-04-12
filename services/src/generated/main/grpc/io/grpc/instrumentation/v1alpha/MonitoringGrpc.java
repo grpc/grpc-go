@@ -30,48 +30,63 @@ public final class MonitoringGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.Empty,
       io.grpc.instrumentation.v1alpha.CanonicalRpcStats> METHOD_GET_CANONICAL_RPC_STATS =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.instrumentation.v1alpha.Monitoring", "GetCanonicalRpcStats"),
-          io.grpc.protobuf.ProtoUtils.marshaller(com.google.protobuf.Empty.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.CanonicalRpcStats.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<com.google.protobuf.Empty, io.grpc.instrumentation.v1alpha.CanonicalRpcStats>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.instrumentation.v1alpha.Monitoring", "GetCanonicalRpcStats"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              com.google.protobuf.Empty.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.CanonicalRpcStats.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.instrumentation.v1alpha.StatsRequest,
       io.grpc.instrumentation.v1alpha.StatsResponse> METHOD_GET_STATS =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.instrumentation.v1alpha.Monitoring", "GetStats"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.instrumentation.v1alpha.StatsRequest, io.grpc.instrumentation.v1alpha.StatsResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.instrumentation.v1alpha.Monitoring", "GetStats"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.instrumentation.v1alpha.StatsRequest,
       io.grpc.instrumentation.v1alpha.StatsResponse> METHOD_WATCH_STATS =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
-          generateFullMethodName(
-              "grpc.instrumentation.v1alpha.Monitoring", "WatchStats"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.instrumentation.v1alpha.StatsRequest, io.grpc.instrumentation.v1alpha.StatsResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.instrumentation.v1alpha.Monitoring", "WatchStats"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.StatsResponse.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.instrumentation.v1alpha.TraceRequest,
       io.grpc.instrumentation.v1alpha.TraceResponse> METHOD_GET_REQUEST_TRACES =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.instrumentation.v1alpha.Monitoring", "GetRequestTraces"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.TraceRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.TraceResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.instrumentation.v1alpha.TraceRequest, io.grpc.instrumentation.v1alpha.TraceResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.instrumentation.v1alpha.Monitoring", "GetRequestTraces"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.TraceRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.TraceResponse.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.instrumentation.v1alpha.MonitoringDataGroup,
       io.grpc.instrumentation.v1alpha.CustomMonitoringData> METHOD_GET_CUSTOM_MONITORING_DATA =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.instrumentation.v1alpha.Monitoring", "GetCustomMonitoringData"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.MonitoringDataGroup.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.instrumentation.v1alpha.CustomMonitoringData.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.instrumentation.v1alpha.MonitoringDataGroup, io.grpc.instrumentation.v1alpha.CustomMonitoringData>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.instrumentation.v1alpha.Monitoring", "GetCustomMonitoringData"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.MonitoringDataGroup.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.instrumentation.v1alpha.CustomMonitoringData.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service

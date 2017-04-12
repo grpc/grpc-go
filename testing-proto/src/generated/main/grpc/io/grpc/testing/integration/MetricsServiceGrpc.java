@@ -30,21 +30,27 @@ public final class MetricsServiceGrpc {
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_ALL_GAUGES =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING,
-          generateFullMethodName(
-              "grpc.testing.MetricsService", "GetAllGauges"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.EmptyMessage.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.testing.integration.Metrics.EmptyMessage, io.grpc.testing.integration.Metrics.GaugeResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.MetricsService", "GetAllGauges"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Metrics.EmptyMessage.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()))
+          .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_GAUGE =
-      io.grpc.MethodDescriptor.create(
-          io.grpc.MethodDescriptor.MethodType.UNARY,
-          generateFullMethodName(
-              "grpc.testing.MetricsService", "GetGauge"),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeRequest.getDefaultInstance()),
-          io.grpc.protobuf.ProtoUtils.marshaller(io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()));
+      io.grpc.MethodDescriptor.<io.grpc.testing.integration.Metrics.GaugeRequest, io.grpc.testing.integration.Metrics.GaugeResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.MetricsService", "GetGauge"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Metrics.GaugeRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Metrics.GaugeResponse.getDefaultInstance()))
+          .build();
 
   /**
    * Creates a new async stub that supports all call types for the service
