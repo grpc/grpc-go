@@ -247,7 +247,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stream, err := lbc.BalanceLoad(ctx, grpc.FailFast(false))
+	stream, err := lbc.BalanceLoad(ctx)
 	if err != nil {
 		grpclog.Printf("Failed to perform RPC to the remote balancer %v", err)
 		return
@@ -370,29 +370,31 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 					return
 				}
 				foundIdx := -1
-				for i, trb := range rbs {
-					if rb != nil && trb == *rb {
-						foundIdx = i
-						break
+				if rb != nil {
+					for i, trb := range rbs {
+						if trb == *rb {
+							foundIdx = i
+							break
+						}
 					}
 				}
 				if foundIdx >= 0 {
-					if foundIdx > 0 {
+					if foundIdx >= 1 {
 						// Move the address in use to the beginning of the list.
 						b.rbs[0], b.rbs[foundIdx] = b.rbs[foundIdx], b.rbs[0]
 						rbIdx = 0
 					}
-					continue
-				}
-				if len(rbs) > 0 {
+					continue // If found, don't dial new cc.
+				} else if len(rbs) > 0 {
 					// Pick a random one from the list, instead of always using the first one.
-					if l := len(rbs); l > 1 {
+					if l := len(rbs); l > 1 && rb != nil {
 						tmpIdx := b.rand.Intn(l - 1)
 						b.rbs[0], b.rbs[tmpIdx] = b.rbs[tmpIdx], b.rbs[0]
 					}
 					rbIdx = 0
 					rb = &rbs[0]
 				} else {
+					// foundIdx < 0 && len(rbs) <= 0.
 					rb = nil
 				}
 			case <-ccError:
@@ -429,7 +431,8 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			}
 			if err != nil {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)
-				return
+				close(ccError)
+				continue
 			}
 			b.mu.Lock()
 			b.seq++ // tick when getting a new balancer address

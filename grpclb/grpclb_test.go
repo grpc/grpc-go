@@ -126,6 +126,12 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 	return r.w, nil
 }
 
+func (r *testNameResolver) inject(updates []*naming.Update) {
+	if r.w != nil {
+		r.w.inject(updates)
+	}
+}
+
 type serverNameCheckCreds struct {
 	expected string
 	sn       string
@@ -510,7 +516,7 @@ func TestBalancerDisconnects(t *testing.T) {
 		lbAddrs []string
 		lbs     []*grpc.Server
 	)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		tss, cleanup, err := newLoadBalancer(1)
 		if err != nil {
 			t.Fatalf("failed to create new load balancer: %v", err)
@@ -538,9 +544,10 @@ func TestBalancerDisconnects(t *testing.T) {
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addrs: lbAddrs,
-	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
+	resolver := &testNameResolver{
+		addrs: lbAddrs[:2],
+	}
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(resolver)), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -551,14 +558,41 @@ func TestBalancerDisconnects(t *testing.T) {
 	} else {
 		message = resp.Message
 	}
+	// The initial resolver update contains lbs[0] and lbs[1].
+	// When lbs[0] is stopped, lbs[1] should be used.
 	lbs[0].Stop()
-	time.Sleep(time.Second)
-	if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
-	} else if resp.Message == message {
-		// A new backend server should receive the request.
-		// The response contains the backend address, so the message should be different from the previous one.
-		t.Fatalf("Got two same messages: %q, %q, expect different messages", resp.Message, message)
+	for {
+		if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+			t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+		} else if resp.Message != message {
+			// A new backend server should receive the request.
+			// The response contains the backend address, so the message should be different from the previous one.
+			message = resp.Message
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Inject a update to add lbs[2] to resolved addresses.
+	resolver.inject([]*naming.Update{
+		{Op: naming.Add,
+			Addr: lbAddrs[2],
+			Metadata: &Metadata{
+				AddrType:   GRPCLB,
+				ServerName: lbsn,
+			},
+		},
+	})
+	// Stop lbs[1]. Now lbs[0] and lbs[1] are all stopped. lbs[2] should be used.
+	lbs[1].Stop()
+	for {
+		if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+			t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+		} else if resp.Message != message {
+			// A new backend server should receive the request.
+			// The response contains the backend address, so the message should be different from the previous one.
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	cc.Close()
 }
