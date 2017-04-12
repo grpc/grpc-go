@@ -536,6 +536,8 @@ func TestBalancerDisconnects(t *testing.T) {
 	if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
 		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
 	} else if resp.Message == message {
+		// A new backend server should receive the request.
+		// The response contains the backend address, so the message should be different from the previous one.
 		t.Fatalf("Got two same messages: %q, %q, expect different messages", resp.Message, message)
 	}
 	cc.Close()
