@@ -214,6 +214,7 @@ func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer)
 }
 
 type helloServer struct {
+	addr string
 }
 
 func (s *helloServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwpb.HelloReply, error) {
@@ -225,7 +226,7 @@ func (s *helloServer) SayHello(ctx context.Context, in *hwpb.HelloRequest) (*hwp
 		return nil, grpc.Errorf(codes.Internal, "received unexpected metadata: %v", md)
 	}
 	return &hwpb.HelloReply{
-		Message: "Hello " + in.Name,
+		Message: "Hello " + in.Name + " for " + s.addr,
 	}, nil
 }
 
@@ -235,7 +236,7 @@ func startBackends(sn string, lis ...net.Listener) (servers []*grpc.Server) {
 			sn: sn,
 		}
 		s := grpc.NewServer(grpc.Creds(creds))
-		hwpb.RegisterGreeterServer(s, &helloServer{})
+		hwpb.RegisterGreeterServer(s, &helloServer{addr: l.Addr().String()})
 		servers = append(servers, s)
 		go func(s *grpc.Server, l net.Listener) {
 			s.Serve(l)
@@ -250,7 +251,7 @@ func stopBackends(servers []*grpc.Server) {
 	}
 }
 
-func newLoadBalancer(numberOfBackends int) (lbAddr string, ls *remoteBalancer, beIPs []net.IP, bePorts []int, cleanup func(), err error) {
+func newLoadBalancer(numberOfBackends int) (lbAddr string, ls *remoteBalancer, lb *grpc.Server, beIPs []net.IP, bePorts []int, cleanup func(), err error) {
 	var beListeners []net.Listener
 	for i := 0; i < numberOfBackends; i++ {
 		// Start a backend.
@@ -278,7 +279,7 @@ func newLoadBalancer(numberOfBackends int) (lbAddr string, ls *remoteBalancer, b
 	lbCreds := &serverNameCheckCreds{
 		sn: lbsn,
 	}
-	lb := grpc.NewServer(grpc.Creds(lbCreds))
+	lb = grpc.NewServer(grpc.Creds(lbCreds))
 	if err != nil {
 		err = fmt.Errorf("Failed to generate the port number %v", err)
 		return
@@ -301,7 +302,7 @@ func newLoadBalancer(numberOfBackends int) (lbAddr string, ls *remoteBalancer, b
 }
 
 func TestGRPCLB(t *testing.T) {
-	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
+	lbAddr, ls, _, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -337,7 +338,7 @@ func TestGRPCLB(t *testing.T) {
 }
 
 func TestDropRequest(t *testing.T) {
-	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(2)
+	lbAddr, ls, _, beIPs, bePorts, cleanup, err := newLoadBalancer(2)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -388,7 +389,7 @@ func TestDropRequest(t *testing.T) {
 }
 
 func TestDropRequestFailedNonFailFast(t *testing.T) {
-	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
+	lbAddr, ls, _, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -425,7 +426,7 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 }
 
 func TestServerExpiration(t *testing.T) {
-	lbAddr, ls, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
+	lbAddr, ls, _, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
@@ -479,6 +480,63 @@ func TestServerExpiration(t *testing.T) {
 	// the remote load balancer.
 	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	}
+	cc.Close()
+}
+
+// When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
+func TestBalancerDisconnects(t *testing.T) {
+	var (
+		lbAddrs []string
+		lbs     []*grpc.Server
+	)
+	for i := 0; i < 2; i++ {
+		lbAddr, ls, lb, beIPs, bePorts, cleanup, err := newLoadBalancer(1)
+		if err != nil {
+			t.Fatalf("failed to create new load balancer: %v", err)
+		}
+		defer cleanup()
+
+		be := &lbpb.Server{
+			IpAddress:        beIPs[0],
+			Port:             int32(bePorts[0]),
+			LoadBalanceToken: lbToken,
+		}
+		var bes []*lbpb.Server
+		bes = append(bes, be)
+		sl := &lbpb.ServerList{
+			Servers: bes,
+		}
+		ls.sls = []*lbpb.ServerList{sl}
+		ls.intervals = []time.Duration{0}
+
+		lbAddrs = append(lbAddrs, lbAddr)
+		lbs = append(lbs, lb)
+	}
+
+	creds := serverNameCheckCreds{
+		expected: besn,
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+		addrs: lbAddrs,
+	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	helloC := hwpb.NewGreeterClient(cc)
+	var message string
+	if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	} else {
+		message = resp.Message
+	}
+	lbs[0].Stop()
+	time.Sleep(time.Second)
+	if resp, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	} else if resp.Message == message {
+		t.Fatalf("Got two same messages: %q, %q, expect different messages", resp.Message, message)
 	}
 	cc.Close()
 }
