@@ -43,7 +43,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -52,32 +51,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
 )
-
-// Codec defines the interface gRPC uses to encode and decode messages.
-type Codec interface {
-	// Marshal returns the wire format of v.
-	Marshal(v interface{}) ([]byte, error)
-	// Unmarshal parses the wire format into v.
-	Unmarshal(data []byte, v interface{}) error
-	// String returns the name of the Codec implementation. The returned
-	// string will be used as part of content type in transmission.
-	String() string
-}
-
-// protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
-type protoCodec struct{}
-
-func (protoCodec) Marshal(v interface{}) ([]byte, error) {
-	return proto.Marshal(v.(proto.Message))
-}
-
-func (protoCodec) Unmarshal(data []byte, v interface{}) error {
-	return proto.Unmarshal(data, v.(proto.Message))
-}
-
-func (protoCodec) String() string {
-	return "proto"
-}
 
 // Compressor defines the interface gRPC uses to compress a message.
 type Compressor interface {
@@ -271,13 +244,33 @@ func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err erro
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, error) {
 	var (
-		b      []byte
-		length uint
+		b        []byte
+		length   uint
+		header   []byte
+		startBuf []byte
 	)
+	const (
+		payloadLen     = 1
+		sizeLen        = 4
+		totalHeaderLen = 5
+	)
+
+	if sc, ok := c.(sliceSuppliedCodec); ok && msg != nil {
+		sizeNeeded := sc.ComputeSizeNeeded(msg)
+		startBuf = make([]byte, payloadLen+sizeLen+sizeNeeded)
+	} else {
+		startBuf = make([]byte, payloadLen+sizeLen)
+	}
+	header = startBuf[:totalHeaderLen]
+
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
-		b, err = c.Marshal(msg)
+		if sc, ok := c.(sliceSuppliedCodec); ok {
+			b, err = sc.MarshalUseSlice(msg, startBuf[totalHeaderLen:])
+		} else {
+			b, err = c.Marshal(msg)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -299,12 +292,9 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
 	}
 
-	const (
-		payloadLen = 1
-		sizeLen    = 4
-	)
-
-	var buf = make([]byte, payloadLen+sizeLen+len(b))
+	// If Codec is a sliceSuppliedCodec, it's possible for the header to have enough
+	// remaining capacity to avoid a realloc. Otherwise this should realloc/copy.
+	var buf = append(header, b...)
 
 	// Write payload format
 	if cp == nil {
@@ -314,8 +304,6 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	}
 	// Write length of b into buf
 	binary.BigEndian.PutUint32(buf[1:], uint32(length))
-	// Copy encoded msg to buf
-	copy(buf[5:], b)
 
 	if outPayload != nil {
 		outPayload.WireLength = len(buf)
