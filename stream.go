@@ -445,17 +445,17 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
-	defer func() {
-		if cs.cancel != nil {
-			cs.cancel()
-		}
-	}()
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.finished {
 		return
 	}
 	cs.finished = true
+	defer func() {
+		if cs.cancel != nil {
+			cs.cancel()
+		}
+	}()
 	for _, o := range cs.opts {
 		o.after(&cs.c)
 	}
