@@ -219,10 +219,11 @@ func (te *test) clientConn() *grpc.ClientConn {
 }
 
 type rpcConfig struct {
-	count     int  // Number of requests and responses for streaming RPCs.
-	success   bool // Whether the RPC should succeed or return error.
-	failfast  bool
-	streaming bool // Whether the rpc should be a streaming RPC.
+	count      int  // Number of requests and responses for streaming RPCs.
+	success    bool // Whether the RPC should succeed or return error.
+	failfast   bool
+	streaming  bool // Whether the rpc should be a streaming RPC.
+	noLastRecv bool // Whether to call recv for io.EOF. When true, last recv won't be called. Only valid for streaming RPCs.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
@@ -275,8 +276,14 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]*testpb.SimpleRequest
 	if err = stream.CloseSend(); err != nil && err != io.EOF {
 		return reqs, resps, err
 	}
-	if _, err = stream.Recv(); err != io.EOF {
-		return reqs, resps, err
+	if !c.noLastRecv {
+		if _, err = stream.Recv(); err != io.EOF {
+			return reqs, resps, err
+		}
+	} else {
+		// In the case of not calling the last recv, sleep to avoid
+		// returning too fast to miss the remaining stats (InTrailer and End).
+		time.Sleep(time.Second)
 	}
 
 	return reqs, resps, nil
@@ -958,6 +965,20 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 func TestClientStatsStreamingRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+// If the user doesn't call the last recv() on clientSteam.
+func TestClientStatsStreamingRPCNotCallingLastRecv(t *testing.T) {
+	count := 1
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, streaming: true, noLastRecv: true}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, count},
