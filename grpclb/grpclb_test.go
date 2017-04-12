@@ -99,24 +99,26 @@ func (w *testWatcher) inject(updates []*naming.Update) {
 }
 
 type testNameResolver struct {
-	w    *testWatcher
-	addr string
+	w     *testWatcher
+	addrs []string
 }
 
 func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 	r.w = &testWatcher{
-		update:   make(chan *naming.Update, 1),
+		update:   make(chan *naming.Update, len(r.addrs)),
 		side:     make(chan int, 1),
 		readDone: make(chan int),
 	}
-	r.w.side <- 1
-	r.w.update <- &naming.Update{
-		Op:   naming.Add,
-		Addr: r.addr,
-		Metadata: &Metadata{
-			AddrType:   GRPCLB,
-			ServerName: lbsn,
-		},
+	r.w.side <- len(r.addrs)
+	for _, addr := range r.addrs {
+		r.w.update <- &naming.Update{
+			Op:   naming.Add,
+			Addr: addr,
+			Metadata: &Metadata{
+				AddrType:   GRPCLB,
+				ServerName: lbsn,
+			},
+		}
 	}
 	go func() {
 		<-r.w.readDone
@@ -322,7 +324,7 @@ func TestGRPCLB(t *testing.T) {
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbAddr,
+		addrs: []string{lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -359,7 +361,7 @@ func TestDropRequest(t *testing.T) {
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbAddr,
+		addrs: []string{lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -409,7 +411,7 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbAddr,
+		addrs: []string{lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
@@ -459,7 +461,7 @@ func TestServerExpiration(t *testing.T) {
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
-		addr: lbAddr,
+		addrs: []string{lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
