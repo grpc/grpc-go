@@ -45,9 +45,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	spb "github.com/google/go-genproto/googleapis/rpc/status"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -383,6 +383,9 @@ func newFramer(conn net.Conn) *framer {
 		writer: bufio.NewWriterSize(conn, http2IOBufSize),
 	}
 	f.fr = http2.NewFramer(f.writer, f.reader)
+	// Opt-in to Frame reuse API on framer to reduce garbage.
+	// Frames aren't safe to read from after a subsequent call to ReadFrame.
+	f.fr.SetReuseFrames()
 	f.fr.ReadMetaHeaders = hpack.NewDecoder(http2InitHeaderTableSize, nil)
 	return f
 }

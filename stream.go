@@ -303,9 +303,10 @@ type clientStream struct {
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
-	mu     sync.Mutex
-	put    func()
-	closed bool
+	mu       sync.Mutex
+	put      func()
+	closed   bool
+	finished bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
 	// and is set to nil when the clientStream's finish method is called.
 	trInfo traceInfo
@@ -394,21 +395,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
-	defer func() {
-		if err != nil && cs.statsHandler != nil {
-			// Only generate End if err != nil.
-			// If err == nil, it's not the last RecvMsg.
-			// The last RecvMsg gets either an RPC error or io.EOF.
-			end := &stats.End{
-				Client:  true,
-				EndTime: time.Now(),
-			}
-			if err != io.EOF {
-				end.Error = toRPCErr(err)
-			}
-			cs.statsHandler.HandleRPC(cs.statsCtx, end)
-		}
-	}()
 	var inPayload *stats.InPayload
 	if cs.statsHandler != nil {
 		inPayload = &stats.InPayload{
@@ -494,19 +480,34 @@ func (cs *clientStream) closeTransportStream(err error) {
 }
 
 func (cs *clientStream) finish(err error) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.finished {
+		return
+	}
+	cs.finished = true
 	defer func() {
 		if cs.cancel != nil {
 			cs.cancel()
 		}
 	}()
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
 	for _, o := range cs.opts {
 		o.after(&cs.c)
 	}
 	if cs.put != nil {
 		cs.put()
 		cs.put = nil
+	}
+	if cs.statsHandler != nil {
+		end := &stats.End{
+			Client:  true,
+			EndTime: time.Now(),
+		}
+		if err != io.EOF {
+			// end.Error is nil if the RPC finished successfully.
+			end.Error = toRPCErr(err)
+		}
+		cs.statsHandler.HandleRPC(cs.statsCtx, end)
 	}
 	if !cs.tracing {
 		return

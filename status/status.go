@@ -46,7 +46,7 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	spb "github.com/google/go-genproto/googleapis/rpc/status"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 )
 

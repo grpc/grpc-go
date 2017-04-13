@@ -792,19 +792,24 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			Delay: false,
 		}
 		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
-			// TODO: Translate error into a status.Status error if necessary?
-			// TODO: Write status when appropriate.
-			s, ok := status.FromError(err)
-			if !ok {
-				// TODO: Parse possible non-status error
+			if err == io.EOF {
+				// The entire stream is done (for unary RPC only).
+				return err
+			}
+			if s, ok := status.FromError(err); ok {
+				if e := t.WriteStatus(stream, s); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+				}
 			} else {
-				switch s.Code() {
-				case codes.InvalidArgument:
-					if e := t.WriteStatus(stream, s); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+				switch st := err.(type) {
+				case transport.ConnectionError:
+					// Nothing to do here.
+				case transport.StreamError:
+					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 					}
-					// TODO: Add cases if needed
 				default:
+					panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
 				}
 			}
 			return err

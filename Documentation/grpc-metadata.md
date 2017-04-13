@@ -66,11 +66,11 @@ md := metadata.Pairs(
 
 ## Retrieving metadata from context
 
-Metadata can be retrieved from context using `FromContext`:
+Metadata can be retrieved from context using `FromIncomingContext`:
 
 ```go
 func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeResponse, err) {
-    md, ok := metadata.FromContext(ctx)
+    md, ok := metadata.FromIncomingContext(ctx)
     // do something with metadata
 }
 ```
@@ -88,7 +88,7 @@ To send metadata to server, the client can wrap the metadata into a context usin
 md := metadata.Pairs("key", "val")
 
 // create a new context with this metadata
-ctx := metadata.NewContext(context.Background(), md)
+ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 // make unary RPC
 response, err := client.SomeRPC(ctx, someRequest)
@@ -96,6 +96,9 @@ response, err := client.SomeRPC(ctx, someRequest)
 // or make streaming RPC
 stream, err := client.SomeStreamingRPC(ctx)
 ```
+
+To read this back from the context on the client (e.g. in an interceptor) before the RPC is sent, use `FromOutgoingContext`.
+
 ### Receiving metadata
 
 Metadata that a client can receive includes header and trailer.
@@ -152,7 +155,7 @@ For streaming calls, the server needs to get context from the stream.
 
 ```go
 func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someResponse, error) {
-    md, ok := metadata.FromContext(ctx)
+    md, ok := metadata.FromIncomingContext(ctx)
     // do something with metadata
 }
 ```
@@ -161,7 +164,7 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.someRequest) (*pb.someRespo
 
 ```go
 func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) error {
-    md, ok := metadata.FromContext(stream.Context()) // get context from stream
+    md, ok := metadata.FromIncomingContext(stream.Context()) // get context from stream
     // do something with metadata
 }
 ```
