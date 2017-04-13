@@ -1,3 +1,32 @@
+// Copyright 2016, Google Inc.
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//     * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//     * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 syntax = "proto3";
 
 package grpc.lb.v1;
@@ -13,6 +42,20 @@ message Duration {
   // of one second or more, a non-zero value for the `nanos` field must be
   // of the same sign as the `seconds` field. Must be from -999,999,999
   // to +999,999,999 inclusive.
+  int32 nanos = 2;
+}
+
+message Timestamp {
+
+  // Represents seconds of UTC time since Unix epoch
+  // 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to
+  // 9999-12-31T23:59:59Z inclusive.
+  int64 seconds = 1;
+
+  // Non-negative fractions of a second at nanosecond resolution. Negative
+  // second values with fractions must still have non-negative nanos values
+  // that count forward in time. Must be from 0 to 999,999,999
+  // inclusive.
   int32 nanos = 2;
 }
 
@@ -34,21 +77,37 @@ message LoadBalanceRequest {
 }
 
 message InitialLoadBalanceRequest {
-  // Name of load balanced service (IE, service.grpc.gslb.google.com)
+  // Name of load balanced service (IE, balancer.service.com)
+  // length should be less than 256 bytes.
   string name = 1;
 }
 
 // Contains client level statistics that are useful to load balancing. Each
-// count should be reset to zero after reporting the stats.
+// count except the timestamp should be reset to zero after reporting the stats.
 message ClientStats {
-  // The total number of requests sent by the client since the last report.
-  int64 total_requests = 1;
+  // The timestamp of generating the report.
+  Timestamp timestamp = 1;
 
-  // The number of client rpc errors since the last report.
-  int64 client_rpc_errors = 2;
+  // The total number of RPCs that started.
+  int64 num_calls_started = 2;
 
-  // The number of dropped requests since the last report.
-  int64 dropped_requests = 3;
+  // The total number of RPCs that finished.
+  int64 num_calls_finished = 3;
+
+  // The total number of RPCs that were dropped by the client because of rate
+  // limiting.
+  int64 num_calls_finished_with_drop_for_rate_limiting = 4;
+
+  // The total number of RPCs that were dropped by the client because of load
+  // balancing.
+  int64 num_calls_finished_with_drop_for_load_balancing = 5;
+
+  // The total number of RPCs that failed to reach a server except dropped RPCs.
+  int64 num_calls_finished_with_client_failed_to_send = 6;
+
+  // The total number of RPCs that finished and are known to have been received
+  // by a server.
+  int64 num_calls_finished_known_received = 7;
 }
 
 message LoadBalanceResponse {
@@ -66,13 +125,14 @@ message InitialLoadBalanceResponse {
   // This is an application layer redirect that indicates the client should use
   // the specified server for load balancing. When this field is non-empty in
   // the response, the client should open a separate connection to the
-  // load_balancer_delegate and call the BalanceLoad method.
+  // load_balancer_delegate and call the BalanceLoad method. Its length should
+  // be less than 64 bytes.
   string load_balancer_delegate = 1;
 
   // This interval defines how often the client should send the client stats
   // to the load balancer. Stats should only be reported when the duration is
   // positive.
-  Duration client_stats_report_interval = 3;
+  Duration client_stats_report_interval = 2;
 }
 
 message ServerList {
@@ -89,6 +149,10 @@ message ServerList {
   Duration expiration_interval = 3;
 }
 
+// Contains server information. When none of the [drop_for_*] fields are true,
+// use the other fields. When drop_for_rate_limiting is true, ignore all other
+// fields. Use drop_for_load_balancing only when it is true and
+// drop_for_rate_limiting is false.
 message Server {
   // A resolved address for the server, serialized in network-byte-order. It may
   // either be an IPv4 or IPv6 address.
@@ -101,9 +165,15 @@ message Server {
   // frontend requests for that pick must include the token in its initial
   // metadata. The token is used by the backend to verify the request and to
   // allow the backend to report load to the gRPC LB system.
+  //
+  // Its length is variable but less than 50 bytes.
   string load_balance_token = 3;
 
   // Indicates whether this particular request should be dropped by the client
-  // when this server is chosen from the list.
-  bool drop_request = 4;
+  // for rate limiting.
+  bool drop_for_rate_limiting = 4;
+
+  // Indicates whether this particular request should be dropped by the client
+  // for load balancing.
+  bool drop_for_load_balancing = 5;
 }
