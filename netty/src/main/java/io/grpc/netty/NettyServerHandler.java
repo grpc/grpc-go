@@ -173,22 +173,6 @@ class NettyServerHandler extends AbstractNettyHandler {
     final KeepAliveEnforcer keepAliveEnforcer = new KeepAliveEnforcer(
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos, TimeUnit.NANOSECONDS);
 
-    connection.addListener(new Http2ConnectionAdapter() {
-      @Override
-      public void onStreamActive(Http2Stream stream) {
-        if (connection.numActiveStreams() == 1) {
-          keepAliveEnforcer.onTransportActive();
-        }
-      }
-
-      @Override
-      public void onStreamClosed(Http2Stream stream) {
-        if (connection.numActiveStreams() == 0) {
-          keepAliveEnforcer.onTransportIdle();
-        }
-      }
-    });
-
     // Create the local flow controller configured to auto-refill the connection window.
     connection.local().flowController(
         new DefaultHttp2LocalFlowController(connection, DEFAULT_WINDOW_UPDATE_RATIO, true));
@@ -205,13 +189,18 @@ class NettyServerHandler extends AbstractNettyHandler {
     settings.maxHeaderListSize(maxHeaderListSize);
 
     return new NettyServerHandler(
-        transportListener, streamTracerFactories, decoder, encoder, settings, maxMessageSize,
+        connection,
+        transportListener,
+        streamTracerFactories,
+        decoder, encoder, settings,
+        maxMessageSize,
         keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         keepAliveEnforcer);
   }
 
   private NettyServerHandler(
+      final Http2Connection connection,
       ServerTransportListener transportListener,
       List<ServerStreamTracer.Factory> streamTracerFactories,
       Http2ConnectionDecoder decoder,
@@ -221,8 +210,25 @@ class NettyServerHandler extends AbstractNettyHandler {
       long keepAliveTimeoutInNanos,
       long maxConnectionAgeInNanos,
       long maxConnectionAgeGraceInNanos,
-      KeepAliveEnforcer keepAliveEnforcer) {
+      final KeepAliveEnforcer keepAliveEnforcer) {
     super(decoder, encoder, settings);
+
+    connection.addListener(new Http2ConnectionAdapter() {
+      @Override
+      public void onStreamActive(Http2Stream stream) {
+        if (connection.numActiveStreams() == 1) {
+          keepAliveEnforcer.onTransportActive();
+        }
+      }
+
+      @Override
+      public void onStreamClosed(Http2Stream stream) {
+        if (connection.numActiveStreams() == 0) {
+          keepAliveEnforcer.onTransportIdle();
+        }
+      }
+    });
+
     checkArgument(maxMessageSize >= 0, "maxMessageSize must be >= 0");
     this.maxMessageSize = maxMessageSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
