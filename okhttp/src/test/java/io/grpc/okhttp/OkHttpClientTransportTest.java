@@ -69,7 +69,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
-import io.grpc.internal.AbstractStream;
+import io.grpc.internal.AbstractStream2;
 import io.grpc.internal.ClientStreamListener;
 import io.grpc.internal.ClientTransport;
 import io.grpc.internal.GrpcUtil;
@@ -1121,7 +1121,8 @@ public class OkHttpClientTransportTest {
   public void notifyOnReady() throws Exception {
     initTransport();
     // exactly one byte below the threshold
-    int messageLength = AbstractStream.DEFAULT_ONREADY_THRESHOLD - HEADER_LENGTH - 1;
+    int messageLength =
+        AbstractStream2.TransportState.DEFAULT_ONREADY_THRESHOLD - HEADER_LENGTH - 1;
     setInitialWindowSize(0);
     MockStreamListener listener = new MockStreamListener();
     OkHttpClientStream stream = clientTransport.newStream(method, new Metadata());

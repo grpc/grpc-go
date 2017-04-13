@@ -34,6 +34,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
@@ -119,7 +120,8 @@ public abstract class AbstractStream2 implements Stream {
      * The default number of queued bytes for a given stream, below which
      * {@link StreamListener#onReady()} will be called.
      */
-    private static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
+    @VisibleForTesting
+    public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
 
     private final MessageDeframer deframer;
     private final Object onReadyLock = new Object();
