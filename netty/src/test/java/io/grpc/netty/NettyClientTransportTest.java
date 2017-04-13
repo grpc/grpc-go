@@ -32,7 +32,6 @@
 package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
-import static io.grpc.Status.Code.INTERNAL;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
@@ -58,6 +57,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
+import io.grpc.Status.Code;
 import io.grpc.StatusException;
 import io.grpc.internal.ClientStream;
 import io.grpc.internal.ClientStreamListener;
@@ -213,7 +213,7 @@ public class NettyClientTransportTest {
       fail("Expected the stream to fail.");
     } catch (ExecutionException e) {
       Status status = Status.fromThrowable(e);
-      assertEquals(INTERNAL, status.getCode());
+      assertEquals(Code.RESOURCE_EXHAUSTED, status.getCode());
       assertTrue("Missing exceeds maximum from: " + status.getDescription(),
           status.getDescription().contains("exceeds maximum"));
     }

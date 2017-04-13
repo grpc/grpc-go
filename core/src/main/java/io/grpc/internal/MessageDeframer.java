@@ -344,8 +344,10 @@ public class MessageDeframer implements Closeable {
     // Update the required length to include the length of the frame.
     requiredLength = nextFrame.readInt();
     if (requiredLength < 0 || requiredLength > maxInboundMessageSize) {
-      throw Status.INTERNAL.withDescription(String.format("%s: Frame size %d exceeds maximum: %d. ",
-              debugString, requiredLength, maxInboundMessageSize)).asRuntimeException();
+      throw Status.RESOURCE_EXHAUSTED.withDescription(
+          String.format("%s: Frame size %d exceeds maximum: %d. ",
+              debugString, requiredLength, maxInboundMessageSize))
+          .asRuntimeException();
     }
 
     statsTraceCtx.inboundMessage();
@@ -469,7 +471,7 @@ public class MessageDeframer implements Closeable {
 
     private void verifySize() {
       if (count > maxMessageSize) {
-        throw Status.INTERNAL.withDescription(String.format(
+        throw Status.RESOURCE_EXHAUSTED.withDescription(String.format(
                 "%s: Compressed frame exceeds maximum frame size: %d. Bytes read: %d. ",
                 debugString, maxMessageSize, count)).asRuntimeException();
       }

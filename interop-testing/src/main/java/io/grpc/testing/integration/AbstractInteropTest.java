@@ -906,7 +906,7 @@ public abstract class AbstractInteropTest {
       fail();
     } catch (StatusRuntimeException ex) {
       Status s = ex.getStatus();
-      assertThat(s.getCode()).named(s.toString()).isEqualTo(Status.Code.INTERNAL);
+      assertThat(s.getCode()).named(s.toString()).isEqualTo(Status.Code.RESOURCE_EXHAUSTED);
       assertThat(Throwables.getStackTraceAsString(ex)).contains("exceeds maximum");
     }
   }

@@ -269,7 +269,7 @@ public class MessageDeframerTest {
 
     try {
       thrown.expect(StatusRuntimeException.class);
-      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+      thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
 
       while (stream.read() != -1) {}
     } finally {
@@ -316,7 +316,7 @@ public class MessageDeframerTest {
 
     try {
       thrown.expect(StatusRuntimeException.class);
-      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+      thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
 
       stream.read(buf, 0, buf.length);
     } finally {
@@ -361,7 +361,7 @@ public class MessageDeframerTest {
 
     try {
       thrown.expect(StatusRuntimeException.class);
-      thrown.expectMessage("INTERNAL: test: Compressed frame exceeds");
+      thrown.expectMessage("RESOURCE_EXHAUSTED: test: Compressed frame exceeds");
 
       stream.skip(4);
     } finally {

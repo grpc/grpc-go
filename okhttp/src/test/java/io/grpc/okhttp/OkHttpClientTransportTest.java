@@ -33,7 +33,6 @@ package io.grpc.okhttp;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.Status.Code.INTERNAL;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.okhttp.Headers.CONTENT_TYPE_HEADER;
 import static io.grpc.okhttp.Headers.METHOD_HEADER;
@@ -218,7 +217,7 @@ public class OkHttpClientTransportTest {
     frameHandler().data(false, 3, buffer, (int) buffer.size());
 
     listener.waitUntilStreamClosed();
-    assertEquals(INTERNAL, listener.status.getCode());
+    assertEquals(Code.RESOURCE_EXHAUSTED, listener.status.getCode());
     shutdownAndVerify();
   }
 

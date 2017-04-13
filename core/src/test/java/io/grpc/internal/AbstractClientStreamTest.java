@@ -155,7 +155,7 @@ public class AbstractClientStreamTest {
     stream.deframeFailed(new RuntimeException("something bad"));
 
     verify(mockListener).closed(statusCaptor.capture(), isA(Metadata.class));
-    assertEquals(Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals(Code.UNKNOWN, statusCaptor.getValue().getCode());
   }
 
   @Test

@@ -172,7 +172,7 @@ public abstract class AbstractClientStream extends AbstractStream
 
   @Override
   protected final void deframeFailed(Throwable cause) {
-    cancel(Status.INTERNAL.withDescription("Exception deframing message").withCause(cause));
+    cancel(Status.fromThrowable(cause));
   }
 
   /**

@@ -169,7 +169,7 @@ public class MessageFramer implements Framer {
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
     int written = writeToOutputStream(message, bufferChain);
     if (maxOutboundMessageSize >= 0 && written > maxOutboundMessageSize) {
-      throw Status.INTERNAL
+      throw Status.RESOURCE_EXHAUSTED
           .withDescription(
               String.format("message too large %d > %d", written , maxOutboundMessageSize))
           .asRuntimeException();
@@ -189,7 +189,7 @@ public class MessageFramer implements Framer {
       compressingStream.close();
     }
     if (maxOutboundMessageSize >= 0 && written > maxOutboundMessageSize) {
-      throw Status.CANCELLED
+      throw Status.RESOURCE_EXHAUSTED
           .withDescription(
               String.format("message too large %d > %d", written , maxOutboundMessageSize))
           .asRuntimeException();
@@ -212,7 +212,7 @@ public class MessageFramer implements Framer {
   private int writeKnownLengthUncompressed(InputStream message, int messageLength)
       throws IOException {
     if (maxOutboundMessageSize >= 0 && messageLength > maxOutboundMessageSize) {
-      throw Status.CANCELLED
+      throw Status.RESOURCE_EXHAUSTED
           .withDescription(
               String.format("message too large %d > %d", messageLength , maxOutboundMessageSize))
           .asRuntimeException();
