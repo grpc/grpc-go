@@ -1253,15 +1253,15 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		Payload:      smallPayload,
 	}
 	// test for unary RPC recv
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// test for unary RPC send
 	req.Payload = extraLargePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// test for streaming RPC recv
@@ -1282,8 +1282,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// 	test for streaming RPC send
@@ -1293,8 +1293,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.InvalidArgument)
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 
 	// Case2: Client API set maxReqSize to 1024 (send), maxRespSize to 1024 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
@@ -1310,15 +1310,15 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	req.Payload = smallPayload
 	req.ResponseSize = proto.Int32(int32(largeSize))
 
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC recv.
@@ -1331,8 +1331,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// 	Test for streaming RPC send.
@@ -1342,8 +1342,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.InvalidArgument)
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 
 	// Case3: Client API set maxReqSize to 4096 (send), maxRespSize to 4096 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
@@ -1364,8 +1364,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 
 	req.ResponseSize = proto.Int32(int32(extraLargeSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
@@ -1376,8 +1376,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 
 	req.Payload = extraLargePayload
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC recv.
@@ -1400,8 +1400,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// 	Test for streaming RPC send.
@@ -1415,8 +1415,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	sreq.Payload = extraLargePayload
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.InvalidArgument)
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
 
@@ -1462,15 +1462,15 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
@@ -1492,8 +1492,8 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC send.
@@ -1503,8 +1503,8 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Send(%v) = %v, want _, error codes: %s", stream, sreq, err, codes.InvalidArgument)
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error codes: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
 
@@ -1543,15 +1543,15 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
@@ -1573,8 +1573,8 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC send.
@@ -1584,8 +1584,8 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.InvalidArgument)
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
 
@@ -1622,15 +1622,15 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC send.
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC recv.
 	req.Payload = largePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
@@ -1652,8 +1652,8 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC recv.
@@ -1666,8 +1666,8 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 }
 
@@ -2020,14 +2020,14 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		ResponseSize: proto.Int32(smallSize),
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 	// Test on client side for unary RPC.
 	req.ResponseSize = proto.Int32(int32(te.maxMsgSize) + 1)
 	req.Payload = smallPayload
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test on server side for streaming RPC.
@@ -2054,8 +2054,8 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test on client side for streaming RPC.
@@ -2068,8 +2068,8 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 }

@@ -644,7 +644,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	if len(p) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
+		return status.Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, p, opts)
 	if err == nil && outPayload != nil {
@@ -751,7 +751,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			if len(req) > s.opts.maxReceiveMessageSize {
 				// TODO: Revisit the error code. Currently keep it consistent with
 				// java implementation.
-				return status.Errorf(codes.InvalidArgument, "Received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
+				return status.Errorf(codes.ResourceExhausted, "Received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 			}
 			if err := s.opts.codec.Unmarshal(req, v); err != nil {
 				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
@@ -931,7 +931,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.SetError()
 		}
 		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
-		if err := t.WriteStatus(stream, status.New(codes.InvalidArgument, errDesc)); err != nil {
+		if err := t.WriteStatus(stream, status.New(codes.ResourceExhausted, errDesc)); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				trInfo.tr.SetError()

@@ -123,7 +123,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
 	if len(outBuf) > msgSizeLimit {
-		return nil, Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(outBuf), msgSizeLimit)
+		return nil, Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(outBuf), msgSizeLimit)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {

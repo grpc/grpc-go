@@ -384,7 +384,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
 	if len(out) > cs.maxSendMessageSize {
-		return Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(out), cs.maxSendMessageSize)
+		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(out), cs.maxSendMessageSize)
 	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
@@ -614,7 +614,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		return err
 	}
 	if len(out) > ss.maxSendMessageSize {
-		return Errorf(codes.InvalidArgument, "Sent message larger than max (%d vs. %d)", len(out), ss.maxSendMessageSize)
+		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(out), ss.maxSendMessageSize)
 	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)

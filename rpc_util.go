@@ -226,7 +226,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 		return pf, nil, nil
 	}
 	if length > uint32(maxReceiveMessageSize) {
-		return 0, nil, Errorf(codes.InvalidArgument, "grpc: Received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
+		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: Received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
@@ -269,7 +269,7 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		length = uint(len(b))
 	}
 	if length > math.MaxUint32 {
-		return nil, Errorf(codes.InvalidArgument, "grpc: message too large (%d bytes)", length)
+		return nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", length)
 	}
 
 	const (
@@ -330,7 +330,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	if len(d) > maxReceiveMessageSize {
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
-		return Errorf(codes.InvalidArgument, "grpc: Received message larger than max (%d vs. %d)", len(d), maxReceiveMessageSize)
+		return Errorf(codes.ResourceExhausted, "grpc: Received message larger than max (%d vs. %d)", len(d), maxReceiveMessageSize)
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
