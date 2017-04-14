@@ -55,8 +55,7 @@ def vmArgs = [
         "-server",
         "-Xms2g",
         "-Xmx2g",
-        "-XX:+PrintGCDetails",
-        "-XX:+PrintFlagsFinal"
+        "-XX:+PrintGCDetails"
 ]
 
 task qps_client(type: CreateStartScripts) {
