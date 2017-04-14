@@ -72,6 +72,7 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
+import io.grpc.testing.TestUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -538,7 +539,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     maxConnectionAgeInNanos = TimeUnit.MINUTES.toNanos(30L);
     setUp();
 
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY not sent yet
@@ -549,13 +550,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  @Ignore // Flaky. TODO(zdapeng): fix https://github.com/grpc/grpc-java/issues/2898
   public void maxConnectionAge_goAwaySent() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     setUp();
     assertTrue(channel().isOpen());
 
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY sent
@@ -568,21 +568,20 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  @Ignore // Flaky. TODO(zdapeng): fix https://github.com/grpc/grpc-java/issues/2898
   public void maxConnectionAgeGrace_channelStillOpenDuringGracePeriod() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     maxConnectionAgeGraceInNanos = TimeUnit.MINUTES.toNanos(30L);
     setUp();
     createStream();
 
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     verifyWrite().writeGoAway(
         eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
         any(ChannelPromise.class));
 
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // channel not closed yet
@@ -590,7 +589,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  @Ignore // Flaky. TODO(zdapeng): fix https://github.com/grpc/grpc-java/issues/2898
   public void maxConnectionAgeGrace_channelClosedAfterGracePeriod() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     maxConnectionAgeGraceInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
@@ -598,7 +596,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
 
     // runPendingTasks so that GO_AWAY is sent and the forceful shutdown is scheduled
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     verifyWrite().writeGoAway(
@@ -607,7 +605,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertTrue(channel().isOpen());
 
     // need runPendingTasks again so that the forceful shutdown can be executed
-    Thread.sleep(10L);
+    TestUtils.sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // channel closed

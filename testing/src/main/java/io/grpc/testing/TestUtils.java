@@ -56,6 +56,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
@@ -217,6 +218,19 @@ public class TestUtils {
     SSLContext context = SSLContext.getInstance("TLS", provider);
     context.init(null, trustManagerFactory.getTrustManagers(), null);
     return context.getSocketFactory();
+  }
+
+  /**
+   * Sleeps for at least the specified time. When in need of a guaranteed sleep time, use this in
+   * preference to {@code Thread.sleep} which might not sleep for the required time.
+   */
+  public static void sleepAtLeast(long millis) throws InterruptedException {
+    long delay = TimeUnit.MILLISECONDS.toNanos(millis);
+    long end = System.nanoTime() + delay;
+    while (delay > 0) {
+      TimeUnit.NANOSECONDS.sleep(delay);
+      delay = end - System.nanoTime();
+    }
   }
 
   private TestUtils() {}
