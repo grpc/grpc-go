@@ -90,9 +90,12 @@ type remoteBalancerInfo struct {
 type addrInfo struct {
 	addr      grpc.Address
 	connected bool
-	// dropRequest indicates whether a particular RPC which chooses this address
-	// should be dropped.
-	dropRequest bool
+	// dropForRateLimiting indicates whether this particular request should be
+	// dropped by the client for rate limiting.
+	dropForRateLimiting bool
+	// dropForLoadBalancing indicates whether this particular request should be
+	// dropped by the client for load balancing.
+	dropForLoadBalancing bool
 }
 
 type balancer struct {
@@ -216,8 +219,9 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 			Metadata: &md,
 		}
 		sl = append(sl, &addrInfo{
-			addr:        addr,
-			dropRequest: s.DropRequest,
+			addr:                 addr,
+			dropForRateLimiting:  s.DropForRateLimiting,
+			dropForLoadBalancing: s.DropForLoadBalancing,
 		})
 		addrs = append(addrs, addr)
 	}
@@ -479,7 +483,7 @@ func (b *balancer) Up(addr grpc.Address) func(error) {
 			}
 			a.connected = true
 		}
-		if a.connected && !a.dropRequest {
+		if a.connected && !a.dropForRateLimiting && !a.dropForLoadBalancing {
 			cnt++
 		}
 	}
@@ -511,7 +515,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 			a := b.addrs[next]
 			next = (next + 1) % len(b.addrs)
 			if a.connected {
-				if !a.dropRequest {
+				if !a.dropForRateLimiting && !a.dropForLoadBalancing {
 					addr = a.addr
 					b.next = next
 					b.mu.Unlock()
@@ -572,7 +576,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 					a := b.addrs[next]
 					next = (next + 1) % len(b.addrs)
 					if a.connected {
-						if !a.dropRequest {
+						if !a.dropForRateLimiting && !a.dropForLoadBalancing {
 							addr = a.addr
 							b.next = next
 							b.mu.Unlock()
