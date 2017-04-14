@@ -37,13 +37,17 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
+import io.grpc.ClientStreamTracer;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.Status.Code;
+import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream2.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
@@ -223,6 +227,15 @@ public class AbstractClientStream2Test {
   @Test
   public void getRequest() {
     AbstractClientStream2.Sink sink = mock(AbstractClientStream2.Sink.class);
+    final ClientStreamTracer tracer = spy(new ClientStreamTracer() {});
+    ClientStreamTracer.Factory tracerFactory =
+        new ClientStreamTracer.Factory() {
+          @Override
+          public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+            return tracer;
+          }
+        };
+    StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
     AbstractClientStream2 stream = new BaseAbstractClientStream(allocator,
         new BaseTransportState(statsTraceCtx), sink, statsTraceCtx, true);
     stream.start(mockListener);
@@ -237,6 +250,10 @@ public class AbstractClientStream2Test {
     // GET requests don't have BODY.
     verify(sink, never())
         .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Boolean.class));
+    verify(tracer).outboundMessage();
+    verify(tracer).outboundWireSize(1);
+    verify(tracer).outboundUncompressedSize(1);
+    verifyNoMoreInteractions(tracer);
   }
 
   /**

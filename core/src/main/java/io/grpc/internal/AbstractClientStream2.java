@@ -349,6 +349,18 @@ public abstract class AbstractClientStream2 extends AbstractStream2
       } catch (java.io.IOException ex) {
         throw new RuntimeException(ex);
       }
+      statsTraceCtx.outboundMessage();
+      statsTraceCtx.outboundUncompressedSize(payload.length);
+      // NB(zhangkun83): this is not accurate, because the underlying transport will probably encode
+      // it using e.g., base64.  However, we are not supposed to know such detail here.
+      //
+      // We don't want to move this line to where the encoding happens either, because we'd better
+      // contain the message stats reporting in Framer as suggested in StatsTraceContext.
+      // Scattering the reporting sites increases the risk of mis-counting or double-counting.
+      //
+      // Because the payload is usually very small, people shouldn't care about the size difference
+      // caused by encoding.
+      statsTraceCtx.outboundWireSize(payload.length);
     }
 
     @Override

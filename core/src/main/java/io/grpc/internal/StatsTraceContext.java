@@ -104,6 +104,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link ClientStreamTracer#headersSent}.  For client-side only.
+   *
+   * <p>Transport-specific, thus should be called by transport implementations.
    */
   public void clientHeadersSent() {
     for (StreamTracer tracer : tracers) {
@@ -113,6 +115,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link ServerStreamTracer#filterContext}.  For server-side only.
+   *
+   * <p>Called from {@link io.grpc.internal.ServerImpl}.
    */
   public <ReqT, RespT> Context serverFilterContext(Context context) {
     Context ctx = checkNotNull(context, "context");
@@ -126,6 +130,8 @@ public final class StatsTraceContext {
   /**
    * See {@link StreamTracer#streamClosed}. This may be called multiple times, and only the first
    * value will be taken.
+   *
+   * <p>Called from abstract stream implementations.
    */
   public void streamClosed(Status status) {
     if (closed.compareAndSet(false, true)) {
@@ -137,6 +143,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#outboundMessage}.
+   *
+   * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundMessage() {
     for (StreamTracer tracer : tracers) {
@@ -146,6 +154,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#inboundMessage}.
+   *
+   * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
   public void inboundMessage() {
     for (StreamTracer tracer : tracers) {
@@ -155,6 +165,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#outboundUncompressedSize}.
+   *
+   * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundUncompressedSize(long bytes) {
     for (StreamTracer tracer : tracers) {
@@ -164,6 +176,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#outboundWireSize}.
+   *
+   * <p>Called from {@link io.grpc.internal.Framer}.
    */
   public void outboundWireSize(long bytes) {
     for (StreamTracer tracer : tracers) {
@@ -173,6 +187,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#inboundUncompressedSize}.
+   *
+   * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
   public void inboundUncompressedSize(long bytes) {
     for (StreamTracer tracer : tracers) {
@@ -182,6 +198,8 @@ public final class StatsTraceContext {
 
   /**
    * See {@link StreamTracer#inboundWireSize}.
+   *
+   * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
   public void inboundWireSize(long bytes) {
     for (StreamTracer tracer : tracers) {
