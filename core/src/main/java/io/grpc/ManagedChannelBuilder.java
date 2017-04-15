@@ -160,10 +160,6 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>If this method is not called, the builder will use {@link PickFirstBalancerFactory}
    * for the channel.
    *
-   * <p>Calling this will make the channel to run the LBv2 code path. See <a
-   * href="https://github.com/grpc/grpc-java/issues/2656" target="_blank">#2656</a> for more
-   * information.
-   *
    * <p>This method is implemented by all stock channel builders that
    * are shipped with gRPC, but may not be implemented by custom channel builders, in which case
    * this method will throw.
