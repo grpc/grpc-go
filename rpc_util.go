@@ -368,6 +368,7 @@ func ErrorDesc(err error) string {
 }
 
 // Errorf returns an error containing an error code and a description;
+// CodeOf extracts the Code.
 // Errorf returns nil if c is OK.
 //
 // Deprecated; use status.Errorf instead.
