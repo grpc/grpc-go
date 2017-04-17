@@ -49,6 +49,7 @@ import io.grpc.internal.AtomicBackoff;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.okhttp.internal.Platform;
@@ -202,6 +203,7 @@ public class OkHttpChannelBuilder extends
   public OkHttpChannelBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
     Preconditions.checkArgument(keepAliveTime > 0L, "keepalive time must be positive");
     keepAliveTimeNanos = timeUnit.toNanos(keepAliveTime);
+    keepAliveTimeNanos = KeepAliveManager.clampKeepAliveTimeInNanos(keepAliveTimeNanos);
     if (keepAliveTimeNanos >= AS_LARGE_AS_INFINITE) {
       // Bump keepalive time to infinite. This disables keepalive.
       keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
@@ -221,6 +223,7 @@ public class OkHttpChannelBuilder extends
   public OkHttpChannelBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
     Preconditions.checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
     keepAliveTimeoutNanos = timeUnit.toNanos(keepAliveTimeout);
+    keepAliveTimeoutNanos = KeepAliveManager.clampKeepAliveTimeoutInNanos(keepAliveTimeoutNanos);
     return this;
   }
 

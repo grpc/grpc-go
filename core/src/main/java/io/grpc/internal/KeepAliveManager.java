@@ -46,7 +46,7 @@ import java.util.concurrent.TimeUnit;
 public class KeepAliveManager {
   private static final SystemTicker SYSTEM_TICKER = new SystemTicker();
   private static final long MIN_KEEPALIVE_TIME_NANOS = TimeUnit.SECONDS.toNanos(10);
-  private static final long MIN_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MICROSECONDS.toNanos(499L);
+  private static final long MIN_KEEPALIVE_TIMEOUT_NANOS = TimeUnit.MILLISECONDS.toNanos(10L);
 
   private final ScheduledExecutorService scheduler;
   private final Ticker ticker;
@@ -86,7 +86,10 @@ public class KeepAliveManager {
               TimeUnit.NANOSECONDS);
         } else if (state == State.PING_DELAYED) {
           // We have received some data. Reschedule the ping with the new time.
-          pingFuture = scheduler.schedule(sendPing, nextKeepaliveTime - ticker.read(),
+          pingFuture = scheduler.schedule(
+              sendPing,
+              // normalized as some Netty executor service does not accept a negative delay
+              Math.max(nextKeepaliveTime - ticker.read(), 0L),
               TimeUnit.NANOSECONDS);
           state = State.PING_SCHEDULED;
         }
@@ -136,10 +139,7 @@ public class KeepAliveManager {
   public KeepAliveManager(KeepAlivePinger keepAlivePinger, ScheduledExecutorService scheduler,
                           long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
                           boolean keepAliveDuringTransportIdle) {
-    this(keepAlivePinger, scheduler, SYSTEM_TICKER,
-        // Set a minimum cap on keepalive dealy.
-        Math.max(MIN_KEEPALIVE_TIME_NANOS, keepAliveTimeInNanos),
-        Math.max(MIN_KEEPALIVE_TIMEOUT_NANOS, keepAliveTimeoutInNanos),
+    this(keepAlivePinger, scheduler, SYSTEM_TICKER, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         keepAliveDuringTransportIdle);
   }
 
@@ -199,7 +199,10 @@ public class KeepAliveManager {
       // When the transport goes active, we do not reset the nextKeepaliveTime. This allows us to
       // quickly check whether the connection is still working.
       state = State.PING_SCHEDULED;
-      pingFuture = scheduler.schedule(sendPing, nextKeepaliveTime - ticker.read(),
+      pingFuture = scheduler.schedule(
+          sendPing,
+          // normalized as some Netty executor service does not accept a negative delay
+          Math.max(nextKeepaliveTime - ticker.read(), 0L),
           TimeUnit.NANOSECONDS);
     } else if (state == State.IDLE_AND_PING_SENT) {
       state = State.PING_SENT;
@@ -234,6 +237,20 @@ public class KeepAliveManager {
         pingFuture.cancel(false);
       }
     }
+  }
+
+  /**
+   * Bumps keepalive time to 10 seconds if the specified value was smaller than that.
+   */
+  public static long clampKeepAliveTimeInNanos(long keepAliveTimeInNanos) {
+    return Math.max(keepAliveTimeInNanos, MIN_KEEPALIVE_TIME_NANOS);
+  }
+
+  /**
+   * Bumps keepalive timeout to 10 milliseconds if the specified value was smaller than that.
+   */
+  public static long clampKeepAliveTimeoutInNanos(long keepAliveTimeoutInNanos) {
+    return Math.max(keepAliveTimeoutInNanos, MIN_KEEPALIVE_TIMEOUT_NANOS);
   }
 
   public interface KeepAlivePinger {

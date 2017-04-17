@@ -466,13 +466,15 @@ public class NettyClientTransportTest {
   private NettyClientTransport newTransport(ProtocolNegotiator negotiator, int maxMsgSize,
       int maxHeaderListSize, String userAgent, boolean enableKeepAlive) {
     long keepAliveTimeNano = KEEPALIVE_TIME_NANOS_DISABLED;
+    long keepAliveTimeoutNano = TimeUnit.SECONDS.toNanos(1L);
     if (enableKeepAlive) {
-      keepAliveTimeNano = 1000L;
+      keepAliveTimeNano = TimeUnit.SECONDS.toNanos(10L);
     }
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
-        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, keepAliveTimeNano, 1L, false, authority,
-        userAgent, tooManyPingsRunnable);
+        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
+        keepAliveTimeNano, keepAliveTimeoutNano,
+        false, authority, userAgent, tooManyPingsRunnable);
     transports.add(transport);
     return transport;
   }

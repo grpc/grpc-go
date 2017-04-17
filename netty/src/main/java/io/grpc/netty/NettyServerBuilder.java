@@ -44,6 +44,7 @@ import io.grpc.Internal;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.KeepAliveManager;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -260,6 +261,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   public NettyServerBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
     checkArgument(keepAliveTime > 0L, "keepalive time must be positive");
     keepAliveTimeInNanos = timeUnit.toNanos(keepAliveTime);
+    keepAliveTimeInNanos = KeepAliveManager.clampKeepAliveTimeInNanos(keepAliveTimeInNanos);
     if (keepAliveTimeInNanos >= AS_LARGE_AS_INFINITE) {
       // Bump keepalive time to infinite. This disables keep alive.
       keepAliveTimeInNanos = SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
@@ -280,6 +282,8 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   public NettyServerBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
     checkArgument(keepAliveTimeout > 0L, "keepalive timeout must be positive");
     keepAliveTimeoutInNanos = timeUnit.toNanos(keepAliveTimeout);
+    keepAliveTimeoutInNanos =
+        KeepAliveManager.clampKeepAliveTimeoutInNanos(keepAliveTimeoutInNanos);
     if (keepAliveTimeoutInNanos < MIN_KEEPALIVE_TIMEOUT_NANO) {
       // Bump keepalive timeout.
       keepAliveTimeoutInNanos = MIN_KEEPALIVE_TIMEOUT_NANO;
