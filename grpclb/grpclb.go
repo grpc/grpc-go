@@ -497,7 +497,7 @@ func (b *balancer) Up(addr grpc.Address) func(error) {
 	}
 }
 
-func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr grpc.Address, put func(), err error) {
+func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr grpc.Address, put func(grpc.BalancerPutOptions, error), err error) {
 	var ch chan struct{}
 	b.mu.Lock()
 	if b.done {

@@ -109,7 +109,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	var (
 		t      transport.ClientTransport
 		s      *transport.Stream
-		put    func()
+		put    func(BalancerPutOptions, error)
 		cancel context.CancelFunc
 	)
 	c := defaultCallInfo
@@ -194,7 +194,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if put != nil {
-				put()
+				put(BalancerPutOptions{rpcFinishType: RPCFailedToSend}, err) // TODO: failed to send?
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -272,7 +272,7 @@ type clientStream struct {
 	tracing bool // set to EnableTracing when the clientStream is created.
 
 	mu       sync.Mutex
-	put      func()
+	put      func(BalancerPutOptions, error)
 	closed   bool
 	finished bool
 	// trInfo.tr is set when the clientStream is created (if EnableTracing is true),
@@ -460,7 +460,7 @@ func (cs *clientStream) finish(err error) {
 		o.after(&cs.c)
 	}
 	if cs.put != nil {
-		cs.put()
+		cs.put(BalancerPutOptions{}, err) // TODO
 		cs.put = nil
 	}
 	if cs.statsHandler != nil {
