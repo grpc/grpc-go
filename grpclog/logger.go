@@ -78,7 +78,7 @@ func (g *loggerWrapper) Errorf(format string, args ...interface{}) {
 	g.Logger.Printf(format, args...)
 }
 
-func (g *loggerWrapper) V(l VerboseLevel) bool {
+func (g *loggerWrapper) V(l int) bool {
 	// Returns true for all verbose level.
 	return true
 }

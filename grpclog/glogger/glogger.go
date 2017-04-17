@@ -79,6 +79,6 @@ func (g *glogger) Fatalf(format string, args ...interface{}) {
 	glog.Fatalf(format, args...)
 }
 
-func (g *glogger) V(l grpclog.VerboseLevel) bool {
+func (g *glogger) V(l int) bool {
 	return bool(glog.V(glog.Level(l)))
 }

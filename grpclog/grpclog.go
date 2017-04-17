@@ -38,7 +38,7 @@ import "os"
 var logger = newLoggerV2()
 
 // V reports whether verbosity level l is at least the requested verbose level.
-func V(l VerboseLevel) bool {
+func V(l int) bool {
 	return logger.V(l)
 }
 
@@ -87,19 +87,22 @@ func Errorln(args ...interface{}) {
 	logger.Errorln(args...)
 }
 
-// Fatal is equivalent to Info() followed by a call to os.Exit() with a non-zero exit code.
+// Fatal logs to the FATAL log. Arguments are handled in the manner of fmt.Print.
+// It calls os.Exit() with exit code 1.
 func Fatal(args ...interface{}) {
 	logger.Fatal(args...)
 	os.Exit(1)
 }
 
-// Fatalf is equivalent to Infof() followed by a call to os.Exit() with a non-zero exit code.
+// Fatalf logs to the FATAL log. Arguments are handled in the manner of fmt.Printf.
+// It calles os.Exit() with exit code 1.
 func Fatalf(format string, args ...interface{}) {
 	logger.Fatalf(format, args...)
 	os.Exit(1)
 }
 
-// Fatalln is equivalent to Infoln() followed by a call to os.Exit()) with a non-zero exit code.
+// Fatalln logs to the FATAL log. Arguments are handled in the manner of fmt.Println.
+// It calle os.Exit()) with exit code 1.
 func Fatalln(args ...interface{}) {
 	logger.Fatalln(args...)
 	os.Exit(1)

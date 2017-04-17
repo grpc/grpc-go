@@ -43,9 +43,6 @@ import (
 	"os"
 )
 
-// VerboseLevel identifies the verbose level used in grpclog.V() function.
-type VerboseLevel int32
-
 // LoggerV2 does underlying logging work for grpclog.
 type LoggerV2 interface {
 	// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
@@ -76,7 +73,7 @@ type LoggerV2 interface {
 	// This function should call os.Exit() with a non-zero exit code.
 	Fatalf(format string, args ...interface{})
 	// V reports whether verbosity level l is at least the requested verbose level.
-	V(l VerboseLevel) bool
+	V(l int) bool
 }
 
 // SetLoggerV2 sets logger that is used in grpc to a V2 logger.
@@ -178,7 +175,7 @@ func (g *loggerT) Fatalf(format string, args ...interface{}) {
 	g.m[fatalLog].Fatalf(format, args...)
 }
 
-func (g *loggerT) V(l VerboseLevel) bool {
+func (g *loggerT) V(l int) bool {
 	// Returns true for all verbose level.
 	// TODO support verbose level in the default logger.
 	return true
