@@ -152,6 +152,18 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 		if m.err != nil {
 			return 0, m.err
 		}
+
+		// If we get an empty data frame, we have read zero bytes, but we have
+		// not necessarily reached the end of the stream.  So, do not use a
+		// bytes.Reader to produce our return value, since that would return
+		// EOF.  Returning 0, nil is "discouraged" by the interface definition,
+		// but callers are instructed to interpret this case correctly, and it
+		// seems preferable to introducing a giant loop or potentially
+		// unbounded recursion.
+		if len(m.data) == 0 {
+			return 0, nil
+		}
+
 		r.last = bytes.NewReader(m.data)
 		return r.last.Read(p)
 	}
