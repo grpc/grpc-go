@@ -210,6 +210,13 @@ public final class FakeClock {
   }
 
   /**
+   * Ticker of the FakeClock.
+   */
+  public Ticker getTicker() {
+    return ticker;
+  }
+
+  /**
    * Run all due tasks.
    *
    * @return the number of tasks run by this call

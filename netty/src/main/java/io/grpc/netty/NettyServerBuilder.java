@@ -65,11 +65,13 @@ import javax.net.ssl.SSLException;
 public final class NettyServerBuilder extends AbstractServerImplBuilder<NettyServerBuilder> {
   public static final int DEFAULT_FLOW_CONTROL_WINDOW = 1048576; // 1MiB
 
+  static final long MAX_CONNECTION_IDLE_NANOS_DISABLED = Long.MAX_VALUE;
   static final long MAX_CONNECTION_AGE_NANOS_DISABLED = Long.MAX_VALUE;
   static final long MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE = Long.MAX_VALUE;
 
   private static final long MIN_KEEPALIVE_TIME_NANO = TimeUnit.MILLISECONDS.toNanos(1L);
   private static final long MIN_KEEPALIVE_TIMEOUT_NANO = TimeUnit.MICROSECONDS.toNanos(499L);
+  private static final long MIN_MAX_CONNECTION_IDLE_NANO = TimeUnit.SECONDS.toNanos(1L);
   private static final long MIN_MAX_CONNECTION_AGE_NANO = TimeUnit.SECONDS.toNanos(1L);
   private static final long AS_LARGE_AS_INFINITE = TimeUnit.DAYS.toNanos(1000L);
 
@@ -87,6 +89,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
   private long keepAliveTimeInNanos =  DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+  private long maxConnectionIdleInNanos = MAX_CONNECTION_IDLE_NANOS_DISABLED;
   private long maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
   private boolean permitKeepAliveWithoutCalls;
@@ -285,6 +288,27 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   }
 
   /**
+   * Sets a custom max connection idle time, connection being idle for longer than which will be
+   * gracefully terminated. Idleness duration is defined since the most recent time the number of
+   * outstanding RPCs became zero or the connection establishment. An unreasonably small value might
+   * be increased. {@code Long.MAX_VALUE} nano seconds or an unreasonably large value will disable
+   * max connection idle.
+   *
+   * @since 1.4.0
+   */
+  public NettyServerBuilder maxConnectionIdle(long maxConnectionIdle, TimeUnit timeUnit) {
+    checkArgument(maxConnectionIdle > 0L, "max connection idle must be positive");
+    maxConnectionIdleInNanos = timeUnit.toNanos(maxConnectionIdle);
+    if (maxConnectionIdleInNanos >= AS_LARGE_AS_INFINITE) {
+      maxConnectionIdleInNanos = MAX_CONNECTION_IDLE_NANOS_DISABLED;
+    }
+    if (maxConnectionIdleInNanos < MIN_MAX_CONNECTION_IDLE_NANO) {
+      maxConnectionIdleInNanos = MIN_MAX_CONNECTION_IDLE_NANO;
+    }
+    return this;
+  }
+
+  /**
    * Sets a custom max connection age, connection lasting longer than which will be gracefully
    * terminated. An unreasonably small value might be increased.  A random jitter of +/-10% will be
    * added to it. {@code Long.MAX_VALUE} nano seconds or an unreasonably large value will disable
@@ -364,9 +388,11 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
               ProtocolNegotiators.serverPlaintext();
     }
 
-    return new NettyServer(address, channelType, bossEventLoopGroup, workerEventLoopGroup,
+    return new NettyServer(
+        address, channelType, bossEventLoopGroup, workerEventLoopGroup,
         negotiator, streamTracerFactories, maxConcurrentCallsPerConnection, flowControlWindow,
         maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }

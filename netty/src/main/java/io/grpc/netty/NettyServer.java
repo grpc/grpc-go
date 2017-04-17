@@ -80,6 +80,7 @@ class NettyServer implements InternalServer {
   private final int maxHeaderListSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final long maxConnectionIdleInNanos;
   private final long maxConnectionAgeInNanos;
   private final long maxConnectionAgeGraceInNanos;
   private final boolean permitKeepAliveWithoutCalls;
@@ -93,6 +94,7 @@ class NettyServer implements InternalServer {
       ProtocolNegotiator protocolNegotiator, List<ServerStreamTracer.Factory> streamTracerFactories,
       int maxStreamsPerConnection, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
       long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+      long maxConnectionIdleInNanos,
       long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
       boolean permitKeepAliveWithoutCalls, long permitKeepAliveTimeInNanos) {
     this.address = address;
@@ -109,6 +111,7 @@ class NettyServer implements InternalServer {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.maxConnectionIdleInNanos = maxConnectionIdleInNanos;
     this.maxConnectionAgeInNanos = maxConnectionAgeInNanos;
     this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
@@ -157,6 +160,7 @@ class NettyServer implements InternalServer {
                 ch, protocolNegotiator, streamTracerFactories, maxStreamsPerConnection,
                 flowControlWindow, maxMessageSize, maxHeaderListSize,
                 keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+                maxConnectionIdleInNanos,
                 maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
                 permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
         ServerTransportListener transportListener;

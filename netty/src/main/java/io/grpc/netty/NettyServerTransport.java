@@ -62,6 +62,7 @@ class NettyServerTransport implements ServerTransport {
   private final int maxHeaderListSize;
   private final long keepAliveTimeInNanos;
   private final long keepAliveTimeoutInNanos;
+  private final long maxConnectionIdleInNanos;
   private final long maxConnectionAgeInNanos;
   private final long maxConnectionAgeGraceInNanos;
   private final boolean permitKeepAliveWithoutCalls;
@@ -73,6 +74,7 @@ class NettyServerTransport implements ServerTransport {
       List<ServerStreamTracer.Factory> streamTracerFactories, int maxStreams,
       int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
       long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
+      long maxConnectionIdleInNanos,
       long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
       boolean permitKeepAliveWithoutCalls,long permitKeepAliveTimeInNanos) {
     this.channel = Preconditions.checkNotNull(channel, "channel");
@@ -85,6 +87,7 @@ class NettyServerTransport implements ServerTransport {
     this.maxHeaderListSize = maxHeaderListSize;
     this.keepAliveTimeInNanos = keepAliveTimeInNanos;
     this.keepAliveTimeoutInNanos = keepAliveTimeoutInNanos;
+    this.maxConnectionIdleInNanos = maxConnectionIdleInNanos;
     this.maxConnectionAgeInNanos = maxConnectionAgeInNanos;
     this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
@@ -155,6 +158,7 @@ class NettyServerTransport implements ServerTransport {
         transportListener, streamTracerFactories, maxStreams,
         flowControlWindow, maxHeaderListSize, maxMessageSize,
         keepAliveTimeInNanos, keepAliveTimeoutInNanos,
+        maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }

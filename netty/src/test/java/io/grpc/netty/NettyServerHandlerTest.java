@@ -35,6 +35,7 @@ import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
+import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_IDLE_NANOS_DISABLED;
 import static io.grpc.netty.Utils.CONTENT_TYPE_GRPC;
 import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
@@ -125,6 +126,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private int maxHeaderListSize = Integer.MAX_VALUE;
   private boolean permitKeepAliveWithoutCalls = true;
   private long permitKeepAliveTimeInNanos = 0;
+  private long maxConnectionIdleInNanos = MAX_CONNECTION_IDLE_NANOS_DISABLED;
   private long maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 
@@ -535,6 +537,68 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
+  public void noGoAwaySentBeforeMaxConnectionIdleReached() throws Exception {
+    maxConnectionIdleInNanos = TimeUnit.MINUTES.toNanos(30L);
+    setUp();
+
+    TestUtils.sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY not sent yet
+    verifyWrite(never()).writeGoAway(
+        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
+        any(ChannelPromise.class));
+    assertTrue(channel().isOpen());
+  }
+
+  @Test
+  public void maxConnectionIdle_goAwaySent() throws Exception {
+    maxConnectionIdleInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    setUp();
+    assertTrue(channel().isOpen());
+
+    TestUtils.sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY sent
+    verifyWrite().writeGoAway(
+        eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
+        any(ChannelPromise.class));
+
+    // channel closed
+    assertTrue(!channel().isOpen());
+  }
+
+  @Test
+  public void maxConnectionIdle_activeThenRst() throws Exception {
+    maxConnectionIdleInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    setUp();
+    createStream();
+
+    TestUtils.sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY not sent when active
+    verifyWrite(never()).writeGoAway(
+        any(ChannelHandlerContext.class), any(Integer.class), any(Long.class), any(ByteBuf.class),
+        any(ChannelPromise.class));
+    assertTrue(channel().isOpen());
+
+    channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
+
+    TestUtils.sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    // GO_AWAY sent
+    verifyWrite().writeGoAway(
+        eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
+        any(ChannelPromise.class));
+
+    // channel closed
+    assertTrue(!channel().isOpen());
+  }
+
+  @Test
   public void noGoAwaySentBeforeMaxConnectionAgeReached() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MINUTES.toNanos(30L);
     setUp();
@@ -640,10 +704,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Override
   protected NettyServerHandler newHandler() {
-    return NettyServerHandler.newHandler(frameReader(), frameWriter(), transportListener,
+    return NettyServerHandler.newHandler(
+        frameReader(), frameWriter(), transportListener,
         Arrays.asList(streamTracerFactory), maxConcurrentStreams, flowControlWindow,
         maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
-        2000L, 100L, maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        2000L, 100L,
+        maxConnectionIdleInNanos,
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
