@@ -1448,7 +1448,7 @@ public abstract class AbstractInteropTest {
     // Tracer-based stats
     ClientStreamTracer tracer = clientStreamTracers.poll();
     assertNotNull(tracer);
-    verify(tracer).headersSent();
+    verify(tracer).outboundHeaders();
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     // assertClientMetrics() is called right after application receives status,
     // but streamClosed() may be called slightly later than that.  So we need a timeout.

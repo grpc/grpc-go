@@ -191,7 +191,7 @@ public class CensusStreamTracerModuleTest {
     ClientStreamTracer tracer = callTracer.newClientStreamTracer(headers);
 
     fakeClock.forwardTime(30, MILLISECONDS);
-    tracer.headersSent();
+    tracer.outboundHeaders();
 
     fakeClock.forwardTime(100, MILLISECONDS);
     tracer.outboundWireSize(1028);

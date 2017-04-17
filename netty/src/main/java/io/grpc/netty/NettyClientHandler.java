@@ -422,7 +422,7 @@ class NettyClientHandler extends AbstractNettyHandler {
                   // was canceled via RST_STREAM.
                   Http2Stream http2Stream = connection().stream(streamId);
                   if (http2Stream != null) {
-                    stream.getStatsTraceContext().clientHeadersSent();
+                    stream.getStatsTraceContext().clientOutboundHeaders();
                     http2Stream.setProperty(streamKey, stream);
 
                     // Attach the client stream to the HTTP/2 stream object as user data.

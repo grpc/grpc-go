@@ -42,7 +42,13 @@ public abstract class ClientStreamTracer extends StreamTracer {
   /**
    * Headers has been sent to the socket.
    */
-  public void headersSent() {
+  public void outboundHeaders() {
+  }
+
+  /**
+   * Headers has been received from the server.
+   */
+  public void inboundHeaders() {
   }
 
   /**
