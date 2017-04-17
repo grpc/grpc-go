@@ -111,6 +111,10 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 					v = v[:i]
 				}
 			}
+			v, err := decodeMetadataHeader(k, v)
+			if err != nil {
+				return nil, streamErrorf(codes.InvalidArgument, "malformed binary metadata: %v", err)
+			}
 			metakv = append(metakv, k, v)
 		}
 	}
@@ -207,10 +211,9 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 					continue
 				}
 				for _, v := range vv {
-					// http2 ResponseWriter mechanism to
-					// send undeclared Trailers after the
-					// headers have possibly been written.
-					h.Add(http2.TrailerPrefix+k, v)
+					// http2 ResponseWriter mechanism to send undeclared Trailers after
+					// the headers have possibly been written.
+					h.Add(http2.TrailerPrefix+k, encodeMetadataHeader(k, v))
 				}
 			}
 		}
@@ -265,6 +268,7 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 				continue
 			}
 			for _, v := range vv {
+				v = encodeMetadataHeader(k, v)
 				h.Add(k, v)
 			}
 		}

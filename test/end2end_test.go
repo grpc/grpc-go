@@ -75,8 +75,9 @@ import (
 var (
 	// For headers:
 	testMetadata = metadata.MD{
-		"key1": []string{"value1"},
-		"key2": []string{"value2"},
+		"key1":     []string{"value1"},
+		"key2":     []string{"value2"},
+		"key3-bin": []string{"binvalue1", string([]byte{1, 2, 3})},
 	}
 	testMetadata2 = metadata.MD{
 		"key1": []string{"value12"},
@@ -84,8 +85,9 @@ var (
 	}
 	// For trailers:
 	testTrailerMetadata = metadata.MD{
-		"tkey1": []string{"trailerValue1"},
-		"tkey2": []string{"trailerValue2"},
+		"tkey1":     []string{"trailerValue1"},
+		"tkey2":     []string{"trailerValue2"},
+		"tkey3-bin": []string{"trailerbinvalue1", string([]byte{3, 2, 1})},
 	}
 	testTrailerMetadata2 = metadata.MD{
 		"tkey1": []string{"trailerValue12"},

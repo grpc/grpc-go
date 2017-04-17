@@ -644,13 +644,13 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	if s.sendCompress != "" {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
-	for k, v := range md {
+	for k, vv := range md {
 		if isReservedHeader(k) {
 			// Clients don't tolerate reading restricted headers after some non restricted ones were sent.
 			continue
 		}
-		for _, entry := range v {
-			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+		for _, v := range vv {
+			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
 	bufLen := t.hBuf.Len()
@@ -713,21 +713,17 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 			panic(err)
 		}
 
-		for k, v := range metadata.New(map[string]string{"grpc-status-details-bin": (string)(stBytes)}) {
-			for _, entry := range v {
-				t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
-			}
-		}
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-status-details-bin", Value: encodeBinHeader(stBytes)})
 	}
 
 	// Attach the trailer metadata.
-	for k, v := range s.trailer {
+	for k, vv := range s.trailer {
 		// Clients don't tolerate reading restricted headers after some non restricted ones were sent.
 		if isReservedHeader(k) {
 			continue
 		}
-		for _, entry := range v {
-			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: entry})
+		for _, v := range vv {
+			t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
 	bufLen := t.hBuf.Len()
