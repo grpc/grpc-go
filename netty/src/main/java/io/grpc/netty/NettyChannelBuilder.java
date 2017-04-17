@@ -45,6 +45,7 @@ import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
+import io.grpc.internal.AtomicBackoff;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
@@ -451,7 +452,7 @@ public final class NettyChannelBuilder
     private final int flowControlWindow;
     private final int maxMessageSize;
     private final int maxHeaderListSize;
-    private final long keepAliveTimeNanos;
+    private final AtomicBackoff keepAliveTimeNanos;
     private final long keepAliveTimeoutNanos;
     private final boolean keepAliveWithoutCalls;
 
@@ -481,7 +482,7 @@ public final class NettyChannelBuilder
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
       this.maxHeaderListSize = maxHeaderListSize;
-      this.keepAliveTimeNanos = keepAliveTimeNanos;
+      this.keepAliveTimeNanos = new AtomicBackoff("keepalive time nanos", keepAliveTimeNanos);
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
       usingSharedGroup = group == null;
@@ -501,11 +502,19 @@ public final class NettyChannelBuilder
       TransportCreationParamsFilter dparams =
           transportCreationParamsFilterFactory.create(serverAddress, authority, userAgent);
 
+      final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
+      Runnable tooManyPingsRunnable = new Runnable() {
+        @Override
+        public void run() {
+          keepAliveTimeNanosState.backoff();
+        }
+      };
       NettyClientTransport transport = new NettyClientTransport(
           dparams.getTargetServerAddress(), channelType, channelOptions, group,
           dparams.getProtocolNegotiator(), flowControlWindow,
-          maxMessageSize, maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos,
-          keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent());
+          maxMessageSize, maxHeaderListSize, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos,
+          keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent(),
+          tooManyPingsRunnable);
       return transport;
     }
 

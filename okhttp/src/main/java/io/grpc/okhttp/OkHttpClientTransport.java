@@ -190,6 +190,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private final String proxyUsername;
   @Nullable
   private final String proxyPassword;
+  private final Runnable tooManyPingsRunnable;
 
   // The following fields should only be used for test.
   Runnable connectingCallback;
@@ -198,7 +199,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   OkHttpClientTransport(InetSocketAddress address, String authority, @Nullable String userAgent,
       Executor executor, @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
       int maxMessageSize, @Nullable InetSocketAddress proxyAddress, @Nullable String proxyUsername,
-      @Nullable String proxyPassword) {
+      @Nullable String proxyPassword, Runnable tooManyPingsRunnable) {
     this.address = Preconditions.checkNotNull(address, "address");
     this.defaultAuthority = authority;
     this.maxMessageSize = maxMessageSize;
@@ -214,6 +215,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.proxyAddress = proxyAddress;
     this.proxyUsername = proxyUsername;
     this.proxyPassword = proxyPassword;
+    this.tooManyPingsRunnable =
+        Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
   }
 
   /**
@@ -223,7 +226,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   OkHttpClientTransport(String userAgent, Executor executor, FrameReader frameReader,
       FrameWriter testFrameWriter, int nextStreamId, Socket socket, Ticker ticker,
       @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture,
-      int maxMessageSize) {
+      int maxMessageSize, Runnable tooManyPingsRunnable) {
     address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
@@ -241,6 +244,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.proxyAddress = null;
     this.proxyUsername = null;
     this.proxyPassword = null;
+    this.tooManyPingsRunnable =
+        Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
   }
 
   /**
@@ -1014,9 +1019,17 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
     @Override
     public void goAway(int lastGoodStreamId, ErrorCode errorCode, ByteString debugData) {
+      if (errorCode == ErrorCode.ENHANCE_YOUR_CALM) {
+        String data = debugData.utf8();
+        log.log(Level.WARNING, String.format(
+            "%s: Received GOAWAY with ENHANCE_YOUR_CALM. Debug data: %s", this, data));
+        if ("too_many_pings".equals(data)) {
+          tooManyPingsRunnable.run();
+        }
+      }
       Status status = GrpcUtil.Http2Error.statusForCode(errorCode.httpCode)
           .augmentDescription("Received Goaway");
-      if (debugData != null && debugData.size() > 0) {
+      if (debugData.size() > 0) {
         // If a debug message was provided, use it.
         status = status.augmentDescription(debugData.utf8());
       }

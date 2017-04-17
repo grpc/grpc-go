@@ -87,6 +87,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final long keepAliveTimeNanos;
   private final long keepAliveTimeoutNanos;
   private final boolean keepAliveWithoutCalls;
+  private final Runnable tooManyPingsRunnable;
 
   private ProtocolNegotiator.Handler negotiationHandler;
   private NettyClientHandler handler;
@@ -103,7 +104,8 @@ class NettyClientTransport implements ConnectionClientTransport {
       Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
       ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
       int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
-      boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent) {
+      boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent,
+      Runnable tooManyPingsRunnable) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
@@ -117,6 +119,8 @@ class NettyClientTransport implements ConnectionClientTransport {
     this.keepAliveWithoutCalls = keepAliveWithoutCalls;
     this.authority = new AsciiString(authority);
     this.userAgent = new AsciiString(GrpcUtil.getGrpcUserAgent("netty", userAgent));
+    this.tooManyPingsRunnable =
+        Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
   }
 
   @Override
@@ -184,7 +188,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     }
 
     handler = NettyClientHandler.newHandler(lifecycleManager, keepAliveManager, flowControlWindow,
-        maxHeaderListSize, Ticker.systemTicker());
+        maxHeaderListSize, Ticker.systemTicker(), tooManyPingsRunnable);
     HandlerSettings.setAutoWindow(handler);
 
     negotiationHandler = negotiator.newHandler(handler);

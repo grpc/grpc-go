@@ -89,6 +89,7 @@ import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import java.io.InputStream;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -116,6 +117,9 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   private List<String> setKeepaliveManagerFor = ImmutableList.of("cancelShouldSucceed",
       "sendFrameShouldSucceed", "channelShutdownShouldCancelBufferedStreams",
       "createIncrementsIdsForActualAndBufferdStreams", "dataPingAckIsRecognized");
+  private Runnable tooManyPingsRunnable = new Runnable() {
+    @Override public void run() {}
+  };
 
   @Rule
   public TestName testNameRule = new TestName();
@@ -348,6 +352,48 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
         status.getDescription());
   }
 
+  // This test is not as useful as it looks, because the HTTP/2 Netty code catches and doesn't
+  // propagate exceptions during the onGoAwayReceived callback.
+  @Test
+  public void receivedGoAway_notUtf8() throws Exception {
+    // 0xFF is never permitted in UTF-8. 0xF0 should have 3 continuations following, and 0x0a isn't
+    // a continuation.
+    channelRead(goAwayFrame(0, 11 /* ENHANCE_YOUR_CALM */,
+          Unpooled.copiedBuffer(new byte[] {(byte) 0xFF, (byte) 0xF0, (byte) 0x0a})));
+  }
+
+  @Test
+  public void receivedGoAway_enhanceYourCalmWithoutTooManyPings() throws Exception {
+    final AtomicBoolean b = new AtomicBoolean();
+    tooManyPingsRunnable = new Runnable() {
+      @Override
+      public void run() {
+        b.set(true);
+      }
+    };
+    setUp();
+
+    channelRead(goAwayFrame(0, 11 /* ENHANCE_YOUR_CALM */,
+          Unpooled.copiedBuffer("not_many_pings", UTF_8)));
+    assertFalse(b.get());
+  }
+
+  @Test
+  public void receivedGoAway_enhanceYourCalmWithTooManyPings() throws Exception {
+    final AtomicBoolean b = new AtomicBoolean();
+    tooManyPingsRunnable = new Runnable() {
+      @Override
+      public void run() {
+        b.set(true);
+      }
+    };
+    setUp();
+
+    channelRead(goAwayFrame(0, 11 /* ENHANCE_YOUR_CALM */,
+          Unpooled.copiedBuffer("too_many_pings", UTF_8)));
+    assertTrue(b.get());
+  }
+
   @Test
   public void cancelStreamShouldCreateAndThenFailBufferedStream() throws Exception {
     receiveMaxConcurrentStreams(0);
@@ -575,7 +621,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     };
 
     return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
-        lifecycleManager, mockKeepAliveManager, flowControlWindow, maxHeaderListSize, ticker);
+        lifecycleManager, mockKeepAliveManager, flowControlWindow, maxHeaderListSize, ticker,
+        tooManyPingsRunnable);
   }
 
   @Override

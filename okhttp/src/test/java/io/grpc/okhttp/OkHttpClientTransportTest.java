@@ -99,8 +99,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 import okio.Buffer;
+import okio.ByteString;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -140,6 +142,11 @@ public class OkHttpClientTransportTest {
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
   private SettableFuture<Void> connectedFuture;
   private DelayConnectedCallback delayConnectedCallback;
+  private Runnable tooManyPingsRunnable = new Runnable() {
+    @Override public void run() {
+      throw new AssertionError();
+    }
+  };
 
   /** Set up for test. */
   @Before
@@ -179,7 +186,7 @@ public class OkHttpClientTransportTest {
     };
     clientTransport = new OkHttpClientTransport(userAgent, executor, frameReader,
         frameWriter, startId, new MockSocket(frameReader), ticker, connectingCallback,
-        connectedFuture, maxMessageSize);
+        connectedFuture, maxMessageSize, tooManyPingsRunnable);
     clientTransport.start(transportListener);
     if (waitingForConnected) {
       connectedFuture.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);
@@ -192,7 +199,7 @@ public class OkHttpClientTransportTest {
     clientTransport = new OkHttpClientTransport(
         address, "hostname", null /* agent */, executor, null,
         Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE,
-        null, null, null);
+        null, null, null, tooManyPingsRunnable);
     String s = clientTransport.toString();
     assertTrue("Unexpected: " + s, s.contains("OkHttpClientTransport"));
     assertTrue("Unexpected: " + s, s.contains(address.toString()));
@@ -715,7 +722,7 @@ public class OkHttpClientTransportTest {
     assertEquals(2, activeStreamCount());
 
     // Receive goAway, max good id is 3.
-    frameHandler().goAway(3, ErrorCode.CANCEL, null);
+    frameHandler().goAway(3, ErrorCode.CANCEL, ByteString.EMPTY);
 
     // Transport should be in STOPPING state.
     verify(transportListener).transportShutdown(isA(Status.class));
@@ -864,7 +871,7 @@ public class OkHttpClientTransportTest {
     assertEquals(1, activeStreamCount());
 
     // Receives GO_AWAY.
-    frameHandler().goAway(99, ErrorCode.CANCEL, null);
+    frameHandler().goAway(99, ErrorCode.CANCEL, ByteString.EMPTY);
 
     listener2.waitUntilStreamClosed();
     assertEquals(Status.CANCELLED.getCode(), listener2.status.getCode());
@@ -1339,7 +1346,8 @@ public class OkHttpClientTransportTest {
         DEFAULT_MAX_MESSAGE_SIZE,
         null,
         null,
-        null);
+        null,
+        tooManyPingsRunnable);
 
     String host = clientTransport.getOverridenHost();
     int port = clientTransport.getOverridenPort();
@@ -1360,7 +1368,8 @@ public class OkHttpClientTransportTest {
         DEFAULT_MAX_MESSAGE_SIZE,
         null,
         null,
-        null);
+        null,
+        tooManyPingsRunnable);
 
     ManagedClientTransport.Listener listener = mock(ManagedClientTransport.Listener.class);
     clientTransport.start(listener);
@@ -1389,7 +1398,8 @@ public class OkHttpClientTransportTest {
         DEFAULT_MAX_MESSAGE_SIZE,
         (InetSocketAddress) serverSocket.getLocalSocketAddress(),
         null,
-        null);
+        null,
+        tooManyPingsRunnable);
     clientTransport.start(transportListener);
 
     Socket sock = serverSocket.accept();
@@ -1437,7 +1447,8 @@ public class OkHttpClientTransportTest {
         DEFAULT_MAX_MESSAGE_SIZE,
         (InetSocketAddress) serverSocket.getLocalSocketAddress(),
         null,
-        null);
+        null,
+        tooManyPingsRunnable);
     clientTransport.start(transportListener);
 
     Socket sock = serverSocket.accept();
@@ -1484,7 +1495,8 @@ public class OkHttpClientTransportTest {
         DEFAULT_MAX_MESSAGE_SIZE,
         (InetSocketAddress) serverSocket.getLocalSocketAddress(),
         null,
-        null);
+        null,
+        tooManyPingsRunnable);
     clientTransport.start(transportListener);
 
     Socket sock = serverSocket.accept();
@@ -1499,6 +1511,49 @@ public class OkHttpClientTransportTest {
     assertEquals("Not UNAVAILABLE: " + captor.getValue(),
         Status.UNAVAILABLE.getCode(), error.getCode());
     verify(transportListener, timeout(TIME_OUT_MS)).transportTerminated();
+  }
+
+  @Test
+  public void goAway_notUtf8() throws Exception {
+    initTransport();
+    // 0xFF is never permitted in UTF-8. 0xF0 should have 3 continuations following, and 0x0a isn't
+    // a continuation.
+    frameHandler().goAway(
+        0, ErrorCode.ENHANCE_YOUR_CALM, ByteString.of((byte) 0xFF, (byte) 0xF0, (byte) 0x0a));
+
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void goAway_notTooManyPings() throws Exception {
+    final AtomicBoolean run = new AtomicBoolean();
+    tooManyPingsRunnable = new Runnable() {
+      @Override
+      public void run() {
+        run.set(true);
+      }
+    };
+    initTransport();
+    frameHandler().goAway(0, ErrorCode.ENHANCE_YOUR_CALM, ByteString.encodeUtf8("not_many_pings"));
+    assertFalse(run.get());
+
+    shutdownAndVerify();
+  }
+
+  @Test
+  public void goAway_tooManyPings() throws Exception {
+    final AtomicBoolean run = new AtomicBoolean();
+    tooManyPingsRunnable = new Runnable() {
+      @Override
+      public void run() {
+        run.set(true);
+      }
+    };
+    initTransport();
+    frameHandler().goAway(0, ErrorCode.ENHANCE_YOUR_CALM, ByteString.encodeUtf8("too_many_pings"));
+    assertTrue(run.get());
+
+    shutdownAndVerify();
   }
 
   private int activeStreamCount() {

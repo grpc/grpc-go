@@ -113,6 +113,10 @@ public class NettyClientTransportTest {
   private final List<NettyClientTransport> transports = new ArrayList<NettyClientTransport>();
   private final NioEventLoopGroup group = new NioEventLoopGroup(1);
   private final EchoServerListener serverListener = new EchoServerListener();
+  private Runnable tooManyPingsRunnable = new Runnable() {
+    // Throwing is useless in this method, because Netty doesn't propagate the exception
+    @Override public void run() {}
+  };
 
   private InetSocketAddress address;
   private String authority;
@@ -173,7 +177,8 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
-        KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */);
+        KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */,
+        tooManyPingsRunnable);
     transports.add(transport);
     callMeMaybe(transport.start(clientTransportListener));
 
@@ -300,7 +305,7 @@ public class NettyClientTransportTest {
         address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
         newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
-        null);
+        null, tooManyPingsRunnable);
     transports.add(transport);
 
     // Should not throw
@@ -466,7 +471,7 @@ public class NettyClientTransportTest {
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
         DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize, keepAliveTimeNano, 1L, false, authority,
-        userAgent);
+        userAgent, tooManyPingsRunnable);
     transports.add(transport);
     return transport;
   }

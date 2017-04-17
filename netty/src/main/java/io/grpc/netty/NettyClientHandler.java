@@ -114,7 +114,7 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   static NettyClientHandler newHandler(ClientTransportLifecycleManager lifecycleManager,
       @Nullable KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
-      Ticker ticker) {
+      Ticker ticker, Runnable tooManyPingsRunnable) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ClientHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
@@ -122,20 +122,21 @@ class NettyClientHandler extends AbstractNettyHandler {
     Http2Connection connection = new DefaultHttp2Connection(false);
 
     return newHandler(connection, frameReader, frameWriter, lifecycleManager, keepAliveManager,
-        flowControlWindow, maxHeaderListSize, ticker);
+        flowControlWindow, maxHeaderListSize, ticker, tooManyPingsRunnable);
   }
 
   @VisibleForTesting
   static NettyClientHandler newHandler(Http2Connection connection, Http2FrameReader frameReader,
       Http2FrameWriter frameWriter, ClientTransportLifecycleManager lifecycleManager,
       KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
-      Ticker ticker) {
+      Ticker ticker, Runnable tooManyPingsRunnable) {
     Preconditions.checkNotNull(connection, "connection");
     Preconditions.checkNotNull(frameReader, "frameReader");
     Preconditions.checkNotNull(lifecycleManager, "lifecycleManager");
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Preconditions.checkNotNull(ticker, "ticker");
+    Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
 
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyClientHandler.class);
     frameReader = new Http2InboundFrameLogger(frameReader, frameLogger);
@@ -159,12 +160,12 @@ class NettyClientHandler extends AbstractNettyHandler {
     settings.maxHeaderListSize(maxHeaderListSize);
 
     return new NettyClientHandler(decoder, encoder, settings, lifecycleManager, keepAliveManager,
-        ticker);
+        ticker, tooManyPingsRunnable);
   }
 
   private NettyClientHandler(Http2ConnectionDecoder decoder, StreamBufferingEncoder encoder,
       Http2Settings settings, ClientTransportLifecycleManager lifecycleManager,
-      KeepAliveManager keepAliveManager, Ticker ticker) {
+      KeepAliveManager keepAliveManager, Ticker ticker, final Runnable tooManyPingsRunnable) {
     super(decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
     this.keepAliveManager = keepAliveManager;
@@ -179,7 +180,16 @@ class NettyClientHandler extends AbstractNettyHandler {
     connection.addListener(new Http2ConnectionAdapter() {
       @Override
       public void onGoAwayReceived(int lastStreamId, long errorCode, ByteBuf debugData) {
-        goingAway(statusFromGoAway(errorCode, ByteBufUtil.getBytes(debugData)));
+        byte[] debugDataBytes = ByteBufUtil.getBytes(debugData);
+        goingAway(statusFromGoAway(errorCode, debugDataBytes));
+        if (errorCode == Http2Error.ENHANCE_YOUR_CALM.code()) {
+          String data = new String(debugDataBytes, UTF_8);
+          logger.log(
+              Level.WARNING, "Received GOAWAY with ENHANCE_YOUR_CALM. Debug data: {1}", data);
+          if ("too_many_pings".equals(data)) {
+            tooManyPingsRunnable.run();
+          }
+        }
       }
 
       @Override

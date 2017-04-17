@@ -45,6 +45,7 @@ import io.grpc.ExperimentalApi;
 import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
+import io.grpc.internal.AtomicBackoff;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
@@ -360,7 +361,7 @@ public class OkHttpChannelBuilder extends
     private final ConnectionSpec connectionSpec;
     private final int maxMessageSize;
     private final boolean enableKeepAlive;
-    private final long keepAliveTimeNanos;
+    private final AtomicBackoff keepAliveTimeNanos;
     private final long keepAliveTimeoutNanos;
     private final boolean keepAliveWithoutCalls;
     private boolean closed;
@@ -377,7 +378,7 @@ public class OkHttpChannelBuilder extends
       this.connectionSpec = connectionSpec;
       this.maxMessageSize = maxMessageSize;
       this.enableKeepAlive = enableKeepAlive;
-      this.keepAliveTimeNanos = keepAliveTimeNanos;
+      this.keepAliveTimeNanos = new AtomicBackoff("keepalive time nanos", keepAliveTimeNanos);
       this.keepAliveTimeoutNanos = keepAliveTimeoutNanos;
       this.keepAliveWithoutCalls = keepAliveWithoutCalls;
 
@@ -406,13 +407,20 @@ public class OkHttpChannelBuilder extends
         }
         proxyAddress = new InetSocketAddress(parts[0], port);
       }
+      final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
+      Runnable tooManyPingsRunnable = new Runnable() {
+        @Override
+        public void run() {
+          keepAliveTimeNanosState.backoff();
+        }
+      };
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       OkHttpClientTransport transport = new OkHttpClientTransport(inetSocketAddr, authority,
           userAgent, executor, socketFactory, Utils.convertSpec(connectionSpec), maxMessageSize,
-          proxyAddress, null, null);
+          proxyAddress, null, null, tooManyPingsRunnable);
       if (enableKeepAlive) {
         transport.enableKeepAlive(
-            true, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
+            true, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos, keepAliveWithoutCalls);
       }
       return transport;
     }
