@@ -194,7 +194,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if put != nil {
-				put()
+				put() // TODO: failed to send?
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -460,7 +460,7 @@ func (cs *clientStream) finish(err error) {
 		o.after(&cs.c)
 	}
 	if cs.put != nil {
-		cs.put()
+		cs.put() // TODO
 		cs.put = nil
 	}
 	if cs.statsHandler != nil {

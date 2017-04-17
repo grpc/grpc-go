@@ -249,13 +249,14 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
 			if put != nil {
-				put()
+				// put() // WHAT???
 				put = nil
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+				// put() // failed to send.
 				if c.failFast {
 					return toRPCErr(err)
 				}
@@ -266,7 +267,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
-				put()
+				// put() // WHAT???
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -282,7 +283,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
-			put()
+			put() // TODO what?
 			put = nil
 		}
 		return stream.Status().Err()

@@ -662,14 +662,14 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	}
 	if !ok {
 		if put != nil {
-			put()
+			put() // failed to send.
 		}
 		return nil, nil, errConnClosing
 	}
 	t, err := ac.wait(ctx, cc.dopts.balancer != nil, !opts.BlockingWait)
 	if err != nil {
 		if put != nil {
-			put()
+			put() // failed to send.
 		}
 		return nil, nil, err
 	}
