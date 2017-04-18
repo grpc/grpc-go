@@ -34,6 +34,7 @@ package io.grpc.internal;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import javax.annotation.Nullable;
 
 /**
  * Extension of {@link Stream} to support server-side termination semantics.
@@ -78,8 +79,9 @@ public interface ServerStream extends Stream {
 
   /**
    * Gets the authority this stream is addressed to.
-   * @return the authority string.
+   * @return the authority string. {@code null} if not available.
    */
+  @Nullable
   String getAuthority();
 
   /**

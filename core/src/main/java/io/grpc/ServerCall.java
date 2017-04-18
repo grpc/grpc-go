@@ -32,6 +32,7 @@
 package io.grpc;
 
 import com.google.errorprone.annotations.DoNotMock;
+import javax.annotation.Nullable;
 
 /**
  * Encapsulates a single call received from a remote client. Calls may not simply be unary
@@ -213,6 +214,17 @@ public abstract class ServerCall<ReqT, RespT> {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1779")
   public Attributes getAttributes() {
     return Attributes.EMPTY;
+  }
+
+  /**
+   * Gets the authority this call is addressed to.
+   *
+   * @return the authority string. {@code null} if not available.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2924")
+  @Nullable
+  public String getAuthority() {
+    return null;
   }
 
   /**

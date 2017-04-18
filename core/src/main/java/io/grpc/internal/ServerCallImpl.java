@@ -195,6 +195,11 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   }
 
   @Override
+  public String getAuthority() {
+    return stream.getAuthority();
+  }
+
+  @Override
   public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
     return method;
   }

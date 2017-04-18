@@ -181,6 +181,20 @@ public class ServerCallImplTest {
   }
 
   @Test
+  public void getAuthority() {
+    when(stream.getAuthority()).thenReturn("fooapi.googleapis.com");
+    assertEquals("fooapi.googleapis.com", call.getAuthority());
+    verify(stream).getAuthority();
+  }
+
+  @Test
+  public void getNullAuthority() {
+    when(stream.getAuthority()).thenReturn(null);
+    assertNull(call.getAuthority());
+    verify(stream).getAuthority();
+  }
+
+  @Test
   public void setMessageCompression() {
     call.setMessageCompression(true);
 
