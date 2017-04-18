@@ -190,7 +190,7 @@ public class ClientCallImplTest {
     streamListener.headersRead(new Metadata());
 
     RuntimeException failure = new RuntimeException("bad");
-    doThrow(failure).when(callListener).onMessage(any(Void.class));
+    doThrow(failure).when(callListener).onMessage(Matchers.<Void>any());
 
     /*
      * In unary calls, the server closes the call right after responding, so the onClose call is

@@ -473,7 +473,7 @@ public abstract class AbstractTransportTest {
       // Transport doesn't support ping, so this neither passes nor fails.
       assumeTrue(false);
     }
-    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyInt());
+    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyLong());
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
 
@@ -494,7 +494,7 @@ public abstract class AbstractTransportTest {
       // Transport doesn't support ping, so this neither passes nor fails.
       assumeTrue(false);
     }
-    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyInt());
+    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(Matchers.anyLong());
     stream.cancel(Status.CANCELLED);
   }
 
