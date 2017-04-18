@@ -101,7 +101,7 @@ func runRecordRoute(client pb.RouteGuideClient) {
 		grpclog.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 	}
 	for _, point := range points {
-		if err := stream.Send(point); err != nil {
+		if err = stream.Send(point); err != nil {
 			grpclog.Fatalf("%v.Send(%v) = %v", stream, point, err)
 		}
 	}
