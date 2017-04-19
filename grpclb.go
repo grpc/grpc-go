@@ -49,22 +49,14 @@ import (
 	"google.golang.org/grpc/naming"
 )
 
-// Client API for LoadBalancer service
-
-type LoadBalancerClient interface {
-	// Bidirectional rpc to get a list of servers.
-	BalanceLoad(ctx context.Context, opts ...CallOption) (LoadBalancer_BalanceLoadClient, error)
-}
-
+// Client API for LoadBalancer service.
+// Mostly copied from generated pb.go file.
+// To avoid circular dependency.
 type loadBalancerClient struct {
 	cc *ClientConn
 }
 
-func NewLoadBalancerClient(cc *ClientConn) LoadBalancerClient {
-	return &loadBalancerClient{cc}
-}
-
-func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption) (LoadBalancer_BalanceLoadClient, error) {
+func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption) (*balanceLoadClientStream, error) {
 	stream, err := NewClientStream(ctx,
 		&StreamDesc{
 			StreamName:    "BalanceLoad",
@@ -75,25 +67,19 @@ func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption
 	if err != nil {
 		return nil, err
 	}
-	x := &loadBalancerBalanceLoadClient{stream}
+	x := &balanceLoadClientStream{stream}
 	return x, nil
 }
 
-type LoadBalancer_BalanceLoadClient interface {
-	Send(*lbpb.LoadBalanceRequest) error
-	Recv() (*lbpb.LoadBalanceResponse, error)
+type balanceLoadClientStream struct {
 	ClientStream
 }
 
-type loadBalancerBalanceLoadClient struct {
-	ClientStream
-}
-
-func (x *loadBalancerBalanceLoadClient) Send(m *lbpb.LoadBalanceRequest) error {
+func (x *balanceLoadClientStream) Send(m *lbpb.LoadBalanceRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *loadBalancerBalanceLoadClient) Recv() (*lbpb.LoadBalanceResponse, error) {
+func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 	m := new(lbpb.LoadBalanceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -296,7 +282,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
-func (b *balancer) callRemoteBalancer(lbc LoadBalancerClient, seq int) (retry bool) {
+func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream, err := lbc.BalanceLoad(ctx)
@@ -492,7 +478,7 @@ func (b *balancer) Start(target string, config BalancerConfig) error {
 			b.next = 0
 			b.mu.Unlock()
 			go func(cc *ClientConn, ccError chan struct{}) {
-				lbc := NewLoadBalancerClient(cc)
+				lbc := &loadBalancerClient{cc}
 				b.callRemoteBalancer(lbc, seq)
 				cc.Close()
 				select {
