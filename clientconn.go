@@ -624,11 +624,11 @@ func (cc *ClientConn) getMethodConfig(method string) (m MethodConfig, ok bool) {
 	return
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(BalancerPutOptions, error), error) {
+func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
 	var (
 		ac  *addrConn
 		ok  bool
-		put func(BalancerPutOptions, error)
+		put func()
 	)
 	if cc.dopts.balancer == nil {
 		// If balancer is nil, there should be only one addrConn available.
@@ -662,14 +662,14 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	}
 	if !ok {
 		if put != nil {
-			put(BalancerPutOptions{rpcFinishType: RPCFailedToSend}, errConnClosing) // failed to send.
+			put()
 		}
 		return nil, nil, errConnClosing
 	}
 	t, err := ac.wait(ctx, cc.dopts.balancer != nil, !opts.BlockingWait)
 	if err != nil {
 		if put != nil {
-			put(BalancerPutOptions{rpcFinishType: RPCFailedToSend}, err) // failed to send.
+			put()
 		}
 		return nil, nil, err
 	}

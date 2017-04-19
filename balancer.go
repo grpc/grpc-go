@@ -70,28 +70,6 @@ type BalancerGetOptions struct {
 	BlockingWait bool
 }
 
-// RPCFinishState indicates how an RPC finishes.
-type RPCFinishState int
-
-const (
-	// Unclear indicates the rpc finish state is unclear. The finish state
-	// is not one of the following states. Unclear is the default finish state.
-	Unclear RPCFinishState = iota
-	// RPCFailedToSend indicates gRPC failed to send this RPC. Server never
-	// gets anything about this RPC. This implies that header is not sent.
-	RPCFailedToSend
-	// RPCReceivedByServer indicates the RPC is sent and the server has
-	// received the RPC. Note that it's possible that server received part of
-	// the RPC (only the header for example).
-	RPCReceivedByServer
-)
-
-// BalancerPutOptions contains the RPC information for put().
-// This is the EXPERIMENTAL API and may be changed or extended in the future.
-type BalancerPutOptions struct {
-	rpcFinishType RPCFinishState
-}
-
 // Balancer chooses network addresses for RPCs.
 // This is the EXPERIMENTAL API and may be changed or extended in the future.
 type Balancer interface {
@@ -129,7 +107,7 @@ type Balancer interface {
 	//
 	// This function should only return the errors Balancer cannot recover by itself.
 	// gRPC internals will fail the RPC if an error is returned.
-	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(BalancerPutOptions, error), err error)
+	Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error)
 	// Notify returns a channel that is used by gRPC internals to watch the addresses
 	// gRPC needs to connect. The addresses might be from a name resolver or remote
 	// load balancer. gRPC internals will compare it with the existing connected
@@ -306,7 +284,7 @@ func (rr *roundRobin) down(addr Address, err error) {
 }
 
 // Get returns the next addr in the rotation.
-func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(BalancerPutOptions, error), err error) {
+func (rr *roundRobin) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	rr.mu.Lock()
 	if rr.done {

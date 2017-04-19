@@ -149,7 +149,7 @@ func (b *blockingBalancer) Start(target string, config BalancerConfig) error {
 func (b *blockingBalancer) Up(addr Address) func(error) {
 	return nil
 }
-func (b *blockingBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(BalancerPutOptions, error), err error) {
+func (b *blockingBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	return Address{}, nil, nil
 }
 func (b *blockingBalancer) Notify() <-chan []Address {
@@ -282,7 +282,7 @@ func (b *emptyBalancer) Start(_ string, _ BalancerConfig) error {
 func (b *emptyBalancer) Up(_ Address) func(error) {
 	return nil
 }
-func (b *emptyBalancer) Get(_ context.Context, _ BalancerGetOptions) (Address, func(BalancerPutOptions, error), error) {
+func (b *emptyBalancer) Get(_ context.Context, _ BalancerGetOptions) (Address, func(), error) {
 	return Address{}, nil, nil
 }
 func (b *emptyBalancer) Notify() <-chan []Address {

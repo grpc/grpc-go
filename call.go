@@ -214,7 +214,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			stream *transport.Stream
 			// Record the put handler from Balancer.Get(...). It is called once the
 			// RPC has completed or failed.
-			put func(BalancerPutOptions, error)
+			put func()
 		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
@@ -249,14 +249,13 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
 		if err != nil {
 			if put != nil {
-				// put() // WHAT???
+				put()
 				put = nil
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				// put() // failed to send.
 				if c.failFast {
 					return toRPCErr(err)
 				}
@@ -267,7 +266,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
-				// put() // WHAT???
+				put()
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -283,7 +282,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
-			put(BalancerPutOptions{rpcFinishType: RPCReceivedByServer}, nil)
+			put()
 			put = nil
 		}
 		return stream.Status().Err()
