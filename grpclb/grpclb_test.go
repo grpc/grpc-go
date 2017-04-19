@@ -114,8 +114,8 @@ func (r *testNameResolver) Resolve(target string) (naming.Watcher, error) {
 		r.w.update <- &naming.Update{
 			Op:   naming.Add,
 			Addr: addr,
-			Metadata: &Metadata{
-				AddrType:   GRPCLB,
+			Metadata: &grpc.GRPCLBAddrMetadata{
+				AddrType:   grpc.GRPCLB,
 				ServerName: lbsn,
 			},
 		}
@@ -187,7 +187,7 @@ func (b *remoteBalancer) stop() {
 	close(b.done)
 }
 
-func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer) error {
+func (b *remoteBalancer) BalanceLoad(stream *loadBalancerBalanceLoadServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -305,7 +305,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		return
 	}
 	ls = newRemoteBalancer(nil, nil)
-	lbpb.RegisterLoadBalancerServer(lb, ls)
+	registerLoadBalancerServer(lb, ls)
 	go func() {
 		lb.Serve(lbLis)
 	}()
@@ -350,7 +350,7 @@ func TestGRPCLB(t *testing.T) {
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
@@ -387,7 +387,7 @@ func TestDropRequest(t *testing.T) {
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
@@ -437,7 +437,7 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
@@ -487,7 +487,7 @@ func TestServerExpiration(t *testing.T) {
 		expected: besn,
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(&testNameResolver{
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
@@ -547,7 +547,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	resolver := &testNameResolver{
 		addrs: lbAddrs[:2],
 	}
-	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(Balancer(resolver)), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
+	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(resolver)), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -576,8 +576,8 @@ func TestBalancerDisconnects(t *testing.T) {
 	resolver.inject([]*naming.Update{
 		{Op: naming.Add,
 			Addr: lbAddrs[2],
-			Metadata: &Metadata{
-				AddrType:   GRPCLB,
+			Metadata: &grpc.GRPCLBAddrMetadata{
+				AddrType:   grpc.GRPCLB,
 				ServerName: lbsn,
 			},
 		},
