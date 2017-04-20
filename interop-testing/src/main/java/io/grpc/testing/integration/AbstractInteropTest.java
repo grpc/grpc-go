@@ -35,6 +35,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -65,6 +66,7 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Context;
 import io.grpc.Grpc;
@@ -85,6 +87,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
 import io.grpc.protobuf.ProtoUtils;
+import io.grpc.stub.ClientCalls;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.StreamRecorder;
@@ -268,6 +271,44 @@ public abstract class AbstractInteropTest {
   @Test(timeout = 10000)
   public void emptyUnary() throws Exception {
     assertEquals(EMPTY, blockingStub.emptyCall(EMPTY));
+  }
+
+  /** Sends a cacheable unary rpc using GET. Requires that the server is behind a caching proxy. */
+  public void cacheableUnary() {
+    // Set safe to true.
+    MethodDescriptor<SimpleRequest, SimpleResponse> safeCacheableUnaryCallMethod =
+        TestServiceGrpc.METHOD_CACHEABLE_UNARY_CALL.toBuilder().setSafe(true).build();
+    // Set fake user IP since some proxies (GFE) won't cache requests from localhost.
+    Metadata.Key<String> userIpKey = Metadata.Key.of("x-user-ip", Metadata.ASCII_STRING_MARSHALLER);
+    Metadata metadata = new Metadata();
+    metadata.put(userIpKey, "1.2.3.4");
+    Channel channelWithUserIpKey =
+        ClientInterceptors.intercept(channel, MetadataUtils.newAttachHeadersInterceptor(metadata));
+    SimpleRequest requests1And2 =
+        SimpleRequest.newBuilder()
+            .setPayload(
+                Payload.newBuilder()
+                    .setBody(ByteString.copyFromUtf8(String.valueOf(System.nanoTime()))))
+            .build();
+    SimpleRequest request3 =
+        SimpleRequest.newBuilder()
+            .setPayload(
+                Payload.newBuilder()
+                    .setBody(ByteString.copyFromUtf8(String.valueOf(System.nanoTime()))))
+            .build();
+
+    SimpleResponse response1 =
+        ClientCalls.blockingUnaryCall(
+            channelWithUserIpKey, safeCacheableUnaryCallMethod, CallOptions.DEFAULT, requests1And2);
+    SimpleResponse response2 =
+        ClientCalls.blockingUnaryCall(
+            channelWithUserIpKey, safeCacheableUnaryCallMethod, CallOptions.DEFAULT, requests1And2);
+    SimpleResponse response3 =
+        ClientCalls.blockingUnaryCall(
+            channelWithUserIpKey, safeCacheableUnaryCallMethod, CallOptions.DEFAULT, request3);
+
+    assertEquals(response1, response2);
+    assertNotEquals(response1, response3);
   }
 
   @Test(timeout = 10000)

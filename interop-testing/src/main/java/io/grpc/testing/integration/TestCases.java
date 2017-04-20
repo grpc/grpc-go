@@ -38,6 +38,7 @@ import com.google.common.base.Preconditions;
  */
 public enum TestCases {
   EMPTY_UNARY("empty (zero bytes) request and response"),
+  CACHEABLE_UNARY("cacheable unary rpc sent using GET"),
   LARGE_UNARY("single request and (large) response"),
   CLIENT_STREAMING("request streaming with single response"),
   SERVER_STREAMING("single request with response streaming"),

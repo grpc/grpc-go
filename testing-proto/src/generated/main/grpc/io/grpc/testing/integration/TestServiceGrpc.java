@@ -56,6 +56,18 @@ public final class TestServiceGrpc {
               io.grpc.testing.integration.Messages.SimpleResponse.getDefaultInstance()))
           .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.SimpleRequest,
+      io.grpc.testing.integration.Messages.SimpleResponse> METHOD_CACHEABLE_UNARY_CALL =
+      io.grpc.MethodDescriptor.<io.grpc.testing.integration.Messages.SimpleRequest, io.grpc.testing.integration.Messages.SimpleResponse>newBuilder()
+          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName(generateFullMethodName(
+              "grpc.testing.TestService", "CacheableUnaryCall"))
+          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Messages.SimpleRequest.getDefaultInstance()))
+          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+              io.grpc.testing.integration.Messages.SimpleResponse.getDefaultInstance()))
+          .build();
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Messages.StreamingOutputCallRequest,
       io.grpc.testing.integration.Messages.StreamingOutputCallResponse> METHOD_STREAMING_OUTPUT_CALL =
       io.grpc.MethodDescriptor.<io.grpc.testing.integration.Messages.StreamingOutputCallRequest, io.grpc.testing.integration.Messages.StreamingOutputCallResponse>newBuilder()
@@ -169,6 +181,18 @@ public final class TestServiceGrpc {
 
     /**
      * <pre>
+     * One request followed by one response. Response has cache control
+     * headers set such that a caching HTTP proxy (such as GFE) can
+     * satisfy subsequent requests.
+     * </pre>
+     */
+    public void cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
+      asyncUnimplementedUnaryCall(METHOD_CACHEABLE_UNARY_CALL, responseObserver);
+    }
+
+    /**
+     * <pre>
      * One request followed by a sequence of responses (streamed download).
      * The server returns the payload with client desired type and sizes.
      * </pre>
@@ -241,6 +265,13 @@ public final class TestServiceGrpc {
                 io.grpc.testing.integration.Messages.SimpleRequest,
                 io.grpc.testing.integration.Messages.SimpleResponse>(
                   this, METHODID_UNARY_CALL)))
+          .addMethod(
+            METHOD_CACHEABLE_UNARY_CALL,
+            asyncUnaryCall(
+              new MethodHandlers<
+                io.grpc.testing.integration.Messages.SimpleRequest,
+                io.grpc.testing.integration.Messages.SimpleResponse>(
+                  this, METHODID_CACHEABLE_UNARY_CALL)))
           .addMethod(
             METHOD_STREAMING_OUTPUT_CALL,
             asyncServerStreamingCall(
@@ -322,6 +353,19 @@ public final class TestServiceGrpc {
         io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
       asyncUnaryCall(
           getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * One request followed by one response. Response has cache control
+     * headers set such that a caching HTTP proxy (such as GFE) can
+     * satisfy subsequent requests.
+     * </pre>
+     */
+    public void cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request,
+        io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse> responseObserver) {
+      asyncUnaryCall(
+          getChannel().newCall(METHOD_CACHEABLE_UNARY_CALL, getCallOptions()), request, responseObserver);
     }
 
     /**
@@ -432,6 +476,18 @@ public final class TestServiceGrpc {
 
     /**
      * <pre>
+     * One request followed by one response. Response has cache control
+     * headers set such that a caching HTTP proxy (such as GFE) can
+     * satisfy subsequent requests.
+     * </pre>
+     */
+    public io.grpc.testing.integration.Messages.SimpleResponse cacheableUnaryCall(io.grpc.testing.integration.Messages.SimpleRequest request) {
+      return blockingUnaryCall(
+          getChannel(), METHOD_CACHEABLE_UNARY_CALL, getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
      * One request followed by a sequence of responses (streamed download).
      * The server returns the payload with client desired type and sizes.
      * </pre>
@@ -500,6 +556,19 @@ public final class TestServiceGrpc {
 
     /**
      * <pre>
+     * One request followed by one response. Response has cache control
+     * headers set such that a caching HTTP proxy (such as GFE) can
+     * satisfy subsequent requests.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<io.grpc.testing.integration.Messages.SimpleResponse> cacheableUnaryCall(
+        io.grpc.testing.integration.Messages.SimpleRequest request) {
+      return futureUnaryCall(
+          getChannel().newCall(METHOD_CACHEABLE_UNARY_CALL, getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
      * The test server will not implement this method. It will be used
      * to test the behavior when clients call unimplemented methods.
      * </pre>
@@ -513,11 +582,12 @@ public final class TestServiceGrpc {
 
   private static final int METHODID_EMPTY_CALL = 0;
   private static final int METHODID_UNARY_CALL = 1;
-  private static final int METHODID_STREAMING_OUTPUT_CALL = 2;
-  private static final int METHODID_UNIMPLEMENTED_CALL = 3;
-  private static final int METHODID_STREAMING_INPUT_CALL = 4;
-  private static final int METHODID_FULL_DUPLEX_CALL = 5;
-  private static final int METHODID_HALF_DUPLEX_CALL = 6;
+  private static final int METHODID_CACHEABLE_UNARY_CALL = 2;
+  private static final int METHODID_STREAMING_OUTPUT_CALL = 3;
+  private static final int METHODID_UNIMPLEMENTED_CALL = 4;
+  private static final int METHODID_STREAMING_INPUT_CALL = 5;
+  private static final int METHODID_FULL_DUPLEX_CALL = 6;
+  private static final int METHODID_HALF_DUPLEX_CALL = 7;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -542,6 +612,10 @@ public final class TestServiceGrpc {
           break;
         case METHODID_UNARY_CALL:
           serviceImpl.unaryCall((io.grpc.testing.integration.Messages.SimpleRequest) request,
+              (io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse>) responseObserver);
+          break;
+        case METHODID_CACHEABLE_UNARY_CALL:
+          serviceImpl.cacheableUnaryCall((io.grpc.testing.integration.Messages.SimpleRequest) request,
               (io.grpc.stub.StreamObserver<io.grpc.testing.integration.Messages.SimpleResponse>) responseObserver);
           break;
         case METHODID_STREAMING_OUTPUT_CALL:
@@ -596,6 +670,7 @@ public final class TestServiceGrpc {
               .setSchemaDescriptor(new TestServiceDescriptorSupplier())
               .addMethod(METHOD_EMPTY_CALL)
               .addMethod(METHOD_UNARY_CALL)
+              .addMethod(METHOD_CACHEABLE_UNARY_CALL)
               .addMethod(METHOD_STREAMING_OUTPUT_CALL)
               .addMethod(METHOD_STREAMING_INPUT_CALL)
               .addMethod(METHOD_FULL_DUPLEX_CALL)

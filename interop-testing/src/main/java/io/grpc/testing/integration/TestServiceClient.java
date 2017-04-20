@@ -209,6 +209,11 @@ public class TestServiceClient {
         tester.emptyUnary();
         break;
 
+      case CACHEABLE_UNARY: {
+        tester.cacheableUnary();
+        break;
+      }
+
       case LARGE_UNARY:
         tester.largeUnary();
         break;

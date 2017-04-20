@@ -128,6 +128,7 @@ class NettyClientStream extends AbstractClientStream2 {
       AsciiString httpMethod;
       if (get) {
         // Forge the query string
+        // TODO(ericgribkoff) Add the key back to the query string
         defaultPath =
             new AsciiString(defaultPath + "?" + BaseEncoding.base64().encode(requestPayload));
         httpMethod = Utils.HTTP_GET_METHOD;
