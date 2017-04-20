@@ -373,6 +373,7 @@ public class ServerImplTest {
     assertEquals("Method not found: Waiter/nonexist", status.getDescription());
 
     verify(streamTracerFactory).newServerStreamTracer(eq("Waiter/nonexist"), same(requestHeaders));
+    verify(streamTracer, never()).serverCallStarted(any(ServerCall.class));
     assertEquals(Status.Code.UNIMPLEMENTED, statusCaptor.getValue().getCode());
   }
 
@@ -426,6 +427,7 @@ public class ServerImplTest {
     assertEquals(1, executor.runDueTasks());
     ServerCall<String, Integer> call = callReference.get();
     assertNotNull(call);
+    verify(streamTracer).serverCallStarted(same(call));
     verify(stream).getAuthority();
     Context callContext = callContextReference.get();
     assertNotNull(callContext);

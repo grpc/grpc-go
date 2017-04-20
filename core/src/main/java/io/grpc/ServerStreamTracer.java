@@ -47,6 +47,13 @@ public abstract class ServerStreamTracer extends StreamTracer {
     return context;
   }
 
+  /**
+   * Called when {@link ServerCall} is created.  This is for the tracer to access information
+   * about the {@code ServerCall}.
+   */
+  public void serverCallStarted(ServerCall<?, ?> call) {
+  }
+
   public abstract static class Factory {
     /**
      * Creates a {@link ServerStreamTracer} for a new server stream.

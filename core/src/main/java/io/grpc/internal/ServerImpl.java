@@ -418,7 +418,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
                 context.cancel(null);
                 return;
               }
-              listener = startCall(stream, methodName, method, headers, context);
+              listener = startCall(stream, methodName, method, headers, context, statsTraceCtx);
             } catch (RuntimeException e) {
               stream.close(Status.fromThrowable(e), new Metadata());
               context.cancel(null);
@@ -464,11 +464,12 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     /** Never returns {@code null}. */
     private <ReqT, RespT> ServerStreamListener startCall(ServerStream stream, String fullMethodName,
         ServerMethodDefinition<ReqT, RespT> methodDef, Metadata headers,
-        Context.CancellableContext context) {
+        Context.CancellableContext context, StatsTraceContext statsTraceCtx) {
       // TODO(ejona86): should we update fullMethodName to have the canonical path of the method?
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor(), headers, context,
           decompressorRegistry, compressorRegistry);
+      statsTraceCtx.serverCallStarted(call);
       ServerCall.Listener<ReqT> listener =
           methodDef.getServerCallHandler().startCall(call, headers);
       if (listener == null) {

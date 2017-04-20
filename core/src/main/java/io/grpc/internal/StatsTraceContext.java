@@ -38,6 +38,7 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Context;
 import io.grpc.Metadata;
+import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
@@ -136,6 +137,17 @@ public final class StatsTraceContext {
       checkNotNull(ctx, "%s returns null context", tracer);
     }
     return ctx;
+  }
+
+  /**
+   * See {@link ServerStreamTracer#serverCallStarted}.  For server-side only.
+   *
+   * <p>Called from {@link io.grpc.internal.ServerImpl}.
+   */
+  public void serverCallStarted(ServerCall<?, ?> call) {
+    for (StreamTracer tracer : tracers) {
+      ((ServerStreamTracer) tracer).serverCallStarted(call);
+    }
   }
 
   /**
