@@ -1,4 +1,5 @@
 // This file contains the generated server side code.
+// It's only used for grpclb testing.
 
 package grpclb
 

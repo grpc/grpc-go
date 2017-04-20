@@ -57,13 +57,12 @@ type loadBalancerClient struct {
 }
 
 func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption) (*balanceLoadClientStream, error) {
-	stream, err := NewClientStream(ctx,
-		&StreamDesc{
-			StreamName:    "BalanceLoad",
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-		c.cc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
+	desc := &StreamDesc{
+		StreamName:    "BalanceLoad",
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+	stream, err := NewClientStream(ctx, desc, c.cc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +96,10 @@ const (
 	GRPCLB
 )
 
-// GRPCLBAddrMetadata contains the information the name resolution for grpclb should provide. The
+// AddrMetadataGRPCLB contains the information the name resolution for grpclb should provide. The
 // name resolver used by grpclb balancer is required to provide this type of metadata in
 // its address updates.
-type GRPCLBAddrMetadata struct {
+type AddrMetadataGRPCLB struct {
 	// AddrType is the type of server (grpc load balancer or backend).
 	AddrType AddressType
 	// ServerName is the name of the grpc load balancer. Used for authentication.
@@ -172,7 +171,7 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerIn
 			if exist {
 				continue
 			}
-			md, ok := update.Metadata.(*GRPCLBAddrMetadata)
+			md, ok := update.Metadata.(*AddrMetadataGRPCLB)
 			if !ok {
 				// TODO: Revisit the handling here and may introduce some fallback mechanism.
 				grpclog.Printf("The name resolution contains unexpected metadata %v", update.Metadata)
