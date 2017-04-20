@@ -31,6 +31,8 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
@@ -41,15 +43,22 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
+import javax.naming.directory.Attribute;
+import javax.naming.directory.InitialDirContext;
 
 /**
  * A DNS-based {@link NameResolver}.
@@ -57,9 +66,19 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Each {@code A} or {@code AAAA} record emits an {@link EquivalentAddressGroup} in the list
  * passed to {@link NameResolver.Listener#onUpdate}
  *
- * @see DnsNameResolverFactory
+ * @see DnsNameResolverProvider
  */
-class DnsNameResolver extends NameResolver {
+final class DnsNameResolver extends NameResolver {
+
+  private static final Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
+
+  private static final boolean isJndiAvailable = jndiAvailable();
+
+  @VisibleForTesting
+  static boolean enableJndi = false;
+
+  private DelegateResolver delegateResolver = pickDelegateResolver();
+
   private final String authority;
   private final String host;
   private final int port;
@@ -83,7 +102,6 @@ class DnsNameResolver extends NameResolver {
       Resource<ExecutorService> executorResource) {
     // TODO: if a DNS server is provided as nsAuthority, use it.
     // https://www.captechconsulting.com/blogs/accessing-the-dusty-corners-of-dns-with-java
-
     this.timerServiceResource = timerServiceResource;
     this.executorResource = executorResource;
     // Must prepend a "//" to the name when constructing a URI, otherwise it will be treated as an
@@ -128,7 +146,6 @@ class DnsNameResolver extends NameResolver {
   private final Runnable resolutionRunnable = new Runnable() {
       @Override
       public void run() {
-        InetAddress[] inetAddrs;
         Listener savedListener;
         synchronized (DnsNameResolver.this) {
           // If this task is started by refresh(), there might already be a scheduled task.
@@ -149,10 +166,10 @@ class DnsNameResolver extends NameResolver {
             savedListener.onAddresses(Collections.singletonList(server), Attributes.EMPTY);
             return;
           }
-
+          ResolutionResults resolvedInetAddrs;
           try {
-            inetAddrs = getAllByName(host);
-          } catch (UnknownHostException e) {
+            resolvedInetAddrs = delegateResolver.resolve(host);
+          } catch (Exception e) {
             synchronized (DnsNameResolver.this) {
               if (shutdown) {
                 return;
@@ -168,8 +185,7 @@ class DnsNameResolver extends NameResolver {
           }
           // Each address forms an EAG
           ArrayList<EquivalentAddressGroup> servers = new ArrayList<EquivalentAddressGroup>();
-          for (int i = 0; i < inetAddrs.length; i++) {
-            InetAddress inetAddr = inetAddrs[i];
+          for (InetAddress inetAddr : resolvedInetAddrs.addresses) {
             servers.add(new EquivalentAddressGroup(new InetSocketAddress(inetAddr, port)));
           }
           savedListener.onAddresses(servers, Attributes.EMPTY);
@@ -191,12 +207,6 @@ class DnsNameResolver extends NameResolver {
         }
       }
     };
-
-  // To be mocked out in tests
-  @VisibleForTesting
-  InetAddress[] getAllByName(String host) throws UnknownHostException {
-    return InetAddress.getAllByName(host);
-  }
 
   @GuardedBy("this")
   private void resolve() {
@@ -225,5 +235,151 @@ class DnsNameResolver extends NameResolver {
 
   final int getPort() {
     return port;
+  }
+
+  private DelegateResolver pickDelegateResolver() {
+    JdkResolver jdkResolver = new JdkResolver();
+    if (isJndiAvailable && enableJndi) {
+      return new CompositeResolver(jdkResolver, new JndiResolver());
+    }
+    return jdkResolver;
+  }
+
+  /**
+   * Forces the resolver.  This should only be used by testing code.
+   */
+  @VisibleForTesting
+  void setDelegateResolver(DelegateResolver delegateResolver) {
+    this.delegateResolver = delegateResolver;
+  }
+
+  /**
+   * Returns whether the JNDI DNS resolver is available.  This is accomplished by looking up a
+   * particular class.  It is believed to be the default (only?) DNS resolver that will actually be
+   * used.  It is provided by the OpenJDK, but unlikely Android.  Actual resolution will be done by
+   * using a service provider when a hostname query is present, so the {@code DnsContextFactory}
+   * may not actually be used to perform the query.  This is believed to be "okay."
+   */
+  @VisibleForTesting
+  @SuppressWarnings("LiteralClassName")
+  static boolean jndiAvailable() {
+    try {
+      Class.forName("javax.naming.directory.InitialDirContext");
+      Class.forName("com.sun.jndi.dns.DnsContextFactory");
+    } catch (ClassNotFoundException e) {
+      logger.log(Level.FINE, "Unable to find JNDI DNS resolver, skipping", e);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Common interface between the delegate resolvers used by DnsNameResolver.
+   */
+  @VisibleForTesting
+  abstract static class DelegateResolver {
+    abstract ResolutionResults resolve(String host) throws Exception;
+  }
+
+  /**
+   * Describes the results from a DNS query.
+   */
+  @VisibleForTesting
+  static final class ResolutionResults {
+    final List<InetAddress> addresses;
+    final List<String> txtRecords;
+
+    ResolutionResults(List<InetAddress> addresses, List<String> txtRecords) {
+      this.addresses = Collections.unmodifiableList(checkNotNull(addresses, "addresses"));
+      this.txtRecords = Collections.unmodifiableList(checkNotNull(txtRecords, "txtRecords"));
+    }
+  }
+
+  /**
+   * A composite DNS resolver that uses both the JDK and JNDI resolvers as delegate.  It is
+   * expected that two DNS queries will be executed, with the second one being from JNDI.
+   */
+  @VisibleForTesting
+  static final class CompositeResolver extends DelegateResolver {
+
+    private final DelegateResolver jdkResovler;
+    private final DelegateResolver jndiResovler;
+
+    CompositeResolver(DelegateResolver jdkResovler, DelegateResolver jndiResovler) {
+      this.jdkResovler = jdkResovler;
+      this.jndiResovler = jndiResovler;
+    }
+
+    @Override
+    ResolutionResults resolve(String host) throws Exception {
+      ResolutionResults jdkResults = jdkResovler.resolve(host);
+      List<InetAddress> addresses = jdkResults.addresses;
+      List<String> txtRecords = Collections.emptyList();
+      try {
+        ResolutionResults jdniResults = jndiResovler.resolve(host);
+        txtRecords = jdniResults.txtRecords;
+      } catch (Exception e) {
+        logger.log(Level.SEVERE, "Failed to resolve TXT results", e);
+      }
+
+      return new ResolutionResults(addresses, txtRecords);
+    }
+  }
+
+  /**
+   * The default name resolver provided with the JDK.  This is unable to lookup TXT records, but
+   * provides address ordering sorted according to RFC 3484.  This is true on OpenJDK, because it
+   * in turn calls into libc which sorts addresses in order of reachability.
+   */
+  @VisibleForTesting
+  static final class JdkResolver extends DelegateResolver {
+
+    @Override
+    ResolutionResults resolve(String host) throws Exception {
+      return new ResolutionResults(
+          Arrays.asList(InetAddress.getAllByName(host)),
+          Collections.<String>emptyList());
+    }
+  }
+
+  /**
+   * A resolver that uses JNDI.  This class is capable of looking up both addresses
+   * and text records, but does not provide ordering guarantees.  It is currently not used for
+   * address resolution.
+   */
+  @VisibleForTesting
+  static final class JndiResolver extends DelegateResolver {
+
+    private static final String[] rrTypes = new String[]{"TXT"};
+
+    @Override
+    ResolutionResults resolve(String host) throws NamingException {
+
+      InitialDirContext dirContext = new InitialDirContext();
+      javax.naming.directory.Attributes attrs = dirContext.getAttributes("dns:///" + host, rrTypes);
+      List<InetAddress> addresses = new ArrayList<InetAddress>();
+      List<String> txtRecords = new ArrayList<String>();
+
+      NamingEnumeration<? extends Attribute> rrGroups = attrs.getAll();
+      try {
+        while (rrGroups.hasMore()) {
+          Attribute rrEntry = rrGroups.next();
+          assert Arrays.asList(rrTypes).contains(rrEntry.getID());
+          NamingEnumeration<?> rrValues = rrEntry.getAll();
+          try {
+            while (rrValues.hasMore()) {
+              String rrValue = (String) rrValues.next();
+              txtRecords.add(rrValue);
+            }
+          } finally {
+            rrValues.close();
+          }
+        }
+      } finally {
+        rrGroups.close();
+      }
+
+      return new ResolutionResults(addresses, txtRecords);
+    }
   }
 }
