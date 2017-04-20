@@ -47,20 +47,6 @@ final class LbAddressGroup {
     this.authority = checkNotNull(authority, "authority");
   }
 
-  @Override
-  public boolean equals(Object other) {
-    if (!(other instanceof LbAddressGroup)) {
-      return false;
-    }
-    LbAddressGroup otherGroup = (LbAddressGroup) other;
-    return addresses.equals(otherGroup.addresses) && authority.equals(otherGroup.authority);
-  }
-
-  @Override
-  public int hashCode() {
-    return addresses.hashCode();
-  }
-
   EquivalentAddressGroup getAddresses() {
     return addresses;
   }

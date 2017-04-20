@@ -55,6 +55,7 @@ import io.grpc.internal.WithLogId;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -118,14 +119,10 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   ///////////////////////////////////////////////////////////////////////////////
 
   // null if there isn't any available LB addresses.
-  // If non-null, never empty.
   @Nullable
-  private List<LbAddressGroup> lbAddressGroups;
+  private LbAddressGroup lbAddressGroup;
   @Nullable
   private ManagedChannel lbCommChannel;
-  // Points to the position of the LB address that lbCommChannel is bound to, if
-  // lbCommChannel != null.
-  private int currentLbIndex;
   @Nullable
   private LbResponseObserver lbResponseObserver;
   @Nullable
@@ -201,8 +198,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     if (newLbPolicy != lbPolicy) {
       shutdownDelegate();
       shutdownLbComm();
-      lbAddressGroups = null;
-      currentLbIndex = 0;
+      lbAddressGroup = null;
       switch (newLbPolicy) {
         case PICK_FIRST:
           delegate = checkNotNull(pickFirstBalancerFactory.newLoadBalancer(helper),
@@ -228,25 +224,14 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       case GRPCLB:
         if (newLbAddressGroups.isEmpty()) {
           shutdownLbComm();
-          lbAddressGroups = null;
+          lbAddressGroup = null;
           handleGrpclbError(Status.UNAVAILABLE.withDescription(
                   "NameResolver returned no LB address while asking for GRPCLB"));
         } else {
-          // See if the currently used LB server is in the new list.
-          int newIndexOfCurrentLb = -1;
-          if (lbAddressGroups != null) {
-            LbAddressGroup currentLb = lbAddressGroups.get(currentLbIndex);
-            newIndexOfCurrentLb = newLbAddressGroups.indexOf(currentLb);
-          }
-          lbAddressGroups = newLbAddressGroups;
-          if (newIndexOfCurrentLb == -1) {
-            shutdownLbComm();
-            currentLbIndex = 0;
-            startLbComm();
-          } else {
-            // Current LB is still in the list, calibrate index.
-            currentLbIndex = newIndexOfCurrentLb;
-          }
+          lbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
+          // TODO(ejona): support swapping addresses without re-creating Channel.
+          shutdownLbComm();
+          startLbComm();
         }
         break;
       default:
@@ -271,13 +256,17 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
   private void startLbComm() {
     checkState(lbCommChannel == null, "previous lbCommChannel has not been closed yet");
+    lbCommChannel = helper.createOobChannel(
+        lbAddressGroup.getAddresses(), lbAddressGroup.getAuthority());
+    startLbRpc();
+  }
+
+  private void startLbRpc() {
     checkState(lbRequestWriter == null, "previous lbRequestWriter has not been cleared yet");
     checkState(lbResponseObserver == null, "previous lbResponseObserver has not been cleared yet");
-    LbAddressGroup currentLb = lbAddressGroups.get(currentLbIndex);
-    lbCommChannel = helper.createOobChannel(currentLb.getAddresses(), currentLb.getAuthority());
     LoadBalancerGrpc.LoadBalancerStub stub = LoadBalancerGrpc.newStub(lbCommChannel);
     lbResponseObserver = new LbResponseObserver();
-    lbRequestWriter = stub.balanceLoad(lbResponseObserver);
+    lbRequestWriter = stub.withWaitForReady().balanceLoad(lbResponseObserver);
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
@@ -414,10 +403,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
         return;
       }
       lbRequestWriter = null;
+      lbResponseObserver = null;
       handleGrpclbError(status);
-      shutdownLbComm();
-      currentLbIndex = (currentLbIndex + 1) % lbAddressGroups.size();
-      startLbComm();
+      startLbRpc();
     }
   }
 
@@ -487,6 +475,39 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @VisibleForTesting
   LbPolicy getLbPolicy() {
     return lbPolicy;
+  }
+
+  private LbAddressGroup flattenLbAddressGroups(List<LbAddressGroup> groupList) {
+    assert !groupList.isEmpty();
+    List<EquivalentAddressGroup> eags = new ArrayList<EquivalentAddressGroup>(groupList.size());
+    String authority = groupList.get(0).getAuthority();
+    for (LbAddressGroup group : groupList) {
+      if (!authority.equals(group.getAuthority())) {
+        // TODO(ejona): Allow different authorities for different addresses. Requires support from
+        // Helper.
+        logger.log(Level.WARNING,
+            "[{0}] Multiple authorities found for LB. "
+            + "Skipping addresses for {0} in preference to {1}",
+            new Object[] {logId, group.getAuthority(), authority});
+      } else {
+        eags.add(group.getAddresses());
+      }
+    }
+    return new LbAddressGroup(flattenEquivalentAddressGroup(eags), authority);
+  }
+
+  /**
+   * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
+   */
+  private static EquivalentAddressGroup flattenEquivalentAddressGroup(
+      List<EquivalentAddressGroup> groupList) {
+    List<SocketAddress> addrs = new ArrayList<SocketAddress>();
+    for (EquivalentAddressGroup group : groupList) {
+      for (SocketAddress addr : group.getAddresses()) {
+        addrs.add(addr);
+      }
+    }
+    return new EquivalentAddressGroup(addrs);
   }
 
   @VisibleForTesting
