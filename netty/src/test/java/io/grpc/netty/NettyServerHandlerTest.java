@@ -33,6 +33,8 @@ package io.grpc.netty;
 
 import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_IDLE_NANOS_DISABLED;
@@ -41,17 +43,22 @@ import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.HTTP_METHOD;
 import static io.grpc.netty.Utils.TE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
+import static io.grpc.testing.TestUtils.sleepAtLeast;
+import static io.netty.buffer.Unpooled.directBuffer;
 import static io.netty.handler.codec.http2.Http2CodecUtil.DEFAULT_WINDOW_SIZE;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -73,7 +80,6 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
-import io.grpc.testing.TestUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
@@ -92,7 +98,6 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -129,6 +134,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private long maxConnectionIdleInNanos = MAX_CONNECTION_IDLE_NANOS_DISABLED;
   private long maxConnectionAgeInNanos = MAX_CONNECTION_AGE_NANOS_DISABLED;
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
+  private long keepAliveTimeInNanos = DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
+  private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -147,8 +154,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     }
   }
 
-  @Before
-  public void setUp() throws Exception {
+  @Override
+  protected void manualSetUp() throws Exception {
+    assertNull("manualSetUp should not run more than once", handler());
+
     MockitoAnnotations.initMocks(this);
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
@@ -156,7 +165,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
     // replace the keepAliveManager with spyKeepAliveManager
-    spyKeepAliveManager = spy(handler().getKeepAliveManagerForTest());
+    spyKeepAliveManager =
+        mock(KeepAliveManager.class, delegatesTo(handler().getKeepAliveManagerForTest()));
     handler().setKeepAliveManagerForTest(spyKeepAliveManager);
 
     // Simulate receipt of the connection preface
@@ -169,6 +179,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void sendFrameShouldSucceed() throws Exception {
+    manualSetUp();
     createStream();
 
     // Send a frame and verify that it was written.
@@ -181,6 +192,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void streamTracerCreated() throws Exception {
+    manualSetUp();
     createStream();
 
     verify(streamTracerFactory).newServerStreamTracer(eq("foo/bar"), any(Metadata.class));
@@ -192,11 +204,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void inboundDataWithEndStreamShouldForwardToStreamListener() throws Exception {
+    manualSetUp();
     inboundDataShouldForwardToStreamListener(true);
   }
 
   @Test
   public void inboundDataShouldForwardToStreamListener() throws Exception {
+    manualSetUp();
     inboundDataShouldForwardToStreamListener(false);
   }
 
@@ -221,6 +235,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void clientHalfCloseShouldForwardToStreamListener() throws Exception {
+    manualSetUp();
     createStream();
     stream.request(1);
 
@@ -235,6 +250,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void clientCancelShouldForwardToStreamListener() throws Exception {
+    manualSetUp();
     createStream();
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
@@ -246,6 +262,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void streamErrorShouldNotCloseChannel() throws Exception {
+    manualSetUp();
     createStream();
     stream.request(1);
 
@@ -269,6 +286,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void closeShouldCloseChannel() throws Exception {
+    manualSetUp();
     handler().close(ctx(), newPromise());
 
     verifyWrite().writeGoAway(eq(ctx()), eq(0), eq(Http2Error.NO_ERROR.code()),
@@ -280,6 +298,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void exceptionCaughtShouldCloseConnection() throws Exception {
+    manualSetUp();
     handler().exceptionCaught(ctx(), new RuntimeException("fake exception"));
 
     // TODO(nmittler): EmbeddedChannel does not currently invoke the channelInactive processing,
@@ -291,6 +310,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void channelInactiveShouldCloseStreams() throws Exception {
+    manualSetUp();
     createStream();
     handler().channelInactive(ctx());
     ArgumentCaptor<Status> captor = ArgumentCaptor.forClass(Status.class);
@@ -301,7 +321,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void shouldAdvertiseMaxConcurrentStreams() throws Exception {
     maxConcurrentStreams = 314;
-    setUp();
+    manualSetUp();
 
     ArgumentCaptor<Http2Settings> captor = ArgumentCaptor.forClass(Http2Settings.class);
     verifyWrite().writeSettings(
@@ -313,7 +333,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void shouldAdvertiseMaxHeaderListSize() throws Exception {
     maxHeaderListSize = 123;
-    setUp();
+    manualSetUp();
 
     ArgumentCaptor<Http2Settings> captor = ArgumentCaptor.forClass(Http2Settings.class);
     verifyWrite().writeSettings(
@@ -326,7 +346,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Ignore("Re-enable once https://github.com/grpc/grpc-java/issues/1175 is fixed")
   public void connectionWindowShouldBeOverridden() throws Exception {
     flowControlWindow = 1048576; // 1MiB
-    setUp();
+    manualSetUp();
 
     Http2Stream connectionStream = connection().connectionStream();
     Http2LocalFlowController localFlowController = connection().local().flowController();
@@ -338,6 +358,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void cancelShouldSendRstStream() throws Exception {
+    manualSetUp();
     createStream();
     enqueue(new CancelServerStreamCommand(stream.transportState(), Status.DEADLINE_EXCEEDED));
     verifyWrite().writeRstStream(eq(ctx()), eq(stream.transportState().id()),
@@ -346,6 +367,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void headersWithInvalidContentTypeShouldFail() throws Exception {
+    manualSetUp();
     Http2Headers headers = new DefaultHttp2Headers()
             .method(HTTP_METHOD)
             .set(CONTENT_TYPE_HEADER, new AsciiString("application/bad", UTF_8))
@@ -359,6 +381,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void headersSupportExtensionContentType() throws Exception {
+    manualSetUp();
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
         .set(CONTENT_TYPE_HEADER, new AsciiString("application/grpc+json", UTF_8))
@@ -376,14 +399,16 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  public void keepAliveManagerStarted() {
+  public void keepAliveManagerStarted() throws Exception {
+    manualSetUp();
     verify(spyKeepAliveManager).onTransportStarted();
     verify(spyKeepAliveManager, never()).onDataReceived();
     verify(spyKeepAliveManager, never()).onTransportTermination();
   }
 
   @Test
-  public void keepAlivemanagerOnDataReceived_headersRead() throws Exception {
+  public void keepAliveManagerOnDataReceived_headersRead() throws Exception {
+    manualSetUp();
     ByteBuf headersFrame = headersFrame(STREAM_ID, new DefaultHttp2Headers());
     channelRead(headersFrame);
 
@@ -392,7 +417,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  public void keepAlivemanagerOnDataReceived_dataRead() throws Exception {
+  public void keepAliveManagerOnDataReceived_dataRead() throws Exception {
+    manualSetUp();
     createStream();
     verify(spyKeepAliveManager).onDataReceived(); // received headers
 
@@ -407,7 +433,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   }
 
   @Test
-  public void keepAlivemanagerOnDataReceived_rstStreamRead() throws Exception {
+  public void keepAliveManagerOnDataReceived_rstStreamRead() throws Exception {
+    manualSetUp();
     createStream();
     verify(spyKeepAliveManager).onDataReceived(); // received headers
 
@@ -419,6 +446,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManagerOnDataReceived_pingRead() throws Exception {
+    manualSetUp();
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1234L);
     channelRead(pingFrame(false /* isAck */, payload));
@@ -429,6 +457,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManagerOnDataReceived_pingActRead() throws Exception {
+    manualSetUp();
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1234L);
     channelRead(pingFrame(true /* isAck */, payload));
@@ -439,16 +468,55 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManagerOnTransportTermination() throws Exception {
+    manualSetUp();
     handler().channelInactive(handler().ctx());
 
     verify(spyKeepAliveManager).onTransportTermination();
   }
 
   @Test
+  public void keepAliveManager_pingSent() throws Exception {
+    ByteBuf pingBuf = directBuffer(8).writeLong(0xDEADL);
+    keepAliveTimeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    keepAliveTimeoutInNanos = TimeUnit.MINUTES.toNanos(30L);
+    manualSetUp();
+
+    sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    verifyWrite().writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
+
+    spyKeepAliveManager.onDataReceived();
+    sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    verifyWrite(times(2))
+        .writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
+    assertTrue(channel().isOpen());
+  }
+
+  @Test
+  public void keepAliveManager_pingTimeout() throws Exception {
+    keepAliveTimeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    keepAliveTimeoutInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    manualSetUp();
+
+    sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    assertTrue(channel().isOpen());
+
+    sleepAtLeast(10L);
+    channel().runPendingTasks();
+
+    assertTrue(!channel().isOpen());
+  }
+
+  @Test
   public void keepAliveEnforcer_enforcesPings() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);
-    setUp();
+    manualSetUp();
 
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
@@ -464,7 +532,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveEnforcer_sendingDataResetsCounters() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);
-    setUp();
+    manualSetUp();
 
     createStream();
     Http2Headers headers = Utils.convertServerHeaders(new Metadata());
@@ -489,7 +557,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveEnforcer_initialIdle() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = 0;
-    setUp();
+    manualSetUp();
 
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
@@ -505,7 +573,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveEnforcer_noticesActive() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = 0;
-    setUp();
+    manualSetUp();
 
     createStream();
     ByteBuf payload = handler().ctx().alloc().buffer(8);
@@ -522,7 +590,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void keepAliveEnforcer_noticesInactive() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = 0;
-    setUp();
+    manualSetUp();
 
     createStream();
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
@@ -539,9 +607,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void noGoAwaySentBeforeMaxConnectionIdleReached() throws Exception {
     maxConnectionIdleInNanos = TimeUnit.MINUTES.toNanos(30L);
-    setUp();
+    manualSetUp();
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY not sent yet
@@ -554,10 +622,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void maxConnectionIdle_goAwaySent() throws Exception {
     maxConnectionIdleInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    setUp();
+    manualSetUp();
     assertTrue(channel().isOpen());
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY sent
@@ -572,10 +640,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void maxConnectionIdle_activeThenRst() throws Exception {
     maxConnectionIdleInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    setUp();
+    manualSetUp();
     createStream();
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY not sent when active
@@ -586,7 +654,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY sent
@@ -601,9 +669,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void noGoAwaySentBeforeMaxConnectionAgeReached() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MINUTES.toNanos(30L);
-    setUp();
+    manualSetUp();
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY not sent yet
@@ -616,10 +684,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void maxConnectionAge_goAwaySent() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    setUp();
+    manualSetUp();
     assertTrue(channel().isOpen());
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // GO_AWAY sent
@@ -635,17 +703,17 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void maxConnectionAgeGrace_channelStillOpenDuringGracePeriod() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     maxConnectionAgeGraceInNanos = TimeUnit.MINUTES.toNanos(30L);
-    setUp();
+    manualSetUp();
     createStream();
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     verifyWrite().writeGoAway(
         eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
         any(ChannelPromise.class));
 
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // channel not closed yet
@@ -656,11 +724,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   public void maxConnectionAgeGrace_channelClosedAfterGracePeriod() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
     maxConnectionAgeGraceInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    setUp();
+    manualSetUp();
     createStream();
 
     // runPendingTasks so that GO_AWAY is sent and the forceful shutdown is scheduled
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     verifyWrite().writeGoAway(
@@ -669,7 +737,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertTrue(channel().isOpen());
 
     // need runPendingTasks again so that the forceful shutdown can be executed
-    TestUtils.sleepAtLeast(10L);
+    sleepAtLeast(10L);
     channel().runPendingTasks();
 
     // channel closed
@@ -708,7 +776,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
         frameReader(), frameWriter(), transportListener,
         Arrays.asList(streamTracerFactory), maxConcurrentStreams, flowControlWindow,
         maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
-        2000L, 100L,
+        keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
         maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);

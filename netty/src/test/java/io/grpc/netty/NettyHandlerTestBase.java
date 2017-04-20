@@ -94,6 +94,11 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   private WriteQueue writeQueue;
 
   /**
+   * Does additional setup jobs. Call it manually when necessary.
+   */
+  protected void manualSetUp() throws Exception {}
+
+  /**
    * Must be called by subclasses to initialize the handler and channel.
    */
   protected final void initChannel(GrpcHttp2HeadersDecoder headersDecoder) throws Exception {
@@ -256,6 +261,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @Test
   public void dataPingSentOnHeaderRecieved() throws Exception {
+    manualSetUp();
     makeStream();
     AbstractNettyHandler handler = (AbstractNettyHandler) handler();
     handler.setAutoTuneFlowControl(true);
@@ -267,6 +273,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @Test
   public void dataPingAckIsRecognized() throws Exception {
+    manualSetUp();
     makeStream();
     AbstractNettyHandler handler = (AbstractNettyHandler) handler();
     handler.setAutoTuneFlowControl(true);
@@ -283,6 +290,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @Test
   public void dataSizeSincePingAccumulates() throws Exception {
+    manualSetUp();
     makeStream();
     AbstractNettyHandler handler = (AbstractNettyHandler) handler();
     handler.setAutoTuneFlowControl(true);
@@ -300,6 +308,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @Test
   public void windowUpdateMatchesTarget() throws Exception {
+    manualSetUp();
     Http2Stream connectionStream = connection().connectionStream();
     Http2LocalFlowController localFlowController = connection().local().flowController();
     makeStream();
@@ -330,6 +339,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   @Test
   public void windowShouldNotExceedMaxWindowSize() throws Exception {
+    manualSetUp();
     makeStream();
     AbstractNettyHandler handler = (AbstractNettyHandler) handler();
     handler.setAutoTuneFlowControl(true);
