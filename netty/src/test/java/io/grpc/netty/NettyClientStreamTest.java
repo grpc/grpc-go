@@ -422,7 +422,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     verify(writeQueue).enqueue(cmdCap.capture(), eq(true));
     assertThat(ImmutableListMultimap.copyOf(cmdCap.getValue().headers()))
         .containsEntry(AsciiString.of(":path"), AsciiString.of(
-            "//testService/test?grpc-payload-bin=" + BaseEncoding.base64().encode(msg)));
+            "//testService/test?" + BaseEncoding.base64().encode(msg)));
   }
 
   @Override
