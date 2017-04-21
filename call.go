@@ -152,42 +152,20 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	maxReceiveMessageSize := defaultClientMaxReceiveMessageSize
-	maxSendMessageSize := defaultClientMaxSendMessageSize
-	if mc, ok := cc.GetMethodConfig(method); ok {
-		if mc.WaitForReady != nil {
-			c.failFast = !*mc.WaitForReady
-		}
-
-		if mc.Timeout != nil && *mc.Timeout >= 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
-			defer cancel()
-		}
-
-		if mc.MaxReqSize != nil && cc.dopts.maxSendMessageSize >= 0 {
-			maxSendMessageSize = min(*mc.MaxReqSize, cc.dopts.maxSendMessageSize)
-		} else if mc.MaxReqSize != nil {
-			maxSendMessageSize = *mc.MaxReqSize
-		} else if mc.MaxReqSize == nil && cc.dopts.maxSendMessageSize >= 0 {
-			maxSendMessageSize = cc.dopts.maxSendMessageSize
-		}
-
-		if mc.MaxRespSize != nil && cc.dopts.maxReceiveMessageSize >= 0 {
-			maxReceiveMessageSize = min(*mc.MaxRespSize, cc.dopts.maxReceiveMessageSize)
-		} else if mc.MaxRespSize != nil {
-			maxReceiveMessageSize = *mc.MaxRespSize
-		} else if mc.MaxRespSize == nil && cc.dopts.maxReceiveMessageSize >= 0 {
-			maxReceiveMessageSize = cc.dopts.maxReceiveMessageSize
-		}
-	} else {
-		if cc.dopts.maxSendMessageSize >= 0 {
-			maxSendMessageSize = cc.dopts.maxSendMessageSize
-		}
-		if cc.dopts.maxReceiveMessageSize >= 0 {
-			maxReceiveMessageSize = cc.dopts.maxReceiveMessageSize
-		}
+	mc := cc.GetMethodConfig(method)
+	if mc.WaitForReady != nil {
+		c.failFast = !*mc.WaitForReady
 	}
+
+	if mc.Timeout != nil && *mc.Timeout >= 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
+		defer cancel()
+	}
+
+	maxSendMessageSize := getMaxSize(mc.MaxReqSize, cc.dopts.maxSendMessageSize, defaultClientMaxSendMessageSize)
+	maxReceiveMessageSize := getMaxSize(mc.MaxRespSize, cc.dopts.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)

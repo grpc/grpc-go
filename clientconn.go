@@ -98,8 +98,8 @@ type dialOptions struct {
 	timeout               time.Duration
 	scChan                <-chan ServiceConfig
 	copts                 transport.ConnectOptions
-	maxReceiveMessageSize int
-	maxSendMessageSize    int
+	maxReceiveMessageSize *int
+	maxSendMessageSize    *int
 }
 
 const (
@@ -120,14 +120,14 @@ func WithMaxMsgSize(s int) DialOption {
 // WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive. Negative input is invalid and has the same effect as not setting the field.
 func WithMaxReceiveMessageSize(s int) DialOption {
 	return func(o *dialOptions) {
-		o.maxReceiveMessageSize = s
+		*o.maxReceiveMessageSize = s
 	}
 }
 
 // WithMaxSendMessageSize returns a DialOption which sets the maximum message size the client can send. Negative input is invalid and has the same effect as not seeting the field.
 func WithMaxSendMessageSize(s int) DialOption {
 	return func(o *dialOptions) {
-		o.maxSendMessageSize = s
+		*o.maxSendMessageSize = s
 	}
 }
 
@@ -323,10 +323,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
-
-	// initialize maxReceiveMessageSize and maxSendMessageSize to -1 before applying DialOption functions to distinguish whether the user set the message limit or not.
-	cc.dopts.maxReceiveMessageSize = -1
-	cc.dopts.maxSendMessageSize = -1
 
 	for _, opt := range opts {
 		opt(&cc.dopts)
@@ -646,13 +642,13 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 
 // GetMethodConfig gets the method config of the input method. If there's no exact match for the input method (i.e. /service/method), we will return the default config for all methods under the service (/service/).
 // TODO: Avoid the locking here.
-func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig, ok bool) {
+func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	m, ok = cc.sc.Methods[method]
+	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
-		m, ok = cc.sc.Methods[method[:i+1]]
+		m, _ = cc.sc.Methods[method[:i+1]]
 	}
 	return
 }

@@ -483,4 +483,17 @@ func min(a, b int) int {
 	return b
 }
 
+func getMaxSize(mcMax, doptMax *int, defaultVal int) int {
+	if mcMax == nil && doptMax == nil {
+		return defaultVal
+	}
+	if mcMax != nil && doptMax != nil {
+		return min(*mcMax, *doptMax)
+	}
+	if mcMax != nil {
+		return *mcMax
+	}
+	return *doptMax
+}
+
 const grpcUA = "grpc-go/" + Version
