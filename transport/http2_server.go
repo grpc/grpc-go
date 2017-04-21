@@ -741,6 +741,9 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		}
 		t.stats.HandleRPC(s.Context(), outTrailer)
 	}
+	if statusCode == codes.DeadlineExceeded {
+		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeInternal})
+	}
 	t.closeStream(s)
 	t.writableChan <- 0
 	return nil
