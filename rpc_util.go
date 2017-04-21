@@ -345,6 +345,30 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	return nil
 }
 
+type rpcStats struct {
+	bytesSent     bool
+	bytesReceived bool
+}
+
+type rpcStatsContextKey struct{}
+
+func newContextWithRPCStats(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rpcStatsContextKey{}, &rpcStats{})
+}
+
+func rpcStatsFromContext(ctx context.Context) (s *rpcStats, ok bool) {
+	s, ok = ctx.Value(rpcStatsContextKey{}).(*rpcStats)
+	return
+}
+
+func updateRPCStatsInContext(ctx context.Context, s rpcStats) {
+	ss, ok := rpcStatsFromContext(ctx)
+	if !ok {
+		return
+	}
+	*ss = s
+}
+
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 //

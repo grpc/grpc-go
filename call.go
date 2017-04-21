@@ -224,6 +224,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
 		}
+		ctx = newContextWithRPCStats(ctx)
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
@@ -244,8 +245,14 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
+			if _, ok := err.(transport.ConnectionError); ok && put != nil {
+				// If error is connection error, transport was sending data on wire,
+				// and we are not sure if anything has been sent on wire.
+				// If error is not connection error, we are sure nothing has been sent.
+				updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
+			}
 			if put != nil {
-				// put() // WHAT???
+				put() // WHAT???
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -259,7 +266,11 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, stream, t, args, topts)
 		if err != nil {
 			if put != nil {
-				// put() // WHAT???
+				updateRPCStatsInContext(ctx, rpcStats{
+					bytesSent:     stream.BytesSent(),
+					bytesReceived: stream.BytesReceived(),
+				})
+				put() // WHAT???
 				put = nil
 			}
 			// Retry a non-failfast RPC when
@@ -277,7 +288,11 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
-				// put() // WHAT???
+				updateRPCStatsInContext(ctx, rpcStats{
+					bytesSent:     stream.BytesSent(),
+					bytesReceived: stream.BytesReceived(),
+				})
+				put() // WHAT???
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -288,11 +303,19 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
+		updateRPCStatsInContext(ctx, rpcStats{
+			bytesSent:     stream.BytesSent(),
+			bytesReceived: stream.BytesReceived(),
+		})
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
+			updateRPCStatsInContext(ctx, rpcStats{
+				bytesSent:     stream.BytesSent(),
+				bytesReceived: stream.BytesReceived(),
+			})
 			put() // TODO what?
 			put = nil
 		}
