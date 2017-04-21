@@ -1021,6 +1021,41 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
+func TestClientConnCloseAfterGoAwayWithActiveStream(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testClientConnCloseAfterGoAwayWithActiveStream(t, e)
+	}
+}
+
+func testClientConnCloseAfterGoAwayWithActiveStream(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+
+	if _, err := tc.FullDuplexCall(context.Background()); err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
+	}
+	done := make(chan struct{})
+	go func() {
+		te.srv.GracefulStop()
+		close(done)
+	}()
+	time.Sleep(time.Second)
+	cc.Close()
+	timeout := time.NewTimer(time.Second)
+	select {
+	case <-done:
+	case <-timeout.C:
+		t.Fatalf("Test timed-out.")
+	}
+}
+
 func TestFailFast(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
