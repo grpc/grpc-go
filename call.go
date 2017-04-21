@@ -93,11 +93,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
-	stream, err := t.NewStream(ctx, callHdr)
-	if err != nil {
-		return nil, err
-	}
+func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, stream *transport.Stream, t transport.ClientTransport, args interface{}, opts *transport.Options) (err error) {
 	defer func() {
 		if err != nil {
 			// If err is connection error, t will be closed, no need to close stream here.
@@ -120,7 +116,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	}
 	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
-		return nil, Errorf(codes.Internal, "grpc: %v", err)
+		return Errorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {
@@ -131,10 +127,10 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.
 	if err != nil && err != io.EOF {
-		return nil, err
+		return err
 	}
 	// Sent successfully.
-	return stream, nil
+	return nil
 }
 
 // Invoke sends the RPC request on the wire and returns after response is received.
@@ -246,7 +242,21 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
+		stream, err = t.NewStream(ctx, callHdr)
+		if err != nil {
+			if put != nil {
+				// put() // WHAT???
+				put = nil
+			}
+			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
+				if c.failFast {
+					return toRPCErr(err)
+				}
+				continue
+			}
+			return toRPCErr(err)
+		}
+		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, stream, t, args, topts)
 		if err != nil {
 			if put != nil {
 				// put() // WHAT???
