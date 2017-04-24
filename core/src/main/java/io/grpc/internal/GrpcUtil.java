@@ -70,10 +70,10 @@ public final class GrpcUtil {
 
   public static final Charset US_ASCII = Charset.forName("US-ASCII");
 
-  // Certain production AppEngine runtimes have constraints on threading and socket handling
+  // AppEngine runtimes have constraints on threading and socket handling
   // that need to be accommodated.
   public static final boolean IS_RESTRICTED_APPENGINE =
-      "Production".equals(System.getProperty("com.google.appengine.runtime.environment"))
+      System.getProperty("com.google.appengine.runtime.environment") != null
           && "1.7".equals(System.getProperty("java.specification.version"));
 
   /**
