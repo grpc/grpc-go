@@ -59,7 +59,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.grpc.Attributes;
-import io.grpc.CallOptions;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -73,7 +72,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.grpclb.GrpclbLoadBalancer.ErrorPicker;
 import io.grpc.grpclb.GrpclbLoadBalancer.RoundRobinEntry;
@@ -81,7 +79,6 @@ import io.grpc.grpclb.GrpclbLoadBalancer.RoundRobinPicker;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.internal.SerializingExecutor;
-import io.grpc.stub.ClientCalls;
 import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -203,13 +200,6 @@ public class GrpclbLoadBalancerTest {
             channel = InProcessChannelBuilder.forName("nonExistFakeLb").directExecutor().build();
           } else {
             channel = InProcessChannelBuilder.forName("fakeLb").directExecutor().build();
-          }
-          // TODO(zhangkun83): #2444: non-determinism of Channel due to starting NameResolver on the
-          // timer "Prime" it before use.  Remove it after #2444 is resolved.
-          try {
-            ClientCalls.blockingUnaryCall(channel, TRASH_METHOD, CallOptions.DEFAULT, "trash");
-          } catch (StatusRuntimeException ignored) {
-            // Ignored
           }
           fakeOobChannels.add(channel);
           oobChannelTracker.add(channel);
