@@ -252,7 +252,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
 			}
 			if put != nil {
-				put() // WHAT???
+				put()
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -270,14 +270,13 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
-				put() // WHAT???
+				put()
 				put = nil
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				// put() // failed to send.
 				if c.failFast {
 					return toRPCErr(err)
 				}
@@ -292,7 +291,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
-				put() // WHAT???
+				put()
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -316,7 +315,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				bytesSent:     stream.BytesSent(),
 				bytesReceived: stream.BytesReceived(),
 			})
-			put() // TODO what?
+			put()
 			put = nil
 		}
 		return stream.Status().Err()

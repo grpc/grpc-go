@@ -201,7 +201,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
 			}
 			if put != nil {
-				put() // TODO: failed to send?
+				put()
 				put = nil
 			}
 			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
@@ -471,7 +471,7 @@ func (cs *clientStream) finish(err error) {
 			bytesSent:     cs.s.BytesSent(),
 			bytesReceived: cs.s.BytesReceived(),
 		})
-		cs.put() // TODO
+		cs.put()
 		cs.put = nil
 	}
 	if cs.statsHandler != nil {

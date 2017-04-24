@@ -662,14 +662,16 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	}
 	if !ok {
 		if put != nil {
-			put() // failed to send.
+			updateRPCStatsInContext(ctx, rpcStats{bytesSent: false, bytesReceived: false})
+			put()
 		}
 		return nil, nil, errConnClosing
 	}
 	t, err := ac.wait(ctx, cc.dopts.balancer != nil, !opts.BlockingWait)
 	if err != nil {
 		if put != nil {
-			put() // failed to send.
+			updateRPCStatsInContext(ctx, rpcStats{bytesSent: false, bytesReceived: false})
+			put()
 		}
 		return nil, nil, err
 	}
