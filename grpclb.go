@@ -145,6 +145,8 @@ type balancer struct {
 	done     bool
 	expTimer *time.Timer
 	rand     *rand.Rand
+
+	clientStats lbpb.ClientStats
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
@@ -538,7 +540,31 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 		err = ErrClientConnClosing
 		return
 	}
+	seq := b.seq
 
+	defer func() {
+		if err == nil {
+			put = func() {
+				s, ok := rpcStatsFromContext(ctx)
+				if !ok {
+					return
+				}
+				b.mu.Lock()
+				defer b.mu.Unlock()
+				if b.done || seq < b.seq {
+					return
+				}
+				b.clientStats.NumCallsFinished++
+				if !s.bytesSent {
+					b.clientStats.NumCallsFinishedWithClientFailedToSend++
+				} else if s.bytesReceived {
+					b.clientStats.NumCallsFinishedKnownReceived++
+				}
+			}
+		}
+	}()
+
+	b.clientStats.NumCallsStarted++
 	if len(b.addrs) > 0 {
 		if b.next >= len(b.addrs) {
 			b.next = 0
@@ -556,6 +582,13 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 				}
 				if !opts.BlockingWait {
 					b.next = next
+					if a.dropForLoadBalancing {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+					} else if a.dropForRateLimiting {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+					}
 					b.mu.Unlock()
 					err = Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
 					return
@@ -569,6 +602,8 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	}
 	if !opts.BlockingWait {
 		if len(b.addrs) == 0 {
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
 			b.mu.Unlock()
 			err = Errorf(codes.Unavailable, "there is no address available")
 			return
@@ -591,10 +626,14 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 		select {
 		case <-ctx.Done():
 			err = ctx.Err()
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
 			return
 		case <-ch:
 			b.mu.Lock()
 			if b.done {
+				b.clientStats.NumCallsFinished++
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
 				b.mu.Unlock()
 				err = ErrClientConnClosing
 				return
@@ -617,6 +656,13 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 						}
 						if !opts.BlockingWait {
 							b.next = next
+							if a.dropForLoadBalancing {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+							} else if a.dropForRateLimiting {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+							}
 							b.mu.Unlock()
 							err = Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
 							return
