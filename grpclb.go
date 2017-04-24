@@ -283,6 +283,29 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
+func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		b.mu.Lock()
+		stats := b.clientStats
+		b.clientStats = lbpb.ClientStats{} // Clear the stats.
+		b.mu.Unlock()
+		t := time.Now()
+		stats.Timestamp = &lbpb.Timestamp{
+			Seconds: t.Unix(),
+			Nanos:   int32(t.Nanosecond()),
+		}
+		if err := s.Send(&lbpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+				ClientStats: &stats,
+			},
+		}); err != nil {
+			return
+		}
+	}
+}
+
 func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -323,6 +346,9 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 		// delegation
 		grpclog.Println("TODO: Delegation is not supported yet.")
 		return
+	}
+	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
+		go b.sendLoadReport(stream, d)
 	}
 	// Retrieve the server list.
 	for {
