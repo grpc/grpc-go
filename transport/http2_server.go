@@ -241,6 +241,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
 	}
+	s.contentType = state.contentType
 	s.recvCompress = state.encoding
 	if state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(t.ctx, state.timeout)
@@ -640,7 +641,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	t.hBuf.Reset()
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: s.contentType})
 	if s.sendCompress != "" {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
@@ -697,7 +698,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	t.hBuf.Reset()
 	if !headersSent {
 		t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-		t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: s.contentType})
 	}
 	t.hEnc.WriteField(
 		hpack.HeaderField{

@@ -108,6 +108,40 @@ func TestValidContentType(t *testing.T) {
 	}
 }
 
+func TestGetContentSubtype(t *testing.T) {
+	tests := []struct {
+		contentType string
+		want        string
+	}{
+		{"application/grpc", ""},
+		{"application/grpc+proto", "proto"},
+		{"application/grpc;proto", "proto"},
+		{"application/grpc-proto", ""},
+	}
+	for _, tt := range tests {
+		got := getContentSubtype(tt.contentType)
+		if got != tt.want {
+			t.Errorf("getContentSubtype(%q) = %v; want %v", tt.contentType, got, tt.want)
+		}
+	}
+}
+
+func TestGetContentTypeForSubtype(t *testing.T) {
+	tests := []struct {
+		subtype string
+		want    string
+	}{
+		{"", "application/grpc"},
+		{"proto", "application/grpc+proto"},
+	}
+	for _, tt := range tests {
+		got := getContentTypeForSubtype(tt.subtype)
+		if got != tt.want {
+			t.Errorf("getContentTypeForSubtype(%q) = %v; want %v", tt.subtype, got, tt.want)
+		}
+	}
+}
+
 func TestEncodeGrpcMessage(t *testing.T) {
 	for _, tt := range []struct {
 		input    string

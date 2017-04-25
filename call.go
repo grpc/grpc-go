@@ -52,7 +52,7 @@ import (
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
 // TODO ctx is used for stats collection and processing. It is the context passed from the application.
-func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
+func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}, codec Codec) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
 		if err != nil {
@@ -73,7 +73,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, dopts.maxMsgSize, inPayload); err != nil {
+		if err = recv(p, codec, stream, dopts.dc, reply, dopts.maxMsgSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -93,7 +93,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options, codec Codec) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	outBuf, err := encode(codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
@@ -216,10 +216,15 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			// RPC has completed or failed.
 			put func()
 		)
+		codec := c.codec
+		if codec == nil {
+			codec = cc.dopts.codec
+		}
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
-			Host:   cc.authority,
-			Method: method,
+			Host:           cc.authority,
+			Method:         method,
+			ContentSubtype: codec.String(),
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
@@ -246,7 +251,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts, codec)
 		if err != nil {
 			if put != nil {
 				put()
@@ -263,7 +268,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
+		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply, codec)
 		if err != nil {
 			if put != nil {
 				put()

@@ -220,6 +220,8 @@ type Stream struct {
 	rstStream bool
 	// rstError is the error that needs to be sent along with the RST_STREAM frame.
 	rstError http2.ErrCode
+	// contentType is the content-type.
+	contentType string
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -287,6 +289,16 @@ func (s *Stream) Method() string {
 // Status returns the status received from the server.
 func (s *Stream) Status() *status.Status {
 	return s.status
+}
+
+// ContentType returns the content-type.
+func (s *Stream) ContentType() string {
+	return s.contentType
+}
+
+// ContentSubtype returns the content subtype.
+func (s *Stream) ContentSubtype() string {
+	return getContentSubtype(s.contentType)
 }
 
 // SetHeader sets the header metadata. This can be called multiple times.
@@ -455,6 +467,10 @@ type CallHdr struct {
 	// only a hint. The transport may modify the flush decision
 	// for performance purposes.
 	Flush bool
+
+	// ContentSubtype specifies the subtype of the content-type header,
+	// e.g. "proto" would mean to set content-type to "application/grpc+proto".
+	ContentSubtype string
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport

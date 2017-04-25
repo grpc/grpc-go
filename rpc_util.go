@@ -116,6 +116,7 @@ type callInfo struct {
 	trailerMD metadata.MD
 	peer      *peer.Peer
 	traceInfo traceInfo // in trace.go
+	codec     Codec
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -177,6 +178,14 @@ func Peer(peer *peer.Peer) CallOption {
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
+		return nil
+	})
+}
+
+// CallCodec returns a CallOption that uses the given Codec for the RPC call.
+func CallCodec(codec Codec) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.codec = codec
 		return nil
 	})
 }
