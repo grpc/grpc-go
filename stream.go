@@ -244,6 +244,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		select {
 		case <-t.Error():
 			// Incur transport error, simply exit.
+		case <-cc.ctx.Done():
+			cs.finish(ErrClientConnClosing)
+			cs.closeTransportStream(ErrClientConnClosing)
 		case <-s.Done():
 			// TODO: The trace of the RPC is terminated here when there is no pending
 			// I/O, which is probably not the optimal solution.
