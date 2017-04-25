@@ -40,6 +40,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,6 +175,7 @@ type remoteBalancer struct {
 	intervals []time.Duration
 	statsDura time.Duration
 	done      chan struct{}
+	mu        sync.Mutex
 	stats     lbpb.ClientStats
 }
 
@@ -220,12 +222,14 @@ func (b *remoteBalancer) BalanceLoad(stream *loadBalancerBalanceLoadServer) erro
 			if req, err = stream.Recv(); err != nil {
 				return
 			}
+			b.mu.Lock()
 			b.stats.NumCallsStarted += req.GetClientStats().NumCallsStarted
 			b.stats.NumCallsFinished += req.GetClientStats().NumCallsFinished
 			b.stats.NumCallsFinishedWithDropForRateLimiting += req.GetClientStats().NumCallsFinishedWithDropForRateLimiting
 			b.stats.NumCallsFinishedWithDropForLoadBalancing += req.GetClientStats().NumCallsFinishedWithDropForLoadBalancing
 			b.stats.NumCallsFinishedWithClientFailedToSend += req.GetClientStats().NumCallsFinishedWithClientFailedToSend
 			b.stats.NumCallsFinishedKnownReceived += req.GetClientStats().NumCallsFinishedKnownReceived
+			b.mu.Unlock()
 		}
 	}()
 	for k, v := range b.sls {
@@ -696,6 +700,7 @@ func TestGRPCLBStatsUnary(t *testing.T) {
 	cc.Close()
 
 	time.Sleep(1 * time.Second)
+	tss.ls.mu.Lock()
 	if tss.ls.stats.NumCallsStarted != int64(countNormalRPC+countFailedToSend) {
 		t.Errorf("num calls started = %v, want %v+%v", tss.ls.stats.NumCallsStarted, countNormalRPC, countFailedToSend)
 	}
@@ -714,6 +719,7 @@ func TestGRPCLBStatsUnary(t *testing.T) {
 	if tss.ls.stats.NumCallsFinishedKnownReceived != int64(countNormalRPC)/3 {
 		t.Errorf("num calls known received = %v, want %v/3", tss.ls.stats.NumCallsFinishedKnownReceived, countNormalRPC)
 	}
+	tss.ls.mu.Unlock()
 }
 
 func TestGRPCLBStatsStreaming(t *testing.T) {
@@ -785,6 +791,7 @@ func TestGRPCLBStatsStreaming(t *testing.T) {
 	cc.Close()
 
 	time.Sleep(1 * time.Second)
+	tss.ls.mu.Lock()
 	if tss.ls.stats.NumCallsStarted != int64(countNormalRPC+countFailedToSend) {
 		t.Errorf("num calls started = %v, want %v+%v", tss.ls.stats.NumCallsStarted, countNormalRPC, countFailedToSend)
 	}
@@ -803,4 +810,5 @@ func TestGRPCLBStatsStreaming(t *testing.T) {
 	if tss.ls.stats.NumCallsFinishedKnownReceived != int64(countNormalRPC)/3 {
 		t.Errorf("num calls known received = %v, want %v/3", tss.ls.stats.NumCallsFinishedKnownReceived, countNormalRPC)
 	}
+	tss.ls.mu.Unlock()
 }
