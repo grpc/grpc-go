@@ -284,7 +284,6 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 }
 
 func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
-	b.clientStats = lbpb.ClientStats{} // Clear client stats.
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -355,6 +354,9 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 	}
 	streamDone := make(chan struct{})
 	defer close(streamDone)
+	b.mu.Lock()
+	b.clientStats = lbpb.ClientStats{} // Clear client stats.
+	b.mu.Unlock()
 	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
 		go b.sendLoadReport(stream, d, streamDone)
 	}
