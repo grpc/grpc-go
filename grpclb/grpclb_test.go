@@ -431,8 +431,8 @@ func TestDropRequest(t *testing.T) {
 	testC := testpb.NewTestServiceClient(cc)
 	// The 1st, non-fail-fast RPC should succeed.  This ensures both server
 	// connections are made, because the first one has DropForLoadBalancing set to true.
-	if _, err := helloC.SayHello(context.Background(), &hwpb.HelloRequest{Name: "grpc"}, grpc.FailFast(false)); err != nil {
-		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", helloC, err)
+	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+		t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 	for i := 0; i < 3; i++ {
 		// Odd fail-fast RPCs should fail, because the 1st backend has DropForLoadBalancing
