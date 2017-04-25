@@ -84,6 +84,28 @@ func TestDecodeKeyValue(t *testing.T) {
 	}
 }
 
+func TestVals(t *testing.T) {
+	for _, test := range []struct {
+		key, val string
+	}{
+		{"key", "val0"},
+		{"Key", "val1"},
+		{"KEY", "val2"},
+	} {
+		md := Pairs(test.key, test.val)
+		vals, ok := md.Vals(test.key)
+		if !ok {
+			t.Fatalf("md.Vals(%s) could not retrieve slice of vals, expected slice", test.key)
+		}
+		if len(vals) != 1 {
+			t.Fatalf("md.Vals(%s) has length %d, want slice of length 1", test.key, len(vals))
+		}
+		if vals[0] != test.val {
+			t.Fatalf("md.Vals(%s) = [%s], want [%s]", test.key, vals[0], test.val)
+		}
+	}
+}
+
 func TestPairsMD(t *testing.T) {
 	for _, test := range []struct {
 		// input
