@@ -34,6 +34,7 @@ package io.grpc.okhttp;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.io.BaseEncoding;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -83,7 +84,7 @@ class OkHttpClientStream extends AbstractClientStream2 {
       String authority,
       String userAgent,
       StatsTraceContext statsTraceCtx) {
-    super(new OkHttpWritableBufferAllocator(), statsTraceCtx, headers, false);
+    super(new OkHttpWritableBufferAllocator(), statsTraceCtx, headers, method.isSafe());
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
     this.method = method;
     this.authority = authority;
@@ -127,6 +128,9 @@ class OkHttpClientStream extends AbstractClientStream2 {
     @Override
     public void writeHeaders(Metadata metadata, byte[] payload) {
       String defaultPath = "/" + method.getFullMethodName();
+      if (payload != null) {
+        defaultPath += "?" + BaseEncoding.base64().encode(payload);
+      }
       metadata.discardAll(GrpcUtil.USER_AGENT_KEY);
       synchronized (state.lock) {
         state.streamReady(metadata, defaultPath);

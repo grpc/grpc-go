@@ -35,9 +35,12 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.io.BaseEncoding;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -47,7 +50,9 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.okhttp.internal.framed.ErrorCode;
 import io.grpc.okhttp.internal.framed.Header;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
@@ -174,6 +179,38 @@ public class OkHttpClientStreamTest {
         Headers.CONTENT_TYPE_HEADER,
         Headers.TE_HEADER)
             .inOrder();
+  }
+
+  @Test
+  public void getUnaryRequest() {
+    MethodDescriptor<?, ?> getMethod = MethodDescriptor.<Void, Void>newBuilder()
+        .setType(MethodDescriptor.MethodType.UNARY)
+        .setFullMethodName("/service/method")
+        .setIdempotent(true)
+        .setSafe(true)
+        .setRequestMarshaller(marshaller)
+        .setResponseMarshaller(marshaller)
+        .build();
+    stream = new OkHttpClientStream(getMethod, new Metadata(), frameWriter, transport,
+        flowController, lock, MAX_MESSAGE_SIZE, "localhost", "good-application",
+        StatsTraceContext.NOOP);
+    stream.start(new BaseClientStreamListener());
+
+    // GET streams send headers after halfClose is called.
+    verify(frameWriter, times(0)).synStream(
+        eq(false), eq(false), eq(3), eq(0), headersCaptor.capture());
+    verify(transport, times(0)).streamReadyToStart(isA(OkHttpClientStream.class));
+
+    byte[] msg = "request".getBytes(Charset.forName("UTF-8"));
+    stream.writeMessage(new ByteArrayInputStream(msg));
+    stream.halfClose();
+    verify(transport).streamReadyToStart(eq(stream));
+    stream.transportState().start(3);
+
+    verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), headersCaptor.capture());
+    assertThat(headersCaptor.getValue()).contains(
+        new Header(Header.TARGET_PATH, "/" + getMethod.getFullMethodName() + "?"
+            + BaseEncoding.base64().encode(msg)));
   }
 
   // TODO(carl-mastrangelo): extract this out into a testing/ directory and remove other definitions
