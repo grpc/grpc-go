@@ -758,18 +758,33 @@ func TestGRPCLBStatsStreaming(t *testing.T) {
 	}
 	testC := testpb.NewTestServiceClient(cc)
 	// The first non-failfast RPC succeeds, all connections are up.
-	if _, err := testC.FullDuplexCall(context.Background(), grpc.FailFast(false)); err != nil {
+	var stream testpb.TestService_FullDuplexCallClient
+	stream, err = testC.FullDuplexCall(context.Background(), grpc.FailFast(false))
+	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
+	for {
+		if _, err = stream.Recv(); err == io.EOF {
+			break
+		}
+	}
 	for i := 0; i < countNormalRPC-1; i++ {
-		testC.FullDuplexCall(context.Background())
+		stream, err = testC.FullDuplexCall(context.Background())
+		if err == nil {
+			// Wait for stream to end if err is nil.
+			for {
+				if _, err = stream.Recv(); err == io.EOF {
+					break
+				}
+			}
+		}
 	}
 	for i := 0; i < countFailedToSend; i++ {
 		grpc.NewClientStream(context.Background(), &grpc.StreamDesc{}, cc, "failtosend")
 	}
 	cc.Close()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 	if tss.ls.stats.NumCallsStarted != int64(countNormalRPC+countFailedToSend) {
 		t.Errorf("num calls started = %v, want %v+%v", tss.ls.stats.NumCallsStarted, countNormalRPC, countFailedToSend)
 	}
