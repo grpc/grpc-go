@@ -269,8 +269,9 @@ func (s *Stream) ReadFull(p []byte) (n int, err error) {
 	if s.readFullErr != nil {
 		return 0, s.readFullErr
 	}
-	defer func() { s.readFullErr = err }()
-	return io.ReadFull(s.streamReader, p)
+	n, err = io.ReadFull(s.streamReader, p)
+	s.readFullErr = err
+	return n, err
 }
 
 type streamWindowSpaceLoaningReader struct {
@@ -285,10 +286,11 @@ func (r *streamWindowSpaceLoaningReader) Read(p []byte) (n int, err error) {
 	if r.readFullErr != nil {
 		return 0, r.readFullErr
 	}
-	defer func() { r.readFullErr = err }()
 	committedReadAmount := min(maxSingleStreamWindowUpdate, uint32(len(p)))
 	r.loanSpaceInStreamWindow(committedReadAmount)
-	return io.ReadFull(r.wr, p[:committedReadAmount])
+	n, err = io.ReadFull(r.wr, p[:committedReadAmount])
+	r.readFullErr = err
+	return n, err
 }
 
 type connAndStreamWindowConsumingReader struct {

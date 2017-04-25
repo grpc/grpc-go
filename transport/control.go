@@ -68,6 +68,13 @@ const (
 
 	// max legal window update
 	http2MaxWindowUpdate = 2147483647
+	// The fraction of an "inFlow" flow control window's limit at which accumulated
+	// "pending updates" should be flushed out and cause a window update to be sent.
+	// This number is arbitrary; limit/4 makes sure that the receiver isn't
+	// constantly busy sending window updates, but it also tries to avoid
+	// sending an update "too late" and causing the sender to stall.
+	// TODO: possibly tweaking this effects performance in some scenarios.
+	pendingUpdateThreshold = 4
 )
 
 // The following defines various control items which could flow through
@@ -171,7 +178,7 @@ type inFlow struct {
 	limit uint32
 
 	mu sync.Mutex
-	// PendingData is the overall data which have been received but not been
+	// The overall data which has been received but not been
 	// consumed by applications.
 	pendingData uint32
 	// The amount of data the application has consumed but grpc has not sent
@@ -179,7 +186,7 @@ type inFlow struct {
 	pendingUpdate uint32
 
 	// This is temporary space in the incoming flow control that can be granted at convenient times
-	// to prevent the sender from stalling for lack flow control space.
+	// to prevent the sender from stalling for lack of flow control space.
 	// If present, it is paid back when data is consumed from the window.
 	loanedWindowSpace uint32
 }
@@ -229,12 +236,12 @@ func (f *inFlow) loanWindowSpace(n uint32) uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.loanedWindowSpace > 0 {
-		grpclog.Fatalf("pre-consuming window space while there is pre-consumed window space still  outstanding")
+		grpclog.Fatalf("pre-consuming window space while there is pre-consumed window space still outstanding")
 	}
 	f.loanedWindowSpace = n
 
-	if f.loanedWindowSpace+f.pendingUpdate >= f.limit/4 {
-		wu := f.pendingUpdate + f.loanedWindowSpace
+	wu := f.pendingUpdate + f.loanedWindowSpace
+	if wu >= f.limit/pendingUpdateThreshold {
 		f.pendingUpdate = 0
 		return wu
 	}
