@@ -33,6 +33,7 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
@@ -281,6 +282,47 @@ public class ManagedChannelImplIdlenessTest {
     verify(mockLoadBalancer, never()).shutdown();
     timer.forwardTime(1, TimeUnit.SECONDS);
     verify(mockLoadBalancer).shutdown();
+  }
+
+  @Test
+  public void updateSubchannelAddresses_newAddressConnects() {
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata()); // Create LB
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    Helper helper = helperCaptor.getValue();
+    Subchannel subchannel = helper.createSubchannel(servers.get(0), Attributes.EMPTY);
+
+    subchannel.requestConnection();
+    MockClientTransportInfo t0 = newTransports.poll();
+    t0.listener.transportReady();
+
+    helper.updateSubchannelAddresses(subchannel, servers.get(1));
+
+    subchannel.requestConnection();
+    MockClientTransportInfo t1 = newTransports.poll();
+    t1.listener.transportReady();
+  }
+
+  @Test
+  public void updateSubchannelAddresses_existingAddressDoesNotConnect() {
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata()); // Create LB
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    Helper helper = helperCaptor.getValue();
+    Subchannel subchannel = helper.createSubchannel(servers.get(0), Attributes.EMPTY);
+
+    subchannel.requestConnection();
+    MockClientTransportInfo t0 = newTransports.poll();
+    t0.listener.transportReady();
+
+    List<SocketAddress> changedList = new ArrayList<SocketAddress>(servers.get(0).getAddresses());
+    changedList.add(new FakeSocketAddress("aDifferentServer"));
+    helper.updateSubchannelAddresses(subchannel, new EquivalentAddressGroup(changedList));
+
+    subchannel.requestConnection();
+    assertNull(newTransports.poll());
   }
 
   @Test

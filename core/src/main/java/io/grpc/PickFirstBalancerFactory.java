@@ -83,13 +83,11 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
       // as far as load balancer is concerned, there's virtually one single server with multiple
       // addresses so the connection will be created only for the first address (pick first).
       EquivalentAddressGroup newEag = flattenEquivalentAddressGroup(servers);
-      if (subchannel == null || !newEag.equals(subchannel.getAddresses())) {
-        if (subchannel != null) {
-          subchannel.shutdown();
-        }
-
+      if (subchannel == null) {
         subchannel = helper.createSubchannel(newEag, Attributes.EMPTY);
         helper.updatePicker(new Picker(PickResult.withSubchannel(subchannel)));
+      } else {
+        helper.updateSubchannelAddresses(subchannel, newEag);
       }
     }
 

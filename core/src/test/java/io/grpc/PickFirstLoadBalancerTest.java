@@ -36,7 +36,6 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isA;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -96,7 +95,7 @@ public class PickFirstLoadBalancerTest {
       socketAddresses.add(addr);
     }
 
-    when(mockSubchannel.getAddresses()).thenReturn(new EquivalentAddressGroup(socketAddresses));
+    when(mockSubchannel.getAddresses()).thenThrow(new UnsupportedOperationException());
     when(mockHelper.createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class)))
         .thenReturn(mockSubchannel);
 
@@ -131,6 +130,9 @@ public class PickFirstLoadBalancerTest {
     verify(mockHelper).createSubchannel(any(EquivalentAddressGroup.class),
         any(Attributes.class));
     verify(mockHelper).updatePicker(isA(Picker.class));
+    // Updating the subchannel addresses is unnecessary, but doesn't hurt anything
+    verify(mockHelper).updateSubchannelAddresses(
+        eq(mockSubchannel), any(EquivalentAddressGroup.class));
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -142,16 +144,7 @@ public class PickFirstLoadBalancerTest {
     List<EquivalentAddressGroup> newServers =
         Lists.newArrayList(new EquivalentAddressGroup(socketAddr));
 
-    final Subchannel oldSubchannel = mock(Subchannel.class);
     final EquivalentAddressGroup oldEag = new EquivalentAddressGroup(socketAddresses);
-    when(oldSubchannel.getAddresses()).thenReturn(oldEag);
-
-    final Subchannel newSubchannel = mock(Subchannel.class);
-    final EquivalentAddressGroup newEag = new EquivalentAddressGroup(newSocketAddresses);
-    when(newSubchannel.getAddresses()).thenReturn(newEag);
-
-    when(mockHelper.createSubchannel(eq(oldEag), any(Attributes.class))).thenReturn(oldSubchannel);
-    when(mockHelper.createSubchannel(eq(newEag), any(Attributes.class))).thenReturn(newSubchannel);
 
     InOrder inOrder = inOrder(mockHelper);
 
@@ -159,20 +152,13 @@ public class PickFirstLoadBalancerTest {
     inOrder.verify(mockHelper).createSubchannel(eagCaptor.capture(), any(Attributes.class));
     inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
     assertEquals(socketAddresses, eagCaptor.getValue().getAddresses());
+    assertEquals(mockSubchannel, pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
 
     loadBalancer.handleResolvedAddressGroups(newServers, affinity);
-    inOrder.verify(mockHelper).createSubchannel(eagCaptor.capture(), any(Attributes.class));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateSubchannelAddresses(eq(mockSubchannel), eagCaptor.capture());
     assertEquals(newSocketAddresses, eagCaptor.getValue().getAddresses());
 
-    Subchannel subchannel = pickerCaptor.getAllValues().get(0).pickSubchannel(mockArgs)
-        .getSubchannel();
-    assertEquals(oldSubchannel, subchannel);
-
-    Subchannel subchannel2 = pickerCaptor.getAllValues().get(1).pickSubchannel(mockArgs)
-        .getSubchannel();
-    assertEquals(newSubchannel, subchannel2);
-    verify(subchannel2, never()).shutdown();
+    verify(mockSubchannel, never()).shutdown();
 
     verifyNoMoreInteractions(mockHelper);
   }

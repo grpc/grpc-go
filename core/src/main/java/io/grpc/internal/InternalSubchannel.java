@@ -66,7 +66,6 @@ final class InternalSubchannel implements WithLogId {
   private static final Logger log = Logger.getLogger(InternalSubchannel.class.getName());
 
   private final LogId logId = LogId.allocate(getClass().getName());
-  private final EquivalentAddressGroup addressGroup;
   private final String authority;
   private final String userAgent;
   private final BackoffPolicy.Provider backoffPolicyProvider;
@@ -88,7 +87,14 @@ final class InternalSubchannel implements WithLogId {
   private final ChannelExecutor channelExecutor;
 
   @GuardedBy("lock")
-  private int nextAddressIndex;
+  private EquivalentAddressGroup addressGroup;
+
+  /**
+   * The index of the address corresponding to pendingTransport/activeTransport, or 0 if both are
+   * null.
+   */
+  @GuardedBy("lock")
+  private int addressIndex;
 
   /**
    * The policy to control back off between reconnects. Non-{@code null} when last connect failed.
@@ -194,14 +200,11 @@ final class InternalSubchannel implements WithLogId {
   private void startNewTransport() {
     Preconditions.checkState(reconnectTask == null, "Should have no reconnectTask scheduled");
 
-    if (nextAddressIndex == 0) {
+    if (addressIndex == 0) {
       connectingTimer.reset().start();
     }
     List<SocketAddress> addrs = addressGroup.getAddresses();
-    final SocketAddress address = addrs.get(nextAddressIndex++);
-    if (nextAddressIndex >= addrs.size()) {
-      nextAddressIndex = 0;
-    }
+    final SocketAddress address = addrs.get(addressIndex);
 
     ConnectionClientTransport transport =
         transportFactory.newClientTransport(address, authority, userAgent);
@@ -282,6 +285,42 @@ final class InternalSubchannel implements WithLogId {
     }
   }
 
+  /** Replaces the existing addresses, avoiding unnecessary reconnects. */
+  public void updateAddresses(EquivalentAddressGroup newAddressGroup) {
+    ManagedClientTransport savedTransport = null;
+    try {
+      synchronized (lock) {
+        EquivalentAddressGroup oldAddressGroup = addressGroup;
+        addressGroup = newAddressGroup;
+        if (state.getState() == READY || state.getState() == CONNECTING) {
+          SocketAddress address = oldAddressGroup.getAddresses().get(addressIndex);
+          int newIndex = newAddressGroup.getAddresses().indexOf(address);
+          if (newIndex != -1) {
+            addressIndex = newIndex;
+          } else {
+            // Forced to drop the connection
+            if (state.getState() == READY) {
+              savedTransport = activeTransport;
+              activeTransport = null;
+              addressIndex = 0;
+              gotoNonErrorState(IDLE);
+            } else {
+              savedTransport = pendingTransport;
+              pendingTransport = null;
+              addressIndex = 0;
+              startNewTransport();
+            }
+          }
+        }
+      }
+    } finally {
+      channelExecutor.drain();
+    }
+    if (savedTransport != null) {
+      savedTransport.shutdown();
+    }
+  }
+
   public void shutdown() {
     ManagedClientTransport savedActiveTransport;
     ConnectionClientTransport savedPendingTransport;
@@ -295,6 +334,7 @@ final class InternalSubchannel implements WithLogId {
         savedPendingTransport = pendingTransport;
         activeTransport = null;
         pendingTransport = null;
+        addressIndex = 0;
         if (transports.isEmpty()) {
           handleTermination();
           if (log.isLoggable(Level.FINE)) {
@@ -350,7 +390,13 @@ final class InternalSubchannel implements WithLogId {
   }
 
   EquivalentAddressGroup getAddressGroup() {
-    return addressGroup;
+    try {
+      synchronized (lock) {
+        return addressGroup;
+      }
+    } finally {
+      channelExecutor.drain();
+    }
   }
 
   @GuardedBy("lock")
@@ -398,7 +444,6 @@ final class InternalSubchannel implements WithLogId {
         synchronized (lock) {
           savedState = state.getState();
           reconnectPolicy = null;
-          nextAddressIndex = 0;
           if (savedState == SHUTDOWN) {
             // activeTransport should have already been set to null by shutdown(). We keep it null.
             Preconditions.checkState(activeTransport == null,
@@ -436,11 +481,15 @@ final class InternalSubchannel implements WithLogId {
           if (activeTransport == transport) {
             gotoNonErrorState(IDLE);
             activeTransport = null;
+            addressIndex = 0;
           } else if (pendingTransport == transport) {
             Preconditions.checkState(state.getState() == CONNECTING,
                 "Expected state is CONNECTING, actual state is %s", state.getState());
+            addressIndex++;
             // Continue reconnect if there are still addresses to try.
-            if (nextAddressIndex == 0) {
+            if (addressIndex >= addressGroup.getAddresses().size()) {
+              pendingTransport = null;
+              addressIndex = 0;
               // Initiate backoff
               // Transition to TRANSIENT_FAILURE
               scheduleBackoff(s);

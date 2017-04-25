@@ -432,6 +432,18 @@ public abstract class LoadBalancer {
     public abstract Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs);
 
     /**
+     * Replaces the existing addresses used with {@code subchannel}. This method is superior to
+     * {@link #createSubchannel} when the new and old addresses overlap, since the subchannel can
+     * continue using an existing connection.
+     *
+     * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
+     *     #createSubchannel}
+     */
+    public void updateSubchannelAddresses(Subchannel subchannel, EquivalentAddressGroup addrs) {
+      throw new UnsupportedOperationException();
+    }
+
+    /**
      * Out-of-band channel for LoadBalancer’s own RPC needs, e.g., talking to an external
      * load-balancer service.
      *

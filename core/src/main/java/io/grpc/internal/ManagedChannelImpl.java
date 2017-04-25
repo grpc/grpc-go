@@ -653,6 +653,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     }
 
     @Override
+    public void updateSubchannelAddresses(
+        LoadBalancer.Subchannel subchannel, EquivalentAddressGroup addrs) {
+      checkArgument(subchannel instanceof SubchannelImplImpl,
+          "subchannel must have been returned from createSubchannel");
+      ((SubchannelImplImpl) subchannel).subchannel.updateAddresses(addrs);
+    }
+
+    @Override
     public ManagedChannel createOobChannel(EquivalentAddressGroup addressGroup, String authority) {
       ScheduledExecutorService scheduledExecutorCopy = scheduledExecutor;
       checkState(scheduledExecutorCopy != null,
