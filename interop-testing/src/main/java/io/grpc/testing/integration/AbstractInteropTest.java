@@ -511,7 +511,7 @@ public abstract class AbstractInteropTest {
       // CensusStreamTracerModule record final status in the interceptor, thus is guaranteed to be
       // recorded.  The tracer stats rely on the stream being created, which is not always the case
       // in this test.  Therefore we don't check the tracer stats.
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/StreamingInputCall",
           Status.CANCELLED.getCode());
@@ -817,7 +817,7 @@ public abstract class AbstractInteropTest {
   }
 
   @Test(timeout = 10000)
-  public void deadlineExceeded() {
+  public void deadlineExceeded() throws Exception {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
     TestServiceGrpc.TestServiceBlockingStub stub =
@@ -836,7 +836,7 @@ public abstract class AbstractInteropTest {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
       // Stream may not have been created before deadline is exceeded, thus we don't test the tracer
       // stats.
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/StreamingOutputCall",
           Status.Code.DEADLINE_EXCEEDED);
@@ -869,7 +869,7 @@ public abstract class AbstractInteropTest {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
       // Stream may not have been created when deadline is exceeded, thus we don't check tracer
       // stats.
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/StreamingOutputCall",
           Status.Code.DEADLINE_EXCEEDED);
@@ -893,7 +893,7 @@ public abstract class AbstractInteropTest {
     // recorded.  The tracer stats rely on the stream being created, which is not the case if
     // deadline is exceeded before the call is created. Therefore we don't check the tracer stats.
     if (metricsExpected()) {
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/EmptyCall",
           Status.DEADLINE_EXCEEDED.getCode());
@@ -912,7 +912,7 @@ public abstract class AbstractInteropTest {
     if (metricsExpected()) {
       assertMetrics("grpc.testing.TestService/EmptyCall", Status.Code.OK);
 
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/EmptyCall",
           Status.DEADLINE_EXCEEDED.getCode());
@@ -1236,7 +1236,7 @@ public abstract class AbstractInteropTest {
       // CensusStreamTracerModule record final status in the interceptor, thus is guaranteed to be
       // recorded.  The tracer stats rely on the stream being created, which is not always the case
       // in this test, thus we will not check that.
-      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
+      MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       checkTags(
           clientRecord, false, "grpc.testing.TestService/FullDuplexCall",
           Status.DEADLINE_EXCEEDED.getCode());
@@ -1524,7 +1524,7 @@ public abstract class AbstractInteropTest {
       try {
         // On the server, the stats is finalized in ServerStreamListener.closed(), which can be run
         // after the client receives the final status.  So we use a timeout.
-        serverRecord = serverStatsCtxFactory.pollRecord(1, TimeUnit.SECONDS);
+        serverRecord = serverStatsCtxFactory.pollRecord(5, TimeUnit.SECONDS);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }

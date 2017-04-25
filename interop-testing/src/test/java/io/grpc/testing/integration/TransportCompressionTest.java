@@ -95,6 +95,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
   /** Start server. */
   @BeforeClass
   public static void startServer() {
+    GrpcUtil.enableCensusStats = true;
     compressors.register(FZIPPER);
     compressors.register(Codec.Identity.NONE);
     startStaticServer(

@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ManagedChannel;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -52,6 +53,7 @@ public class Http2NettyLocalChannelTest extends AbstractInteropTest {
   /** Start server. */
   @BeforeClass
   public static void startServer() {
+    GrpcUtil.enableCensusStats = true;
     startStaticServer(
         NettyServerBuilder
             .forAddress(new LocalAddress("in-process-1"))

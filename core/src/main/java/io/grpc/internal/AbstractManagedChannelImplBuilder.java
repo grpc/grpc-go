@@ -39,6 +39,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.instrumentation.stats.Stats;
 import com.google.instrumentation.stats.StatsContextFactory;
+import com.google.instrumentation.trace.Tracing;
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
@@ -287,19 +288,25 @@ public abstract class AbstractManagedChannelImplBuilder
       nameResolverFactory = NameResolverProvider.asFactory();
     }
 
-    List<ClientInterceptor> interceptors = this.interceptors;
-    if (recordsStats()) {
+    List<ClientInterceptor> effectiveInterceptors =
+        new ArrayList<ClientInterceptor>(this.interceptors);
+    if (GrpcUtil.enableCensusStats && recordsStats()) {
       StatsContextFactory statsCtxFactory =
           this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
       if (statsCtxFactory != null) {
-        interceptors = new ArrayList<ClientInterceptor>(this.interceptors);
-        CensusStreamTracerModule census =
-            new CensusStreamTracerModule(statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+        CensusStatsModule censusStats =
+            new CensusStatsModule(statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
         // First interceptor runs last (see ClientInterceptors.intercept()), so that no
         // other interceptor can override the tracer factory we set in CallOptions.
-        interceptors.add(0, census.getClientInterceptor());
+        effectiveInterceptors.add(0, censusStats.getClientInterceptor());
       }
     }
+    if (GrpcUtil.enableCensusTracing) {
+      CensusTracingModule censusTracing =
+          new CensusTracingModule(Tracing.getTracer(), Tracing.getBinaryPropagationHandler());
+      effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
+    }
+
     return new ManagedChannelImpl(
         target,
         // TODO(carl-mastrangelo): Allow clients to pass this in
@@ -316,7 +323,7 @@ public abstract class AbstractManagedChannelImplBuilder
         GrpcUtil.STOPWATCH_SUPPLIER,
         idleTimeoutMillis,
         userAgent,
-        interceptors);
+        effectiveInterceptors);
   }
 
   /**

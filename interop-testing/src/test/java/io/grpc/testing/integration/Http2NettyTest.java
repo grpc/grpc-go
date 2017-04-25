@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ManagedChannel;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -55,6 +56,7 @@ public class Http2NettyTest extends AbstractInteropTest {
   /** Starts the server with HTTPS. */
   @BeforeClass
   public static void startServer() {
+    GrpcUtil.enableCensusStats = true;
     try {
       startStaticServer(NettyServerBuilder.forPort(0)
           .flowControlWindow(65 * 1024)

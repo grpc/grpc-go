@@ -70,6 +70,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   /** Starts the server with HTTPS. */
   @BeforeClass
   public static void startServer() throws Exception {
+    GrpcUtil.enableCensusStats = true;
     try {
       SslProvider sslProvider = SslContext.defaultServerProvider();
       if (sslProvider == SslProvider.OPENSSL && !OpenSsl.isAlpnSupported()) {

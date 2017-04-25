@@ -136,7 +136,7 @@ public class StatsTestUtils {
     }
 
     @Override
-    public StatsContext deserialize(InputStream buffer) {
+    public StatsContext deserialize(InputStream buffer) throws IOException {
       String serializedString;
       try {
         serializedString = new String(IoUtils.toByteArray(buffer), UTF_8);
@@ -149,7 +149,7 @@ public class StatsTestUtils {
       } else if (serializedString.startsWith(NO_EXTRA_TAG_HEADER_VALUE_PREFIX)) {
         return getDefault();
       } else {
-        return null;
+        throw new IOException("Malformed value");
       }
     }
 

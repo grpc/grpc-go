@@ -32,6 +32,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ManagedChannel;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.HandlerSettings;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -46,6 +47,7 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
 
   @BeforeClass
   public static void turnOnAutoWindow() {
+    GrpcUtil.enableCensusStats = true;
     HandlerSettings.enable(true);
     HandlerSettings.autoWindowOn(true);
     startStaticServer(

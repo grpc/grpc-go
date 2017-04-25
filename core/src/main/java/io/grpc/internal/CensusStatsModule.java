@@ -63,19 +63,23 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
- * Provides factories for {@link StreamTracer} that records tracing and metrics to Census.
+ * Provides factories for {@link StreamTracer} that records stats to Census.
  *
  * <p>On the client-side, a factory is created for each call, because ClientCall starts earlier than
  * the ClientStream, and in some cases may even not create a ClientStream at all.  Therefore, it's
  * the factory that reports the summary to Census.
  *
- * <p>On the server-side, a tracer is created for each call, because ServerStream starts earlier
- * than the ServerCall.  Therefore, it's the tracer that reports the summary to Census.
+ * <p>On the server-side, there is only one ServerStream per each ServerCall, and ServerStream
+ * starts earlier than the ServerCall.  Therefore, only one tracer is created per stream/call and
+ * it's the tracer that reports the summary to Census.
  */
-final class CensusStreamTracerModule {
+final class CensusStatsModule {
+  private static final Logger logger = Logger.getLogger(CensusStatsModule.class.getName());
   private static final double NANOS_PER_MILLI = TimeUnit.MILLISECONDS.toNanos(1);
   private static final ClientTracer BLANK_CLIENT_TRACER = new ClientTracer();
 
@@ -86,16 +90,17 @@ final class CensusStreamTracerModule {
 
   private final StatsContextFactory statsCtxFactory;
   private final Supplier<Stopwatch> stopwatchSupplier;
-  private final Metadata.Key<StatsContext> statsHeader;
-  private final CensusClientInterceptor clientInterceptor = new CensusClientInterceptor();
+  @VisibleForTesting
+  final Metadata.Key<StatsContext> statsHeader;
+  private final StatsClientInterceptor clientInterceptor = new StatsClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
 
-  CensusStreamTracerModule(
+  CensusStatsModule(
       final StatsContextFactory statsCtxFactory, Supplier<Stopwatch> stopwatchSupplier) {
     this.statsCtxFactory = checkNotNull(statsCtxFactory, "statsCtxFactory");
     this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
     this.statsHeader =
-        Metadata.Key.of("grpc-census-bin", new Metadata.BinaryMarshaller<StatsContext>() {
+        Metadata.Key.of("grpc-tags-bin", new Metadata.BinaryMarshaller<StatsContext>() {
             @Override
             public byte[] toBytes(StatsContext context) {
               // TODO(carl-mastrangelo): currently we only make sure the correctness. We may need to
@@ -113,8 +118,9 @@ final class CensusStreamTracerModule {
             public StatsContext parseBytes(byte[] serialized) {
               try {
                 return statsCtxFactory.deserialize(new ByteArrayInputStream(serialized));
-              } catch (IOException e) {
-                throw new RuntimeException(e);
+              } catch (Exception e) {
+                logger.log(Level.FINE, "Failed to parse stats header", e);
+                return statsCtxFactory.getDefault();
               }
             }
           });
@@ -192,7 +198,9 @@ final class CensusStreamTracerModule {
       checkState(streamTracer.compareAndSet(null, tracer),
           "Are you creating multiple streams per call? This class doesn't yet support this case.");
       headers.discardAll(statsHeader);
-      headers.put(statsHeader, parentCtx);
+      if (parentCtx != statsCtxFactory.getDefault()) {
+        headers.put(statsHeader, parentCtx);
+      }
       return tracer;
     }
 
@@ -245,10 +253,10 @@ final class CensusStreamTracerModule {
     private final AtomicLong outboundUncompressedSize = new AtomicLong();
     private final AtomicLong inboundUncompressedSize = new AtomicLong();
 
-    ServerTracer(String fullMethodName, @Nullable StatsContext parentCtx) {
+    ServerTracer(String fullMethodName, StatsContext parentCtx) {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
+      this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.stopwatch = stopwatchSupplier.get().start();
-      this.parentCtx = parentCtx;
     }
 
     @Override
@@ -308,11 +316,10 @@ final class CensusStreamTracerModule {
 
     @Override
     public <ReqT, RespT> Context filterContext(Context context) {
-      if (parentCtx != null) {
+      if (parentCtx != statsCtxFactory.getDefault()) {
         return context.withValue(STATS_CONTEXT_KEY, parentCtx);
-      } else {
-        return context;
       }
+      return context;
     }
   }
 
@@ -320,14 +327,18 @@ final class CensusStreamTracerModule {
     @Override
     public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
       StatsContext parentCtx = headers.get(statsHeader);
+      if (parentCtx == null) {
+        parentCtx = statsCtxFactory.getDefault();
+      }
       return new ServerTracer(fullMethodName, parentCtx);
     }
   }
 
-  private class CensusClientInterceptor implements ClientInterceptor {
+  private class StatsClientInterceptor implements ClientInterceptor {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      // New RPCs on client-side inherit the stats context from the current Context.
       StatsContext parentCtx = STATS_CONTEXT_KEY.get();
       if (parentCtx == null) {
         parentCtx = statsCtxFactory.getDefault();
