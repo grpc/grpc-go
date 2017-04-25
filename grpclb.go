@@ -283,10 +283,15 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
-func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration) {
+func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-ticker.C:
+		case <-done:
+			return
+		}
 		b.mu.Lock()
 		stats := b.clientStats
 		b.clientStats = lbpb.ClientStats{} // Clear the stats.
@@ -347,8 +352,10 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 		grpclog.Println("TODO: Delegation is not supported yet.")
 		return
 	}
+	streamDone := make(chan struct{})
+	defer close(streamDone)
 	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
-		go b.sendLoadReport(stream, d)
+		go b.sendLoadReport(stream, d, streamDone)
 	}
 	// Retrieve the server list.
 	for {
