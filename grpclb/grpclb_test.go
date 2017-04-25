@@ -769,7 +769,7 @@ func TestGRPCLBStatsStreaming(t *testing.T) {
 	}
 	cc.Close()
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 	if tss.ls.stats.NumCallsStarted != int64(countNormalRPC+countFailedToSend) {
 		t.Errorf("num calls started = %v, want %v+%v", tss.ls.stats.NumCallsStarted, countNormalRPC, countFailedToSend)
 	}

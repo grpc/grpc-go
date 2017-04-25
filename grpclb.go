@@ -284,6 +284,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 }
 
 func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
+	b.clientStats = lbpb.ClientStats{} // Clear client stats.
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
