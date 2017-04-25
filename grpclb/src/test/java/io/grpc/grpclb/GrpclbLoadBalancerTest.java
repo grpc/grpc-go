@@ -291,30 +291,30 @@ public class GrpclbLoadBalancerTest {
     when(args1.getHeaders()).thenReturn(headers1);
     assertSame(r1.result, picker.pickSubchannel(args1));
     verify(args1).getHeaders();
-    assertFalse(headers1.containsKey(GrpclbLoadBalancer.TOKEN_KEY));
+    assertFalse(headers1.containsKey(GrpclbConstants.TOKEN_METADATA_KEY));
 
     PickSubchannelArgs args2 = mock(PickSubchannelArgs.class);
     Metadata headers2 = new Metadata();
     // The existing token on the headers will be replaced
-    headers2.put(GrpclbLoadBalancer.TOKEN_KEY, "LBTOKEN__OLD");
+    headers2.put(GrpclbConstants.TOKEN_METADATA_KEY, "LBTOKEN__OLD");
     when(args2.getHeaders()).thenReturn(headers2);
     assertSame(r2.result, picker.pickSubchannel(args2));
     verify(args2).getHeaders();
-    assertThat(headers2.getAll(GrpclbLoadBalancer.TOKEN_KEY)).containsExactly("LBTOKEN0001");
+    assertThat(headers2.getAll(GrpclbConstants.TOKEN_METADATA_KEY)).containsExactly("LBTOKEN0001");
 
     PickSubchannelArgs args3 = mock(PickSubchannelArgs.class);
     Metadata headers3 = new Metadata();
     when(args3.getHeaders()).thenReturn(headers3);
     assertSame(r3.result, picker.pickSubchannel(args3));
     verify(args3).getHeaders();
-    assertThat(headers3.getAll(GrpclbLoadBalancer.TOKEN_KEY)).containsExactly("LBTOKEN0002");
+    assertThat(headers3.getAll(GrpclbConstants.TOKEN_METADATA_KEY)).containsExactly("LBTOKEN0002");
 
     PickSubchannelArgs args4 = mock(PickSubchannelArgs.class);
     Metadata headers4 = new Metadata();
     when(args4.getHeaders()).thenReturn(headers4);
     assertSame(r1.result, picker.pickSubchannel(args4));
     verify(args4).getHeaders();
-    assertFalse(headers4.containsKey(GrpclbLoadBalancer.TOKEN_KEY));
+    assertFalse(headers4.containsKey(GrpclbConstants.TOKEN_METADATA_KEY));
 
     verify(subchannel, never()).getAttributes();
   }

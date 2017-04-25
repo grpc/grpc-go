@@ -96,10 +96,6 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
 
   @VisibleForTesting
-  static final Metadata.Key<String> TOKEN_KEY =
-      Metadata.Key.of("lb-token", Metadata.ASCII_STRING_MARSHALLER);
-
-  @VisibleForTesting
   static final RoundRobinEntry DROP_ENTRY =
       new RoundRobinEntry(Status.UNAVAILABLE.withDescription("Drop requested by balancer"));
 
@@ -548,8 +544,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
     void updateHeaders(Metadata headers) {
       if (token != null) {
-        headers.discardAll(TOKEN_KEY);
-        headers.put(TOKEN_KEY, token);
+        headers.discardAll(GrpclbConstants.TOKEN_METADATA_KEY);
+        headers.put(GrpclbConstants.TOKEN_METADATA_KEY, token);
       }
     }
 

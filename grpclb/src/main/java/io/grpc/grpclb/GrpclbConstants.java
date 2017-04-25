@@ -33,6 +33,7 @@ package io.grpc.grpclb;
 
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.Metadata;
 
 /**
  * Constants for the GRPCLB load-balancer.
@@ -60,6 +61,13 @@ public final class GrpclbConstants {
    */
   public static final Attributes.Key<String> ATTR_LB_ADDR_AUTHORITY =
       Attributes.Key.of("io.grpc.grpclb.lbAddrAuthority");
+
+  /**
+   * The opaque token given by the remote balancer for each returned server address.  The client
+   * will send this token with any requests sent to the associated server.
+   */
+  public static final Metadata.Key<String> TOKEN_METADATA_KEY =
+      Metadata.Key.of("lb-token", Metadata.ASCII_STRING_MARSHALLER);
 
   private GrpclbConstants() { }
 }
