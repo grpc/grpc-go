@@ -216,9 +216,11 @@ public class GrpclbLoadBalancerTest {
           String authority = (String) invocation.getArguments()[1];
           ManagedChannel channel;
           if (failingLbAuthorities.contains(authority)) {
-            channel = InProcessChannelBuilder.forName("nonExistFakeLb").directExecutor().build();
+            channel = InProcessChannelBuilder.forName("nonExistFakeLb").directExecutor()
+                .overrideAuthority(authority).build();
           } else {
-            channel = InProcessChannelBuilder.forName("fakeLb").directExecutor().build();
+            channel = InProcessChannelBuilder.forName("fakeLb").directExecutor()
+                .overrideAuthority(authority).build();
           }
           fakeOobChannels.add(channel);
           oobChannelTracker.add(channel);
@@ -872,6 +874,53 @@ public class GrpclbLoadBalancerTest {
     assertSame(pickFirstBalancer, balancer.getDelegate());
     // GRPCLB connection is closed
     assertTrue(oobChannel.isShutdown());
+  }
+
+  @Test
+  public void grpclbUpdatedAddresses_avoidsReconnect() {
+    List<EquivalentAddressGroup> grpclbResolutionList =
+        createResolvedServerAddresses(true, false);
+    Attributes grpclbResolutionAttrs = Attributes.newBuilder()
+        .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+    assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
+    verify(helper).createOobChannel(addrsEq(grpclbResolutionList.get(0)), eq(lbAuthority(0)));
+    ManagedChannel oobChannel = fakeOobChannels.poll();
+    assertEquals(1, lbRequestObservers.size());
+
+    List<EquivalentAddressGroup> grpclbResolutionList2 =
+        createResolvedServerAddresses(true, false, true);
+    EquivalentAddressGroup combinedEag = new EquivalentAddressGroup(Arrays.asList(
+        grpclbResolutionList2.get(0).getAddresses().get(0),
+        grpclbResolutionList2.get(2).getAddresses().get(0)));
+    deliverResolvedAddresses(grpclbResolutionList2, grpclbResolutionAttrs);
+    verify(helper).updateOobChannelAddresses(eq(oobChannel), addrsEq(combinedEag));
+    assertEquals(1, lbRequestObservers.size()); // No additional RPC
+  }
+
+  @Test
+  public void grpclbUpdatedAddresses_reconnectOnAuthorityChange() {
+    List<EquivalentAddressGroup> grpclbResolutionList =
+        createResolvedServerAddresses(true, false);
+    Attributes grpclbResolutionAttrs = Attributes.newBuilder()
+        .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
+    deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
+
+    assertSame(LbPolicy.GRPCLB, balancer.getLbPolicy());
+    verify(helper).createOobChannel(addrsEq(grpclbResolutionList.get(0)), eq(lbAuthority(0)));
+    ManagedChannel oobChannel = fakeOobChannels.poll();
+    assertEquals(1, lbRequestObservers.size());
+
+    final String newAuthority = "some-new-authority";
+    List<EquivalentAddressGroup> grpclbResolutionList2 =
+        createResolvedServerAddresses(false);
+    grpclbResolutionList2.add(new EquivalentAddressGroup(
+        new FakeSocketAddress("somethingNew"), lbAttributes(newAuthority)));
+    deliverResolvedAddresses(grpclbResolutionList2, grpclbResolutionAttrs);
+    assertTrue(oobChannel.isTerminated());
+    verify(helper).createOobChannel(addrsEq(grpclbResolutionList2.get(1)), eq(newAuthority));
+    assertEquals(2, lbRequestObservers.size()); // An additional RPC
   }
 
   @Test

@@ -703,6 +703,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     }
 
     @Override
+    public void updateOobChannelAddresses(ManagedChannel channel, EquivalentAddressGroup eag) {
+      checkArgument(channel instanceof OobChannel,
+          "channel must have been returned from createOobChannel");
+      ((OobChannel) channel).updateAddresses(eag);
+    }
+
+    @Override
     public String getAuthority() {
       return ManagedChannelImpl.this.authority();
     }

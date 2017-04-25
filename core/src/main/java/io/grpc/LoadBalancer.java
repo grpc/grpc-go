@@ -450,8 +450,19 @@ public abstract class LoadBalancer {
      * <p>The LoadBalancer is responsible for closing unused OOB channels, and closing all OOB
      * channels within {@link #shutdown}.
      */
-    public abstract ManagedChannel createOobChannel(
-        EquivalentAddressGroup eag, String authority);
+    public abstract ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority);
+
+    /**
+     * Updates the addresses used for connections in the {@code Channel}. This is supperior to
+     * {@link #createOobChannel} when the old and new addresses overlap, since the channel can
+     * continue using an existing connection.
+     *
+     * @throws IllegalArgumentException if {@code channel} was not returned from {@link
+     *     #createOobChannel}
+     */
+    public void updateOobChannelAddresses(ManagedChannel channel, EquivalentAddressGroup eag) {
+      throw new UnsupportedOperationException();
+    }
 
     /**
      * Set a new picker to the channel.

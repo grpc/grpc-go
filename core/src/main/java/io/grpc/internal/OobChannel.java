@@ -62,6 +62,7 @@ import javax.annotation.concurrent.ThreadSafe;
 final class OobChannel extends ManagedChannel implements WithLogId {
   private static final Logger log = Logger.getLogger(OobChannel.class.getName());
 
+  private InternalSubchannel subchannel;
   private SubchannelImpl subchannelImpl;
   private SubchannelPicker subchannelPicker;
 
@@ -119,6 +120,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
   // Must be called only once, right after the OobChannel is created.
   void setSubchannel(final InternalSubchannel subchannel) {
     log.log(Level.FINE, "[{0}] Created with [{1}]", new Object[] {this, subchannel});
+    this.subchannel = subchannel;
     subchannelImpl = new SubchannelImpl() {
         @Override
         public void shutdown() {
@@ -155,6 +157,10 @@ final class OobChannel extends ManagedChannel implements WithLogId {
         }
       };
     delayedTransport.reprocess(subchannelPicker);
+  }
+
+  void updateAddresses(EquivalentAddressGroup eag) {
+    subchannel.updateAddresses(eag);
   }
 
   @Override

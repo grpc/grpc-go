@@ -248,9 +248,14 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
                   "NameResolver returned no LB address while asking for GRPCLB"));
         } else {
           lbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
-          // TODO(ejona): support swapping addresses without re-creating Channel.
-          shutdownLbComm();
           startLbComm();
+          // Avoid creating a new RPC just because the addresses were updated, as it can cause a
+          // stampeding herd. The current RPC may be on a connection to an address not present in
+          // newLbAddressGroups, but we're considering that "okay". If we detected the RPC is to an
+          // outdated backend, we could choose to re-create the RPC.
+          if (lbStream == null) {
+            startLbRpc();
+          }
         }
         break;
       default:
@@ -263,16 +268,27 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       lbCommChannel.shutdown();
       lbCommChannel = null;
     }
+    shutdownLbRpc();
+  }
+
+  private void shutdownLbRpc() {
     if (lbStream != null) {
       lbStream.close(null);
     }
   }
 
   private void startLbComm() {
-    checkState(lbCommChannel == null, "previous lbCommChannel has not been closed yet");
-    lbCommChannel = helper.createOobChannel(
-        lbAddressGroup.getAddresses(), lbAddressGroup.getAuthority());
-    startLbRpc();
+    if (lbCommChannel == null) {
+      lbCommChannel = helper.createOobChannel(
+          lbAddressGroup.getAddresses(), lbAddressGroup.getAuthority());
+    } else if (lbAddressGroup.getAuthority().equals(lbCommChannel.authority())) {
+      helper.updateOobChannelAddresses(lbCommChannel, lbAddressGroup.getAddresses());
+    } else {
+      // Full restart of channel
+      shutdownLbComm();
+      lbCommChannel = helper.createOobChannel(
+          lbAddressGroup.getAddresses(), lbAddressGroup.getAuthority());
+    }
   }
 
   private void startLbRpc() {

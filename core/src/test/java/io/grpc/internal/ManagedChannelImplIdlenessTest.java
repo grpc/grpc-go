@@ -366,6 +366,47 @@ public class ManagedChannelImplIdlenessTest {
     verify(mockLoadBalancer).shutdown();
   }
 
+  @Test
+  public void updateOobChannelAddresses_newAddressConnects() {
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata()); // Create LB
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    Helper helper = helperCaptor.getValue();
+    ManagedChannel oobChannel = helper.createOobChannel(servers.get(0), "localhost");
+
+    oobChannel.newCall(method, CallOptions.DEFAULT).start(mockCallListener, new Metadata());
+    MockClientTransportInfo t0 = newTransports.poll();
+    t0.listener.transportReady();
+
+    helper.updateOobChannelAddresses(oobChannel, servers.get(1));
+
+    oobChannel.newCall(method, CallOptions.DEFAULT).start(mockCallListener, new Metadata());
+    MockClientTransportInfo t1 = newTransports.poll();
+    t1.listener.transportReady();
+  }
+
+  @Test
+  public void updateOobChannelAddresses_existingAddressDoesNotConnect() {
+    ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
+    call.start(mockCallListener, new Metadata()); // Create LB
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
+    verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
+    Helper helper = helperCaptor.getValue();
+    ManagedChannel oobChannel = helper.createOobChannel(servers.get(0), "localhost");
+
+    oobChannel.newCall(method, CallOptions.DEFAULT).start(mockCallListener, new Metadata());
+    MockClientTransportInfo t0 = newTransports.poll();
+    t0.listener.transportReady();
+
+    List<SocketAddress> changedList = new ArrayList<SocketAddress>(servers.get(0).getAddresses());
+    changedList.add(new FakeSocketAddress("aDifferentServer"));
+    helper.updateOobChannelAddresses(oobChannel, new EquivalentAddressGroup(changedList));
+
+    oobChannel.newCall(method, CallOptions.DEFAULT).start(mockCallListener, new Metadata());
+    assertNull(newTransports.poll());
+  }
+
   private static class FakeBackoffPolicyProvider implements BackoffPolicy.Provider {
     @Override
     public BackoffPolicy get() {
