@@ -179,6 +179,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
+	ctx = newContextWithRPCStats(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
@@ -224,7 +225,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
 		}
-		ctx = newContextWithRPCStats(ctx)
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
