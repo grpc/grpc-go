@@ -196,7 +196,8 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pendingData += n
-	if f.pendingData+f.pendingUpdate > f.limit+f.loanedWindowSpace {
+	// ASSERT(f.pendingUpdate >= f.loanedWindowSpace)
+	if f.pendingData+f.pendingUpdate-f.loanedWindowSpace > f.limit {
 		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit+f.loanedWindowSpace)
 	}
 	return nil
@@ -236,9 +237,10 @@ func (f *inFlow) loanWindowSpace(n uint32) uint32 {
 		grpclog.Fatalf("pre-consuming window space while there is pre-consumed window space still outstanding")
 	}
 	f.loanedWindowSpace = n
+	f.pendingUpdate += f.loanedWindowSpace
 
-	wu := f.pendingUpdate + f.loanedWindowSpace
-	if wu >= f.limit/pendingUpdateThreshold {
+	if f.pendingUpdate >= f.limit/pendingUpdateThreshold {
+		wu := f.pendingUpdate
 		f.pendingUpdate = 0
 		return wu
 	}

@@ -2415,7 +2415,7 @@ func TestServerStreaming(t *testing.T) {
 }
 
 func testServerStreaming(t *testing.T, e env, serverRespSizes []int) {
-	const streamingCallTimeout = time.Second * 60
+	const streamingCallTimeout = time.Second * 3 * 60
 
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
@@ -2614,7 +2614,7 @@ func TestClientStreaming(t *testing.T) {
 }
 
 func testClientStreaming(t *testing.T, e env, clientReqSizes []int) {
-	const streamingCallTimeout = time.Second * 60
+	const streamingCallTimeout = time.Second * 3 * 60
 
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
