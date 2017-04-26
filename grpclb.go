@@ -490,20 +490,27 @@ func (b *balancer) Start(target string, config BalancerConfig) error {
 				cc.Close()
 			}
 			// Talk to the remote load balancer to get the server list.
-			var err error
-			creds := config.DialCreds
-			ccError = make(chan struct{})
-			if creds == nil {
-				cc, err = Dial(rb.addr, WithInsecure())
-			} else {
+			var (
+				err   error
+				dopts []DialOption
+			)
+			if creds := config.DialCreds; creds != nil {
 				if rb.name != "" {
 					if err := creds.OverrideServerName(rb.name); err != nil {
 						grpclog.Printf("Failed to override the server name in the credentials: %v", err)
 						continue
 					}
 				}
-				cc, err = Dial(rb.addr, WithTransportCredentials(creds))
+				dopts = append(dopts, WithTransportCredentials(creds))
+			} else {
+				dopts = append(dopts, WithInsecure())
 			}
+			if dialer := config.Dialer; dialer != nil {
+				// WithDialer takes a different type of function, so we instead use a special DialOption here.
+				dopts = append(dopts, func(o *dialOptions) { o.copts.Dialer = dialer })
+			}
+			ccError = make(chan struct{})
+			cc, err = Dial(rb.addr, dopts...)
 			if err != nil {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)
 				close(ccError)
