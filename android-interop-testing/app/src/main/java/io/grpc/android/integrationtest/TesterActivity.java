@@ -40,6 +40,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import com.google.android.gms.security.ProviderInstaller;
@@ -52,6 +53,7 @@ public class TesterActivity extends AppCompatActivity
   private EditText hostEdit;
   private EditText portEdit;
   private TextView resultText;
+  private CheckBox getCheckBox;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +69,7 @@ public class TesterActivity extends AppCompatActivity
     hostEdit = (EditText) findViewById(R.id.host_edit_text);
     portEdit = (EditText) findViewById(R.id.port_edit_text);
     resultText = (TextView) findViewById(R.id.grpc_response_text);
+    getCheckBox = (CheckBox) findViewById(R.id.get_checkbox);
 
     ProviderInstaller.installIfNeededAsync(this, this);
     // Disable buttons until the security provider installing finishes.
@@ -120,7 +123,7 @@ public class TesterActivity extends AppCompatActivity
             resultText.setText(result);
             enableButtons(true);
           }
-        }).execute();
+        }, getCheckBox.isChecked()).execute();
   }
 
   @Override

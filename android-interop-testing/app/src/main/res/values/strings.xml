@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">gRPC Integration Test</string>
+    <string name="use_get">Use GET</string>
 </resources>

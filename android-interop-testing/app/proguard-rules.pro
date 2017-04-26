@@ -9,11 +9,12 @@
 
 # Add any project specific keep options here:
 
+-dontwarn android.test.**
 -dontwarn com.google.common.**
+-dontwarn javax.naming.**
 -dontwarn okio.**
 -dontwarn org.mockito.**
 -dontwarn sun.reflect.**
--dontwarn android.test.**
 # Ignores: can't find referenced class javax.lang.model.element.Modifier
 -dontwarn com.google.errorprone.annotations.**
 -keep class io.grpc.internal.DnsNameResolverProvider

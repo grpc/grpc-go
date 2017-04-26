@@ -41,9 +41,14 @@ import android.util.Log;
 import com.google.protobuf.nano.EmptyProtos;
 import com.google.protobuf.nano.MessageNano;
 import io.grpc.CallOptions;
+import io.grpc.Channel;
 import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ClientInterceptors;
+import io.grpc.ClientInterceptors.CheckedForwardingClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
 import io.grpc.StatusRuntimeException;
 import io.grpc.android.integrationtest.nano.Messages;
 import io.grpc.android.integrationtest.nano.Messages.Payload;
@@ -105,12 +110,17 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
   public InteropTester(String testCase,
                        ManagedChannel channel,
-                       TestListener listener) {
+                       TestListener listener,
+                       boolean useGet) {
     this.testCase = testCase;
     this.listener = listener;
     this.channel = channel;
-    blockingStub = TestServiceGrpc.newBlockingStub(channel);
-    asyncStub = TestServiceGrpc.newStub(channel);
+    Channel channelToUse = channel;
+    if (useGet) {
+      channelToUse = ClientInterceptors.intercept(channel, new SafeMethodChannelInterceptor());
+    }
+    blockingStub = TestServiceGrpc.newBlockingStub(channelToUse);
+    asyncStub = TestServiceGrpc.newStub(channelToUse);
   }
 
   @Override
@@ -758,5 +768,19 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
       return true;
     }
     return false;
+  }
+
+  private static final class SafeMethodChannelInterceptor implements ClientInterceptor {
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      return new CheckedForwardingClientCall<ReqT, RespT>(
+          next.newCall(method.toBuilder().setSafe(true).build(), callOptions)) {
+        @Override
+        public void checkedStart(Listener<RespT> responseListener, Metadata headers) {
+          delegate().start(responseListener, headers);
+        }
+      };
+    }
   }
 }

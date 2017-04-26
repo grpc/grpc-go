@@ -26,6 +26,11 @@
         android:inputType="numberDecimal"
         android:hint="Enter Port"
         />
+    <CheckBox android:id="@+id/get_checkbox"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/use_get"
+        />
   </LinearLayout>
 
   <Button

@@ -52,6 +52,7 @@ public class TesterInstrumentation extends Instrumentation {
   private boolean useTls;
   private boolean useTestCa;
   private String androidSocketFactoryTls;
+  private boolean useGet;
 
   @Override
   public void onCreate(Bundle args) {
@@ -66,6 +67,8 @@ public class TesterInstrumentation extends Instrumentation {
     useTestCa = args.getString("use_test_ca") != null
         ? Boolean.parseBoolean(args.getString("use_test_ca")) : false;
     androidSocketFactoryTls = args.getString("android_socket_factory_tls");
+    useGet = args.getString("use_get") != null
+        ? Boolean.parseBoolean(args.getString("use_get")) : false;
 
     InputStream testCa = null;
     if (useTestCa) {
@@ -105,8 +108,8 @@ public class TesterInstrumentation extends Instrumentation {
                 finish(1, bundle);
               }
             }
-          }
-      ).execute();
+          },
+          useGet).execute();
     } catch (Throwable t) {
       Bundle bundle = new Bundle();
       bundle.putString("Exception encountered", t.toString());
