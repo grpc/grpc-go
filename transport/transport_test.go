@@ -122,6 +122,7 @@ func (h *testStreamHandler) handleStreamDelayBeginRead(t *testing.T, s *Stream) 
 	time.Sleep(2 * time.Second)
 	_, err := s.ReadFull(p)
 	if err != nil {
+		t.Fatalf("s.ReadFull failed; got error %v", err)
 		return
 	}
 
@@ -144,6 +145,7 @@ func (h *testStreamHandler) handleStreamDelayBeginWrite(t *testing.T, s *Stream)
 	p := make([]byte, len(req))
 	_, err := s.ReadFull(p)
 	if err != nil {
+		t.Fatalf("s.ReadFull failed; got error %v", err)
 		return
 	}
 	if !bytes.Equal(p, req) {
@@ -213,6 +215,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 // start starts server. Other goroutines should block on s.readyChan for further operations.
 func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
+
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", "localhost:0")
 	} else {
@@ -1257,7 +1260,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
 		t.Fatalf("Failed to write: %v", err)
 	}
-	// reflect to get the inner recvBufferReader, which reads without doing window updates
+	// type assert to get the inner recvBufferReader, which reads without doing window updates
 	recvBufferReader := s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec
 	// Read without window update.
 	for {
@@ -1321,7 +1324,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	// reflect to get the plain recvBufferReader from the stream's stream reader, which doesn't do window updates
+	// type assert to get the plain recvBufferReader from the stream's stream reader, which doesn't do window updates
 	recvBufferReader := s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec
 	if _, err := recvBufferReader.Read(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
@@ -1351,7 +1354,7 @@ func TestInvalidHeaderField(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	// reflect to get the inner recvBufferReader, which reads without doing window updates
+	// type assert to get the inner recvBufferReader, which reads without doing window updates
 	_, err = s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec.Read(p)
 	if se, ok := err.(StreamError); !ok || se.Code != codes.FailedPrecondition || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.FailedPrecondition, expectedInvalidHeaderField)

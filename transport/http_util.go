@@ -495,9 +495,6 @@ func (f *framer) writeSettingsAck(forceFlush bool) error {
 }
 
 func (f *framer) writeWindowUpdate(forceFlush bool, streamID, incr uint32) error {
-	if incr > http2MaxWindowUpdate {
-		grpclog.Fatalf("attempted window update too large. have %v; max is %v", incr, http2MaxWindowUpdate)
-	}
 	if err := f.fr.WriteWindowUpdate(streamID, incr); err != nil {
 		return err
 	}
