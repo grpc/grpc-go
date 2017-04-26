@@ -214,9 +214,6 @@ func min(a uint32, b uint32) uint32 {
 func (f *inFlow) onRead(n uint32) uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if n > http2MaxWindowUpdate {
-		grpclog.Fatalf("potential window update too large. onRead(n) where n is %v; max n is %v", f.pendingUpdate, http2MaxWindowUpdate)
-	}
 	f.pendingData -= n
 	// first use up remaining "loanedWindowSpace", add remaining Read to "pendingUpdate"
 	windowSpaceDebtPayment := min(n, f.loanedWindowSpace)
@@ -224,7 +221,7 @@ func (f *inFlow) onRead(n uint32) uint32 {
 	n -= windowSpaceDebtPayment
 
 	f.pendingUpdate += n
-	if f.pendingUpdate >= f.limit/4 {
+	if f.pendingUpdate >= f.limit/pendingUpdateThreshold {
 		wu := f.pendingUpdate
 		f.pendingUpdate = 0
 		return wu

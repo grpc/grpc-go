@@ -2405,10 +2405,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 }
 
 func TestServerStreaming(t *testing.T) {
-	serverRespSizes := [][]int{
-		{27182, 8, 1828, 45904},
-		{(1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21)},
-	}
+	serverRespSizes := streamingTestPayloadSizes()
 	defer leakCheck(t)()
 	for _, s := range serverRespSizes {
 		for _, e := range listTestEnv() {
@@ -2418,6 +2415,8 @@ func TestServerStreaming(t *testing.T) {
 }
 
 func testServerStreaming(t *testing.T, e env, serverRespSizes []int) {
+	const streamingCallTimeout = time.Second * 60
+
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
@@ -2433,7 +2432,8 @@ func testServerStreaming(t *testing.T, e env, serverRespSizes []int) {
 		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseParameters: respParam,
 	}
-	stream, err := tc.StreamingOutputCall(context.Background(), req)
+	ctx, _ := context.WithTimeout(context.Background(), streamingCallTimeout)
+	stream, err := tc.StreamingOutputCall(ctx, req)
 	if err != nil {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -2580,12 +2580,32 @@ func testServerStreamingConcurrent(t *testing.T, e env) {
 
 }
 
+func streamingTestPayloadSizes() [][]int {
+	reqSizes := [][]int{
+		{27182, 8, 1828, 45904},
+	}
+
+	num8KPayloads := 1024
+	eightKPayloads := []int{}
+	for i := 0; i < num8KPayloads; i++ {
+		eightKPayloads = append(eightKPayloads, (1 << 13))
+	}
+	reqSizes = append(reqSizes, eightKPayloads)
+
+	num2MPayloads := 8
+	twoMPayloads := []int{}
+	for i := 0; i < num2MPayloads; i++ {
+		twoMPayloads = append(twoMPayloads, (1 << 21))
+	}
+	reqSizes = append(reqSizes, twoMPayloads)
+
+	return reqSizes
+}
+
 func TestClientStreaming(t *testing.T) {
 	defer leakCheck(t)()
-	clientReqSizes := [][]int{
-		{27182, 8, 1828, 45904},
-		{(1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21), (1 << 21)},
-	}
+	clientReqSizes := streamingTestPayloadSizes()
+
 	for _, s := range clientReqSizes {
 		for _, e := range listTestEnv() {
 			testClientStreaming(t, e, s)
@@ -2594,12 +2614,15 @@ func TestClientStreaming(t *testing.T) {
 }
 
 func testClientStreaming(t *testing.T, e env, clientReqSizes []int) {
+	const streamingCallTimeout = time.Second * 60
+
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	stream, err := tc.StreamingInputCall(te.ctx)
+	ctx, _ := context.WithTimeout(te.ctx, streamingCallTimeout)
+	stream, err := tc.StreamingInputCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
 	}
