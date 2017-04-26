@@ -203,20 +203,6 @@ public final class GrpcUtil {
   public static final long SERVER_KEEPALIVE_TIME_NANOS_DISABLED = Long.MAX_VALUE;
 
   /**
-   * Whether the channel builder and server builder will try to load and use Census stats library.
-   * Delete this and assume always on once Census stats has been fully tested and its wire-format is
-   * stabilized.
-   */
-  public static boolean enableCensusStats;
-
-  /**
-   * Whether the channel builder and server builder will try to load and use Census tracing library.
-   * Delete this and assume always on once Census stats has been fully tested and its wire-format is
-   * stabilized.
-   */
-  public static boolean enableCensusTracing;
-
-  /**
    * Maps HTTP error response status codes to transport codes, as defined in <a
    * href="https://github.com/grpc/grpc/blob/master/doc/http-grpc-status-mapping.md">
    * http-grpc-status-mapping.md</a>. Never returns a status for which {@code status.isOk()} is

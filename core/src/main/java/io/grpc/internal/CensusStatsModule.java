@@ -94,11 +94,14 @@ final class CensusStatsModule {
   final Metadata.Key<StatsContext> statsHeader;
   private final StatsClientInterceptor clientInterceptor = new StatsClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
+  private final boolean propagateTags;
 
   CensusStatsModule(
-      final StatsContextFactory statsCtxFactory, Supplier<Stopwatch> stopwatchSupplier) {
+      final StatsContextFactory statsCtxFactory, Supplier<Stopwatch> stopwatchSupplier,
+      boolean propagateTags) {
     this.statsCtxFactory = checkNotNull(statsCtxFactory, "statsCtxFactory");
     this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
+    this.propagateTags = propagateTags;
     this.statsHeader =
         Metadata.Key.of("grpc-tags-bin", new Metadata.BinaryMarshaller<StatsContext>() {
             @Override
@@ -197,9 +200,11 @@ final class CensusStatsModule {
       // one streams.  We will need to update this file to support them.
       checkState(streamTracer.compareAndSet(null, tracer),
           "Are you creating multiple streams per call? This class doesn't yet support this case.");
-      headers.discardAll(statsHeader);
-      if (parentCtx != statsCtxFactory.getDefault()) {
-        headers.put(statsHeader, parentCtx);
+      if (propagateTags) {
+        headers.discardAll(statsHeader);
+        if (parentCtx != statsCtxFactory.getDefault()) {
+          headers.put(statsHeader, parentCtx);
+        }
       }
       return tracer;
     }

@@ -120,6 +120,9 @@ public abstract class AbstractManagedChannelImplBuilder
 
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
+  private boolean enableStatsTagPropagation;
+  private boolean enableTracing;
+
   // Can be overriden by subclasses.
   @Override
   public T maxInboundMessageSize(int max) {
@@ -273,6 +276,24 @@ public abstract class AbstractManagedChannelImplBuilder
     return GrpcUtil.checkAuthority(authority);
   }
 
+  /**
+   * Set it to true to propagate the stats tags on the wire.  This will be deleted assuming always
+   * enabled once the instrumentation-java wire format is stabilized.
+   */
+  @Deprecated
+  public void setEnableStatsTagPropagation(boolean enabled) {
+    this.enableStatsTagPropagation = enabled;
+  }
+
+  /**
+   * Set it to true to record traces and propagate tracing information on the wire.  This will be
+   * deleted assuming always enabled once the instrumentation-java wire format is stabilized.
+   */
+  @Deprecated
+  public void setEnableTracing(boolean enabled) {
+    this.enableTracing = enabled;
+  }
+
   @Override
   public ManagedChannel build() {
     ClientTransportFactory transportFactory = buildTransportFactory();
@@ -290,18 +311,19 @@ public abstract class AbstractManagedChannelImplBuilder
 
     List<ClientInterceptor> effectiveInterceptors =
         new ArrayList<ClientInterceptor>(this.interceptors);
-    if (GrpcUtil.enableCensusStats && recordsStats()) {
+    if (recordsStats()) {
       StatsContextFactory statsCtxFactory =
           this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
       if (statsCtxFactory != null) {
         CensusStatsModule censusStats =
-            new CensusStatsModule(statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER);
+            new CensusStatsModule(
+                statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER, enableStatsTagPropagation);
         // First interceptor runs last (see ClientInterceptors.intercept()), so that no
         // other interceptor can override the tracer factory we set in CallOptions.
         effectiveInterceptors.add(0, censusStats.getClientInterceptor());
       }
     }
-    if (GrpcUtil.enableCensusTracing) {
+    if (enableTracing) {
       CensusTracingModule censusTracing =
           new CensusTracingModule(Tracing.getTracer(), Tracing.getBinaryPropagationHandler());
       effectiveInterceptors.add(0, censusTracing.getClientInterceptor());

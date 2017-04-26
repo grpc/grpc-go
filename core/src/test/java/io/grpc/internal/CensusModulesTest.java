@@ -210,7 +210,7 @@ public class CensusModulesTest {
     when(mockTracingPropagationHandler.fromBinaryValue(any(byte[].class)))
         .thenReturn(fakeServerParentSpanContext);
     tracer = new Tracer(mockSpanFactory) {};
-    censusStats = new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier());
+    censusStats = new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), true);
     censusTracing = new CensusTracingModule(tracer, mockTracingPropagationHandler);
   }
 
@@ -445,27 +445,42 @@ public class CensusModulesTest {
 
   @Test
   public void statsHeadersPropagateTags() {
+    subtestStatsHeadersPropagateTags(true);
+  }
+
+  @Test
+  public void statsHeadersNotPropagateTags() {
+    subtestStatsHeadersPropagateTags(false);
+  }
+
+  private void subtestStatsHeadersPropagateTags(boolean propagate) {
     // EXTRA_TAG is propagated by the FakeStatsContextFactory. Note that not all tags are
     // propagated.  The StatsContextFactory decides which tags are to propagated.  gRPC facilitates
     // the propagation by putting them in the headers.
     StatsContext clientCtx = statsCtxFactory.getDefault().with(
         StatsTestUtils.EXTRA_TAG, TagValue.create("extra-tag-value-897"));
-    CensusStatsModule.ClientCallTracer callTracer =
-        censusStats.newClientCallTracer(clientCtx, method.getFullMethodName());
+    CensusStatsModule census =
+        new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), propagate);
     Metadata headers = new Metadata();
-    // This propagates clientCtx to headers
+    CensusStatsModule.ClientCallTracer callTracer =
+        census.newClientCallTracer(clientCtx, method.getFullMethodName());
+    // This propagates clientCtx to headers if propagates==true
     callTracer.newClientStreamTracer(headers);
-    assertTrue(headers.containsKey(censusStats.statsHeader));
+    if (propagate) {
+      assertTrue(headers.containsKey(census.statsHeader));
+    } else {
+      assertFalse(headers.containsKey(census.statsHeader));
+      return;
+    }
 
     ServerStreamTracer serverTracer =
-        censusStats.getServerTracerFactory().newServerStreamTracer(
+        census.getServerTracerFactory().newServerStreamTracer(
             method.getFullMethodName(), headers);
     // Server tracer deserializes clientCtx from the headers, so that it records stats with the
     // propagated tags.
     Context serverContext = serverTracer.filterContext(Context.ROOT);
     // It also put clientCtx in the Context seen by the call handler
     assertEquals(clientCtx, CensusStatsModule.STATS_CONTEXT_KEY.get(serverContext));
-
 
     // Verifies that the server tracer records the status with the propagated tag
     serverTracer.streamClosed(Status.OK);
