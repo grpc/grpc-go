@@ -196,8 +196,8 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pendingData += n
-	// ASSERT(f.pendingUpdate >= f.loanedWindowSpace)
-	if f.pendingData+f.pendingUpdate-f.loanedWindowSpace > f.limit {
+	// allow going over the "limit" if there's outstanding "loanedWindowSpace"
+	if f.pendingData+f.pendingUpdate > f.limit+f.loanedWindowSpace {
 		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit+f.loanedWindowSpace)
 	}
 	return nil
