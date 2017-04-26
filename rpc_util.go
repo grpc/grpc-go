@@ -362,11 +362,10 @@ func rpcStatsFromContext(ctx context.Context) (s *rpcStats, ok bool) {
 }
 
 func updateRPCStatsInContext(ctx context.Context, s rpcStats) {
-	ss, ok := rpcStatsFromContext(ctx)
-	if !ok {
-		return
+	if ss, ok := rpcStatsFromContext(ctx); ok {
+		*ss = s
 	}
-	*ss = s
+	return
 }
 
 // Code returns the error code for err if it was produced by the rpc system.

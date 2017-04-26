@@ -579,23 +579,24 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	seq := b.seq
 
 	defer func() {
-		if err == nil {
-			put = func() {
-				s, ok := rpcStatsFromContext(ctx)
-				if !ok {
-					return
-				}
-				b.mu.Lock()
-				defer b.mu.Unlock()
-				if b.done || seq < b.seq {
-					return
-				}
-				b.clientStats.NumCallsFinished++
-				if !s.bytesSent {
-					b.clientStats.NumCallsFinishedWithClientFailedToSend++
-				} else if s.bytesReceived {
-					b.clientStats.NumCallsFinishedKnownReceived++
-				}
+		if err != nil {
+			return
+		}
+		put = func() {
+			s, ok := rpcStatsFromContext(ctx)
+			if !ok {
+				return
+			}
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if b.done || seq < b.seq {
+				return
+			}
+			b.clientStats.NumCallsFinished++
+			if !s.bytesSent {
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			} else if s.bytesReceived {
+				b.clientStats.NumCallsFinishedKnownReceived++
 			}
 		}
 	}()
@@ -661,9 +662,11 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	for {
 		select {
 		case <-ctx.Done():
-			err = ctx.Err()
+			b.mu.Lock()
 			b.clientStats.NumCallsFinished++
 			b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			b.mu.Unlock()
+			err = ctx.Err()
 			return
 		case <-ch:
 			b.mu.Lock()

@@ -245,20 +245,16 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
-			if _, ok := err.(transport.ConnectionError); ok && put != nil {
-				// If error is connection error, transport was sending data on wire,
-				// and we are not sure if anything has been sent on wire.
-				// If error is not connection error, we are sure nothing has been sent.
-				updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
-			}
 			if put != nil {
-				put()
-				put = nil
-			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return toRPCErr(err)
+				if _, ok := err.(transport.ConnectionError); ok {
+					// If error is connection error, transport was sending data on wire,
+					// and we are not sure if anything has been sent on wire.
+					// If error is not connection error, we are sure nothing has been sent.
+					updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
 				}
+				put()
+			}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return toRPCErr(err)
@@ -271,15 +267,11 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 					bytesReceived: stream.BytesReceived(),
 				})
 				put()
-				put = nil
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return toRPCErr(err)
-				}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return toRPCErr(err)
@@ -292,20 +284,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 					bytesReceived: stream.BytesReceived(),
 				})
 				put()
-				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return toRPCErr(err)
-				}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return toRPCErr(err)
 		}
-		updateRPCStatsInContext(ctx, rpcStats{
-			bytesSent:     stream.BytesSent(),
-			bytesReceived: stream.BytesReceived(),
-		})
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
@@ -316,7 +300,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				bytesReceived: stream.BytesReceived(),
 			})
 			put()
-			put = nil
 		}
 		return stream.Status().Err()
 	}
