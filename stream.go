@@ -113,7 +113,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cancel context.CancelFunc
 	)
 	c := defaultCallInfo
-	mc := cc.GetMethodConfig(method)
+	mc, _ := cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}
@@ -124,13 +124,15 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		defer cancel()
 	}
 
-	maxSendMessageSize := getMaxSize(mc.MaxReqSize, cc.dopts.maxSendMessageSize, defaultClientMaxSendMessageSize)
-	maxReceiveMessageSize := getMaxSize(mc.MaxRespSize, cc.dopts.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	opts = append(cc.dopts.callOptions, opts...)
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return nil, toRPCErr(err)
 		}
 	}
+	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
+	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
@@ -221,8 +223,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		codec: cc.dopts.codec,
 		cp:    cc.dopts.cp,
 		dc:    cc.dopts.dc,
-		maxReceiveMessageSize: maxReceiveMessageSize,
-		maxSendMessageSize:    maxSendMessageSize,
+		maxReceiveMessageSize: *c.maxReceiveMessageSize,
+		maxSendMessageSize:    *c.maxSendMessageSize,
 		cancel:                cancel,
 
 		put: put,

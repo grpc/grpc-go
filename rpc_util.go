@@ -111,11 +111,13 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-	peer      *peer.Peer
-	traceInfo traceInfo // in trace.go
+	failFast              bool
+	headerMD              metadata.MD
+	trailerMD             metadata.MD
+	peer                  *peer.Peer
+	traceInfo             traceInfo // in trace.go
+	maxReceiveMessageSize *int
+	maxSendMessageSize    *int
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -177,6 +179,22 @@ func Peer(peer *peer.Peer) CallOption {
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
+		return nil
+	})
+}
+
+// WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive. Negative input is invalid and has the same effect as not setting the field.
+func WithMaxReceiveMessageSize(s int) CallOption {
+	return beforeCall(func(o *callInfo) error {
+		o.maxReceiveMessageSize = &s
+		return nil
+	})
+}
+
+// WithMaxSendMessageSize returns a DialOption which sets the maximum message size the client can send. Negative input is invalid and has the same effect as not seeting the field.
+func WithMaxSendMessageSize(s int) CallOption {
+	return beforeCall(func(o *callInfo) error {
+		o.maxSendMessageSize = &s
 		return nil
 	})
 }
@@ -476,24 +494,24 @@ const SupportPackageIsVersion4 = true
 // Version is the current grpc version.
 const Version = "1.3.0-dev"
 
-func min(a, b int) int {
-	if a < b {
+func min(a, b *int) *int {
+	if *a < *b {
 		return a
 	}
 	return b
 }
 
-func getMaxSize(mcMax, doptMax *int, defaultVal int) int {
+func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 	if mcMax == nil && doptMax == nil {
-		return defaultVal
+		return &defaultVal
 	}
 	if mcMax != nil && doptMax != nil {
-		return min(*mcMax, *doptMax)
+		return min(mcMax, doptMax)
 	}
 	if mcMax != nil {
-		return *mcMax
+		return mcMax
 	}
-	return *doptMax
+	return doptMax
 }
 
 const grpcUA = "grpc-go/" + Version

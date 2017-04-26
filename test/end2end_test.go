@@ -433,11 +433,11 @@ type test struct {
 	healthServer            *health.Server           // nil means disabled
 	maxStream               uint32
 	tapHandle               tap.ServerInHandle
-	maxMsgSize              int
-	maxClientReceiveMsgSize int
-	maxClientSendMsgSize    int
-	maxServerReceiveMsgSize int
-	maxServerSendMsgSize    int
+	maxMsgSize              *int
+	maxClientReceiveMsgSize *int
+	maxClientSendMsgSize    *int
+	maxServerReceiveMsgSize *int
+	maxServerSendMsgSize    *int
 	userAgent               string
 	clientCompression       bool
 	serverCompression       bool
@@ -483,12 +483,6 @@ func newTest(t *testing.T, e env) *test {
 		t:         t,
 		e:         e,
 		maxStream: math.MaxUint32,
-		// Default value 0 is meaningful (0 byte msg size limit), thus using -1 to indiciate the field is unset.
-		maxClientReceiveMsgSize: -1,
-		maxClientSendMsgSize:    -1,
-		maxServerReceiveMsgSize: -1,
-		maxServerSendMsgSize:    -1,
-		maxMsgSize:              -1,
 	}
 	te.ctx, te.cancel = context.WithCancel(context.Background())
 	return te
@@ -500,14 +494,14 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	te.testServer = ts
 	te.t.Logf("Running test in %s environment...", te.e.name)
 	sopts := []grpc.ServerOption{grpc.MaxConcurrentStreams(te.maxStream)}
-	if te.maxMsgSize >= 0 {
-		sopts = append(sopts, grpc.MaxMsgSize(te.maxMsgSize))
+	if te.maxMsgSize != nil {
+		sopts = append(sopts, grpc.MaxMsgSize(*te.maxMsgSize))
 	}
-	if te.maxServerReceiveMsgSize >= 0 {
-		sopts = append(sopts, grpc.MaxReceiveMessageSize(te.maxServerReceiveMsgSize))
+	if te.maxServerReceiveMsgSize != nil {
+		sopts = append(sopts, grpc.MaxReceiveMessageSize(*te.maxServerReceiveMsgSize))
 	}
-	if te.maxServerSendMsgSize >= 0 {
-		sopts = append(sopts, grpc.MaxSendMessageSize(te.maxServerSendMsgSize))
+	if te.maxServerSendMsgSize != nil {
+		sopts = append(sopts, grpc.MaxSendMessageSize(*te.maxServerSendMsgSize))
 	}
 	if te.tapHandle != nil {
 		sopts = append(sopts, grpc.InTapHandle(te.tapHandle))
@@ -600,14 +594,14 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.streamClientInt != nil {
 		opts = append(opts, grpc.WithStreamInterceptor(te.streamClientInt))
 	}
-	if te.maxMsgSize >= 0 {
-		opts = append(opts, grpc.WithMaxMsgSize(te.maxMsgSize))
+	if te.maxMsgSize != nil {
+		opts = append(opts, grpc.WithMaxMsgSize(*te.maxMsgSize))
 	}
-	if te.maxClientReceiveMsgSize >= 0 {
-		opts = append(opts, grpc.WithMaxReceiveMessageSize(te.maxClientReceiveMsgSize))
+	if te.maxClientReceiveMsgSize != nil {
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WithMaxReceiveMessageSize(*te.maxClientReceiveMsgSize)))
 	}
-	if te.maxClientSendMsgSize >= 0 {
-		opts = append(opts, grpc.WithMaxSendMessageSize(te.maxClientSendMsgSize))
+	if te.maxClientSendMsgSize != nil {
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WithMaxSendMessageSize(*te.maxClientSendMsgSize)))
 	}
 	if te.timeout > 0 {
 		opts = append(opts, grpc.WithTimeout(te.timeout))
@@ -1334,8 +1328,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Case2: Client API set maxReqSize to 1024 (send), maxRespSize to 1024 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te2, ch2 := testServiceConfigSetup(t, e)
-	te2.maxClientReceiveMsgSize = 1024
-	te2.maxClientSendMsgSize = 1024
+	te2.maxClientReceiveMsgSize = newInt(1024)
+	te2.maxClientSendMsgSize = newInt(1024)
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	ch2 <- sc
@@ -1383,8 +1377,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Case3: Client API set maxReqSize to 4096 (send), maxRespSize to 4096 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te3, ch3 := testServiceConfigSetup(t, e)
-	te3.maxClientReceiveMsgSize = 4096
-	te3.maxClientSendMsgSize = 4096
+	te3.maxClientReceiveMsgSize = newInt(4096)
+	te3.maxClientSendMsgSize = newInt(4096)
 	te3.startServer(&testServer{security: e.security})
 	defer te3.tearDown()
 	ch3 <- sc
@@ -1468,7 +1462,7 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	// To avoid error on server side.
-	te.maxServerSendMsgSize = 5 * 1024 * 1024
+	te.maxServerSendMsgSize = newInt(5 * 1024 * 1024)
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
@@ -1547,9 +1541,9 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
 	// To avoid error on server side.
-	te.maxServerSendMsgSize = 5 * 1024 * 1024
-	te.maxClientReceiveMsgSize = 1024
-	te.maxClientSendMsgSize = 1024
+	te.maxServerSendMsgSize = newInt(5 * 1024 * 1024)
+	te.maxClientReceiveMsgSize = newInt(1024)
+	te.maxClientSendMsgSize = newInt(1024)
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
@@ -1627,8 +1621,8 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	te.maxServerReceiveMsgSize = 1024
-	te.maxServerSendMsgSize = 1024
+	te.maxServerReceiveMsgSize = newInt(1024)
+	te.maxServerSendMsgSize = newInt(1024)
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
@@ -2032,12 +2026,12 @@ func TestExceedMsgLimit(t *testing.T) {
 
 func testExceedMsgLimit(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.maxMsgSize = 1024
+	te.maxMsgSize = newInt(1024)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	argSize := int32(te.maxMsgSize + 1)
+	argSize := int32(*te.maxMsgSize + 1)
 	const smallSize = 1
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
@@ -2059,7 +2053,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 	// Test on client side for unary RPC.
-	req.ResponseSize = proto.Int32(int32(te.maxMsgSize) + 1)
+	req.ResponseSize = proto.Int32(int32(*te.maxMsgSize) + 1)
 	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
@@ -2076,7 +2070,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		},
 	}
 
-	spayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(te.maxMsgSize+1))
+	spayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(*te.maxMsgSize+1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2098,7 +2092,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = proto.Int32(int32(te.maxMsgSize) + 1)
+	respParam[0].Size = proto.Int32(int32(*te.maxMsgSize) + 1)
 	sreq.Payload = smallPayload
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)

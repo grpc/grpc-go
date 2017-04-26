@@ -86,20 +86,19 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt              UnaryClientInterceptor
-	streamInt             StreamClientInterceptor
-	codec                 Codec
-	cp                    Compressor
-	dc                    Decompressor
-	bs                    backoffStrategy
-	balancer              Balancer
-	block                 bool
-	insecure              bool
-	timeout               time.Duration
-	scChan                <-chan ServiceConfig
-	copts                 transport.ConnectOptions
-	maxReceiveMessageSize *int
-	maxSendMessageSize    *int
+	unaryInt    UnaryClientInterceptor
+	streamInt   StreamClientInterceptor
+	codec       Codec
+	cp          Compressor
+	dc          Decompressor
+	bs          backoffStrategy
+	balancer    Balancer
+	block       bool
+	insecure    bool
+	timeout     time.Duration
+	scChan      <-chan ServiceConfig
+	copts       transport.ConnectOptions
+	callOptions []CallOption
 }
 
 const (
@@ -114,20 +113,13 @@ type DialOption func(*dialOptions)
 
 // WithMaxMsgSize Deprecated: use WithMaxReceiveMessageSize instead.
 func WithMaxMsgSize(s int) DialOption {
-	return WithMaxReceiveMessageSize(s)
+	return WithDefaultCallOptions(WithMaxReceiveMessageSize(s))
 }
 
-// WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive. Negative input is invalid and has the same effect as not setting the field.
-func WithMaxReceiveMessageSize(s int) DialOption {
+// WithDefaultCallOptions returns a DialOption which sets the default CallOptions for calls over the connection.
+func WithDefaultCallOptions(cos ...CallOption) DialOption {
 	return func(o *dialOptions) {
-		*o.maxReceiveMessageSize = s
-	}
-}
-
-// WithMaxSendMessageSize returns a DialOption which sets the maximum message size the client can send. Negative input is invalid and has the same effect as not seeting the field.
-func WithMaxSendMessageSize(s int) DialOption {
-	return func(o *dialOptions) {
-		*o.maxSendMessageSize = s
+		o.callOptions = append(o.callOptions, cos...)
 	}
 }
 
@@ -642,13 +634,13 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 
 // GetMethodConfig gets the method config of the input method. If there's no exact match for the input method (i.e. /service/method), we will return the default config for all methods under the service (/service/).
 // TODO: Avoid the locking here.
-func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig) {
+func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig, ok bool) {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	m, ok := cc.sc.Methods[method]
+	m, ok = cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
-		m, _ = cc.sc.Methods[method[:i+1]]
+		m, ok = cc.sc.Methods[method[:i+1]]
 	}
 	return
 }

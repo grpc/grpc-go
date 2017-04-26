@@ -52,7 +52,7 @@ import (
 //
 // TODO(zhaoq): Check whether the received message sequence is valid.
 // TODO ctx is used for stats collection and processing. It is the context passed from the application.
-func recvResponse(ctx context.Context, dopts dialOptions, msgSizeLimit int, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
+func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTransport, c *callInfo, stream *transport.Stream, reply interface{}) (err error) {
 	// Try to acquire header metadata from the server if there is any.
 	defer func() {
 		if err != nil {
@@ -73,7 +73,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, msgSizeLimit int, t tr
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, msgSizeLimit, inPayload); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -93,7 +93,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, msgSizeLimit int, t tr
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, msgSizeLimit int, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
+func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, c *callInfo, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
 	stream, err := t.NewStream(ctx, callHdr)
 	if err != nil {
 		return nil, err
@@ -122,8 +122,8 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	if err != nil {
 		return nil, Errorf(codes.Internal, "grpc: %v", err)
 	}
-	if len(outBuf) > msgSizeLimit {
-		return nil, Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(outBuf), msgSizeLimit)
+	if len(outBuf) > *c.maxSendMessageSize {
+		return nil, Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {
@@ -152,7 +152,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	mc := cc.GetMethodConfig(method)
+	mc, _ := cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}
@@ -163,9 +163,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		defer cancel()
 	}
 
-	maxSendMessageSize := getMaxSize(mc.MaxReqSize, cc.dopts.maxSendMessageSize, defaultClientMaxSendMessageSize)
-	maxReceiveMessageSize := getMaxSize(mc.MaxRespSize, cc.dopts.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
-
+	opts = append(cc.dopts.callOptions, opts...)
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)
@@ -176,6 +174,10 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			o.after(&c)
 		}
 	}()
+
+	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
+	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		defer c.traceInfo.tr.Finish()
@@ -255,7 +257,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, maxSendMessageSize, callHdr, t, args, topts)
+		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, &c, callHdr, t, args, topts)
 		if err != nil {
 			if put != nil {
 				put()
@@ -272,7 +274,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		err = recvResponse(ctx, cc.dopts, maxReceiveMessageSize, t, &c, stream, reply)
+		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
 				put()
