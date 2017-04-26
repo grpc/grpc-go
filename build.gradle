@@ -26,6 +26,21 @@ subprojects {
     apply plugin: "ru.vyarus.animalsniffer"
     if (!rootProject.hasProperty('errorProne') || rootProject.errorProne.toBoolean()) {
       apply plugin: "net.ltgt.errorprone"
+
+      dependencies {
+        // The ErrorProne plugin defaults to the latest, which would break our
+        // build if error prone releases a new version with a new check
+        errorprone 'com.google.errorprone:error_prone_core:2.0.19'
+      }
+    } else {
+      // Remove per-project error-prone checker config
+      allprojects {
+        afterEvaluate { project ->
+          project.tasks.withType(JavaCompile) {
+            options.compilerArgs.removeAll { it.startsWith("-Xep:") }
+          }
+        }
+      }
     }
 
     group = "io.grpc"
@@ -206,10 +221,6 @@ subprojects {
 
         // Configuration for modules that use Jetty ALPN agent
         alpnagent libraries.jetty_alpn_agent
-
-        // The ErrorProne plugin defaults to the latest, which would break our
-        // build if error prone releases a new version with a new check
-        errorprone 'com.google.errorprone:error_prone_core:2.0.19'
     }
 
     signing {
