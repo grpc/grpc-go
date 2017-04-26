@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -82,6 +83,8 @@ const (
 	misbehaved
 	encodingRequiredStatus
 	invalidHeaderField
+	delayBeginRead
+	delayBeginWrite
 )
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
@@ -92,7 +95,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		resp = expectedResponseLarge
 	}
 	p := make([]byte, len(req))
-	_, err := io.ReadFull(s, p)
+	_, err := s.ReadFull(p)
 	if err != nil {
 		return
 	}
@@ -100,6 +103,58 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 		t.Fatalf("handleStream got %v, want %v", p, req)
 	}
 	// send a response back to the client.
+	h.t.Write(s, resp, &Options{})
+	// send the trailer to end the stream.
+	h.t.WriteStatus(s, status.New(codes.OK, ""))
+}
+
+func (h *testStreamHandler) handleStreamDelayBeginRead(t *testing.T, s *Stream) {
+	req := expectedRequest
+	resp := expectedResponse
+	if s.Method() == "foo.Large" {
+		req = expectedRequestLarge
+		resp = expectedResponseLarge
+	}
+	p := make([]byte, len(req))
+
+	// Wait before reading. Give time to client to start sending
+	// before server starts reading.
+	time.Sleep(2 * time.Second)
+	_, err := s.ReadFull(p)
+	if err != nil {
+		t.Fatalf("s.ReadFull failed; got error %v", err)
+		return
+	}
+
+	if !bytes.Equal(p, req) {
+		t.Fatalf("handleStream got %v, want %v", p, req)
+	}
+	// send a response back to the client.
+	h.t.Write(s, resp, &Options{})
+	// send the trailer to end the stream.
+	h.t.WriteStatus(s, status.New(codes.OK, ""))
+}
+
+func (h *testStreamHandler) handleStreamDelayBeginWrite(t *testing.T, s *Stream) {
+	req := expectedRequest
+	resp := expectedResponse
+	if s.Method() == "foo.Large" {
+		req = expectedRequestLarge
+		resp = expectedResponseLarge
+	}
+	p := make([]byte, len(req))
+	_, err := s.ReadFull(p)
+	if err != nil {
+		t.Fatalf("s.ReadFull failed; got error %v", err)
+		return
+	}
+	if !bytes.Equal(p, req) {
+		t.Fatalf("handleStream got %v, want %v", p, req)
+	}
+
+	// Wait before sending. Give time to client to start reading
+	// before server starts sending.
+	time.Sleep(2 * time.Second)
 	h.t.Write(s, resp, &Options{})
 	// send the trailer to end the stream.
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
@@ -160,6 +215,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 // start starts server. Other goroutines should block on s.readyChan for further operations.
 func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
+
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", "localhost:0")
 	} else {
@@ -216,6 +272,18 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case invalidHeaderField:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamInvalidHeaderField(t, s)
+			}, func(ctx context.Context, method string) context.Context {
+				return ctx
+			})
+		case delayBeginRead:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamDelayBeginRead(t, s)
+			}, func(ctx context.Context, method string) context.Context {
+				return ctx
+			})
+		case delayBeginWrite:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamDelayBeginWrite(t, s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -694,11 +762,11 @@ func TestClientSendAndReceive(t *testing.T) {
 		t.Fatalf("failed to send data: %v", err)
 	}
 	p := make([]byte, len(expectedResponse))
-	_, recvErr := io.ReadFull(s1, p)
+	_, recvErr := s1.ReadFull(p)
 	if recvErr != nil || !bytes.Equal(p, expectedResponse) {
 		t.Fatalf("Error: %v, want <nil>; Result: %v, want %v", recvErr, p, expectedResponse)
 	}
-	_, recvErr = io.ReadFull(s1, p)
+	_, recvErr = s1.ReadFull(p)
 	if recvErr != io.EOF {
 		t.Fatalf("Error: %v; want <EOF>", recvErr)
 	}
@@ -734,9 +802,9 @@ func performOneRPC(ct ClientTransport) {
 		//
 		// Read response
 		p := make([]byte, len(expectedResponse))
-		io.ReadFull(s, p)
+		s.ReadFull(p)
 		// Read io.EOF
-		io.ReadFull(s, p)
+		s.ReadFull(p)
 	}
 }
 
@@ -775,10 +843,82 @@ func TestLargeMessage(t *testing.T) {
 				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 			}
 			p := make([]byte, len(expectedResponseLarge))
-			if _, err := io.ReadFull(s, p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
-				t.Errorf("io.ReadFull(_, %v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+			if _, err := s.ReadFull(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+				t.Errorf("io.ReadFull(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
 			}
-			if _, err = io.ReadFull(s, p); err != io.EOF {
+			if _, err = s.ReadFull(p); err != io.EOF {
+				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
+			}
+		}()
+	}
+	wg.Wait()
+	ct.Close()
+	server.stop()
+}
+
+// Try to catch issues in flow control that depend on data arrival/read order
+func TestLargeMessageDelayBeginRead(t *testing.T) {
+	server, ct := setUp(t, 0, math.MaxUint32, delayBeginRead)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Large",
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := ct.NewStream(context.Background(), callHdr)
+			if err != nil {
+				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
+			}
+			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
+				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
+			}
+			p := make([]byte, len(expectedResponseLarge))
+
+			// Give time to server to begin sending before client starts reading.
+			time.Sleep(2 * time.Second)
+			if _, err := s.ReadFull(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+				t.Errorf("io.ReadFull(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+			}
+			if _, err = s.ReadFull(p); err != io.EOF {
+				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
+			}
+		}()
+	}
+	wg.Wait()
+	ct.Close()
+	server.stop()
+}
+
+// Try to catch issues in flow control that depend on data arrival/read order
+func TestLargeMessageDelayBeginWrite(t *testing.T) {
+	server, ct := setUp(t, 0, math.MaxUint32, delayBeginWrite)
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Large",
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := ct.NewStream(context.Background(), callHdr)
+			if err != nil {
+				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
+			}
+
+			// Give time to server to start reading before client starts sending.
+			time.Sleep(2 * time.Second)
+			if err := ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
+				t.Errorf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
+			}
+			p := make([]byte, len(expectedResponseLarge))
+			if _, err := s.ReadFull(p); err != nil || !bytes.Equal(p, expectedResponseLarge) {
+				t.Errorf("io.ReadFull(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+			}
+			if _, err = s.ReadFull(p); err != io.EOF {
 				t.Errorf("Failed to complete the stream %v; want <EOF>", err)
 			}
 		}()
@@ -821,10 +961,10 @@ func TestGracefulClose(t *testing.T) {
 		t.Fatalf("%v.Write(_, _, _) = %v, want  <nil>", ct, err)
 	}
 	p := make([]byte, len(expectedResponse))
-	if _, err := io.ReadFull(s, p); err != nil || !bytes.Equal(p, expectedResponse) {
-		t.Fatalf("io.ReadFull(_, %v) = _, %v, want %v, <nil>", err, p, expectedResponse)
+	if _, err := s.ReadFull(p); err != nil || !bytes.Equal(p, expectedResponse) {
+		t.Fatalf("io.ReadFull(%v) = _, %v, want %v, <nil>", err, p, expectedResponse)
 	}
-	if _, err = io.ReadFull(s, p); err != io.EOF {
+	if _, err = s.ReadFull(p); err != io.EOF {
 		t.Fatalf("Failed to complete the stream %v; want <EOF>", err)
 	}
 	wg.Wait()
@@ -1072,7 +1212,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	// Server sent a resetStream for s already.
 	code := http2ErrConvTab[http2.ErrCodeFlowControl]
-	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF {
+	if _, err := s.ReadFull(make([]byte, 1)); err != io.EOF {
 		t.Fatalf("%v got err %v want <EOF>", s, err)
 	}
 	if s.status.Code() != code {
@@ -1120,10 +1260,12 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if err := ct.Write(s, d, &Options{Last: true, Delay: false}); err != nil && err != io.EOF {
 		t.Fatalf("Failed to write: %v", err)
 	}
+	// type assert to get the inner recvBufferReader, which reads without doing window updates
+	recvBufferReader := s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec
 	// Read without window update.
 	for {
 		p := make([]byte, http2MaxFrameLen)
-		if _, err = s.dec.Read(p); err != nil {
+		if _, err = recvBufferReader.Read(p); err != nil {
 			break
 		}
 	}
@@ -1182,7 +1324,9 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	if _, err := s.dec.Read(p); err != io.EOF {
+	// type assert to get the plain recvBufferReader from the stream's stream reader, which doesn't do window updates
+	recvBufferReader := s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec
+	if _, err := recvBufferReader.Read(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
 	if !reflect.DeepEqual(s.Status(), encodingTestStatus) {
@@ -1210,7 +1354,8 @@ func TestInvalidHeaderField(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	_, err = s.dec.Read(p)
+	// type assert to get the inner recvBufferReader, which reads without doing window updates
+	_, err = s.streamReader.(*streamWindowSpaceLoaningReader).wr.dec.Read(p)
 	if se, ok := err.(StreamError); !ok || se.Code != codes.FailedPrecondition || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.FailedPrecondition, expectedInvalidHeaderField)
 	}
@@ -1263,6 +1408,46 @@ func TestContextErr(t *testing.T) {
 		err := ContextErr(test.errIn)
 		if err != test.errOut {
 			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
+		}
+	}
+}
+
+// If any error occurs on a call to Stream.ReadFull, future calls
+// should continue to return that same error.
+func TestReadFullGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
+	testRecvBuffer := newRecvBuffer()
+	s := &Stream{
+		ctx:    context.Background(),
+		goAway: make(chan struct{}),
+		buf:    testRecvBuffer,
+	}
+	s.setClientStreamReader(func(uint32) {}, func(uint32) {})
+
+	testData := make([]byte, 1)
+	testData[0] = 5
+	testErr := errors.New("test error")
+	s.write(recvMsg{data: testData, err: testErr})
+
+	inBuf := make([]byte, 1)
+	actualCount, actualErr := s.ReadFull(inBuf)
+	if actualCount != 0 {
+		t.Errorf("actualCount, _ := io.ReadFull(_) differs; want %v; got %v", 0, actualCount)
+	}
+	if actualErr.Error() != testErr.Error() {
+		t.Errorf("_ , actualErr := io.ReadFull(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
+	}
+
+	s.write(recvMsg{data: testData, err: nil})
+	s.write(recvMsg{data: testData, err: errors.New("different error from first")})
+
+	for i := 0; i < 2; i++ {
+		inBuf := make([]byte, 1)
+		actualCount, actualErr := s.ReadFull(inBuf)
+		if actualCount != 0 {
+			t.Errorf("actualCount, _ := io.ReadFull(_) differs; want %v; got %v", 0, actualCount)
+		}
+		if actualErr.Error() != testErr.Error() {
+			t.Errorf("_ , actualErr := io.ReadFull(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
 		}
 	}
 }

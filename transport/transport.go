@@ -48,6 +48,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -189,14 +190,12 @@ type Stream struct {
 	recvCompress string
 	sendCompress string
 	buf          *recvBuffer
-	dec          io.Reader
 	fc           *inFlow
 	recvQuota    uint32
 	// The accumulated inbound quota pending for window update.
-	updateQuota uint32
-	// The handler to control the window update procedure for both this
-	// particular stream and the associated transport.
-	windowHandler func(int)
+	updateQuota  uint32
+	readFullErr  error
+	streamReader io.Reader
 
 	sendQuotaPool *quotaPool
 	// Close headerChan to indicate the end of reception of header metadata.
@@ -220,6 +219,96 @@ type Stream struct {
 	rstStream bool
 	// rstError is the error that needs to be sent along with the RST_STREAM frame.
 	rstError http2.ErrCode
+}
+
+func (s *Stream) setClientStreamReader(consumeConnAndStreamWindows func(uint32), loanSpaceInStreamWindow func(uint32)) {
+	if s.ctx == nil || s.goAway == nil || s.buf == nil {
+		grpclog.Fatalf("Uninitialized stream. s.ctx == nil: %v; s.goAway == nil: %v; s.buf == nil: %v", s.ctx == nil, s.goAway == nil, s.buf == nil)
+	}
+	s.setStreamReader(consumeConnAndStreamWindows, loanSpaceInStreamWindow)
+}
+
+func (s *Stream) setServerStreamReader(consumeConnAndStreamWindows func(uint32), loanSpaceInStreamWindow func(uint32)) {
+	if s.ctx == nil || s.buf == nil {
+		grpclog.Fatalf("Uninitialized stream. s.ctx == nil: %v; s.buf == nil: %v", s.ctx == nil, s.buf == nil)
+	}
+	if s.goAway != nil {
+		grpclog.Fatalf("Unexpected initialization of s.goAway; got %v; want nil", s.goAway)
+	}
+	s.setStreamReader(consumeConnAndStreamWindows, loanSpaceInStreamWindow)
+}
+
+func (s *Stream) setStreamReader(consumeConnAndStreamWindows func(uint32), loanSpaceInStreamWindow func(uint32)) {
+	s.streamReader = &streamWindowSpaceLoaningReader{
+		loanSpaceInStreamWindow: loanSpaceInStreamWindow,
+		wr: &connAndStreamWindowConsumingReader{
+			dec: &recvBufferReader{
+				ctx:    s.ctx,
+				goAway: s.goAway,
+				recv:   s.buf,
+			},
+			consumeConnAndStreamWindows: consumeConnAndStreamWindows,
+		},
+	}
+}
+
+// FullReader makes complete reads into p.
+type FullReader interface {
+	// This Read function blocks until either the len(p) bytes have been read
+	// into p, or until an error occurs.
+	// It's meant to mimick the semantics of the standard libraries io.ReadFull(_, p)
+	// Note that err == nil iff n == len(p).
+	ReadFull(p []byte) (int, error)
+}
+
+// ReadFull reads bytes from the stream and manages flow control as needed.
+// Also note that an error returned by this function indicates an error
+// in the underlying stream, and future calls to Read will continue to
+// return that same error.
+func (s *Stream) ReadFull(p []byte) (n int, err error) {
+	if s.readFullErr != nil {
+		return 0, s.readFullErr
+	}
+	n, err = io.ReadFull(s.streamReader, p)
+	s.readFullErr = err
+	return n, err
+}
+
+type streamWindowSpaceLoaningReader struct {
+	// The handler to control the window update procedure for both this
+	// particular stream and the associated transport.
+	loanSpaceInStreamWindow func(uint32)
+	wr                      *connAndStreamWindowConsumingReader
+	readFullErr             error
+}
+
+func (r *streamWindowSpaceLoaningReader) Read(p []byte) (n int, err error) {
+	if r.readFullErr != nil {
+		return 0, r.readFullErr
+	}
+	committedReadAmount := min(maxSingleStreamWindowUpdate, uint32(len(p)))
+	r.loanSpaceInStreamWindow(committedReadAmount)
+	n, err = io.ReadFull(r.wr, p[:committedReadAmount])
+	r.readFullErr = err
+	return n, err
+}
+
+type connAndStreamWindowConsumingReader struct {
+	dec                         io.Reader
+	consumeConnAndStreamWindows func(uint32)
+}
+
+// Read reads all the data available for this Stream from the transport and
+// passes them into the decoder, which converts them into a gRPC message stream.
+// The error is io.EOF when the stream is done or another non-nil error if
+// the stream broke.
+func (s *connAndStreamWindowConsumingReader) Read(p []byte) (n int, err error) {
+	n, err = s.dec.Read(p)
+	if err != nil {
+		return
+	}
+	s.consumeConnAndStreamWindows(uint32(n))
+	return
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -318,19 +407,6 @@ func (s *Stream) SetTrailer(md metadata.MD) error {
 
 func (s *Stream) write(m recvMsg) {
 	s.buf.put(&m)
-}
-
-// Read reads all the data available for this Stream from the transport and
-// passes them into the decoder, which converts them into a gRPC message stream.
-// The error is io.EOF when the stream is done or another non-nil error if
-// the stream broke.
-func (s *Stream) Read(p []byte) (n int, err error) {
-	n, err = s.dec.Read(p)
-	if err != nil {
-		return
-	}
-	s.windowHandler(n)
-	return
 }
 
 // finish sets the stream's state and status, and closes the done channel.
