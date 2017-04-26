@@ -31,6 +31,7 @@
  *
  */
 
+// Package grpclb is currently used only for grpclb testing.
 package grpclb
 
 import (
