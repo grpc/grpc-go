@@ -209,8 +209,10 @@ public final class NettyChannelBuilder
   }
 
   /**
-   * Sets the maximum size of header list allowed to be received on the channel. If not called,
-   * defaults to {@link GrpcUtil#DEFAULT_MAX_HEADER_LIST_SIZE}.
+   * Sets the maximum size of header list allowed to be received. This is cumulative size of the
+   * headers with some overhead, as defined for
+   * <a href="http://httpwg.org/specs/rfc7540.html#rfc.section.6.5.2">
+   * HTTP/2's SETTINGS_MAX_HEADER_LIST_SIZE</a>. The default is 8 KiB.
    */
   public NettyChannelBuilder maxHeaderListSize(int maxHeaderListSize) {
     checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be > 0");

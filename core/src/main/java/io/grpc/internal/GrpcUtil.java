@@ -151,6 +151,7 @@ public final class GrpcUtil {
   /**
    * The default maximum size (in bytes) for inbound header/trailer.
    */
+  // Update documentation in public-facing Builders when changing this value.
   public static final int DEFAULT_MAX_HEADER_LIST_SIZE = 8192;
 
   public static final Splitter ACCEPT_ENCODING_SPLITTER = Splitter.on(',').trimResults();
