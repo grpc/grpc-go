@@ -583,7 +583,7 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 			return
 		}
 		put = func() {
-			s, ok := rpcStatsFromContext(ctx)
+			s, ok := rpcInfoFromContext(ctx)
 			if !ok {
 				return
 			}

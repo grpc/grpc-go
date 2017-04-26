@@ -669,7 +669,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	}
 	if !ok {
 		if put != nil {
-			updateRPCStatsInContext(ctx, rpcStats{bytesSent: false, bytesReceived: false})
+			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
 			put()
 		}
 		return nil, nil, errConnClosing
@@ -677,7 +677,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	t, err := ac.wait(ctx, cc.dopts.balancer != nil, !opts.BlockingWait)
 	if err != nil {
 		if put != nil {
-			updateRPCStatsInContext(ctx, rpcStats{bytesSent: false, bytesReceived: false})
+			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
 			put()
 		}
 		return nil, nil, err

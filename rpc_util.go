@@ -345,24 +345,24 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	return nil
 }
 
-type rpcStats struct {
+type rpcInfo struct {
 	bytesSent     bool
 	bytesReceived bool
 }
 
-type rpcStatsContextKey struct{}
+type rpcInfoContextKey struct{}
 
-func newContextWithRPCStats(ctx context.Context) context.Context {
-	return context.WithValue(ctx, rpcStatsContextKey{}, &rpcStats{})
+func newContextWithRPCInfo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{})
 }
 
-func rpcStatsFromContext(ctx context.Context) (s *rpcStats, ok bool) {
-	s, ok = ctx.Value(rpcStatsContextKey{}).(*rpcStats)
+func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
+	s, ok = ctx.Value(rpcInfoContextKey{}).(*rpcInfo)
 	return
 }
 
-func updateRPCStatsInContext(ctx context.Context, s rpcStats) {
-	if ss, ok := rpcStatsFromContext(ctx); ok {
+func updateRPCInfoInContext(ctx context.Context, s rpcInfo) {
+	if ss, ok := rpcInfoFromContext(ctx); ok {
 		*ss = s
 	}
 	return

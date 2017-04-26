@@ -179,7 +179,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
-	ctx = newContextWithRPCStats(ctx)
+	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
@@ -250,7 +250,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 					// If error is connection error, transport was sending data on wire,
 					// and we are not sure if anything has been sent on wire.
 					// If error is not connection error, we are sure nothing has been sent.
-					updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
+					updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
 				}
 				put()
 			}
@@ -262,7 +262,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, stream, t, args, topts)
 		if err != nil {
 			if put != nil {
-				updateRPCStatsInContext(ctx, rpcStats{
+				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
@@ -279,7 +279,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
-				updateRPCStatsInContext(ctx, rpcStats{
+				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
@@ -295,7 +295,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
-			updateRPCStatsInContext(ctx, rpcStats{
+			updateRPCInfoInContext(ctx, rpcInfo{
 				bytesSent:     stream.BytesSent(),
 				bytesReceived: stream.BytesReceived(),
 			})

@@ -151,7 +151,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
-	ctx = newContextWithRPCStats(ctx)
+	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
@@ -198,7 +198,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 				// If error is connection error, transport was sending data on wire,
 				// and we are not sure if anything has been sent on wire.
 				// If error is not connection error, we are sure nothing has been sent.
-				updateRPCStatsInContext(ctx, rpcStats{bytesSent: true, bytesReceived: false})
+				updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
 			}
 			if put != nil {
 				put()
@@ -467,7 +467,7 @@ func (cs *clientStream) finish(err error) {
 		o.after(&cs.c)
 	}
 	if cs.put != nil {
-		updateRPCStatsInContext(cs.s.Context(), rpcStats{
+		updateRPCInfoInContext(cs.s.Context(), rpcInfo{
 			bytesSent:     cs.s.BytesSent(),
 			bytesReceived: cs.s.BytesReceived(),
 		})
