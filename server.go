@@ -109,6 +109,7 @@ type Server struct {
 type options struct {
 	creds                credentials.TransportCredentials
 	codec                Codec
+	codecs               map[string]Codec
 	cp                   Compressor
 	dc                   Decompressor
 	maxMsgSize           int
@@ -146,6 +147,27 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
+	}
+}
+
+// CustomCodecs returns a ServerOption that sets the codecs that can be used based on the
+// content-type in addition to the proto codec.
+func CustomCodecs(codecs ...Codec) ServerOption {
+	m := map[string]Codec{
+		"proto": protoCodec{},
+	}
+	for _, codec := range codecs {
+		// TODO: do we want to do string operations?
+		// I believe TrimSpace does not make a copy, but ToLower does
+		// This might be an extra allocation that is not generally wanted
+		// This matters more in getCodec than here
+		name := strings.TrimSpace(strings.ToLower(codec.String()))
+		if name != "" {
+			m[name] = codec
+		}
+	}
+	return func(o *options) {
+		o.codecs = m
 	}
 }
 
@@ -256,6 +278,11 @@ func NewServer(opt ...ServerOption) *Server {
 	if opts.codec == nil {
 		// Set the default codec.
 		opts.codec = protoCodec{}
+	}
+	if len(opts.codecs) == 0 {
+		opts.codecs = map[string]Codec{
+			"proto": protoCodec{},
+		}
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
@@ -607,6 +634,23 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
+func (s *Server) getCodec(contentSubtype string) (Codec, error) {
+	// TODO: do we really want to do string operations each time?
+	// This may be an extra allocation
+	// See comment in CustomCodecs
+	contentSubtype = strings.TrimSpace(strings.ToLower(contentSubtype))
+	if contentSubtype == "" {
+		return s.opts.codec, nil
+	}
+	codec, ok := s.opts.codecs[contentSubtype]
+	if !ok {
+		// TODO: return error? we are not doing verification  of encoding
+		// type as of now, do we want to add it?
+		return s.opts.codec, nil
+	}
+	return codec, nil
+}
+
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
 		cbuf       *bytes.Buffer
@@ -618,7 +662,11 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	codec, err := s.getCodec(stream.ContentSubtype())
+	if err != nil {
+		return err
+	}
+	p, err := encode(codec, msg, cp, cbuf, outPayload)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -736,7 +784,11 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				// java implementation.
 				return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
 			}
-			if err := s.opts.codec.Unmarshal(req, v); err != nil {
+			codec, err := s.getCodec(stream.ContentSubtype())
+			if err != nil {
+				return err
+			}
+			if err := codec.Unmarshal(req, v); err != nil {
 				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 			}
 			if inPayload != nil {
@@ -829,11 +881,15 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
+	codec, err := s.getCodec(stream.ContentSubtype())
+	if err != nil {
+		return err
+	}
 	ss := &serverStream{
 		t:            t,
 		s:            stream,
 		p:            &parser{r: stream},
-		codec:        s.opts.codec,
+		codec:        codec,
 		cp:           s.opts.cp,
 		dc:           s.opts.dc,
 		maxMsgSize:   s.opts.maxMsgSize,
