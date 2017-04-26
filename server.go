@@ -152,6 +152,9 @@ func CustomCodec(codec Codec) ServerOption {
 
 // CustomCodecs returns a ServerOption that sets the codecs that can be used based on the
 // content-type in addition to the proto codec.
+//
+// TODO: Function name is not amazing
+// TODO: better documentation on overlap with CustonCodec
 func CustomCodecs(codecs ...Codec) ServerOption {
 	m := map[string]Codec{
 		"proto": protoCodec{},

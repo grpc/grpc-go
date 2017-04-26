@@ -183,6 +183,8 @@ func FailFast(failFast bool) CallOption {
 }
 
 // CallCodec returns a CallOption that uses the given Codec for the RPC call.
+//
+// TODO: this name is not amazing, and there is a lot of overlap with other function names.
 func CallCodec(codec Codec) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.codec = codec

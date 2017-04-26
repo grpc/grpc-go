@@ -297,6 +297,8 @@ func (s *Stream) ContentType() string {
 }
 
 // ContentSubtype returns the content subtype.
+//
+// TODO: verify this does not make a copy of the content-type string each time
 func (s *Stream) ContentSubtype() string {
 	return getContentSubtype(s.contentType)
 }
