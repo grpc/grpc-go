@@ -431,6 +431,7 @@ type test struct {
 	// Configurable knobs, after newTest returns:
 	testServer        testpb.TestServiceServer // nil means none
 	healthServer      *health.Server           // nil means disabled
+	byteBufServer     *byteBufServer           // nil means disabled
 	maxStream         uint32
 	tapHandle         tap.ServerInHandle
 	maxMsgSize        int
@@ -443,6 +444,7 @@ type test struct {
 	streamServerInt   grpc.StreamServerInterceptor
 	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
+	customCodec       grpc.Codec // nil means none chosen
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -532,6 +534,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
 	}
+	if te.customCodec != nil {
+		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
+	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
 	if te.e.httpHandler {
@@ -542,6 +547,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.testServer != nil {
 		testpb.RegisterTestServiceServer(s, te.testServer)
+	}
+	if te.byteBufServer != nil {
+		s.RegisterService(&_ByteBufTestService_serviceDesc, te.byteBufServer)
 	}
 	addr := la
 	switch te.e.network {
@@ -602,6 +610,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.e.balancer {
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
+	}
+	if te.customCodec != nil {
+		opts = append(opts, grpc.WithCodec(te.customCodec))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -3713,4 +3724,235 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 	return fw.dst.Write(p)
+}
+
+var _ByteBufTestService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "grpc.testing.ByteBufTestService",
+	HandlerType: (*ByteBufTestServiceServer)(nil),
+	Methods: []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamingInputCall",
+			Handler:       _ByteBufTestService_StreamingInputCall_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "StreamingOutputCall",
+			Handler:       _ByteBufTestService_StreamingOutputCall_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "services.proto",
+}
+
+type ByteBufTestServiceServer interface {
+	// A stream of requests followed by a single response.
+	StreamingInputCall(grpc.ServerStream) error
+	// A single request followed by a stream of responses.
+	StreamingOutputCall(*[]byte, grpc.ServerStream) error
+}
+
+func _ByteBufTestService_StreamingInputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ByteBufTestServiceServer).StreamingInputCall(stream)
+}
+
+func _ByteBufTestService_StreamingOutputCall_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := make([]byte, 0)
+	if err := stream.RecvMsg(&m); err != nil {
+		return err
+	}
+	return srv.(ByteBufTestServiceServer).StreamingOutputCall(&m, stream)
+}
+
+type byteBufCodec struct {
+}
+
+func (byteBufCodec) Marshal(v interface{}) ([]byte, error) {
+	b, ok := v.(*[]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)
+	}
+	return *b, nil
+}
+
+func (byteBufCodec) Unmarshal(data []byte, v interface{}) error {
+	b, ok := v.(*[]byte)
+	if !ok {
+		return fmt.Errorf("failed to marshal: %v is not type of *[]byte", v)
+	}
+	*b = data
+	return nil
+}
+
+func (byteBufCodec) String() string {
+	return "bytebuffer"
+}
+
+type byteBufServer struct {
+	te           *test
+	respSizes    []int
+	reqSizes     []int
+}
+
+func (s *byteBufServer) StreamingInputCall(stream grpc.ServerStream) error {
+	in := make([]byte, 0)
+
+	for _, size := range s.reqSizes {
+		var in []byte
+		err := stream.RecvMsg(&in)
+		if err != nil {
+			s.te.t.Fatal(err)
+		}
+		if len(in) != size {
+			s.te.t.Fatal("received grpc message length %v; want %v", len(in), size)
+		}
+	}
+
+	if err := stream.RecvMsg(&in); err != io.EOF {
+		s.te.t.Fatal("expected EOF; got %v", err)
+		return err
+	}
+
+	out := make([]byte, 0)
+
+	if err := stream.SendMsg(&out); err != nil {
+		s.te.t.Fatal(err)
+	}
+	return nil
+}
+
+func (s *byteBufServer) StreamingOutputCall(in *[]byte, stream grpc.ServerStream) error {
+	for _, size := range s.respSizes {
+		out := make([]byte, size)
+		if err := stream.SendMsg(&out); err != nil {
+			s.te.t.Fatal(err)
+		}
+	}
+	return nil
+}
+
+func byteBufStreamingTestPayloadSizes() [][]int {
+	reqSizes := [][]int{}
+
+	// send 1M zero byte "grpc messages", (total of ~5M total grpc bytes due to 5 byte headers).
+	numZeroBytePayloads := 1 << 20
+	zeroBytePayloads := []int{}
+	for i := 0; i < numZeroBytePayloads; i++ {
+		zeroBytePayloads = append(zeroBytePayloads, 0)
+	}
+	reqSizes = append(reqSizes, zeroBytePayloads)
+
+	return reqSizes
+}
+
+func TestByteBufServerStreaming(t *testing.T) {
+	defer leakCheck(t)()
+
+	respSizes := byteBufStreamingTestPayloadSizes()
+
+	for _, sizes := range respSizes {
+		testByteBufServerStreaming(t, sizes)
+	}
+}
+
+func testByteBufServerStreaming(t *testing.T, respSizes []int) {
+	const timeout = time.Second * 5 * 60
+
+	te := newTest(t, tcpClearEnv)
+
+	b := &byteBufServer{
+		te:        te,
+		respSizes: respSizes,
+	}
+	te.byteBufServer = b
+	te.customCodec = &byteBufCodec{}
+	te.startServer(nil)
+	defer te.tearDown()
+	cc := te.clientConn()
+
+	req := make([]byte, 0)
+	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	stream, err := doByteBufStreamingOutputCall(cc, ctx, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var in []byte
+	for _, size := range respSizes {
+		err := stream.RecvMsg(&in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(in) != size {
+			t.Fatalf("received grpc message length %v; want %v", len(in), size)
+		}
+	}
+
+	if err := stream.RecvMsg(&in); err != io.EOF {
+		t.Fatalf("expected EOF; got %v", err)
+	}
+}
+
+func TestByteBufClientStreaming(t *testing.T) {
+	defer leakCheck(t)()
+
+	respSizes := byteBufStreamingTestPayloadSizes()
+
+	for _, sizes := range respSizes {
+		testByteBufClientStreaming(t, sizes)
+	}
+}
+
+func testByteBufClientStreaming(t *testing.T, reqSizes []int) {
+	const msgSize = 0
+	const timeout = time.Second * 5 * 60
+
+	te := newTest(t, tcpClearEnv)
+
+	b := &byteBufServer{
+		te:        te,
+		reqSizes: reqSizes,
+	}
+	te.byteBufServer = b
+	te.customCodec = &byteBufCodec{}
+	te.startServer(nil)
+	defer te.tearDown()
+	cc := te.clientConn()
+
+	req := make([]byte, msgSize)
+	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	stream, err := doByteBufStreamingOutputCall(cc, ctx, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, size := range reqSizes {
+		in := make([]byte, size)
+		err := stream.SendMsg(&in)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		t.Fatal(err)
+	}
+
+	var in []byte
+	if err := stream.RecvMsg(&in); err != io.EOF {
+		t.Fatal(err)
+	}
+}
+
+func doByteBufStreamingOutputCall(cc *grpc.ClientConn, ctx context.Context, in *[]byte, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	stream, err := grpc.NewClientStream(ctx, &_ByteBufTestService_serviceDesc.Streams[1], cc, "/grpc.testing.ByteBufTestService/StreamingOutputCall", opts...)
+	if err != nil {
+		return nil, err
+	}
+	if err := stream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := stream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return stream, nil
 }
