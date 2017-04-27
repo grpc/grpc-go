@@ -37,6 +37,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	apb "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -59,7 +60,7 @@ func TestFromToProto(t *testing.T) {
 	}
 
 	err := FromProto(s)
-	if got := err.Proto(); !reflect.DeepEqual(s, got) {
+	if got := err.Proto(); !proto.Equal(s, got) {
 		t.Fatalf("Expected errors to be identical - s: %v  got: %v", s, got)
 	}
 }
