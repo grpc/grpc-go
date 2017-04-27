@@ -3729,7 +3729,7 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 var _ByteBufTestService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "grpc.testing.ByteBufTestService",
 	HandlerType: (*ByteBufTestServiceServer)(nil),
-	Methods: []grpc.MethodDesc{},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamingInputCall",
@@ -3789,9 +3789,9 @@ func (byteBufCodec) String() string {
 }
 
 type byteBufServer struct {
-	te           *test
-	respSizes    []int
-	reqSizes     []int
+	te        *test
+	respSizes []int
+	reqSizes  []int
 }
 
 func (s *byteBufServer) StreamingInputCall(stream grpc.ServerStream) error {
@@ -3903,13 +3903,12 @@ func TestByteBufClientStreaming(t *testing.T) {
 }
 
 func testByteBufClientStreaming(t *testing.T, reqSizes []int) {
-	const msgSize = 0
 	const timeout = time.Second * 5 * 60
 
 	te := newTest(t, tcpClearEnv)
 
 	b := &byteBufServer{
-		te:        te,
+		te:       te,
 		reqSizes: reqSizes,
 	}
 	te.byteBufServer = b
@@ -3918,7 +3917,7 @@ func testByteBufClientStreaming(t *testing.T, reqSizes []int) {
 	defer te.tearDown()
 	cc := te.clientConn()
 
-	req := make([]byte, msgSize)
+	req := make([]byte, 0)
 	ctx, _ := context.WithTimeout(context.Background(), timeout)
 	stream, err := doByteBufStreamingOutputCall(cc, ctx, &req)
 	if err != nil {
@@ -3955,4 +3954,76 @@ func doByteBufStreamingOutputCall(cc *grpc.ClientConn, ctx context.Context, in *
 		return nil, err
 	}
 	return stream, nil
+}
+
+func TestFlowControlWithPadding(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testFlowControlWithPadding(t, e)
+	}
+}
+
+func testFlowControlWithPadding(t *testing.T, e env) {
+	te := newTest(t, e)
+	b := &byteBufServer{
+		te:       te,
+		reqSizes: []int{0},
+	}
+	te.byteBufServer = b
+	te.customCodec = &byteBufCodec{}
+	te.startServer(nil)
+	defer te.tearDown()
+
+	padding := make([]byte, 10)
+
+	streamWindow := uint32(65535)
+	connWindow := uint32(65535 * 16)
+
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.ByteBufTestService/StreamingInputCall")
+		requestCount := 1 << 20
+		requestsDone := 0
+		for requestsDone < requestCount {
+			const flowControlDebtPerFrame = 15
+			for streamWindow >= flowControlDebtPerFrame && connWindow >= flowControlDebtPerFrame {
+				if requestsDone == requestCount {
+					goto receive
+				}
+				st.writeDataPadded(1, true, []byte{0, 0, 0, 0, 0}, padding)
+				requestsDone++
+			}
+			for streamWindow < flowControlDebtPerFrame || connWindow < flowControlDebtPerFrame {
+				f := st.wantAnyFrame()
+				switch v := f.(type) {
+				case *http2.WindowUpdateFrame:
+					wu := f.(*http2.WindowUpdateFrame)
+					id := wu.Header().StreamID
+					incr := wu.Increment
+					if id == 0 {
+						connWindow += incr
+					} else {
+						streamWindow += incr
+					}
+				default:
+					t.Logf("received http2 frame from grpc server with type: %v", v)
+				}
+			}
+		}
+
+	receive:
+		var df *http2.DataFrame
+		for df == nil {
+			f := st.wantAnyFrame()
+			switch v := f.(type) {
+			case *http2.DataFrame:
+				df = f.(*http2.DataFrame)
+				break
+			default:
+				t.Logf("received http2 frame from grpc server with type: %v", v)
+			}
+		}
+		if len(df.Data()) != 5 {
+			log.Fatalf("want response data length 5; got %v", len(df.Data()))
+		}
+	})
 }
