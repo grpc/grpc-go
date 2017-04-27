@@ -59,31 +59,39 @@ public final class LoadBalancerProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\023load_balancer.proto\022\ngrpc.lb.v1\032\036googl" +
-      "e/protobuf/duration.proto\"\244\001\n\022LoadBalanc" +
-      "eRequest\022@\n\017initial_request\030\001 \001(\0132%.grpc" +
-      ".lb.v1.InitialLoadBalanceRequestH\000\022/\n\014cl" +
-      "ient_stats\030\002 \001(\0132\027.grpc.lb.v1.ClientStat" +
-      "sH\000B\033\n\031load_balance_request_type\")\n\031Init" +
-      "ialLoadBalanceRequest\022\014\n\004name\030\001 \001(\t\"Z\n\013C" +
-      "lientStats\022\026\n\016total_requests\030\001 \001(\003\022\031\n\021cl" +
-      "ient_rpc_errors\030\002 \001(\003\022\030\n\020dropped_request" +
-      "s\030\003 \001(\003\"\246\001\n\023LoadBalanceResponse\022B\n\020initi",
-      "al_response\030\001 \001(\0132&.grpc.lb.v1.InitialLo" +
-      "adBalanceResponseH\000\022-\n\013server_list\030\002 \001(\013" +
-      "2\026.grpc.lb.v1.ServerListH\000B\034\n\032load_balan" +
-      "ce_response_type\"}\n\032InitialLoadBalanceRe" +
-      "sponse\022\036\n\026load_balancer_delegate\030\001 \001(\t\022?" +
-      "\n\034client_stats_report_interval\030\002 \001(\0132\031.g" +
-      "oogle.protobuf.Duration\"i\n\nServerList\022#\n" +
-      "\007servers\030\001 \003(\0132\022.grpc.lb.v1.Server\0226\n\023ex" +
-      "piration_interval\030\003 \001(\0132\031.google.protobu" +
-      "f.Duration\"\\\n\006Server\022\022\n\nip_address\030\001 \001(\014",
-      "\022\014\n\004port\030\002 \001(\005\022\032\n\022load_balance_token\030\003 \001" +
-      "(\t\022\024\n\014drop_request\030\004 \001(\0102b\n\014LoadBalancer" +
-      "\022R\n\013BalanceLoad\022\036.grpc.lb.v1.LoadBalance" +
-      "Request\032\037.grpc.lb.v1.LoadBalanceResponse" +
-      "(\0010\001B%\n\016io.grpc.grpclbB\021LoadBalancerProt" +
-      "oP\001b\006proto3"
+      "e/protobuf/duration.proto\032\037google/protob" +
+      "uf/timestamp.proto\"\244\001\n\022LoadBalanceReques" +
+      "t\022@\n\017initial_request\030\001 \001(\0132%.grpc.lb.v1." +
+      "InitialLoadBalanceRequestH\000\022/\n\014client_st" +
+      "ats\030\002 \001(\0132\027.grpc.lb.v1.ClientStatsH\000B\033\n\031" +
+      "load_balance_request_type\")\n\031InitialLoad" +
+      "BalanceRequest\022\014\n\004name\030\001 \001(\t\"\306\002\n\013ClientS" +
+      "tats\022-\n\ttimestamp\030\001 \001(\0132\032.google.protobu" +
+      "f.Timestamp\022\031\n\021num_calls_started\030\002 \001(\003\022\032",
+      "\n\022num_calls_finished\030\003 \001(\003\0226\n.num_calls_" +
+      "finished_with_drop_for_rate_limiting\030\004 \001" +
+      "(\003\0227\n/num_calls_finished_with_drop_for_l" +
+      "oad_balancing\030\005 \001(\003\0225\n-num_calls_finishe" +
+      "d_with_client_failed_to_send\030\006 \001(\003\022)\n!nu" +
+      "m_calls_finished_known_received\030\007 \001(\003\"\246\001" +
+      "\n\023LoadBalanceResponse\022B\n\020initial_respons" +
+      "e\030\001 \001(\0132&.grpc.lb.v1.InitialLoadBalanceR" +
+      "esponseH\000\022-\n\013server_list\030\002 \001(\0132\026.grpc.lb" +
+      ".v1.ServerListH\000B\034\n\032load_balance_respons",
+      "e_type\"}\n\032InitialLoadBalanceResponse\022\036\n\026" +
+      "load_balancer_delegate\030\001 \001(\t\022?\n\034client_s" +
+      "tats_report_interval\030\002 \001(\0132\031.google.prot" +
+      "obuf.Duration\"i\n\nServerList\022#\n\007servers\030\001" +
+      " \003(\0132\022.grpc.lb.v1.Server\0226\n\023expiration_i" +
+      "nterval\030\003 \001(\0132\031.google.protobuf.Duration" +
+      "\"\207\001\n\006Server\022\022\n\nip_address\030\001 \001(\014\022\014\n\004port\030" +
+      "\002 \001(\005\022\032\n\022load_balance_token\030\003 \001(\t\022\036\n\026dro" +
+      "p_for_rate_limiting\030\004 \001(\010\022\037\n\027drop_for_lo" +
+      "ad_balancing\030\005 \001(\0102b\n\014LoadBalancer\022R\n\013Ba",
+      "lanceLoad\022\036.grpc.lb.v1.LoadBalanceReques" +
+      "t\032\037.grpc.lb.v1.LoadBalanceResponse(\0010\001B%" +
+      "\n\016io.grpc.grpclbB\021LoadBalancerProtoP\001b\006p" +
+      "roto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -97,6 +105,7 @@ public final class LoadBalancerProto {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
           com.google.protobuf.DurationProto.getDescriptor(),
+          com.google.protobuf.TimestampProto.getDescriptor(),
         }, assigner);
     internal_static_grpc_lb_v1_LoadBalanceRequest_descriptor =
       getDescriptor().getMessageTypes().get(0);
@@ -115,7 +124,7 @@ public final class LoadBalancerProto {
     internal_static_grpc_lb_v1_ClientStats_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_lb_v1_ClientStats_descriptor,
-        new java.lang.String[] { "TotalRequests", "ClientRpcErrors", "DroppedRequests", });
+        new java.lang.String[] { "Timestamp", "NumCallsStarted", "NumCallsFinished", "NumCallsFinishedWithDropForRateLimiting", "NumCallsFinishedWithDropForLoadBalancing", "NumCallsFinishedWithClientFailedToSend", "NumCallsFinishedKnownReceived", });
     internal_static_grpc_lb_v1_LoadBalanceResponse_descriptor =
       getDescriptor().getMessageTypes().get(3);
     internal_static_grpc_lb_v1_LoadBalanceResponse_fieldAccessorTable = new
@@ -139,8 +148,9 @@ public final class LoadBalancerProto {
     internal_static_grpc_lb_v1_Server_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_lb_v1_Server_descriptor,
-        new java.lang.String[] { "IpAddress", "Port", "LoadBalanceToken", "DropRequest", });
+        new java.lang.String[] { "IpAddress", "Port", "LoadBalanceToken", "DropForRateLimiting", "DropForLoadBalancing", });
     com.google.protobuf.DurationProto.getDescriptor();
+    com.google.protobuf.TimestampProto.getDescriptor();
   }
 
   // @@protoc_insertion_point(outer_class_scope)

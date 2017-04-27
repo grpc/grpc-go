@@ -12,7 +12,8 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * This is an application layer redirect that indicates the client should use
    * the specified server for load balancing. When this field is non-empty in
    * the response, the client should open a separate connection to the
-   * load_balancer_delegate and call the BalanceLoad method.
+   * load_balancer_delegate and call the BalanceLoad method. Its length should
+   * be less than 64 bytes.
    * </pre>
    *
    * <code>string load_balancer_delegate = 1;</code>
@@ -23,7 +24,8 @@ public interface InitialLoadBalanceResponseOrBuilder extends
    * This is an application layer redirect that indicates the client should use
    * the specified server for load balancing. When this field is non-empty in
    * the response, the client should open a separate connection to the
-   * load_balancer_delegate and call the BalanceLoad method.
+   * load_balancer_delegate and call the BalanceLoad method. Its length should
+   * be less than 64 bytes.
    * </pre>
    *
    * <code>string load_balancer_delegate = 1;</code>

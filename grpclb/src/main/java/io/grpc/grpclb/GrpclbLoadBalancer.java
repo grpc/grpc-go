@@ -42,6 +42,7 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import com.google.protobuf.util.Durations;
 import io.grpc.Attributes;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
@@ -51,6 +52,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.internal.LogId;
+import io.grpc.internal.ObjectPool;
 import io.grpc.internal.WithLogId;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
@@ -59,10 +61,14 @@ import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -78,6 +84,21 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private static final Logger logger = Logger.getLogger(GrpclbLoadBalancer.class.getName());
 
   @VisibleForTesting
+  static final Map<DropType, PickResult> DROP_PICK_RESULTS;
+
+  static {
+    EnumMap<DropType, PickResult> map = new EnumMap<DropType, PickResult>(DropType.class);
+    for (DropType dropType : DropType.values()) {
+      map.put(
+          dropType,
+          PickResult.withError(
+              Status.UNAVAILABLE.withDescription(
+                  "Dropped as requested by balancer. Type: " + dropType)));
+    }
+    DROP_PICK_RESULTS = Collections.unmodifiableMap(map);
+  }
+
+  @VisibleForTesting
   static final SubchannelPicker BUFFER_PICKER = new SubchannelPicker() {
       @Override
       public PickResult pickSubchannel(PickSubchannelArgs args) {
@@ -91,19 +112,18 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private final Helper helper;
   private final Factory pickFirstBalancerFactory;
   private final Factory roundRobinBalancerFactory;
+  private final ObjectPool<ScheduledExecutorService> timerServicePool;
+  private final TimeProvider time;
 
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
-
-  @VisibleForTesting
-  static final RoundRobinEntry DROP_ENTRY =
-      new RoundRobinEntry(Status.UNAVAILABLE.withDescription("Drop requested by balancer"));
 
   // All mutable states in this class are mutated ONLY from Channel Executor
 
   ///////////////////////////////////////////////////////////////////////////////
   // General states.
   ///////////////////////////////////////////////////////////////////////////////
+  private ScheduledExecutorService timerService;
 
   // If not null, all work is delegated to it.
   @Nullable
@@ -119,23 +139,26 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private LbAddressGroup lbAddressGroup;
   @Nullable
   private ManagedChannel lbCommChannel;
+
   @Nullable
-  private LbResponseObserver lbResponseObserver;
-  @Nullable
-  private StreamObserver<LoadBalanceRequest> lbRequestWriter;
+  private LbStream lbStream;
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Collections.emptyMap();
 
   private List<RoundRobinEntry> roundRobinList = Collections.emptyList();
   private SubchannelPicker currentPicker = BUFFER_PICKER;
 
   GrpclbLoadBalancer(Helper helper, Factory pickFirstBalancerFactory,
-      Factory roundRobinBalancerFactory) {
+      Factory roundRobinBalancerFactory, ObjectPool<ScheduledExecutorService> timerServicePool,
+      TimeProvider time) {
     this.helper = checkNotNull(helper, "helper");
     this.serviceName = checkNotNull(helper.getAuthority(), "helper returns null authority");
     this.pickFirstBalancerFactory =
         checkNotNull(pickFirstBalancerFactory, "pickFirstBalancerFactory");
     this.roundRobinBalancerFactory =
         checkNotNull(roundRobinBalancerFactory, "roundRobinBalancerFactory");
+    this.timerServicePool = checkNotNull(timerServicePool, "timerServicePool");
+    this.timerService = checkNotNull(timerServicePool.getObject(), "timerService");
+    this.time = checkNotNull(time, "time provider");
   }
 
   @Override
@@ -240,13 +263,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       lbCommChannel.shutdown();
       lbCommChannel = null;
     }
-    if (lbRequestWriter != null) {
-      lbRequestWriter.onCompleted();
-      lbRequestWriter = null;
-    }
-    if (lbResponseObserver != null) {
-      lbResponseObserver.dismissed = true;
-      lbResponseObserver = null;
+    if (lbStream != null) {
+      lbStream.close(null);
     }
   }
 
@@ -258,17 +276,19 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   }
 
   private void startLbRpc() {
-    checkState(lbRequestWriter == null, "previous lbRequestWriter has not been cleared yet");
-    checkState(lbResponseObserver == null, "previous lbResponseObserver has not been cleared yet");
+    checkState(lbStream == null, "previous lbStream has not been cleared yet");
     LoadBalancerGrpc.LoadBalancerStub stub = LoadBalancerGrpc.newStub(lbCommChannel);
-    lbResponseObserver = new LbResponseObserver();
-    lbRequestWriter = stub.withWaitForReady().balanceLoad(lbResponseObserver);
+    lbStream = new LbStream(stub);
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
             .setName(serviceName).build())
         .build();
-    lbRequestWriter.onNext(initRequest);
+    try {
+      lbStream.lbRequestWriter.onNext(initRequest);
+    } catch (Exception e) {
+      lbStream.close(e);
+    }
   }
 
   private void shutdownDelegate() {
@@ -286,6 +306,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       subchannel.shutdown();
     }
     subchannels = Collections.emptyMap();
+    timerService = timerServicePool.returnObject(timerService);
   }
 
   private void handleGrpclbError(Status status) {
@@ -305,8 +326,44 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     }
   }
 
-  private class LbResponseObserver implements StreamObserver<LoadBalanceResponse> {
-    boolean dismissed;
+  @VisibleForTesting
+  @Nullable
+  GrpclbClientLoadRecorder getLoadRecorder() {
+    if (lbStream == null) {
+      return null;
+    }
+    return lbStream.loadRecorder;
+  }
+
+  private class LbStream implements StreamObserver<LoadBalanceResponse> {
+    final StreamObserver<LoadBalanceRequest> lbRequestWriter;
+    final GrpclbClientLoadRecorder loadRecorder;
+
+    final Runnable loadReportRunnable = new Runnable() {
+        @Override
+        public void run() {
+          helper.runSerialized(new Runnable() {
+              @Override
+              public void run() {
+                loadReportTask = null;
+                sendLoadReport();
+              }
+            });
+        }
+      };
+
+    // These fields are only accessed from helper.runSerialized()
+    boolean initialResponseReceived;
+    boolean closed;
+    long loadReportIntervalMillis = -1;
+    ScheduledFuture<?> loadReportTask;
+
+    LbStream(LoadBalancerGrpc.LoadBalancerStub stub) {
+      // Stats data only valid for current LbStream.  We do not carry over data from previous
+      // stream.
+      loadRecorder = new GrpclbClientLoadRecorder(time);
+      lbRequestWriter = stub.withWaitForReady().balanceLoad(this);
+    }
 
     @Override public void onNext(final LoadBalanceResponse response) {
       helper.runSerialized(new Runnable() {
@@ -317,13 +374,72 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
         });
     }
 
+    @Override public void onError(final Throwable error) {
+      helper.runSerialized(new Runnable() {
+          @Override
+          public void run() {
+            handleStreamClosed(Status.fromThrowable(error)
+                .augmentDescription("Stream to GRPCLB LoadBalancer had an error"));
+          }
+        });
+    }
+
+    @Override public void onCompleted() {
+      helper.runSerialized(new Runnable() {
+          @Override
+          public void run() {
+            handleStreamClosed(
+                Status.UNAVAILABLE.withDescription("Stream to GRPCLB LoadBalancer was closed"));
+          }
+        });
+    }
+
+    // Following methods must be run in helper.runSerialized()
+
+    private void sendLoadReport() {
+      if (closed) {
+        return;
+      }
+      ClientStats stats = loadRecorder.generateLoadReport();
+      // TODO(zhangkun83): flow control?
+      try {
+        lbRequestWriter.onNext(LoadBalanceRequest.newBuilder().setClientStats(stats).build());
+        scheduleNextLoadReport();
+      } catch (Exception e) {
+        close(e);
+      }
+    }
+
+    private void scheduleNextLoadReport() {
+      if (loadReportIntervalMillis > 0) {
+        loadReportTask = timerService.schedule(
+            loadReportRunnable, loadReportIntervalMillis, TimeUnit.MILLISECONDS);
+      }
+    }
+
     private void handleResponse(LoadBalanceResponse response) {
-      if (dismissed) {
+      if (closed) {
         return;
       }
       logger.log(Level.FINE, "[{0}] Got an LB response: {1}", new Object[] {logId, response});
-      // TODO(zhangkun83): make use of initialResponse
-      // InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
+
+      InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
+      if (initialResponse != InitialLoadBalanceResponse.getDefaultInstance()) {
+        if (initialResponseReceived) {
+          logger.log(
+              Level.WARNING,
+              "[{0}] : Ignored abundant initial response: {1}",
+              new Object[] {logId, initialResponse});
+        } else {
+          initialResponseReceived = true;
+          loadReportIntervalMillis =
+              Durations.toMillis(initialResponse.getClientStatsReportInterval());
+          scheduleNextLoadReport();
+        }
+        return;
+      }
+
+      // TODO(zhangkun83): handle delegate from initialResponse
       ServerList serverList = response.getServerList();
       HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
           new HashMap<EquivalentAddressGroup, Subchannel>();
@@ -331,8 +447,10 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       // TODO(zhangkun83): honor expiration_interval
       // Construct the new collections. Create new Subchannels when necessary.
       for (Server server : serverList.getServersList()) {
-        if (server.getDropRequest()) {
-          newRoundRobinList.add(DROP_ENTRY);
+        if (server.getDropForRateLimiting()) {
+          newRoundRobinList.add(new RoundRobinEntry(DropType.RATE_LIMITING, loadRecorder));
+        } else if (server.getDropForLoadBalancing()) {
+          newRoundRobinList.add(new RoundRobinEntry(DropType.LOAD_BALANCING, loadRecorder));
         } else {
           InetSocketAddress address;
           try {
@@ -358,7 +476,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
             }
             newSubchannelMap.put(eag, subchannel);
           }
-          newRoundRobinList.add(new RoundRobinEntry(subchannel, token));
+          newRoundRobinList.add(new RoundRobinEntry(subchannel, loadRecorder, token));
         }
       }
       // Close Subchannels whose addresses have been delisted
@@ -374,34 +492,41 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       maybeUpdatePicker();
     }
 
-    @Override public void onError(final Throwable error) {
-      helper.runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            handleStreamClosed(Status.fromThrowable(error)
-                .augmentDescription("Stream to GRPCLB LoadBalancer had an error"));
-          }
-        });
-    }
-
-    @Override public void onCompleted() {
-      helper.runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            handleStreamClosed(Status.UNAVAILABLE.augmentDescription(
-                    "Stream to GRPCLB LoadBalancer was closed"));
-          }
-        });
-    }
-
     private void handleStreamClosed(Status status) {
-      if (dismissed) {
+      if (closed) {
         return;
       }
-      lbRequestWriter = null;
-      lbResponseObserver = null;
+      closed = true;
+      cleanUp();
       handleGrpclbError(status);
       startLbRpc();
+    }
+
+    void close(@Nullable Exception error) {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      cleanUp();
+      try {
+        if (error == null) {
+          lbRequestWriter.onCompleted();
+        } else {
+          lbRequestWriter.onError(error);
+        }
+      } catch (Exception e) {
+        // Don't care
+      }
+    }
+
+    private void cleanUp() {
+      if (loadReportTask != null) {
+        loadReportTask.cancel(false);
+        loadReportTask = null;
+      }
+      if (lbStream == this) {
+        lbStream = null;
+      }
     }
   }
 
@@ -412,6 +537,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private void maybeUpdatePicker() {
     List<RoundRobinEntry> resultList = new ArrayList<RoundRobinEntry>();
     Status error = null;
+    // TODO(zhangkun83): if roundRobinList contains at least one address, but none of them are
+    // ready, maybe we should always return BUFFER_PICKER, no matter if there are drop entries or
+    // not.
     for (RoundRobinEntry entry : roundRobinList) {
       Subchannel subchannel = entry.result.getSubchannel();
       if (subchannel != null) {
@@ -523,23 +651,32 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @VisibleForTesting
   static final class RoundRobinEntry {
     final PickResult result;
+    final GrpclbClientLoadRecorder loadRecorder;
     @Nullable
     private final String token;
+    @Nullable
+    private final DropType dropType;
 
     /**
      * A non-drop result.
      */
-    RoundRobinEntry(Subchannel subchannel, String token) {
-      this.result = PickResult.withSubchannel(subchannel);
+    RoundRobinEntry(Subchannel subchannel, GrpclbClientLoadRecorder loadRecorder, String token) {
+      this.loadRecorder = checkNotNull(loadRecorder, "loadRecorder");
+      this.result = PickResult.withSubchannel(subchannel, loadRecorder);
       this.token = token;
+      this.dropType = null;
     }
 
     /**
      * A drop result.
      */
-    RoundRobinEntry(Status dropStatus) {
-      this.result = PickResult.withError(dropStatus);
+    RoundRobinEntry(DropType dropType, GrpclbClientLoadRecorder loadRecorder) {
+      this.loadRecorder = checkNotNull(loadRecorder, "loadRecorder");
+      // We re-use the status for each DropType to make it easy to test, because Status class
+      // intentionally doesn't implement equals().
+      this.result = DROP_PICK_RESULTS.get(dropType);
       this.token = null;
+      this.dropType = dropType;
     }
 
     void updateHeaders(Metadata headers) {
@@ -554,12 +691,13 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       return MoreObjects.toStringHelper(this)
           .add("result", result)
           .add("token", token)
+          .add("dropType", dropType)
           .toString();
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(result, token);
+      return Objects.hashCode(result, token, dropType);
     }
 
     @Override
@@ -568,7 +706,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
         return false;
       }
       RoundRobinEntry that = (RoundRobinEntry) other;
-      return Objects.equal(result, that.result) && Objects.equal(token, that.token);
+      return Objects.equal(result, that.result) && Objects.equal(token, that.token)
+          && Objects.equal(dropType, that.dropType);
     }
   }
 
@@ -579,7 +718,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
 
     RoundRobinPicker(List<RoundRobinEntry> resultList) {
       checkArgument(!resultList.isEmpty(), "resultList is empty");
-      list = resultList;
+      this.list = checkNotNull(resultList, "resultList");
     }
 
     @Override
@@ -591,6 +730,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
           index = 0;
         }
         result.updateHeaders(args.getHeaders());
+        if (result.dropType != null) {
+          result.loadRecorder.recordDroppedRequest(result.dropType);
+        }
         return result.result;
       }
     }

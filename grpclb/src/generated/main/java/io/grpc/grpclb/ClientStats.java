@@ -6,7 +6,7 @@ package io.grpc.grpclb;
 /**
  * <pre>
  * Contains client level statistics that are useful to load balancing. Each
- * count should be reset to zero after reporting the stats.
+ * count except the timestamp should be reset to zero after reporting the stats.
  * </pre>
  *
  * Protobuf type {@code grpc.lb.v1.ClientStats}
@@ -20,9 +20,12 @@ public  final class ClientStats extends
     super(builder);
   }
   private ClientStats() {
-    totalRequests_ = 0L;
-    clientRpcErrors_ = 0L;
-    droppedRequests_ = 0L;
+    numCallsStarted_ = 0L;
+    numCallsFinished_ = 0L;
+    numCallsFinishedWithDropForRateLimiting_ = 0L;
+    numCallsFinishedWithDropForLoadBalancing_ = 0L;
+    numCallsFinishedWithClientFailedToSend_ = 0L;
+    numCallsFinishedKnownReceived_ = 0L;
   }
 
   @java.lang.Override
@@ -50,19 +53,47 @@ public  final class ClientStats extends
             }
             break;
           }
-          case 8: {
+          case 10: {
+            com.google.protobuf.Timestamp.Builder subBuilder = null;
+            if (timestamp_ != null) {
+              subBuilder = timestamp_.toBuilder();
+            }
+            timestamp_ = input.readMessage(com.google.protobuf.Timestamp.parser(), extensionRegistry);
+            if (subBuilder != null) {
+              subBuilder.mergeFrom(timestamp_);
+              timestamp_ = subBuilder.buildPartial();
+            }
 
-            totalRequests_ = input.readInt64();
             break;
           }
           case 16: {
 
-            clientRpcErrors_ = input.readInt64();
+            numCallsStarted_ = input.readInt64();
             break;
           }
           case 24: {
 
-            droppedRequests_ = input.readInt64();
+            numCallsFinished_ = input.readInt64();
+            break;
+          }
+          case 32: {
+
+            numCallsFinishedWithDropForRateLimiting_ = input.readInt64();
+            break;
+          }
+          case 40: {
+
+            numCallsFinishedWithDropForLoadBalancing_ = input.readInt64();
+            break;
+          }
+          case 48: {
+
+            numCallsFinishedWithClientFailedToSend_ = input.readInt64();
+            break;
+          }
+          case 56: {
+
+            numCallsFinishedKnownReceived_ = input.readInt64();
             break;
           }
         }
@@ -88,43 +119,118 @@ public  final class ClientStats extends
             io.grpc.grpclb.ClientStats.class, io.grpc.grpclb.ClientStats.Builder.class);
   }
 
-  public static final int TOTAL_REQUESTS_FIELD_NUMBER = 1;
-  private long totalRequests_;
+  public static final int TIMESTAMP_FIELD_NUMBER = 1;
+  private com.google.protobuf.Timestamp timestamp_;
   /**
    * <pre>
-   * The total number of requests sent by the client since the last report.
+   * The timestamp of generating the report.
    * </pre>
    *
-   * <code>int64 total_requests = 1;</code>
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
    */
-  public long getTotalRequests() {
-    return totalRequests_;
+  public boolean hasTimestamp() {
+    return timestamp_ != null;
+  }
+  /**
+   * <pre>
+   * The timestamp of generating the report.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+   */
+  public com.google.protobuf.Timestamp getTimestamp() {
+    return timestamp_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : timestamp_;
+  }
+  /**
+   * <pre>
+   * The timestamp of generating the report.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+   */
+  public com.google.protobuf.TimestampOrBuilder getTimestampOrBuilder() {
+    return getTimestamp();
   }
 
-  public static final int CLIENT_RPC_ERRORS_FIELD_NUMBER = 2;
-  private long clientRpcErrors_;
+  public static final int NUM_CALLS_STARTED_FIELD_NUMBER = 2;
+  private long numCallsStarted_;
   /**
    * <pre>
-   * The number of client rpc errors since the last report.
+   * The total number of RPCs that started.
    * </pre>
    *
-   * <code>int64 client_rpc_errors = 2;</code>
+   * <code>int64 num_calls_started = 2;</code>
    */
-  public long getClientRpcErrors() {
-    return clientRpcErrors_;
+  public long getNumCallsStarted() {
+    return numCallsStarted_;
   }
 
-  public static final int DROPPED_REQUESTS_FIELD_NUMBER = 3;
-  private long droppedRequests_;
+  public static final int NUM_CALLS_FINISHED_FIELD_NUMBER = 3;
+  private long numCallsFinished_;
   /**
    * <pre>
-   * The number of dropped requests since the last report.
+   * The total number of RPCs that finished.
    * </pre>
    *
-   * <code>int64 dropped_requests = 3;</code>
+   * <code>int64 num_calls_finished = 3;</code>
    */
-  public long getDroppedRequests() {
-    return droppedRequests_;
+  public long getNumCallsFinished() {
+    return numCallsFinished_;
+  }
+
+  public static final int NUM_CALLS_FINISHED_WITH_DROP_FOR_RATE_LIMITING_FIELD_NUMBER = 4;
+  private long numCallsFinishedWithDropForRateLimiting_;
+  /**
+   * <pre>
+   * The total number of RPCs that were dropped by the client because of rate
+   * limiting.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
+   */
+  public long getNumCallsFinishedWithDropForRateLimiting() {
+    return numCallsFinishedWithDropForRateLimiting_;
+  }
+
+  public static final int NUM_CALLS_FINISHED_WITH_DROP_FOR_LOAD_BALANCING_FIELD_NUMBER = 5;
+  private long numCallsFinishedWithDropForLoadBalancing_;
+  /**
+   * <pre>
+   * The total number of RPCs that were dropped by the client because of load
+   * balancing.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
+   */
+  public long getNumCallsFinishedWithDropForLoadBalancing() {
+    return numCallsFinishedWithDropForLoadBalancing_;
+  }
+
+  public static final int NUM_CALLS_FINISHED_WITH_CLIENT_FAILED_TO_SEND_FIELD_NUMBER = 6;
+  private long numCallsFinishedWithClientFailedToSend_;
+  /**
+   * <pre>
+   * The total number of RPCs that failed to reach a server except dropped RPCs.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_client_failed_to_send = 6;</code>
+   */
+  public long getNumCallsFinishedWithClientFailedToSend() {
+    return numCallsFinishedWithClientFailedToSend_;
+  }
+
+  public static final int NUM_CALLS_FINISHED_KNOWN_RECEIVED_FIELD_NUMBER = 7;
+  private long numCallsFinishedKnownReceived_;
+  /**
+   * <pre>
+   * The total number of RPCs that finished and are known to have been received
+   * by a server.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_known_received = 7;</code>
+   */
+  public long getNumCallsFinishedKnownReceived() {
+    return numCallsFinishedKnownReceived_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -139,14 +245,26 @@ public  final class ClientStats extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (totalRequests_ != 0L) {
-      output.writeInt64(1, totalRequests_);
+    if (timestamp_ != null) {
+      output.writeMessage(1, getTimestamp());
     }
-    if (clientRpcErrors_ != 0L) {
-      output.writeInt64(2, clientRpcErrors_);
+    if (numCallsStarted_ != 0L) {
+      output.writeInt64(2, numCallsStarted_);
     }
-    if (droppedRequests_ != 0L) {
-      output.writeInt64(3, droppedRequests_);
+    if (numCallsFinished_ != 0L) {
+      output.writeInt64(3, numCallsFinished_);
+    }
+    if (numCallsFinishedWithDropForRateLimiting_ != 0L) {
+      output.writeInt64(4, numCallsFinishedWithDropForRateLimiting_);
+    }
+    if (numCallsFinishedWithDropForLoadBalancing_ != 0L) {
+      output.writeInt64(5, numCallsFinishedWithDropForLoadBalancing_);
+    }
+    if (numCallsFinishedWithClientFailedToSend_ != 0L) {
+      output.writeInt64(6, numCallsFinishedWithClientFailedToSend_);
+    }
+    if (numCallsFinishedKnownReceived_ != 0L) {
+      output.writeInt64(7, numCallsFinishedKnownReceived_);
     }
   }
 
@@ -155,17 +273,33 @@ public  final class ClientStats extends
     if (size != -1) return size;
 
     size = 0;
-    if (totalRequests_ != 0L) {
+    if (timestamp_ != null) {
       size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(1, totalRequests_);
+        .computeMessageSize(1, getTimestamp());
     }
-    if (clientRpcErrors_ != 0L) {
+    if (numCallsStarted_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(2, clientRpcErrors_);
+        .computeInt64Size(2, numCallsStarted_);
     }
-    if (droppedRequests_ != 0L) {
+    if (numCallsFinished_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(3, droppedRequests_);
+        .computeInt64Size(3, numCallsFinished_);
+    }
+    if (numCallsFinishedWithDropForRateLimiting_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(4, numCallsFinishedWithDropForRateLimiting_);
+    }
+    if (numCallsFinishedWithDropForLoadBalancing_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(5, numCallsFinishedWithDropForLoadBalancing_);
+    }
+    if (numCallsFinishedWithClientFailedToSend_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(6, numCallsFinishedWithClientFailedToSend_);
+    }
+    if (numCallsFinishedKnownReceived_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeInt64Size(7, numCallsFinishedKnownReceived_);
     }
     memoizedSize = size;
     return size;
@@ -183,12 +317,23 @@ public  final class ClientStats extends
     io.grpc.grpclb.ClientStats other = (io.grpc.grpclb.ClientStats) obj;
 
     boolean result = true;
-    result = result && (getTotalRequests()
-        == other.getTotalRequests());
-    result = result && (getClientRpcErrors()
-        == other.getClientRpcErrors());
-    result = result && (getDroppedRequests()
-        == other.getDroppedRequests());
+    result = result && (hasTimestamp() == other.hasTimestamp());
+    if (hasTimestamp()) {
+      result = result && getTimestamp()
+          .equals(other.getTimestamp());
+    }
+    result = result && (getNumCallsStarted()
+        == other.getNumCallsStarted());
+    result = result && (getNumCallsFinished()
+        == other.getNumCallsFinished());
+    result = result && (getNumCallsFinishedWithDropForRateLimiting()
+        == other.getNumCallsFinishedWithDropForRateLimiting());
+    result = result && (getNumCallsFinishedWithDropForLoadBalancing()
+        == other.getNumCallsFinishedWithDropForLoadBalancing());
+    result = result && (getNumCallsFinishedWithClientFailedToSend()
+        == other.getNumCallsFinishedWithClientFailedToSend());
+    result = result && (getNumCallsFinishedKnownReceived()
+        == other.getNumCallsFinishedKnownReceived());
     return result;
   }
 
@@ -199,15 +344,28 @@ public  final class ClientStats extends
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + TOTAL_REQUESTS_FIELD_NUMBER;
+    if (hasTimestamp()) {
+      hash = (37 * hash) + TIMESTAMP_FIELD_NUMBER;
+      hash = (53 * hash) + getTimestamp().hashCode();
+    }
+    hash = (37 * hash) + NUM_CALLS_STARTED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getTotalRequests());
-    hash = (37 * hash) + CLIENT_RPC_ERRORS_FIELD_NUMBER;
+        getNumCallsStarted());
+    hash = (37 * hash) + NUM_CALLS_FINISHED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getClientRpcErrors());
-    hash = (37 * hash) + DROPPED_REQUESTS_FIELD_NUMBER;
+        getNumCallsFinished());
+    hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_DROP_FOR_RATE_LIMITING_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getDroppedRequests());
+        getNumCallsFinishedWithDropForRateLimiting());
+    hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_DROP_FOR_LOAD_BALANCING_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getNumCallsFinishedWithDropForLoadBalancing());
+    hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_CLIENT_FAILED_TO_SEND_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getNumCallsFinishedWithClientFailedToSend());
+    hash = (37 * hash) + NUM_CALLS_FINISHED_KNOWN_RECEIVED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getNumCallsFinishedKnownReceived());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -293,7 +451,7 @@ public  final class ClientStats extends
   /**
    * <pre>
    * Contains client level statistics that are useful to load balancing. Each
-   * count should be reset to zero after reporting the stats.
+   * count except the timestamp should be reset to zero after reporting the stats.
    * </pre>
    *
    * Protobuf type {@code grpc.lb.v1.ClientStats}
@@ -331,11 +489,23 @@ public  final class ClientStats extends
     }
     public Builder clear() {
       super.clear();
-      totalRequests_ = 0L;
+      if (timestampBuilder_ == null) {
+        timestamp_ = null;
+      } else {
+        timestamp_ = null;
+        timestampBuilder_ = null;
+      }
+      numCallsStarted_ = 0L;
 
-      clientRpcErrors_ = 0L;
+      numCallsFinished_ = 0L;
 
-      droppedRequests_ = 0L;
+      numCallsFinishedWithDropForRateLimiting_ = 0L;
+
+      numCallsFinishedWithDropForLoadBalancing_ = 0L;
+
+      numCallsFinishedWithClientFailedToSend_ = 0L;
+
+      numCallsFinishedKnownReceived_ = 0L;
 
       return this;
     }
@@ -359,9 +529,17 @@ public  final class ClientStats extends
 
     public io.grpc.grpclb.ClientStats buildPartial() {
       io.grpc.grpclb.ClientStats result = new io.grpc.grpclb.ClientStats(this);
-      result.totalRequests_ = totalRequests_;
-      result.clientRpcErrors_ = clientRpcErrors_;
-      result.droppedRequests_ = droppedRequests_;
+      if (timestampBuilder_ == null) {
+        result.timestamp_ = timestamp_;
+      } else {
+        result.timestamp_ = timestampBuilder_.build();
+      }
+      result.numCallsStarted_ = numCallsStarted_;
+      result.numCallsFinished_ = numCallsFinished_;
+      result.numCallsFinishedWithDropForRateLimiting_ = numCallsFinishedWithDropForRateLimiting_;
+      result.numCallsFinishedWithDropForLoadBalancing_ = numCallsFinishedWithDropForLoadBalancing_;
+      result.numCallsFinishedWithClientFailedToSend_ = numCallsFinishedWithClientFailedToSend_;
+      result.numCallsFinishedKnownReceived_ = numCallsFinishedKnownReceived_;
       onBuilt();
       return result;
     }
@@ -403,14 +581,26 @@ public  final class ClientStats extends
 
     public Builder mergeFrom(io.grpc.grpclb.ClientStats other) {
       if (other == io.grpc.grpclb.ClientStats.getDefaultInstance()) return this;
-      if (other.getTotalRequests() != 0L) {
-        setTotalRequests(other.getTotalRequests());
+      if (other.hasTimestamp()) {
+        mergeTimestamp(other.getTimestamp());
       }
-      if (other.getClientRpcErrors() != 0L) {
-        setClientRpcErrors(other.getClientRpcErrors());
+      if (other.getNumCallsStarted() != 0L) {
+        setNumCallsStarted(other.getNumCallsStarted());
       }
-      if (other.getDroppedRequests() != 0L) {
-        setDroppedRequests(other.getDroppedRequests());
+      if (other.getNumCallsFinished() != 0L) {
+        setNumCallsFinished(other.getNumCallsFinished());
+      }
+      if (other.getNumCallsFinishedWithDropForRateLimiting() != 0L) {
+        setNumCallsFinishedWithDropForRateLimiting(other.getNumCallsFinishedWithDropForRateLimiting());
+      }
+      if (other.getNumCallsFinishedWithDropForLoadBalancing() != 0L) {
+        setNumCallsFinishedWithDropForLoadBalancing(other.getNumCallsFinishedWithDropForLoadBalancing());
+      }
+      if (other.getNumCallsFinishedWithClientFailedToSend() != 0L) {
+        setNumCallsFinishedWithClientFailedToSend(other.getNumCallsFinishedWithClientFailedToSend());
+      }
+      if (other.getNumCallsFinishedKnownReceived() != 0L) {
+        setNumCallsFinishedKnownReceived(other.getNumCallsFinishedKnownReceived());
       }
       onChanged();
       return this;
@@ -438,116 +628,392 @@ public  final class ClientStats extends
       return this;
     }
 
-    private long totalRequests_ ;
+    private com.google.protobuf.Timestamp timestamp_ = null;
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> timestampBuilder_;
     /**
      * <pre>
-     * The total number of requests sent by the client since the last report.
+     * The timestamp of generating the report.
      * </pre>
      *
-     * <code>int64 total_requests = 1;</code>
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
      */
-    public long getTotalRequests() {
-      return totalRequests_;
+    public boolean hasTimestamp() {
+      return timestampBuilder_ != null || timestamp_ != null;
     }
     /**
      * <pre>
-     * The total number of requests sent by the client since the last report.
+     * The timestamp of generating the report.
      * </pre>
      *
-     * <code>int64 total_requests = 1;</code>
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
      */
-    public Builder setTotalRequests(long value) {
+    public com.google.protobuf.Timestamp getTimestamp() {
+      if (timestampBuilder_ == null) {
+        return timestamp_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : timestamp_;
+      } else {
+        return timestampBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public Builder setTimestamp(com.google.protobuf.Timestamp value) {
+      if (timestampBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        timestamp_ = value;
+        onChanged();
+      } else {
+        timestampBuilder_.setMessage(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public Builder setTimestamp(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      if (timestampBuilder_ == null) {
+        timestamp_ = builderForValue.build();
+        onChanged();
+      } else {
+        timestampBuilder_.setMessage(builderForValue.build());
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public Builder mergeTimestamp(com.google.protobuf.Timestamp value) {
+      if (timestampBuilder_ == null) {
+        if (timestamp_ != null) {
+          timestamp_ =
+            com.google.protobuf.Timestamp.newBuilder(timestamp_).mergeFrom(value).buildPartial();
+        } else {
+          timestamp_ = value;
+        }
+        onChanged();
+      } else {
+        timestampBuilder_.mergeFrom(value);
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public Builder clearTimestamp() {
+      if (timestampBuilder_ == null) {
+        timestamp_ = null;
+        onChanged();
+      } else {
+        timestamp_ = null;
+        timestampBuilder_ = null;
+      }
+
+      return this;
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public com.google.protobuf.Timestamp.Builder getTimestampBuilder() {
       
-      totalRequests_ = value;
+      onChanged();
+      return getTimestampFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    public com.google.protobuf.TimestampOrBuilder getTimestampOrBuilder() {
+      if (timestampBuilder_ != null) {
+        return timestampBuilder_.getMessageOrBuilder();
+      } else {
+        return timestamp_ == null ?
+            com.google.protobuf.Timestamp.getDefaultInstance() : timestamp_;
+      }
+    }
+    /**
+     * <pre>
+     * The timestamp of generating the report.
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+     */
+    private com.google.protobuf.SingleFieldBuilderV3<
+        com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder> 
+        getTimestampFieldBuilder() {
+      if (timestampBuilder_ == null) {
+        timestampBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+            com.google.protobuf.Timestamp, com.google.protobuf.Timestamp.Builder, com.google.protobuf.TimestampOrBuilder>(
+                getTimestamp(),
+                getParentForChildren(),
+                isClean());
+        timestamp_ = null;
+      }
+      return timestampBuilder_;
+    }
+
+    private long numCallsStarted_ ;
+    /**
+     * <pre>
+     * The total number of RPCs that started.
+     * </pre>
+     *
+     * <code>int64 num_calls_started = 2;</code>
+     */
+    public long getNumCallsStarted() {
+      return numCallsStarted_;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that started.
+     * </pre>
+     *
+     * <code>int64 num_calls_started = 2;</code>
+     */
+    public Builder setNumCallsStarted(long value) {
+      
+      numCallsStarted_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * The total number of requests sent by the client since the last report.
+     * The total number of RPCs that started.
      * </pre>
      *
-     * <code>int64 total_requests = 1;</code>
+     * <code>int64 num_calls_started = 2;</code>
      */
-    public Builder clearTotalRequests() {
+    public Builder clearNumCallsStarted() {
       
-      totalRequests_ = 0L;
+      numCallsStarted_ = 0L;
       onChanged();
       return this;
     }
 
-    private long clientRpcErrors_ ;
+    private long numCallsFinished_ ;
     /**
      * <pre>
-     * The number of client rpc errors since the last report.
+     * The total number of RPCs that finished.
      * </pre>
      *
-     * <code>int64 client_rpc_errors = 2;</code>
+     * <code>int64 num_calls_finished = 3;</code>
      */
-    public long getClientRpcErrors() {
-      return clientRpcErrors_;
+    public long getNumCallsFinished() {
+      return numCallsFinished_;
     }
     /**
      * <pre>
-     * The number of client rpc errors since the last report.
+     * The total number of RPCs that finished.
      * </pre>
      *
-     * <code>int64 client_rpc_errors = 2;</code>
+     * <code>int64 num_calls_finished = 3;</code>
      */
-    public Builder setClientRpcErrors(long value) {
+    public Builder setNumCallsFinished(long value) {
       
-      clientRpcErrors_ = value;
+      numCallsFinished_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * The number of client rpc errors since the last report.
+     * The total number of RPCs that finished.
      * </pre>
      *
-     * <code>int64 client_rpc_errors = 2;</code>
+     * <code>int64 num_calls_finished = 3;</code>
      */
-    public Builder clearClientRpcErrors() {
+    public Builder clearNumCallsFinished() {
       
-      clientRpcErrors_ = 0L;
+      numCallsFinished_ = 0L;
       onChanged();
       return this;
     }
 
-    private long droppedRequests_ ;
+    private long numCallsFinishedWithDropForRateLimiting_ ;
     /**
      * <pre>
-     * The number of dropped requests since the last report.
+     * The total number of RPCs that were dropped by the client because of rate
+     * limiting.
      * </pre>
      *
-     * <code>int64 dropped_requests = 3;</code>
+     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
      */
-    public long getDroppedRequests() {
-      return droppedRequests_;
+    public long getNumCallsFinishedWithDropForRateLimiting() {
+      return numCallsFinishedWithDropForRateLimiting_;
     }
     /**
      * <pre>
-     * The number of dropped requests since the last report.
+     * The total number of RPCs that were dropped by the client because of rate
+     * limiting.
      * </pre>
      *
-     * <code>int64 dropped_requests = 3;</code>
+     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
      */
-    public Builder setDroppedRequests(long value) {
+    public Builder setNumCallsFinishedWithDropForRateLimiting(long value) {
       
-      droppedRequests_ = value;
+      numCallsFinishedWithDropForRateLimiting_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * The number of dropped requests since the last report.
+     * The total number of RPCs that were dropped by the client because of rate
+     * limiting.
      * </pre>
      *
-     * <code>int64 dropped_requests = 3;</code>
+     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
      */
-    public Builder clearDroppedRequests() {
+    public Builder clearNumCallsFinishedWithDropForRateLimiting() {
       
-      droppedRequests_ = 0L;
+      numCallsFinishedWithDropForRateLimiting_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long numCallsFinishedWithDropForLoadBalancing_ ;
+    /**
+     * <pre>
+     * The total number of RPCs that were dropped by the client because of load
+     * balancing.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
+     */
+    public long getNumCallsFinishedWithDropForLoadBalancing() {
+      return numCallsFinishedWithDropForLoadBalancing_;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that were dropped by the client because of load
+     * balancing.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
+     */
+    public Builder setNumCallsFinishedWithDropForLoadBalancing(long value) {
+      
+      numCallsFinishedWithDropForLoadBalancing_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that were dropped by the client because of load
+     * balancing.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
+     */
+    public Builder clearNumCallsFinishedWithDropForLoadBalancing() {
+      
+      numCallsFinishedWithDropForLoadBalancing_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long numCallsFinishedWithClientFailedToSend_ ;
+    /**
+     * <pre>
+     * The total number of RPCs that failed to reach a server except dropped RPCs.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_client_failed_to_send = 6;</code>
+     */
+    public long getNumCallsFinishedWithClientFailedToSend() {
+      return numCallsFinishedWithClientFailedToSend_;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that failed to reach a server except dropped RPCs.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_client_failed_to_send = 6;</code>
+     */
+    public Builder setNumCallsFinishedWithClientFailedToSend(long value) {
+      
+      numCallsFinishedWithClientFailedToSend_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that failed to reach a server except dropped RPCs.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_with_client_failed_to_send = 6;</code>
+     */
+    public Builder clearNumCallsFinishedWithClientFailedToSend() {
+      
+      numCallsFinishedWithClientFailedToSend_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long numCallsFinishedKnownReceived_ ;
+    /**
+     * <pre>
+     * The total number of RPCs that finished and are known to have been received
+     * by a server.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_known_received = 7;</code>
+     */
+    public long getNumCallsFinishedKnownReceived() {
+      return numCallsFinishedKnownReceived_;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that finished and are known to have been received
+     * by a server.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_known_received = 7;</code>
+     */
+    public Builder setNumCallsFinishedKnownReceived(long value) {
+      
+      numCallsFinishedKnownReceived_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The total number of RPCs that finished and are known to have been received
+     * by a server.
+     * </pre>
+     *
+     * <code>int64 num_calls_finished_known_received = 7;</code>
+     */
+    public Builder clearNumCallsFinishedKnownReceived() {
+      
+      numCallsFinishedKnownReceived_ = 0L;
       onChanged();
       return this;
     }

@@ -34,6 +34,8 @@ package io.grpc.grpclb;
 import io.grpc.ExperimentalApi;
 import io.grpc.LoadBalancer;
 import io.grpc.PickFirstBalancerFactory;
+import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.SharedResourcePool;
 import io.grpc.util.RoundRobinLoadBalancerFactory;
 
 /**
@@ -45,19 +47,31 @@ import io.grpc.util.RoundRobinLoadBalancerFactory;
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1782")
 public class GrpclbLoadBalancerFactory extends LoadBalancer.Factory {
 
-  private static final GrpclbLoadBalancerFactory instance = new GrpclbLoadBalancerFactory();
+  private static final GrpclbLoadBalancerFactory INSTANCE = new GrpclbLoadBalancerFactory();
+  private static final TimeProvider TIME_PROVIDER = new TimeProvider() {
+      @Override
+      public long currentTimeMillis() {
+        return System.currentTimeMillis();
+      }
+    };
 
   private GrpclbLoadBalancerFactory() {
   }
 
   public static GrpclbLoadBalancerFactory getInstance() {
-    return instance;
+    return INSTANCE;
   }
 
   @Override
   public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
     return new GrpclbLoadBalancer(
         helper, PickFirstBalancerFactory.getInstance(),
-        RoundRobinLoadBalancerFactory.getInstance());
+        RoundRobinLoadBalancerFactory.getInstance(),
+        // TODO(zhangkun83): balancer sends load reporting RPCs from it, which also involves
+        // channelExecutor thus may also run other tasks queued in the channelExecutor.  If such
+        // load should not be on the shared scheduled executor, we should use a combination of the
+        // scheduled executor and the default app executor.
+        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
+        TIME_PROVIDER);
   }
 }

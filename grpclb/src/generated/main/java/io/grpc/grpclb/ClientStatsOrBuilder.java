@@ -9,28 +9,83 @@ public interface ClientStatsOrBuilder extends
 
   /**
    * <pre>
-   * The total number of requests sent by the client since the last report.
+   * The timestamp of generating the report.
    * </pre>
    *
-   * <code>int64 total_requests = 1;</code>
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
    */
-  long getTotalRequests();
+  boolean hasTimestamp();
+  /**
+   * <pre>
+   * The timestamp of generating the report.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+   */
+  com.google.protobuf.Timestamp getTimestamp();
+  /**
+   * <pre>
+   * The timestamp of generating the report.
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp timestamp = 1;</code>
+   */
+  com.google.protobuf.TimestampOrBuilder getTimestampOrBuilder();
 
   /**
    * <pre>
-   * The number of client rpc errors since the last report.
+   * The total number of RPCs that started.
    * </pre>
    *
-   * <code>int64 client_rpc_errors = 2;</code>
+   * <code>int64 num_calls_started = 2;</code>
    */
-  long getClientRpcErrors();
+  long getNumCallsStarted();
 
   /**
    * <pre>
-   * The number of dropped requests since the last report.
+   * The total number of RPCs that finished.
    * </pre>
    *
-   * <code>int64 dropped_requests = 3;</code>
+   * <code>int64 num_calls_finished = 3;</code>
    */
-  long getDroppedRequests();
+  long getNumCallsFinished();
+
+  /**
+   * <pre>
+   * The total number of RPCs that were dropped by the client because of rate
+   * limiting.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
+   */
+  long getNumCallsFinishedWithDropForRateLimiting();
+
+  /**
+   * <pre>
+   * The total number of RPCs that were dropped by the client because of load
+   * balancing.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
+   */
+  long getNumCallsFinishedWithDropForLoadBalancing();
+
+  /**
+   * <pre>
+   * The total number of RPCs that failed to reach a server except dropped RPCs.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_with_client_failed_to_send = 6;</code>
+   */
+  long getNumCallsFinishedWithClientFailedToSend();
+
+  /**
+   * <pre>
+   * The total number of RPCs that finished and are known to have been received
+   * by a server.
+   * </pre>
+   *
+   * <code>int64 num_calls_finished_known_received = 7;</code>
+   */
+  long getNumCallsFinishedKnownReceived();
 }

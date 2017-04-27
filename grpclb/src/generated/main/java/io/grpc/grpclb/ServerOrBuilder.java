@@ -53,10 +53,20 @@ public interface ServerOrBuilder extends
   /**
    * <pre>
    * Indicates whether this particular request should be dropped by the client
-   * when this server is chosen from the list.
+   * for rate limiting.
    * </pre>
    *
-   * <code>bool drop_request = 4;</code>
+   * <code>bool drop_for_rate_limiting = 4;</code>
    */
-  boolean getDropRequest();
+  boolean getDropForRateLimiting();
+
+  /**
+   * <pre>
+   * Indicates whether this particular request should be dropped by the client
+   * for load balancing.
+   * </pre>
+   *
+   * <code>bool drop_for_load_balancing = 5;</code>
+   */
+  boolean getDropForLoadBalancing();
 }

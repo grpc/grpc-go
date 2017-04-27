@@ -4,6 +4,13 @@
 package io.grpc.grpclb;
 
 /**
+ * <pre>
+ * Contains server information. When none of the [drop_for_*] fields are true,
+ * use the other fields. When drop_for_rate_limiting is true, ignore all other
+ * fields. Use drop_for_load_balancing only when it is true and
+ * drop_for_rate_limiting is false.
+ * </pre>
+ *
  * Protobuf type {@code grpc.lb.v1.Server}
  */
 public  final class Server extends
@@ -18,7 +25,8 @@ public  final class Server extends
     ipAddress_ = com.google.protobuf.ByteString.EMPTY;
     port_ = 0;
     loadBalanceToken_ = "";
-    dropRequest_ = false;
+    dropForRateLimiting_ = false;
+    dropForLoadBalancing_ = false;
   }
 
   @java.lang.Override
@@ -64,7 +72,12 @@ public  final class Server extends
           }
           case 32: {
 
-            dropRequest_ = input.readBool();
+            dropForRateLimiting_ = input.readBool();
+            break;
+          }
+          case 40: {
+
+            dropForLoadBalancing_ = input.readBool();
             break;
           }
         }
@@ -165,18 +178,32 @@ public  final class Server extends
     }
   }
 
-  public static final int DROP_REQUEST_FIELD_NUMBER = 4;
-  private boolean dropRequest_;
+  public static final int DROP_FOR_RATE_LIMITING_FIELD_NUMBER = 4;
+  private boolean dropForRateLimiting_;
   /**
    * <pre>
    * Indicates whether this particular request should be dropped by the client
-   * when this server is chosen from the list.
+   * for rate limiting.
    * </pre>
    *
-   * <code>bool drop_request = 4;</code>
+   * <code>bool drop_for_rate_limiting = 4;</code>
    */
-  public boolean getDropRequest() {
-    return dropRequest_;
+  public boolean getDropForRateLimiting() {
+    return dropForRateLimiting_;
+  }
+
+  public static final int DROP_FOR_LOAD_BALANCING_FIELD_NUMBER = 5;
+  private boolean dropForLoadBalancing_;
+  /**
+   * <pre>
+   * Indicates whether this particular request should be dropped by the client
+   * for load balancing.
+   * </pre>
+   *
+   * <code>bool drop_for_load_balancing = 5;</code>
+   */
+  public boolean getDropForLoadBalancing() {
+    return dropForLoadBalancing_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -200,8 +227,11 @@ public  final class Server extends
     if (!getLoadBalanceTokenBytes().isEmpty()) {
       com.google.protobuf.GeneratedMessageV3.writeString(output, 3, loadBalanceToken_);
     }
-    if (dropRequest_ != false) {
-      output.writeBool(4, dropRequest_);
+    if (dropForRateLimiting_ != false) {
+      output.writeBool(4, dropForRateLimiting_);
+    }
+    if (dropForLoadBalancing_ != false) {
+      output.writeBool(5, dropForLoadBalancing_);
     }
   }
 
@@ -221,9 +251,13 @@ public  final class Server extends
     if (!getLoadBalanceTokenBytes().isEmpty()) {
       size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, loadBalanceToken_);
     }
-    if (dropRequest_ != false) {
+    if (dropForRateLimiting_ != false) {
       size += com.google.protobuf.CodedOutputStream
-        .computeBoolSize(4, dropRequest_);
+        .computeBoolSize(4, dropForRateLimiting_);
+    }
+    if (dropForLoadBalancing_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(5, dropForLoadBalancing_);
     }
     memoizedSize = size;
     return size;
@@ -247,8 +281,10 @@ public  final class Server extends
         == other.getPort());
     result = result && getLoadBalanceToken()
         .equals(other.getLoadBalanceToken());
-    result = result && (getDropRequest()
-        == other.getDropRequest());
+    result = result && (getDropForRateLimiting()
+        == other.getDropForRateLimiting());
+    result = result && (getDropForLoadBalancing()
+        == other.getDropForLoadBalancing());
     return result;
   }
 
@@ -265,9 +301,12 @@ public  final class Server extends
     hash = (53 * hash) + getPort();
     hash = (37 * hash) + LOAD_BALANCE_TOKEN_FIELD_NUMBER;
     hash = (53 * hash) + getLoadBalanceToken().hashCode();
-    hash = (37 * hash) + DROP_REQUEST_FIELD_NUMBER;
+    hash = (37 * hash) + DROP_FOR_RATE_LIMITING_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-        getDropRequest());
+        getDropForRateLimiting());
+    hash = (37 * hash) + DROP_FOR_LOAD_BALANCING_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getDropForLoadBalancing());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -351,6 +390,13 @@ public  final class Server extends
     return builder;
   }
   /**
+   * <pre>
+   * Contains server information. When none of the [drop_for_*] fields are true,
+   * use the other fields. When drop_for_rate_limiting is true, ignore all other
+   * fields. Use drop_for_load_balancing only when it is true and
+   * drop_for_rate_limiting is false.
+   * </pre>
+   *
    * Protobuf type {@code grpc.lb.v1.Server}
    */
   public static final class Builder extends
@@ -392,7 +438,9 @@ public  final class Server extends
 
       loadBalanceToken_ = "";
 
-      dropRequest_ = false;
+      dropForRateLimiting_ = false;
+
+      dropForLoadBalancing_ = false;
 
       return this;
     }
@@ -419,7 +467,8 @@ public  final class Server extends
       result.ipAddress_ = ipAddress_;
       result.port_ = port_;
       result.loadBalanceToken_ = loadBalanceToken_;
-      result.dropRequest_ = dropRequest_;
+      result.dropForRateLimiting_ = dropForRateLimiting_;
+      result.dropForLoadBalancing_ = dropForLoadBalancing_;
       onBuilt();
       return result;
     }
@@ -471,8 +520,11 @@ public  final class Server extends
         loadBalanceToken_ = other.loadBalanceToken_;
         onChanged();
       }
-      if (other.getDropRequest() != false) {
-        setDropRequest(other.getDropRequest());
+      if (other.getDropForRateLimiting() != false) {
+        setDropForRateLimiting(other.getDropForRateLimiting());
+      }
+      if (other.getDropForLoadBalancing() != false) {
+        setDropForLoadBalancing(other.getDropForLoadBalancing());
       }
       onChanged();
       return this;
@@ -686,43 +738,84 @@ public  final class Server extends
       return this;
     }
 
-    private boolean dropRequest_ ;
+    private boolean dropForRateLimiting_ ;
     /**
      * <pre>
      * Indicates whether this particular request should be dropped by the client
-     * when this server is chosen from the list.
+     * for rate limiting.
      * </pre>
      *
-     * <code>bool drop_request = 4;</code>
+     * <code>bool drop_for_rate_limiting = 4;</code>
      */
-    public boolean getDropRequest() {
-      return dropRequest_;
+    public boolean getDropForRateLimiting() {
+      return dropForRateLimiting_;
     }
     /**
      * <pre>
      * Indicates whether this particular request should be dropped by the client
-     * when this server is chosen from the list.
+     * for rate limiting.
      * </pre>
      *
-     * <code>bool drop_request = 4;</code>
+     * <code>bool drop_for_rate_limiting = 4;</code>
      */
-    public Builder setDropRequest(boolean value) {
+    public Builder setDropForRateLimiting(boolean value) {
       
-      dropRequest_ = value;
+      dropForRateLimiting_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
      * Indicates whether this particular request should be dropped by the client
-     * when this server is chosen from the list.
+     * for rate limiting.
      * </pre>
      *
-     * <code>bool drop_request = 4;</code>
+     * <code>bool drop_for_rate_limiting = 4;</code>
      */
-    public Builder clearDropRequest() {
+    public Builder clearDropForRateLimiting() {
       
-      dropRequest_ = false;
+      dropForRateLimiting_ = false;
+      onChanged();
+      return this;
+    }
+
+    private boolean dropForLoadBalancing_ ;
+    /**
+     * <pre>
+     * Indicates whether this particular request should be dropped by the client
+     * for load balancing.
+     * </pre>
+     *
+     * <code>bool drop_for_load_balancing = 5;</code>
+     */
+    public boolean getDropForLoadBalancing() {
+      return dropForLoadBalancing_;
+    }
+    /**
+     * <pre>
+     * Indicates whether this particular request should be dropped by the client
+     * for load balancing.
+     * </pre>
+     *
+     * <code>bool drop_for_load_balancing = 5;</code>
+     */
+    public Builder setDropForLoadBalancing(boolean value) {
+      
+      dropForLoadBalancing_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Indicates whether this particular request should be dropped by the client
+     * for load balancing.
+     * </pre>
+     *
+     * <code>bool drop_for_load_balancing = 5;</code>
+     */
+    public Builder clearDropForLoadBalancing() {
+      
+      dropForLoadBalancing_ = false;
       onChanged();
       return this;
     }
