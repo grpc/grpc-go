@@ -297,16 +297,16 @@ public abstract class AbstractManagedChannelImplBuilder
   @Override
   public ManagedChannel build() {
     ClientTransportFactory transportFactory = buildTransportFactory();
-    if (authorityOverride != null) {
-      transportFactory = new AuthorityOverridingTransportFactory(
-        transportFactory, authorityOverride);
-    }
     NameResolver.Factory nameResolverFactory = this.nameResolverFactory;
     if (nameResolverFactory == null) {
       // Avoid loading the provider unless necessary, as a way to workaround a possibly-costly
       // and poorly optimized getResource() call on Android. If any other piece of code calls
       // getResource(), then this shouldn't be a problem unless called on the UI thread.
       nameResolverFactory = NameResolverProvider.asFactory();
+    }
+    if (authorityOverride != null) {
+      nameResolverFactory =
+          new OverrideAuthorityNameResolverFactory(nameResolverFactory, authorityOverride);
     }
 
     List<ClientInterceptor> effectiveInterceptors =
@@ -382,29 +382,6 @@ public abstract class AbstractManagedChannelImplBuilder
     }
   }
 
-  private static class AuthorityOverridingTransportFactory implements ClientTransportFactory {
-    final ClientTransportFactory factory;
-    final String authorityOverride;
-
-    AuthorityOverridingTransportFactory(
-        ClientTransportFactory factory, String authorityOverride) {
-      this.factory = Preconditions.checkNotNull(factory, "factory should not be null");
-      this.authorityOverride = Preconditions.checkNotNull(
-        authorityOverride, "authorityOverride should not be null");
-    }
-
-    @Override
-    public ConnectionClientTransport newClientTransport(SocketAddress serverAddress,
-        String authority, @Nullable String userAgent) {
-      return factory.newClientTransport(serverAddress, authorityOverride, userAgent);
-    }
-
-    @Override
-    public void close() {
-      factory.close();
-    }
-  }
-
   private static class DirectAddressNameResolverFactory extends NameResolver.Factory {
     final SocketAddress address;
     final String authority;
@@ -437,6 +414,60 @@ public abstract class AbstractManagedChannelImplBuilder
     @Override
     public String getDefaultScheme() {
       return DIRECT_ADDRESS_SCHEME;
+    }
+  }
+
+  /**
+   * A wrapper class that overrides the authority of a NameResolver, while preserving all other
+   * functionality.
+   */
+  @VisibleForTesting
+  static class OverrideAuthorityNameResolverFactory extends NameResolver.Factory {
+    private final NameResolver.Factory delegate;
+    private final String authorityOverride;
+
+    /**
+     * Constructor for the {@link NameResolver.Factory}
+     *
+     * @param delegate The actual underlying factory that will produce the a {@link NameResolver}
+     * @param authorityOverride The authority that will be returned by {@link
+     *   NameResolver#getServiceAuthority()}
+     */
+    OverrideAuthorityNameResolverFactory(NameResolver.Factory delegate,
+        String authorityOverride) {
+      this.delegate = delegate;
+      this.authorityOverride = authorityOverride;
+    }
+
+    @Nullable
+    @Override
+    public NameResolver newNameResolver(URI targetUri, Attributes params) {
+      final NameResolver resolver = delegate.newNameResolver(targetUri, params);
+      // Do not wrap null values. We do not want to impede error signaling.
+      if (resolver == null) {
+        return null;
+      }
+      return new NameResolver() {
+        @Override
+        public String getServiceAuthority() {
+          return authorityOverride;
+        }
+
+        @Override
+        public void start(Listener listener) {
+          resolver.start(listener);
+        }
+
+        @Override
+        public void shutdown() {
+          resolver.shutdown();
+        }
+      };
+    }
+
+    @Override
+    public String getDefaultScheme() {
+      return delegate.getDefaultScheme();
     }
   }
 

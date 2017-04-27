@@ -35,6 +35,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
+import io.grpc.ManagedChannel;
 import io.grpc.netty.InternalNettyChannelBuilder.OverrideAuthorityChecker;
 import io.grpc.netty.ProtocolNegotiators.TlsNegotiator;
 import io.netty.handler.ssl.SslContext;
@@ -53,6 +54,37 @@ public class NettyChannelBuilderTest {
 
   @Rule public final ExpectedException thrown = ExpectedException.none();
   private final SslContext noSslContext = null;
+
+  @Test
+  public void authorityIsReadable() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("original", 1234);
+    assertEquals("original:1234", builder.build().authority());
+  }
+
+  @Test
+  public void overrideAuthorityIsReadableForAddress() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("original", 1234);
+    overrideAuthorityIsReadableHelper(builder, "override:5678");
+  }
+
+  @Test
+  public void overrideAuthorityIsReadableForTarget() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forTarget("original:1234");
+    overrideAuthorityIsReadableHelper(builder, "override:5678");
+  }
+
+  @Test
+  public void overrideAuthorityIsReadableForSocketAddress() {
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress(new SocketAddress(){});
+    overrideAuthorityIsReadableHelper(builder, "override:5678");
+  }
+
+  private void overrideAuthorityIsReadableHelper(NettyChannelBuilder builder,
+      String overrideAuthority) {
+    builder.overrideAuthority(overrideAuthority);
+    ManagedChannel channel = builder.build();
+    assertEquals(overrideAuthority, channel.authority());
+  }
 
   @Test
   public void overrideAllowsInvalidAuthority() {

@@ -32,8 +32,14 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import io.grpc.Attributes;
+import io.grpc.NameResolver;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
@@ -97,5 +103,32 @@ public class AbstractManagedChannelImplBuilderTest {
 
     builder.idleTimeout(30, TimeUnit.SECONDS);
     assertEquals(TimeUnit.SECONDS.toMillis(30), builder.getIdleTimeoutMillis());
+  }
+
+  @Test
+  public void overrideAuthorityNameResolverWrapsDelegateTest() {
+    NameResolver nameResolverMock = mock(NameResolver.class);
+    NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
+    when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class)))
+      .thenReturn(nameResolverMock);
+    String override = "override:5678";
+    NameResolver.Factory factory =
+        new AbstractManagedChannelImplBuilder.OverrideAuthorityNameResolverFactory(wrappedFactory,
+          override);
+    NameResolver nameResolver = factory.newNameResolver(URI.create("dns:///localhost:443"),
+        Attributes.EMPTY);
+    assertNotNull(nameResolver);
+    assertEquals(override, nameResolver.getServiceAuthority());
+  }
+
+  @Test
+  public void overrideAuthorityNameResolverWontWrapNullTest() {
+    NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
+    when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class))).thenReturn(null);
+    NameResolver.Factory factory =
+        new AbstractManagedChannelImplBuilder.OverrideAuthorityNameResolverFactory(wrappedFactory,
+            "override:5678");
+    assertEquals(null,
+        factory.newNameResolver(URI.create("dns:///localhost:443"), Attributes.EMPTY));
   }
 }
