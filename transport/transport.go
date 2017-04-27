@@ -220,6 +220,10 @@ type Stream struct {
 	rstStream bool
 	// rstError is the error that needs to be sent along with the RST_STREAM frame.
 	rstError http2.ErrCode
+	// bytesSent and bytesReceived indicates whether any bytes have been sent or
+	// received on this stream.
+	bytesSent     bool
+	bytesReceived bool
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -339,6 +343,20 @@ func (s *Stream) finish(st *status.Status) {
 	s.status = st
 	s.state = streamDone
 	close(s.done)
+}
+
+// BytesSent indicates whether any bytes have been sent on this stream.
+func (s *Stream) BytesSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bytesSent
+}
+
+// BytesReceived indicates whether any bytes have been received on this stream.
+func (s *Stream) BytesReceived() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.bytesReceived
 }
 
 // GoString is implemented by Stream so context.String() won't

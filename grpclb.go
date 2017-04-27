@@ -145,6 +145,8 @@ type balancer struct {
 	done     bool
 	expTimer *time.Timer
 	rand     *rand.Rand
+
+	clientStats lbpb.ClientStats
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
@@ -281,6 +283,34 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
+func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+		case <-done:
+			return
+		}
+		b.mu.Lock()
+		stats := b.clientStats
+		b.clientStats = lbpb.ClientStats{} // Clear the stats.
+		b.mu.Unlock()
+		t := time.Now()
+		stats.Timestamp = &lbpb.Timestamp{
+			Seconds: t.Unix(),
+			Nanos:   int32(t.Nanosecond()),
+		}
+		if err := s.Send(&lbpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+				ClientStats: &stats,
+			},
+		}); err != nil {
+			return
+		}
+	}
+}
+
 func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -321,6 +351,14 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 		// delegation
 		grpclog.Println("TODO: Delegation is not supported yet.")
 		return
+	}
+	streamDone := make(chan struct{})
+	defer close(streamDone)
+	b.mu.Lock()
+	b.clientStats = lbpb.ClientStats{} // Clear client stats.
+	b.mu.Unlock()
+	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
+		go b.sendLoadReport(stream, d, streamDone)
 	}
 	// Retrieve the server list.
 	for {
@@ -538,7 +576,32 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 		err = ErrClientConnClosing
 		return
 	}
+	seq := b.seq
 
+	defer func() {
+		if err != nil {
+			return
+		}
+		put = func() {
+			s, ok := rpcInfoFromContext(ctx)
+			if !ok {
+				return
+			}
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if b.done || seq < b.seq {
+				return
+			}
+			b.clientStats.NumCallsFinished++
+			if !s.bytesSent {
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			} else if s.bytesReceived {
+				b.clientStats.NumCallsFinishedKnownReceived++
+			}
+		}
+	}()
+
+	b.clientStats.NumCallsStarted++
 	if len(b.addrs) > 0 {
 		if b.next >= len(b.addrs) {
 			b.next = 0
@@ -556,6 +619,13 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 				}
 				if !opts.BlockingWait {
 					b.next = next
+					if a.dropForLoadBalancing {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+					} else if a.dropForRateLimiting {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+					}
 					b.mu.Unlock()
 					err = Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
 					return
@@ -569,6 +639,8 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	}
 	if !opts.BlockingWait {
 		if len(b.addrs) == 0 {
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
 			b.mu.Unlock()
 			err = Errorf(codes.Unavailable, "there is no address available")
 			return
@@ -590,11 +662,17 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	for {
 		select {
 		case <-ctx.Done():
+			b.mu.Lock()
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			b.mu.Unlock()
 			err = ctx.Err()
 			return
 		case <-ch:
 			b.mu.Lock()
 			if b.done {
+				b.clientStats.NumCallsFinished++
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
 				b.mu.Unlock()
 				err = ErrClientConnClosing
 				return
@@ -617,6 +695,13 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 						}
 						if !opts.BlockingWait {
 							b.next = next
+							if a.dropForLoadBalancing {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+							} else if a.dropForRateLimiting {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+							}
 							b.mu.Unlock()
 							err = Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
 							return
