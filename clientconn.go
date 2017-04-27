@@ -104,8 +104,6 @@ type dialOptions struct {
 const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultClientMaxSendMessageSize    = 1024 * 1024 * 4
-	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
-	defaultServerMaxSendMessageSize    = 1024 * 1024 * 4
 )
 
 // DialOption configures how we set up the connection.
