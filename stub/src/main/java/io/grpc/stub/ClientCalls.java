@@ -234,8 +234,11 @@ public final class ClientCalls {
   private static <ReqT, RespT> void asyncUnaryRequestCall(
       ClientCall<ReqT, RespT> call, ReqT param, StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
-    asyncUnaryRequestCall(call, param,
-        new StreamObserverToCallListenerAdapter<ReqT, RespT>(call, responseObserver,
+    asyncUnaryRequestCall(
+        call,
+        param,
+        new StreamObserverToCallListenerAdapter<ReqT, RespT>(
+            responseObserver,
             new CallToStreamObserverAdapter<ReqT>(call),
             streamingResponse),
         streamingResponse);
@@ -260,8 +263,11 @@ public final class ClientCalls {
       ClientCall<ReqT, RespT> call, StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
     CallToStreamObserverAdapter<ReqT> adapter = new CallToStreamObserverAdapter<ReqT>(call);
-    startCall(call, new StreamObserverToCallListenerAdapter<ReqT, RespT>(
-        call, responseObserver, adapter, streamingResponse), streamingResponse);
+    startCall(
+        call,
+        new StreamObserverToCallListenerAdapter<ReqT, RespT>(
+            responseObserver, adapter, streamingResponse),
+        streamingResponse);
     return adapter;
   }
 
@@ -340,18 +346,15 @@ public final class ClientCalls {
 
   private static class StreamObserverToCallListenerAdapter<ReqT, RespT>
       extends ClientCall.Listener<RespT> {
-    private final ClientCall<ReqT, RespT> call;
     private final StreamObserver<RespT> observer;
     private final CallToStreamObserverAdapter<ReqT> adapter;
     private final boolean streamingResponse;
     private boolean firstResponseReceived;
 
     StreamObserverToCallListenerAdapter(
-        ClientCall<ReqT, RespT> call,
         StreamObserver<RespT> observer,
         CallToStreamObserverAdapter<ReqT> adapter,
         boolean streamingResponse) {
-      this.call = call;
       this.observer = observer;
       this.streamingResponse = streamingResponse;
       this.adapter = adapter;
@@ -380,7 +383,7 @@ public final class ClientCalls {
 
       if (streamingResponse && adapter.autoFlowControlEnabled) {
         // Request delivery of the next inbound message.
-        call.request(1);
+        adapter.request(1);
       }
     }
 
