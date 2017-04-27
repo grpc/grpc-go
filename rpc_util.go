@@ -483,17 +483,6 @@ type ServiceConfig struct {
 	Methods map[string]MethodConfig
 }
 
-// SupportPackageIsVersion4 is referenced from generated protocol buffer files
-// to assert that that code is compatible with this version of the grpc package.
-//
-// This constant may be renamed in the future if a change in the generated code
-// requires a synchronised update of grpc-go and protoc-gen-go. This constant
-// should not be referenced from any other code.
-const SupportPackageIsVersion4 = true
-
-// Version is the current grpc version.
-const Version = "1.3.0-dev"
-
 func min(a, b *int) *int {
 	if *a < *b {
 		return a
@@ -513,5 +502,16 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 	}
 	return doptMax
 }
+
+// SupportPackageIsVersion4 is referenced from generated protocol buffer files
+// to assert that that code is compatible with this version of the grpc package.
+//
+// This constant may be renamed in the future if a change in the generated code
+// requires a synchronised update of grpc-go and protoc-gen-go. This constant
+// should not be referenced from any other code.
+const SupportPackageIsVersion4 = true
+
+// Version is the current grpc version.
+const Version = "1.3.0-dev"
 
 const grpcUA = "grpc-go/" + Version

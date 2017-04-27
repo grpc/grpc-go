@@ -119,9 +119,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 
 	if mc.Timeout != nil && *mc.Timeout >= 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
-		defer cancel()
 	}
 
 	opts = append(cc.dopts.callOptions, opts...)
