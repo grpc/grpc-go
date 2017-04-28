@@ -44,6 +44,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -384,7 +385,8 @@ func TestGRPCLB(t *testing.T) {
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
@@ -421,7 +423,8 @@ func TestDropRequest(t *testing.T) {
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
@@ -471,7 +474,8 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
@@ -479,7 +483,8 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	testC := testpb.NewTestServiceClient(cc)
-	ctx, _ = context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.DeadlineExceeded)
 	}
@@ -521,7 +526,8 @@ func TestServerExpiration(t *testing.T) {
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds))
@@ -578,7 +584,8 @@ func TestBalancerDisconnects(t *testing.T) {
 	creds := serverNameCheckCreds{
 		expected: besn,
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	resolver := &testNameResolver{
 		addrs: lbAddrs[:2],
 	}
@@ -647,23 +654,8 @@ func (failPreRPCCred) RequireTransportSecurity() bool {
 }
 
 func checkStats(stats *lbpb.ClientStats, expected *lbpb.ClientStats) error {
-	if stats.NumCallsStarted != expected.NumCallsStarted {
-		return fmt.Errorf("num calls started = %v, want %v", stats.NumCallsStarted, expected.NumCallsStarted)
-	}
-	if stats.NumCallsFinished != expected.NumCallsFinished {
-		return fmt.Errorf("num calls finished = %v, want %v", stats.NumCallsFinished, expected.NumCallsFinished)
-	}
-	if stats.NumCallsFinishedWithDropForRateLimiting != expected.NumCallsFinishedWithDropForRateLimiting {
-		return fmt.Errorf("num calls drop rate limiting = %v, want %v", stats.NumCallsFinishedWithDropForRateLimiting, expected.NumCallsFinishedWithDropForRateLimiting)
-	}
-	if stats.NumCallsFinishedWithDropForLoadBalancing != expected.NumCallsFinishedWithDropForLoadBalancing {
-		return fmt.Errorf("num calls drop load balancing = %v, want %v", stats.NumCallsFinishedWithDropForLoadBalancing, expected.NumCallsFinishedWithDropForLoadBalancing)
-	}
-	if stats.NumCallsFinishedWithClientFailedToSend != expected.NumCallsFinishedWithClientFailedToSend {
-		return fmt.Errorf("num calls failed to send = %v, want %v", stats.NumCallsFinishedWithClientFailedToSend, expected.NumCallsFinishedWithClientFailedToSend)
-	}
-	if stats.NumCallsFinishedKnownReceived != expected.NumCallsFinishedKnownReceived {
-		return fmt.Errorf("num calls known received = %v, want %v", stats.NumCallsFinishedKnownReceived, expected.NumCallsFinishedKnownReceived)
+	if !proto.Equal(stats, expected) {
+		return fmt.Errorf("stats not equal: got %+v, want %+v", stats, expected)
 	}
 	return nil
 }
@@ -687,7 +679,8 @@ func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool
 	tss.ls.statsDura = 100 * time.Millisecond
 	creds := serverNameCheckCreds{expected: besn}
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	cc, err := grpc.DialContext(ctx, besn, grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{
 		addrs: []string{tss.lbAddr},
 	})), grpc.WithBlock(), grpc.WithTransportCredentials(&creds), grpc.WithPerRPCCredentials(failPreRPCCred{}))
