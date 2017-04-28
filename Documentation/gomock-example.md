@@ -1,6 +1,6 @@
 # Mocking Service for gRPC
 
-[Example code](https://github.com/grpc/grpc-go/tree/master/examples/mock_helloworld)
+[Example code](https://github.com/grpc/grpc-go/tree/master/examples/helloworld/mock_helloworld)
 
 ## Why?
 
