@@ -225,7 +225,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		hBuf:              &buf,
 		hEnc:              hpack.NewEncoder(&buf),
 		controlBuf:        newRecvBuffer(),
-		fc:                &inFlow{limit: icwz},
+		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
 		scheme:            scheme,
 		state:             reachable,
