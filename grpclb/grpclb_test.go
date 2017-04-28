@@ -660,7 +660,7 @@ func checkStats(stats *lbpb.ClientStats, expected *lbpb.ClientStats) error {
 	return nil
 }
 
-func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool, runRPCs func(*grpc.ClientConn)) *lbpb.ClientStats {
+func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool, runRPCs func(*grpc.ClientConn)) lbpb.ClientStats {
 	tss, cleanup, err := newLoadBalancer(3)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -692,7 +692,7 @@ func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool
 	runRPCs(cc)
 	time.Sleep(1 * time.Second)
 	tss.ls.mu.Lock()
-	stats := &tss.ls.stats
+	stats := tss.ls.stats
 	tss.ls.mu.Unlock()
 	return stats
 }
@@ -711,7 +711,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:               int64(countRPC),
 		NumCallsFinished:              int64(countRPC),
 		NumCallsFinishedKnownReceived: int64(countRPC),
@@ -737,7 +737,7 @@ func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                          int64(countRPC),
 		NumCallsFinished:                         int64(countRPC),
 		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC - c + 1),
@@ -764,7 +764,7 @@ func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                         int64(countRPC),
 		NumCallsFinished:                        int64(countRPC),
 		NumCallsFinishedWithDropForRateLimiting: int64(countRPC - c + 1),
@@ -786,7 +786,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                        int64(countRPC),
 		NumCallsFinished:                       int64(countRPC),
 		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
@@ -822,7 +822,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:               int64(countRPC),
 		NumCallsFinished:              int64(countRPC),
 		NumCallsFinishedKnownReceived: int64(countRPC),
@@ -848,7 +848,7 @@ func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                          int64(countRPC),
 		NumCallsFinished:                         int64(countRPC),
 		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC - c + 1),
@@ -875,7 +875,7 @@ func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                         int64(countRPC),
 		NumCallsFinished:                        int64(countRPC),
 		NumCallsFinishedWithDropForRateLimiting: int64(countRPC - c + 1),
@@ -903,7 +903,7 @@ func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
 		}
 	})
 
-	if err := checkStats(stats, &lbpb.ClientStats{
+	if err := checkStats(&stats, &lbpb.ClientStats{
 		NumCallsStarted:                        int64(countRPC),
 		NumCallsFinished:                       int64(countRPC),
 		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
