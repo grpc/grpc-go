@@ -65,6 +65,24 @@ func TestFromToProto(t *testing.T) {
 	}
 }
 
+func TestFromNilProto(t *testing.T) {
+	tests := []*Status{nil, FromProto(nil)}
+	for _, s := range tests {
+		if c := s.Code(); c != codes.OK {
+			t.Errorf("s: %v - Expected s.Code() = OK; got %v", s, c)
+		}
+		if m := s.Message(); m != "" {
+			t.Errorf("s: %v - Expected s.Message() = \"\"; got %q", s, m)
+		}
+		if p := s.Proto(); p != nil {
+			t.Errorf("s: %v - Expected s.Proto() = nil; got %q", s, p)
+		}
+		if e := s.Err(); e != nil {
+			t.Errorf("s: %v - Expected s.Err() = nil; got %v", s, e)
+		}
+	}
+}
+
 func TestError(t *testing.T) {
 	err := Error(codes.Internal, "test description")
 	if got, want := err.Error(), "rpc error: code = Internal desc = test description"; got != want {
