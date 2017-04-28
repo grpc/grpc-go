@@ -158,7 +158,7 @@ func TestEncodeMetadataHeader(t *testing.T) {
 		{"key", "abc", "abc"},
 		{"KEY", "abc", "abc"},
 		{"key-bin", "abc", "YWJj"},
-		{"key-bin", binaryValue, "woA="},
+		{"key-bin", binaryValue, "woA"},
 	} {
 		v := encodeMetadataHeader(test.kin, test.vin)
 		if !reflect.DeepEqual(v, test.vout) {
@@ -178,6 +178,7 @@ func TestDecodeMetadataHeader(t *testing.T) {
 	}{
 		{"a", "abc", "abc", nil},
 		{"key-bin", "Zm9vAGJhcg==", "foo\x00bar", nil},
+		{"key-bin", "Zm9vAGJhcg", "foo\x00bar", nil},
 		{"key-bin", "woA=", binaryValue, nil},
 		{"a", "abc,efg", "abc,efg", nil},
 	} {

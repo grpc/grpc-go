@@ -167,11 +167,15 @@ func (d *decodeState) status() *status.Status {
 const binHdrSuffix = "-bin"
 
 func encodeBinHeader(v []byte) string {
-	return base64.StdEncoding.EncodeToString(v)
+	return base64.RawStdEncoding.EncodeToString(v)
 }
 
 func decodeBinHeader(v string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(v)
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
 
 func encodeMetadataHeader(k, v string) string {
