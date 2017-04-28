@@ -732,15 +732,15 @@ func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
 				}
 			}
 		}
-		for i := 0; i < countRPC-c; i++ {
+		for i := 0; i < countRPC; i++ {
 			testC.EmptyCall(context.Background(), &testpb.Empty{})
 		}
 	})
 
 	if err := checkStats(&stats, &lbpb.ClientStats{
-		NumCallsStarted:                          int64(countRPC),
-		NumCallsFinished:                         int64(countRPC),
-		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC - c + 1),
+		NumCallsStarted:                          int64(countRPC + c),
+		NumCallsFinished:                         int64(countRPC + c),
+		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
 		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
 	}); err != nil {
 		t.Fatal(err)
@@ -759,15 +759,15 @@ func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
 				}
 			}
 		}
-		for i := 0; i < countRPC-c; i++ {
+		for i := 0; i < countRPC; i++ {
 			testC.EmptyCall(context.Background(), &testpb.Empty{})
 		}
 	})
 
 	if err := checkStats(&stats, &lbpb.ClientStats{
-		NumCallsStarted:                         int64(countRPC),
-		NumCallsFinished:                        int64(countRPC),
-		NumCallsFinishedWithDropForRateLimiting: int64(countRPC - c + 1),
+		NumCallsStarted:                         int64(countRPC + c),
+		NumCallsFinished:                        int64(countRPC + c),
+		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
 		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
 	}); err != nil {
 		t.Fatal(err)
@@ -843,15 +843,15 @@ func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
 				}
 			}
 		}
-		for i := 0; i < countRPC-c; i++ {
+		for i := 0; i < countRPC; i++ {
 			testC.FullDuplexCall(context.Background())
 		}
 	})
 
 	if err := checkStats(&stats, &lbpb.ClientStats{
-		NumCallsStarted:                          int64(countRPC),
-		NumCallsFinished:                         int64(countRPC),
-		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC - c + 1),
+		NumCallsStarted:                          int64(countRPC + c),
+		NumCallsFinished:                         int64(countRPC + c),
+		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
 		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
 	}); err != nil {
 		t.Fatal(err)
@@ -870,15 +870,15 @@ func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
 				}
 			}
 		}
-		for i := 0; i < countRPC-c; i++ {
+		for i := 0; i < countRPC; i++ {
 			testC.FullDuplexCall(context.Background())
 		}
 	})
 
 	if err := checkStats(&stats, &lbpb.ClientStats{
-		NumCallsStarted:                         int64(countRPC),
-		NumCallsFinished:                        int64(countRPC),
-		NumCallsFinishedWithDropForRateLimiting: int64(countRPC - c + 1),
+		NumCallsStarted:                         int64(countRPC + c),
+		NumCallsFinished:                        int64(countRPC + c),
+		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
 		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
 	}); err != nil {
 		t.Fatal(err)
