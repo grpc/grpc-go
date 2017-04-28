@@ -1,4 +1,4 @@
-package mock_test
+package mock_helloworld_test
 
 import (
 	"fmt"
