@@ -38,8 +38,6 @@ import (
 	"testing"
 )
 
-const binaryValue = string(128)
-
 func TestPairsMD(t *testing.T) {
 	for _, test := range []struct {
 		// input
