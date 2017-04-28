@@ -110,6 +110,9 @@ type http2Client struct {
 
 	statsHandler stats.Handler
 
+	initialWindowSize     int32
+	initialConnWindowSize int32
+
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
 	activeStreams map[uint32]*Stream
@@ -209,27 +212,36 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		localAddr:  conn.LocalAddr(),
 		authInfo:   authInfo,
 		// The client initiated stream id is odd starting from 1.
-		nextID:          1,
-		writableChan:    make(chan int, 1),
-		shutdownChan:    make(chan struct{}),
-		errorChan:       make(chan struct{}),
-		goAway:          make(chan struct{}),
-		awakenKeepalive: make(chan struct{}, 1),
-		framer:          newFramer(conn),
-		hBuf:            &buf,
-		hEnc:            hpack.NewEncoder(&buf),
-		controlBuf:      newRecvBuffer(),
-		fc:              &inFlow{limit: initialConnWindowSize},
-		sendQuotaPool:   newQuotaPool(defaultWindowSize),
-		scheme:          scheme,
-		state:           reachable,
-		activeStreams:   make(map[uint32]*Stream),
-		creds:           opts.PerRPCCredentials,
-		maxStreams:      defaultMaxStreamsClient,
-		streamsQuota:    newQuotaPool(defaultMaxStreamsClient),
-		streamSendQuota: defaultWindowSize,
-		kp:              kp,
-		statsHandler:    opts.StatsHandler,
+		nextID:                1,
+		writableChan:          make(chan int, 1),
+		shutdownChan:          make(chan struct{}),
+		errorChan:             make(chan struct{}),
+		goAway:                make(chan struct{}),
+		awakenKeepalive:       make(chan struct{}, 1),
+		framer:                newFramer(conn),
+		hBuf:                  &buf,
+		hEnc:                  hpack.NewEncoder(&buf),
+		controlBuf:            newRecvBuffer(),
+		fc:                    &inFlow{limit: initialConnWindowSize},
+		sendQuotaPool:         newQuotaPool(defaultWindowSize),
+		scheme:                scheme,
+		state:                 reachable,
+		activeStreams:         make(map[uint32]*Stream),
+		creds:                 opts.PerRPCCredentials,
+		maxStreams:            defaultMaxStreamsClient,
+		streamsQuota:          newQuotaPool(defaultMaxStreamsClient),
+		streamSendQuota:       defaultWindowSize,
+		kp:                    kp,
+		statsHandler:          opts.StatsHandler,
+		initialWindowSize:     initialWindowSize,
+		initialConnWindowSize: initialConnWindowSize,
+	}
+	if opts.InitialWindowSize >= defaultWindowSize {
+		t.initialWindowSize = opts.InitialWindowSize
+	}
+	if opts.InitialConnWindowSize >= defaultWindowSize {
+		t.initialConnWindowSize = opts.InitialConnWindowSize
+		t.fc.limit = uint32(t.initialConnWindowSize)
 	}
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
@@ -258,10 +270,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		t.Close()
 		return nil, connectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
-	if initialWindowSize != defaultWindowSize {
+	if t.initialWindowSize != defaultWindowSize {
 		err = t.framer.writeSettings(true, http2.Setting{
 			ID:  http2.SettingInitialWindowSize,
-			Val: uint32(initialWindowSize),
+			Val: uint32(t.initialWindowSize),
 		})
 	} else {
 		err = t.framer.writeSettings(true)
@@ -271,7 +283,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
-	if delta := uint32(initialConnWindowSize - defaultWindowSize); delta > 0 {
+	if delta := uint32(t.initialConnWindowSize - defaultWindowSize); delta > 0 {
 		if err := t.framer.writeWindowUpdate(true, 0, delta); err != nil {
 			t.Close()
 			return nil, connectionErrorf(true, err, "transport: %v", err)
@@ -294,7 +306,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		method:        callHdr.Method,
 		sendCompress:  callHdr.SendCompress,
 		buf:           newRecvBuffer(),
-		fc:            &inFlow{limit: initialWindowSize},
+		fc:            &inFlow{limit: uint32(t.initialWindowSize)},
 		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
 		headerChan:    make(chan struct{}),
 	}

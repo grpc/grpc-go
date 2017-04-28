@@ -1266,3 +1266,107 @@ func TestContextErr(t *testing.T) {
 		}
 	}
 }
+
+type windowSizeConfig struct {
+	serverStream int32
+	serverConn   int32
+	clientStream int32
+	clientConn   int32
+}
+
+func TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
+	wc := windowSizeConfig{
+		serverStream: 10 * 1024 * 1024,
+		serverConn:   12 * 1024 * 1024,
+		clientStream: 6 * 1024 * 1024,
+		clientConn:   8 * 1024 * 1024,
+	}
+	testAccountCheckWindowSize(t, wc)
+}
+
+func TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
+	wc := windowSizeConfig{
+		serverStream: defaultWindowSize,
+		serverConn:   defaultWindowSize,
+		clientStream: defaultWindowSize,
+		clientConn:   defaultWindowSize,
+	}
+	testAccountCheckWindowSize(t, wc)
+}
+
+func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
+	serverConfig := &ServerConfig{
+		InitialWindowSize:     wc.serverStream,
+		InitialConnWindowSize: wc.serverConn,
+	}
+	connectOptions := ConnectOptions{
+		InitialWindowSize:     wc.clientStream,
+		InitialConnWindowSize: wc.clientConn,
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, connectOptions)
+	defer server.stop()
+	defer client.Close()
+	// Sleep for a second to make sure connection is established.
+	time.Sleep(time.Second)
+	var st *http2Server
+	server.mu.Lock()
+	for k := range server.conns {
+		st = k.(*http2Server)
+	}
+	server.mu.Unlock()
+	ct := client.(*http2Client)
+	if st.fc.limit != uint32(serverConfig.InitialConnWindowSize) {
+		t.Fatalf("Server transport flow control window size is %v, want %v", st.fc.limit, serverConfig.InitialConnWindowSize)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	serverSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+	if err != nil {
+		t.Fatalf("Error while acquiring sendQuota on server. Err: %v", err)
+	}
+	cancel()
+	st.sendQuotaPool.add(serverSendQuota)
+	if serverSendQuota != int(connectOptions.InitialConnWindowSize) {
+		t.Fatalf("Server send quota(%v) not equal to client's window size(%v) on conn.", serverSendQuota, connectOptions.InitialConnWindowSize)
+	}
+	st.mu.Lock()
+	if st.streamSendQuota != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Server stream send quota(%v) not equal to client's window size(%v) on stream.", ct.streamSendQuota, connectOptions.InitialWindowSize)
+	}
+	st.mu.Unlock()
+	if ct.fc.limit != uint32(connectOptions.InitialConnWindowSize) {
+		t.Fatalf("Client transport flow control window size is %v, want %v", ct.fc.limit, connectOptions.InitialConnWindowSize)
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	clientSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+	if err != nil {
+		t.Fatalf("Error while acquiring sendQuota on client. Err: %v", err)
+	}
+	cancel()
+	ct.sendQuotaPool.add(clientSendQuota)
+	if clientSendQuota != int(serverConfig.InitialConnWindowSize) {
+		t.Fatalf("Client send quota(%v) not equal to server's window size(%v) on conn.", clientSendQuota, serverConfig.InitialConnWindowSize)
+	}
+	ct.mu.Lock()
+	if ct.streamSendQuota != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Client stream send quota(%v) not equal to server's window size(%v) on stream.", ct.streamSendQuota, serverConfig.InitialWindowSize)
+	}
+	ct.mu.Unlock()
+	cstream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+	if cstream.fc.limit != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Client stream flow control window size is %v, want %v", cstream.fc.limit, connectOptions.InitialWindowSize)
+	}
+	// Sleep for a bit to make sure server received headers for the stream.
+	time.Sleep(time.Millisecond * 500)
+	var sstream *Stream
+	st.mu.Lock()
+	for _, v := range st.activeStreams {
+		sstream = v
+	}
+	st.mu.Unlock()
+	if sstream.fc.limit != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Server stream flow control window size is %v, want %v", sstream.fc.limit, serverConfig.InitialWindowSize)
+	}
+}
