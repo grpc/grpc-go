@@ -174,9 +174,8 @@ func decodeBinHeader(v string) ([]byte, error) {
 	if len(v)%4 == 0 {
 		// Input was padded, or padding was not necessary.
 		return base64.StdEncoding.DecodeString(v)
-	} else {
-		return base64.RawStdEncoding.DecodeString(v)
 	}
+	return base64.RawStdEncoding.DecodeString(v)
 }
 
 func encodeMetadataHeader(k, v string) string {
