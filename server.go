@@ -131,6 +131,7 @@ var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size l
 type ServerOption func(*options)
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialWindowSize(s int32) ServerOption {
 	return func(o *options) {
 		o.initialWindowSize = s
@@ -138,6 +139,7 @@ func InitialWindowSize(s int32) ServerOption {
 }
 
 // InitialConnWindowSize returns a ServerOption that sets window size for a connection.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialConnWindowSize(s int32) ServerOption {
 	return func(o *options) {
 		o.initialConnWindowSize = s

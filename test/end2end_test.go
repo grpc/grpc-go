@@ -3915,7 +3915,7 @@ func TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: 16 * 1024 * 1024,
 		serverConn:   32 * 1024 * 1024,
-		clientStream: 4 * 1024,
+		clientStream: 4 * 1024 * 1024,
 		clientConn:   8 * 1024 * 1024,
 	}
 	for _, e := range listTestEnv() {

@@ -113,8 +113,7 @@ type http2Server struct {
 	// 1 means yes.
 	resetPingStrikes uint32 // Accessed atomically.
 
-	initialWindowSize     int32
-	initialConnWindowSize int32
+	initialWindowSize int32
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -191,30 +190,29 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	}
 	var buf bytes.Buffer
 	t := &http2Server{
-		ctx:                   context.Background(),
-		conn:                  conn,
-		remoteAddr:            conn.RemoteAddr(),
-		localAddr:             conn.LocalAddr(),
-		authInfo:              config.AuthInfo,
-		framer:                framer,
-		hBuf:                  &buf,
-		hEnc:                  hpack.NewEncoder(&buf),
-		maxStreams:            maxStreams,
-		inTapHandle:           config.InTapHandle,
-		controlBuf:            newRecvBuffer(),
-		fc:                    &inFlow{limit: uint32(icwz)},
-		sendQuotaPool:         newQuotaPool(defaultWindowSize),
-		state:                 reachable,
-		writableChan:          make(chan int, 1),
-		shutdownChan:          make(chan struct{}),
-		activeStreams:         make(map[uint32]*Stream),
-		streamSendQuota:       defaultWindowSize,
-		stats:                 config.StatsHandler,
-		kp:                    kp,
-		idle:                  time.Now(),
-		kep:                   kep,
-		initialWindowSize:     iwz,
-		initialConnWindowSize: icwz,
+		ctx:               context.Background(),
+		conn:              conn,
+		remoteAddr:        conn.RemoteAddr(),
+		localAddr:         conn.LocalAddr(),
+		authInfo:          config.AuthInfo,
+		framer:            framer,
+		hBuf:              &buf,
+		hEnc:              hpack.NewEncoder(&buf),
+		maxStreams:        maxStreams,
+		inTapHandle:       config.InTapHandle,
+		controlBuf:        newRecvBuffer(),
+		fc:                &inFlow{limit: uint32(icwz)},
+		sendQuotaPool:     newQuotaPool(defaultWindowSize),
+		state:             reachable,
+		writableChan:      make(chan int, 1),
+		shutdownChan:      make(chan struct{}),
+		activeStreams:     make(map[uint32]*Stream),
+		streamSendQuota:   defaultWindowSize,
+		stats:             config.StatsHandler,
+		kp:                kp,
+		idle:              time.Now(),
+		kep:               kep,
+		initialWindowSize: iwz,
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
