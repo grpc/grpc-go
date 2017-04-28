@@ -66,18 +66,20 @@ func TestFromToProto(t *testing.T) {
 }
 
 func TestFromNilProto(t *testing.T) {
-	s := FromProto(nil)
-	if c := s.Code(); c != codes.OK {
-		t.Fatalf("Expected s.Code() = OK; got %v", c)
-	}
-	if m := s.Message(); m != "" {
-		t.Fatalf("Expected s.Message() = \"\"; got %q", m)
-	}
-	if p := s.Proto(); p != nil {
-		t.Fatalf("Expected s.Proto() = nil; got %q", p)
-	}
-	if e := s.Err(); e != nil {
-		t.Fatalf("Expected s.Err() = nil; got %v", e)
+	tests := []*Status{nil, FromProto(nil)}
+	for _, s := range tests {
+		if c := s.Code(); c != codes.OK {
+			t.Errorf("s: %v - Expected s.Code() = OK; got %v", s, c)
+		}
+		if m := s.Message(); m != "" {
+			t.Errorf("s: %v - Expected s.Message() = \"\"; got %q", s, m)
+		}
+		if p := s.Proto(); p != nil {
+			t.Errorf("s: %v - Expected s.Proto() = nil; got %q", s, p)
+		}
+		if e := s.Err(); e != nil {
+			t.Errorf("s: %v - Expected s.Err() = nil; got %v", s, e)
+		}
 	}
 }
 

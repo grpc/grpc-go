@@ -71,16 +71,25 @@ type Status struct {
 
 // Code returns the status code contained in s.
 func (s *Status) Code() codes.Code {
-	return codes.Code(s.s.GetCode())
+	if s == nil || s.s == nil {
+		return codes.OK
+	}
+	return codes.Code(s.s.Code)
 }
 
 // Message returns the message contained in s.
 func (s *Status) Message() string {
-	return s.s.GetMessage()
+	if s == nil || s.s == nil {
+		return ""
+	}
+	return s.s.Message
 }
 
 // Proto returns s's status as an spb.Status proto message.
 func (s *Status) Proto() *spb.Status {
+	if s == nil {
+		return nil
+	}
 	return proto.Clone(s.s).(*spb.Status)
 }
 
