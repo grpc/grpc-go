@@ -65,6 +65,22 @@ func TestFromToProto(t *testing.T) {
 	}
 }
 
+func TestFromNilProto(t *testing.T) {
+	s := FromProto(nil)
+	if c := s.Code(); c != codes.OK {
+		t.Fatalf("Expected s.Code() = OK; got %v", c)
+	}
+	if m := s.Message(); m != "" {
+		t.Fatalf("Expected s.Message() = \"\"; got %q", m)
+	}
+	if p := s.Proto(); p != nil {
+		t.Fatalf("Expected s.Proto() = nil; got %q", p)
+	}
+	if e := s.Err(); e != nil {
+		t.Fatalf("Expected s.Err() = nil; got %v", e)
+	}
+}
+
 func TestError(t *testing.T) {
 	err := Error(codes.Internal, "test description")
 	if got, want := err.Error(), "rpc error: code = Internal desc = test description"; got != want {
