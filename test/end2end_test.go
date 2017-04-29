@@ -3913,9 +3913,9 @@ func max(a, b int32) int32 {
 func TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
 	defer leakCheck(t)()
 	wc := windowSizeConfig{
-		serverStream: 16 * 1024 * 1024,
-		serverConn:   32 * 1024 * 1024,
-		clientStream: 4 * 1024 * 1024,
+		serverStream: 8 * 1024 * 1024,
+		serverConn:   12 * 1024 * 1024,
+		clientStream: 6 * 1024 * 1024,
 		clientConn:   8 * 1024 * 1024,
 	}
 	for _, e := range listTestEnv() {
