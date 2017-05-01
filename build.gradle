@@ -177,7 +177,7 @@ subprojects {
                 hpack: 'com.twitter:hpack:0.10.1',
                 jsr305: 'com.google.code.findbugs:jsr305:3.0.0',
                 oauth_client: 'com.google.auth:google-auth-library-oauth2-http:0.4.0',
-                google_api_protos: 'com.google.api.grpc:grpc-google-common-protos:0.1.6',
+                google_api_protos: 'com.google.api.grpc:proto-google-common-protos:0.1.9',
                 google_auth_credentials: 'com.google.auth:google-auth-library-credentials:0.4.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.6.0',

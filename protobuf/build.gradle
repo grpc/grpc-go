@@ -16,10 +16,9 @@ dependencies {
             libraries.protobuf_util
 
     compile (libraries.google_api_protos) {
-        exclude group: 'io.grpc'
-        // 'com.google.api' transitively depends on 'com.google.auto.value:auto-value:1.1', which
-        // breaks our annotations.
-        exclude group: 'com.google.api'
+        // 'com.google.api:api-common' transitively depends on auto-value, which breaks our
+        // annotations.
+        exclude group: 'com.google.api', module: 'api-common'
     }
 
     compile (project(':grpc-protobuf-lite')) {
