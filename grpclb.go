@@ -31,10 +31,7 @@
  *
  */
 
-// Package grpclb implements the load balancing protocol defined at
-// https://github.com/grpc/grpc/blob/master/doc/load-balancing.md.
-// The implementation is currently EXPERIMENTAL.
-package grpclb
+package grpc
 
 import (
 	"errors"
@@ -45,13 +42,49 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 )
+
+// Client API for LoadBalancer service.
+// Mostly copied from generated pb.go file.
+// To avoid circular dependency.
+type loadBalancerClient struct {
+	cc *ClientConn
+}
+
+func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...CallOption) (*balanceLoadClientStream, error) {
+	desc := &StreamDesc{
+		StreamName:    "BalanceLoad",
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+	stream, err := NewClientStream(ctx, desc, c.cc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &balanceLoadClientStream{stream}
+	return x, nil
+}
+
+type balanceLoadClientStream struct {
+	ClientStream
+}
+
+func (x *balanceLoadClientStream) Send(m *lbpb.LoadBalanceRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
+	m := new(lbpb.LoadBalanceResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
 
 // AddressType indicates the address type returned by name resolution.
 type AddressType uint8
@@ -63,18 +96,18 @@ const (
 	GRPCLB
 )
 
-// Metadata contains the information the name resolution for grpclb should provide. The
+// AddrMetadataGRPCLB contains the information the name resolution for grpclb should provide. The
 // name resolver used by grpclb balancer is required to provide this type of metadata in
 // its address updates.
-type Metadata struct {
+type AddrMetadataGRPCLB struct {
 	// AddrType is the type of server (grpc load balancer or backend).
 	AddrType AddressType
 	// ServerName is the name of the grpc load balancer. Used for authentication.
 	ServerName string
 }
 
-// Balancer creates a grpclb load balancer.
-func Balancer(r naming.Resolver) grpc.Balancer {
+// NewGRPCLBBalancer creates a grpclb load balancer.
+func NewGRPCLBBalancer(r naming.Resolver) Balancer {
 	return &balancer{
 		r: r,
 	}
@@ -86,13 +119,16 @@ type remoteBalancerInfo struct {
 	name string
 }
 
-// addrInfo consists of the information of a backend server.
-type addrInfo struct {
-	addr      grpc.Address
+// grpclbAddrInfo consists of the information of a backend server.
+type grpclbAddrInfo struct {
+	addr      Address
 	connected bool
-	// dropRequest indicates whether a particular RPC which chooses this address
-	// should be dropped.
-	dropRequest bool
+	// dropForRateLimiting indicates whether this particular request should be
+	// dropped by the client for rate limiting.
+	dropForRateLimiting bool
+	// dropForLoadBalancing indicates whether this particular request should be
+	// dropped by the client for load balancing.
+	dropForLoadBalancing bool
 }
 
 type balancer struct {
@@ -101,14 +137,16 @@ type balancer struct {
 	mu       sync.Mutex
 	seq      int // a sequence number to make sure addrCh does not get stale addresses.
 	w        naming.Watcher
-	addrCh   chan []grpc.Address
+	addrCh   chan []Address
 	rbs      []remoteBalancerInfo
-	addrs    []*addrInfo
+	addrs    []*grpclbAddrInfo
 	next     int
 	waitCh   chan struct{}
 	done     bool
 	expTimer *time.Timer
 	rand     *rand.Rand
+
+	clientStats lbpb.ClientStats
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
@@ -119,7 +157,7 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerIn
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
-		return grpc.ErrClientConnClosing
+		return ErrClientConnClosing
 	}
 	for _, update := range updates {
 		switch update.Op {
@@ -135,7 +173,7 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerIn
 			if exist {
 				continue
 			}
-			md, ok := update.Metadata.(*Metadata)
+			md, ok := update.Metadata.(*AddrMetadataGRPCLB)
 			if !ok {
 				// TODO: Revisit the handling here and may introduce some fallback mechanism.
 				grpclog.Printf("The name resolution contains unexpected metadata %v", update.Metadata)
@@ -206,18 +244,19 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	servers := l.GetServers()
 	expiration := convertDuration(l.GetExpirationInterval())
 	var (
-		sl    []*addrInfo
-		addrs []grpc.Address
+		sl    []*grpclbAddrInfo
+		addrs []Address
 	)
 	for _, s := range servers {
 		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
-		addr := grpc.Address{
+		addr := Address{
 			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
 			Metadata: &md,
 		}
-		sl = append(sl, &addrInfo{
-			addr:        addr,
-			dropRequest: s.DropRequest,
+		sl = append(sl, &grpclbAddrInfo{
+			addr:                 addr,
+			dropForRateLimiting:  s.DropForRateLimiting,
+			dropForLoadBalancing: s.DropForLoadBalancing,
 		})
 		addrs = append(addrs, addr)
 	}
@@ -244,7 +283,35 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	return
 }
 
-func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (retry bool) {
+func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+		case <-done:
+			return
+		}
+		b.mu.Lock()
+		stats := b.clientStats
+		b.clientStats = lbpb.ClientStats{} // Clear the stats.
+		b.mu.Unlock()
+		t := time.Now()
+		stats.Timestamp = &lbpb.Timestamp{
+			Seconds: t.Unix(),
+			Nanos:   int32(t.Nanosecond()),
+		}
+		if err := s.Send(&lbpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+				ClientStats: &stats,
+			},
+		}); err != nil {
+			return
+		}
+	}
+}
+
+func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stream, err := lbc.BalanceLoad(ctx)
@@ -285,6 +352,14 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 		grpclog.Println("TODO: Delegation is not supported yet.")
 		return
 	}
+	streamDone := make(chan struct{})
+	defer close(streamDone)
+	b.mu.Lock()
+	b.clientStats = lbpb.ClientStats{} // Clear client stats.
+	b.mu.Unlock()
+	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
+		go b.sendLoadReport(stream, d, streamDone)
+	}
 	// Retrieve the server list.
 	for {
 		reply, err := stream.Recv()
@@ -306,7 +381,7 @@ func (b *balancer) callRemoteBalancer(lbc lbpb.LoadBalancerClient, seq int) (ret
 	return true
 }
 
-func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
+func (b *balancer) Start(target string, config BalancerConfig) error {
 	b.rand = rand.New(rand.NewSource(time.Now().Unix()))
 	// TODO: Fall back to the basic direct connection if there is no name resolver.
 	if b.r == nil {
@@ -316,9 +391,9 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 	b.mu.Lock()
 	if b.done {
 		b.mu.Unlock()
-		return grpc.ErrClientConnClosing
+		return ErrClientConnClosing
 	}
-	b.addrCh = make(chan []grpc.Address)
+	b.addrCh = make(chan []Address)
 	w, err := b.r.Resolve(target)
 	if err != nil {
 		b.mu.Unlock()
@@ -340,7 +415,7 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 	// Spawn a goroutine to talk to the remote load balancer.
 	go func() {
 		var (
-			cc *grpc.ClientConn
+			cc *ClientConn
 			// ccError is closed when there is an error in the current cc.
 			// A new rb should be picked from rbs and connected.
 			ccError chan struct{}
@@ -419,7 +494,7 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			creds := config.DialCreds
 			ccError = make(chan struct{})
 			if creds == nil {
-				cc, err = grpc.Dial(rb.addr, grpc.WithInsecure())
+				cc, err = Dial(rb.addr, WithInsecure())
 			} else {
 				if rb.name != "" {
 					if err := creds.OverrideServerName(rb.name); err != nil {
@@ -427,7 +502,7 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 						continue
 					}
 				}
-				cc, err = grpc.Dial(rb.addr, grpc.WithTransportCredentials(creds))
+				cc, err = Dial(rb.addr, WithTransportCredentials(creds))
 			}
 			if err != nil {
 				grpclog.Printf("Failed to setup a connection to the remote balancer %v: %v", rb.addr, err)
@@ -439,8 +514,8 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 			seq := b.seq
 			b.next = 0
 			b.mu.Unlock()
-			go func(cc *grpc.ClientConn, ccError chan struct{}) {
-				lbc := lbpb.NewLoadBalancerClient(cc)
+			go func(cc *ClientConn, ccError chan struct{}) {
+				lbc := &loadBalancerClient{cc}
 				b.callRemoteBalancer(lbc, seq)
 				cc.Close()
 				select {
@@ -454,7 +529,7 @@ func (b *balancer) Start(target string, config grpc.BalancerConfig) error {
 	return nil
 }
 
-func (b *balancer) down(addr grpc.Address, err error) {
+func (b *balancer) down(addr Address, err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, a := range b.addrs {
@@ -465,7 +540,7 @@ func (b *balancer) down(addr grpc.Address, err error) {
 	}
 }
 
-func (b *balancer) Up(addr grpc.Address) func(error) {
+func (b *balancer) Up(addr Address) func(error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
@@ -479,7 +554,7 @@ func (b *balancer) Up(addr grpc.Address) func(error) {
 			}
 			a.connected = true
 		}
-		if a.connected && !a.dropRequest {
+		if a.connected && !a.dropForRateLimiting && !a.dropForLoadBalancing {
 			cnt++
 		}
 	}
@@ -493,15 +568,40 @@ func (b *balancer) Up(addr grpc.Address) func(error) {
 	}
 }
 
-func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr grpc.Address, put func(), err error) {
+func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	b.mu.Lock()
 	if b.done {
 		b.mu.Unlock()
-		err = grpc.ErrClientConnClosing
+		err = ErrClientConnClosing
 		return
 	}
+	seq := b.seq
 
+	defer func() {
+		if err != nil {
+			return
+		}
+		put = func() {
+			s, ok := rpcInfoFromContext(ctx)
+			if !ok {
+				return
+			}
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if b.done || seq < b.seq {
+				return
+			}
+			b.clientStats.NumCallsFinished++
+			if !s.bytesSent {
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			} else if s.bytesReceived {
+				b.clientStats.NumCallsFinishedKnownReceived++
+			}
+		}
+	}()
+
+	b.clientStats.NumCallsStarted++
 	if len(b.addrs) > 0 {
 		if b.next >= len(b.addrs) {
 			b.next = 0
@@ -511,7 +611,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 			a := b.addrs[next]
 			next = (next + 1) % len(b.addrs)
 			if a.connected {
-				if !a.dropRequest {
+				if !a.dropForRateLimiting && !a.dropForLoadBalancing {
 					addr = a.addr
 					b.next = next
 					b.mu.Unlock()
@@ -519,8 +619,15 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 				}
 				if !opts.BlockingWait {
 					b.next = next
+					if a.dropForLoadBalancing {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+					} else if a.dropForRateLimiting {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+					}
 					b.mu.Unlock()
-					err = grpc.Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
+					err = Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
 					return
 				}
 			}
@@ -532,8 +639,10 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 	}
 	if !opts.BlockingWait {
 		if len(b.addrs) == 0 {
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
 			b.mu.Unlock()
-			err = grpc.Errorf(codes.Unavailable, "there is no address available")
+			err = Errorf(codes.Unavailable, "there is no address available")
 			return
 		}
 		// Returns the next addr on b.addrs for a failfast RPC.
@@ -553,13 +662,19 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 	for {
 		select {
 		case <-ctx.Done():
+			b.mu.Lock()
+			b.clientStats.NumCallsFinished++
+			b.clientStats.NumCallsFinishedWithClientFailedToSend++
+			b.mu.Unlock()
 			err = ctx.Err()
 			return
 		case <-ch:
 			b.mu.Lock()
 			if b.done {
+				b.clientStats.NumCallsFinished++
+				b.clientStats.NumCallsFinishedWithClientFailedToSend++
 				b.mu.Unlock()
-				err = grpc.ErrClientConnClosing
+				err = ErrClientConnClosing
 				return
 			}
 
@@ -572,7 +687,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 					a := b.addrs[next]
 					next = (next + 1) % len(b.addrs)
 					if a.connected {
-						if !a.dropRequest {
+						if !a.dropForRateLimiting && !a.dropForLoadBalancing {
 							addr = a.addr
 							b.next = next
 							b.mu.Unlock()
@@ -580,8 +695,15 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 						}
 						if !opts.BlockingWait {
 							b.next = next
+							if a.dropForLoadBalancing {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+							} else if a.dropForRateLimiting {
+								b.clientStats.NumCallsFinished++
+								b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+							}
 							b.mu.Unlock()
-							err = grpc.Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
+							err = Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
 							return
 						}
 					}
@@ -603,7 +725,7 @@ func (b *balancer) Get(ctx context.Context, opts grpc.BalancerGetOptions) (addr 
 	}
 }
 
-func (b *balancer) Notify() <-chan []grpc.Address {
+func (b *balancer) Notify() <-chan []Address {
 	return b.addrCh
 }
 
