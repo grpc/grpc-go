@@ -31,7 +31,7 @@
  *
  */
 
-package grpc_test
+package test
 
 import (
 	"bytes"
