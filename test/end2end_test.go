@@ -1567,14 +1567,15 @@ func TestCustomCodecs(t *testing.T) {
 
 func testCustomCodecs(t *testing.T, e env) {
 	const numDefaultRPC = 3
-	const numJSONRPC = 2
-	const numFooRPC = 3
+	jsonCodec := &testJSONCodec{name: "json", numRPC: 4}
+	fooCodec := &testJSONCodec{name: "foo", numRPC: 5}
+	barCodec := &testJSONCodec{name: "bar", numRPC: 6}
+	codecs := []grpc.Codec{jsonCodec, fooCodec, barCodec}
+	testJSONCodecs := []*testJSONCodec{jsonCodec, fooCodec, barCodec}
 
-	jsonCodec := &testJSONCodec{name: "json"}
-	fooCodec := &testJSONCodec{name: "foo"}
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	te.customCodecs = []grpc.Codec{jsonCodec, fooCodec}
+	te.customCodecs = codecs
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
@@ -1584,22 +1585,18 @@ func testCustomCodecs(t *testing.T, e env) {
 		wg.Add(1)
 		go performOneRPC(t, tc, &wg)
 	}
-	for i := 0; i < numJSONRPC; i++ {
-		wg.Add(1)
-		go performOneRPC(t, tc, &wg, grpc.CallCodec(jsonCodec))
-	}
-	for i := 0; i < numFooRPC; i++ {
-		wg.Add(1)
-		go performOneRPC(t, tc, &wg, grpc.CallCodec(fooCodec))
+	for _, testJSONCodec := range testJSONCodecs {
+		testJSONCodec.performRPCS(t, tc, &wg)
 	}
 	wg.Wait()
-
-	jsonCodec.check(t, numJSONRPC)
-	fooCodec.check(t, numFooRPC)
+	for _, testJSONCodec := range testJSONCodecs {
+		testJSONCodec.check(t)
+	}
 }
 
 type testJSONCodec struct {
 	name           string
+	numRPC         int
 	marshalCount   int64
 	unmarshalCount int64
 }
@@ -1618,12 +1615,19 @@ func (j *testJSONCodec) String() string {
 	return j.name
 }
 
-func (j *testJSONCodec) check(t *testing.T, numRPC int) {
-	if int(j.marshalCount) != numRPC*2 {
-		t.Errorf("Expected %d %s marshals, want %d", j.marshalCount, j.name, numRPC*2)
+func (j *testJSONCodec) performRPCS(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
+	for i := 0; i < j.numRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, wg, grpc.CallCodec(j))
 	}
-	if int(j.unmarshalCount) != numRPC*2 {
-		t.Errorf("Expected %d %s unmarshals, want %d", j.unmarshalCount, j.name, numRPC*2)
+}
+
+func (j *testJSONCodec) check(t *testing.T) {
+	if int(j.marshalCount) != j.numRPC*2 {
+		t.Errorf("Got %d %s marshals, want %d", j.marshalCount, j.name, j.numRPC*2)
+	}
+	if int(j.unmarshalCount) != j.numRPC*2 {
+		t.Errorf("Got %d %s unmarshals, want %d", j.unmarshalCount, j.name, j.numRPC*2)
 	}
 }
 
