@@ -34,7 +34,7 @@ package io.grpc.helloworldexample;
 import android.content.Context;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.v7.app.ActionBarActivity;
+import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.view.View;
@@ -53,7 +53,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.concurrent.TimeUnit;
 
-public class HelloworldActivity extends ActionBarActivity {
+public class HelloworldActivity extends AppCompatActivity {
     private Button mSendButton;
     private EditText mHostEdit;
     private EditText mPortEdit;
