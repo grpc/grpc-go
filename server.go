@@ -644,9 +644,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			BeginTime: time.Now(),
 		}
 		sh.HandleRPC(stream.Context(), begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				EndTime: time.Now(),
 			}
@@ -654,8 +652,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				end.Error = toRPCErr(err)
 			}
 			sh.HandleRPC(stream.Context(), end)
-		}
-	}()
+		}()
+	}
 	if trInfo != nil {
 		defer trInfo.tr.Finish()
 		trInfo.firstLine.client = false
@@ -814,9 +812,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			BeginTime: time.Now(),
 		}
 		sh.HandleRPC(stream.Context(), begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				EndTime: time.Now(),
 			}
@@ -824,8 +820,8 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				end.Error = toRPCErr(err)
 			}
 			sh.HandleRPC(stream.Context(), end)
-		}
-	}()
+		}()
+	}
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
