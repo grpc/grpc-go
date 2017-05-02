@@ -9,10 +9,11 @@
 
 # Add any project specific keep options here:
 
--dontwarn sun.misc.Unsafe
 -dontwarn com.google.common.**
--dontwarn okio.**
 # Ignores: can't find referenced class javax.lang.model.element.Modifier
 -dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.naming.**
+-dontwarn okio.**
+-dontwarn sun.misc.Unsafe
 -keep class io.grpc.internal.DnsNameResolverProvider
 -keep class io.grpc.okhttp.OkHttpChannelProvider
