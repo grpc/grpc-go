@@ -132,19 +132,20 @@ type grpclbAddrInfo struct {
 }
 
 type balancer struct {
-	r        naming.Resolver
-	target   string
-	mu       sync.Mutex
-	seq      int // a sequence number to make sure addrCh does not get stale addresses.
-	w        naming.Watcher
-	addrCh   chan []Address
-	rbs      []remoteBalancerInfo
-	addrs    []*grpclbAddrInfo
-	next     int
-	waitCh   chan struct{}
-	done     bool
-	expTimer *time.Timer
-	rand     *rand.Rand
+	r              naming.Resolver
+	target         string
+	mu             sync.Mutex
+	seq            int // a sequence number to make sure addrCh does not get stale addresses.
+	w              naming.Watcher
+	addrCh         chan []Address
+	rbs            []remoteBalancerInfo
+	addrs          []*grpclbAddrInfo
+	next           int
+	countConnected int
+	waitCh         chan struct{}
+	done           bool
+	expTimer       *time.Timer
+	rand           *rand.Rand
 
 	clientStats lbpb.ClientStats
 }
@@ -225,6 +226,7 @@ func (b *balancer) serverListExpire(seq int) {
 		return
 	}
 	b.next = 0
+	b.countConnected = 0
 	b.addrs = nil
 	// Ask grpc internals to close all the corresponding connections.
 	b.addrCh <- nil
@@ -253,12 +255,20 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
 			Metadata: &md,
 		}
-		sl = append(sl, &grpclbAddrInfo{
-			addr:                 addr,
-			dropForRateLimiting:  s.DropForRateLimiting,
-			dropForLoadBalancing: s.DropForLoadBalancing,
-		})
-		addrs = append(addrs, addr)
+		addrInfo := &grpclbAddrInfo{}
+		if s.DropForRateLimiting {
+			addrInfo.dropForRateLimiting = true
+			addrInfo.connected = true // Drop request fake entries are always connected.
+		} else if s.DropForLoadBalancing {
+			addrInfo.dropForLoadBalancing = true
+			addrInfo.connected = true // Drop request fake entries are always connected.
+		} else {
+			addrInfo.addr = addr
+		}
+		sl = append(sl, addrInfo)
+		if !s.DropForLoadBalancing && !s.DropForRateLimiting {
+			addrs = append(addrs, addr)
+		}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -268,6 +278,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	if len(sl) > 0 {
 		// reset b.next to 0 when replacing the server list.
 		b.next = 0
+		b.countConnected = 0
 		b.addrs = sl
 		b.addrCh <- addrs
 		if b.expTimer != nil {
@@ -513,6 +524,7 @@ func (b *balancer) Start(target string, config BalancerConfig) error {
 			b.seq++ // tick when getting a new balancer address
 			seq := b.seq
 			b.next = 0
+			b.countConnected = 0
 			b.mu.Unlock()
 			go func(cc *ClientConn, ccError chan struct{}) {
 				lbc := &loadBalancerClient{cc}
@@ -534,7 +546,10 @@ func (b *balancer) down(addr Address, err error) {
 	defer b.mu.Unlock()
 	for _, a := range b.addrs {
 		if addr == a.addr {
-			a.connected = false
+			if a.connected {
+				a.connected = false
+				b.countConnected--
+			}
 			break
 		}
 	}
@@ -546,20 +561,18 @@ func (b *balancer) Up(addr Address) func(error) {
 	if b.done {
 		return nil
 	}
-	var cnt int
 	for _, a := range b.addrs {
 		if a.addr == addr {
 			if a.connected {
 				return nil
 			}
 			a.connected = true
-		}
-		if a.connected && !a.dropForRateLimiting && !a.dropForLoadBalancing {
-			cnt++
+			b.countConnected++
+			break
 		}
 	}
 	// addr is the only one which is connected. Notify the Get() callers who are blocking.
-	if cnt == 1 && b.waitCh != nil {
+	if b.countConnected == 1 && b.waitCh != nil {
 		close(b.waitCh)
 		b.waitCh = nil
 	}
@@ -602,7 +615,7 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	}()
 
 	b.clientStats.NumCallsStarted++
-	if len(b.addrs) > 0 {
+	if len(b.addrs) > 0 && b.countConnected > 0 {
 		if b.next >= len(b.addrs) {
 			b.next = 0
 		}
