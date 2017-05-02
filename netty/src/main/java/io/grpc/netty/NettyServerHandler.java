@@ -419,7 +419,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   protected void onConnectionError(ChannelHandlerContext ctx, Throwable cause,
       Http2Exception http2Ex) {
-    logger.log(Level.WARNING, "Connection Error", cause);
+    logger.log(Level.FINE, "Connection Error", cause);
     connectionError = cause;
     super.onConnectionError(ctx, cause, http2Ex);
   }
