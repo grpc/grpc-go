@@ -189,17 +189,15 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			FailFast:  c.failFast,
 		}
 		sh.HandleRPC(ctx, begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
 				Error:   e,
 			}
 			sh.HandleRPC(ctx, end)
-		}
-	}()
+		}()
+	}
 	topts := &transport.Options{
 		Last:  true,
 		Delay: false,
