@@ -141,7 +141,7 @@ type balancer struct {
 	rbs            []remoteBalancerInfo
 	addrs          []*grpclbAddrInfo
 	next           int
-	countConnected int
+	countConnected int // The number of connected addresses, not including fake entries for drop requests.
 	waitCh         chan struct{}
 	done           bool
 	expTimer       *time.Timer
@@ -255,6 +255,10 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
 			Metadata: &md,
 		}
+		// - If it's not a drop request, add an entry in addrs list, and also notify this address
+		//   to gRPC.
+		// - If it a drop request, add a fake entry in addrs list, so we can do round-robin on it.
+		//   This fake entries always appear as connected.
 		addrInfo := &grpclbAddrInfo{}
 		if s.DropForRateLimiting {
 			addrInfo.dropForRateLimiting = true
@@ -267,7 +271,7 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 		}
 		sl = append(sl, addrInfo)
 		if !s.DropForLoadBalancing && !s.DropForRateLimiting {
-			addrs = append(addrs, addr)
+			addrs = append(addrs, addr) // Only notify gRPC if it's not drop request.
 		}
 	}
 	b.mu.Lock()
