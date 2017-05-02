@@ -299,9 +299,13 @@ type testServers struct {
 	lb      *grpc.Server
 	beIPs   []net.IP
 	bePorts []int
+	bes     []*grpc.Server
 }
 
 func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), err error) {
+	if numberOfBackends <= 0 {
+		return nil, nil, fmt.Errorf("numberOfBackends is %v", numberOfBackends)
+	}
 	var (
 		beListeners []net.Listener
 		ls          *remoteBalancer
@@ -352,6 +356,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		lb:      lb,
 		beIPs:   beIPs,
 		bePorts: bePorts,
+		bes:     backends,
 	}
 	cleanup = func() {
 		defer stopBackends(backends)
@@ -480,6 +485,15 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	defer cancel()
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.DeadlineExceeded)
+	}
+	// Close backends. And all following RPCs should timeout, not dropped.
+	tss.bes[0].Stop()
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Microsecond)
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("%v.SayHello(_, _) = _, %v, want _, <DeadlineExceeded>", testC, err)
+		}
+		cancel()
 	}
 	cc.Close()
 }
@@ -660,19 +674,29 @@ type statsTestServerConfig struct {
 }
 
 func runAndGetStats(t *testing.T, c *statsTestServerConfig, runRPCs func(*grpc.ClientConn)) lbpb.ClientStats {
-	tss, cleanup, err := newLoadBalancer(3)
+	tss, cleanup, err := newLoadBalancer(c.normal)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
 	defer cleanup()
 	sl := &lbpb.ServerList{}
-	sl.Servers = append(sl.Servers, &lbpb.Server{
-		IpAddress:        tss.beIPs[2],
-		Port:             int32(tss.bePorts[2]),
-		LoadBalanceToken: lbToken,
-		// DropForLoadBalancing: dropForLoadBalancing,
-		// DropForRateLimiting:  dropForRateLimiting,
-	})
+	for i := 0; i < c.normal; i++ {
+		sl.Servers = append(sl.Servers, &lbpb.Server{
+			IpAddress:        tss.beIPs[i],
+			Port:             int32(tss.bePorts[i]),
+			LoadBalanceToken: lbToken,
+		})
+	}
+	for i := 0; i < c.dropLB; i++ {
+		sl.Servers = append(sl.Servers, &lbpb.Server{
+			DropForLoadBalancing: true,
+		})
+	}
+	for i := 0; i < c.dropRL; i++ {
+		sl.Servers = append(sl.Servers, &lbpb.Server{
+			DropForRateLimiting: true,
+		})
+	}
 	tss.ls.sls = []*lbpb.ServerList{sl}
 	tss.ls.intervals = []time.Duration{0}
 	tss.ls.statsDura = 100 * time.Millisecond
@@ -696,218 +720,83 @@ func runAndGetStats(t *testing.T, c *statsTestServerConfig, runRPCs func(*grpc.C
 	return stats
 }
 
-const countRPC = 40
+const (
+	countRPC        = 40
+	countFailToSend = 12
+)
 
-func TestGRPCLBStatsUnarySuccess(t *testing.T) {
-	stats := runAndGetStats(t, nil, func(cc *grpc.ClientConn) {
+func TestGRPCLBStatsUnary(t *testing.T) {
+	c := &statsTestServerConfig{
+		// 1/2 normal, 1/4 drop for LB, 1/4 drop for RL.
+		normal: 2,
+		dropLB: 1,
+		dropRL: 1,
+	}
+	stats := runAndGetStats(t, c, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			// One success.
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
-		for i := 0; i < countRPC-1; i++ {
+		for i := 0; i < countRPC; i++ {
 			testC.EmptyCall(context.Background(), &testpb.Empty{})
+		}
+		for i := 0; i < countFailToSend; i++ {
+			grpc.Invoke(context.Background(), "failtosend", &testpb.Empty{}, nil, cc)
 		}
 	})
 
 	if err := checkStats(&stats, &lbpb.ClientStats{
-		NumCallsStarted:               int64(countRPC),
-		NumCallsFinished:              int64(countRPC),
-		NumCallsFinishedKnownReceived: int64(countRPC),
+		NumCallsStarted:                          int64(countRPC + countFailToSend + 1),
+		NumCallsFinished:                         int64(countRPC + countFailToSend + 1),
+		NumCallsFinishedKnownReceived:            int64(countRPC/2 + 1),
+		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC/4 + countFailToSend/4),
+		NumCallsFinishedWithDropForRateLimiting:  int64(countRPC/4 + countFailToSend/4),
+		NumCallsFinishedWithClientFailedToSend:   int64(countFailToSend / 2),
 	}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
-// 	c := 0
-// 	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		for {
-// 			c++
-// 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-// 				if strings.Contains(err.Error(), "drops requests") {
-// 					break
-// 				}
-// 			}
-// 		}
-// 		for i := 0; i < countRPC; i++ {
-// 			testC.EmptyCall(context.Background(), &testpb.Empty{})
-// 		}
-// 	})
+func TestGRPCLBStatsStreaming(t *testing.T) {
+	c := &statsTestServerConfig{
+		// 1/2 normal, 1/4 drop for LB, 1/4 drop for RL.
+		normal: 2,
+		dropLB: 1,
+		dropRL: 1,
+	}
+	stats := runAndGetStats(t, c, func(cc *grpc.ClientConn) {
+		testC := testpb.NewTestServiceClient(cc)
+		// The first non-failfast RPC succeeds, all connections are up.
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			// One success.
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+		}
+		for i := 0; i < countRPC; i++ {
+			stream, err := testC.FullDuplexCall(context.Background())
+			if err == nil {
+				// Wait for stream to end if err is nil.
+				for {
+					if _, err = stream.Recv(); err == io.EOF {
+						break
+					}
+				}
+			}
+		}
+		for i := 0; i < countFailToSend; i++ {
+			grpc.NewClientStream(context.Background(), &grpc.StreamDesc{}, cc, "failtosend")
+		}
+	})
 
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                          int64(countRPC + c),
-// 		NumCallsFinished:                         int64(countRPC + c),
-// 		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
-// 		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
-// 	c := 0
-// 	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		for {
-// 			c++
-// 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-// 				if strings.Contains(err.Error(), "drops requests") {
-// 					break
-// 				}
-// 			}
-// 		}
-// 		for i := 0; i < countRPC; i++ {
-// 			testC.EmptyCall(context.Background(), &testpb.Empty{})
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                         int64(countRPC + c),
-// 		NumCallsFinished:                        int64(countRPC + c),
-// 		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
-// 		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
-// 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		// The first non-failfast RPC succeeds, all connections are up.
-// 		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
-// 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-// 		}
-// 		for i := 0; i < countRPC-1; i++ {
-// 			grpc.Invoke(context.Background(), "failtosend", &testpb.Empty{}, nil, cc)
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                        int64(countRPC),
-// 		NumCallsFinished:                       int64(countRPC),
-// 		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
-// 		NumCallsFinishedKnownReceived:          1,
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
-// 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		// The first non-failfast RPC succeeds, all connections are up.
-// 		stream, err := testC.FullDuplexCall(context.Background(), grpc.FailFast(false))
-// 		if err != nil {
-// 			t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
-// 		}
-// 		for {
-// 			if _, err = stream.Recv(); err == io.EOF {
-// 				break
-// 			}
-// 		}
-// 		for i := 0; i < countRPC-1; i++ {
-// 			stream, err = testC.FullDuplexCall(context.Background())
-// 			if err == nil {
-// 				// Wait for stream to end if err is nil.
-// 				for {
-// 					if _, err = stream.Recv(); err == io.EOF {
-// 						break
-// 					}
-// 				}
-// 			}
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:               int64(countRPC),
-// 		NumCallsFinished:              int64(countRPC),
-// 		NumCallsFinishedKnownReceived: int64(countRPC),
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
-// 	c := 0
-// 	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		for {
-// 			c++
-// 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-// 				if strings.Contains(err.Error(), "drops requests") {
-// 					break
-// 				}
-// 			}
-// 		}
-// 		for i := 0; i < countRPC; i++ {
-// 			testC.FullDuplexCall(context.Background())
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                          int64(countRPC + c),
-// 		NumCallsFinished:                         int64(countRPC + c),
-// 		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC + 1),
-// 		NumCallsFinishedWithClientFailedToSend:   int64(c - 1),
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
-// 	c := 0
-// 	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		for {
-// 			c++
-// 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-// 				if strings.Contains(err.Error(), "drops requests") {
-// 					break
-// 				}
-// 			}
-// 		}
-// 		for i := 0; i < countRPC; i++ {
-// 			testC.FullDuplexCall(context.Background())
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                         int64(countRPC + c),
-// 		NumCallsFinished:                        int64(countRPC + c),
-// 		NumCallsFinishedWithDropForRateLimiting: int64(countRPC + 1),
-// 		NumCallsFinishedWithClientFailedToSend:  int64(c - 1),
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
-
-// func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
-// 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
-// 		testC := testpb.NewTestServiceClient(cc)
-// 		// The first non-failfast RPC succeeds, all connections are up.
-// 		stream, err := testC.FullDuplexCall(context.Background(), grpc.FailFast(false))
-// 		if err != nil {
-// 			t.Fatalf("%v.FullDuplexCall(_, _) = _, %v, want _, <nil>", testC, err)
-// 		}
-// 		for {
-// 			if _, err = stream.Recv(); err == io.EOF {
-// 				break
-// 			}
-// 		}
-// 		for i := 0; i < countRPC-1; i++ {
-// 			grpc.NewClientStream(context.Background(), &grpc.StreamDesc{}, cc, "failtosend")
-// 		}
-// 	})
-
-// 	if err := checkStats(&stats, &lbpb.ClientStats{
-// 		NumCallsStarted:                        int64(countRPC),
-// 		NumCallsFinished:                       int64(countRPC),
-// 		NumCallsFinishedWithClientFailedToSend: int64(countRPC - 1),
-// 		NumCallsFinishedKnownReceived:          1,
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
+	if err := checkStats(&stats, &lbpb.ClientStats{
+		NumCallsStarted:                          int64(countRPC + countFailToSend + 1),
+		NumCallsFinished:                         int64(countRPC + countFailToSend + 1),
+		NumCallsFinishedKnownReceived:            int64(countRPC/2 + 1),
+		NumCallsFinishedWithDropForLoadBalancing: int64(countRPC/4 + countFailToSend/4),
+		NumCallsFinishedWithDropForRateLimiting:  int64(countRPC/4 + countFailToSend/4),
+		NumCallsFinishedWithClientFailedToSend:   int64(countFailToSend / 2),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
