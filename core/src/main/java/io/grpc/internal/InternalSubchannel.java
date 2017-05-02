@@ -60,8 +60,6 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Transports for a single {@link SocketAddress}.
- *
- * <p>This is the next version of {@link TransportSet} in development.
  */
 @ThreadSafe
 final class InternalSubchannel implements WithLogId {

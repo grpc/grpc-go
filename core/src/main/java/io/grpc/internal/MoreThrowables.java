@@ -33,7 +33,7 @@ package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 
-/** Utility functions when interacting with {@link Throwables}. */
+/** Utility functions when interacting with {@link Throwable}s. */
 // TODO(ejona): Delete this once we've upgraded to Guava 20 or later.
 final class MoreThrowables {
   /**

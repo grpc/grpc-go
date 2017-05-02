@@ -112,10 +112,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   /**
    * Construct a server.
    *
+   * @param executorPool provides an executor to call methods on behalf of remote clients
    * @param registry the primary method registry
    * @param fallbackRegistry the secondary method registry, used only if the primary registry
    *        doesn't have the method
-   * @param executor to call methods on behalf of remote clients
    */
   ServerImpl(ObjectPool<? extends Executor> executorPool,
       ObjectPool<ScheduledExecutorService> timeoutServicePool,

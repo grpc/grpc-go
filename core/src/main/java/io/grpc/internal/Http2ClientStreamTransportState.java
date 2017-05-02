@@ -57,7 +57,7 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
         /**
          * RFC 7231 says status codes are 3 digits long.
          *
-         * @see: <a href="https://tools.ietf.org/html/rfc7231#section-6">RFC 7231</a>
+         * @see <a href="https://tools.ietf.org/html/rfc7231#section-6">RFC 7231</a>
          */
         @Override
         public Integer parseAsciiString(byte[] serialized) {

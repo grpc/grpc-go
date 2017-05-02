@@ -42,6 +42,7 @@ import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.trace.Tracing;
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
+import io.grpc.ClientStreamTracer;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;

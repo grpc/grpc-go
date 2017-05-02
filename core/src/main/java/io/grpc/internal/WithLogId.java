@@ -37,8 +37,7 @@ package io.grpc.internal;
 public interface WithLogId {
   /**
    * Returns an ID that is primarily used in debug logs. It usually contains the class name and a
-   * numeric ID that is unique among the instances. {@link GrpcUtil#getLogId} is a canonical
-   * implementation.
+   * numeric ID that is unique among the instances.
    *
    * <p>The subclasses of this interface usually want to include the log ID in their {@link
    * #toString} results.

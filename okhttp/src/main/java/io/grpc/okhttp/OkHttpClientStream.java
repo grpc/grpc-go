@@ -175,7 +175,7 @@ class OkHttpClientStream extends AbstractClientStream2 {
     @GuardedBy("lock")
     private List<Header> requestHeaders;
     /**
-     * Null iff {@link #requestHeaders} is null.  Non-null iff neither {@link #sendCancel} nor
+     * Null iff {@link #requestHeaders} is null.  Non-null iff neither {@link #cancel} nor
      * {@link #start(int)} have been called.
      */
     @GuardedBy("lock")
