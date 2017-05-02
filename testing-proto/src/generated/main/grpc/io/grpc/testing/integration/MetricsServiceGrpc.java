@@ -68,7 +68,7 @@ public final class MetricsServiceGrpc {
   }
 
   /**
-   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   * Creates a new ListenableFuture-style stub that supports unary calls on the service
    */
   public static MetricsServiceFutureStub newFutureStub(
       io.grpc.Channel channel) {

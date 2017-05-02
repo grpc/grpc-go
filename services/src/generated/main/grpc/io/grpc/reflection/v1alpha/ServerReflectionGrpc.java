@@ -56,7 +56,7 @@ public final class ServerReflectionGrpc {
   }
 
   /**
-   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   * Creates a new ListenableFuture-style stub that supports unary calls on the service
    */
   public static ServerReflectionFutureStub newFutureStub(
       io.grpc.Channel channel) {

@@ -104,7 +104,7 @@ public final class MonitoringGrpc {
   }
 
   /**
-   * Creates a new ListenableFuture-style stub that supports unary and streaming output calls on the service
+   * Creates a new ListenableFuture-style stub that supports unary calls on the service
    */
   public static MonitoringFutureStub newFutureStub(
       io.grpc.Channel channel) {

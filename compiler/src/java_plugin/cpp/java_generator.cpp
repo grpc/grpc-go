@@ -1078,8 +1078,8 @@ static void PrintService(const ServiceDescriptor* service,
   p->Print("}\n\n");
 
   // TODO(nmittler): Replace with WriteDocComment once included by protobuf distro.
-  GrpcWriteDocComment(p, " Creates a new ListenableFuture-style stub that supports unary and "
-                         "streaming output calls on the service");
+  GrpcWriteDocComment(p, " Creates a new ListenableFuture-style stub that supports unary calls "
+                         "on the service");
   p->Print(
       *vars,
       "public static $service_name$FutureStub newFutureStub(\n"
