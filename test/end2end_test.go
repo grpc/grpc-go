@@ -36,6 +36,7 @@ package grpc_test
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -49,6 +50,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -445,6 +447,7 @@ type test struct {
 	streamServerInt   grpc.StreamServerInterceptor
 	unknownHandler    grpc.StreamHandler
 	sc                <-chan grpc.ServiceConfig
+	customCodecs      []grpc.Codec
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -511,6 +514,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.unknownHandler != nil {
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
+	}
+	if len(te.customCodecs) > 0 {
+		sopts = append(sopts, grpc.CustomCodecs(te.customCodecs...))
 	}
 	la := "localhost:0"
 	switch te.e.network {
@@ -1552,6 +1558,75 @@ func testExceedMsgLimit(t *testing.T, e env) {
 
 }
 
+func TestCustomCodecs(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testCustomCodecs(t, e)
+	}
+}
+
+func testCustomCodecs(t *testing.T, e env) {
+	const numDefaultRPC = 3
+	const numJSONRPC = 2
+	const numFooRPC = 3
+
+	jsonCodec := &testJSONCodec{name: "json"}
+	fooCodec := &testJSONCodec{name: "foo"}
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.customCodecs = []grpc.Codec{jsonCodec, fooCodec}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	var wg sync.WaitGroup
+	for i := 0; i < numDefaultRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, &wg)
+	}
+	for i := 0; i < numJSONRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, &wg, grpc.CallCodec(jsonCodec))
+	}
+	for i := 0; i < numFooRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, &wg, grpc.CallCodec(fooCodec))
+	}
+	wg.Wait()
+
+	jsonCodec.check(t, numJSONRPC)
+	fooCodec.check(t, numFooRPC)
+}
+
+type testJSONCodec struct {
+	name           string
+	marshalCount   int64
+	unmarshalCount int64
+}
+
+func (j *testJSONCodec) Marshal(v interface{}) ([]byte, error) {
+	atomic.AddInt64(&j.marshalCount, 1)
+	return json.Marshal(v)
+}
+
+func (j *testJSONCodec) Unmarshal(data []byte, v interface{}) error {
+	atomic.AddInt64(&j.unmarshalCount, 1)
+	return json.Unmarshal(data, v)
+}
+
+func (j *testJSONCodec) String() string {
+	return j.name
+}
+
+func (j *testJSONCodec) check(t *testing.T, numRPC int) {
+	if int(j.marshalCount) != numRPC*2 {
+		t.Errorf("Expected %d %s marshals, want %d", j.marshalCount, j.name, numRPC*2)
+	}
+	if int(j.unmarshalCount) != numRPC*2 {
+		t.Errorf("Expected %d %s unmarshals, want %d", j.unmarshalCount, j.name, numRPC*2)
+	}
+}
+
 func TestPeerClientSide(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -2057,7 +2132,7 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 }
 
-func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
+func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup, opts ...grpc.CallOption) {
 	defer wg.Done()
 	const argSize = 2718
 	const respSize = 314
@@ -2073,7 +2148,7 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
+	reply, err := tc.UnaryCall(context.Background(), req, opts...)
 	if err != nil {
 		t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 		return
@@ -2133,7 +2208,7 @@ func testRetry(t *testing.T, e env) {
 	for i := 0; i < numRPC; i++ {
 		time.Sleep(rpcSpacing)
 		wg.Add(1)
-		go performOneRPC(t, tc, &wg)
+		go performOneRPC(t, tc, &wg, grpc.FailFast(false))
 	}
 	wg.Wait()
 }
