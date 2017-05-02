@@ -585,6 +585,32 @@ func (b *balancer) Up(addr Address) func(error) {
 	}
 }
 
+// getNextConnectedAddr returns the next connected addr.
+// If no connected address is available, it returns nil.
+// b.next will be advanced to the correct value.
+// Caller must hold the lock.
+func (b *balancer) getNextConnectedAddr() *grpclbAddrInfo {
+	if len(b.addrs) > 0 && b.countConnected > 0 {
+		if b.next >= len(b.addrs) {
+			b.next = 0
+		}
+		next := b.next
+		for {
+			a := b.addrs[next]
+			next = (next + 1) % len(b.addrs)
+			if a.connected {
+				b.next = next
+				return a
+			}
+			if next == b.next {
+				// Has iterated all the possible address but none is connected.
+				break
+			}
+		}
+	}
+	return nil
+}
+
 func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	b.mu.Lock()
@@ -619,41 +645,24 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	}()
 
 	b.clientStats.NumCallsStarted++
-	if len(b.addrs) > 0 && b.countConnected > 0 {
-		if b.next >= len(b.addrs) {
-			b.next = 0
-		}
-		next := b.next
-		for {
-			a := b.addrs[next]
-			next = (next + 1) % len(b.addrs)
-			if a.connected {
-				if !a.dropForRateLimiting && !a.dropForLoadBalancing {
-					addr = a.addr
-					b.next = next
-					b.mu.Unlock()
-					return
-				}
-				if !opts.BlockingWait {
-					b.next = next
-					if a.dropForLoadBalancing {
-						b.clientStats.NumCallsFinished++
-						b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
-					} else if a.dropForRateLimiting {
-						b.clientStats.NumCallsFinished++
-						b.clientStats.NumCallsFinishedWithDropForRateLimiting++
-					}
-					b.mu.Unlock()
-					err = Errorf(codes.Unavailable, "%s drops requests", a.addr.Addr)
-					return
-				}
-			}
-			if next == b.next {
-				// Has iterated all the possible address but none is connected.
-				break
+	if addrInfo := b.getNextConnectedAddr(); addrInfo != nil {
+		if !addrInfo.dropForRateLimiting && !addrInfo.dropForLoadBalancing {
+			addr = addrInfo.addr
+		} else {
+			if addrInfo.dropForLoadBalancing {
+				b.clientStats.NumCallsFinished++
+				b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+				err = Errorf(codes.Unavailable, "%s drops requests for load balancing", addrInfo.addr.Addr)
+			} else if addrInfo.dropForRateLimiting {
+				b.clientStats.NumCallsFinished++
+				b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+				err = Errorf(codes.Unavailable, "%s drops requests for rate limiting", addrInfo.addr.Addr)
 			}
 		}
+		b.mu.Unlock()
+		return
 	}
+
 	if !opts.BlockingWait {
 		if len(b.addrs) == 0 {
 			b.clientStats.NumCallsFinished++
@@ -695,42 +704,25 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 				return
 			}
 
-			if len(b.addrs) > 0 {
-				if b.next >= len(b.addrs) {
-					b.next = 0
-				}
-				next := b.next
-				for {
-					a := b.addrs[next]
-					next = (next + 1) % len(b.addrs)
-					if a.connected {
-						if !a.dropForRateLimiting && !a.dropForLoadBalancing {
-							addr = a.addr
-							b.next = next
-							b.mu.Unlock()
-							return
-						}
-						if !opts.BlockingWait {
-							b.next = next
-							if a.dropForLoadBalancing {
-								b.clientStats.NumCallsFinished++
-								b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
-							} else if a.dropForRateLimiting {
-								b.clientStats.NumCallsFinished++
-								b.clientStats.NumCallsFinishedWithDropForRateLimiting++
-							}
-							b.mu.Unlock()
-							err = Errorf(codes.Unavailable, "drop requests for the addreess %s", a.addr.Addr)
-							return
-						}
-					}
-					if next == b.next {
-						// Has iterated all the possible address but none is connected.
-						break
+			// An address just became connected.
+			if addrInfo := b.getNextConnectedAddr(); addrInfo != nil {
+				if !addrInfo.dropForRateLimiting && !addrInfo.dropForLoadBalancing {
+					addr = addrInfo.addr
+				} else {
+					if addrInfo.dropForLoadBalancing {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForLoadBalancing++
+						err = Errorf(codes.Unavailable, "%s drops requests for load balancing", addrInfo.addr.Addr)
+					} else if addrInfo.dropForRateLimiting {
+						b.clientStats.NumCallsFinished++
+						b.clientStats.NumCallsFinishedWithDropForRateLimiting++
+						err = Errorf(codes.Unavailable, "%s drops requests for rate limiting", addrInfo.addr.Addr)
 					}
 				}
+				b.mu.Unlock()
+				return
 			}
-			// The newly added addr got removed by Down() again.
+			// The newly connected addr got disconnected again.
 			if b.waitCh == nil {
 				ch = make(chan struct{})
 				b.waitCh = ch
