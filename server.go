@@ -151,25 +151,28 @@ func CustomCodec(codec Codec) ServerOption {
 }
 
 // CustomCodecs returns a ServerOption that sets the codecs that can be used based on the
-// content-type in addition to the proto codec.
+// content-type subtype, ie if a codec returns "proto" from calling String(), this will
+// be used if the content-type is "application/grpc+proto". If there is no subtype
+// on the content-type, the codec set by CustomCodec will be used, or if CustomCodec
+// is not set, then the default codec will be used.
 //
-// TODO: Function name is not amazing
-// TODO: better documentation on overlap with CustonCodec
+// Note that the subtype "proto" is registered by default, but can be overridden
+// with a custom codec here that returns "proto" from callikng String()
 func CustomCodecs(codecs ...Codec) ServerOption {
-	m := map[string]Codec{
-		"proto": protoCodec{},
-	}
+	m := make(map[string]Codec, len(codecs))
 	for _, codec := range codecs {
-		// TODO: do we want to do string operations?
-		// I believe TrimSpace does not make a copy, but ToLower does
-		// This might be an extra allocation that is not generally wanted
-		// This matters more in getCodec than here
+		// this is a one-time server setup operation
+		// note that http/2 transmits headers as lowercase
 		name := strings.TrimSpace(strings.ToLower(codec.String()))
 		if name != "" {
 			m[name] = codec
 		}
 	}
 	return func(o *options) {
+		for name, codec := range o.codecs {
+			// override codecs registered earlier
+			m[name] = codec
+		}
 		o.codecs = m
 	}
 }
@@ -283,9 +286,11 @@ func NewServer(opt ...ServerOption) *Server {
 		opts.codec = protoCodec{}
 	}
 	if len(opts.codecs) == 0 {
-		opts.codecs = map[string]Codec{
-			"proto": protoCodec{},
-		}
+		// will register protoCodec in next if statement
+		opts.codecs = make(map[string]Codec, 1)
+	}
+	if _, ok := opts.codecs["proto"]; !ok {
+		opts.codecs["proto"] = protoCodec{}
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
@@ -638,18 +643,12 @@ func (s *Server) removeConn(c io.Closer) {
 }
 
 func (s *Server) getCodec(contentSubtype string) (Codec, error) {
-	// TODO: do we really want to do string operations each time?
-	// This may be an extra allocation
-	// See comment in CustomCodecs
-	contentSubtype = strings.TrimSpace(strings.ToLower(contentSubtype))
 	if contentSubtype == "" {
 		return s.opts.codec, nil
 	}
 	codec, ok := s.opts.codecs[contentSubtype]
 	if !ok {
-		// TODO: return error? we are not doing verification  of encoding
-		// type as of now, do we want to add it?
-		return s.opts.codec, nil
+		return nil, Errorf(codes.Internal, "grpc: no codec registered for content-type subtype %s", contentSubtype)
 	}
 	return codec, nil
 }
