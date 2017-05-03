@@ -222,6 +222,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}
 		d.contentType = f.Value
+		d.addMetadata(f)
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":
@@ -252,18 +253,22 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		d.method = f.Value
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
-			if d.mdata == nil {
-				d.mdata = make(map[string][]string)
-			}
-			v, err := decodeMetadataHeader(f.Name, f.Value)
-			if err != nil {
-				grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
-				return nil
-			}
-			d.mdata[f.Name] = append(d.mdata[f.Name], v)
+			d.addMetadata(f)
 		}
 	}
 	return nil
+}
+
+func (d *decodeState) addMetadata(f hpack.HeaderField) {
+	if d.mdata == nil {
+		d.mdata = make(map[string][]string)
+	}
+	v, err := decodeMetadataHeader(f.Name, f.Value)
+	if err != nil {
+		grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
+		return nil
+	}
+	d.mdata[f.Name] = append(d.mdata[f.Name], v)
 }
 
 type timeoutUnit uint8

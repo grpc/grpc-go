@@ -94,7 +94,7 @@ func NewServerHandlerTransport(w http.ResponseWriter, r *http.Request) (ServerTr
 		st.timeout = to
 	}
 
-	var metakv []string
+	metakv := []string{"content-type", contentType}
 	if r.Host != "" {
 		metakv = append(metakv, ":authority", r.Host)
 	}
