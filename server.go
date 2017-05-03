@@ -642,15 +642,15 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
-func (s *Server) getCodec(contentSubtype string) (Codec, error) {
+func (s *Server) getCodec(contentSubtype string) Codec {
 	if contentSubtype == "" {
-		return s.opts.codec, nil
+		return s.opts.codec
 	}
 	codec, ok := s.opts.codecs[contentSubtype]
 	if !ok {
-		return nil, Errorf(codes.Internal, "grpc: no codec registered for content-type subtype %s", contentSubtype)
+		return s.opts.codec
 	}
-	return codec, nil
+	return codec
 }
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
@@ -664,11 +664,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	codec, err := s.getCodec(stream.ContentSubtype())
-	if err != nil {
-		return err
-	}
-	p, err := encode(codec, msg, cp, cbuf, outPayload)
+	p, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, cbuf, outPayload)
 	if err != nil {
 		// This typically indicates a fatal issue (e.g., memory
 		// corruption or hardware faults) the application program
@@ -786,11 +782,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				// java implementation.
 				return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
 			}
-			codec, err := s.getCodec(stream.ContentSubtype())
-			if err != nil {
-				return err
-			}
-			if err := codec.Unmarshal(req, v); err != nil {
+			if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
 				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 			}
 			if inPayload != nil {
@@ -883,15 +875,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
-	codec, err := s.getCodec(stream.ContentSubtype())
-	if err != nil {
-		return err
-	}
 	ss := &serverStream{
 		t:            t,
 		s:            stream,
 		p:            &parser{r: stream},
-		codec:        codec,
+		codec:        s.getCodec(stream.ContentSubtype()),
 		cp:           s.opts.cp,
 		dc:           s.opts.dc,
 		maxMsgSize:   s.opts.maxMsgSize,
