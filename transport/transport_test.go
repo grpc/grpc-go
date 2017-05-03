@@ -1287,6 +1287,7 @@ func TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 func TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
 	wc := windowSizeConfig{
 		serverStream: defaultWindowSize,
+		// Note this is smaller than initialConnWindowSize which is the current default.
 		serverConn:   defaultWindowSize,
 		clientStream: defaultWindowSize,
 		clientConn:   defaultWindowSize,
@@ -1308,10 +1309,13 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	defer client.Close()
 
 	// Wait for server conns to be populated with new server transport.
-	waitWhileTrue(t, func() bool {
+	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
-		return len(server.conns) == 0
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed out waiting for server transport to be created")
+		}
+		return false, nil
 	})
 	var st *http2Server
 	server.mu.Lock()
@@ -1325,15 +1329,23 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Failed to create stream. Err: %v", err)
 	}
 	// Wait for server to receive headers.
-	waitWhileTrue(t, func() bool {
+	waitWhileTrue(t, func() (bool, error) {
 		st.mu.Lock()
 		defer st.mu.Unlock()
-		return len(st.activeStreams) == 0
+		if len(st.activeStreams) == 0 {
+			return true, fmt.Errorf("timed out waiting for server to receive headers")
+		}
+		return false, nil
 	})
+	// Sleeping to make sure the settings are applied in case of negative test.
+	time.Sleep(time.Second)
 
-	if st.fc.limit != uint32(serverConfig.InitialConnWindowSize) {
-		t.Fatalf("Server transport flow control window size is %v, want %v", st.fc.limit, serverConfig.InitialConnWindowSize)
-	}
+	waitWhileTrue(t, func() (bool, error) {
+		if lim := st.fc.limit; lim != uint32(serverConfig.InitialConnWindowSize) {
+			return true, fmt.Errorf("Server transport flow control window size: got %v, want %v", lim, serverConfig.InitialConnWindowSize)
+		}
+		return false, nil
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	serverSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
 	if err != nil {
@@ -1381,15 +1393,18 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	}
 }
 
-func waitWhileTrue(t *testing.T, condition func() bool) {
-	wait := false
+func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
+	var (
+		wait bool
+		err  error
+	)
 	timer := time.NewTimer(time.Second * 5)
 	for {
-		wait = condition()
+		wait, err = condition()
 		if wait {
 			select {
 			case <-timer.C:
-				t.Fatalf("Test timed out waiting for settings frames to be exchanged.")
+				t.Fatalf(err.Error())
 			default:
 				time.Sleep(50 * time.Millisecond)
 				continue
