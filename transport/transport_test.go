@@ -1306,8 +1306,13 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	server, client := setUpWithOptions(t, 0, serverConfig, suspended, connectOptions)
 	defer server.stop()
 	defer client.Close()
-	// Sleep for a second to make sure connection is established.
-	time.Sleep(time.Second)
+
+	// Wait for server conns to be populated with new server transport.
+	waitWhileTrue(t, func() bool {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		return len(server.conns) == 0
+	})
 	var st *http2Server
 	server.mu.Lock()
 	for k := range server.conns {
@@ -1315,6 +1320,17 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	}
 	server.mu.Unlock()
 	ct := client.(*http2Client)
+	cstream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+	// Wait for server to receive headers.
+	waitWhileTrue(t, func() bool {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		return len(st.activeStreams) == 0
+	})
+
 	if st.fc.limit != uint32(serverConfig.InitialConnWindowSize) {
 		t.Fatalf("Server transport flow control window size is %v, want %v", st.fc.limit, serverConfig.InitialConnWindowSize)
 	}
@@ -1351,15 +1367,9 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Client stream send quota(%v) not equal to server's window size(%v) on stream.", ct.streamSendQuota, serverConfig.InitialWindowSize)
 	}
 	ct.mu.Unlock()
-	cstream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
-	if err != nil {
-		t.Fatalf("Failed to create stream. Err: %v", err)
-	}
 	if cstream.fc.limit != uint32(connectOptions.InitialWindowSize) {
 		t.Fatalf("Client stream flow control window size is %v, want %v", cstream.fc.limit, connectOptions.InitialWindowSize)
 	}
-	// Sleep for a bit to make sure server received headers for the stream.
-	time.Sleep(time.Millisecond * 500)
 	var sstream *Stream
 	st.mu.Lock()
 	for _, v := range st.activeStreams {
@@ -1368,5 +1378,26 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	st.mu.Unlock()
 	if sstream.fc.limit != uint32(serverConfig.InitialWindowSize) {
 		t.Fatalf("Server stream flow control window size is %v, want %v", sstream.fc.limit, serverConfig.InitialWindowSize)
+	}
+}
+
+func waitWhileTrue(t *testing.T, condition func() bool) {
+	wait := false
+	timer := time.NewTimer(time.Second * 5)
+	for {
+		wait = condition()
+		if wait {
+			select {
+			case <-timer.C:
+				t.Fatalf("Test timed out waiting for settings frames to be exchanged.")
+			default:
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+		}
+		if !timer.Stop() {
+			<-timer.C
+		}
+		break
 	}
 }
