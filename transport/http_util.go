@@ -266,7 +266,7 @@ func (d *decodeState) addMetadata(f hpack.HeaderField) {
 	v, err := decodeMetadataHeader(f.Name, f.Value)
 	if err != nil {
 		grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
-		return nil
+		return
 	}
 	d.mdata[f.Name] = append(d.mdata[f.Name], v)
 }
