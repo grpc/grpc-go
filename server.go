@@ -155,9 +155,6 @@ func CustomCodec(codec Codec) ServerOption {
 // be used if the content-type is "application/grpc+proto". If there is no subtype
 // on the content-type, the codec set by CustomCodec will be used, or if CustomCodec
 // is not set, then the default codec will be used.
-//
-// Note that the subtype "proto" is registered by default, but can be overridden
-// with a custom codec here that returns "proto" from callikng String()
 func CustomCodecs(codecs ...Codec) ServerOption {
 	m := make(map[string]Codec, len(codecs))
 	for _, codec := range codecs {
@@ -284,13 +281,6 @@ func NewServer(opt ...ServerOption) *Server {
 	if opts.codec == nil {
 		// Set the default codec.
 		opts.codec = protoCodec{}
-	}
-	if len(opts.codecs) == 0 {
-		// will register protoCodec in next if statement
-		opts.codecs = make(map[string]Codec, 1)
-	}
-	if _, ok := opts.codecs["proto"]; !ok {
-		opts.codecs["proto"] = protoCodec{}
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
