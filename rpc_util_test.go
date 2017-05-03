@@ -130,7 +130,7 @@ func TestCompress(t *testing.T) {
 		// outputs
 		err error
 	}{
-		{make([]byte, 1024), &gzipCompressor{}, &gzipDecompressor{}, nil},
+		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), nil},
 	} {
 		b := new(bytes.Buffer)
 		if err := test.cp.Do(b, test.data); err != test.err {
@@ -201,4 +201,41 @@ func BenchmarkEncode512KiB(b *testing.B) {
 
 func BenchmarkEncode1MiB(b *testing.B) {
 	bmEncode(b, 1024*1024)
+}
+
+// bmCompressor benchmarks a compressor of a Protocol Buffer message containing
+// mSize bytes.
+func bmCompressor(b *testing.B, mSize int, cp Compressor) {
+	payload := make([]byte, mSize)
+	cBuf := bytes.NewBuffer(make([]byte, mSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cp.Do(cBuf, payload)
+		cBuf.Reset()
+	}
+}
+
+func BenchmarkGZIPCompressor1B(b *testing.B) {
+	bmCompressor(b, 1, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor1KiB(b *testing.B) {
+	bmCompressor(b, 1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor8KiB(b *testing.B) {
+	bmCompressor(b, 8*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor64KiB(b *testing.B) {
+	bmCompressor(b, 64*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor512KiB(b *testing.B) {
+	bmCompressor(b, 512*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor1MiB(b *testing.B) {
+	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
