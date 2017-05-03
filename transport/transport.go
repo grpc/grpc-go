@@ -295,11 +295,6 @@ func (s *Stream) Status() *status.Status {
 	return s.status
 }
 
-// ContentType returns the content-type.
-func (s *Stream) ContentType() string {
-	return s.contentType
-}
-
 // ContentSubtype returns the content subtype.
 //
 // TODO: verify this does not make a copy of the content-type string each time
