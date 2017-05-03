@@ -111,12 +111,13 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	failFast  bool
-	headerMD  metadata.MD
-	trailerMD metadata.MD
-	peer      *peer.Peer
-	traceInfo traceInfo // in trace.go
-	codec     Codec
+	failFast       bool
+	headerMD       metadata.MD
+	trailerMD      metadata.MD
+	peer           *peer.Peer
+	traceInfo      traceInfo // in trace.go
+	codec          Codec
+	contentSubtype string
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -187,6 +188,15 @@ func FailFast(failFast bool) CallOption {
 func CallCodec(codec Codec) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.codec = codec
+		return nil
+	})
+}
+
+// CallContentSubtype returns a CallOption that will set the content subtype
+// to the given string. Normally, the value returned from Codec.String() is used.
+func CallContentSubtype(contentSubtype string) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.contentSubtype = contentSubtype
 		return nil
 	})
 }

@@ -217,11 +217,15 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if codec == nil {
 			codec = cc.dopts.codec
 		}
+		contentSubtype := c.contentSubtype
+		if contentSubtype == "" {
+			contentSubtype = codec.String()
+		}
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
 			Host:           cc.authority,
 			Method:         method,
-			ContentSubtype: codec.String(),
+			ContentSubtype: contentSubtype,
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
