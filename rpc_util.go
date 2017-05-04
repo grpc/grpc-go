@@ -173,7 +173,8 @@ func Peer(peer *peer.Peer) CallOption {
 // immediately. Otherwise, the RPC client will block the call until a
 // connection is available (or the call is canceled or times out) and will retry
 // the call if it fails due to a transient error. Please refer to
-// https://github.com/grpc/grpc/blob/master/doc/fail_fast.md. Note: failFast is default to true.
+// https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
+// Note: failFast is default to true.
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast

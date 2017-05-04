@@ -125,7 +125,7 @@ type options struct {
 
 var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
-// A ServerOption sets options.
+// A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
@@ -229,7 +229,7 @@ func StatsHandler(h stats.Handler) ServerOption {
 
 // UnknownServiceHandler returns a ServerOption that allows for adding a custom
 // unknown service handler. The provided method is a bidi-streaming RPC service
-// handler that will be invoked instead of returning the the "unimplemented" gRPC
+// handler that will be invoked instead of returning the "unimplemented" gRPC
 // error whenever a request is received for an unregistered service or method.
 // The handling function has full access to the Context of the request and the
 // stream, and the invocation passes through interceptors.
@@ -288,8 +288,8 @@ func (s *Server) errorf(format string, a ...interface{}) {
 	}
 }
 
-// RegisterService register a service and its implementation to the gRPC
-// server. Called from the IDL generated code. This must be called before
+// RegisterService registers a service and its implementation to the gRPC
+// server. It is called from the IDL generated code. This must be called before
 // invoking Serve.
 func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	ht := reflect.TypeOf(sd.HandlerType).Elem()
@@ -334,7 +334,7 @@ type MethodInfo struct {
 	IsServerStream bool
 }
 
-// ServiceInfo contains unary RPC method info, streaming RPC methid info and metadata for a service.
+// ServiceInfo contains unary RPC method info, streaming RPC method info and metadata for a service.
 type ServiceInfo struct {
 	Methods []MethodInfo
 	// Metadata is the metadata specified in ServiceDesc when registering service.
@@ -1007,8 +1007,9 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
-// GracefulStop stops the gRPC server gracefully. It stops the server to accept new
-// connections and RPCs and blocks until all the pending RPCs are finished.
+// GracefulStop stops the gRPC server gracefully. It stops the server from
+// accepting new connections and RPCs and blocks until all the pending RPCs are
+// finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
