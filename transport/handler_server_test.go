@@ -212,7 +212,7 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					"meta-bar":     {"bar-val1", "bar-val2"},
 					"user-agent":   {"x/y"},
 					"meta-foo":     {"foo-val"},
-					"content-type": "application/grpc",
+					"content-type": {"application/grpc"},
 				}
 				if !reflect.DeepEqual(ht.headerMD, want) {
 					return fmt.Errorf("metdata = %#v; want %#v", ht.headerMD, want)
