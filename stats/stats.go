@@ -49,7 +49,7 @@ type RPCStats interface {
 }
 
 // Begin contains stats when an RPC begins.
-// FailFast are only valid if Client is true.
+// FailFast is only valid if this Begin is from client side.
 type Begin struct {
 	// Client is true if this Begin is from client side.
 	Client bool
@@ -59,7 +59,7 @@ type Begin struct {
 	FailFast bool
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if the stats information is from client side.
 func (s *Begin) IsClient() bool { return s.Client }
 
 func (s *Begin) isRPCStats() {}
@@ -80,7 +80,7 @@ type InPayload struct {
 	RecvTime time.Time
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if the stats information is from client side.
 func (s *InPayload) IsClient() bool { return s.Client }
 
 func (s *InPayload) isRPCStats() {}
@@ -103,7 +103,7 @@ type InHeader struct {
 	Compression string
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if the stats information is from client side.
 func (s *InHeader) IsClient() bool { return s.Client }
 
 func (s *InHeader) isRPCStats() {}
@@ -116,7 +116,7 @@ type InTrailer struct {
 	WireLength int
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if the stats information is from client side.
 func (s *InTrailer) IsClient() bool { return s.Client }
 
 func (s *InTrailer) isRPCStats() {}
@@ -137,7 +137,7 @@ type OutPayload struct {
 	SentTime time.Time
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if this stats information is from client side.
 func (s *OutPayload) IsClient() bool { return s.Client }
 
 func (s *OutPayload) isRPCStats() {}
@@ -160,7 +160,7 @@ type OutHeader struct {
 	Compression string
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if this stats information is from client side.
 func (s *OutHeader) IsClient() bool { return s.Client }
 
 func (s *OutHeader) isRPCStats() {}
@@ -173,7 +173,7 @@ type OutTrailer struct {
 	WireLength int
 }
 
-// IsClient indicates if this is from client side.
+// IsClient indicates if this stats information is from client side.
 func (s *OutTrailer) IsClient() bool { return s.Client }
 
 func (s *OutTrailer) isRPCStats() {}

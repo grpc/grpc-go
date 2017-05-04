@@ -96,7 +96,7 @@ const (
 	GRPCLB
 )
 
-// AddrMetadataGRPCLB contains the information the name resolution for grpclb should provide. The
+// AddrMetadataGRPCLB contains the information the name resolver for grpclb should provide. The
 // name resolver used by grpclb balancer is required to provide this type of metadata in
 // its address updates.
 type AddrMetadataGRPCLB struct {

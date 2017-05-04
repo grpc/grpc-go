@@ -81,12 +81,12 @@ func Pairs(kv ...string) MD {
 	return md
 }
 
-// Len returns the number of items in md.
+// Len returns the number of items in MD.
 func (md MD) Len() int {
 	return len(md)
 }
 
-// Copy returns a copy of md.
+// Copy returns a copy of MD.
 func (md MD) Copy() MD {
 	return Join(md)
 }
@@ -112,12 +112,12 @@ func NewContext(ctx context.Context, md MD) context.Context {
 	return NewOutgoingContext(ctx, md)
 }
 
-// NewIncomingContext creates a new context with incoming md attached.
+// NewIncomingContext creates a new context with incoming MD attached.
 func NewIncomingContext(ctx context.Context, md MD) context.Context {
 	return context.WithValue(ctx, mdIncomingKey{}, md)
 }
 
-// NewOutgoingContext creates a new context with outgoing md attached.
+// NewOutgoingContext creates a new context with outgoing MD attached.
 func NewOutgoingContext(ctx context.Context, md MD) context.Context {
 	return context.WithValue(ctx, mdOutgoingKey{}, md)
 }
@@ -128,15 +128,15 @@ func FromContext(ctx context.Context) (md MD, ok bool) {
 }
 
 // FromIncomingContext returns the incoming MD in ctx if it exists.  The
-// returned md should be immutable, writing to it may cause races.
-// Modification should be made to the copies of the returned md.
+// returned md should be immutable. Writing to it may cause races.
+// Modification should be made to copies of the returned md.
 func FromIncomingContext(ctx context.Context) (md MD, ok bool) {
 	md, ok = ctx.Value(mdIncomingKey{}).(MD)
 	return
 }
 
 // FromOutgoingContext returns the outgoing MD in ctx if it exists.  The
-// returned md should be immutable, writing to it may cause races.
+// returned md should be immutable. Writing to it may cause races.
 // Modification should be made to the copies of the returned md.
 func FromOutgoingContext(ctx context.Context) (md MD, ok bool) {
 	md, ok = ctx.Value(mdOutgoingKey{}).(MD)
