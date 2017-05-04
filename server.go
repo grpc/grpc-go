@@ -125,8 +125,7 @@ type options struct {
 
 var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
-// A ServerOption sets options such as credentials, codec and keepalive 
-// parameters, etc.
+// A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
@@ -1008,8 +1007,8 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
-// GracefulStop stops the gRPC server gracefully. It stops the server from 
-// accepting new connections and RPCs and blocks until all the pending RPCs are 
+// GracefulStop stops the gRPC server gracefully. It stops the server from
+// accepting new connections and RPCs and blocks until all the pending RPCs are
 // finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
