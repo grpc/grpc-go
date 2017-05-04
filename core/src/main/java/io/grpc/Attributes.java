@@ -155,6 +155,9 @@ public final class Attributes {
     return data.hashCode();
   }
 
+  /**
+   * The helper class to build an Attributes instance.
+   */
   public static final class Builder {
     private Attributes product;
 

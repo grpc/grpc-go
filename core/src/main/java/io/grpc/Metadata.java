@@ -516,7 +516,7 @@ public final class Metadata {
   }
 
   /**
-   * Marshaller for metadata values that are serialized into ASCII strings that contain only
+   * Marshaller for metadata values that are serialized into ASCII strings. The strings contain only
    * following characters:
    *
    * <ul>

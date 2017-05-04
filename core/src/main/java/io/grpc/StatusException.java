@@ -57,10 +57,16 @@ public class StatusException extends Exception {
     this.trailers = trailers;
   }
 
+  /**
+   * Returns the status code as a {@link #Status} object.
+   */
   public final Status getStatus() {
     return status;
   }
 
+  /**
+   * Returns the received trailers.
+   */
   @ExperimentalApi
   public final Metadata getTrailers() {
     return trailers;

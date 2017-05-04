@@ -83,6 +83,9 @@ public abstract class NameResolver {
    */
   public void refresh() {}
 
+  /**
+   * Factory that creates {@link #NameResolver} instances.
+   */
   public abstract static class Factory {
     /**
      * The port number used in case the target or the underlying naming system doesn't provide a

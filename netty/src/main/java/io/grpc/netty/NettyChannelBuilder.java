@@ -43,6 +43,7 @@ import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.Internal;
 import io.grpc.NameResolver;
 import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.AtomicBackoff;
@@ -331,6 +332,7 @@ public final class NettyChannelBuilder
 
   @Override
   @CheckReturnValue
+  @Internal
   protected ClientTransportFactory buildTransportFactory() {
     return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
         negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
@@ -412,6 +414,7 @@ public final class NettyChannelBuilder
 
   @Override
   @CheckReturnValue
+  @Internal
   protected String checkAuthority(String authority) {
     if (authorityChecker != null) {
       return authorityChecker.checkAuthority(authority);

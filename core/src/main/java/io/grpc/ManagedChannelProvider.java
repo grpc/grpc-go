@@ -140,6 +140,9 @@ public abstract class ManagedChannelProvider {
     return Thread.currentThread().getContextClassLoader();
   }
 
+  /**
+   * Returns whether current platform is Android.
+   */
   protected static boolean isAndroid() {
     try {
       Class.forName("android.app.Application", /*initialize=*/ false, null);

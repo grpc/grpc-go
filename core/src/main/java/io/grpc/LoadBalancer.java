@@ -509,6 +509,9 @@ public abstract class LoadBalancer {
     public abstract Attributes getAttributes();
   }
 
+  /**
+   * Factory to create {@link LoadBalancer} instance.
+   */
   @ThreadSafe
   public abstract static class Factory {
     /**

@@ -33,12 +33,14 @@ package io.grpc.netty;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.Internal;
 
 /**
  * Allows autoFlowControl to be turned on and off from interop testing and flow control windows to
- * be accessed.
+ * be accessed. For internal use only.
  */
-@VisibleForTesting
+@VisibleForTesting // Visible for tests in other packages.
+@Internal
 public final class HandlerSettings {
 
   private static volatile boolean enabled;

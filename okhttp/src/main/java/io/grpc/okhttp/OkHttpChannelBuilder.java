@@ -289,6 +289,7 @@ public class OkHttpChannelBuilder extends
   }
 
   @Override
+  @Internal
   protected final ClientTransportFactory buildTransportFactory() {
     boolean enableKeepAlive = keepAliveTimeNanos != KEEPALIVE_TIME_NANOS_DISABLED;
     return new OkHttpTransportFactory(transportExecutor,

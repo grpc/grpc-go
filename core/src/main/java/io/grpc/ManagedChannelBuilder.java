@@ -41,6 +41,11 @@ import java.util.concurrent.TimeUnit;
  * @param <T> The concrete type of this builder.
  */
 public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> {
+  /**
+   * Creates a channel with the target's address and port number.
+   *
+   * @see #forTarget()
+   */
   public static ManagedChannelBuilder<?> forAddress(String name, int port) {
     return ManagedChannelProvider.provider().builderForAddress(name, port);
   }

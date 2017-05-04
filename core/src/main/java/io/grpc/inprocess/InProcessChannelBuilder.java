@@ -80,11 +80,13 @@ public class InProcessChannelBuilder extends
   }
 
   @Override
+  @Internal
   protected ClientTransportFactory buildTransportFactory() {
     return new InProcessClientTransportFactory(name);
   }
 
   @Override
+  @Internal
   protected boolean recordsStats() {
     // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
     // not counted.  Therefore, we disable stats for now.

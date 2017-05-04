@@ -49,7 +49,7 @@ import static java.lang.Math.min;
  * {@link Http2LocalFlowController}
  */
 @UnstableApi
-public class FixedHttp2ConnectionDecoder implements Http2ConnectionDecoder {
+class FixedHttp2ConnectionDecoder implements Http2ConnectionDecoder {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(FixedHttp2ConnectionDecoder.class);
     private Http2FrameListener internalFrameListener = new PrefaceFrameListener();
     private final Http2Connection connection;

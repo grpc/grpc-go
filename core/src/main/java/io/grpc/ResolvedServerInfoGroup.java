@@ -151,6 +151,7 @@ public final class ResolvedServerInfoGroup {
   /**
    * Builder for a {@link ResolvedServerInfo}.
    */
+  @Deprecated
   public static final class Builder {
     private final List<ResolvedServerInfo> group = new ArrayList<ResolvedServerInfo>();
     private final Attributes attributes;
