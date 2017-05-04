@@ -430,9 +430,6 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := t.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w})
-	}
 	if w := s.fc.onRead(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
@@ -497,6 +494,9 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		}
 		s.mu.Unlock()
 		s.write(recvMsg{err: io.EOF})
+	}
+	if w := t.fc.onRead(uint32(size)); w > 0 {
+		t.controlBuf.put(&windowUpdate{0, w})
 	}
 }
 
