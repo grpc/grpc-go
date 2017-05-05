@@ -210,7 +210,7 @@ func Creds(c credentials.TransportCredentials) ServerOption {
 func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.unaryInt != nil {
-			panic("The unary server interceptor has been set.")
+			panic("The unary server interceptor was already set and may not be reset.")
 		}
 		o.unaryInt = i
 	}
@@ -221,7 +221,7 @@ func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.streamInt != nil {
-			panic("The stream server interceptor has been set.")
+			panic("The stream server interceptor was already set and may not be reset.")
 		}
 		o.streamInt = i
 	}
@@ -232,7 +232,7 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 func InTapHandle(h tap.ServerInHandle) ServerOption {
 	return func(o *options) {
 		if o.inTapHandle != nil {
-			panic("The tap handle has been set.")
+			panic("The tap handle was already set and may not be reset.")
 		}
 		o.inTapHandle = h
 	}
