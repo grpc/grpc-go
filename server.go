@@ -107,26 +107,44 @@ type Server struct {
 }
 
 type options struct {
-	creds                credentials.TransportCredentials
-	codec                Codec
-	cp                   Compressor
-	dc                   Decompressor
-	maxMsgSize           int
-	unaryInt             UnaryServerInterceptor
-	streamInt            StreamServerInterceptor
-	inTapHandle          tap.ServerInHandle
-	statsHandler         stats.Handler
-	maxConcurrentStreams uint32
-	useHandlerImpl       bool // use http.Handler-based server
-	unknownStreamDesc    *StreamDesc
-	keepaliveParams      keepalive.ServerParameters
-	keepalivePolicy      keepalive.EnforcementPolicy
+	creds                 credentials.TransportCredentials
+	codec                 Codec
+	cp                    Compressor
+	dc                    Decompressor
+	maxMsgSize            int
+	unaryInt              UnaryServerInterceptor
+	streamInt             StreamServerInterceptor
+	inTapHandle           tap.ServerInHandle
+	statsHandler          stats.Handler
+	maxConcurrentStreams  uint32
+	useHandlerImpl        bool // use http.Handler-based server
+	unknownStreamDesc     *StreamDesc
+	keepaliveParams       keepalive.ServerParameters
+	keepalivePolicy       keepalive.EnforcementPolicy
+	initialWindowSize     int32
+	initialConnWindowSize int32
 }
 
 var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
+
+// InitialWindowSize returns a ServerOption that sets window size for stream.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func InitialWindowSize(s int32) ServerOption {
+	return func(o *options) {
+		o.initialWindowSize = s
+	}
+}
+
+// InitialConnWindowSize returns a ServerOption that sets window size for a connection.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func InitialConnWindowSize(s int32) ServerOption {
+	return func(o *options) {
+		o.initialConnWindowSize = s
+	}
+}
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
@@ -483,12 +501,14 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 // transport.NewServerTransport).
 func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
 	config := &transport.ServerConfig{
-		MaxStreams:      s.opts.maxConcurrentStreams,
-		AuthInfo:        authInfo,
-		InTapHandle:     s.opts.inTapHandle,
-		StatsHandler:    s.opts.statsHandler,
-		KeepaliveParams: s.opts.keepaliveParams,
-		KeepalivePolicy: s.opts.keepalivePolicy,
+		MaxStreams:            s.opts.maxConcurrentStreams,
+		AuthInfo:              authInfo,
+		InTapHandle:           s.opts.inTapHandle,
+		StatsHandler:          s.opts.statsHandler,
+		KeepaliveParams:       s.opts.keepaliveParams,
+		KeepalivePolicy:       s.opts.keepalivePolicy,
+		InitialWindowSize:     s.opts.initialWindowSize,
+		InitialConnWindowSize: s.opts.initialConnWindowSize,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {

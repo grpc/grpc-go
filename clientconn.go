@@ -105,6 +105,22 @@ const defaultClientMaxMsgSize = math.MaxInt32
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+// WithInitialWindowSize returns a DialOption which sets the value for initial window size on a stream.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func WithInitialWindowSize(s int32) DialOption {
+	return func(o *dialOptions) {
+		o.copts.InitialWindowSize = s
+	}
+}
+
+// WithInitialConnWindowSize returns a DialOption which sets the value for initial window size on a connection.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func WithInitialConnWindowSize(s int32) DialOption {
+	return func(o *dialOptions) {
+		o.copts.InitialConnWindowSize = s
+	}
+}
+
 // WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
 func WithMaxMsgSize(s int) DialOption {
 	return func(o *dialOptions) {
