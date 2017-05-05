@@ -59,7 +59,7 @@ public class StatusRuntimeException extends RuntimeException {
   }
 
   /**
-   * Returns the status code as a {@link #Status} object.
+   * Returns the status code as a {@link Status} object.
    */
   public final Status getStatus() {
     return status;

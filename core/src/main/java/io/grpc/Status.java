@@ -230,7 +230,7 @@ public final class Status {
     }
 
     /**
-     * Returns a {@link #Status} object corresponding to this status code.
+     * Returns a {@link Status} object corresponding to this status code.
      */
     public Status toStatus() {
       return STATUS_LIST.get(value);

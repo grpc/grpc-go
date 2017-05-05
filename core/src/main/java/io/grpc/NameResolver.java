@@ -84,7 +84,7 @@ public abstract class NameResolver {
   public void refresh() {}
 
   /**
-   * Factory that creates {@link #NameResolver} instances.
+   * Factory that creates {@link NameResolver} instances.
    */
   public abstract static class Factory {
     /**

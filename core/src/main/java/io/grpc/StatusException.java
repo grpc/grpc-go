@@ -58,7 +58,7 @@ public class StatusException extends Exception {
   }
 
   /**
-   * Returns the status code as a {@link #Status} object.
+   * Returns the status code as a {@link Status} object.
    */
   public final Status getStatus() {
     return status;
