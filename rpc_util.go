@@ -175,7 +175,8 @@ func Peer(peer *peer.Peer) CallOption {
 // immediately. Otherwise, the RPC client will block the call until a
 // connection is available (or the call is canceled or times out) and will retry
 // the call if it fails due to a transient error. Please refer to
-// https://github.com/grpc/grpc/blob/master/doc/fail_fast.md. Note: failFast is default to true.
+// https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
+// Note: failFast is default to true.
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
@@ -363,6 +364,29 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	return nil
 }
 
+type rpcInfo struct {
+	bytesSent     bool
+	bytesReceived bool
+}
+
+type rpcInfoContextKey struct{}
+
+func newContextWithRPCInfo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{})
+}
+
+func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
+	s, ok = ctx.Value(rpcInfoContextKey{}).(*rpcInfo)
+	return
+}
+
+func updateRPCInfoInContext(ctx context.Context, s rpcInfo) {
+	if ss, ok := rpcInfoFromContext(ctx); ok {
+		*ss = s
+	}
+	return
+}
+
 // Code returns the error code for err if it was produced by the rpc system.
 // Otherwise, it returns codes.Unknown.
 //
@@ -512,6 +536,6 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 const SupportPackageIsVersion4 = true
 
 // Version is the current grpc version.
-const Version = "1.3.0-dev"
+const Version = "1.4.0-dev"
 
 const grpcUA = "grpc-go/" + Version

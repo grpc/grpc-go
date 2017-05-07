@@ -128,10 +128,28 @@ type options struct {
 	unknownStreamDesc     *StreamDesc
 	keepaliveParams       keepalive.ServerParameters
 	keepalivePolicy       keepalive.EnforcementPolicy
+	initialWindowSize     int32
+	initialConnWindowSize int32
 }
 
-// A ServerOption sets options.
+// A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
+
+// InitialWindowSize returns a ServerOption that sets window size for stream.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func InitialWindowSize(s int32) ServerOption {
+	return func(o *options) {
+		o.initialWindowSize = s
+	}
+}
+
+// InitialConnWindowSize returns a ServerOption that sets window size for a connection.
+// The lower bound for window size is 64K and any value smaller than that will be ignored.
+func InitialConnWindowSize(s int32) ServerOption {
+	return func(o *options) {
+		o.initialConnWindowSize = s
+	}
+}
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
@@ -210,7 +228,7 @@ func Creds(c credentials.TransportCredentials) ServerOption {
 func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.unaryInt != nil {
-			panic("The unary server interceptor has been set.")
+			panic("The unary server interceptor was already set and may not be reset.")
 		}
 		o.unaryInt = i
 	}
@@ -221,7 +239,7 @@ func UnaryInterceptor(i UnaryServerInterceptor) ServerOption {
 func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 	return func(o *options) {
 		if o.streamInt != nil {
-			panic("The stream server interceptor has been set.")
+			panic("The stream server interceptor was already set and may not be reset.")
 		}
 		o.streamInt = i
 	}
@@ -232,7 +250,7 @@ func StreamInterceptor(i StreamServerInterceptor) ServerOption {
 func InTapHandle(h tap.ServerInHandle) ServerOption {
 	return func(o *options) {
 		if o.inTapHandle != nil {
-			panic("The tap handle has been set.")
+			panic("The tap handle was already set and may not be reset.")
 		}
 		o.inTapHandle = h
 	}
@@ -307,8 +325,8 @@ func (s *Server) errorf(format string, a ...interface{}) {
 	}
 }
 
-// RegisterService register a service and its implementation to the gRPC
-// server. Called from the IDL generated code. This must be called before
+// RegisterService registers a service and its implementation to the gRPC
+// server. It is called from the IDL generated code. This must be called before
 // invoking Serve.
 func (s *Server) RegisterService(sd *ServiceDesc, ss interface{}) {
 	ht := reflect.TypeOf(sd.HandlerType).Elem()
@@ -353,7 +371,7 @@ type MethodInfo struct {
 	IsServerStream bool
 }
 
-// ServiceInfo contains unary RPC method info, streaming RPC methid info and metadata for a service.
+// ServiceInfo contains unary RPC method info, streaming RPC method info and metadata for a service.
 type ServiceInfo struct {
 	Methods []MethodInfo
 	// Metadata is the metadata specified in ServiceDesc when registering service.
@@ -502,12 +520,14 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 // transport.NewServerTransport).
 func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) {
 	config := &transport.ServerConfig{
-		MaxStreams:      s.opts.maxConcurrentStreams,
-		AuthInfo:        authInfo,
-		InTapHandle:     s.opts.inTapHandle,
-		StatsHandler:    s.opts.statsHandler,
-		KeepaliveParams: s.opts.keepaliveParams,
-		KeepalivePolicy: s.opts.keepalivePolicy,
+		MaxStreams:            s.opts.maxConcurrentStreams,
+		AuthInfo:              authInfo,
+		InTapHandle:           s.opts.inTapHandle,
+		StatsHandler:          s.opts.statsHandler,
+		KeepaliveParams:       s.opts.keepaliveParams,
+		KeepalivePolicy:       s.opts.keepalivePolicy,
+		InitialWindowSize:     s.opts.initialWindowSize,
+		InitialConnWindowSize: s.opts.initialConnWindowSize,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
@@ -666,9 +686,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			BeginTime: time.Now(),
 		}
 		sh.HandleRPC(stream.Context(), begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				EndTime: time.Now(),
 			}
@@ -676,8 +694,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				end.Error = toRPCErr(err)
 			}
 			sh.HandleRPC(stream.Context(), end)
-		}
-	}()
+		}()
+	}
 	if trInfo != nil {
 		defer trInfo.tr.Finish()
 		trInfo.firstLine.client = false
@@ -836,9 +854,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			BeginTime: time.Now(),
 		}
 		sh.HandleRPC(stream.Context(), begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				EndTime: time.Now(),
 			}
@@ -846,8 +862,8 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				end.Error = toRPCErr(err)
 			}
 			sh.HandleRPC(stream.Context(), end)
-		}
-	}()
+		}()
+	}
 	if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
@@ -1034,8 +1050,9 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
-// GracefulStop stops the gRPC server gracefully. It stops the server to accept new
-// connections and RPCs and blocks until all the pending RPCs are finished.
+// GracefulStop stops the gRPC server gracefully. It stops the server from
+// accepting new connections and RPCs and blocks until all the pending RPCs are
+// finished.
 func (s *Server) GracefulStop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

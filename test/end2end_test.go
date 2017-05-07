@@ -31,7 +31,7 @@
  *
  */
 
-package grpc_test
+package test
 
 import (
 	"bytes"
@@ -75,8 +75,9 @@ import (
 var (
 	// For headers:
 	testMetadata = metadata.MD{
-		"key1": []string{"value1"},
-		"key2": []string{"value2"},
+		"key1":     []string{"value1"},
+		"key2":     []string{"value2"},
+		"key3-bin": []string{"binvalue1", string([]byte{1, 2, 3})},
 	}
 	testMetadata2 = metadata.MD{
 		"key1": []string{"value12"},
@@ -84,8 +85,9 @@ var (
 	}
 	// For trailers:
 	testTrailerMetadata = metadata.MD{
-		"tkey1": []string{"trailerValue1"},
-		"tkey2": []string{"trailerValue2"},
+		"tkey1":     []string{"trailerValue1"},
+		"tkey2":     []string{"trailerValue2"},
+		"tkey3-bin": []string{"trailerbinvalue1", string([]byte{3, 2, 1})},
 	}
 	testTrailerMetadata2 = metadata.MD{
 		"tkey1": []string{"trailerValue12"},
@@ -429,25 +431,29 @@ type test struct {
 	cancel context.CancelFunc
 
 	// Configurable knobs, after newTest returns:
-	testServer              testpb.TestServiceServer // nil means none
-	healthServer            *health.Server           // nil means disabled
-	maxStream               uint32
-	tapHandle               tap.ServerInHandle
-	maxMsgSize              *int
-	maxClientReceiveMsgSize *int
-	maxClientSendMsgSize    *int
-	maxServerReceiveMsgSize *int
-	maxServerSendMsgSize    *int
-	userAgent               string
-	clientCompression       bool
-	serverCompression       bool
-	timeout                 time.Duration
-	unaryClientInt          grpc.UnaryClientInterceptor
-	streamClientInt         grpc.StreamClientInterceptor
-	unaryServerInt          grpc.UnaryServerInterceptor
-	streamServerInt         grpc.StreamServerInterceptor
-	unknownHandler          grpc.StreamHandler
-	sc                      <-chan grpc.ServiceConfig
+	testServer                  testpb.TestServiceServer // nil means none
+	healthServer                *health.Server           // nil means disabled
+	maxStream                   uint32
+	tapHandle                   tap.ServerInHandle
+	maxMsgSize                  *int
+	maxClientReceiveMsgSize     *int
+	maxClientSendMsgSize        *int
+	maxServerReceiveMsgSize     *int
+	maxServerSendMsgSize        *int
+	userAgent                   string
+	clientCompression           bool
+	serverCompression           bool
+  timeout                     time.Duration
+	unaryClientInt              grpc.UnaryClientInterceptor
+	streamClientInt             grpc.StreamClientInterceptor
+	unaryServerInt              grpc.UnaryServerInterceptor
+	streamServerInt             grpc.StreamServerInterceptor
+	unknownHandler              grpc.StreamHandler
+	sc                          <-chan grpc.ServiceConfig
+	serverInitialWindowSize     int32
+	serverInitialConnWindowSize int32
+	clientInitialWindowSize     int32
+	clientInitialConnWindowSize int32
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -520,6 +526,12 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.unknownHandler != nil {
 		sopts = append(sopts, grpc.UnknownServiceHandler(te.unknownHandler))
+	}
+	if te.serverInitialWindowSize > 0 {
+		sopts = append(sopts, grpc.InitialWindowSize(te.serverInitialWindowSize))
+	}
+	if te.serverInitialConnWindowSize > 0 {
+		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
 	la := "localhost:0"
 	switch te.e.network {
@@ -622,6 +634,12 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.e.balancer {
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
+	}
+	if te.clientInitialWindowSize > 0 {
+		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
+	}
+	if te.clientInitialConnWindowSize > 0 {
+		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -4430,5 +4448,92 @@ func TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 
 	if err := doFDC(ctx, proxy.client); err != nil {
 		t.Fatalf("doFDC(_, proxy.client) = %v; want nil", err)
+	}
+}
+
+type windowSizeConfig struct {
+	serverStream int32
+	serverConn   int32
+	clientStream int32
+	clientConn   int32
+}
+
+func max(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
+	defer leakCheck(t)()
+	wc := windowSizeConfig{
+		serverStream: 8 * 1024 * 1024,
+		serverConn:   12 * 1024 * 1024,
+		clientStream: 6 * 1024 * 1024,
+		clientConn:   8 * 1024 * 1024,
+	}
+	for _, e := range listTestEnv() {
+		testConfigurableWindowSize(t, e, wc)
+	}
+}
+
+func TestConfigurableWindowSizeWithSmallWindow(t *testing.T) {
+	defer leakCheck(t)()
+	wc := windowSizeConfig{
+		serverStream: 1,
+		serverConn:   1,
+		clientStream: 1,
+		clientConn:   1,
+	}
+	for _, e := range listTestEnv() {
+		testConfigurableWindowSize(t, e, wc)
+	}
+}
+
+func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
+	te := newTest(t, e)
+	te.serverInitialWindowSize = wc.serverStream
+	te.serverInitialConnWindowSize = wc.serverConn
+	te.clientInitialWindowSize = wc.clientStream
+	te.clientInitialConnWindowSize = wc.clientConn
+
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	stream, err := tc.FullDuplexCall(context.Background())
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	numOfIter := 11
+	// Set message size to exhaust largest of window sizes.
+	messageSize := max(max(wc.serverStream, wc.serverConn), max(wc.clientStream, wc.clientConn)) / int32(numOfIter-1)
+	messageSize = max(messageSize, 64*1024)
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, messageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respParams := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(messageSize),
+		},
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParams,
+		Payload:            payload,
+	}
+	for i := 0; i < numOfIter; i++ {
+		if err := stream.Send(req); err != nil {
+			t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+		}
+		if _, err := stream.Recv(); err != nil {
+			t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
+		}
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
 	}
 }

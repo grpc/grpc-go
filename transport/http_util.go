@@ -36,6 +36,7 @@ package transport
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -50,7 +51,6 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -164,6 +164,35 @@ func (d *decodeState) status() *status.Status {
 	return d.statusGen
 }
 
+const binHdrSuffix = "-bin"
+
+func encodeBinHeader(v []byte) string {
+	return base64.RawStdEncoding.EncodeToString(v)
+}
+
+func decodeBinHeader(v string) ([]byte, error) {
+	if len(v)%4 == 0 {
+		// Input was padded, or padding was not necessary.
+		return base64.StdEncoding.DecodeString(v)
+	}
+	return base64.RawStdEncoding.DecodeString(v)
+}
+
+func encodeMetadataHeader(k, v string) string {
+	if strings.HasSuffix(k, binHdrSuffix) {
+		return encodeBinHeader(([]byte)(v))
+	}
+	return v
+}
+
+func decodeMetadataHeader(k, v string) (string, error) {
+	if strings.HasSuffix(k, binHdrSuffix) {
+		b, err := decodeBinHeader(v)
+		return string(b), err
+	}
+	return v, nil
+}
+
 func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	switch f.Name {
 	case "content-type":
@@ -181,12 +210,12 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	case "grpc-message":
 		d.rawStatusMsg = decodeGrpcMessage(f.Value)
 	case "grpc-status-details-bin":
-		_, v, err := metadata.DecodeKeyValue("grpc-status-details-bin", f.Value)
+		v, err := decodeBinHeader(f.Value)
 		if err != nil {
 			return streamErrorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
 		}
 		s := &spb.Status{}
-		if err := proto.Unmarshal([]byte(v), s); err != nil {
+		if err := proto.Unmarshal(v, s); err != nil {
 			return streamErrorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
 		}
 		d.statusGen = status.FromProto(s)
@@ -203,12 +232,12 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			if d.mdata == nil {
 				d.mdata = make(map[string][]string)
 			}
-			k, v, err := metadata.DecodeKeyValue(f.Name, f.Value)
+			v, err := decodeMetadataHeader(f.Name, f.Value)
 			if err != nil {
 				grpclog.Printf("Failed to decode (%q, %q): %v", f.Name, f.Value, err)
 				return nil
 			}
-			d.mdata[k] = append(d.mdata[k], v)
+			d.mdata[f.Name] = append(d.mdata[f.Name], v)
 		}
 	}
 	return nil
