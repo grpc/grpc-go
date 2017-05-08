@@ -96,8 +96,8 @@ const (
 	GRPCLB
 )
 
-// AddrMetadataGRPCLB contains the information the name resolution for grpclb should provide. The
-// name resolver used by grpclb balancer is required to provide this type of metadata in
+// AddrMetadataGRPCLB contains the information the name resolver for grpclb should provide. The
+// name resolver used by the grpclb balancer is required to provide this type of metadata in
 // its address updates.
 type AddrMetadataGRPCLB struct {
 	// AddrType is the type of server (grpc load balancer or backend).

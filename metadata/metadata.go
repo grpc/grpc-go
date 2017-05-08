@@ -51,7 +51,7 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 // two convenience functions New and Pairs to generate MD.
 type MD map[string][]string
 
-// New creates a MD from given key-value map.
+// New creates an MD from a given key-value map.
 // Keys are automatically converted to lowercase.
 func New(m map[string]string) MD {
 	md := MD{}
@@ -91,9 +91,9 @@ func (md MD) Copy() MD {
 	return Join(md)
 }
 
-// Join joins any number of MDs into a single MD.
+// Join joins any number of mds into a single MD.
 // The order of values for each key is determined by the order in which
-// the MDs containing those values are presented to Join.
+// the mds containing those values are presented to Join.
 func Join(mds ...MD) MD {
 	out := MD{}
 	for _, md := range mds {
@@ -127,17 +127,17 @@ func FromContext(ctx context.Context) (md MD, ok bool) {
 	return FromIncomingContext(ctx)
 }
 
-// FromIncomingContext returns the incoming MD in ctx if it exists.  The
-// returned md should be immutable, writing to it may cause races.
-// Modification should be made to the copies of the returned md.
+// FromIncomingContext returns the incoming metadata in ctx if it exists.  The
+// returned MD should not be modified. Writing to it may cause races.
+// Modification should be made to copies of the returned MD.
 func FromIncomingContext(ctx context.Context) (md MD, ok bool) {
 	md, ok = ctx.Value(mdIncomingKey{}).(MD)
 	return
 }
 
-// FromOutgoingContext returns the outgoing MD in ctx if it exists.  The
-// returned md should be immutable, writing to it may cause races.
-// Modification should be made to the copies of the returned md.
+// FromOutgoingContext returns the outgoing metadata in ctx if it exists.  The
+// returned MD should not be modified. Writing to it may cause races.
+// Modification should be made to the copies of the returned MD.
 func FromOutgoingContext(ctx context.Context) (md MD, ok bool) {
 	md, ok = ctx.Value(mdOutgoingKey{}).(MD)
 	return

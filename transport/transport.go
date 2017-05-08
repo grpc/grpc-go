@@ -401,12 +401,14 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams      uint32
-	AuthInfo        credentials.AuthInfo
-	InTapHandle     tap.ServerInHandle
-	StatsHandler    stats.Handler
-	KeepaliveParams keepalive.ServerParameters
-	KeepalivePolicy keepalive.EnforcementPolicy
+	MaxStreams            uint32
+	AuthInfo              credentials.AuthInfo
+	InTapHandle           tap.ServerInHandle
+	StatsHandler          stats.Handler
+	KeepaliveParams       keepalive.ServerParameters
+	KeepalivePolicy       keepalive.EnforcementPolicy
+	InitialWindowSize     int32
+	InitialConnWindowSize int32
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -434,6 +436,10 @@ type ConnectOptions struct {
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.
 	StatsHandler stats.Handler
+	// InitialWindowSize sets the intial window size for a stream.
+	InitialWindowSize int32
+	// InitialConnWindowSize sets the intial window size for a connection.
+	InitialConnWindowSize int32
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
