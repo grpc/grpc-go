@@ -447,6 +447,7 @@ type test struct {
 	serverInitialConnWindowSize int32
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
+	perRPCCreds                 credentials.PerRPCCredentials
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -618,6 +619,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.clientInitialConnWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialConnWindowSize(te.clientInitialConnWindowSize))
+	}
+	if te.perRPCCreds != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -3980,5 +3984,61 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	}
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
+	}
+}
+
+var (
+	// test authdata
+	authdata = map[string]string{
+		"test-key":      "test-value",
+		"test-key2-bin": string([]byte{1, 2, 3}),
+	}
+)
+
+type testPerRPCCredentials struct{}
+
+func (cr testPerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return authdata, nil
+}
+
+func (cr testPerRPCCredentials) RequireTransportSecurity() bool {
+	return false
+}
+
+func authHandle(ctx context.Context, info *tap.Info) (context.Context, error) {
+	for k, vwant := range authdata {
+		vgot, ok := authdata[k]
+		if !ok {
+			err := fmt.Errorf("didn't find authdata key %v in context", k)
+			fmt.Println(err)
+			return ctx, err
+		}
+		if vgot != vwant {
+			err := fmt.Errorf("for key %v, got value %v, want %v", k, vgot, vwant)
+			fmt.Println(err)
+			return ctx, err
+		}
+	}
+	return ctx, nil
+}
+
+func TestPerRPCCredentialsViaDialOptions(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPerRPCCredentialsViaDialOptions(t, e)
+	}
+}
+
+func testPerRPCCredentialsViaDialOptions(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.tapHandle = authHandle
+	te.perRPCCreds = testPerRPCCredentials{}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
