@@ -443,7 +443,7 @@ type test struct {
 	userAgent                   string
 	clientCompression           bool
 	serverCompression           bool
-  timeout                     time.Duration
+	timeout                     time.Duration
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	unaryServerInt              grpc.UnaryServerInterceptor
