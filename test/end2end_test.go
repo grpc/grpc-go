@@ -31,7 +31,7 @@
  *
  */
 
-package grpc_test
+package test
 
 import (
 	"bytes"
@@ -75,8 +75,9 @@ import (
 var (
 	// For headers:
 	testMetadata = metadata.MD{
-		"key1": []string{"value1"},
-		"key2": []string{"value2"},
+		"key1":     []string{"value1"},
+		"key2":     []string{"value2"},
+		"key3-bin": []string{"binvalue1", string([]byte{1, 2, 3})},
 	}
 	testMetadata2 = metadata.MD{
 		"key1": []string{"value12"},
@@ -84,8 +85,9 @@ var (
 	}
 	// For trailers:
 	testTrailerMetadata = metadata.MD{
-		"tkey1": []string{"trailerValue1"},
-		"tkey2": []string{"trailerValue2"},
+		"tkey1":     []string{"trailerValue1"},
+		"tkey2":     []string{"trailerValue2"},
+		"tkey3-bin": []string{"trailerbinvalue1", string([]byte{3, 2, 1})},
 	}
 	testTrailerMetadata2 = metadata.MD{
 		"tkey1": []string{"trailerValue12"},
@@ -4006,17 +4008,17 @@ func (cr testPerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func authHandle(ctx context.Context, info *tap.Info) (context.Context, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx, fmt.Errorf("didn't find metadata in context")
+	}
 	for k, vwant := range authdata {
-		vgot, ok := authdata[k]
+		vgot, ok := md[k]
 		if !ok {
-			err := fmt.Errorf("didn't find authdata key %v in context", k)
-			fmt.Println(err)
-			return ctx, err
+			return ctx, fmt.Errorf("didn't find authdata key %v in context", k)
 		}
-		if vgot != vwant {
-			err := fmt.Errorf("for key %v, got value %v, want %v", k, vgot, vwant)
-			fmt.Println(err)
-			return ctx, err
+		if vgot[0] != vwant {
+			return ctx, fmt.Errorf("for key %v, got value %v, want %v", k, vgot, vwant)
 		}
 	}
 	return ctx, nil
@@ -4039,6 +4041,67 @@ func testPerRPCCredentialsViaDialOptions(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func TestPerRPCCredentialsViaCallOptions(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPerRPCCredentialsViaCallOptions(t, e)
+	}
+}
+
+func testPerRPCCredentialsViaCallOptions(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.tapHandle = authHandle
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
+		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func TestPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPerRPCCredentialsViaDialOptionsAndCallOptions(t, e)
+	}
+}
+
+func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.perRPCCreds = testPerRPCCredentials{}
+	// When credentials are provided via both dial options and call options,
+	// we apply both sets.
+	te.tapHandle = func(ctx context.Context, _ *tap.Info) (context.Context, error) {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return ctx, fmt.Errorf("couldn't find metadata in context")
+		}
+		for k, vwant := range authdata {
+			vgot, ok := md[k]
+			if !ok {
+				return ctx, fmt.Errorf("couldn't find metadata for key %v", k)
+			}
+			if len(vgot) != 2 {
+				return ctx, fmt.Errorf("len of value for key %v was %v, want 2", k, len(vgot))
+			}
+			if vgot[0] != vwant || vgot[1] != vwant {
+				return ctx, fmt.Errorf("value for %v was %v, want [%v, %v]", k, vgot, vwant, vwant)
+			}
+		}
+		return ctx, nil
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
