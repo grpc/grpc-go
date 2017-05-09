@@ -94,7 +94,7 @@ func TestFileDescForType(t *testing.T) {
 		{reflect.TypeOf(pb.ToBeExtended{}), fdProto2},
 	} {
 		fd, err := s.fileDescForType(test.st)
-		if err != nil || !reflect.DeepEqual(fd, test.wantFd) {
+		if err != nil || !proto.Equal(fd, test.wantFd) {
 			t.Errorf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
 		}
 	}
@@ -138,7 +138,7 @@ func TestFileDescContainingExtension(t *testing.T) {
 		{reflect.TypeOf(pb.ToBeExtended{}), 29, fdProto2Ext2},
 	} {
 		fd, err := s.fileDescContainingExtension(test.st, test.extNum)
-		if err != nil || !reflect.DeepEqual(fd, test.want) {
+		if err != nil || !proto.Equal(fd, test.want) {
 			t.Errorf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
 		}
 	}

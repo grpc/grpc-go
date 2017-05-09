@@ -1,4 +1,4 @@
-package mock_test
+package mock_helloworld_test
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	helloworld "google.golang.org/grpc/examples/helloworld/helloworld"
-	hwmock "google.golang.org/grpc/examples/helloworld/mock/mock_helloworld"
+	hwmock "google.golang.org/grpc/examples/helloworld/mock_helloworld"
 )
 
 // rpcMsg implements the gomock.Matcher interface

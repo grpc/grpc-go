@@ -1,3 +1,5 @@
+// +build go1.6,!go1.7
+
 /*
  * Copyright 2016, Google Inc.
  * All rights reserved.
@@ -30,61 +32,25 @@
  *
  */
 
-package main
+package grpc
 
 import (
-	"log"
-	"os"
-	"path/filepath"
-	"syscall"
+	"fmt"
+	"net"
+	"net/http"
+
+	"golang.org/x/net/context"
 )
 
-// abs returns the absolute path the given relative file or directory path,
-// relative to the google.golang.org/grpc directory in the user's GOPATH.
-// If rel is already absolute, it is returned unmodified.
-func abs(rel string) string {
-	if filepath.IsAbs(rel) {
-		return rel
-	}
-	v, err := goPackagePath("google.golang.org/grpc")
-	if err != nil {
-		log.Fatalf("Error finding google.golang.org/grpc/testdata directory: %v", err)
-	}
-	return filepath.Join(v, rel)
+// dialContext connects to the address on the named network.
+func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return (&net.Dialer{Cancel: ctx.Done()}).Dial(network, address)
 }
 
-func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float64) {
-	var (
-		utimeDiffs  = latest.Utime.Sec - first.Utime.Sec
-		utimeDiffus = latest.Utime.Usec - first.Utime.Usec
-		stimeDiffs  = latest.Stime.Sec - first.Stime.Sec
-		stimeDiffus = latest.Stime.Usec - first.Stime.Usec
-	)
-
-	uTimeElapsed := float64(utimeDiffs) + float64(utimeDiffus)*1.0e-6
-	sTimeElapsed := float64(stimeDiffs) + float64(stimeDiffus)*1.0e-6
-
-	return uTimeElapsed, sTimeElapsed
-}
-
-func goPackagePath(pkg string) (path string, err error) {
-	gp := os.Getenv("GOPATH")
-	if gp == "" {
-		return path, os.ErrNotExist
+func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	req.Cancel = ctx.Done()
+	if err := req.Write(conn); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
-	for _, p := range filepath.SplitList(gp) {
-		dir := filepath.Join(p, "src", filepath.FromSlash(pkg))
-		fi, err := os.Stat(dir)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return "", err
-		}
-		if !fi.IsDir() {
-			continue
-		}
-		return dir, nil
-	}
-	return path, os.ErrNotExist
+	return nil
 }
