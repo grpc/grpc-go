@@ -277,7 +277,7 @@ type rpcConfig struct {
 	success    bool // Whether the RPC should succeed or return error.
 	failfast   bool
 	callType   rpcType // Type of RPC.
-	noLastRecv bool // Whether to call recv for io.EOF. When true, last recv won't be called. Only valid for streaming RPCs.
+	noLastRecv bool    // Whether to call recv for io.EOF. When true, last recv won't be called. Only valid for streaming RPCs.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
