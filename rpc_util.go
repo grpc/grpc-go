@@ -45,6 +45,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -116,6 +117,7 @@ type callInfo struct {
 	trailerMD metadata.MD
 	peer      *peer.Peer
 	traceInfo traceInfo // in trace.go
+	creds     credentials.PerRPCCredentials
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -178,6 +180,15 @@ func Peer(peer *peer.Peer) CallOption {
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
+		return nil
+	})
+}
+
+// PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
+// for a call.
+func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.creds = creds
 		return nil
 	})
 }

@@ -101,6 +101,8 @@ type http2Client struct {
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
 
+	isSecure bool
+
 	creds []credentials.PerRPCCredentials
 
 	// Boolean to keep track of reading activity on transport.
@@ -181,6 +183,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			conn.Close()
 		}
 	}(conn)
+	var isSecure bool
 	var authInfo credentials.AuthInfo
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
@@ -191,6 +194,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			temp := isTemporary(err)
 			return nil, connectionErrorf(temp, err, "transport: %v", err)
 		}
+		isSecure = true
 	}
 	kp := opts.KeepaliveParams
 	// Validate keepalive parameters.
@@ -230,6 +234,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		scheme:            scheme,
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
+		isSecure:          isSecure,
 		creds:             opts.PerRPCCredentials,
 		maxStreams:        defaultMaxStreamsClient,
 		streamsQuota:      newQuotaPool(defaultMaxStreamsClient),
@@ -356,7 +361,27 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			return nil, streamErrorf(codes.InvalidArgument, "transport: %v", err)
 		}
 		for k, v := range data {
+			// Capital header names are illegal in HTTP/2.
+			k = strings.ToLower(k)
 			authData[k] = v
+		}
+	}
+	// Check if credentials.PerRPCCredentials were provided via call options.
+	// Note: if these credentials are provided both via dial options and call
+	// options, then both sets of credentials will be applied.
+	callAuthData := make(map[string]string)
+	if callCreds := callHdr.Creds; callCreds != nil {
+		if !t.isSecure && callCreds.RequireTransportSecurity() {
+			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure channel")
+		}
+		data, err := callCreds.GetRequestMetadata(ctx)
+		if err != nil {
+			return nil, streamErrorf(codes.Internal, "transport: %v", err)
+		}
+		for k, v := range data {
+			// Capital header names are illegal in HTTP/2
+			k = strings.ToLower(k)
+			callAuthData[k] = v
 		}
 	}
 	t.mu.Lock()
@@ -437,9 +462,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 
 	for k, v := range authData {
-		// Capital header names are illegal in HTTP/2.
-		k = strings.ToLower(k)
-		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: v})
+		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+	}
+	for k, v := range callAuthData {
+		t.hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
 	var (
 		hasMD      bool

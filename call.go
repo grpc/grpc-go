@@ -219,6 +219,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
+		if c.creds != nil {
+			callHdr.Creds = c.creds
+		}
 
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
