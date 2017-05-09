@@ -121,7 +121,7 @@ func DoClientStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 		req := &testpb.StreamingInputCallRequest{
 			Payload: pl,
 		}
-		if err := stream.Send(req); err != nil {
+		if err := stream.Send(req); err != nil && err != io.EOF {
 			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		sum += s
@@ -198,7 +198,7 @@ func DoPingPong(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 			ResponseParameters: respParam,
 			Payload:            pl,
 		}
-		if err := stream.Send(req); err != nil {
+		if err := stream.Send(req); err != nil && err != io.EOF {
 			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		reply, err := stream.Recv()
@@ -446,7 +446,7 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient, args ...grpc.CallOp
 		ResponseParameters: respParam,
 		Payload:            pl,
 	}
-	if err := stream.Send(req); err != nil {
+	if err := stream.Send(req); err != nil && err != io.EOF {
 		grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 	}
 	if _, err := stream.Recv(); err != nil {
@@ -524,7 +524,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 		ResponseParameters: respParam,
 		Payload:            pl,
 	}
-	if err := stream.Send(streamReq); err != nil {
+	if err := stream.Send(streamReq); err != nil && err != io.EOF {
 		grpclog.Fatalf("%v has error %v while sending %v", stream, err, streamReq)
 	}
 	streamHeader, err := stream.Header()
@@ -568,7 +568,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption
 	streamReq := &testpb.StreamingOutputCallRequest{
 		ResponseStatus: respStatus,
 	}
-	if err := stream.Send(streamReq); err != nil {
+	if err := stream.Send(streamReq); err != nil && err != io.EOF {
 		grpclog.Fatalf("%v has error %v while sending %v, want <nil>", stream, err, streamReq)
 	}
 	if err := stream.CloseSend(); err != nil {
