@@ -972,18 +972,16 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 	s.bytesReceived = true
 	var state decodeState
-	for _, hf := range frame.Fields {
-		if err := state.processHeaderField(hf); err != nil {
-			s.mu.Lock()
-			if !s.headerDone {
-				close(s.headerChan)
-				s.headerDone = true
-			}
-			s.mu.Unlock()
-			s.write(recvMsg{err: err})
-			// Something wrong. Stops reading even when there is remaining.
-			return
+	if err := state.decodeResponseHeader(frame); err != nil {
+		s.mu.Lock()
+		if !s.headerDone {
+			close(s.headerChan)
+			s.headerDone = true
 		}
+		s.mu.Unlock()
+		s.write(recvMsg{err: err})
+		// Something wrong. Stops reading even when there is remaining.
+		return
 	}
 
 	endStream := frame.StreamEnded()
