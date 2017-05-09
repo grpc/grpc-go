@@ -182,7 +182,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),

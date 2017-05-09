@@ -45,13 +45,15 @@ type ConnTagInfo struct {
 	RemoteAddr net.Addr
 	// LocalAddr is the local address of the corresponding connection.
 	LocalAddr net.Addr
-	// TODO add QOS related fields.
 }
 
 // RPCTagInfo defines the relevant information needed by RPC context tagger.
+// FailFast is only valid on client side, it's always false on server side.
 type RPCTagInfo struct {
 	// FullMethodName is the RPC method in the format of /package.service/method.
 	FullMethodName string
+	// FailFast indicates if this RPC is failfast.
+	FailFast bool
 }
 
 // Handler defines the interface for the related stats handling (e.g., RPCs, connections).
