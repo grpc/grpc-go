@@ -1530,10 +1530,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		server *httpServer
 		client ClientTransport
 	)
-	defer func() {
-		if err == nil {
-			return
-		}
+	cleanUp = func() {
 		if lis != nil {
 			lis.Close()
 		}
@@ -1542,6 +1539,11 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		}
 		if client != nil {
 			client.Close()
+		}
+	}
+	defer func() {
+		if err != nil {
+			cleanUp()
 		}
 	}()
 	lis, err = net.Listen("tcp", "localhost:0")
@@ -1560,11 +1562,6 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
 	if err != nil {
 		t.Fatalf("Error creating stream at client-side. Err: %v", err)
-	}
-	cleanUp = func() {
-		lis.Close()
-		server.cleanUp()
-		client.Close()
 	}
 	return
 }

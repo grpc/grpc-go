@@ -228,7 +228,7 @@ func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error 
 	// If grpc status doesn't exist and http status doesn't exist,
 	// then it's a malformed header.
 	if d.httpStatus == nil {
-		return streamErrorf(codes.Internal, "Malformed header: Doesn't contain status(gRPC or HTTP).")
+		return streamErrorf(codes.Internal, "malformed header: doesn't contain status(gRPC or HTTP)")
 	}
 
 	if *(d.httpStatus) != http.StatusOK {
