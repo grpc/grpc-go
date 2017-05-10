@@ -1243,3 +1243,17 @@ func TestClientStatsFullDuplexRPCError(t *testing.T) {
 		end:        {checkEnd, 1},
 	})
 }
+
+// If the user doesn't call the last recv() on clientStream.
+func TestClientStatsFullDuplexRPCNotCallingLastRecv(t *testing.T) {
+	count := 1
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC, noLastRecv: true}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}

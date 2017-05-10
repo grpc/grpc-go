@@ -172,16 +172,6 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
-	defer func() {
-		if err != nil && sh != nil {
-			// Only handle end stats if err != nil.
-			end := &stats.End{
-				Client: true,
-				Error:  err,
-			}
-			sh.HandleRPC(ctx, end)
-		}
-	}()
 	gopts := BalancerGetOptions{
 		BlockingWait: !c.failFast,
 	}
