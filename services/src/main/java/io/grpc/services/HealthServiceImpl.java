@@ -46,8 +46,8 @@ import javax.annotation.Nullable;
 final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
 
   /* Due to the latency of rpc calls, synchronization of the map does not help with consistency.
-   * However, need use ConcurrentHashMap to prevent the possible race condition of currently putting
-   * two keys with a colliding hashCode into the map. */
+   * However, need use ConcurrentHashMap to prevent the possible race condition of concurrently
+   * putting two keys with a colliding hashCode into the map.*/
   private final Map<String, ServingStatus> statusMap
       = new ConcurrentHashMap<String, ServingStatus>();
 
@@ -75,9 +75,5 @@ final class HealthServiceImpl extends HealthGrpc.HealthImplBase {
 
   void clearStatus(String service) {
     statusMap.remove(service);
-  }
-
-  void clearAll() {
-    statusMap.clear();
   }
 }

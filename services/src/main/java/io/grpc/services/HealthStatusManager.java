@@ -33,8 +33,8 @@ package io.grpc.services;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import io.grpc.BindableService;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
-import io.grpc.health.v1.HealthGrpc;
 
 /**
  * A {@code HealthStatusManager} object manages a health check service. A health check service is
@@ -57,7 +57,7 @@ public final class HealthStatusManager {
   /**
    * Gets the health check service created in the constructor.
    */
-  public HealthGrpc.HealthImplBase getHealthService() {
+  public BindableService getHealthService() {
     return healthService;
   }
 

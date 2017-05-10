@@ -56,7 +56,8 @@ import org.mockito.InOrder;
 public class HealthStatusManagerTest {
 
   private final HealthStatusManager manager = new HealthStatusManager();
-  private final HealthGrpc.HealthImplBase health = manager.getHealthService();
+  private final HealthGrpc.HealthImplBase health =
+      (HealthGrpc.HealthImplBase) manager.getHealthService();
   private final HealthCheckResponse.ServingStatus status
       = HealthCheckResponse.ServingStatus.UNKNOWN;
 
