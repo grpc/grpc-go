@@ -183,8 +183,10 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			conn.Close()
 		}
 	}(conn)
-	var isSecure bool
-	var authInfo credentials.AuthInfo
+	var (
+		isSecure bool
+		authInfo credentials.AuthInfo
+	)
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
 		conn, authInfo, err = creds.ClientHandshake(ctx, addr.Addr, conn)
@@ -342,20 +344,20 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	userCtx := ctx
 	ctx = peer.NewContext(ctx, pr)
 	authData := make(map[string]string)
+	// Construct URI required to get auth request metadata.
+	var port string
+	if pos := strings.LastIndex(t.target, ":"); pos != -1 {
+		// Omit port if it is the default one.
+		if t.target[pos+1:] != "443" {
+			port = ":" + t.target[pos+1:]
+		}
+	}
+	pos := strings.LastIndex(callHdr.Method, "/")
+	if pos == -1 {
+		pos = len(callHdr.Method)
+	}
+	audience := "https://" + callHdr.Host + port + callHdr.Method[:pos]
 	for _, c := range t.creds {
-		// Construct URI required to get auth request metadata.
-		var port string
-		if pos := strings.LastIndex(t.target, ":"); pos != -1 {
-			// Omit port if it is the default one.
-			if t.target[pos+1:] != "443" {
-				port = ":" + t.target[pos+1:]
-			}
-		}
-		pos := strings.LastIndex(callHdr.Method, "/")
-		if pos == -1 {
-			return nil, streamErrorf(codes.InvalidArgument, "transport: malformed method name: %q", callHdr.Method)
-		}
-		audience := "https://" + callHdr.Host + port + callHdr.Method[:pos]
 		data, err := c.GetRequestMetadata(ctx, audience)
 		if err != nil {
 			return nil, streamErrorf(codes.InvalidArgument, "transport: %v", err)
@@ -366,15 +368,15 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			authData[k] = v
 		}
 	}
+	callAuthData := make(map[string]string)
 	// Check if credentials.PerRPCCredentials were provided via call options.
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
-	callAuthData := make(map[string]string)
 	if callCreds := callHdr.Creds; callCreds != nil {
 		if !t.isSecure && callCreds.RequireTransportSecurity() {
-			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure channel")
+			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure conneciton")
 		}
-		data, err := callCreds.GetRequestMetadata(ctx)
+		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {
 			return nil, streamErrorf(codes.Internal, "transport: %v", err)
 		}
