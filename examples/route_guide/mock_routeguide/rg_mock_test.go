@@ -30,6 +30,7 @@ func TestRouteChat(t *testing.T) {
 	).Return(nil)
 	// Set expectation on receiving.
 	stream.EXPECT().Recv().Return(msg, nil)
+	stream.EXPECT().CloseSend().Return(nil)
 	// Create mock for the client interface.
 	rgclient := rgmock.NewMockRouteGuideClient(ctrl)
 	// Set expectation on RouteChat
@@ -47,6 +48,9 @@ func testRouteChat(client rgpb.RouteGuideClient) error {
 		return err
 	}
 	if err := stream.Send(msg); err != nil {
+		return err
+	}
+	if err := stream.CloseSend(); err != nil {
 		return err
 	}
 	got, err := stream.Recv()
