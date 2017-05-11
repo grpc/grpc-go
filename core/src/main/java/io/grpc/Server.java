@@ -49,6 +49,7 @@ public abstract class Server {
    * @return {@code this} object
    * @throws IllegalStateException if already started
    * @throws IOException if unable to bind
+   * @since 1.0.0
    */
   public abstract Server start() throws IOException;
 
@@ -58,6 +59,7 @@ public abstract class Server {
    * terminated.
    *
    * @throws IllegalStateException if the server has not yet been started.
+   * @since 1.0.0
    */
   public int getPort() {
     return -1;
@@ -66,6 +68,8 @@ public abstract class Server {
   /**
    * Returns all services registered with the server, or an empty list if not supported by the
    * implementation.
+   *
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
   public List<ServerServiceDefinition> getServices() {
@@ -75,6 +79,8 @@ public abstract class Server {
   /**
    * Returns immutable services registered with the server, or an empty list if not supported by the
    * implementation.
+   *
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
   public List<ServerServiceDefinition> getImmutableServices() {
@@ -85,6 +91,8 @@ public abstract class Server {
   /**
    * Returns mutable services registered with the server, or an empty list if not supported by the
    * implementation.
+   *
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
   public List<ServerServiceDefinition> getMutableServices() {
@@ -93,6 +101,9 @@ public abstract class Server {
 
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are rejected.
+   *
+   * @return {@code this} object
+   * @since 1.0.0
    */
   public abstract Server shutdown();
 
@@ -100,6 +111,9 @@ public abstract class Server {
    * Initiates a forceful shutdown in which preexisting and new calls are rejected. Although
    * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
    * return {@code false} immediately after this method returns.
+   *
+   * @return {@code this} object
+   * @since 1.0.0
    */
   public abstract Server shutdownNow();
 
@@ -109,6 +123,7 @@ public abstract class Server {
    *
    * @see #shutdown()
    * @see #isTerminated()
+   * @since 1.0.0
    */
   public abstract boolean isShutdown();
 
@@ -117,6 +132,7 @@ public abstract class Server {
    * relevant resources released (like TCP connections).
    *
    * @see #isShutdown()
+   * @since 1.0.0
    */
   public abstract boolean isTerminated();
 
@@ -129,6 +145,8 @@ public abstract class Server {
 
   /**
    * Waits for the server to become terminated.
+   *
+   * @since 1.0.0
    */
   public abstract void awaitTermination() throws InterruptedException;
 }
