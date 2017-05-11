@@ -469,6 +469,9 @@ type CallHdr struct {
 	// outbound message.
 	SendCompress string
 
+	// Creds specifies credentials.PerRPCCredentials for a call.
+	Creds credentials.PerRPCCredentials
+
 	// Flush indicates whether a new stream command should be sent
 	// to the peer without waiting for the first data. This is
 	// only a hint. The transport may modify the flush decision
