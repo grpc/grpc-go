@@ -334,7 +334,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if t.authInfo != nil {
 		pr.AuthInfo = t.authInfo
 	}
-	userCtx := ctx
 	ctx = peer.NewContext(ctx, pr)
 	authData := make(map[string]string)
 	for _, c := range t.creds {
@@ -401,7 +400,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		return nil, ErrConnClosing
 	}
 	s := t.newStream(ctx, callHdr)
-	s.clientStatsCtx = userCtx
 	t.activeStreams[s.id] = s
 	// If the number of active streams change from 0 to 1, then check if keepalive
 	// has gone dormant. If so, wake it up.
@@ -514,7 +512,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 		}
-		t.statsHandler.HandleRPC(s.clientStatsCtx, outHeader)
+		t.statsHandler.HandleRPC(s.ctx, outHeader)
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -993,13 +991,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				t.statsHandler.HandleRPC(s.clientStatsCtx, inHeader)
+				t.statsHandler.HandleRPC(s.ctx, inHeader)
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				t.statsHandler.HandleRPC(s.clientStatsCtx, inTrailer)
+				t.statsHandler.HandleRPC(s.ctx, inTrailer)
 			}
 		}
 	}()

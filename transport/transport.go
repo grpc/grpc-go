@@ -171,11 +171,6 @@ type Stream struct {
 	id uint32
 	// nil for client side Stream.
 	st ServerTransport
-	// clientStatsCtx keeps the user context for stats handling.
-	// It's only valid on client side. Server side stats context is same as s.ctx.
-	// All client side stats collection should use the clientStatsCtx (instead of the stream context)
-	// so that all the generated stats for a particular RPC can be associated in the processing phase.
-	clientStatsCtx context.Context
 	// ctx is the associated context of the stream.
 	ctx context.Context
 	// cancel is always nil for client side Stream.

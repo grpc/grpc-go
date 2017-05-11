@@ -86,13 +86,13 @@ func (s *InPayload) IsClient() bool { return s.Client }
 func (s *InPayload) isRPCStats() {}
 
 // InHeader contains stats when a header is received.
-// FullMethod, addresses and Compression are only valid if Client is false.
 type InHeader struct {
 	// Client is true if this InHeader is from client side.
 	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
+	// The following fields are valid only if Client is false.
 	// FullMethod is the full RPC method string, i.e., /package.service/method.
 	FullMethod string
 	// RemoteAddr is the remote address of the corresponding connection.
@@ -143,13 +143,13 @@ func (s *OutPayload) IsClient() bool { return s.Client }
 func (s *OutPayload) isRPCStats() {}
 
 // OutHeader contains stats when a header is sent.
-// FullMethod, addresses and Compression are only valid if Client is true.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
 	// WireLength is the wire length of header.
 	WireLength int
 
+	// The following fields are valid only if Client is true.
 	// FullMethod is the full RPC method string, i.e., /package.service/method.
 	FullMethod string
 	// RemoteAddr is the remote address of the corresponding connection.

@@ -800,13 +800,14 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
 	}
 
-	var rpcctx context.Context
+	var tagInfoInCtx *stats.RPCTagInfo
 	for i := 0; i < len(got); i++ {
 		if _, ok := got[i].s.(stats.RPCStats); ok {
-			if rpcctx != nil && got[i].ctx != rpcctx {
-				t.Fatalf("got different contexts with stats %T", got[i].s)
+			tagInfoInCtxNew, _ := got[i].ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo)
+			if tagInfoInCtx != nil && tagInfoInCtx != tagInfoInCtxNew {
+				t.Fatalf("got context containing different tagInfo with stats %T", got[i].s)
 			}
-			rpcctx = got[i].ctx
+			tagInfoInCtx = tagInfoInCtxNew
 		}
 	}
 

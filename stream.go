@@ -154,7 +154,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
