@@ -133,19 +133,23 @@ func NewComputeEngine() credentials.PerRPCCredentials {
 
 // serviceAccount represents PerRPCCredentials via JWT signing key.
 type serviceAccount struct {
+	mu     sync.Mutex
 	config *jwt.Config
-	once   sync.Once
-	ts     oauth2.TokenSource
+	t      *oauth2.Token
 }
 
 func (s *serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	s.once.Do(func() { s.ts = s.config.TokenSource(ctx) })
-	token, err := s.ts.Token()
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.t.Valid() {
+		var err error
+		s.t, err = s.config.TokenSource(ctx).Token()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return map[string]string{
-		"authorization": token.TokenType + " " + token.AccessToken,
+		"authorization": s.t.TokenType + " " + s.t.AccessToken,
 	}, nil
 }
 
