@@ -45,6 +45,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Creates a channel with the target's address and port number.
    *
    * @see #forTarget(String)
+   * @since 1.0.0
    */
   public static ManagedChannelBuilder<?> forAddress(String name, int port) {
     return ManagedChannelProvider.provider().builderForAddress(name, port);
@@ -77,6 +78,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]"}</li>
    *   <li>{@code "[2001:db8:85a3:8d3:1319:8a2e:370:7348]:443"}</li>
    * </ul>
+   *
+   * @since 1.0.0
    */
   public static ManagedChannelBuilder<?> forTarget(String target) {
     return ManagedChannelProvider.provider().builderForTarget(target);
@@ -92,6 +95,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>Calling this method is semantically equivalent to calling {@link #executor(Executor)} and
    * passing in a direct executor. However, this is the preferred way as it may allow the transport
    * to perform special optimizations.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract T directExecutor();
 
@@ -103,6 +109,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>The channel won't take ownership of the given executor. It's caller's responsibility to
    * shut down the executor when it's desired.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract T executor(Executor executor);
 
@@ -110,6 +119,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel, List)}, but while
    * still having access to the original {@code ManagedChannel}.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract T intercept(List<ClientInterceptor> interceptors);
 
@@ -117,6 +129,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Adds interceptors that will be called before the channel performs its real work. This is
    * functionally equivalent to using {@link ClientInterceptors#intercept(Channel,
    * ClientInterceptor...)}, but while still having access to the original {@code ManagedChannel}.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract T intercept(ClientInterceptor... interceptors);
 
@@ -125,6 +140,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * <p>It's an optional parameter. The library will provide a user agent independent of this
    * option. If provided, the given agent will prepend the library's user agent information.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract T userAgent(String userAgent);
 
@@ -133,11 +151,14 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * actually connected to. Is commonly in the form {@code host:port}.
    *
    * <p>Should only used by tests.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1767")
   public abstract T overrideAuthority(String authority);
 
-  /*
+  /**
    * Use of a plaintext connection to the server. By default a secure connection mechanism
    * such as TLS will be used.
    *
@@ -146,15 +167,20 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * @param skipNegotiation @{code true} if there is a priori knowledge that the endpoint supports
    *                        plaintext, {@code false} if plaintext use must be negotiated.
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1772")
   public abstract T usePlaintext(boolean skipNegotiation);
 
-  /*
+  /**
    * Provides a custom {@link NameResolver.Factory} for the channel.
    *
    * <p>If this method is not called, the builder will try the providers listed by {@link
    * NameResolverProvider#providers()} for the given target.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
   public abstract T nameResolverFactory(NameResolver.Factory resolverFactory);
@@ -168,6 +194,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>This method is implemented by all stock channel builders that
    * are shipped with gRPC, but may not be implemented by custom channel builders, in which case
    * this method will throw.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
@@ -175,7 +204,10 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Set the decompression registry for use in the channel.  This is an advanced API call and
    * shouldn't be used unless you are using custom message encoding.   The default supported
-   * decompressors are in {@code DecompressorRegistry.getDefaultInstance}.
+   * decompressors are in {@link DecompressorRegistry#getDefaultInstance}.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T decompressorRegistry(DecompressorRegistry registry);
@@ -183,7 +215,10 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   /**
    * Set the compression registry for use in the channel.  This is an advanced API call and
    * shouldn't be used unless you are using custom message encoding.   The default supported
-   * compressors are in {@code CompressorRegistry.getDefaultInstance}.
+   * compressors are in {@link CompressorRegistry#getDefaultInstance}.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1704")
   public abstract T compressorRegistry(CompressorRegistry registry);
@@ -198,6 +233,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * mode.
    *
    * <p>This is an advisory option. Do not rely on any specific behavior related to this option.
+   *
+   * @return this
+   * @since 1.0.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2022")
   public abstract T idleTimeout(long value, TimeUnit unit);
@@ -212,8 +250,9 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * the only known transport to not enforce this is {@code InProcessTransport}.
    *
    * @param max the maximum number of bytes a single message can be.
-   *
    * @throws IllegalArgumentException if max is negative.
+   * @return this
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2307")
   public T maxInboundMessageSize(int max) {
@@ -223,6 +262,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
 
   /**
    * Builds a channel using the given parameters.
+   *
+   * @since 1.0.0
    */
   public abstract ManagedChannel build();
 

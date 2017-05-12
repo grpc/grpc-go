@@ -55,7 +55,7 @@ public abstract class Channel {
    * @param methodDescriptor describes the name and parameter types of the operation to call.
    * @param callOptions runtime options to be applied to this call.
    * @return a {@link ClientCall} bound to the specified method.
-   *
+   * @since 1.0.0
    */
   public abstract <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(
       MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions);
@@ -63,6 +63,8 @@ public abstract class Channel {
   /**
    * The authority of the destination this channel connects to. Typically this is in the format
    * {@code host:port}.
+   *
+   * @since 1.0.0
    */
   public abstract String authority();
 }

@@ -42,6 +42,9 @@ public abstract class ManagedChannel extends Channel {
   /**
    * Initiates an orderly shutdown in which preexisting calls continue but new calls are immediately
    * cancelled.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract ManagedChannel shutdown();
 
@@ -51,6 +54,7 @@ public abstract class ManagedChannel extends Channel {
    *
    * @see #shutdown()
    * @see #isTerminated()
+   * @since 1.0.0
    */
   public abstract boolean isShutdown();
 
@@ -59,6 +63,7 @@ public abstract class ManagedChannel extends Channel {
    * relevant resources released (like TCP connections).
    *
    * @see #isShutdown()
+   * @since 1.0.0
    */
   public abstract boolean isTerminated();
 
@@ -66,6 +71,9 @@ public abstract class ManagedChannel extends Channel {
    * Initiates a forceful shutdown in which preexisting and new calls are cancelled. Although
    * forceful, the shutdown process is still not instantaneous; {@link #isTerminated()} will likely
    * return {@code false} immediately after this method returns.
+   *
+   * @return this
+   * @since 1.0.0
    */
   public abstract ManagedChannel shutdownNow();
 
@@ -73,6 +81,7 @@ public abstract class ManagedChannel extends Channel {
    * Waits for the channel to become terminated, giving up if the timeout is reached.
    *
    * @return whether the channel is terminated, as would be done by {@link #isTerminated()}.
+   * @since 1.0.0
    */
   public abstract boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
 
@@ -84,8 +93,8 @@ public abstract class ManagedChannel extends Channel {
    *
    * @param requestConnection if {@code true}, the channel will try to make a connection if it is
    *        currently IDLE
-   *
    * @throws UnsupportedOperationException if not supported by implementation
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
   public ConnectivityState getState(boolean requestConnection) {
@@ -103,8 +112,8 @@ public abstract class ManagedChannel extends Channel {
    *
    * @param source the assumed current state, typically just returned by {@link #getState}
    * @param callback the one-off callback
-   *
    * @throws UnsupportedOperationException if not supported by implementation
+   * @since 1.1.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/28")
   public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
