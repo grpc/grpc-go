@@ -334,6 +334,7 @@ class NettyServerHandler extends AbstractNettyHandler {
     if (keepAliveTimeInNanos != SERVER_KEEPALIVE_TIME_NANOS_DISABLED) {
       keepAliveManager = new KeepAliveManager(new KeepAlivePinger(ctx), ctx.executor(),
           keepAliveTimeInNanos, keepAliveTimeoutInNanos, true /* keepAliveDuringTransportIdle */);
+      keepAliveManager.onTransportStarted();
     }
     super.handlerAdded(ctx);
   }
@@ -441,9 +442,6 @@ class NettyServerHandler extends AbstractNettyHandler {
   @Override
   public void handleProtocolNegotiationCompleted(Attributes attrs) {
     attributes = transportListener.transportReady(attrs);
-    if (keepAliveManager != null) {
-      keepAliveManager.onTransportStarted();
-    }
   }
 
   @VisibleForTesting
@@ -706,7 +704,7 @@ class NettyServerHandler extends AbstractNettyHandler {
           logger.log(Level.FINE, String.format("Window: %d",
               decoder().flowController().initialWindowSize(connection().connectionStream())));
         }
-      } else {
+      } else if (!KEEPALIVE_PING_BUF.equals(data)) {
         logger.warning("Received unexpected ping ack. No ping outstanding");
       }
     }
