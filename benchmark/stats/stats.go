@@ -18,6 +18,11 @@ type Stats struct {
 
 	durations durationSlice
 	dirty     bool
+
+	qpsStartTime  time.Time
+	qpsStartCount int
+	qpsDuration   time.Duration
+	qpsCount      int
 }
 
 type durationSlice []time.Duration
@@ -39,6 +44,20 @@ func NewStats(numBuckets int) *Stats {
 func (stats *Stats) Add(d time.Duration) {
 	stats.durations = append(stats.durations, d)
 	stats.dirty = true
+}
+
+// StartQPS records current time and current number of durations
+// to get ready for qps test.
+func (stats *Stats) StartQPS() {
+	stats.qpsStartTime = time.Now()
+	stats.qpsStartCount = len(stats.durations)
+}
+
+// EndQPS records the duration since qps started, and the number
+// of durations added during this period.
+func (stats *Stats) EndQPS() {
+	stats.qpsDuration = time.Since(stats.qpsStartTime)
+	stats.qpsCount = len(stats.durations) - stats.qpsStartCount
 }
 
 // Clear resets the stats, removing all values.
@@ -103,6 +122,7 @@ func (stats *Stats) Print(w io.Writer) {
 	if stats.histogram == nil {
 		fmt.Fprint(w, "Histogram (empty)\n")
 	} else {
+		fmt.Fprintf(w, "QPS: %v\n", int64(float64(stats.qpsCount)/float64(stats.qpsDuration)*float64(time.Second)))
 		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
 		stats.histogram.Print(w)
 	}
