@@ -334,16 +334,18 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 	}
 	if err := stream.Send(initReq); err != nil {
 		// TODO: backoff on retry?
+		grpclog.Printf("Failed to send initial request to remote balancer: %v", err)
 		return true
 	}
 	reply, err := stream.Recv()
 	if err != nil {
 		// TODO: backoff on retry?
+		grpclog.Printf("Failed to receive response from remote balancer: %v", err)
 		return true
 	}
 	initResp := reply.GetInitialResponse()
 	if initResp == nil {
-		grpclog.Println("Failed to receive the initial response from the remote balancer.")
+		grpclog.Println("Reply from remote balancer did not include initial response.")
 		return
 	}
 	// TODO: Support delegation.
