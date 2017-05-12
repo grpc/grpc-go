@@ -37,6 +37,7 @@ package oauth
 import (
 	"fmt"
 	"io/ioutil"
+	"sync"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -133,10 +134,13 @@ func NewComputeEngine() credentials.PerRPCCredentials {
 // serviceAccount represents PerRPCCredentials via JWT signing key.
 type serviceAccount struct {
 	config *jwt.Config
+	once   sync.Once
+	ts     oauth2.TokenSource
 }
 
-func (s serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	token, err := s.config.TokenSource(ctx).Token()
+func (s *serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	s.once.Do(func() { s.ts = s.config.TokenSource(ctx) })
+	token, err := s.ts.Token()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +149,7 @@ func (s serviceAccount) GetRequestMetadata(ctx context.Context, uri ...string) (
 	}, nil
 }
 
-func (s serviceAccount) RequireTransportSecurity() bool {
+func (s *serviceAccount) RequireTransportSecurity() bool {
 	return true
 }
 
@@ -156,7 +160,7 @@ func NewServiceAccountFromKey(jsonKey []byte, scope ...string) (credentials.PerR
 	if err != nil {
 		return nil, err
 	}
-	return serviceAccount{config: config}, nil
+	return &serviceAccount{config: config}, nil
 }
 
 // NewServiceAccountFromFile constructs the PerRPCCredentials using the JSON key file
