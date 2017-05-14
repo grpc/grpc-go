@@ -70,7 +70,7 @@ public class ProtoLiteUtils {
    * {@link #setExtensionRegistry}, but not to modify the underlying object.
    *
    * <p>If you need custom parsing behavior for protos, you will need to make your own
-   * {@code MethodDescriptor.Marhsaller} for the time being.
+   * {@code MethodDescriptor.Marshaller} for the time being.
    *
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1787")
