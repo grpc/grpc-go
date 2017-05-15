@@ -86,6 +86,7 @@ subprojects {
         protocPluginBaseName = 'protoc-gen-grpc-java'
         javaPluginPath = "$rootDir/compiler/build/exe/java_plugin/$protocPluginBaseName$exeSuffix"
 
+        nettyVersion = '4.1.11.Final'
         guavaVersion = '19.0'
         protobufVersion = '3.2.0'
         protobufNanoVersion = '3.0.0-alpha-5'
@@ -191,10 +192,10 @@ subprojects {
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.0',
                 protobuf_util: "com.google.protobuf:protobuf-java-util:${protobufVersion}",
 
-                netty: 'io.netty:netty-codec-http2:[4.1.8.Final]',
-                netty_epoll: 'io.netty:netty-transport-native-epoll:4.1.8.Final' + epoll_suffix,
-                netty_proxy_handler: 'io.netty:netty-handler-proxy:4.1.8.Final',
-                netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork26',
+                netty: "io.netty:netty-codec-http2:[${nettyVersion}]",
+                netty_epoll: "io.netty:netty-transport-native-epoll:${nettyVersion}" + epoll_suffix,
+                netty_proxy_handler: "io.netty:netty-handler-proxy:${nettyVersion}",
+                netty_tcnative: 'io.netty:netty-tcnative-boringssl-static:2.0.1.Final',
 
                 // Test dependencies.
                 junit: 'junit:junit:4.11',

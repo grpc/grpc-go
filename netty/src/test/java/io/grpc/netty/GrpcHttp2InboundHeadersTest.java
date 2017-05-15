@@ -37,9 +37,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.io.BaseEncoding;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2InboundHeaders;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2RequestHeaders;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ResponseHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2InboundHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2RequestHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ResponseHeaders;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import java.util.Random;

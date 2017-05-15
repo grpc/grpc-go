@@ -37,8 +37,8 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ClientHeadersDecoder;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
@@ -54,10 +54,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * Tests for {@link GrpcHttp2HeadersDecoder}.
+ * Tests for {@link GrpcHttp2HeadersUtils}.
  */
 @RunWith(JUnit4.class)
-public class GrpcHttp2HeadersDecoderTest {
+public class GrpcHttp2HeadersUtilsTest {
 
   private static final SensitivityDetector NEVER_SENSITIVE = new SensitivityDetector() {
     @Override

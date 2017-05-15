@@ -35,8 +35,8 @@ import static io.grpc.netty.Utils.CONTENT_TYPE_HEADER;
 import static io.grpc.netty.Utils.TE_TRAILERS;
 import static io.netty.util.AsciiString.of;
 
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2RequestHeaders;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ResponseHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2RequestHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ResponseHeaders;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;

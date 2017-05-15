@@ -55,12 +55,8 @@ import static io.netty.util.AsciiString.isUpperCase;
 
 import com.google.common.io.BaseEncoding;
 import io.grpc.Metadata;
-import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
-import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2HeadersDecoder;
-import io.netty.handler.codec.http2.internal.hpack.Decoder;
 import io.netty.util.AsciiString;
 import io.netty.util.internal.PlatformDependent;
 import java.util.ArrayList;
@@ -68,88 +64,30 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A {@link Http2HeadersDecoder} that allows to use custom {@link Http2Headers} implementations.
- *
- * <p>Some of the code is copied from Netty's {@link DefaultHttp2HeadersDecoder}.
+ * A headers utils providing custom gRPC implementations of {@link DefaultHttp2HeadersDecoder}.
  */
-abstract class GrpcHttp2HeadersDecoder implements Http2HeadersDecoder,
-    Http2HeadersDecoder.Configuration {
-
-  private static final float HEADERS_COUNT_WEIGHT_NEW = 1 / 5f;
-  private static final float HEADERS_COUNT_WEIGHT_HISTORICAL = 1 - HEADERS_COUNT_WEIGHT_NEW;
-
-  private final Decoder decoder;
-  private float numHeadersGuess = 8;
-
-  GrpcHttp2HeadersDecoder(long maxHeaderListSize) {
-    decoder = new Decoder(maxHeaderListSize, 32 /* same as default */);
-  }
-
-  @Override
-  public Http2Headers decodeHeaders(int streamId, ByteBuf headerBlock) throws Http2Exception {
-    GrpcHttp2InboundHeaders headers = newHeaders(1 + (int) numHeadersGuess);
-    decoder.decode(streamId, headerBlock, headers);
-
-    numHeadersGuess = HEADERS_COUNT_WEIGHT_NEW * headers.numHeaders()
-        + HEADERS_COUNT_WEIGHT_HISTORICAL * numHeadersGuess;
-
-    return headers;
-  }
-
-  abstract GrpcHttp2InboundHeaders newHeaders(int numHeadersGuess);
-
-  @Override
-  public Configuration configuration() {
-    return this;
-  }
-
-  @Override
-  public long maxHeaderListSize() {
-    return decoder.getMaxHeaderListSize();
-  }
-
-  @Override
-  public void maxHeaderListSize(long maxHeaderListSize, long maxHeaderListSizeGoAway)
-      throws Http2Exception {
-    decoder.setMaxHeaderListSize(maxHeaderListSize, maxHeaderListSizeGoAway);
-  }
-
-  @Override
-  public long maxHeaderListSizeGoAway() {
-    return decoder.getMaxHeaderListSizeGoAway();
-  }
-
-  @Override
-  public long maxHeaderTableSize() {
-    return decoder.getMaxHeaderTableSize();
-  }
-
-  @Override
-  public void maxHeaderTableSize(long max) throws Http2Exception {
-    decoder.setMaxHeaderTableSize(max);
-  }
-
-  static final class GrpcHttp2ServerHeadersDecoder extends GrpcHttp2HeadersDecoder {
+class GrpcHttp2HeadersUtils {
+  static final class GrpcHttp2ServerHeadersDecoder extends DefaultHttp2HeadersDecoder {
 
     GrpcHttp2ServerHeadersDecoder(long maxHeaderListSize) {
-      super(maxHeaderListSize);
+      super(true, maxHeaderListSize);
     }
 
     @Override
-    GrpcHttp2InboundHeaders newHeaders(int numHeadersGuess) {
-      return new GrpcHttp2RequestHeaders(numHeadersGuess);
+    protected GrpcHttp2InboundHeaders newHeaders() {
+      return new GrpcHttp2RequestHeaders(numberOfHeadersGuess());
     }
   }
 
-  static final class GrpcHttp2ClientHeadersDecoder extends GrpcHttp2HeadersDecoder {
+  static final class GrpcHttp2ClientHeadersDecoder extends DefaultHttp2HeadersDecoder {
 
     GrpcHttp2ClientHeadersDecoder(long maxHeaderListSize) {
-      super(maxHeaderListSize);
+      super(true, maxHeaderListSize);
     }
 
     @Override
-    GrpcHttp2InboundHeaders newHeaders(int numHeadersGuess) {
-      return new GrpcHttp2ResponseHeaders(numHeadersGuess);
+    protected GrpcHttp2InboundHeaders newHeaders() {
+      return new GrpcHttp2ResponseHeaders(numberOfHeadersGuess());
     }
   }
 

@@ -62,6 +62,7 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameReader;
 import io.netty.handler.codec.http2.Http2FrameWriter;
 import io.netty.handler.codec.http2.Http2Headers;
+import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2LocalFlowController;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
@@ -101,7 +102,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   /**
    * Must be called by subclasses to initialize the handler and channel.
    */
-  protected final void initChannel(GrpcHttp2HeadersDecoder headersDecoder) throws Exception {
+  protected final void initChannel(Http2HeadersDecoder headersDecoder) throws Exception {
     content = Unpooled.copiedBuffer("hello world", UTF_8);
     frameWriter = spy(new DefaultHttp2FrameWriter());
     frameReader = new DefaultHttp2FrameReader(headersDecoder);

@@ -44,7 +44,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2InboundHeaders;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2InboundHeaders;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.Http2Exception;

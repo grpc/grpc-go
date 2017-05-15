@@ -55,7 +55,7 @@ import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.LogExceptionRunnable;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
+import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelFuture;
@@ -64,6 +64,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DecoratingHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2Connection;
+import io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder;
 import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
@@ -188,8 +189,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
     frameWriter = new WriteMonitoringFrameWriter(frameWriter, keepAliveEnforcer);
     Http2ConnectionEncoder encoder = new DefaultHttp2ConnectionEncoder(connection, frameWriter);
-    // TODO(ejona): swap back to DefaultHttp2Connection with Netty-4.1.9
-    Http2ConnectionDecoder decoder = new FixedHttp2ConnectionDecoder(connection, encoder,
+    Http2ConnectionDecoder decoder = new DefaultHttp2ConnectionDecoder(connection, encoder,
         frameReader);
 
     Http2Settings settings = new Http2Settings();
