@@ -43,16 +43,20 @@ import io.grpc.ExperimentalApi;
 import io.grpc.ManagedChannelBuilder;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * Common base type for stub implementations.
+ * Common base type for stub implementations. Stub configuration is immutable; changing the
+ * configuration returns a new stub with updated configuration. Changing the configuration is cheap
+ * and may be done before every RPC, such as would be common when using {@link #withDeadlineAfter}.
  *
- * <p>This is the base class of the stub classes from the generated code. It allows for
- * reconfiguration, e.g., attaching interceptors to the stub.
+ * <p>Configuration is stored in {@link CallOptions} and is passed to the {@link Channel} when
+ * performing an RPC.
  *
  * @since 1.0.0
  * @param <S> the concrete type of this stub.
  */
+@ThreadSafe
 public abstract class AbstractStub<S extends AbstractStub<S>> {
   private final Channel channel;
   private final CallOptions callOptions;

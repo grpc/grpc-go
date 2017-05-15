@@ -36,7 +36,14 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * An absolute deadline in system time.
+ * An absolute point in time, generally for tracking when a task should be completed. A deadline is
+ * immutable except for the passage of time causing it to expire.
+ *
+ * <p>Many systems use timeouts, which are relative to the start of the operation. However, being
+ * relative causes them to be poorly suited for managing higher-level tasks where there are many
+ * components and sub-operations that may not know the time of the initial "start of the operation."
+ * However, a timeout can be converted to a {@code Deadline} at the start of the operation and then
+ * passed to the various components unambiguously.
  */
 public final class Deadline implements Comparable<Deadline> {
   private static final SystemTicker SYSTEM_TICKER = new SystemTicker();

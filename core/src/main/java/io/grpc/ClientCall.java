@@ -236,7 +236,8 @@ public abstract class ClientCall<ReqT, RespT> {
    * just a suggestion and the application is free to ignore it, however doing so may
    * result in excessive buffering within the call.
    *
-   * <p>This implementation always returns {@code true}.
+   * <p>This abstract class's implementation always returns {@code true}. Implementations generally
+   * override the method.
    */
   public boolean isReady() {
     return true;

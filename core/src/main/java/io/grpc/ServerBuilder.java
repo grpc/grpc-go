@@ -129,7 +129,9 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
 
   /**
    * Sets a fallback handler registry that will be looked up in if a method is not found in the
-   * primary registry.
+   * primary registry. The primary registry (configured via {@code addService()}) is faster but
+   * immutable. The fallback registry is more flexible and allows implementations to mutate over
+   * time and load services on-demand.
    *
    * @return this
    * @since 1.0.0

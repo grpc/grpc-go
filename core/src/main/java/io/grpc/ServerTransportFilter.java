@@ -39,8 +39,7 @@ package io.grpc;
  * <p>Multiple filters maybe registered to a server, in which case the output of a filter is the
  * input of the next filter.  For example, what returned by {@link #transportReady} of a filter is
  * passed to the same method of the next filter, and the last filter's return value is the effective
- * transport attributes.  A filter should modify the passed-in attributes instead of creating one
- * from scratch.
+ * transport attributes.
  *
  * <p>{@link Grpc} defines commonly used attributes.
  */

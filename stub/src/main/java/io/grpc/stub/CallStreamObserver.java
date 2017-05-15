@@ -54,8 +54,10 @@ import io.grpc.ExperimentalApi;
 public abstract class CallStreamObserver<V> implements StreamObserver<V> {
 
   /**
-   * If {@code true} indicates that a call to {@link #onNext(Object)} will not require the entire
-   * message to be buffered before it is sent to the peer.
+   * If {@code true}, indicates that the observer is capable of sending additional messages
+   * without requiring excessive buffering internally. This value is just a suggestion and the
+   * application is free to ignore it, however doing so may result in excessive buffering within the
+   * observer.
    */
   public abstract boolean isReady();
 

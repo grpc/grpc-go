@@ -198,8 +198,6 @@ public abstract class LoadBalancer {
   /**
    * The main balancing logic.  It <strong>must be thread-safe</strong>. Typically it should only
    * synchronize on its own state, and avoid synchronizing with the LoadBalancer's state.
-   *
-   * <p>Note: Implementations should override exactly one {@code pickSubchannel}.
    */
   @ThreadSafe
   public abstract static class SubchannelPicker {

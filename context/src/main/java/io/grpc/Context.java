@@ -60,11 +60,11 @@ import java.util.logging.Logger;
  *
  * <pre>
  *   Context withCredential = Context.current().withValue(CRED_KEY, cred);
- *   executorService.execute(withCredential.wrap(new Runnable() {
+ *   withCredential.run(new Runnable() {
  *     public void run() {
  *        readUserRecords(userId, CRED_KEY.get());
  *     }
- *   }));
+ *   });
  * </pre>
  *
  * <p>Contexts are also used to represent a scoped unit of work. When the unit of work is done the
@@ -78,7 +78,7 @@ import java.util.logging.Logger;
  * <pre>
  *   CancellableContext withCancellation = Context.current().withCancellation();
  *   try {
- *     executorService.execute(withCancellation.wrap(new Runnable() {
+ *     withCancellation.run(new Runnable() {
  *       public void run() {
  *         while (waitingForData() &amp;&amp; !Context.current().isCancelled()) {}
  *       }
@@ -95,12 +95,13 @@ import java.util.logging.Logger;
  *
  * <p>Notes and cautions on use:
  * <ul>
+ *    <li>Every {@code attach()} should have a {@code detach()} in the same method. And every
+ * CancellableContext should be cancelled at some point. Breaking these rules may lead to memory
+ * leaks.
  *    <li>While Context objects are immutable they do not place such a restriction on the state
  * they store.</li>
  *    <li>Context is not intended for passing optional parameters to an API and developers should
  * take care to avoid excessive dependence on context when designing an API.</li>
- *    <li>If Context is being used in an environment that needs to support class unloading it is the
- * responsibility of the application to ensure that all contexts are properly cancelled.</li>
  * </ul>
  */
 public class Context {
@@ -228,15 +229,16 @@ public class Context {
 
   /**
    * Create a new context which is independently cancellable and also cascades cancellation from
-   * its parent. Callers should ensure that either {@link CancellableContext#cancel(Throwable)}
-   * or {@link CancellableContext#detachAndCancel(Context, Throwable)} are called to notify
-   * listeners and release the resources associated with them.
+   * its parent. Callers <em>must</em> ensure that either {@link
+   * CancellableContext#cancel(Throwable)} or {@link CancellableContext#detachAndCancel(Context,
+   * Throwable)} are called at a later point, in order to allow this context to be garbage
+   * collected.
    *
    * <p>Sample usage:
    * <pre>
    *   Context.CancellableContext withCancellation = Context.current().withCancellation();
    *   try {
-   *     executorService.execute(withCancellation.wrap(new Runnable() {
+   *     withCancellation.run(new Runnable() {
    *       public void run() {
    *         Context current = Context.current();
    *         while (!current.isCancelled()) {
@@ -244,9 +246,8 @@ public class Context {
    *         }
    *       }
    *     });
-   *     doSomethingRelatedWork();
-   *   } catch (Throwable t) {
-   *     withCancellation.cancel(t);
+   *   } finally {
+   *     withCancellation.cancel(null);
    *   }
    * </pre>
    */
@@ -257,20 +258,26 @@ public class Context {
   /**
    * Create a new context which will cancel itself after the given {@code duration} from now.
    * The returned context will cascade cancellation of its parent. Callers may explicitly cancel
-   * the returned context prior to the deadline just as for {@link #withCancellation()},
+   * the returned context prior to the deadline just as for {@link #withCancellation()}. If the unit
+   * of work completes before the deadline, the context should be explicitly cancelled to allow
+   * it to be garbage collected.
    *
    * <p>Sample usage:
    * <pre>
-   *   Context.CancellableContext withDeadline = Context.current().withDeadlineAfter(5,
-   *       TimeUnit.SECONDS, scheduler);
-   *   executorService.execute(withDeadline.wrap(new Runnable() {
-   *     public void run() {
-   *       Context current = Context.current();
-   *       while (!current.isCancelled()) {
-   *         keepWorking();
+   *   Context.CancellableContext withDeadline = Context.current()
+   *       .withDeadlineAfter(5, TimeUnit.SECONDS, scheduler);
+   *   try {
+   *     withDeadline.run(new Runnable() {
+   *       public void run() {
+   *         Context current = Context.current();
+   *         while (!current.isCancelled()) {
+   *           keepWorking();
+   *         }
    *       }
-   *     }
-   *   });
+   *     });
+   *   } finally {
+   *     withDeadline.cancel(null);
+   *   }
    * </pre>
    */
   public CancellableContext withDeadlineAfter(long duration, TimeUnit unit,
@@ -281,20 +288,26 @@ public class Context {
   /**
    * Create a new context which will cancel itself at the given {@link Deadline}.
    * The returned context will cascade cancellation of its parent. Callers may explicitly cancel
-   * the returned context prior to the deadline just as for {@link #withCancellation()},
+   * the returned context prior to the deadline just as for {@link #withCancellation()}. If the unit
+   * of work completes before the deadline, the context should be explicitly cancelled to allow
+   * it to be garbage collected.
    *
    * <p>Sample usage:
    * <pre>
    *   Context.CancellableContext withDeadline = Context.current()
-   *      .withDeadline(someReceivedDeadline);
-   *   executorService.execute(withDeadline.wrap(new Runnable() {
-   *     public void run() {
-   *       Context current = Context.current();
-   *       while (!current.isCancelled()) {
-   *         keepWorking();
+   *      .withDeadline(someReceivedDeadline, scheduler);
+   *   try {
+   *     withDeadline.run(new Runnable() {
+   *       public void run() {
+   *         Context current = Context.current();
+   *         while (!current.isCancelled() &amp;&amp; moreWorkToDo()) {
+   *           keepWorking();
+   *         }
    *       }
-   *     }
-   *   });
+   *     });
+   *   } finally {
+   *     withDeadline.cancel(null);
+   *   }
    * </pre>
    */
   public CancellableContext withDeadline(Deadline deadline,
@@ -310,11 +323,11 @@ public class Context {
    *
    <pre>
    *   Context withCredential = Context.current().withValue(CRED_KEY, cred);
-   *   executorService.execute(withCredential.wrap(new Runnable() {
+   *   withCredential.run(new Runnable() {
    *     public void run() {
    *        readUserRecords(userId, CRED_KEY.get());
    *     }
-   *   }));
+   *   });
    * </pre>
    *
    */
@@ -366,10 +379,19 @@ public class Context {
    * previously current context is returned. It is allowed to attach contexts where {@link
    * #isCancelled()} is {@code true}.
    *
-   * <p>Instead of using {@link #attach()} & {@link #detach(Context)} most use-cases are better
+   * <p>Instead of using {@code attach()} and {@link #detach(Context)} most use-cases are better
    * served by using the {@link #run(Runnable)} or {@link #call(java.util.concurrent.Callable)} to
    * execute work immediately within a context's scope. If work needs to be done in other threads it
    * is recommended to use the 'wrap' methods or to use a propagating executor.
+   *
+   * <p>All calls to {@code attach()} should have a corresponding {@link #detach(Context)} within
+   * the same method:
+   * <pre>{@code Context previous = someContext.attach();
+   * try {
+   *   // Do work
+   * } finally {
+   *   someContext.detach(previous);
+   * }}</pre>
    */
   public Context attach() {
     Context previous = current();
@@ -378,8 +400,7 @@ public class Context {
   }
 
   /**
-   * Detach the current context and attach the provided replacement which should be the context of
-   * the outer scope, thus exit the current scope.
+   * Reverse an {@code attach()}, restoring the previous context and exiting the current scope.
    *
    * <p>This context should be the same context that was previously {@link #attach attached}.  The
    * provided replacement should be what was returned by the same {@link #attach attach()} call.  If
@@ -649,7 +670,9 @@ public class Context {
 
   /**
    * A context which inherits cancellation from its parent but which can also be independently
-   * cancelled and which will propagate cancellation to its descendants.
+   * cancelled and which will propagate cancellation to its descendants. To avoid leaking memory,
+   * every CancellableContext must have a defined lifetime, after which it is guaranteed to be
+   * cancelled.
    */
   public static final class CancellableContext extends Context {
 

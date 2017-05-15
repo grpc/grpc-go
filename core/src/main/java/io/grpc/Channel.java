@@ -34,15 +34,16 @@ package io.grpc;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- * A Channel provides an abstraction over the transport layer that is designed to be consumed
- * by stub implementations. Channel and its associated types {@link ClientCall} and
- * {@link ClientCall.Listener} exchange parsed request and response objects whereas the
- * transport layer only works with serialized data.
+ * A virtual connection to a conceptual endpoint, to perform RPCs. A channel is free to have zero or
+ * many actual connections to the endpoint based on configuration, load, etc. A channel is also free
+ * to determine which actual endpoints to use and may change it every RPC, permitting client-side
+ * load balancing. Applications are generally expected to use stubs instead of calling this class
+ * directly.
  *
  * <p>Applications can add common cross-cutting behaviors to stubs by decorating Channel
  * implementations using {@link ClientInterceptor}. It is expected that most application
  * code will not use this class directly but rather work with stubs that have been bound to a
- * Channel that was decorated during application initialization,
+ * Channel that was decorated during application initialization.
  */
 @ThreadSafe
 public abstract class Channel {
