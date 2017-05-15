@@ -440,7 +440,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}
 	if cc.dopts.scChan != nil && !scSet {
-		// Blocking Wait for the initial service config.
+		// Blocking wait for the initial service config.
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
