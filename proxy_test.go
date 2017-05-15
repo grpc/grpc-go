@@ -133,7 +133,7 @@ func (p *proxyServer) stop() {
 }
 
 func TestHTTPConnect(t *testing.T) {
-	plis, err := net.Listen("tcp", ":0")
+	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestHTTPConnect(t *testing.T) {
 	go p.run()
 	defer p.stop()
 
-	blis, err := net.Listen("tcp", ":0")
+	blis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
