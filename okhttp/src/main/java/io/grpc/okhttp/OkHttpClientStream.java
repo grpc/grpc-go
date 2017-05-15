@@ -282,7 +282,9 @@ class OkHttpClientStream extends AbstractClientStream2 {
      */
     @GuardedBy("lock")
     public void transportDataReceived(okio.Buffer frame, boolean endOfStream) {
-      long length = frame.size();
+      // We only support 16 KiB frames, and the max permitted in HTTP/2 is 16 MiB. This is verified
+      // in OkHttp's Http2 deframer. In addition, this code is after the data has been read.
+      int length = (int) frame.size();
       window -= length;
       if (window < 0) {
         frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
