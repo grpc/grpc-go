@@ -144,8 +144,6 @@ public class PickFirstLoadBalancerTest {
     List<EquivalentAddressGroup> newServers =
         Lists.newArrayList(new EquivalentAddressGroup(socketAddr));
 
-    final EquivalentAddressGroup oldEag = new EquivalentAddressGroup(socketAddresses);
-
     InOrder inOrder = inOrder(mockHelper);
 
     loadBalancer.handleResolvedAddressGroups(servers, affinity);

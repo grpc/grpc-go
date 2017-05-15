@@ -31,7 +31,6 @@
 
 package io.grpc.grpclb;
 
-import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
@@ -57,7 +56,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.Durations;
@@ -74,8 +72,6 @@ import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer.SubchannelPicker;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.grpclb.GrpclbLoadBalancer.ErrorPicker;
@@ -87,9 +83,6 @@ import io.grpc.internal.FakeClock;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.SerializingExecutor;
 import io.grpc.stub.StreamObserver;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;
@@ -118,32 +111,6 @@ public class GrpclbLoadBalancerTest {
   private static final Attributes.Key<String> RESOLUTION_ATTR =
       Attributes.Key.of("resolution-attr");
   private static final String SERVICE_AUTHORITY = "api.google.com";
-
-  private static final MethodDescriptor<String, String> TRASH_METHOD =
-      MethodDescriptor.<String, String>newBuilder()
-          .setType(MethodDescriptor.MethodType.UNARY)
-          .setFullMethodName("/service/trashmethod")
-          .setRequestMarshaller(StringMarshaller.INSTANCE)
-          .setResponseMarshaller(StringMarshaller.INSTANCE)
-          .build();
-
-  private static class StringMarshaller implements Marshaller<String> {
-    static final StringMarshaller INSTANCE = new StringMarshaller();
-
-    @Override
-    public InputStream stream(String value) {
-      return new ByteArrayInputStream(value.getBytes(UTF_8));
-    }
-
-    @Override
-    public String parse(InputStream stream) {
-      try {
-        return new String(ByteStreams.toByteArray(stream), UTF_8);
-      } catch (IOException ex) {
-        throw new RuntimeException(ex);
-      }
-    }
-  }
 
   @Mock
   private Helper helper;
@@ -355,7 +322,6 @@ public class GrpclbLoadBalancerTest {
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
     deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
     assertEquals(1, fakeOobChannels.size());
-    ManagedChannel oobChannel = fakeOobChannels.poll();
     verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
     StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
     assertEquals(1, lbRequestObservers.size());
@@ -565,7 +531,6 @@ public class GrpclbLoadBalancerTest {
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
     deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
     assertEquals(1, fakeOobChannels.size());
-    ManagedChannel oobChannel = fakeOobChannels.poll();
     verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
     StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
 
@@ -596,7 +561,6 @@ public class GrpclbLoadBalancerTest {
         .set(GrpclbConstants.ATTR_LB_POLICY, LbPolicy.GRPCLB).build();
     deliverResolvedAddresses(grpclbResolutionList, grpclbResolutionAttrs);
     assertEquals(1, fakeOobChannels.size());
-    ManagedChannel oobChannel = fakeOobChannels.poll();
     verify(mockLbService).balanceLoad(lbResponseObserverCaptor.capture());
     StreamObserver<LoadBalanceResponse> lbResponseObserver = lbResponseObserverCaptor.getValue();
     assertEquals(1, lbRequestObservers.size());
@@ -1153,7 +1117,7 @@ public class GrpclbLoadBalancerTest {
     return list;
   }
 
-  private static String lbAuthority(int i) {
+  private static String lbAuthority(int unused) {
     // TODO(ejona): Support varying authorities
     return "lb.google.com";
   }
