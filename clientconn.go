@@ -661,7 +661,8 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 
 // GetMethodConfig gets the method config of the input method. If there's no exact
 // match for the input method (i.e. /service/method), we will return the default
-// config for all methods under the service (/service/).
+// config for all methods under the service (/service/). Otherwise, we will return
+// an empty MethodConfig.
 // TODO: Avoid the locking here.
 func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	cc.mu.RLock()

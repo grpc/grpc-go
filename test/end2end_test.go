@@ -1190,6 +1190,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 		}
 		break
 	}
+	// The following RPCs are expected to become fail-fast.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
 	}
@@ -1291,7 +1292,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 	}
 	ch <- sc
 
-	// // Wait for the new service config to take effect.
+	// Wait for the new service config to take effect.
 	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
 		if *mc.Timeout != time.Nanosecond {
@@ -1356,19 +1357,19 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		ResponseSize: proto.Int32(int32(extraLargeSize)),
 		Payload:      smallPayload,
 	}
-	// test for unary RPC recv
+	// Test for unary RPC recv.
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	// test for unary RPC send
+	// Test for unary RPC send.
 	req.Payload = extraLargePayload
 	req.ResponseSize = proto.Int32(int32(smallSize))
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
-	// test for streaming RPC recv
+	// Test for streaming RPC recv.
 	respParam := []*testpb.ResponseParameters{
 		{
 			Size: proto.Int32(int32(extraLargeSize)),
@@ -1390,7 +1391,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
-	// 	test for streaming RPC send
+	// Test for streaming RPC send.
 	respParam[0].Size = proto.Int32(int32(smallSize))
 	sreq.Payload = extraLargePayload
 	stream, err = tc.FullDuplexCall(te1.ctx)
@@ -1439,7 +1440,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
-	// 	Test for streaming RPC send.
+	// Test for streaming RPC send.
 	respParam[0].Size = proto.Int32(int32(smallSize))
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te2.ctx)
@@ -1508,7 +1509,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
-	// 	Test for streaming RPC send.
+	// Test for streaming RPC send.
 	respParam[0].Size = proto.Int32(int32(smallSize))
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te3.ctx)
