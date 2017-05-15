@@ -51,6 +51,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.grpclb.GrpclbConstants.LbPolicy;
+import io.grpc.grpclb.LoadBalanceResponse.LoadBalanceResponseTypeCase;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.WithLogId;
@@ -439,19 +440,28 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       }
       logger.log(Level.FINE, "[{0}] Got an LB response: {1}", new Object[] {logId, response});
 
-      InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
-      if (initialResponse != InitialLoadBalanceResponse.getDefaultInstance()) {
-        if (initialResponseReceived) {
+      LoadBalanceResponseTypeCase typeCase = response.getLoadBalanceResponseTypeCase();
+      if (!initialResponseReceived) {
+        if (typeCase != LoadBalanceResponseTypeCase.INITIAL_RESPONSE) {
           logger.log(
               Level.WARNING,
-              "[{0}] : Ignored abundant initial response: {1}",
-              new Object[] {logId, initialResponse});
-        } else {
-          initialResponseReceived = true;
-          loadReportIntervalMillis =
-              Durations.toMillis(initialResponse.getClientStatsReportInterval());
-          scheduleNextLoadReport();
+              "[{0}] : Did not receive response with type initial response: {1}",
+              new Object[] {logId, response});
+          return;
         }
+        initialResponseReceived = true;
+        InitialLoadBalanceResponse initialResponse = response.getInitialResponse();
+        loadReportIntervalMillis =
+            Durations.toMillis(initialResponse.getClientStatsReportInterval());
+        scheduleNextLoadReport();
+        return;
+      }
+
+      if (typeCase != LoadBalanceResponseTypeCase.SERVER_LIST) {
+        logger.log(
+            Level.WARNING,
+            "[{0}] : Ignoring unexpected response type: {1}",
+            new Object[] {logId, response});
         return;
       }
 
