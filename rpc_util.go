@@ -184,7 +184,7 @@ func FailFast(failFast bool) CallOption {
 	})
 }
 
-// WithMaxReceiveMessageSize returns a DialOption which sets the maximum message size the client can receive.
+// WithMaxReceiveMessageSize returns a CallOption which sets the maximum message size the client can receive.
 func WithMaxReceiveMessageSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxReceiveMessageSize = &s
@@ -192,7 +192,7 @@ func WithMaxReceiveMessageSize(s int) CallOption {
 	})
 }
 
-// WithMaxSendMessageSize returns a DialOption which sets the maximum message size the client can send.
+// WithMaxSendMessageSize returns a CallOption which sets the maximum message size the client can send.
 func WithMaxSendMessageSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxSendMessageSize = &s

@@ -113,7 +113,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		cancel context.CancelFunc
 	)
 	c := defaultCallInfo
-	mc, _ := cc.GetMethodConfig(method)
+	mc := cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}
@@ -219,15 +219,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		break
 	}
 	cs := &clientStream{
-		opts:  opts,
-		c:     c,
-		desc:  desc,
-		codec: cc.dopts.codec,
-		cp:    cc.dopts.cp,
-		dc:    cc.dopts.dc,
-		maxReceiveMessageSize: *c.maxReceiveMessageSize,
-		maxSendMessageSize:    *c.maxSendMessageSize,
-		cancel:                cancel,
+		opts:   opts,
+		c:      c,
+		desc:   desc,
+		codec:  cc.dopts.codec,
+		cp:     cc.dopts.cp,
+		dc:     cc.dopts.dc,
+		cancel: cancel,
 
 		put: put,
 		t:   t,
@@ -271,19 +269,17 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 // clientStream implements a client side Stream.
 type clientStream struct {
-	opts                  []CallOption
-	c                     callInfo
-	t                     transport.ClientTransport
-	s                     *transport.Stream
-	p                     *parser
-	desc                  *StreamDesc
-	codec                 Codec
-	cp                    Compressor
-	cbuf                  *bytes.Buffer
-	dc                    Decompressor
-	maxReceiveMessageSize int
-	maxSendMessageSize    int
-	cancel                context.CancelFunc
+	opts   []CallOption
+	c      callInfo
+	t      transport.ClientTransport
+	s      *transport.Stream
+	p      *parser
+	desc   *StreamDesc
+	codec  Codec
+	cp     Compressor
+	cbuf   *bytes.Buffer
+	dc     Decompressor
+	cancel context.CancelFunc
 
 	tracing bool // set to EnableTracing when the clientStream is created.
 
@@ -367,8 +363,12 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
-	if len(out) > cs.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(out), cs.maxSendMessageSize)
+	if cs.c.maxSendMessageSize == nil {
+		// TODO(lyuxuan): codes.Internal the right error to return here?
+		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
+	}
+	if len(out) > *cs.c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(out), *cs.c.maxSendMessageSize)
 	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
@@ -385,7 +385,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxReceiveMessageSize, inPayload)
+	if cs.c.maxReceiveMessageSize == nil {
+		// TODO(lyuxuan): codes.Internal the right error to return here?
+		return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
+	}
+	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, inPayload)
 	defer func() {
 		// err != nil indicates the termination of the stream.
 		if err != nil {
@@ -408,7 +412,11 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 		// Special handling for client streaming rpc.
 		// This recv expects EOF or errors, so we don't collect inPayload.
-		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, cs.maxReceiveMessageSize, nil)
+		if cs.c.maxReceiveMessageSize == nil {
+			// TODO(lyuxuan): codes.Internal the right error to return here?
+			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
+		}
+		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil)
 		cs.closeTransportStream(err)
 		if err == nil {
 			return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))

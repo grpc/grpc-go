@@ -126,7 +126,7 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	}
 }
 
-// WithMaxMsgSize Deprecated: use WithMaxReceiveMessageSize instead.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithMaxReceiveMessageSize instead.
 func WithMaxMsgSize(s int) DialOption {
 	return WithDefaultCallOptions(WithMaxReceiveMessageSize(s))
 }
@@ -367,12 +367,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
+	scSet := false
 	if cc.dopts.scChan != nil {
 		// Try to get an initial service config.
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = sc
+				scSet = true
 			}
 		default:
 		}
@@ -436,7 +438,17 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			return nil, err
 		}
 	}
-
+	if cc.dopts.scChan != nil && !scSet {
+		// Blocking Wait for the initial service config.
+		select {
+		case sc, ok := <-cc.dopts.scChan:
+			if ok {
+				cc.sc = sc
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	if cc.dopts.scChan != nil {
 		go cc.scWatcher()
 	}
@@ -646,17 +658,19 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 	return nil
 }
 
-// GetMethodConfig gets the method config of the input method. If there's no exact match for the input method (i.e. /service/method), we will return the default config for all methods under the service (/service/).
+// GetMethodConfig gets the method config of the input method. If there's no exact
+// match for the input method (i.e. /service/method), we will return the default
+// config for all methods under the service (/service/).
 // TODO: Avoid the locking here.
-func (cc *ClientConn) GetMethodConfig(method string) (m MethodConfig, ok bool) {
+func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	m, ok = cc.sc.Methods[method]
+	m, ok := cc.sc.Methods[method]
 	if !ok {
 		i := strings.LastIndex(method, "/")
 		m, ok = cc.sc.Methods[method[:i+1]]
 	}
-	return
+	return m
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {

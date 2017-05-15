@@ -116,7 +116,6 @@ type options struct {
 	codec                 Codec
 	cp                    Compressor
 	dc                    Decompressor
-	maxMsgSize            int
 	unaryInt              UnaryServerInterceptor
 	streamInt             StreamServerInterceptor
 	inTapHandle           tap.ServerInHandle
@@ -131,6 +130,8 @@ type options struct {
 	initialWindowSize     int32
 	initialConnWindowSize int32
 }
+
+var defaultServerOptions = options{maxReceiveMessageSize: defaultServerMaxReceiveMessageSize, maxSendMessageSize: defaultServerMaxSendMessageSize}
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
@@ -284,9 +285,7 @@ func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
-	var opts options
-	opts.maxReceiveMessageSize = defaultServerMaxReceiveMessageSize
-	opts.maxSendMessageSize = defaultServerMaxSendMessageSize
+	opts := defaultServerOptions
 	for _, o := range opt {
 		o(&opts)
 	}

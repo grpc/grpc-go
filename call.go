@@ -73,6 +73,10 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	for {
+		if c.maxReceiveMessageSize == nil {
+			// TODO(lyuxuan): codes.Internal the right error to return here?
+			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
+		}
 		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
@@ -118,6 +122,10 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
+	if c.maxSendMessageSize == nil {
+		// TODO(lyuxuan): codes.Internal the right error to return here?
+		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
+	}
 	if len(outBuf) > *c.maxSendMessageSize {
 		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
 	}
@@ -148,7 +156,7 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	mc, _ := cc.GetMethodConfig(method)
+	mc := cc.GetMethodConfig(method)
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
 	}

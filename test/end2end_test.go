@@ -443,7 +443,6 @@ type test struct {
 	userAgent                   string
 	clientCompression           bool
 	serverCompression           bool
-	timeout                     time.Duration
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
 	unaryServerInt              grpc.UnaryServerInterceptor
@@ -614,9 +613,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.maxClientSendMsgSize != nil {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WithMaxSendMessageSize(*te.maxClientSendMsgSize)))
-	}
-	if te.timeout > 0 {
-		opts = append(opts, grpc.WithTimeout(te.timeout))
 	}
 	switch te.e.security {
 	case "tls":
@@ -1118,7 +1114,7 @@ func TestServiceConfig(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testGetMethodConfig(t, e)
 		testServiceConfigWaitForReady(t, e)
-		// Timeout logic (min of service config and client API) is implemented implicitly in context. WithTimeout(). No need to test here.
+		testServiceConfigTimeout(t, e)
 		testServiceConfigMaxMsgSize(t, e)
 	}
 }
@@ -1139,15 +1135,11 @@ func testServiceConfigSetup(t *testing.T, e env) (*test, chan grpc.ServiceConfig
 }
 
 func newBool(b bool) (a *bool) {
-	a = new(bool)
-	*a = b
-	return
+	return &b
 }
 
 func newInt(b int) (a *int) {
-	a = new(int)
-	*a = b
-	return
+	return &b
 }
 
 func newDuration(b time.Duration) (a *time.Duration) {
@@ -1238,11 +1230,11 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 	ch <- sc
 
 	// Wait for the new service config to take effect.
-	mc, ok := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
+	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
-		if ok && !*mc.WaitForReady {
+		if !*mc.WaitForReady {
 			time.Sleep(100 * time.Millisecond)
-			mc, ok = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
+			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 			continue
 		}
 		break
@@ -1252,6 +1244,67 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+}
+
+func testServiceConfigTimeout(t *testing.T, e env) {
+	te, ch := testServiceConfigSetup(t, e)
+	defer te.tearDown()
+
+	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
+	mc := grpc.MethodConfig{
+		Timeout: newDuration(time.Hour),
+	}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
+	ctx, _ := context.WithTimeout(context.Background(), time.Nanosecond)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	ctx, _ = context.WithTimeout(context.Background(), time.Nanosecond)
+	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+
+	// Generate a service config update.
+	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
+	mc.Timeout = newDuration(time.Nanosecond)
+	m = make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc = grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	// // Wait for the new service config to take effect.
+	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+	for {
+		if *mc.Timeout != time.Nanosecond {
+			time.Sleep(100 * time.Millisecond)
+			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+			continue
+		}
+		break
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Hour)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Hour)
+	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
 }
