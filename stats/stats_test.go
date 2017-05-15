@@ -120,6 +120,51 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	}
 }
 
+func (s *testServer) ClientStreamCall(stream testpb.TestService_ClientStreamCallServer) error {
+	md, ok := metadata.FromContext(stream.Context())
+	if ok {
+		if err := stream.SendHeader(md); err != nil {
+			return grpc.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+		}
+		stream.SetTrailer(testTrailerMetadata)
+	}
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			// read done.
+			return stream.SendAndClose(&testpb.SimpleResponse{Id: int32(0)})
+		}
+		if err != nil {
+			return err
+		}
+
+		if in.Id == errorID {
+			return fmt.Errorf("got error id: %v", in.Id)
+		}
+	}
+}
+
+func (s *testServer) ServerStreamCall(in *testpb.SimpleRequest, stream testpb.TestService_ServerStreamCallServer) error {
+	md, ok := metadata.FromContext(stream.Context())
+	if ok {
+		if err := stream.SendHeader(md); err != nil {
+			return grpc.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+		}
+		stream.SetTrailer(testTrailerMetadata)
+	}
+
+	if in.Id == errorID {
+		return fmt.Errorf("got error id: %v", in.Id)
+	}
+
+	for i := 0; i < 5; i++ {
+		if err := stream.Send(&testpb.SimpleResponse{Id: in.Id}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // test is an end-to-end test. It should be created with the newTest
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
@@ -218,12 +263,21 @@ func (te *test) clientConn() *grpc.ClientConn {
 	return te.cc
 }
 
+type rpcType int
+
+const (
+	unaryRPC rpcType = iota
+	clientStreamRPC
+	serverStreamRPC
+	fullDuplexStreamRPC
+)
+
 type rpcConfig struct {
 	count      int  // Number of requests and responses for streaming RPCs.
 	success    bool // Whether the RPC should succeed or return error.
 	failfast   bool
-	streaming  bool // Whether the rpc should be a streaming RPC.
-	noLastRecv bool // Whether to call recv for io.EOF. When true, last recv won't be called. Only valid for streaming RPCs.
+	callType   rpcType // Type of RPC.
+	noLastRecv bool    // Whether to call recv for io.EOF. When true, last recv won't be called. Only valid for streaming RPCs.
 }
 
 func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
@@ -287,6 +341,64 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]*testpb.SimpleRequest
 	}
 
 	return reqs, resps, nil
+}
+
+func (te *test) doClientStreamCall(c *rpcConfig) ([]*testpb.SimpleRequest, *testpb.SimpleResponse, error) {
+	var (
+		reqs []*testpb.SimpleRequest
+		resp *testpb.SimpleResponse
+		err  error
+	)
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	stream, err := tc.ClientStreamCall(metadata.NewContext(context.Background(), testMetadata), grpc.FailFast(c.failfast))
+	if err != nil {
+		return reqs, resp, err
+	}
+	var startID int32
+	if !c.success {
+		startID = errorID
+	}
+	for i := 0; i < c.count; i++ {
+		req := &testpb.SimpleRequest{
+			Id: int32(i) + startID,
+		}
+		reqs = append(reqs, req)
+		if err = stream.Send(req); err != nil {
+			return reqs, resp, err
+		}
+	}
+	resp, err = stream.CloseAndRecv()
+	return reqs, resp, err
+}
+
+func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.SimpleRequest, []*testpb.SimpleResponse, error) {
+	var (
+		req   *testpb.SimpleRequest
+		resps []*testpb.SimpleResponse
+		err   error
+	)
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	var startID int32
+	if !c.success {
+		startID = errorID
+	}
+	req = &testpb.SimpleRequest{Id: startID}
+	stream, err := tc.ServerStreamCall(metadata.NewContext(context.Background(), testMetadata), req, grpc.FailFast(c.failfast))
+	if err != nil {
+		return req, resps, err
+	}
+	for {
+		var resp *testpb.SimpleResponse
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return req, resps, nil
+		} else if err != nil {
+			return req, resps, err
+		}
+		resps = append(resps, resp)
+	}
 }
 
 type expectedData struct {
@@ -672,16 +784,35 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	defer te.tearDown()
 
 	var (
-		reqs  []*testpb.SimpleRequest
-		resps []*testpb.SimpleResponse
-		err   error
+		reqs   []*testpb.SimpleRequest
+		resps  []*testpb.SimpleResponse
+		err    error
+		method string
+
+		req  *testpb.SimpleRequest
+		resp *testpb.SimpleResponse
+		e    error
 	)
-	if !cc.streaming {
-		req, resp, e := te.doUnaryCall(cc)
+
+	switch cc.callType {
+	case unaryRPC:
+		method = "/grpc.testing.TestService/UnaryCall"
+		req, resp, e = te.doUnaryCall(cc)
 		reqs = []*testpb.SimpleRequest{req}
 		resps = []*testpb.SimpleResponse{resp}
 		err = e
-	} else {
+	case clientStreamRPC:
+		method = "/grpc.testing.TestService/ClientStreamCall"
+		reqs, resp, e = te.doClientStreamCall(cc)
+		resps = []*testpb.SimpleResponse{resp}
+		err = e
+	case serverStreamRPC:
+		method = "/grpc.testing.TestService/ServerStreamCall"
+		req, resps, e = te.doServerStreamCall(cc)
+		reqs = []*testpb.SimpleRequest{req}
+		err = e
+	case fullDuplexStreamRPC:
+		method = "/grpc.testing.TestService/FullDuplexCall"
 		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
 	}
 	if cc.success != (err == nil) {
@@ -713,14 +844,10 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	expect := &expectedData{
 		serverAddr:  te.srvAddr,
 		compression: tc.compress,
+		method:      method,
 		requests:    reqs,
 		responses:   resps,
 		err:         err,
-	}
-	if !cc.streaming {
-		expect.method = "/grpc.testing.TestService/UnaryCall"
-	} else {
-		expect.method = "/grpc.testing.TestService/FullDuplexCall"
 	}
 
 	checkConnStats(t, h.gotConn)
@@ -728,7 +855,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 }
 
 func TestServerStatsUnaryRPC(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -740,7 +867,7 @@ func TestServerStatsUnaryRPC(t *testing.T) {
 }
 
 func TestServerStatsUnaryRPCError(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -750,7 +877,73 @@ func TestServerStatsUnaryRPCError(t *testing.T) {
 	})
 }
 
-func TestServerStatsStreamingRPC(t *testing.T) {
+func TestServerStatsClientStreamRPC(t *testing.T) {
+	count := 5
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkInHeader,
+		checkBegin,
+		checkOutHeader,
+	}
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkInPayload,
+	}
+	for i := 0; i < count; i++ {
+		checkFuncs = append(checkFuncs, ioPayFuncs...)
+	}
+	checkFuncs = append(checkFuncs,
+		checkOutPayload,
+		checkOutTrailer,
+		checkEnd,
+	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: clientStreamRPC}, checkFuncs)
+}
+
+func TestServerStatsClientStreamRPCError(t *testing.T) {
+	count := 1
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+		checkInHeader,
+		checkBegin,
+		checkOutHeader,
+		checkInPayload,
+		checkOutTrailer,
+		checkEnd,
+	})
+}
+
+func TestServerStatsServerStreamRPC(t *testing.T) {
+	count := 5
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkInHeader,
+		checkBegin,
+		checkInPayload,
+		checkOutHeader,
+	}
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+		checkOutPayload,
+	}
+	for i := 0; i < count; i++ {
+		checkFuncs = append(checkFuncs, ioPayFuncs...)
+	}
+	checkFuncs = append(checkFuncs,
+		checkOutTrailer,
+		checkEnd,
+	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: serverStreamRPC}, checkFuncs)
+}
+
+func TestServerStatsServerStreamRPCError(t *testing.T) {
+	count := 5
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+		checkInHeader,
+		checkBegin,
+		checkInPayload,
+		checkOutHeader,
+		checkOutTrailer,
+		checkEnd,
+	})
+}
+
+func TestServerStatsFullDuplexRPC(t *testing.T) {
 	count := 5
 	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
@@ -768,12 +961,12 @@ func TestServerStatsStreamingRPC(t *testing.T) {
 		checkOutTrailer,
 		checkEnd,
 	)
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, streaming: true}, checkFuncs)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC}, checkFuncs)
 }
 
-func TestServerStatsStreamingRPCError(t *testing.T) {
+func TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, streaming: true}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -800,13 +993,14 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 		t.Fatalf("got %v stats, want %v stats", len(got), expectLen)
 	}
 
-	var rpcctx context.Context
+	var tagInfoInCtx *stats.RPCTagInfo
 	for i := 0; i < len(got); i++ {
 		if _, ok := got[i].s.(stats.RPCStats); ok {
-			if rpcctx != nil && got[i].ctx != rpcctx {
-				t.Fatalf("got different contexts with stats %T", got[i].s)
+			tagInfoInCtxNew, _ := got[i].ctx.Value(rpcCtxKey{}).(*stats.RPCTagInfo)
+			if tagInfoInCtx != nil && tagInfoInCtx != tagInfoInCtxNew {
+				t.Fatalf("got context containing different tagInfo with stats %T", got[i].s)
 			}
-			rpcctx = got[i].ctx
+			tagInfoInCtx = tagInfoInCtxNew
 		}
 	}
 
@@ -879,16 +1073,34 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 	defer te.tearDown()
 
 	var (
-		reqs  []*testpb.SimpleRequest
-		resps []*testpb.SimpleResponse
-		err   error
+		reqs   []*testpb.SimpleRequest
+		resps  []*testpb.SimpleResponse
+		method string
+		err    error
+
+		req  *testpb.SimpleRequest
+		resp *testpb.SimpleResponse
+		e    error
 	)
-	if !cc.streaming {
-		req, resp, e := te.doUnaryCall(cc)
+	switch cc.callType {
+	case unaryRPC:
+		method = "/grpc.testing.TestService/UnaryCall"
+		req, resp, e = te.doUnaryCall(cc)
 		reqs = []*testpb.SimpleRequest{req}
 		resps = []*testpb.SimpleResponse{resp}
 		err = e
-	} else {
+	case clientStreamRPC:
+		method = "/grpc.testing.TestService/ClientStreamCall"
+		reqs, resp, e = te.doClientStreamCall(cc)
+		resps = []*testpb.SimpleResponse{resp}
+		err = e
+	case serverStreamRPC:
+		method = "/grpc.testing.TestService/ServerStreamCall"
+		req, resps, e = te.doServerStreamCall(cc)
+		reqs = []*testpb.SimpleRequest{req}
+		err = e
+	case fullDuplexStreamRPC:
+		method = "/grpc.testing.TestService/FullDuplexCall"
 		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
 	}
 	if cc.success != (err == nil) {
@@ -924,15 +1136,11 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 	expect := &expectedData{
 		serverAddr:  te.srvAddr,
 		compression: tc.compress,
+		method:      method,
 		requests:    reqs,
 		responses:   resps,
 		failfast:    cc.failfast,
 		err:         err,
-	}
-	if !cc.streaming {
-		expect.method = "/grpc.testing.TestService/UnaryCall"
-	} else {
-		expect.method = "/grpc.testing.TestService/FullDuplexCall"
 	}
 
 	checkConnStats(t, h.gotConn)
@@ -940,7 +1148,7 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 }
 
 func TestClientStatsUnaryRPC(t *testing.T) {
-	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false}, map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
@@ -952,7 +1160,7 @@ func TestClientStatsUnaryRPC(t *testing.T) {
 }
 
 func TestClientStatsUnaryRPCError(t *testing.T) {
-	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false}, map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
@@ -962,23 +1170,59 @@ func TestClientStatsUnaryRPCError(t *testing.T) {
 	})
 }
 
-func TestClientStatsStreamingRPC(t *testing.T) {
+func TestClientStatsClientStreamRPC(t *testing.T) {
 	count := 5
-	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
-		outPayload: {checkOutPayload, count},
 		inHeader:   {checkInHeader, 1},
-		inPayload:  {checkInPayload, count},
+		outPayload: {checkOutPayload, count},
 		inTrailer:  {checkInTrailer, 1},
+		inPayload:  {checkInPayload, 1},
 		end:        {checkEnd, 1},
 	})
 }
 
-// If the user doesn't call the last recv() on clientSteam.
-func TestClientStatsStreamingRPCNotCallingLastRecv(t *testing.T) {
+func TestClientStatsClientStreamRPCError(t *testing.T) {
 	count := 1
-	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, streaming: true, noLastRecv: true}, map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		inHeader:   {checkInHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+func TestClientStatsServerStreamRPC(t *testing.T) {
+	count := 5
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+func TestClientStatsServerStreamRPCError(t *testing.T) {
+	count := 5
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+func TestClientStatsFullDuplexRPC(t *testing.T) {
+	count := 5
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, count},
@@ -989,13 +1233,27 @@ func TestClientStatsStreamingRPCNotCallingLastRecv(t *testing.T) {
 	})
 }
 
-func TestClientStatsStreamingRPCError(t *testing.T) {
+func TestClientStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, streaming: true}, map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 		begin:      {checkBegin, 1},
 		outHeader:  {checkOutHeader, 1},
 		outPayload: {checkOutPayload, 1},
 		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
+}
+
+// If the user doesn't call the last recv() on clientStream.
+func TestClientStatsFullDuplexRPCNotCallingLastRecv(t *testing.T) {
+	count := 1
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC, noLastRecv: true}, map[int]*checkFuncWithCount{
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
 		inTrailer:  {checkInTrailer, 1},
 		end:        {checkEnd, 1},
 	})

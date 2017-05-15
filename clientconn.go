@@ -407,6 +407,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 			config := BalancerConfig{
 				DialCreds: credsClone,
+				Dialer:    cc.dopts.copts.Dialer,
 			}
 			if err := cc.dopts.balancer.Start(target, config); err != nil {
 				waitC <- err

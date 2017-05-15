@@ -105,6 +105,7 @@ func (b *recvBuffer) load() {
 	if len(b.backlog) > 0 {
 		select {
 		case b.c <- b.backlog[0]:
+			b.backlog[0] = nil
 			b.backlog = b.backlog[1:]
 		default:
 		}
@@ -171,11 +172,6 @@ type Stream struct {
 	id uint32
 	// nil for client side Stream.
 	st ServerTransport
-	// clientStatsCtx keeps the user context for stats handling.
-	// It's only valid on client side. Server side stats context is same as s.ctx.
-	// All client side stats collection should use the clientStatsCtx (instead of the stream context)
-	// so that all the generated stats for a particular RPC can be associated in the processing phase.
-	clientStatsCtx context.Context
 	// ctx is the associated context of the stream.
 	ctx context.Context
 	// cancel is always nil for client side Stream.
@@ -473,6 +469,9 @@ type CallHdr struct {
 	// SendCompress specifies the compression algorithm applied on
 	// outbound message.
 	SendCompress string
+
+	// Creds specifies credentials.PerRPCCredentials for a call.
+	Creds credentials.PerRPCCredentials
 
 	// Flush indicates whether a new stream command should be sent
 	// to the peer without waiting for the first data. This is
