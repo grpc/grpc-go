@@ -35,6 +35,7 @@ import static io.grpc.internal.GrpcUtil.CONTENT_TYPE_KEY;
 import static io.grpc.internal.GrpcUtil.USER_AGENT_KEY;
 
 import com.google.common.base.Preconditions;
+import io.grpc.InternalMetadata;
 import io.grpc.Metadata;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.TransportFrameUtil;
@@ -66,7 +67,7 @@ public class Headers {
     Preconditions.checkNotNull(authority, "authority");
 
     // 7 is the number of explicit add calls below.
-    List<Header> okhttpHeaders = new ArrayList<Header>(7 + headers.headerCount());
+    List<Header> okhttpHeaders = new ArrayList<Header>(7 + InternalMetadata.headerCount(headers));
 
     // Set GRPC-specific headers.
     okhttpHeaders.add(SCHEME_HEADER);

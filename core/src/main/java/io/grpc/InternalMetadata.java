@@ -76,4 +76,9 @@ public final class InternalMetadata {
   public static byte[][] serialize(Metadata md) {
     return md.serialize();
   }
+
+  @Internal
+  public static int headerCount(Metadata md) {
+    return md.headerCount();
+  }
 }

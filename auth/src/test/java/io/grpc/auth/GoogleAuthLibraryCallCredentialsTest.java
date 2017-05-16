@@ -223,12 +223,12 @@ public class GoogleAuthLibraryCallCredentialsTest {
     List<Metadata> headerList = headersCaptor.getAllValues();
     assertEquals(3, headerList.size());
 
-    assertEquals(0, headerList.get(0).headerCount());
+    assertEquals(0, headerList.get(0).keys().size());
 
     Iterable<String> authorization = headerList.get(1).getAll(AUTHORIZATION);
     assertArrayEquals(new String[]{"token1"}, Iterables.toArray(authorization, String.class));
 
-    assertEquals(0, headerList.get(2).headerCount());
+    assertEquals(0, headerList.get(2).keys().size());
   }
 
   @Test

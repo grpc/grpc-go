@@ -190,8 +190,7 @@ public final class Metadata {
   public Metadata() {}
 
   /** Returns the total number of key-value headers in this metadata, including duplicates. */
-  @Internal
-  public int headerCount() {
+  int headerCount() {
     return size;
   }
 
