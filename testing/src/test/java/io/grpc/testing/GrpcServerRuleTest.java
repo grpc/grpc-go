@@ -45,10 +45,13 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 import org.junit.runners.model.Statement;
 
 public class GrpcServerRuleTest {
 
+  @RunWith(JUnit4.class)
   public static class WithoutDirectExecutor {
 
     @Rule
@@ -109,6 +112,7 @@ public class GrpcServerRuleTest {
     }
   }
 
+  @RunWith(JUnit4.class)
   public static class WithDirectExecutor {
 
     @Rule
@@ -169,6 +173,7 @@ public class GrpcServerRuleTest {
     }
   }
 
+  @RunWith(JUnit4.class)
   public static class ResourceCleanup {
 
     @Test
