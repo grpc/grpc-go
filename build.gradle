@@ -78,6 +78,7 @@ subprojects {
 
     javadoc.options {
         encoding = 'UTF-8'
+        use = true
         links 'https://docs.oracle.com/javase/8/docs/api/'
     }
 
