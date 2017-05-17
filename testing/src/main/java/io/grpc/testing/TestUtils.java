@@ -124,7 +124,7 @@ public class TestUtils {
    */
   public static InetSocketAddress testServerAddress(int port) {
     try {
-      InetAddress inetAddress = InetAddress.getByName("localhost");
+      InetAddress inetAddress = InetAddress.getByName("::1");
       inetAddress = InetAddress.getByAddress(TEST_SERVER_HOST, inetAddress.getAddress());
       return new InetSocketAddress(inetAddress, port);
     } catch (UnknownHostException e) {

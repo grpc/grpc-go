@@ -99,7 +99,7 @@ public class Http2NettyTest extends AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void remoteAddr() {
-    assertRemoteAddr("/127.0.0.1");
+    assertRemoteAddr("/0:0:0:0:0:0:0:1");
   }
 
   @Test(timeout = 10000)
