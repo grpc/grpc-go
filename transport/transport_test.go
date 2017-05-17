@@ -1125,7 +1125,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	// Read without window update.
 	for {
 		p := make([]byte, http2MaxFrameLen)
-		if _, err = s.dec.Read(p); err != nil {
+		if _, err = s.trReader.(*transportReader).reader.Read(p); err != nil {
 			break
 		}
 	}
@@ -1184,7 +1184,7 @@ func TestEncodingRequiredStatus(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	if _, err := s.dec.Read(p); err != io.EOF {
+	if _, err := s.trReader.Read(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
 	if !reflect.DeepEqual(s.Status(), encodingTestStatus) {
@@ -1212,7 +1212,7 @@ func TestInvalidHeaderField(t *testing.T) {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
 	p := make([]byte, http2MaxFrameLen)
-	_, err = s.dec.Read(p)
+	_, err = s.trReader.Read(p)
 	if se, ok := err.(StreamError); !ok || se.Code != codes.FailedPrecondition || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.FailedPrecondition, expectedInvalidHeaderField)
 	}
@@ -1576,7 +1576,8 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) 
 	stream, cleanUp := setUpHTTPStatusTest(t, httpStatus, wh)
 	defer cleanUp()
 	want := httpStatusConvTab[httpStatus]
-	_, err := stream.Read([]byte{})
+	buf := make([]byte, 8)
+	_, err := stream.Read(buf)
 	if err == nil {
 		t.Fatalf("Stream.Read(_) unexpectedly returned no error. Expected stream error with code %v", want)
 	}
@@ -1592,7 +1593,8 @@ func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) 
 func TestHTTPStatusOKAndMissingGRPCStatus(t *testing.T) {
 	stream, cleanUp := setUpHTTPStatusTest(t, http.StatusOK, writeOneHeader)
 	defer cleanUp()
-	_, err := stream.Read([]byte{})
+	buf := make([]byte, 8)
+	_, err := stream.Read(buf)
 	if err != io.EOF {
 		t.Fatalf("stream.Read(_) = _, %v, want _, io.EOF", err)
 	}

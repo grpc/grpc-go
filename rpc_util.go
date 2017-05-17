@@ -252,7 +252,7 @@ type parser struct {
 // that the underlying io.Reader must not return an incompatible
 // error.
 func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err error) {
-	if _, err := io.ReadFull(p.r, p.header[:]); err != nil {
+	if _, err := p.r.Read(p.header[:]); err != nil {
 		return 0, nil, err
 	}
 
@@ -268,7 +268,7 @@ func (p *parser) recvMsg(maxMsgSize int) (pf payloadFormat, msg []byte, err erro
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
 	msg = make([]byte, int(length))
-	if _, err := io.ReadFull(p.r, msg); err != nil {
+	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}

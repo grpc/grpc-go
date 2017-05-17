@@ -167,6 +167,21 @@ type inFlow struct {
 	// The amount of data the application has consumed but grpc has not sent
 	// window update for them. Used to reduce window update frequency.
 	pendingUpdate uint32
+	// delta is the extra window update given by receiver when an application
+	// is reading data bigger in size than the inFlow limit.
+	delta int32
+}
+
+func (f *inFlow) maybeAdjust(n uint32) uint32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	senderQuota := int32(f.limit - (f.pendingData + f.pendingUpdate))
+	untransmittedData := int32(n - f.pendingData)
+	if untransmittedData > senderQuota {
+		f.delta = int32(n)
+		return n
+	}
+	return 0
 }
 
 // onData is invoked when some data frame is received. It updates pendingData.
@@ -174,7 +189,7 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pendingData += n
-	if f.pendingData+f.pendingUpdate > f.limit {
+	if f.pendingData+f.pendingUpdate > f.limit+uint32(f.delta) {
 		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit)
 	}
 	return nil
@@ -189,6 +204,14 @@ func (f *inFlow) onRead(n uint32) uint32 {
 		return 0
 	}
 	f.pendingData -= n
+	if f.delta > 0 {
+		f.delta -= int32(n)
+		n = 0
+		if f.delta < 0 {
+			n = uint32(-f.delta)
+			f.delta = 0
+		}
+	}
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {
 		wu := f.pendingUpdate

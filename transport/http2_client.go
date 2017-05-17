@@ -316,18 +316,24 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		headerChan:    make(chan struct{}),
 	}
 	t.nextID += 2
-	s.windowHandler = func(n int) {
-		t.updateWindow(s, uint32(n))
+	s.requestRead = func(n int) {
+		t.adjustWindow(s, uint32(n))
 	}
 	// The client side stream context should have exactly the same life cycle with the user provided context.
 	// That means, s.ctx should be read-only. And s.ctx is done iff ctx is done.
 	// So we use the original context here instead of creating a copy.
 	s.ctx = ctx
-	s.dec = &recvBufferReader{
-		ctx:    s.ctx,
-		goAway: s.goAway,
-		recv:   s.buf,
+	s.trReader = &transportReader{
+		reader: &recvBufferReader{
+			ctx:    s.ctx,
+			goAway: s.goAway,
+			recv:   s.buf,
+		},
+		windowHandler: func(n int) {
+			t.updateWindow(s, uint32(n))
+		},
 	}
+
 	return s
 }
 
@@ -800,6 +806,20 @@ func (t *http2Client) getStream(f http2.Frame) (*Stream, bool) {
 	defer t.mu.Unlock()
 	s, ok := t.activeStreams[f.Header().StreamID]
 	return s, ok
+}
+
+// adjustWindow sends out extra window update over the initial window size
+// of stream if the application is requesting data larger in size than
+// the window.
+func (t *http2Client) adjustWindow(s *Stream, n uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == streamDone {
+		return
+	}
+	if w := s.fc.maybeAdjust(n); n > 0 {
+		t.controlBuf.put(&windowUpdate{s.id, w})
+	}
 }
 
 // updateWindow adjusts the inbound quota for the stream and the transport.

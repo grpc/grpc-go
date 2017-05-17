@@ -47,6 +47,14 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+type fullReader struct {
+	reader io.Reader
+}
+
+func (f fullReader) Read(p []byte) (int, error) {
+	return io.ReadFull(f.reader, p)
+}
+
 func TestSimpleParsing(t *testing.T) {
 	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {
@@ -65,7 +73,7 @@ func TestSimpleParsing(t *testing.T) {
 		// Check that messages with length >= 2^24 are parsed.
 		{append([]byte{0, 1, 0, 0, 0}, bigMsg...), nil, bigMsg, compressionNone},
 	} {
-		buf := bytes.NewReader(test.p)
+		buf := fullReader{bytes.NewReader(test.p)}
 		parser := &parser{r: buf}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
 		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
@@ -77,7 +85,7 @@ func TestSimpleParsing(t *testing.T) {
 func TestMultipleParsing(t *testing.T) {
 	// Set a byte stream consists of 3 messages with their headers.
 	p := []byte{0, 0, 0, 0, 1, 'a', 0, 0, 0, 0, 2, 'b', 'c', 0, 0, 0, 0, 1, 'd'}
-	b := bytes.NewReader(p)
+	b := fullReader{bytes.NewReader(p)}
 	parser := &parser{r: b}
 
 	wantRecvs := []struct {
