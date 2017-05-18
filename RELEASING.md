@@ -342,14 +342,14 @@ repository must first be `closed`, which will trigger several sanity checks
 on the repository. If this completes successfully, the repository can then
 be `released`, which will begin the process of pushing the new artifacts to
 Maven Central (the staging repository will be destroyed in the process). You can
-see the complete process for releasing to Maven Central on the [OSSRH site]
-(http://central.sonatype.org/pages/releasing-the-deployment.html).
+see the complete process for releasing to Maven Central on the [OSSRH
+site](http://central.sonatype.org/pages/releasing-the-deployment.html).
 
 Update README.md
 ----------------
-After waiting ~1 day and verifying that the release appears on [Maven Central]
-(http://mvnrepository.com/), cherry-pick the commit that updated the README into
-the master branch and go through review process.
+After waiting ~1 day and verifying that the release appears on [Maven
+Central](http://mvnrepository.com/), cherry-pick the commit that updated the
+README into the master branch and go through review process.
 
 ```
 $ git checkout -b bump-readme master
