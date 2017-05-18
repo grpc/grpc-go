@@ -159,6 +159,14 @@ type CallOption interface {
 	after(*callInfo)
 }
 
+// EmptyCallOption does not alter the Call configuration.
+// It can be embedded in another structure to carry satellite data for use
+// by interceptors.
+type EmptyCallOption struct{}
+
+func (EmptyCallOption) before(*callInfo) error { return nil }
+func (EmptyCallOption) after(*callInfo)        {}
+
 type beforeCall func(c *callInfo) error
 
 func (o beforeCall) before(c *callInfo) error { return o(c) }
