@@ -73,7 +73,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		streamCaller(stream)
 	}
 
-	ch := make(chan int, maxConcurrentCalls*4)
+	ch := make(chan struct{}, maxConcurrentCalls*4)
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
@@ -82,11 +82,11 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
+		stream, err := tc.StreamingCall(context.Background())
+		if err != nil {
+			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		}
 		go func() {
-			stream, err := tc.StreamingCall(context.Background())
-			if err != nil {
-				b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
-			}
 			for range ch {
 				start := time.Now()
 				streamCaller(stream)
@@ -100,7 +100,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		ch <- i
+		ch <- struct{}{}
 	}
 	b.StopTimer()
 	close(ch)
