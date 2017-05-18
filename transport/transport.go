@@ -325,6 +325,10 @@ func (s *Stream) write(m recvMsg) {
 
 // Read reads all p bytes from the wire for this stream.
 func (s *Stream) Read(p []byte) (n int, err error) {
+	// Don't request a read if there's was an error earlier
+	if er := s.trReader.(*transportReader).er; er != nil {
+		return 0, er
+	}
 	s.requestRead(len(p))
 	return io.ReadFull(s.trReader, p)
 }
@@ -338,11 +342,13 @@ type transportReader struct {
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
+	er            error
 }
 
 func (t *transportReader) Read(p []byte) (n int, err error) {
 	n, err = t.reader.Read(p)
 	if err != nil {
+		t.er = err
 		return
 	}
 	t.windowHandler(n)

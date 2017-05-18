@@ -58,6 +58,8 @@ const (
 	defaultServerKeepaliveTime    = time.Duration(2 * time.Hour)
 	defaultServerKeepaliveTimeout = time.Duration(20 * time.Second)
 	defaultKeepalivePolicyMinTime = time.Duration(5 * time.Minute)
+	// max window limit set by HTTP2 Specs.
+	maxWindowSize = math.MaxInt32
 )
 
 // The following defines various control items which could flow through
@@ -173,13 +175,21 @@ type inFlow struct {
 }
 
 func (f *inFlow) maybeAdjust(n uint32) uint32 {
+	if n > uint32(math.MaxInt32) {
+		n = uint32(math.MaxInt32)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	senderQuota := int32(f.limit - (f.pendingData + f.pendingUpdate))
-	untransmittedData := int32(n - f.pendingData)
+	untransmittedData := int32(n - f.pendingData) // Casting into int32 since it could be negative.
 	if untransmittedData > senderQuota {
-		f.delta = int32(n)
-		return n
+		// Sender's window shouldn't go more than 2^31 - 1.
+		if f.limit+n > uint32(maxWindowSize) {
+			f.delta = maxWindowSize - int32(f.limit)
+		} else {
+			f.delta = int32(n)
+		}
+		return uint32(f.delta)
 	}
 	return 0
 }
