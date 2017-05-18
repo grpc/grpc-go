@@ -4236,7 +4236,7 @@ func (s *byteBufServer) StreamingInputCall(stream grpc.ServerStream) error {
 	out := make([]byte, 0)
 
 	if err := stream.SendMsg(&out); err != nil {
-		s.te.t.Fatalf(err)
+		s.te.t.Fatal(err)
 	}
 	return nil
 }
@@ -4245,7 +4245,7 @@ func (s *byteBufServer) StreamingOutputCall(in *[]byte, stream grpc.ServerStream
 	for _, size := range s.respSizes {
 		out := make([]byte, size)
 		if err := stream.SendMsg(&out); err != nil {
-			s.te.t.Fatalf(err)
+			s.te.t.Fatal(err)
 		}
 	}
 	return nil
