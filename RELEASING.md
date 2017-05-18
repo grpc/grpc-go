@@ -145,10 +145,17 @@ would be used to create all `v0.7` tags (e.g. `v0.7.0`, `v0.7.1`).
      url~~): gRPC Java $MAJOR.$MINOR Windows
    * Under _Source Code Management_, _Branches to build_'s
    _Branch Specifier_: `*/v$MAJOR.$MINOR.x`
+   * Under _Build Triggers_, _Build periodically_: `H H * * H`
    * Click _SAVE_ button
    * Click _Build Now_
    * Click on job #1, then _Console Output_. Verify the `git checkout` checked
      out the correct commit
+9. Go to [Travis CI settings](https://travis-ci.org/grpc/grpc-java/settings) and
+   add a _Cron Job_:
+   * Branch: `v$MAJOR.$MINOR.x`
+   * Interval: `weekly`
+   * Options: `Do not run if there has been a build in the last 24h`
+   * Click _Add_ button
 
 Setup Build Environment
 ---------------------------
