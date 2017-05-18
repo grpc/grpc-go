@@ -57,7 +57,6 @@ func (f fullReader) Read(p []byte) (int, error) {
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
 
-
 func TestSimpleParsing(t *testing.T) {
 	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {

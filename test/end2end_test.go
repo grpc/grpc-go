@@ -4224,19 +4224,19 @@ func (s *byteBufServer) StreamingInputCall(stream grpc.ServerStream) error {
 			s.te.t.Fatal(err)
 		}
 		if len(in) != size {
-			s.te.t.Fatal("received grpc message length %v; want %v", len(in), size)
+			s.te.t.Fatalf("received grpc message length %v; want %v", len(in), size)
 		}
 	}
 
 	if err := stream.RecvMsg(&in); err != io.EOF {
-		s.te.t.Fatal("expected EOF; got %v", err)
+		s.te.t.Fatalf("expected EOF; got %v", err)
 		return err
 	}
 
 	out := make([]byte, 0)
 
 	if err := stream.SendMsg(&out); err != nil {
-		s.te.t.Fatal(err)
+		s.te.t.Fatalf(err)
 	}
 	return nil
 }
@@ -4245,7 +4245,7 @@ func (s *byteBufServer) StreamingOutputCall(in *[]byte, stream grpc.ServerStream
 	for _, size := range s.respSizes {
 		out := make([]byte, size)
 		if err := stream.SendMsg(&out); err != nil {
-			s.te.t.Fatal(err)
+			s.te.t.Fatalf(err)
 		}
 	}
 	return nil
