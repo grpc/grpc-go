@@ -392,6 +392,9 @@ public class ContextTest {
     assertSame(t, child.cancellationCause());
   }
 
+  // Context#isCurrent() and Context.CancellableContext#isCurrent() are intended
+  // to be visible only for testing. The deprecation is meant for users.
+  @SuppressWarnings("deprecation")
   @Test
   public void cancellableContextIsAttached() {
     Context.CancellableContext base = Context.current().withValue(FOOD, "fish").withCancellation();

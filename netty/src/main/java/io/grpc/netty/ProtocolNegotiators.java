@@ -431,6 +431,10 @@ public final class ProtocolNegotiators {
       this.handlers = handlers;
     }
 
+    /**
+     * When this channel is registered, we will add all the ChannelHandlers passed into our
+     * constructor to the pipeline.
+     */
     @Override
     public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
       /**
@@ -456,17 +460,28 @@ public final class ProtocolNegotiators {
       }
     }
 
+    /**
+     * If we encounter an exception, then notify all buffered writes that we failed.
+     */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
       fail(ctx, cause);
     }
 
+    /**
+     * If this channel becomes inactive, then notify all buffered writes that we failed.
+     */
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
       fail(ctx, unavailableException("Connection broken while performing protocol negotiation"));
       super.channelInactive(ctx);
     }
 
+    /**
+     * Buffers the write until either {@link #writeBufferedAndRemove(ChannelHandlerContext)} is
+     * called, or we have somehow failed. If we have already failed in the past, then the write
+     * will fail immediately.
+     */
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise)
         throws Exception {
@@ -490,6 +505,10 @@ public final class ProtocolNegotiators {
       }
     }
 
+    /**
+     * Calls to this method will not trigger an immediate flush. The flush will be deferred until
+     * {@link #writeBufferedAndRemove(ChannelHandlerContext)}.
+     */
     @Override
     public void flush(ChannelHandlerContext ctx) {
       /**
@@ -506,6 +525,10 @@ public final class ProtocolNegotiators {
       }
     }
 
+    /**
+     * If we are still performing protocol negotiation, then this will propagate failures to all
+     * buffered writes.
+     */
     @Override
     public void close(ChannelHandlerContext ctx, ChannelPromise future) throws Exception {
       if (ctx.channel().isActive()) { // This may be a notification that the socket was closed
@@ -514,6 +537,9 @@ public final class ProtocolNegotiators {
       super.close(ctx, future);
     }
 
+    /**
+     * Propagate failures to all buffered writes.
+     */
     protected final void fail(ChannelHandlerContext ctx, Throwable cause) {
       if (failCause == null) {
         failCause = cause;

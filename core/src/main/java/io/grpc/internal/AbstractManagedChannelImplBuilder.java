@@ -124,6 +124,11 @@ public abstract class AbstractManagedChannelImplBuilder
   private boolean enableStatsTagPropagation;
   private boolean enableTracing;
 
+  /**
+   * Sets the maximum message size allowed for a single gRPC frame. If an inbound messages
+   * larger than this limit is received it will not be processed and the RPC will fail with
+   * RESOURCE_EXHAUSTED.
+   */
   // Can be overriden by subclasses.
   @Override
   public T maxInboundMessageSize(int max) {

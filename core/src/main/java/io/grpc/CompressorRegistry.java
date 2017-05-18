@@ -49,10 +49,17 @@ public final class CompressorRegistry {
       new Codec.Gzip(),
       Codec.Identity.NONE);
 
+  /**
+   * Returns the default instance used by gRPC when the registry is not specified.
+   * Currently the registry just contains support for gzip.
+   */
   public static CompressorRegistry getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
+  /**
+   * Returns a new instance with no registered compressors.
+   */
   public static CompressorRegistry newEmptyInstance() {
     return new CompressorRegistry();
   }

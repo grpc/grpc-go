@@ -402,6 +402,10 @@ public abstract class LoadBalancer {
       return Objects.hashCode(subchannel, status, streamTracerFactory);
     }
 
+    /**
+     * Returns true if the {@link Subchannel}, {@link Status}, and
+     * {@link ClientStreamTracer.Factory} all match.
+     */
     @Override
     public boolean equals(Object other) {
       if (!(other instanceof PickResult)) {

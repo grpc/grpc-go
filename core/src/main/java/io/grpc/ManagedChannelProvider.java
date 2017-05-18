@@ -78,6 +78,10 @@ public abstract class ManagedChannelProvider {
     }
   }
 
+  /**
+   * Loads service providers for the {@link ManagedChannelProvider} service using
+   * {@link ServiceLoader}.
+   */
   @VisibleForTesting
   public static Iterable<ManagedChannelProvider> getCandidatesViaServiceLoader(
       ClassLoader classLoader) {
@@ -177,6 +181,9 @@ public abstract class ManagedChannelProvider {
    */
   protected abstract ManagedChannelBuilder<?> builderForTarget(String target);
 
+  /**
+   * Thrown when no suitable {@link ManagedChannelProvider} objects can be found.
+   */
   public static final class ProviderNotFoundException extends RuntimeException {
     private static final long serialVersionUID = 1;
 
