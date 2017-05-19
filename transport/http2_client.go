@@ -173,7 +173,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	conn, err := dial(ctx, opts.Dialer, addr.Addr)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
-			return nil, connectionErrorf(isTemporary(err), err, "transport: Error while dialing %v", err)
+			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)
 		}
 		return nil, connectionErrorf(true, err, "transport: Error while dialing %v", err)
 	}
@@ -194,7 +194,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 			// Credentials handshake errors are typically considered permanent
 			// to avoid retrying on e.g. bad certificates.
 			temp := isTemporary(err)
-			return nil, connectionErrorf(temp, err, "transport: authentication handshake failed %v", err)
+			return nil, connectionErrorf(temp, err, "transport: authentication handshake failed: %v", err)
 		}
 		isSecure = true
 	}
@@ -269,7 +269,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	n, err := t.conn.Write(clientPreface)
 	if err != nil {
 		t.Close()
-		return nil, connectionErrorf(true, err, "transport: failed to write client preface %v", err)
+		return nil, connectionErrorf(true, err, "transport: failed to write client preface: %v", err)
 	}
 	if n != len(clientPreface) {
 		t.Close()
@@ -285,13 +285,13 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	if err != nil {
 		t.Close()
-		return nil, connectionErrorf(true, err, "transport: failed to write initial settings frame %v", err)
+		return nil, connectionErrorf(true, err, "transport: failed to write initial settings frame: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(icwz - defaultWindowSize); delta > 0 {
 		if err := t.framer.writeWindowUpdate(true, 0, delta); err != nil {
 			t.Close()
-			return nil, connectionErrorf(true, err, "transport: failed to write window update %v", err)
+			return nil, connectionErrorf(true, err, "transport: failed to write window update: %v", err)
 		}
 	}
 	go t.controller()
@@ -817,7 +817,7 @@ func (t *http2Client) adjustWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := s.fc.maybeAdjust(n); n > 0 {
+	if w := s.fc.maybeAdjust(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }

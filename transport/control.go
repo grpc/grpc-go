@@ -171,7 +171,7 @@ type inFlow struct {
 	pendingUpdate uint32
 	// delta is the extra window update given by receiver when an application
 	// is reading data bigger in size than the inFlow limit.
-	delta int32
+	delta uint32
 }
 
 func (f *inFlow) maybeAdjust(n uint32) uint32 {
@@ -180,16 +180,16 @@ func (f *inFlow) maybeAdjust(n uint32) uint32 {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	senderQuota := int32(f.limit - (f.pendingData + f.pendingUpdate))
-	untransmittedData := int32(n - f.pendingData) // Casting into int32 since it could be negative.
-	if untransmittedData > senderQuota {
+	estSenderQuota := int32(f.limit - (f.pendingData + f.pendingUpdate))
+	estUntransmittedData := int32(n - f.pendingData) // Casting into int32 since it could be negative.
+	if estUntransmittedData > estSenderQuota {
 		// Sender's window shouldn't go more than 2^31 - 1.
-		if f.limit+n > uint32(maxWindowSize) {
-			f.delta = maxWindowSize - int32(f.limit)
+		if f.limit+n > maxWindowSize {
+			f.delta = maxWindowSize - f.limit
 		} else {
-			f.delta = int32(n)
+			f.delta = n
 		}
-		return uint32(f.delta)
+		return f.delta
 	}
 	return 0
 }
@@ -199,7 +199,7 @@ func (f *inFlow) onData(n uint32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pendingData += n
-	if f.pendingData+f.pendingUpdate > f.limit+uint32(f.delta) {
+	if f.pendingData+f.pendingUpdate > f.limit+f.delta {
 		return fmt.Errorf("received %d-bytes data exceeding the limit %d bytes", f.pendingData+f.pendingUpdate, f.limit)
 	}
 	return nil
@@ -214,13 +214,12 @@ func (f *inFlow) onRead(n uint32) uint32 {
 		return 0
 	}
 	f.pendingData -= n
-	if f.delta > 0 {
-		f.delta -= int32(n)
+	if n > f.delta {
+		n -= f.delta
+		f.delta = 0
+	} else {
+		f.delta -= n
 		n = 0
-		if f.delta < 0 {
-			n = uint32(-f.delta)
-			f.delta = 0
-		}
 	}
 	f.pendingUpdate += n
 	if f.pendingUpdate >= f.limit/4 {

@@ -445,7 +445,7 @@ func (t *http2Server) adjustWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := s.fc.maybeAdjust(n); n > 0 {
+	if w := s.fc.maybeAdjust(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }

@@ -325,7 +325,7 @@ func (s *Stream) write(m recvMsg) {
 
 // Read reads all p bytes from the wire for this stream.
 func (s *Stream) Read(p []byte) (n int, err error) {
-	// Don't request a read if there's was an error earlier
+	// Don't request a read if there was an error earlier
 	if er := s.trReader.(*transportReader).er; er != nil {
 		return 0, er
 	}
