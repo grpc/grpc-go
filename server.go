@@ -445,10 +445,12 @@ func (s *Server) Serve(lis net.Listener) error {
 				s.mu.Lock()
 				s.printf("Accept error: %v; retrying in %v", err, tempDelay)
 				s.mu.Unlock()
+				timer := time.NewTimer(tempDelay)
 				select {
-				case <-time.After(tempDelay):
+				case <-timer.C:
 				case <-s.ctx.Done():
 				}
+				timer.Stop()
 				continue
 			}
 			s.mu.Lock()
