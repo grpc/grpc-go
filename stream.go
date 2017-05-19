@@ -118,7 +118,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		c.failFast = !*mc.WaitForReady
 	}
 
-	if mc.Timeout != nil && *mc.Timeout >= 0 {
+	if mc.Timeout != nil {
 		ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
 	}
 
