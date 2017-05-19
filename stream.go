@@ -359,7 +359,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		}
 	}()
 	if err != nil {
-		return Errorf(codes.Internal, "grpc: %v", err)
+		return err
 	}
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
@@ -588,7 +588,6 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 		}
 	}()
 	if err != nil {
-		err = Errorf(codes.Internal, "grpc: %v", err)
 		return err
 	}
 	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {

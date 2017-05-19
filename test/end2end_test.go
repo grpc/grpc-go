@@ -450,6 +450,7 @@ type test struct {
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
+	customCodec                 grpc.Codec
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -545,6 +546,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
 	}
+	if te.customCodec != nil {
+		sopts = append(sopts, grpc.CustomCodec(te.customCodec))
+	}
 	s := grpc.NewServer(sopts...)
 	te.srv = s
 	if te.e.httpHandler {
@@ -624,6 +628,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
+	}
+	if te.customCodec != nil {
+		opts = append(opts, grpc.WithCodec(te.customCodec))
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -4107,5 +4114,48 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+type errCodec struct {
+	noError bool
+}
+
+func (c *errCodec) Marshal(v interface{}) ([]byte, error) {
+	if c.noError {
+		return []byte{}, nil
+	}
+	return nil, fmt.Errorf("3987^12 + 4365^12 = 4472^12")
+}
+
+func (p *errCodec) Unmarshal(data []byte, v interface{}) error {
+	return nil
+}
+
+func (p *errCodec) String() string {
+	return "proto"
+}
+
+func TestEncodeDoesntPanic(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testEncodeDoesntPanic(t, e)
+	}
+}
+
+func testEncodeDoesntPanic(t *testing.T, e env) {
+	te := newTest(t, e)
+	erc := &errCodec{}
+	te.customCodec = erc
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	te.customCodec = nil
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	// Failure case.
+	tc.EmptyCall(context.Background(), &testpb.Empty{})
+	erc.noError = true
+	// Passing case.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 }
