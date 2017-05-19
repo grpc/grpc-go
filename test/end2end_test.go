@@ -1113,16 +1113,6 @@ func testFailFast(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
-func TestServiceConfig(t *testing.T) {
-	defer leakCheck(t)()
-	for _, e := range listTestEnv() {
-		testGetMethodConfig(t, e)
-		testServiceConfigWaitForReady(t, e)
-		testServiceConfigTimeout(t, e)
-		testServiceConfigMaxMsgSize(t, e)
-	}
-}
-
 func testServiceConfigSetup(t *testing.T, e env) (*test, chan grpc.ServiceConfig) {
 	te := newTest(t, e)
 	// We write before read.
@@ -1150,6 +1140,13 @@ func newDuration(b time.Duration) (a *time.Duration) {
 	a = new(time.Duration)
 	*a = b
 	return
+}
+
+func TestServiceConfigGetMethodConfig(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testGetMethodConfig(t, e)
+	}
 }
 
 func testGetMethodConfig(t *testing.T, e env) {
@@ -1193,6 +1190,13 @@ func testGetMethodConfig(t *testing.T, e env) {
 	// The following RPCs are expected to become fail-fast.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	}
+}
+
+func TestServiceConfigWaitForReady(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServiceConfigWaitForReady(t, e)
 	}
 }
 
@@ -1250,6 +1254,13 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 	}
 	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+}
+
+func TestServiceConfigTimeout(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServiceConfigTimeout(t, e)
 	}
 }
 
@@ -1311,6 +1322,13 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 	ctx, _ = context.WithTimeout(context.Background(), time.Hour)
 	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+}
+
+func TestServiceConfigMaxMsgSize(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testServiceConfigMaxMsgSize(t, e)
 	}
 }
 
@@ -1525,12 +1543,10 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 }
 
-func TestMsgSizeDefaultAndAPI(t *testing.T) {
+func TestMaxMsgSizeClientDefault(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
 		testMaxMsgSizeClientDefault(t, e)
-		testMaxMsgSizeClientAPI(t, e)
-		testMaxMsgSizeServerAPI(t, e)
 	}
 }
 
@@ -1613,6 +1629,13 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	}
 }
 
+func TestMaxMsgSizeClientAPI(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testMaxMsgSizeClientAPI(t, e)
+	}
+}
+
 func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
@@ -1691,6 +1714,13 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	}
 	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
+	}
+}
+
+func TestMaxMsgSizeServerAPI(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testMaxMsgSizeServerAPI(t, e)
 	}
 }
 
