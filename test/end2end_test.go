@@ -4128,11 +4128,11 @@ func (c *errCodec) Marshal(v interface{}) ([]byte, error) {
 	return nil, fmt.Errorf("3987^12 + 4365^12 = 4472^12")
 }
 
-func (p *errCodec) Unmarshal(data []byte, v interface{}) error {
+func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func (p *errCodec) String() string {
+func (c *errCodec) String() string {
 	return "proto"
 }
 
