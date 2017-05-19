@@ -74,7 +74,6 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	}
 	for {
 		if c.maxReceiveMessageSize == nil {
-			// TODO(lyuxuan): codes.Internal the right error to return here?
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
 		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
@@ -123,7 +122,6 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
 	if c.maxSendMessageSize == nil {
-		// TODO(lyuxuan): codes.Internal the right error to return here?
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
 	if len(outBuf) > *c.maxSendMessageSize {

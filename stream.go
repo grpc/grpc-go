@@ -367,7 +367,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		return Errorf(codes.Internal, "grpc: %v", err)
 	}
 	if cs.c.maxSendMessageSize == nil {
-		// TODO(lyuxuan): codes.Internal the right error to return here?
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
 	if len(out) > *cs.c.maxSendMessageSize {
@@ -389,7 +388,6 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		}
 	}
 	if cs.c.maxReceiveMessageSize == nil {
-		// TODO(lyuxuan): codes.Internal the right error to return here?
 		return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 	}
 	err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, inPayload)
@@ -416,7 +414,6 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		// Special handling for client streaming rpc.
 		// This recv expects EOF or errors, so we don't collect inPayload.
 		if cs.c.maxReceiveMessageSize == nil {
-			// TODO(lyuxuan): codes.Internal the right error to return here?
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
 		err = recv(cs.p, cs.codec, cs.s, cs.dc, m, *cs.c.maxReceiveMessageSize, nil)
