@@ -126,9 +126,9 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	}
 }
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithMaxReceiveMessageSize instead.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
 func WithMaxMsgSize(s int) DialOption {
-	return WithDefaultCallOptions(WithMaxReceiveMessageSize(s))
+	return WithDefaultCallOptions(MaxCallRecvMsgSize(s))
 }
 
 // WithDefaultCallOptions returns a DialOption which sets the default CallOptions for calls over the connection.

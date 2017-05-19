@@ -131,7 +131,10 @@ type options struct {
 	initialConnWindowSize int32
 }
 
-var defaultServerOptions = options{maxReceiveMessageSize: defaultServerMaxReceiveMessageSize, maxSendMessageSize: defaultServerMaxSendMessageSize}
+var defaultServerOptions = options{
+	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
+	maxSendMessageSize:    defaultServerMaxSendMessageSize,
+}
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
@@ -187,23 +190,23 @@ func RPCDecompressor(dc Decompressor) ServerOption {
 	}
 }
 
-// MaxMsgSize returns a ServerOption to set the max message size in bytes for inbound mesages.
-// If this is not set, gRPC uses the default limit. Deprecated: use MaxReceiveMessageSize instead.
+// MaxMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
+// If this is not set, gRPC uses the default limit. Deprecated: use MaxRecvMsgSize instead.
 func MaxMsgSize(m int) ServerOption {
-	return MaxReceiveMessageSize(m)
+	return MaxRecvMsgSize(m)
 }
 
-// MaxReceiveMessageSize returns a ServerOption to set the max message size in bytes for inbound mesages.
+// MaxRecvMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
 // If this is not set, gRPC uses the default 4MB.
-func MaxReceiveMessageSize(m int) ServerOption {
+func MaxRecvMsgSize(m int) ServerOption {
 	return func(o *options) {
 		o.maxReceiveMessageSize = m
 	}
 }
 
-// MaxSendMessageSize returns a ServerOption to set the max message size in bytes for outbound mesages.
+// MaxSendMsgSize returns a ServerOption to set the max message size in bytes the server can send.
 // If this is not set, gRPC uses the default 4MB.
-func MaxSendMessageSize(m int) ServerOption {
+func MaxSendMsgSize(m int) ServerOption {
 	return func(o *options) {
 		o.maxSendMessageSize = m
 	}
@@ -669,7 +672,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	if len(p) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, p, opts)
 	if err == nil && outPayload != nil {
@@ -773,7 +776,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if len(req) > s.opts.maxReceiveMessageSize {
 			// TODO: Revisit the error code. Currently keep it consistent with
 			// java implementation.
-			return status.Errorf(codes.ResourceExhausted, "Received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
+			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 		}
 		if err := s.opts.codec.Unmarshal(req, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)

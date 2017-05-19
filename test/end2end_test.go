@@ -504,10 +504,10 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 		sopts = append(sopts, grpc.MaxMsgSize(*te.maxMsgSize))
 	}
 	if te.maxServerReceiveMsgSize != nil {
-		sopts = append(sopts, grpc.MaxReceiveMessageSize(*te.maxServerReceiveMsgSize))
+		sopts = append(sopts, grpc.MaxRecvMsgSize(*te.maxServerReceiveMsgSize))
 	}
 	if te.maxServerSendMsgSize != nil {
-		sopts = append(sopts, grpc.MaxSendMessageSize(*te.maxServerSendMsgSize))
+		sopts = append(sopts, grpc.MaxSendMsgSize(*te.maxServerSendMsgSize))
 	}
 	if te.tapHandle != nil {
 		sopts = append(sopts, grpc.InTapHandle(te.tapHandle))
@@ -610,10 +610,10 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithMaxMsgSize(*te.maxMsgSize))
 	}
 	if te.maxClientReceiveMsgSize != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WithMaxReceiveMessageSize(*te.maxClientReceiveMsgSize)))
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(*te.maxClientReceiveMsgSize)))
 	}
 	if te.maxClientSendMsgSize != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.WithMaxSendMessageSize(*te.maxClientSendMsgSize)))
+		opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(*te.maxClientSendMsgSize)))
 	}
 	switch te.e.security {
 	case "tls":

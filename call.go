@@ -127,7 +127,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
 	if len(outBuf) > *c.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "Sent message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
+		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {

@@ -219,16 +219,16 @@ func FailFast(failFast bool) CallOption {
 	})
 }
 
-// WithMaxReceiveMessageSize returns a CallOption which sets the maximum message size the client can receive.
-func WithMaxReceiveMessageSize(s int) CallOption {
+// MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
+func MaxCallRecvMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxReceiveMessageSize = &s
 		return nil
 	})
 }
 
-// WithMaxSendMessageSize returns a CallOption which sets the maximum message size the client can send.
-func WithMaxSendMessageSize(s int) CallOption {
+// MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
+func MaxCallSendMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxSendMessageSize = &s
 		return nil
@@ -289,7 +289,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 		return pf, nil, nil
 	}
 	if length > uint32(maxReceiveMessageSize) {
-		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: Received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
+		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
@@ -393,7 +393,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 	if len(d) > maxReceiveMessageSize {
 		// TODO: Revisit the error code. Currently keep it consistent with java
 		// implementation.
-		return Errorf(codes.ResourceExhausted, "grpc: Received message larger than max (%d vs. %d)", len(d), maxReceiveMessageSize)
+		return Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(d), maxReceiveMessageSize)
 	}
 	if err := c.Unmarshal(d, m); err != nil {
 		return Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
