@@ -362,7 +362,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		return
 	}
 	if err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
+		grpclog.Printf("transport: http2Server.HandleStreams failed to read initial settings frame: %v", err)
 		t.Close()
 		return
 	}
