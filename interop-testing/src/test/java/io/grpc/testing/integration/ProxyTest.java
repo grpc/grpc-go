@@ -144,7 +144,7 @@ public class ProxyTest {
     int serverPort = server.init();
     server.setMode("stream");
     executor.execute(server);
-    assertEquals(server.mode(), "stream");
+    assertEquals("stream", server.mode());
 
     int bandwidth = 64 * 1024;
     proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
@@ -170,7 +170,7 @@ public class ProxyTest {
     int serverPort = server.init();
     server.setMode("stream");
     executor.execute(server);
-    assertEquals(server.mode(), "stream");
+    assertEquals("stream", server.mode());
     int bandwidth = 10 * 1024 * 1024;
     proxy = new TrafficControlProxy(serverPort, bandwidth, 200, TimeUnit.MILLISECONDS);
     startProxy(proxy).get();

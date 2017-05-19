@@ -153,7 +153,7 @@ public class MetadataTest {
     assertFalse(fishes.hasNext());
     byte[][] serialized = metadata.serialize();
     assertEquals(2, serialized.length);
-    assertEquals(new String(serialized[0], US_ASCII), "test-bin");
+    assertEquals("test-bin", new String(serialized[0], US_ASCII));
     assertArrayEquals(LANCE_BYTES, serialized[1]);
     assertEquals(lance, metadata.get(KEY));
     assertEquals(serialized[0], metadata.serialize()[0]);
