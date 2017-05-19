@@ -68,8 +68,6 @@ public final class CallOptions {
   @Nullable
   private CallCredentials credentials;
 
-  private Attributes affinity = Attributes.EMPTY;
-
   @Nullable
   private String compressorName;
 
@@ -157,19 +155,6 @@ public final class CallOptions {
   }
 
   /**
-   * Returns a new {@code CallOptions} with attributes for affinity-based routing.
-   *
-   * @deprecated use {@link #withOption(Key, Object)}.
-   */
-  @Deprecated
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
-  public CallOptions withAffinity(Attributes affinity) {
-    CallOptions newOptions = new CallOptions(this);
-    newOptions.affinity = Preconditions.checkNotNull(affinity, "affinity");
-    return newOptions;
-  }
-
-  /**
    * Enables <a href="https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md">
    * 'wait for ready'</a> feature for the call. 'Fail fast' is the default option for gRPC calls
    * and 'wait for ready' is the opposite to it.
@@ -188,17 +173,6 @@ public final class CallOptions {
     CallOptions newOptions = new CallOptions(this);
     newOptions.waitForReady = false;
     return newOptions;
-  }
-
-  /**
-   * Returns the attributes for affinity-based routing.
-   *
-   * @deprecated use {@link #getOption(Key)}.
-   */
-  @Deprecated
-  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1766")
-  public Attributes getAffinity() {
-    return affinity;
   }
 
   /**
@@ -423,7 +397,6 @@ public final class CallOptions {
     deadline = other.deadline;
     authority = other.authority;
     credentials = other.credentials;
-    affinity = other.affinity;
     executor = other.executor;
     compressorName = other.compressorName;
     customOptions = other.customOptions;
@@ -439,7 +412,6 @@ public final class CallOptions {
         .add("deadline", deadline)
         .add("authority", authority)
         .add("callCredentials", credentials)
-        .add("affinity", affinity)
         .add("executor", executor != null ? executor.getClass() : null)
         .add("compressorName", compressorName)
         .add("customOptions", Arrays.deepToString(customOptions))
