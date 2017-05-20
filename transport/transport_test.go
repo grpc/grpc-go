@@ -36,6 +36,7 @@ package transport
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -87,6 +88,7 @@ const (
 	invalidHeaderField
 	delayRead
 	delayWrite
+	pingpong
 )
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
@@ -108,6 +110,25 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	h.t.Write(s, resp, &Options{})
 	// send the trailer to end the stream.
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
+}
+
+func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
+	header := make([]byte, 5)
+	for i := 0; i < 10; i++ {
+		if _, err := s.Read(header); err != nil {
+			t.Fatalf("Error on server while reading data header: %v", err)
+		}
+		sz := binary.BigEndian.Uint32(header[1:])
+		msg := make([]byte, int(sz))
+		if _, err := s.Read(msg); err != nil {
+			t.Fatalf("Error on server while reading message: %v", err)
+		}
+		buf := make([]byte, sz+5)
+		buf[0] = byte(0)
+		binary.BigEndian.PutUint32(buf[1:], uint32(sz))
+		copy(buf[5:], msg)
+		h.t.Write(s, buf, &Options{})
+	}
 }
 
 // handleStreamSuspension blocks until s.ctx is canceled.
@@ -285,6 +306,12 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case delayWrite:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamDelayWrite(t, s)
+			}, func(ctx context.Context, method string) context.Context {
+				return ctx
+			})
+		case pingpong:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamPingPong(t, s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -1406,6 +1433,13 @@ func TestContextErr(t *testing.T) {
 	}
 }
 
+func max(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 type windowSizeConfig struct {
 	serverStream int32
 	serverConn   int32
@@ -1485,6 +1519,7 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		}
 		return false, nil
 	})
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	serverSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
 	if err != nil {
@@ -1530,6 +1565,165 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	if sstream.fc.limit != uint32(serverConfig.InitialWindowSize) {
 		t.Fatalf("Server stream flow control window size is %v, want %v", sstream.fc.limit, serverConfig.InitialWindowSize)
 	}
+}
+
+func TestAccountCheckExpandingWindow(t *testing.T) {
+	server, client := setUp(t, 0, 0, pingpong)
+	defer server.stop()
+	defer client.Close()
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed out while waiting for server transport to be created")
+		}
+		return false, nil
+	})
+	var st *http2Server
+	server.mu.Lock()
+	for k := range server.conns {
+		st = k.(*http2Server)
+	}
+	server.mu.Unlock()
+	ct := client.(*http2Client)
+	cstream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+
+	msgSize := 65535 * 16 * 2
+	msg := make([]byte, msgSize)
+	buf := make([]byte, msgSize+5)
+	buf[0] = byte(0)
+	binary.BigEndian.PutUint32(buf[1:], uint32(msgSize))
+	copy(buf[5:], msg)
+	opts := Options{}
+	header := make([]byte, 5)
+	for i := 1; i <= 10; i++ {
+		if err := ct.Write(cstream, buf, &opts); err != nil {
+			t.Fatalf("Error on client while writing message: %v", err)
+		}
+		if _, err := cstream.Read(header); err != nil {
+			t.Fatalf("Error on client while reading data frame header: %v", err)
+		}
+		sz := binary.BigEndian.Uint32(header[1:])
+		recvMsg := make([]byte, int(sz))
+		if _, err := cstream.Read(recvMsg); err != nil {
+			t.Fatalf("Error on client while reading data: %v", err)
+		}
+		if len(recvMsg) != len(msg) {
+			t.Fatalf("Length of message received by client: %v, want: %v", len(recvMsg), len(msg))
+		}
+	}
+	var sstream *Stream
+	st.mu.Lock()
+	for _, v := range st.activeStreams {
+		sstream = v
+	}
+	st.mu.Unlock()
+
+	waitWhileTrue(t, func() (bool, error) {
+		// Check that pendingData and delta on flow control windows on both sides are 0.
+		cstream.fc.mu.Lock()
+		if cstream.fc.delta != 0 {
+			cstream.fc.mu.Unlock()
+			return true, fmt.Errorf("delta on flow control window of client stream is non-zero")
+		}
+		if cstream.fc.pendingData != 0 {
+			cstream.fc.mu.Unlock()
+			return true, fmt.Errorf("pendingData on flow control window of client stream is non-zero")
+		}
+		cstream.fc.mu.Unlock()
+		sstream.fc.mu.Lock()
+		if sstream.fc.delta != 0 {
+			sstream.fc.mu.Unlock()
+			return true, fmt.Errorf("delta on flow control window of server stream is non-zero")
+		}
+		if sstream.fc.pendingData != 0 {
+			sstream.fc.mu.Unlock()
+			return true, fmt.Errorf("pendingData on flow control window of sercer stream is non-zero")
+		}
+		sstream.fc.mu.Unlock()
+		ct.fc.mu.Lock()
+		if ct.fc.delta != 0 {
+			ct.fc.mu.Unlock()
+			return true, fmt.Errorf("delta on flow control window of client transport is non-zero")
+		}
+		if ct.fc.pendingData != 0 {
+			ct.fc.mu.Unlock()
+			return true, fmt.Errorf("pendingData on flow control window of client transport is non-zero")
+		}
+		ct.fc.mu.Unlock()
+		st.fc.mu.Lock()
+		if st.fc.delta != 0 {
+			st.fc.mu.Unlock()
+			return true, fmt.Errorf("delta on flow control window of server transport is non-zero")
+		}
+		if st.fc.pendingData != 0 {
+			st.fc.mu.Unlock()
+			return true, fmt.Errorf("pendingData on flow control window of server transport is non-zero")
+		}
+		st.fc.mu.Unlock()
+
+		// Check flow conrtrol window on client stream is equal to out flow on server stream.
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		serverStreamSendQuota, err := wait(ctx, nil, nil, nil, sstream.sendQuotaPool.acquire())
+		if err != nil {
+			return true, fmt.Errorf("error while acquiring server stream send quota. Err: %v", err)
+		}
+		sstream.sendQuotaPool.add(serverStreamSendQuota)
+		cstream.fc.mu.Lock()
+		if uint32(serverStreamSendQuota) != cstream.fc.limit-cstream.fc.pendingUpdate {
+			cstream.fc.mu.Unlock()
+			return true, fmt.Errorf("server stream outflow: %v, estimated by client: %v", serverStreamSendQuota, cstream.fc.limit-cstream.fc.pendingUpdate)
+		}
+		cstream.fc.mu.Unlock()
+
+		// Check flow control window on server stream is equal to out flow on client stream.
+		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		clientStreamSendQuota, err := wait(ctx, nil, nil, nil, cstream.sendQuotaPool.acquire())
+		if err != nil {
+			return true, fmt.Errorf("error while acquiring client stream send quota. Err: %v", err)
+		}
+		cstream.sendQuotaPool.add(clientStreamSendQuota)
+		sstream.fc.mu.Lock()
+		if uint32(clientStreamSendQuota) != sstream.fc.limit-sstream.fc.pendingUpdate {
+			sstream.fc.mu.Unlock()
+			return true, fmt.Errorf("client stream outflow: %v. estimated by server: %v", clientStreamSendQuota, sstream.fc.limit-sstream.fc.pendingUpdate)
+		}
+		sstream.fc.mu.Unlock()
+
+		// Check flow control window on client transport is equal to out flow of server transport.
+		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		serverTrSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+		if err != nil {
+			return true, fmt.Errorf("error while acquring server transport send quota. Err: %v", err)
+		}
+		st.sendQuotaPool.add(serverTrSendQuota)
+		ct.fc.mu.Lock()
+		if uint32(serverTrSendQuota) != ct.fc.limit-ct.fc.pendingUpdate {
+			ct.fc.mu.Unlock()
+			return true, fmt.Errorf("server transport outflow: %v, estimated by client: %v", serverTrSendQuota, ct.fc.limit-ct.fc.pendingUpdate)
+		}
+		ct.fc.mu.Unlock()
+
+		// Check flow control window on server transport is equal to out flow of client transport.
+		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		clientTrSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+		if err != nil {
+			return true, fmt.Errorf("error while acquiring client transport send quota. Err: %v", err)
+		}
+		ct.sendQuotaPool.add(clientTrSendQuota)
+		st.fc.mu.Lock()
+		if uint32(clientTrSendQuota) != st.fc.limit-st.fc.pendingUpdate {
+			st.fc.mu.Unlock()
+			return true, fmt.Errorf("client transport outflow: %v, estimated by client: %v", clientTrSendQuota, st.fc.limit-st.fc.pendingUpdate)
+		}
+		st.fc.mu.Unlock()
+
+		return false, nil
+	})
+
 }
 
 func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
