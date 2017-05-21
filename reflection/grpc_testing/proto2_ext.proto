@@ -3,11 +3,14 @@ syntax = "proto2";
 package grpc.testing;
 
 import "proto2.proto";
-extend ToBeExtened {
-  optional int32 bar = 13;
-  optional Extension baz = 17;
+import "test.proto";
+
+extend ToBeExtended {
+  optional int32 foo = 13;
+  optional Extension bar = 17;
+  optional SearchRequest baz = 19;
 }
 
 message Extension {
-  optional int32 baz = 1;
+  optional int32 whatzit = 1;
 }

@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -55,11 +56,12 @@ var (
 )
 
 type benchmarkServer struct {
-	port          int
-	cores         int
-	closeFunc     func()
-	mu            sync.RWMutex
-	lastResetTime time.Time
+	port            int
+	cores           int
+	closeFunc       func()
+	mu              sync.RWMutex
+	lastResetTime   time.Time
+	rusageLastReset *syscall.Rusage
 }
 
 func printServerConfig(config *testpb.ServerConfig) {
@@ -156,18 +158,35 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		grpclog.Fatalf("failed to get port number from server address: %v", err)
 	}
 
-	return &benchmarkServer{port: p, cores: numOfCores, closeFunc: closeFunc, lastResetTime: time.Now()}, nil
+	rusage := new(syscall.Rusage)
+	syscall.Getrusage(syscall.RUSAGE_SELF, rusage)
+
+	return &benchmarkServer{
+		port:            p,
+		cores:           numOfCores,
+		closeFunc:       closeFunc,
+		lastResetTime:   time.Now(),
+		rusageLastReset: rusage,
+	}, nil
 }
 
 // getStats returns the stats for benchmark server.
 // It resets lastResetTime if argument reset is true.
 func (bs *benchmarkServer) getStats(reset bool) *testpb.ServerStats {
-	// TODO wall time, sys time, user time.
 	bs.mu.RLock()
 	defer bs.mu.RUnlock()
-	timeElapsed := time.Since(bs.lastResetTime).Seconds()
+	wallTimeElapsed := time.Since(bs.lastResetTime).Seconds()
+	rusageLatest := new(syscall.Rusage)
+	syscall.Getrusage(syscall.RUSAGE_SELF, rusageLatest)
+	uTimeElapsed, sTimeElapsed := cpuTimeDiff(bs.rusageLastReset, rusageLatest)
+
 	if reset {
 		bs.lastResetTime = time.Now()
+		bs.rusageLastReset = rusageLatest
 	}
-	return &testpb.ServerStats{TimeElapsed: timeElapsed, TimeUser: 0, TimeSystem: 0}
+	return &testpb.ServerStats{
+		TimeElapsed: wallTimeElapsed,
+		TimeUser:    uTimeElapsed,
+		TimeSystem:  sTimeElapsed,
+	}
 }

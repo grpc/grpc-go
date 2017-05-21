@@ -34,11 +34,14 @@
 package transport
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"math"
 	"net"
+	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,6 +52,8 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 )
 
 type server struct {
@@ -99,7 +104,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	// send a response back to the client.
 	h.t.Write(s, resp, &Options{})
 	// send the trailer to end the stream.
-	h.t.WriteStatus(s, codes.OK, "")
+	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 
 // handleStreamSuspension blocks until s.ctx is canceled.
@@ -141,7 +146,7 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 
 func (h *testStreamHandler) handleStreamEncodingRequiredStatus(t *testing.T, s *Stream) {
 	// raw newline is not accepted by http2 framer so it must be encoded.
-	h.t.WriteStatus(s, encodingTestStatusCode, encodingTestStatusDesc)
+	h.t.WriteStatus(s, encodingTestStatus)
 }
 
 func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stream) {
@@ -155,7 +160,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 }
 
 // start starts server. Other goroutines should block on s.readyChan for further operations.
-func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
+func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
 	if port == 0 {
 		s.lis, err = net.Listen("tcp", "localhost:0")
@@ -179,10 +184,7 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32, ht hType) {
 		if err != nil {
 			return
 		}
-		config := &ServerConfig{
-			MaxStreams: maxStreams,
-		}
-		transport, err := NewServerTransport("http2", conn, config)
+		transport, err := NewServerTransport("http2", conn, serverConfig)
 		if err != nil {
 			return
 		}
@@ -251,8 +253,12 @@ func (s *server) stop() {
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, ClientTransport) {
+	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
+}
+
+func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, ClientTransport) {
 	server := &server{startedErr: make(chan error, 1)}
-	go server.start(t, port, maxStreams, ht)
+	go server.start(t, port, serverConfig, ht)
 	server.wait(t, 2*time.Second)
 	addr := "localhost:" + server.port
 	var (
@@ -262,11 +268,404 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, Client
 	target := TargetInfo{
 		Addr: addr,
 	}
-	ct, connErr = NewClientTransport(context.Background(), target, ConnectOptions{})
+	ct, connErr = NewClientTransport(context.Background(), target, copts)
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
 	return server, ct
+}
+
+func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Conn) ClientTransport {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	// Launch a non responsive server.
+	go func() {
+		defer lis.Close()
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error at server-side while accepting: %v", err)
+			close(done)
+			return
+		}
+		done <- conn
+	}()
+	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
+	if err != nil {
+		// Server clean-up.
+		lis.Close()
+		if conn, ok := <-done; ok {
+			conn.Close()
+		}
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	return tr
+}
+
+// TestMaxConnectionIdle tests that a server will send GoAway to a idle client.
+// An idle client is one who doesn't make any RPC calls for a duration of
+// MaxConnectionIdle time.
+func TestMaxConnectionIdle(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			MaxConnectionIdle: 2 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	stream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Client failed to create RPC request: %v", err)
+	}
+	stream.mu.Lock()
+	stream.rstStream = true
+	stream.mu.Unlock()
+	client.CloseStream(stream, nil)
+	// wait for server to see that closed stream and max-age logic to send goaway after no new RPCs are mode
+	timeout := time.NewTimer(time.Second * 4)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test timed out, expected a GoAway from the server.")
+	}
+}
+
+// TestMaxConenctionIdleNegative tests that a server will not send GoAway to a non-idle(busy) client.
+func TestMaxConnectionIdleNegative(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			MaxConnectionIdle: 2 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	_, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Client failed to create RPC request: %v", err)
+	}
+	timeout := time.NewTimer(time.Second * 4)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+		t.Fatalf("A non-idle client received a GoAway.")
+	case <-timeout.C:
+	}
+
+}
+
+// TestMaxConnectionAge tests that a server will send GoAway after a duration of MaxConnectionAge.
+func TestMaxConnectionAge(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			MaxConnectionAge: 2 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	_, err := client.NewStream(context.Background(), &CallHdr{})
+	if err != nil {
+		t.Fatalf("Client failed to create stream: %v", err)
+	}
+	// Wait for max-age logic to send GoAway.
+	timeout := time.NewTimer(4 * time.Second)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test timer out, expected a GoAway from the server.")
+	}
+}
+
+// TestKeepaliveServer tests that a server closes conneciton with a client that doesn't respond to keepalive pings.
+func TestKeepaliveServer(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			Time:    2 * time.Second,
+			Timeout: 1 * time.Second,
+		},
+	}
+	server, c := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer c.Close()
+	client, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer client.Close()
+	// Set read deadline on client conn so that it doesn't block forever in errorsome cases.
+	client.SetReadDeadline(time.Now().Add(10 * time.Second))
+	// Wait for keepalive logic to close the connection.
+	time.Sleep(4 * time.Second)
+	b := make([]byte, 24)
+	for {
+		_, err = client.Read(b)
+		if err == nil {
+			continue
+		}
+		if err != io.EOF {
+			t.Fatalf("client.Read(_) = _,%v, want io.EOF", err)
+		}
+		break
+	}
+}
+
+// TestKeepaliveServerNegative tests that a server doesn't close connection with a client that responds to keepalive pings.
+func TestKeepaliveServerNegative(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepaliveParams: keepalive.ServerParameters{
+			Time:    2 * time.Second,
+			Timeout: 1 * time.Second,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+	// Give keepalive logic some time by sleeping.
+	time.Sleep(4 * time.Second)
+	// Assert that client is still active.
+	clientTr := client.(*http2Client)
+	clientTr.mu.Lock()
+	defer clientTr.mu.Unlock()
+	if clientTr.state != reachable {
+		t.Fatalf("Test failed: Expected server-client connection to be healthy.")
+	}
+}
+
+func TestKeepaliveClientClosesIdleTransport(t *testing.T) {
+	done := make(chan net.Conn, 1)
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
+	}}, done)
+	defer tr.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("Server didn't return connection object")
+	}
+	defer conn.Close()
+	// Sleep for keepalive to close the connection.
+	time.Sleep(4 * time.Second)
+	// Assert that the connection was closed.
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test Failed: Expected client transport to have closed.")
+	}
+}
+
+func TestKeepaliveClientStaysHealthyOnIdleTransport(t *testing.T) {
+	done := make(chan net.Conn, 1)
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
+		Time:    2 * time.Second, // Keepalive time = 2 sec.
+		Timeout: 1 * time.Second, // Keepalive timeout = 1 sec.
+	}}, done)
+	defer tr.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("server didn't reutrn connection object")
+	}
+	defer conn.Close()
+	// Give keepalive some time.
+	time.Sleep(4 * time.Second)
+	// Assert that connections is still healthy.
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected client transport to be healthy.")
+	}
+}
+
+func TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
+	done := make(chan net.Conn, 1)
+	tr := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
+		Time:    2 * time.Second, // Keepalive time = 2 sec.
+		Timeout: 1 * time.Second, // Keepalive timeout = 1 sec.
+	}}, done)
+	defer tr.Close()
+	conn, ok := <-done
+	if !ok {
+		t.Fatalf("Server didn't return connection object")
+	}
+	defer conn.Close()
+	// Create a stream.
+	_, err := tr.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Failed to create a new stream: %v", err)
+	}
+	// Give keepalive some time.
+	time.Sleep(4 * time.Second)
+	// Assert that transport was closed.
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected client transport to have closed.")
+	}
+}
+
+func TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
+	s, tr := setUpWithOptions(t, 0, &ServerConfig{MaxStreams: math.MaxUint32}, normal, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
+		Time:                2 * time.Second, // Keepalive time = 2 sec.
+		Timeout:             1 * time.Second, // Keepalive timeout = 1 sec.
+		PermitWithoutStream: true,            // Run keepalive even with no RPCs.
+	}})
+	defer s.stop()
+	defer tr.Close()
+	// Give keep alive some time.
+	time.Sleep(4 * time.Second)
+	// Assert that transport is healthy.
+	ct := tr.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected client transport to be healthy.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 2 * time.Second,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                50 * time.Millisecond,
+			Timeout:             50 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	timeout := time.NewTimer(2 * time.Second)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test failed: Expected a GoAway from server.")
+	}
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 2 * time.Second,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    50 * time.Millisecond,
+			Timeout: 50 * time.Millisecond,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+		t.Fatalf("Client failed to create stream.")
+	}
+	timeout := time.NewTimer(2 * time.Second)
+	select {
+	case <-client.GoAway():
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test failed: Expected a GoAway from server.")
+	}
+	time.Sleep(500 * time.Millisecond)
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state == reachable {
+		t.Fatalf("Test failed: Expected the connection to be closed.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:             100 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                101 * time.Millisecond,
+			Timeout:             50 * time.Millisecond,
+			PermitWithoutStream: true,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	// Give keepalive enough time.
+	time.Sleep(2 * time.Second)
+	// Assert that connection is healthy.
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected connection to be healthy.")
+	}
+}
+
+func TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime: 100 * time.Millisecond,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    101 * time.Millisecond,
+			Timeout: 50 * time.Millisecond,
+		},
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
+	defer server.stop()
+	defer client.Close()
+
+	if _, err := client.NewStream(context.Background(), &CallHdr{Flush: true}); err != nil {
+		t.Fatalf("Client failed to create stream.")
+	}
+
+	// Give keepalive enough time.
+	time.Sleep(2 * time.Second)
+	// Assert that connection is healthy.
+	ct := client.(*http2Client)
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.state != reachable {
+		t.Fatalf("Test failed: Expected connection to be healthy.")
+	}
 }
 
 func TestClientSendAndReceive(t *testing.T) {
@@ -499,15 +898,18 @@ func TestMaxStreams(t *testing.T) {
 			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
 		}
 		cc.mu.Lock()
-		// cc.streamsQuota should be initialized once receiving the 1st setting frame from
-		// the server.
-		if cc.streamsQuota != nil {
+		// cc.maxStreams should be equal to 1 after having received settings frame from
+		// server.
+		if cc.maxStreams == 1 {
 			cc.mu.Unlock()
 			select {
 			case <-cc.streamsQuota.acquire():
 				t.Fatalf("streamsQuota.acquire() becomes readable mistakenly.")
 			default:
-				if cc.streamsQuota.quota != 0 {
+				cc.streamsQuota.mu.Lock()
+				quota := cc.streamsQuota.quota
+				cc.streamsQuota.mu.Unlock()
+				if quota != 0 {
 					t.Fatalf("streamsQuota.quota got non-zero quota mistakenly.")
 				}
 			}
@@ -672,8 +1074,11 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	// Server sent a resetStream for s already.
 	code := http2ErrConvTab[http2.ErrCodeFlowControl]
-	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF || s.statusCode != code {
-		t.Fatalf("%v got err %v with statusCode %d, want err <EOF> with statusCode %d", s, err, s.statusCode, code)
+	if _, err := io.ReadFull(s, make([]byte, 1)); err != io.EOF {
+		t.Fatalf("%v got err %v want <EOF>", s, err)
+	}
+	if s.status.Code() != code {
+		t.Fatalf("%v got status %v; want Code=%v", s, s.status, code)
 	}
 
 	if ss.fc.pendingData != 0 || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != 0 || sc.fc.pendingUpdate <= initialWindowSize {
@@ -727,9 +1132,14 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	if s.fc.pendingData <= initialWindowSize || s.fc.pendingUpdate != 0 || conn.fc.pendingData <= initialWindowSize || conn.fc.pendingUpdate != 0 {
 		t.Fatalf("Client mistakenly updates inbound flow control params: got %d, %d, %d, %d; want >%d, %d, >%d, %d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize, 0, initialWindowSize, 0)
 	}
-	if err != io.EOF || s.statusCode != codes.Internal {
-		t.Fatalf("Got err %v and the status code %d, want <EOF> and the code %d", err, s.statusCode, codes.Internal)
+
+	if err != io.EOF {
+		t.Fatalf("Got err %v, want <EOF>", err)
 	}
+	if s.status.Code() != codes.Internal {
+		t.Fatalf("Got s.status %v, want s.status.Code()=Internal", s.status)
+	}
+
 	conn.CloseStream(s, err)
 	if s.fc.pendingData != 0 || s.fc.pendingUpdate != 0 || conn.fc.pendingData != 0 || conn.fc.pendingUpdate <= initialWindowSize {
 		t.Fatalf("Client mistakenly resets inbound flow control params: got %d, %d, %d, %d; want 0, 0, 0, >%d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize)
@@ -754,10 +1164,7 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	server.stop()
 }
 
-var (
-	encodingTestStatusCode = codes.Internal
-	encodingTestStatusDesc = "\n"
-)
+var encodingTestStatus = status.New(codes.Internal, "\n")
 
 func TestEncodingRequiredStatus(t *testing.T) {
 	server, ct := setUp(t, 0, math.MaxUint32, encodingRequiredStatus)
@@ -780,8 +1187,8 @@ func TestEncodingRequiredStatus(t *testing.T) {
 	if _, err := s.dec.Read(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
-	if s.StatusCode() != encodingTestStatusCode || s.StatusDesc() != encodingTestStatusDesc {
-		t.Fatalf("stream with status code %d, status desc %v, want %d, %v", s.StatusCode(), s.StatusDesc(), encodingTestStatusCode, encodingTestStatusDesc)
+	if !reflect.DeepEqual(s.Status(), encodingTestStatus) {
+		t.Fatalf("stream with status %v, want %v", s.Status(), encodingTestStatus)
 	}
 	ct.Close()
 	server.stop()
@@ -843,4 +1250,360 @@ func TestIsReservedHeader(t *testing.T) {
 			t.Errorf("isReservedHeader(%q) = %v; want %v", tt.h, got, tt.want)
 		}
 	}
+}
+
+func TestContextErr(t *testing.T) {
+	for _, test := range []struct {
+		// input
+		errIn error
+		// outputs
+		errOut StreamError
+	}{
+		{context.DeadlineExceeded, StreamError{codes.DeadlineExceeded, context.DeadlineExceeded.Error()}},
+		{context.Canceled, StreamError{codes.Canceled, context.Canceled.Error()}},
+	} {
+		err := ContextErr(test.errIn)
+		if err != test.errOut {
+			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
+		}
+	}
+}
+
+type windowSizeConfig struct {
+	serverStream int32
+	serverConn   int32
+	clientStream int32
+	clientConn   int32
+}
+
+func TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
+	wc := windowSizeConfig{
+		serverStream: 10 * 1024 * 1024,
+		serverConn:   12 * 1024 * 1024,
+		clientStream: 6 * 1024 * 1024,
+		clientConn:   8 * 1024 * 1024,
+	}
+	testAccountCheckWindowSize(t, wc)
+}
+
+func TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
+	wc := windowSizeConfig{
+		serverStream: defaultWindowSize,
+		// Note this is smaller than initialConnWindowSize which is the current default.
+		serverConn:   defaultWindowSize,
+		clientStream: defaultWindowSize,
+		clientConn:   defaultWindowSize,
+	}
+	testAccountCheckWindowSize(t, wc)
+}
+
+func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
+	serverConfig := &ServerConfig{
+		InitialWindowSize:     wc.serverStream,
+		InitialConnWindowSize: wc.serverConn,
+	}
+	connectOptions := ConnectOptions{
+		InitialWindowSize:     wc.clientStream,
+		InitialConnWindowSize: wc.clientConn,
+	}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, connectOptions)
+	defer server.stop()
+	defer client.Close()
+
+	// Wait for server conns to be populated with new server transport.
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed out waiting for server transport to be created")
+		}
+		return false, nil
+	})
+	var st *http2Server
+	server.mu.Lock()
+	for k := range server.conns {
+		st = k.(*http2Server)
+	}
+	server.mu.Unlock()
+	ct := client.(*http2Client)
+	cstream, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+	// Wait for server to receive headers.
+	waitWhileTrue(t, func() (bool, error) {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		if len(st.activeStreams) == 0 {
+			return true, fmt.Errorf("timed out waiting for server to receive headers")
+		}
+		return false, nil
+	})
+	// Sleeping to make sure the settings are applied in case of negative test.
+	time.Sleep(time.Second)
+
+	waitWhileTrue(t, func() (bool, error) {
+		if lim := st.fc.limit; lim != uint32(serverConfig.InitialConnWindowSize) {
+			return true, fmt.Errorf("Server transport flow control window size: got %v, want %v", lim, serverConfig.InitialConnWindowSize)
+		}
+		return false, nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	serverSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+	if err != nil {
+		t.Fatalf("Error while acquiring sendQuota on server. Err: %v", err)
+	}
+	cancel()
+	st.sendQuotaPool.add(serverSendQuota)
+	if serverSendQuota != int(connectOptions.InitialConnWindowSize) {
+		t.Fatalf("Server send quota(%v) not equal to client's window size(%v) on conn.", serverSendQuota, connectOptions.InitialConnWindowSize)
+	}
+	st.mu.Lock()
+	if st.streamSendQuota != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Server stream send quota(%v) not equal to client's window size(%v) on stream.", ct.streamSendQuota, connectOptions.InitialWindowSize)
+	}
+	st.mu.Unlock()
+	if ct.fc.limit != uint32(connectOptions.InitialConnWindowSize) {
+		t.Fatalf("Client transport flow control window size is %v, want %v", ct.fc.limit, connectOptions.InitialConnWindowSize)
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	clientSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+	if err != nil {
+		t.Fatalf("Error while acquiring sendQuota on client. Err: %v", err)
+	}
+	cancel()
+	ct.sendQuotaPool.add(clientSendQuota)
+	if clientSendQuota != int(serverConfig.InitialConnWindowSize) {
+		t.Fatalf("Client send quota(%v) not equal to server's window size(%v) on conn.", clientSendQuota, serverConfig.InitialConnWindowSize)
+	}
+	ct.mu.Lock()
+	if ct.streamSendQuota != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Client stream send quota(%v) not equal to server's window size(%v) on stream.", ct.streamSendQuota, serverConfig.InitialWindowSize)
+	}
+	ct.mu.Unlock()
+	if cstream.fc.limit != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Client stream flow control window size is %v, want %v", cstream.fc.limit, connectOptions.InitialWindowSize)
+	}
+	var sstream *Stream
+	st.mu.Lock()
+	for _, v := range st.activeStreams {
+		sstream = v
+	}
+	st.mu.Unlock()
+	if sstream.fc.limit != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Server stream flow control window size is %v, want %v", sstream.fc.limit, serverConfig.InitialWindowSize)
+	}
+}
+
+func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
+	var (
+		wait bool
+		err  error
+	)
+	timer := time.NewTimer(time.Second * 5)
+	for {
+		wait, err = condition()
+		if wait {
+			select {
+			case <-timer.C:
+				t.Fatalf(err.Error())
+			default:
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+		}
+		if !timer.Stop() {
+			<-timer.C
+		}
+		break
+	}
+}
+
+// A function of type writeHeaders writes out
+// http status with the given stream ID using the given framer.
+type writeHeaders func(*http2.Framer, uint32, int) error
+
+func writeOneHeader(framer *http2.Framer, sid uint32, httpStatus int) error {
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	henc.WriteField(hpack.HeaderField{Name: ":status", Value: fmt.Sprint(httpStatus)})
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndStream:     true,
+		EndHeaders:    true,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeTwoHeaders(framer *http2.Framer, sid uint32, httpStatus int) error {
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	henc.WriteField(hpack.HeaderField{
+		Name:  ":status",
+		Value: fmt.Sprint(http.StatusOK),
+	})
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndHeaders:    true,
+	}); err != nil {
+		return err
+	}
+	buf.Reset()
+	henc.WriteField(hpack.HeaderField{
+		Name:  ":status",
+		Value: fmt.Sprint(httpStatus),
+	})
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{
+		StreamID:      sid,
+		BlockFragment: buf.Bytes(),
+		EndStream:     true,
+		EndHeaders:    true,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+type httpServer struct {
+	conn       net.Conn
+	httpStatus int
+	wh         writeHeaders
+}
+
+func (s *httpServer) start(t *testing.T, lis net.Listener) {
+	// Launch an HTTP server to send back header with httpStatus.
+	go func() {
+		var err error
+		s.conn, err = lis.Accept()
+		if err != nil {
+			t.Errorf("Error accepting connection: %v", err)
+			return
+		}
+		defer s.conn.Close()
+		// Read preface sent by client.
+		if _, err = io.ReadFull(s.conn, make([]byte, len(http2.ClientPreface))); err != nil {
+			t.Errorf("Error at server-side while reading preface from cleint. Err: %v", err)
+			return
+		}
+		reader := bufio.NewReaderSize(s.conn, http2IOBufSize)
+		writer := bufio.NewWriterSize(s.conn, http2IOBufSize)
+		framer := http2.NewFramer(writer, reader)
+		if err = framer.WriteSettingsAck(); err != nil {
+			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
+			return
+		}
+		var sid uint32
+		// Read frames until a header is received.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				t.Errorf("Error at server-side while reading frame. Err: %v", err)
+				return
+			}
+			if hframe, ok := frame.(*http2.HeadersFrame); ok {
+				sid = hframe.Header().StreamID
+				break
+			}
+		}
+		if err = s.wh(framer, sid, s.httpStatus); err != nil {
+			t.Errorf("Error at server-side while writing headers. Err: %v", err)
+			return
+		}
+		writer.Flush()
+	}()
+}
+
+func (s *httpServer) cleanUp() {
+	if s.conn != nil {
+		s.conn.Close()
+	}
+}
+
+func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream *Stream, cleanUp func()) {
+	var (
+		err    error
+		lis    net.Listener
+		server *httpServer
+		client ClientTransport
+	)
+	cleanUp = func() {
+		if lis != nil {
+			lis.Close()
+		}
+		if server != nil {
+			server.cleanUp()
+		}
+		if client != nil {
+			client.Close()
+		}
+	}
+	defer func() {
+		if err != nil {
+			cleanUp()
+		}
+	}()
+	lis, err = net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	server = &httpServer{
+		httpStatus: httpStatus,
+		wh:         wh,
+	}
+	server.start(t, lis)
+	client, err = newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{})
+	if err != nil {
+		t.Fatalf("Error creating client. Err: %v", err)
+	}
+	stream, err = client.NewStream(context.Background(), &CallHdr{Method: "bogus/method", Flush: true})
+	if err != nil {
+		t.Fatalf("Error creating stream at client-side. Err: %v", err)
+	}
+	return
+}
+
+func TestHTTPToGRPCStatusMapping(t *testing.T) {
+	for k := range httpStatusConvTab {
+		testHTTPToGRPCStatusMapping(t, k, writeOneHeader)
+	}
+}
+
+func testHTTPToGRPCStatusMapping(t *testing.T, httpStatus int, wh writeHeaders) {
+	stream, cleanUp := setUpHTTPStatusTest(t, httpStatus, wh)
+	defer cleanUp()
+	want := httpStatusConvTab[httpStatus]
+	_, err := stream.Read([]byte{})
+	if err == nil {
+		t.Fatalf("Stream.Read(_) unexpectedly returned no error. Expected stream error with code %v", want)
+	}
+	serr, ok := err.(StreamError)
+	if !ok {
+		t.Fatalf("err.(Type) = %T, want StreamError", err)
+	}
+	if want != serr.Code {
+		t.Fatalf("Want error code: %v, got: %v", want, serr.Code)
+	}
+}
+
+func TestHTTPStatusOKAndMissingGRPCStatus(t *testing.T) {
+	stream, cleanUp := setUpHTTPStatusTest(t, http.StatusOK, writeOneHeader)
+	defer cleanUp()
+	_, err := stream.Read([]byte{})
+	if err != io.EOF {
+		t.Fatalf("stream.Read(_) = _, %v, want _, io.EOF", err)
+	}
+	want := codes.Unknown
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if stream.status.Code() != want {
+		t.Fatalf("Status code of stream: %v, want: %v", stream.status.Code(), want)
+	}
+}
+
+func TestHTTPStatusNottOKAndMissingGRPCStatusInSecondHeader(t *testing.T) {
+	testHTTPToGRPCStatusMapping(t, http.StatusUnauthorized, writeTwoHeaders)
 }

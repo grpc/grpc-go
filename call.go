@@ -36,13 +36,14 @@ package grpc
 import (
 	"bytes"
 	"io"
-	"math"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
 )
 
@@ -72,28 +73,27 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, math.MaxInt32, inPayload); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, dopts.maxMsgSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
 			return
 		}
 	}
-	if inPayload != nil && err == io.EOF && stream.StatusCode() == codes.OK {
+	if inPayload != nil && err == io.EOF && stream.Status().Code() == codes.OK {
 		// TODO in the current implementation, inTrailer may be handled before inPayload in some cases.
 		// Fix the order if necessary.
 		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
 	}
 	c.trailerMD = stream.Trailer()
+	if peer, ok := peer.FromContext(stream.Context()); ok {
+		c.peer = peer
+	}
 	return nil
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, t transport.ClientTransport, args interface{}, opts *transport.Options) (_ *transport.Stream, err error) {
-	stream, err := t.NewStream(ctx, callHdr)
-	if err != nil {
-		return nil, err
-	}
+func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, stream *transport.Stream, t transport.ClientTransport, args interface{}, opts *transport.Options) (err error) {
 	defer func() {
 		if err != nil {
 			// If err is connection error, t will be closed, no need to close stream here.
@@ -116,7 +116,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	}
 	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
-		return nil, Errorf(codes.Internal, "grpc: %v", err)
+		return Errorf(codes.Internal, "grpc: %v", err)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {
@@ -127,10 +127,10 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.
 	if err != nil && err != io.EOF {
-		return nil, err
+		return err
 	}
 	// Sent successfully.
-	return stream, nil
+	return nil
 }
 
 // Invoke sends the RPC request on the wire and returns after response is received.
@@ -179,26 +179,25 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 		}()
 	}
+	ctx = newContextWithRPCInfo(ctx)
 	sh := cc.dopts.copts.StatsHandler
 	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
 		sh.HandleRPC(ctx, begin)
-	}
-	defer func() {
-		if sh != nil {
+		defer func() {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
 				Error:   e,
 			}
 			sh.HandleRPC(ctx, end)
-		}
-	}()
+		}()
+	}
 	topts := &transport.Options{
 		Last:  true,
 		Delay: false,
@@ -220,6 +219,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
+		if c.creds != nil {
+			callHdr.Creds = c.creds
+		}
 
 		gopts := BalancerGetOptions{
 			BlockingWait: !c.failFast,
@@ -227,7 +229,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		t, put, err = cc.getTransport(ctx, gopts)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := err.(*rpcError); ok {
+			if _, ok := status.FromError(err); ok {
 				return err
 			}
 			if err == errConnClosing || err == errConnUnavailable {
@@ -242,19 +244,35 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		if c.traceInfo.tr != nil {
 			c.traceInfo.tr.LazyLog(&payload{sent: true, msg: args}, true)
 		}
-		stream, err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, t, args, topts)
+		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
 			if put != nil {
+				if _, ok := err.(transport.ConnectionError); ok {
+					// If error is connection error, transport was sending data on wire,
+					// and we are not sure if anything has been sent on wire.
+					// If error is not connection error, we are sure nothing has been sent.
+					updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
+				}
 				put()
-				put = nil
+			}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
+				continue
+			}
+			return toRPCErr(err)
+		}
+		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, stream, t, args, topts)
+		if err != nil {
+			if put != nil {
+				updateRPCInfoInContext(ctx, rpcInfo{
+					bytesSent:     stream.BytesSent(),
+					bytesReceived: stream.BytesReceived(),
+				})
+				put()
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
 			// ii) the server started to drain before this RPC was initiated.
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return toRPCErr(err)
-				}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return toRPCErr(err)
@@ -262,13 +280,13 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		err = recvResponse(ctx, cc.dopts, t, &c, stream, reply)
 		if err != nil {
 			if put != nil {
+				updateRPCInfoInContext(ctx, rpcInfo{
+					bytesSent:     stream.BytesSent(),
+					bytesReceived: stream.BytesReceived(),
+				})
 				put()
-				put = nil
 			}
-			if _, ok := err.(transport.ConnectionError); ok || err == transport.ErrStreamDrain {
-				if c.failFast {
-					return toRPCErr(err)
-				}
+			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
 			}
 			return toRPCErr(err)
@@ -278,9 +296,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
+			updateRPCInfoInContext(ctx, rpcInfo{
+				bytesSent:     stream.BytesSent(),
+				bytesReceived: stream.BytesReceived(),
+			})
 			put()
-			put = nil
 		}
-		return Errorf(stream.StatusCode(), "%s", stream.StatusDesc())
+		return stream.Status().Err()
 	}
 }

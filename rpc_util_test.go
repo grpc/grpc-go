@@ -41,11 +41,13 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	perfpb "google.golang.org/grpc/test/codec_perf"
 	"google.golang.org/grpc/transport"
 )
+
+var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
 
 func TestSimpleParsing(t *testing.T) {
 	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
@@ -130,7 +132,7 @@ func TestCompress(t *testing.T) {
 		// outputs
 		err error
 	}{
-		{make([]byte, 1024), &gzipCompressor{}, &gzipDecompressor{}, nil},
+		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), nil},
 	} {
 		b := new(bytes.Buffer)
 		if err := test.cp.Do(b, test.data); err != test.err {
@@ -150,48 +152,18 @@ func TestToRPCErr(t *testing.T) {
 		// input
 		errIn error
 		// outputs
-		errOut *rpcError
+		errOut error
 	}{
-		{transport.StreamError{codes.Unknown, ""}, Errorf(codes.Unknown, "").(*rpcError)},
-		{transport.ErrConnClosing, Errorf(codes.Internal, transport.ErrConnClosing.Desc).(*rpcError)},
+		{transport.StreamError{Code: codes.Unknown, Desc: ""}, status.Error(codes.Unknown, "")},
+		{transport.ErrConnClosing, status.Error(codes.Internal, transport.ErrConnClosing.Desc)},
 	} {
 		err := toRPCErr(test.errIn)
-		rpcErr, ok := err.(*rpcError)
-		if !ok {
-			t.Fatalf("toRPCErr{%v} returned type %T, want %T", test.errIn, err, rpcError{})
+		if _, ok := status.FromError(err); !ok {
+			t.Fatalf("toRPCErr{%v} returned type %T, want %T", test.errIn, err, status.Error(codes.Unknown, ""))
 		}
-		if *rpcErr != *test.errOut {
+		if !reflect.DeepEqual(err, test.errOut) {
 			t.Fatalf("toRPCErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
 		}
-	}
-}
-
-func TestContextErr(t *testing.T) {
-	for _, test := range []struct {
-		// input
-		errIn error
-		// outputs
-		errOut transport.StreamError
-	}{
-		{context.DeadlineExceeded, transport.StreamError{codes.DeadlineExceeded, context.DeadlineExceeded.Error()}},
-		{context.Canceled, transport.StreamError{codes.Canceled, context.Canceled.Error()}},
-	} {
-		err := transport.ContextErr(test.errIn)
-		if err != test.errOut {
-			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
-		}
-	}
-}
-
-func TestErrorsWithSameParameters(t *testing.T) {
-	const description = "some description"
-	e1 := Errorf(codes.AlreadyExists, description).(*rpcError)
-	e2 := Errorf(codes.AlreadyExists, description).(*rpcError)
-	if e1 == e2 {
-		t.Fatalf("Error interfaces should not be considered equal - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
-	}
-	if Code(e1) != Code(e2) || ErrorDesc(e1) != ErrorDesc(e2) {
-		t.Fatalf("Expected errors to have same code and description - e1: %p - %v  e2: %p - %v", e1, e1, e2, e2)
 	}
 }
 
@@ -231,4 +203,41 @@ func BenchmarkEncode512KiB(b *testing.B) {
 
 func BenchmarkEncode1MiB(b *testing.B) {
 	bmEncode(b, 1024*1024)
+}
+
+// bmCompressor benchmarks a compressor of a Protocol Buffer message containing
+// mSize bytes.
+func bmCompressor(b *testing.B, mSize int, cp Compressor) {
+	payload := make([]byte, mSize)
+	cBuf := bytes.NewBuffer(make([]byte, mSize))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cp.Do(cBuf, payload)
+		cBuf.Reset()
+	}
+}
+
+func BenchmarkGZIPCompressor1B(b *testing.B) {
+	bmCompressor(b, 1, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor1KiB(b *testing.B) {
+	bmCompressor(b, 1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor8KiB(b *testing.B) {
+	bmCompressor(b, 8*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor64KiB(b *testing.B) {
+	bmCompressor(b, 64*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor512KiB(b *testing.B) {
+	bmCompressor(b, 512*1024, NewGZIPCompressor())
+}
+
+func BenchmarkGZIPCompressor1MiB(b *testing.B) {
+	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
