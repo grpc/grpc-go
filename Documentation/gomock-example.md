@@ -1,6 +1,8 @@
 # Mocking Service for gRPC
 
-[Example code](https://github.com/grpc/grpc-go/tree/master/examples/helloworld/mock_helloworld)
+[Example code unary RPC](https://github.com/grpc/grpc-go/tree/master/examples/helloworld/mock_helloworld)
+
+[Example code streaming RPC](https://github.com/grpc/grpc-go/tree/master/examples/route_guide/mock_routeguide)
 
 ## Why?
 
@@ -117,5 +119,64 @@ mockGreeterClient.EXPECT().SayHello(
 ).Return(&helloworld.HelloReply{Message: "Mocked Interface"}, nil)
 ```
 
+## Mock streaming RPCs:
 
+For our example we consider the case of bi-directional streaming RPCs. Concretely, we'll write a test for RouteChat function from the route guide example to demonstrate how to write mocks for streams.
 
+RouteChat is a bi-directional streaming RPC, which means calling RouteChat returns a stream that can __Send__ and __Recv__ messages to  and from the server, respectively. We'll start by creating a mock of this stream interface returned by RouteChat and then we'll mock the client interface and set expectation on the method RouteChat to return our mocked stream.
+
+### Generating mocking code:
+Like before we'll use [mockgen](https://github.com/golang/mock#running-mockgen). From the `examples/route_guide` directory run:  `mockgen google.golang.org/grpc/examples/route_guide/routeguide RouteGuideClient,RouteGuide_RouteChatClient > mock_route_guide/rg_mock.go`
+
+Notice that we are mocking both client(`RouteGuideClient`) and stream(`RouteGuide_RouteChatClient`) interfaces here.
+
+This will create a file `rg_mock.go` under directory `mock_route_guide`. This file contins all the mocking code we need to write our test.
+
+In our test code, like before, we import the this mocking code along with the generated code
+
+```go
+import (
+    rgmock "google.golang.org/grpc/examples/route_guide/mock_routeguide"
+    rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
+)
+```
+
+Now conside a test that takes the RouteGuide client object as a parameter, makes a RouteChat rpc call and sends a message on the resulting stream. Furthermore, this test expects to see the same message to be received on the stream. 
+
+```go
+var msg = ...
+
+// Creates a RouteChat call and sends msg on it.
+// Checks if the received message was equal to msg.
+func testRouteChat(client rgb.RouteChatClient) error{
+    ...
+}
+```
+
+We can inject our mock in here by simply passing it as an argument to the method.
+
+Creating mock for stream interface:
+
+```go
+    stream := rgmock.NewMockRouteGuide_RouteChatClient(ctrl)
+}
+```
+
+Setting Expectations:
+
+```go
+    stream.EXPECT().Send(gomock.Any()).Return(nil)
+    stream.EXPECT().Recv().Return(msg, nil)
+```
+
+Creating mock for client interface:
+
+```go
+    rgclient := rgmock.NewMockRouteGuideClient(ctrl)
+```
+
+Setting Expectations:
+
+```go
+    rgclient.EXPECT().RouteChat(gomock.Any()).Return(stream, nil)
+```

@@ -36,8 +36,8 @@ package grpc
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,22 +87,25 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt   UnaryClientInterceptor
-	streamInt  StreamClientInterceptor
-	codec      Codec
-	cp         Compressor
-	dc         Decompressor
-	bs         backoffStrategy
-	balancer   Balancer
-	block      bool
-	insecure   bool
-	timeout    time.Duration
-	scChan     <-chan ServiceConfig
-	copts      transport.ConnectOptions
-	maxMsgSize int
+	unaryInt    UnaryClientInterceptor
+	streamInt   StreamClientInterceptor
+	codec       Codec
+	cp          Compressor
+	dc          Decompressor
+	bs          backoffStrategy
+	balancer    Balancer
+	block       bool
+	insecure    bool
+	timeout     time.Duration
+	scChan      <-chan ServiceConfig
+	copts       transport.ConnectOptions
+	callOptions []CallOption
 }
 
-const defaultClientMaxMsgSize = math.MaxInt32
+const (
+	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
+	defaultClientMaxSendMessageSize    = 1024 * 1024 * 4
+)
 
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
@@ -123,10 +126,15 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	}
 }
 
-// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive.
+// WithMaxMsgSize returns a DialOption which sets the maximum message size the client can receive. Deprecated: use WithDefaultCallOptions(MaxCallRecvMsgSize(s)) instead.
 func WithMaxMsgSize(s int) DialOption {
+	return WithDefaultCallOptions(MaxCallRecvMsgSize(s))
+}
+
+// WithDefaultCallOptions returns a DialOption which sets the default CallOptions for calls over the connection.
+func WithDefaultCallOptions(cos ...CallOption) DialOption {
 	return func(o *dialOptions) {
-		o.maxMsgSize = s
+		o.callOptions = append(o.callOptions, cos...)
 	}
 }
 
@@ -321,7 +329,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		conns:  make(map[Address]*addrConn),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
-	cc.dopts.maxMsgSize = defaultClientMaxMsgSize
+
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
@@ -359,15 +367,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
+	scSet := false
 	if cc.dopts.scChan != nil {
-		// Wait for the initial service config.
+		// Try to get an initial service config.
 		select {
 		case sc, ok := <-cc.dopts.scChan:
 			if ok {
 				cc.sc = sc
+				scSet = true
 			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		default:
 		}
 	}
 	// Set defaults.
@@ -430,7 +439,17 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			return nil, err
 		}
 	}
-
+	if cc.dopts.scChan != nil && !scSet {
+		// Blocking wait for the initial service config.
+		select {
+		case sc, ok := <-cc.dopts.scChan:
+			if ok {
+				cc.sc = sc
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	if cc.dopts.scChan != nil {
 		go cc.scWatcher()
 	}
@@ -640,12 +659,23 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 	return nil
 }
 
-// TODO: Avoid the locking here.
-func (cc *ClientConn) getMethodConfig(method string) (m MethodConfig, ok bool) {
+// GetMethodConfig gets the method config of the input method.
+// If there's an exact match for input method (i.e. /service/method), we return
+// the corresponding MethodConfig.
+// If there isn't an exact match for the input method, we look for the default config
+// under the service (i.e /service/). If there is a default MethodConfig for
+// the serivce, we return it.
+// Otherwise, we return an empty MethodConfig.
+func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
+	// TODO: Avoid the locking here.
 	cc.mu.RLock()
 	defer cc.mu.RUnlock()
-	m, ok = cc.sc.Methods[method]
-	return
+	m, ok := cc.sc.Methods[method]
+	if !ok {
+		i := strings.LastIndex(method, "/")
+		m, _ = cc.sc.Methods[method[:i+1]]
+	}
+	return m
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(), error) {
@@ -868,11 +898,14 @@ func (ac *addrConn) resetTransport(closeTransport bool) error {
 			}
 			ac.mu.Unlock()
 			closeTransport = false
+			timer := time.NewTimer(sleepTime - time.Since(connectTime))
 			select {
-			case <-time.After(sleepTime - time.Since(connectTime)):
+			case <-timer.C:
 			case <-ac.ctx.Done():
+				timer.Stop()
 				return ac.ctx.Err()
 			}
+			timer.Stop()
 			continue
 		}
 		ac.mu.Lock()

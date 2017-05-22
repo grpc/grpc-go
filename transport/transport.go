@@ -250,7 +250,7 @@ func (s *Stream) GoAway() <-chan struct{} {
 
 // Header acquires the key-value pairs of header metadata once it
 // is available. It blocks until i) the metadata is ready or ii) there is no
-// header metadata or iii) the stream is cancelled/expired.
+// header metadata or iii) the stream is canceled/expired.
 func (s *Stream) Header() (metadata.MD, error) {
 	select {
 	case <-s.ctx.Done():
