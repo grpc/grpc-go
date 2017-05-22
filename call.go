@@ -73,7 +73,10 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		}
 	}
 	for {
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, dopts.maxMsgSize, inPayload); err != nil {
+		if c.maxReceiveMessageSize == nil {
+			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
+		}
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -93,7 +96,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 }
 
 // sendRequest writes out various information of an RPC such as Context and Message.
-func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, callHdr *transport.CallHdr, stream *transport.Stream, t transport.ClientTransport, args interface{}, opts *transport.Options) (err error) {
+func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, c *callInfo, callHdr *transport.CallHdr, stream *transport.Stream, t transport.ClientTransport, args interface{}, opts *transport.Options) (err error) {
 	defer func() {
 		if err != nil {
 			// If err is connection error, t will be closed, no need to close stream here.
@@ -117,6 +120,12 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return Errorf(codes.Internal, "grpc: %v", err)
+	}
+	if c.maxSendMessageSize == nil {
+		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
+	}
+	if len(outBuf) > *c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
 	}
 	err = t.Write(stream, outBuf, opts)
 	if err == nil && outPayload != nil {
@@ -145,14 +154,18 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 func invoke(ctx context.Context, method string, args, reply interface{}, cc *ClientConn, opts ...CallOption) (e error) {
 	c := defaultCallInfo
-	if mc, ok := cc.getMethodConfig(method); ok {
-		c.failFast = !mc.WaitForReady
-		if mc.Timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, mc.Timeout)
-			defer cancel()
-		}
+	mc := cc.GetMethodConfig(method)
+	if mc.WaitForReady != nil {
+		c.failFast = !*mc.WaitForReady
 	}
+
+	if mc.Timeout != nil && *mc.Timeout >= 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, *mc.Timeout)
+		defer cancel()
+	}
+
+	opts = append(cc.dopts.callOptions, opts...)
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
 			return toRPCErr(err)
@@ -163,6 +176,10 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			o.after(&c)
 		}
 	}()
+
+	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
+	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
 		defer c.traceInfo.tr.Finish()
@@ -260,7 +277,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			}
 			return toRPCErr(err)
 		}
-		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, callHdr, stream, t, args, topts)
+		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, &c, callHdr, stream, t, args, topts)
 		if err != nil {
 			if put != nil {
 				updateRPCInfoInContext(ctx, rpcInfo{
