@@ -1,4 +1,4 @@
-// +build !go1.6
+// +build race
 
 /*
  * Copyright 2016, Google Inc.
@@ -32,20 +32,8 @@
  *
  */
 
-package transport
+package test
 
-import (
-	"net"
-	"time"
-
-	"golang.org/x/net/context"
-)
-
-// dialContext connects to the address on the named network.
-func dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	var dialer net.Dialer
-	if deadline, ok := ctx.Deadline(); ok {
-		dialer.Timeout = deadline.Sub(time.Now())
-	}
-	return dialer.Dial(network, address)
+func init() {
+	raceMode = true
 }

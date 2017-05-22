@@ -46,6 +46,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
@@ -188,7 +189,7 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				},
 				RequestURI: "/service/foo.bar",
 			},
-			wantErr: `stream error: code = 13 desc = "malformed time-out: transport: timeout unit is not recognized: \"tomorrow\""`,
+			wantErr: `stream error: code = Internal desc = "malformed time-out: transport: timeout unit is not recognized: \"tomorrow\""`,
 		},
 		{
 			name: "with metadata",
@@ -298,7 +299,7 @@ func TestHandlerTransport_HandleStreams(t *testing.T) {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
 		st.bodyw.Close() // no body
-		st.ht.WriteStatus(s, codes.OK, "")
+		st.ht.WriteStatus(s, status.New(codes.OK, ""))
 	}
 	st.ht.HandleStreams(
 		func(s *Stream) { go handleStream(s) },
@@ -328,7 +329,7 @@ func TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
 func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) {
 	st := newHandleStreamTest(t)
 	handleStream := func(s *Stream) {
-		st.ht.WriteStatus(s, statusCode, msg)
+		st.ht.WriteStatus(s, status.New(statusCode, msg))
 	}
 	st.ht.HandleStreams(
 		func(s *Stream) { go handleStream(s) },
@@ -379,7 +380,7 @@ func TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			t.Errorf("ctx.Err = %v; want %v", err, context.DeadlineExceeded)
 			return
 		}
-		ht.WriteStatus(s, codes.DeadlineExceeded, "too slow")
+		ht.WriteStatus(s, status.New(codes.DeadlineExceeded, "too slow"))
 	}
 	ht.HandleStreams(
 		func(s *Stream) { go runStream(s) },
