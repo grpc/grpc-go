@@ -1567,6 +1567,7 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	}
 }
 
+// Check accounting on both sides after sending and receiving large messages.
 func TestAccountCheckExpandingWindow(t *testing.T) {
 	server, client := setUp(t, 0, 0, pingpong)
 	defer server.stop()
