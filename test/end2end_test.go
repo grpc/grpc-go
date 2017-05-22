@@ -4813,7 +4813,7 @@ func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 }
 
 func (c *errCodec) String() string {
-	return "proto"
+	return "Fermat's near-miss."
 }
 
 func TestEncodeDoesntPanic(t *testing.T) {
@@ -4831,7 +4831,7 @@ func testEncodeDoesntPanic(t *testing.T, e env) {
 	defer te.tearDown()
 	te.customCodec = nil
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	// Failure case.
+	// Failure case, should not panic.
 	tc.EmptyCall(context.Background(), &testpb.Empty{})
 	erc.noError = true
 	// Passing case.
