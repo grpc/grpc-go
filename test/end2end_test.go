@@ -2678,7 +2678,7 @@ func testClientStreaming(t *testing.T, e env, sizes []int) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	ctx, _ := context.WithTimeout(te.ctx, time.Minute*3)
+	ctx, _ := context.WithTimeout(te.ctx, time.Second*30)
 	stream, err := tc.StreamingInputCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
