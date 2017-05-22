@@ -281,7 +281,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private static void logIfContextNarrowedTimeout(long effectiveTimeout,
       Deadline effectiveDeadline, @Nullable Deadline outerCallDeadline,
       @Nullable Deadline callDeadline) {
-    if (!log.isLoggable(Level.INFO) || outerCallDeadline != effectiveDeadline) {
+    if (!log.isLoggable(Level.FINE) || outerCallDeadline != effectiveDeadline) {
       return;
     }
 
@@ -295,7 +295,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       builder.append(String.format(" Explicit call timeout was '%d' ns.", callTimeout));
     }
 
-    log.info(builder.toString());
+    log.fine(builder.toString());
   }
 
   private void removeContextListenerAndCancelDeadlineFuture() {
