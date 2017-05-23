@@ -209,7 +209,10 @@ final class CensusTracingModule {
     ClientCallTracer(@Nullable Span parentSpan, String fullMethodName) {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.span =
-          censusTracer.spanBuilder(parentSpan, makeSpanName("Sent", fullMethodName)).startSpan();
+          censusTracer
+              .spanBuilder(parentSpan, makeSpanName("Sent", fullMethodName))
+              .setRecordEvents(true)
+              .startSpan();
     }
 
     @Override
@@ -241,9 +244,10 @@ final class CensusTracingModule {
     ServerTracer(String fullMethodName, @Nullable SpanContext remoteSpan) {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.span =
-          censusTracer.spanBuilderWithRemoteParent(
-              remoteSpan, makeSpanName("Recv", fullMethodName))
-          .startSpan();
+          censusTracer
+              .spanBuilderWithRemoteParent(remoteSpan, makeSpanName("Recv", fullMethodName))
+              .setRecordEvents(true)
+              .startSpan();
     }
 
     /**
