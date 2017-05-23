@@ -1968,7 +1968,7 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	inBuf := make([]byte, 1)
 	actualCount, actualErr := s.Read(inBuf)
 	if actualCount != 0 {
-		t.Errorf("actualCount, _ := s.Read(_) differs; want %v; got %v", 0, actualCount)
+		t.Errorf("actualCount, _ := s.Read(_) differs; want 0; got %v", actualCount)
 	}
 	if actualErr.Error() != testErr.Error() {
 		t.Errorf("_ , actualErr := s.Read(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
