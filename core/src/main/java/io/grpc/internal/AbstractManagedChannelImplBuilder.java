@@ -16,7 +16,6 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -75,34 +74,45 @@ public abstract class AbstractManagedChannelImplBuilder
   @VisibleForTesting
   static final long IDLE_MODE_MIN_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
-  @Nullable
-  private Executor executor;
+  private static final ObjectPool<? extends Executor> DEFAULT_EXECUTOR_POOL =
+      SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
+
+  private static final NameResolver.Factory DEFAULT_NAME_RESOLVER_FACTORY =
+      NameResolverProvider.asFactory();
+
+  private static final LoadBalancer.Factory DEFAULT_LOAD_BALANCER_FACTORY =
+      PickFirstBalancerFactory.getInstance();
+
+  private static final DecompressorRegistry DEFAULT_DECOMPRESSOR_REGISTRY =
+      DecompressorRegistry.getDefaultInstance();
+
+  private static final CompressorRegistry DEFAULT_COMPRESSOR_REGISTRY =
+      CompressorRegistry.getDefaultInstance();
+
+  ObjectPool<? extends Executor> executorPool = DEFAULT_EXECUTOR_POOL;
 
   private final List<ClientInterceptor> interceptors = new ArrayList<ClientInterceptor>();
 
-  private final String target;
+  final String target;
 
   @Nullable
   private final SocketAddress directServerAddress;
 
   @Nullable
-  private String userAgent;
+  String userAgent;
 
   @Nullable
-  private String authorityOverride;
+  String authorityOverride;
 
-  @Nullable
-  private NameResolver.Factory nameResolverFactory;
+  NameResolver.Factory nameResolverFactory = DEFAULT_NAME_RESOLVER_FACTORY;
 
-  private LoadBalancer.Factory loadBalancerFactory;
+  LoadBalancer.Factory loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
 
-  @Nullable
-  private DecompressorRegistry decompressorRegistry;
+  DecompressorRegistry decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
 
-  @Nullable
-  private CompressorRegistry compressorRegistry;
+  CompressorRegistry compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
 
-  private long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
+  long idleTimeoutMillis = IDLE_MODE_DEFAULT_TIMEOUT_MILLIS;
 
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
@@ -162,7 +172,11 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Override
   public final T executor(Executor executor) {
-    this.executor = executor;
+    if (executor != null) {
+      this.executorPool = new FixedObjectPool<Executor>(executor);
+    } else {
+      this.executorPool = DEFAULT_EXECUTOR_POOL;
+    }
     return thisT();
   }
 
@@ -182,7 +196,11 @@ public abstract class AbstractManagedChannelImplBuilder
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of NameResolverFactory",
         directServerAddress);
-    this.nameResolverFactory = resolverFactory;
+    if (resolverFactory != null) {
+      this.nameResolverFactory = resolverFactory;
+    } else {
+      this.nameResolverFactory = DEFAULT_NAME_RESOLVER_FACTORY;
+    }
     return thisT();
   }
 
@@ -191,19 +209,31 @@ public abstract class AbstractManagedChannelImplBuilder
     Preconditions.checkState(directServerAddress == null,
         "directServerAddress is set (%s), which forbids the use of LoadBalancer.Factory",
         directServerAddress);
-    this.loadBalancerFactory = loadBalancerFactory;
+    if (loadBalancerFactory != null) {
+      this.loadBalancerFactory = loadBalancerFactory;
+    } else {
+      this.loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
+    }
     return thisT();
   }
 
   @Override
   public final T decompressorRegistry(DecompressorRegistry registry) {
-    this.decompressorRegistry = registry;
+    if (registry != null) {
+      this.decompressorRegistry = registry;
+    } else {
+      this.decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
+    } 
     return thisT();
   }
 
   @Override
   public final T compressorRegistry(CompressorRegistry registry) {
-    this.compressorRegistry = registry;
+    if (registry != null) {
+      this.compressorRegistry = registry;
+    } else {
+      this.compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
+    }
     return thisT();
   }
 
@@ -287,19 +317,18 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Override
   public ManagedChannel build() {
-    ClientTransportFactory transportFactory = buildTransportFactory();
-    NameResolver.Factory nameResolverFactory = this.nameResolverFactory;
-    if (nameResolverFactory == null) {
-      // Avoid loading the provider unless necessary, as a way to workaround a possibly-costly
-      // and poorly optimized getResource() call on Android. If any other piece of code calls
-      // getResource(), then this shouldn't be a problem unless called on the UI thread.
-      nameResolverFactory = NameResolverProvider.asFactory();
-    }
-    if (authorityOverride != null) {
-      nameResolverFactory =
-          new OverrideAuthorityNameResolverFactory(nameResolverFactory, authorityOverride);
-    }
+    return new ManagedChannelImpl(
+        this,
+        buildTransportFactory(),
+        // TODO(carl-mastrangelo): Allow clients to pass this in
+        new ExponentialBackoffPolicy.Provider(),
+        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
+        SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
+        GrpcUtil.STOPWATCH_SUPPLIER,
+        getEffectiveInterceptors());
+  }
 
+  private List<ClientInterceptor> getEffectiveInterceptors() {
     List<ClientInterceptor> effectiveInterceptors =
         new ArrayList<ClientInterceptor>(this.interceptors);
     if (recordsStats()) {
@@ -319,24 +348,7 @@ public abstract class AbstractManagedChannelImplBuilder
           new CensusTracingModule(Tracing.getTracer(), Tracing.getBinaryPropagationHandler());
       effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
     }
-
-    return new ManagedChannelImpl(
-        target,
-        // TODO(carl-mastrangelo): Allow clients to pass this in
-        new ExponentialBackoffPolicy.Provider(),
-        nameResolverFactory,
-        getNameResolverParams(),
-        firstNonNull(loadBalancerFactory, PickFirstBalancerFactory.getInstance()),
-        transportFactory,
-        firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
-        firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
-        getExecutorPool(executor),
-        SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
-        GrpcUtil.STOPWATCH_SUPPLIER,
-        idleTimeoutMillis,
-        userAgent,
-        effectiveInterceptors);
+    return effectiveInterceptors;
   }
 
   /**
@@ -353,24 +365,6 @@ public abstract class AbstractManagedChannelImplBuilder
    */
   protected Attributes getNameResolverParams() {
     return Attributes.EMPTY;
-  }
-
-  private static ObjectPool<? extends Executor> getExecutorPool(final @Nullable Executor executor) {
-    if (executor != null) {
-      return new ObjectPool<Executor>() {
-        @Override
-        public Executor getObject() {
-          return executor;
-        }
-
-        @Override
-        public Executor returnObject(Object returned) {
-          return null;
-        }
-      };
-    } else {
-      return SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
-    }
   }
 
   private static class DirectAddressNameResolverFactory extends NameResolver.Factory {
@@ -405,60 +399,6 @@ public abstract class AbstractManagedChannelImplBuilder
     @Override
     public String getDefaultScheme() {
       return DIRECT_ADDRESS_SCHEME;
-    }
-  }
-
-  /**
-   * A wrapper class that overrides the authority of a NameResolver, while preserving all other
-   * functionality.
-   */
-  @VisibleForTesting
-  static class OverrideAuthorityNameResolverFactory extends NameResolver.Factory {
-    private final NameResolver.Factory delegate;
-    private final String authorityOverride;
-
-    /**
-     * Constructor for the {@link NameResolver.Factory}
-     *
-     * @param delegate The actual underlying factory that will produce the a {@link NameResolver}
-     * @param authorityOverride The authority that will be returned by {@link
-     *   NameResolver#getServiceAuthority()}
-     */
-    OverrideAuthorityNameResolverFactory(NameResolver.Factory delegate,
-        String authorityOverride) {
-      this.delegate = delegate;
-      this.authorityOverride = authorityOverride;
-    }
-
-    @Nullable
-    @Override
-    public NameResolver newNameResolver(URI targetUri, Attributes params) {
-      final NameResolver resolver = delegate.newNameResolver(targetUri, params);
-      // Do not wrap null values. We do not want to impede error signaling.
-      if (resolver == null) {
-        return null;
-      }
-      return new NameResolver() {
-        @Override
-        public String getServiceAuthority() {
-          return authorityOverride;
-        }
-
-        @Override
-        public void start(Listener listener) {
-          resolver.start(listener);
-        }
-
-        @Override
-        public void shutdown() {
-          resolver.shutdown();
-        }
-      };
-    }
-
-    @Override
-    public String getDefaultScheme() {
-      return delegate.getDefaultScheme();
     }
   }
 

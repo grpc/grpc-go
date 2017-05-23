@@ -52,10 +52,8 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientStreamTracer;
-import io.grpc.CompressorRegistry;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.Context;
-import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
@@ -171,12 +169,33 @@ public class ManagedChannelImplTest {
 
   private void createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
-    channel = new ManagedChannelImpl(target, new FakeBackoffPolicyProvider(),
-        nameResolverFactory, NAME_RESOLVER_PARAMS, mockLoadBalancerFactory,
-        mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), timerServicePool, executorPool, oobExecutorPool,
-        timer.getStopwatchSupplier(),  ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE, userAgent,
-        interceptors);
+    class Builder extends AbstractManagedChannelImplBuilder<Builder> {
+      Builder(String target) {
+        super(target);
+      }
+
+      @Override protected ClientTransportFactory buildTransportFactory() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override protected Attributes getNameResolverParams() {
+        return NAME_RESOLVER_PARAMS;
+      }
+
+      @Override public Builder usePlaintext(boolean b) {
+        throw new UnsupportedOperationException();
+      }
+    }
+
+    Builder builder = new Builder(target)
+        .nameResolverFactory(nameResolverFactory)
+        .loadBalancerFactory(mockLoadBalancerFactory)
+        .userAgent(userAgent);
+    builder.executorPool = executorPool;
+    builder.idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
+    channel = new ManagedChannelImpl(
+        builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
+        timerServicePool, oobExecutorPool, timer.getStopwatchSupplier(), interceptors);
     // Force-exit the initial idle-mode
     channel.exitIdleMode();
     assertEquals(0, timer.numPendingTasks());

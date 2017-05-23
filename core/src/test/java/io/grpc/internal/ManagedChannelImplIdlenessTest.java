@@ -34,8 +34,6 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
-import io.grpc.CompressorRegistry;
-import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.IntegerMarshaller;
 import io.grpc.LoadBalancer;
@@ -93,10 +91,13 @@ public class ManagedChannelImplIdlenessTest {
           .build();
 
   private final List<EquivalentAddressGroup> servers = Lists.newArrayList();
+  private final ObjectPool<ScheduledExecutorService> timerServicePool =
+      new FixedObjectPool<ScheduledExecutorService>(timer.getScheduledExecutorService());
+  private final ObjectPool<Executor> executorPool =
+      new FixedObjectPool<Executor>(executor.getScheduledExecutorService());
+  private final ObjectPool<Executor> oobExecutorPool =
+      new FixedObjectPool<Executor>(oobExecutor.getScheduledExecutorService());
 
-  @Mock private ObjectPool<ScheduledExecutorService> timerServicePool;
-  @Mock private ObjectPool<Executor> executorPool;
-  @Mock private ObjectPool<Executor> oobExecutorPool;
   @Mock private ClientTransportFactory mockTransportFactory;
   @Mock private LoadBalancer mockLoadBalancer;
   @Mock private LoadBalancer.Factory mockLoadBalancerFactory;
@@ -110,20 +111,35 @@ public class ManagedChannelImplIdlenessTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    when(timerServicePool.getObject()).thenReturn(timer.getScheduledExecutorService());
-    when(executorPool.getObject()).thenReturn(executor.getScheduledExecutorService());
-    when(oobExecutorPool.getObject()).thenReturn(oobExecutor.getScheduledExecutorService());
     when(mockLoadBalancerFactory.newLoadBalancer(any(Helper.class))).thenReturn(mockLoadBalancer);
     when(mockNameResolver.getServiceAuthority()).thenReturn(AUTHORITY);
     when(mockNameResolverFactory
         .newNameResolver(any(URI.class), any(Attributes.class)))
         .thenReturn(mockNameResolver);
 
-    channel = new ManagedChannelImpl("fake://target", new FakeBackoffPolicyProvider(),
-        mockNameResolverFactory, Attributes.EMPTY, mockLoadBalancerFactory,
-        mockTransportFactory, DecompressorRegistry.getDefaultInstance(),
-        CompressorRegistry.getDefaultInstance(), timerServicePool, executorPool, oobExecutorPool,
-        timer.getStopwatchSupplier(), TimeUnit.SECONDS.toMillis(IDLE_TIMEOUT_SECONDS), USER_AGENT,
+    class Builder extends AbstractManagedChannelImplBuilder<Builder> {
+      Builder(String target) {
+        super(target);
+      }
+
+      @Override protected ClientTransportFactory buildTransportFactory() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override public Builder usePlaintext(boolean b) {
+        throw new UnsupportedOperationException();
+      }
+    }
+
+    Builder builder = new Builder("fake://target")
+        .nameResolverFactory(mockNameResolverFactory)
+        .loadBalancerFactory(mockLoadBalancerFactory)
+        .idleTimeout(IDLE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .userAgent(USER_AGENT);
+    builder.executorPool = executorPool;
+    channel = new ManagedChannelImpl(
+        builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
+        timerServicePool, oobExecutorPool, timer.getStopwatchSupplier(),
         Collections.<ClientInterceptor>emptyList());
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 

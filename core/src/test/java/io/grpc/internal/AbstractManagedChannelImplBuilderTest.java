@@ -17,16 +17,24 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
+import io.grpc.CompressorRegistry;
+import io.grpc.DecompressorRegistry;
+import io.grpc.LoadBalancer;
 import io.grpc.NameResolver;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.URI;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,6 +43,173 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link AbstractManagedChannelImplBuilder}. */
 @RunWith(JUnit4.class)
 public class AbstractManagedChannelImplBuilderTest {
+  private Builder builder = new Builder("fake");
+  private Builder directAddressBuilder = new Builder(new SocketAddress(){}, "fake");
+
+  @Test
+  public void executor_default() {
+    assertNotNull(builder.executorPool);
+  }
+
+  @Test
+  public void executor_normal() {
+    Executor executor = mock(Executor.class);
+    assertEquals(builder, builder.executor(executor));
+    assertEquals(executor, builder.executorPool.getObject());
+  }
+
+  @Test
+  public void executor_null() {
+    ObjectPool<? extends Executor> defaultValue = builder.executorPool;
+    builder.executor(mock(Executor.class));
+    assertEquals(builder, builder.executor(null));
+    assertEquals(defaultValue, builder.executorPool);
+  }
+
+  @Test
+  public void directExecutor() {
+    assertEquals(builder, builder.directExecutor());
+    assertEquals(MoreExecutors.directExecutor(), builder.executorPool.getObject());
+  }
+
+  @Test
+  public void nameResolverFactory_default() {
+    assertNotNull(builder.nameResolverFactory);
+  }
+
+  @Test
+  public void nameResolverFactory_normal() {
+    NameResolver.Factory nameResolverFactory = mock(NameResolver.Factory.class);
+    assertEquals(builder, builder.nameResolverFactory(nameResolverFactory));
+    assertEquals(nameResolverFactory, builder.nameResolverFactory);
+  }
+
+  @Test
+  public void nameResolverFactory_null() {
+    NameResolver.Factory defaultValue = builder.nameResolverFactory;
+    builder.nameResolverFactory(mock(NameResolver.Factory.class));
+    assertEquals(builder, builder.nameResolverFactory(null));
+    assertEquals(defaultValue, builder.nameResolverFactory);
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void nameResolverFactory_notAllowedWithDirectAddress() {
+    directAddressBuilder.nameResolverFactory(mock(NameResolver.Factory.class));
+  }
+
+  @Test
+  public void loadBalancerFactory_default() {
+    assertNotNull(builder.loadBalancerFactory);
+  }
+
+  @Test
+  public void loadBalancerFactory_normal() {
+    LoadBalancer.Factory loadBalancerFactory = mock(LoadBalancer.Factory.class);
+    assertEquals(builder, builder.loadBalancerFactory(loadBalancerFactory));
+    assertEquals(loadBalancerFactory, builder.loadBalancerFactory);
+  }
+
+  @Test
+  public void loadBalancerFactory_null() {
+    LoadBalancer.Factory defaultValue = builder.loadBalancerFactory;
+    builder.loadBalancerFactory(mock(LoadBalancer.Factory.class));
+    assertEquals(builder, builder.loadBalancerFactory(null));
+    assertEquals(defaultValue, builder.loadBalancerFactory);
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void loadBalancerFactory_notAllowedWithDirectAddress() {
+    directAddressBuilder.loadBalancerFactory(mock(LoadBalancer.Factory.class));
+  }
+
+  @Test
+  public void decompressorRegistry_default() {
+    assertNotNull(builder.decompressorRegistry);
+  }
+
+  @Test
+  public void decompressorRegistry_normal() {
+    DecompressorRegistry decompressorRegistry = DecompressorRegistry.emptyInstance();
+    assertNotEquals(decompressorRegistry, builder.decompressorRegistry);
+    assertEquals(builder, builder.decompressorRegistry(decompressorRegistry));
+    assertEquals(decompressorRegistry, builder.decompressorRegistry);
+  }
+
+  @Test
+  public void decompressorRegistry_null() {
+    DecompressorRegistry defaultValue = builder.decompressorRegistry;
+    assertEquals(builder, builder.decompressorRegistry(DecompressorRegistry.emptyInstance()));
+    assertNotEquals(defaultValue, builder.decompressorRegistry);
+    builder.decompressorRegistry(null);
+    assertEquals(defaultValue, builder.decompressorRegistry);
+  }
+
+  @Test
+  public void compressorRegistry_default() {
+    assertNotNull(builder.compressorRegistry);
+  }
+
+  @Test
+  public void compressorRegistry_normal() {
+    CompressorRegistry compressorRegistry = CompressorRegistry.newEmptyInstance();
+    assertNotEquals(compressorRegistry, builder.compressorRegistry);
+    assertEquals(builder, builder.compressorRegistry(compressorRegistry));
+    assertEquals(compressorRegistry, builder.compressorRegistry);
+  }
+
+  @Test
+  public void compressorRegistry_null() {
+    CompressorRegistry defaultValue = builder.compressorRegistry;
+    builder.compressorRegistry(CompressorRegistry.newEmptyInstance());
+    assertNotEquals(defaultValue, builder.compressorRegistry);
+    assertEquals(builder, builder.compressorRegistry(null));
+    assertEquals(defaultValue, builder.compressorRegistry);
+  }
+
+  @Test
+  public void userAgent_default() {
+    assertNull(builder.userAgent);
+  }
+
+  @Test
+  public void userAgent_normal() {
+    String userAgent = "user-agent/1";
+    assertEquals(builder, builder.userAgent(userAgent));
+    assertEquals(userAgent, builder.userAgent);
+  }
+
+  @Test
+  public void userAgent_null() {
+    assertEquals(builder, builder.userAgent(null));
+    assertNull(builder.userAgent);
+
+    builder.userAgent("user-agent/1");
+    builder.userAgent(null);
+    assertNull(builder.userAgent);
+  }
+
+  @Test
+  public void overrideAuthority_default() {
+    assertNull(builder.authorityOverride);
+  }
+
+  @Test
+  public void overrideAuthority_normal() {
+    String overrideAuthority = "best-authority";
+    assertEquals(builder, builder.overrideAuthority(overrideAuthority));
+    assertEquals(overrideAuthority, builder.authorityOverride);
+  }
+
+  @Test(expected = NullPointerException.class)
+  public void overrideAuthority_null() {
+    builder.overrideAuthority(null);
+  }
+
+  @Test(expected = IllegalArgumentException.class)
+  public void overrideAuthority_invalid() {
+    builder.overrideAuthority("not_allowed");
+  }
+
   @Test
   public void makeTargetStringForDirectAddress_scopedIpv6() throws Exception {
     InetSocketAddress address = new InetSocketAddress("0:0:0:0:0:0:0:0%0", 10005);
@@ -47,23 +222,7 @@ public class AbstractManagedChannelImplBuilderTest {
 
   @Test
   public void idleTimeout() {
-    class Builder extends AbstractManagedChannelImplBuilder<Builder> {
-      Builder() {
-        super("target");
-      }
-
-      @Override
-      protected ClientTransportFactory buildTransportFactory() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public Builder usePlaintext(boolean value) {
-        return this;
-      }
-    }
-
-    Builder builder = new Builder();
+    Builder builder = new Builder("target");
 
     assertEquals(AbstractManagedChannelImplBuilder.IDLE_MODE_DEFAULT_TIMEOUT_MILLIS,
         builder.getIdleTimeoutMillis());
@@ -98,8 +257,7 @@ public class AbstractManagedChannelImplBuilderTest {
       .thenReturn(nameResolverMock);
     String override = "override:5678";
     NameResolver.Factory factory =
-        new AbstractManagedChannelImplBuilder.OverrideAuthorityNameResolverFactory(wrappedFactory,
-          override);
+        new OverrideAuthorityNameResolverFactory(wrappedFactory, override);
     NameResolver nameResolver = factory.newNameResolver(URI.create("dns:///localhost:443"),
         Attributes.EMPTY);
     assertNotNull(nameResolver);
@@ -111,9 +269,28 @@ public class AbstractManagedChannelImplBuilderTest {
     NameResolver.Factory wrappedFactory = mock(NameResolver.Factory.class);
     when(wrappedFactory.newNameResolver(any(URI.class), any(Attributes.class))).thenReturn(null);
     NameResolver.Factory factory =
-        new AbstractManagedChannelImplBuilder.OverrideAuthorityNameResolverFactory(wrappedFactory,
-            "override:5678");
+        new OverrideAuthorityNameResolverFactory(wrappedFactory, "override:5678");
     assertEquals(null,
         factory.newNameResolver(URI.create("dns:///localhost:443"), Attributes.EMPTY));
+  }
+
+  static class Builder extends AbstractManagedChannelImplBuilder<Builder> {
+    Builder(String target) {
+      super(target);
+    }
+
+    Builder(SocketAddress directServerAddress, String authority) {
+      super(directServerAddress, authority);
+    }
+
+    @Override
+    protected ClientTransportFactory buildTransportFactory() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Builder usePlaintext(boolean value) {
+      throw new UnsupportedOperationException();
+    }
   }
 }

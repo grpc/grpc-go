@@ -364,43 +364,49 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     }
   };
 
-  ManagedChannelImpl(String target, BackoffPolicy.Provider backoffPolicyProvider,
-      NameResolver.Factory nameResolverFactory, Attributes nameResolverParams,
-      LoadBalancer.Factory loadBalancerFactory, ClientTransportFactory transportFactory,
-      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
+  ManagedChannelImpl(
+      AbstractManagedChannelImplBuilder<?> builder,
+      ClientTransportFactory clientTransportFactory,
+      BackoffPolicy.Provider backoffPolicyProvider,
       ObjectPool<ScheduledExecutorService> timerServicePool,
-      ObjectPool<? extends Executor> executorPool, ObjectPool<? extends Executor> oobExecutorPool,
-      Supplier<Stopwatch> stopwatchSupplier, long idleTimeoutMillis,
-      @Nullable String userAgent,
+      ObjectPool<? extends Executor> oobExecutorPool,
+      Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors) {
-    this.target = checkNotNull(target, "target");
-    this.nameResolverFactory = checkNotNull(nameResolverFactory, "nameResolverFactory");
-    this.nameResolverParams = checkNotNull(nameResolverParams, "nameResolverParams");
+    this.target = checkNotNull(builder.target, "target");
+    NameResolver.Factory tmpNameResolverFactory = builder.nameResolverFactory;
+    if (builder.authorityOverride != null) {
+      tmpNameResolverFactory = new OverrideAuthorityNameResolverFactory(
+          tmpNameResolverFactory, builder.authorityOverride);
+    }
+    this.nameResolverFactory = tmpNameResolverFactory;
+    this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
-    this.loadBalancerFactory = checkNotNull(loadBalancerFactory, "loadBalancerFactory");
-    this.executorPool = checkNotNull(executorPool, "executorPool");
+    this.loadBalancerFactory =
+        checkNotNull(builder.loadBalancerFactory, "loadBalancerFactory");
+    this.executorPool = checkNotNull(builder.executorPool, "executorPool");
     this.oobExecutorPool = checkNotNull(oobExecutorPool, "oobExecutorPool");
     this.executor = checkNotNull(executorPool.getObject(), "executor");
     this.delayedTransport = new DelayedClientTransport(this.executor, this.channelExecutor);
     this.delayedTransport.start(delayedTransportListener);
     this.backoffPolicyProvider = backoffPolicyProvider;
     this.transportFactory =
-        new CallCredentialsApplyingTransportFactory(transportFactory, this.executor);
+        new CallCredentialsApplyingTransportFactory(clientTransportFactory, this.executor);
     this.interceptorChannel = ClientInterceptors.intercept(new RealChannel(), interceptors);
     this.timerServicePool = checkNotNull(timerServicePool, "timerServicePool");
     this.scheduledExecutor = checkNotNull(timerServicePool.getObject(), "timerService");
     this.stopwatchSupplier = checkNotNull(stopwatchSupplier, "stopwatchSupplier");
-    if (idleTimeoutMillis == IDLE_TIMEOUT_MILLIS_DISABLE) {
-      this.idleTimeoutMillis = idleTimeoutMillis;
+    if (builder.idleTimeoutMillis == IDLE_TIMEOUT_MILLIS_DISABLE) {
+      this.idleTimeoutMillis = builder.idleTimeoutMillis;
     } else {
       checkArgument(
-          idleTimeoutMillis >= AbstractManagedChannelImplBuilder.IDLE_MODE_MIN_TIMEOUT_MILLIS,
-          "invalid idleTimeoutMillis %s", idleTimeoutMillis);
-      this.idleTimeoutMillis = idleTimeoutMillis;
+          builder.idleTimeoutMillis
+              >= AbstractManagedChannelImplBuilder.IDLE_MODE_MIN_TIMEOUT_MILLIS,
+          "invalid idleTimeoutMillis %s", builder.idleTimeoutMillis);
+      this.idleTimeoutMillis = builder.idleTimeoutMillis;
     }
-    this.decompressorRegistry = checkNotNull(decompressorRegistry, "decompressorRegistry");
-    this.compressorRegistry = checkNotNull(compressorRegistry, "compressorRegistry");
-    this.userAgent = userAgent;
+    this.decompressorRegistry = checkNotNull(builder.decompressorRegistry, "decompressorRegistry");
+    this.compressorRegistry = checkNotNull(builder.compressorRegistry, "compressorRegistry");
+    this.userAgent = builder.userAgent;
 
     log.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
   }
