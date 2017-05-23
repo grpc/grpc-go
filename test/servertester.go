@@ -287,3 +287,9 @@ func (st *serverTester) writeRSTStream(streamID uint32, code http2.ErrCode) {
 		st.t.Fatalf("Error writing RST_STREAM: %v", err)
 	}
 }
+
+func (st *serverTester) writeDataPadded(streamID uint32, endStream bool, data, padding []byte) {
+	if err := st.fr.WriteDataPadded(streamID, endStream, data, padding); err != nil {
+		st.t.Fatalf("Error writing DATA with padding: %v", err)
+	}
+}
