@@ -394,8 +394,7 @@ var (
 	unixTLSEnv    = env{name: "unix-tls", network: "unix", security: "tls", balancer: true}
 	handlerEnv    = env{name: "handler-tls", network: "tcp", security: "tls", httpHandler: true, balancer: true}
 	noBalancerEnv = env{name: "no-balancer", network: "tcp", security: "tls", balancer: false}
-	// TODO add handlerEnv back when ServeHTTP is stable.
-	allEnv = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv /*handlerEnv,*/, noBalancerEnv}
+	allEnv        = []env{tcpClearEnv, tcpTLSEnv, unixClearEnv, unixTLSEnv, handlerEnv, noBalancerEnv}
 )
 
 var onlyEnv = flag.String("only_env", "", "If non-empty, one of 'tcp-clear', 'tcp-tls', 'unix-clear', 'unix-tls', or 'handler-tls' to only run the tests for that environment. Empty means all.")
@@ -2074,6 +2073,11 @@ func testEmptyUnaryWithUserAgent(t *testing.T, e env) {
 func TestFailedEmptyUnary(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			// This test covers status details, but
+			// Grpc-Status-Details-Bin is not support in handler_server.
+			continue
+		}
 		testFailedEmptyUnary(t, e)
 	}
 }
@@ -2695,6 +2699,11 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 func TestMalformedHTTP2Metadata(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			// Failed with "server stops accepting new RPCs".
+			// Server stops accepting new RPCs when the client sends an illegal http2 header.
+			continue
+		}
 		testMalformedHTTP2Metadata(t, e)
 	}
 }
@@ -2753,6 +2762,10 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 func TestRetry(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			// In race mode, with go1.6, the test never returns with handler_server.
+			continue
+		}
 		testRetry(t, e)
 	}
 }
@@ -3434,6 +3447,10 @@ const defaultMaxStreamsClient = 100
 func TestExceedDefaultMaxStreamsLimit(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			// The default max stream limit in handler_server is not 100?
+			continue
+		}
 		testExceedDefaultMaxStreamsLimit(t, e)
 	}
 }
