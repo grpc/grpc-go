@@ -35,7 +35,6 @@
 package transport
 
 import (
-	"fmt"
 	"net"
 
 	"google.golang.org/grpc/codes"
@@ -56,5 +55,5 @@ func ContextErr(err error) StreamError {
 	case context.Canceled:
 		return streamErrorf(codes.Canceled, "%v", err)
 	}
-	panic(fmt.Sprintf("Unexpected error from context packet: %v", err))
+	return streamErrorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }
