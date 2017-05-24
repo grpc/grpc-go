@@ -640,17 +640,6 @@ func (e StreamError) Error() string {
 	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
-// ContextErr converts the error from context package into a StreamError.
-func ContextErr(err error) StreamError {
-	switch err {
-	case context.DeadlineExceeded:
-		return streamErrorf(codes.DeadlineExceeded, "%v", err)
-	case context.Canceled:
-		return streamErrorf(codes.Canceled, "%v", err)
-	}
-	panic(fmt.Sprintf("Unexpected error from context packet: %v", err))
-}
-
 // wait blocks until it can receive from ctx.Done, closing, or proceed.
 // If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
 // If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
