@@ -6,11 +6,11 @@
   <packaging>jar</packaging>
   <!-- Feel free to delete the comment at the end of these lines. It is just
        for safely updating the version in our release process. -->
-  <version>1.4.0-SNAPSHOT</version><!-- CURRENT_GRPC_VERSION -->
+  <version>1.5.0-SNAPSHOT</version><!-- CURRENT_GRPC_VERSION -->
   <name>examples</name>
   <url>http://maven.apache.org</url>
   <properties>
-    <grpc.version>1.4.0-SNAPSHOT</grpc.version><!-- CURRENT_GRPC_VERSION -->
+    <grpc.version>1.5.0-SNAPSHOT</grpc.version><!-- CURRENT_GRPC_VERSION -->
   </properties>
   <dependencies>
     <dependency>

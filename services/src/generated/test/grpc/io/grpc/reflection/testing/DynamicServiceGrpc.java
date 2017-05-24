@@ -21,7 +21,7 @@ import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
  * </pre>
  */
 @javax.annotation.Generated(
-    value = "by gRPC proto compiler (version 1.4.0-SNAPSHOT)",
+    value = "by gRPC proto compiler (version 1.5.0-SNAPSHOT)",
     comments = "Source: io/grpc/reflection/testing/dynamic_reflection_test.proto")
 public final class DynamicServiceGrpc {
 
