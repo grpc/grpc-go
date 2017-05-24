@@ -162,7 +162,7 @@ protobuf {
     if (project.hasProperty('protoc')) {
       path = project.protoc
     } else {
-      artifact = "com.google.protobuf:protoc:${protobufVersion}"
+      artifact = "com.google.protobuf:protoc:${protocVersion}"
     }
   }
   plugins {
@@ -216,7 +216,7 @@ checkstyleTestNano {
   source = fileTree(dir: "src/testNano", include: "**/*.java")
 }
 
-println "*** Building codegen requires Protobuf version ${protobufVersion}"
+println "*** Building codegen requires Protobuf version ${protocVersion}"
 println "*** Please refer to https://github.com/grpc/grpc-java/blob/master/COMPILING.md#how-to-build-code-generation-plugin"
 
 task buildArtifacts(type: Copy) {

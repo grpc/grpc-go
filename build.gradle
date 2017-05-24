@@ -89,7 +89,8 @@ subprojects {
 
         nettyVersion = '4.1.11.Final'
         guavaVersion = '19.0'
-        protobufVersion = '3.2.0'
+        protobufVersion = '3.3.1'
+        protocVersion = '3.3.0' // TODO(carl-mastrangelo): set this from protobufVersion when versions align again
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {
@@ -103,7 +104,7 @@ subprojects {
                 if (project.hasProperty('protoc')) {
                   path = project.protoc
                 } else {
-                  artifact = "com.google.protobuf:protoc:${protobufVersion}"
+                  artifact = "com.google.protobuf:protoc:${protocVersion}"
                 }
               }
               plugins {
@@ -185,9 +186,7 @@ subprojects {
                 okio: 'com.squareup.okio:okio:1.6.0',
                 instrumentation_api: 'com.google.instrumentation:instrumentation-api:0.4.2',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
-                // swap to ${protobufVersion} after versions align again
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",
-                // swap to ${protobufVersion} after versions align again
                 protoc_lite: "com.google.protobuf:protoc-gen-javalite:3.0.0",
                 protobuf_nano: "com.google.protobuf.nano:protobuf-javanano:${protobufNanoVersion}",
                 protobuf_plugin: 'com.google.protobuf:protobuf-gradle-plugin:0.8.0',

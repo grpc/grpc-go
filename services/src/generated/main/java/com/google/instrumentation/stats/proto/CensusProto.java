@@ -222,6 +222,17 @@ public final class CensusProto {
     }
 
     public static com.google.instrumentation.stats.proto.CensusProto.Duration parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.Duration parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.Duration parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
@@ -782,6 +793,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.Timestamp parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.Timestamp parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.Timestamp parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1908,6 +1930,17 @@ public final class CensusProto {
       }
 
       public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.MeasurementUnit parseFrom(
+          java.nio.ByteBuffer data)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.MeasurementUnit parseFrom(
+          java.nio.ByteBuffer data,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data, extensionRegistry);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor.MeasurementUnit parseFrom(
           com.google.protobuf.ByteString data)
           throws com.google.protobuf.InvalidProtocolBufferException {
         return PARSER.parseFrom(data);
@@ -2691,6 +2724,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.MeasurementDescriptor parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3817,6 +3861,17 @@ public final class CensusProto {
       }
 
       public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation.Range parseFrom(
+          java.nio.ByteBuffer data)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation.Range parseFrom(
+          java.nio.ByteBuffer data,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data, extensionRegistry);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation.Range parseFrom(
           com.google.protobuf.ByteString data)
           throws com.google.protobuf.InvalidProtocolBufferException {
         return PARSER.parseFrom(data);
@@ -4508,6 +4563,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregation parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -5952,6 +6018,17 @@ public final class CensusProto {
     }
 
     public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptor parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptor parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptor parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
@@ -6896,6 +6973,17 @@ public final class CensusProto {
       }
 
       public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation.Interval parseFrom(
+          java.nio.ByteBuffer data)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation.Interval parseFrom(
+          java.nio.ByteBuffer data,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        return PARSER.parseFrom(data, extensionRegistry);
+      }
+      public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation.Interval parseFrom(
           com.google.protobuf.ByteString data)
           throws com.google.protobuf.InvalidProtocolBufferException {
         return PARSER.parseFrom(data);
@@ -7595,6 +7683,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregation parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8889,6 +8988,17 @@ public final class CensusProto {
     }
 
     public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
@@ -9823,6 +9933,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.Tag parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.Tag parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.Tag parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -10868,6 +10989,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.ViewDescriptor parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -12285,6 +12417,17 @@ public final class CensusProto {
     }
 
     public static com.google.instrumentation.stats.proto.CensusProto.DistributionView parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionView parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.DistributionView parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
@@ -13470,6 +13613,17 @@ public final class CensusProto {
     }
 
     public static com.google.instrumentation.stats.proto.CensusProto.IntervalView parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalView parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.IntervalView parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
@@ -14462,6 +14616,17 @@ public final class CensusProto {
       return hash;
     }
 
+    public static com.google.instrumentation.stats.proto.CensusProto.View parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static com.google.instrumentation.stats.proto.CensusProto.View parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
     public static com.google.instrumentation.stats.proto.CensusProto.View parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {

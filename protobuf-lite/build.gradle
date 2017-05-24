@@ -33,7 +33,7 @@ protobuf {
     if (project.hasProperty('protoc')) {
       path = project.protoc
     } else {
-      artifact = "com.google.protobuf:protoc:${protobufVersion}"
+      artifact = "com.google.protobuf:protoc:${protocVersion}"
     }
   }
   plugins {
