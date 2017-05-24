@@ -317,6 +317,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 
 	s := &Stream{
 		id:           0, // irrelevant
+		requestRead:  func(int) {},
 		cancel:       cancel,
 		buf:          newRecvBuffer(),
 		st:           ht,
@@ -332,7 +333,10 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	ctx = peer.NewContext(ctx, pr)
 	s.ctx = newContextWithStream(ctx, s)
-	s.trReader = &recvBufferReader{ctx: s.ctx, recv: s.buf}
+	s.trReader = &transportReader{
+		reader:        &recvBufferReader{ctx: s.ctx, recv: s.buf},
+		windowHandler: func(int) {},
+	}
 
 	// readerDone is closed when the Body.Read-ing goroutine exits.
 	readerDone := make(chan struct{})
