@@ -35,6 +35,7 @@ package transport
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -113,6 +114,8 @@ type http2Client struct {
 	statsHandler stats.Handler
 
 	initialWindowSize int32
+
+	bdpEst *bdpEstimator
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -248,6 +251,16 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
 	}
+	t.bdpEst = &bdpEstimator{
+		p: &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
+		send: func(p *ping) {
+			t.controlBuf.put(p)
+		},
+		updateConnWindow: func(n uint32) {
+			fmt.Println("BDP estimation on client:", n)
+		},
+	}
+
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
 	t.awakenKeepalive <- struct{}{}
@@ -845,6 +858,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		t.notifyError(connectionErrorf(true, err, "%v", err))
 		return
 	}
+	t.bdpEst.add(uint32(size))
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
@@ -942,6 +956,8 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
+		// Maybe it's a BDP ping.
+		t.bdpEst.calculate(f.Data)
 		return
 	}
 	pingAck := &ping{ack: true}

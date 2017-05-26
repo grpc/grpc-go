@@ -36,6 +36,7 @@ package transport
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -114,6 +115,8 @@ type http2Server struct {
 	resetPingStrikes uint32 // Accessed atomically.
 
 	initialWindowSize int32
+
+	bdpEst *bdpEstimator
 
 	mu            sync.Mutex // guard the following
 	state         transportState
@@ -213,6 +216,15 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		idle:              time.Now(),
 		kep:               kep,
 		initialWindowSize: iwz,
+	}
+	t.bdpEst = &bdpEstimator{
+		p: &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
+		send: func(p *ping) {
+			t.controlBuf.put(p)
+		},
+		updateConnWindow: func(n uint32) {
+			fmt.Println("BDP estimation on Server:", n)
+		},
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -477,6 +489,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		t.Close()
 		return
 	}
+	t.bdpEst.add(uint32(size))
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
@@ -558,6 +571,8 @@ const (
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
+		// Maybe it's a BDP ping.
+		t.bdpEst.calculate(f.Data)
 		return
 	}
 	pingAck := &ping{ack: true}
