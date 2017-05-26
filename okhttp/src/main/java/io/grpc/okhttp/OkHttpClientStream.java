@@ -39,7 +39,7 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.AbstractClientStream2;
+import io.grpc.internal.AbstractClientStream;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
@@ -55,7 +55,7 @@ import okio.Buffer;
 /**
  * Client stream for the okhttp transport.
  */
-class OkHttpClientStream extends AbstractClientStream2 {
+class OkHttpClientStream extends AbstractClientStream {
 
   private static final int WINDOW_UPDATE_THRESHOLD = Utils.DEFAULT_WINDOW_SIZE / 2;
 
@@ -124,7 +124,7 @@ class OkHttpClientStream extends AbstractClientStream2 {
     return Attributes.EMPTY;
   }
 
-  class Sink implements AbstractClientStream2.Sink {
+  class Sink implements AbstractClientStream.Sink {
     @Override
     public void writeHeaders(Metadata metadata, byte[] payload) {
       String defaultPath = "/" + method.getFullMethodName();

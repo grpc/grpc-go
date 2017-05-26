@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
  * implement {@link #transportState()} and {@link #abstractServerStreamSink()}. Must only be called
  * from the sending application thread.
  */
-public abstract class AbstractServerStream extends AbstractStream2
+public abstract class AbstractServerStream extends AbstractStream
     implements ServerStream, MessageFramer.Sink {
   /**
    * A sink for outbound operations, separated from the stream simply to avoid name
@@ -184,7 +184,7 @@ public abstract class AbstractServerStream extends AbstractStream2
   }
 
   /** This should only called from the transport thread. */
-  protected abstract static class TransportState extends AbstractStream2.TransportState {
+  protected abstract static class TransportState extends AbstractStream.TransportState {
     /** Whether listener.closed() has been called. */
     private boolean listenerClosed;
     private ServerStreamListener listener;

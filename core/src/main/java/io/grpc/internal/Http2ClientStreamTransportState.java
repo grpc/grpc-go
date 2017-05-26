@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
 /**
  * Base implementation for client streams using HTTP2 as the transport.
  */
-public abstract class Http2ClientStreamTransportState extends AbstractClientStream2.TransportState {
+public abstract class Http2ClientStreamTransportState extends AbstractClientStream.TransportState {
 
   /**
    * Metadata marshaller for HTTP status lines.

@@ -45,7 +45,7 @@ import javax.annotation.concurrent.GuardedBy;
  * The stream and stream state as used by the application. Must only be called from the sending
  * application thread.
  */
-public abstract class AbstractStream2 implements Stream {
+public abstract class AbstractStream implements Stream {
   /** The framer to use for sending messages. */
   protected abstract Framer framer();
 
@@ -252,10 +252,10 @@ public abstract class AbstractStream2 implements Stream {
 
     /**
      * Notify that the stream does not exist in a usable state any longer. This causes {@link
-     * AbstractStream2#isReady()} to return {@code false} from this point forward.
+     * AbstractStream#isReady()} to return {@code false} from this point forward.
      *
      * <p>This does not generally need to be called explicitly by the transport, as it is handled
-     * implicitly by {@link AbstractClientStream2} and {@link AbstractServerStream}.
+     * implicitly by {@link AbstractClientStream} and {@link AbstractServerStream}.
      */
     protected final void onStreamDeallocated() {
       synchronized (onReadyLock) {

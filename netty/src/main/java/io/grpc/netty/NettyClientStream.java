@@ -43,7 +43,7 @@ import io.grpc.InternalMethodDescriptor;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.internal.AbstractClientStream2;
+import io.grpc.internal.AbstractClientStream;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
@@ -61,7 +61,7 @@ import javax.annotation.Nullable;
  * Client stream for a Netty transport. Must only be called from the sending application
  * thread.
  */
-class NettyClientStream extends AbstractClientStream2 {
+class NettyClientStream extends AbstractClientStream {
   private static final InternalMethodDescriptor methodDescriptorAccessor =
       new InternalMethodDescriptor(InternalKnownTransport.NETTY);
 
@@ -115,7 +115,7 @@ class NettyClientStream extends AbstractClientStream2 {
     return method.isSafe();
   }
 
-  private class Sink implements AbstractClientStream2.Sink {
+  private class Sink implements AbstractClientStream.Sink {
     @Override
     public void writeHeaders(Metadata headers, byte[] requestPayload) {
       // Convert the headers into Netty HTTP/2 headers.

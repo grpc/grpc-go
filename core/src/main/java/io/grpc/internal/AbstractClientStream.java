@@ -46,10 +46,10 @@ import javax.annotation.Nullable;
  * implement {@link #transportState()} and {@link #abstractClientStreamSink()}. Must only be called
  * from the sending application thread.
  */
-public abstract class AbstractClientStream2 extends AbstractStream2
+public abstract class AbstractClientStream extends AbstractStream
     implements ClientStream, MessageFramer.Sink {
 
-  private static final Logger log = Logger.getLogger(AbstractClientStream2.class.getName());
+  private static final Logger log = Logger.getLogger(AbstractClientStream.class.getName());
 
   /**
    * A sink for outbound operations, separated from the stream simply to avoid name
@@ -88,7 +88,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
      * multiple times and from any thread.
      *
      * <p>This is a clone of {@link ClientStream#cancel(Status)};
-     * {@link AbstractClientStream2#cancel} delegates to this method.
+     * {@link AbstractClientStream#cancel} delegates to this method.
      */
     void cancel(Status status);
   }
@@ -104,7 +104,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
    */
   private volatile boolean cancelled;
 
-  protected AbstractClientStream2(WritableBufferAllocator bufferAllocator,
+  protected AbstractClientStream(WritableBufferAllocator bufferAllocator,
       StatsTraceContext statsTraceCtx, Metadata headers, boolean useGet) {
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
@@ -182,7 +182,7 @@ public abstract class AbstractClientStream2 extends AbstractStream2
   }
 
   /** This should only called from the transport thread. */
-  protected abstract static class TransportState extends AbstractStream2.TransportState {
+  protected abstract static class TransportState extends AbstractStream.TransportState {
     /** Whether listener.closed() has been called. */
     private final StatsTraceContext statsTraceCtx;
     private boolean listenerClosed;
