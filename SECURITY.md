@@ -266,7 +266,7 @@ Server server = NettyServerBuilder.forPort(8443)
         .build());
 ```
 
-Negotiated client certificates are available in the SSLSession, which is found in the SSL_SESSION_KEY attribute of <a href="https://github.com/grpc/grpc-java/blob/master/core/src/main/java/io/grpc/ServerCall.java">ServerCall</a>.  A server interceptor can provide details in the current Context.
+Negotiated client certificates are available in the SSLSession, which is found in the `TRANSPORT_ATTR_SSL_SESSION` attribute of <a href="https://github.com/grpc/grpc-java/blob/master/core/src/main/java/io/grpc/Grpc.java">Grpc</a>.  A server interceptor can provide details in the current Context.
 
 ```java
 public final static Context.Key<SSLSession> SSL_SESSION_CONTEXT = Context.key("SSLSession");
@@ -274,7 +274,7 @@ public final static Context.Key<SSLSession> SSL_SESSION_CONTEXT = Context.key("S
 @Override
 public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(ServerCall<RespT> call, 
     Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-    SSLSession sslSession = call.attributes().get(ServerCall.SSL_SESSION_KEY);
+    SSLSession sslSession = call.attributes().get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
     if (sslSession == null) {
         return next.startCall(call, headers)
     }
