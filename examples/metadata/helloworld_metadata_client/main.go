@@ -53,7 +53,7 @@ func unaryCallWithMetadata(c pb.GreeterClient, name string) {
 	grpclog.Printf("------------ unary ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// call RPC
 	var header, trailer metadata.MD
@@ -88,7 +88,7 @@ func serverStreamingWithMetadata(c pb.GreeterClient, names []string) {
 	grpclog.Printf("------------ server streaming ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// call RPC
 	stream, err := c.ServerStreamingSayHello(ctx, &pb.StreamingHelloRequest{Names: names})
@@ -143,7 +143,7 @@ func clientStreamWithMetadata(c pb.GreeterClient, names []string) {
 	grpclog.Printf("------------ client streaming ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// call RPC
 	stream, err := c.ClientStreamingSayHello(ctx)
@@ -200,7 +200,7 @@ func bidirectionalWithMetadata(c pb.GreeterClient, names []string) {
 	grpclog.Printf("------------ bidirectional ------------")
 	// create metadata and context
 	md := metadata.Pairs("timestamp", time.Now().Format(timestampFormat))
-	ctx := metadata.NewContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// call RPC
 	stream, err := c.BidirectionalStreamingSayHello(ctx)

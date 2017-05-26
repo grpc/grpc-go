@@ -81,7 +81,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	}()
 
 	// read metadata from client
-	md, ok := metadata.FromContext(ctx)
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, grpc.Errorf(codes.DataLoss, "SayHello: failed to get metadata")
 	}
@@ -111,7 +111,7 @@ func (s *server) ServerStreamingSayHello(in *pb.StreamingHelloRequest, stream pb
 	}()
 
 	// read metadata from client
-	md, ok := metadata.FromContext(stream.Context())
+	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
 	}
@@ -149,7 +149,7 @@ func (s *server) ClientStreamingSayHello(stream pb.Greeter_ClientStreamingSayHel
 	}()
 
 	// read metadata from client
-	md, ok := metadata.FromContext(stream.Context())
+	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "ServerStreamingSayHello: failed to get metadata")
 	}
@@ -190,7 +190,7 @@ func (s *server) BidirectionalStreamingSayHello(stream pb.Greeter_BidirectionalS
 	}()
 
 	// read metadata from client
-	md, ok := metadata.FromContext(stream.Context())
+	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		return grpc.Errorf(codes.DataLoss, "BidirectionalStreamingSayHello: failed to get metadata")
 	}
