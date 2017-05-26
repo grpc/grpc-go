@@ -110,25 +110,26 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
    * @param fallbackRegistry the secondary method registry, used only if the primary registry
    *        doesn't have the method
    */
-  ServerImpl(ObjectPool<? extends Executor> executorPool,
+  ServerImpl(
+      AbstractServerImplBuilder<?> builder,
       ObjectPool<ScheduledExecutorService> timeoutServicePool,
-      InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
-      InternalServer transportServer, Context rootContext,
-      DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
-      List<ServerTransportFilter> transportFilters, List<ServerInterceptor> interceptors) {
-    this.executorPool = Preconditions.checkNotNull(executorPool, "executorPool");
+      InternalServer transportServer,
+      Context rootContext) {
+    this.executorPool = Preconditions.checkNotNull(builder.executorPool, "executorPool");
     this.timeoutServicePool = Preconditions.checkNotNull(timeoutServicePool, "timeoutServicePool");
-    this.registry = Preconditions.checkNotNull(registry, "registry");
-    this.fallbackRegistry = Preconditions.checkNotNull(fallbackRegistry, "fallbackRegistry");
+    this.registry = Preconditions.checkNotNull(builder.registryBuilder.build(), "registryBuilder");
+    this.fallbackRegistry =
+        Preconditions.checkNotNull(builder.fallbackRegistry, "fallbackRegistry");
     this.transportServer = Preconditions.checkNotNull(transportServer, "transportServer");
     // Fork from the passed in context so that it does not propagate cancellation, it only
     // inherits values.
     this.rootContext = Preconditions.checkNotNull(rootContext, "rootContext").fork();
-    this.decompressorRegistry = decompressorRegistry;
-    this.compressorRegistry = compressorRegistry;
+    this.decompressorRegistry = builder.decompressorRegistry;
+    this.compressorRegistry = builder.compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
-        new ArrayList<ServerTransportFilter>(transportFilters));
-    this.interceptors = interceptors.toArray(new ServerInterceptor[interceptors.size()]);
+        new ArrayList<ServerTransportFilter>(builder.transportFilters));
+    this.interceptors =
+        builder.interceptors.toArray(new ServerInterceptor[builder.interceptors.size()]);
   }
 
   /**
