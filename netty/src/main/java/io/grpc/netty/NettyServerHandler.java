@@ -69,6 +69,7 @@ import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2RemoteFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
@@ -87,6 +88,7 @@ import io.netty.handler.codec.http2.Http2OutboundFrameLogger;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
+import io.netty.handler.codec.http2.WeightedFairQueueByteDistributor;
 import io.netty.handler.logging.LogLevel;
 import io.netty.util.AsciiString;
 import io.netty.util.ReferenceCountUtil;
@@ -180,6 +182,11 @@ class NettyServerHandler extends AbstractNettyHandler {
     Preconditions.checkArgument(maxMessageSize > 0, "maxMessageSize must be positive");
 
     final Http2Connection connection = new DefaultHttp2Connection(true);
+    WeightedFairQueueByteDistributor dist = new WeightedFairQueueByteDistributor(connection);
+    dist.allocationQuantum(16 * 1024); // Make benchmarks fast again.
+    DefaultHttp2RemoteFlowController controller =
+        new DefaultHttp2RemoteFlowController(connection, dist);
+    connection.remote().flowController(controller);
     final KeepAliveEnforcer keepAliveEnforcer = new KeepAliveEnforcer(
         permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos, TimeUnit.NANOSECONDS);
 

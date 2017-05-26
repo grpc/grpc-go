@@ -61,6 +61,7 @@ import io.netty.handler.codec.http2.DefaultHttp2ConnectionEncoder;
 import io.netty.handler.codec.http2.DefaultHttp2FrameReader;
 import io.netty.handler.codec.http2.DefaultHttp2FrameWriter;
 import io.netty.handler.codec.http2.DefaultHttp2LocalFlowController;
+import io.netty.handler.codec.http2.DefaultHttp2RemoteFlowController;
 import io.netty.handler.codec.http2.Http2Connection;
 import io.netty.handler.codec.http2.Http2ConnectionAdapter;
 import io.netty.handler.codec.http2.Http2ConnectionDecoder;
@@ -78,6 +79,7 @@ import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.Http2StreamVisitor;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
+import io.netty.handler.codec.http2.WeightedFairQueueByteDistributor;
 import io.netty.handler.logging.LogLevel;
 import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.Executor;
@@ -121,6 +123,11 @@ class NettyClientHandler extends AbstractNettyHandler {
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
     Http2FrameWriter frameWriter = new DefaultHttp2FrameWriter();
     Http2Connection connection = new DefaultHttp2Connection(false);
+    WeightedFairQueueByteDistributor dist = new WeightedFairQueueByteDistributor(connection);
+    dist.allocationQuantum(16 * 1024); // Make benchmarks fast again.
+    DefaultHttp2RemoteFlowController controller =
+        new DefaultHttp2RemoteFlowController(connection, dist);
+    connection.remote().flowController(controller);
 
     return newHandler(connection, frameReader, frameWriter, lifecycleManager, keepAliveManager,
         flowControlWindow, maxHeaderListSize, ticker, tooManyPingsRunnable);
