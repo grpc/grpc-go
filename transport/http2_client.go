@@ -595,11 +595,6 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	s.mu.Lock()
 	rstStream = s.rstStream
 	rstError = s.rstError
-	if q := s.fc.resetPendingData(); q > 0 {
-		if n := t.fc.onRead(q); n > 0 {
-			t.controlBuf.put(&windowUpdate{0, n})
-		}
-	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
@@ -831,9 +826,6 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := t.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w})
-	}
 	if w := s.fc.onRead(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
@@ -845,22 +837,19 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		t.notifyError(connectionErrorf(true, err, "%v", err))
 		return
 	}
+	// Decouple connection's flow control form application's read.
+	if w := t.fc.onRead(uint32(size)); w > 0 {
+		t.controlBuf.put(&windowUpdate{0, w})
+	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
-		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
-		}
 		return
 	}
 	if size > 0 {
 		s.mu.Lock()
 		if s.state == streamDone {
 			s.mu.Unlock()
-			// The stream has been closed. Release the corresponding quota.
-			if w := t.fc.onRead(uint32(size)); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
 			return
 		}
 		if err := s.fc.onData(uint32(size)); err != nil {
@@ -872,9 +861,6 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
 				t.controlBuf.put(&windowUpdate{s.id, w})
 			}

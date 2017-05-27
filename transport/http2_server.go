@@ -462,9 +462,6 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := t.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w})
-	}
 	if w := s.fc.onRead(n); w > 0 {
 		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
@@ -477,12 +474,13 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		t.Close()
 		return
 	}
+	// Decouple connection's flow control from application's read.
+	if w := t.fc.onRead(uint32(size)); w > 0 {
+		t.controlBuf.put(&windowUpdate{0, w})
+	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
-		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
-		}
 		return
 	}
 	if size > 0 {
@@ -490,9 +488,6 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		if s.state == streamDone {
 			s.mu.Unlock()
 			// The stream has been closed. Release the corresponding quota.
-			if w := t.fc.onRead(uint32(size)); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
 			return
 		}
 		if err := s.fc.onData(uint32(size)); err != nil {
@@ -502,9 +497,6 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			return
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
 				t.controlBuf.put(&windowUpdate{s.id, w})
 			}
@@ -1066,11 +1058,6 @@ func (t *http2Server) closeStream(s *Stream) {
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 	s.mu.Lock()
-	if q := s.fc.resetPendingData(); q > 0 {
-		if w := t.fc.onRead(q); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
-		}
-	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
