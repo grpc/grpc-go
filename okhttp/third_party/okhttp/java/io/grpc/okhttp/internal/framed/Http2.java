@@ -301,7 +301,8 @@ public final class Http2 implements Variant {
           case 6: // SETTINGS_MAX_HEADER_LIST_SIZE
             break; // Advisory only, so ignored.
           default:
-            throw ioException("PROTOCOL_ERROR invalid settings id: %s", id);
+            // Implementations MUST ignore any unknown or unsupported identifier.
+            continue;
         }
         settings.set(id, 0, value);
       }
