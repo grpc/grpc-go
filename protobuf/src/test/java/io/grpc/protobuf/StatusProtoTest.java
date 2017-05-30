@@ -149,6 +149,15 @@ public class StatusProtoTest {
   }
 
   @Test
+  public void fromThrowable_shouldReturnNullIfStatusDetailsKeyIsMissing() {
+    Status status = Status.fromCodeValue(0);
+    Metadata emptyMetadata = new Metadata();
+
+    assertNull(StatusProto.fromThrowable(status.asRuntimeException(emptyMetadata)));
+    assertNull(StatusProto.fromThrowable(status.asException(emptyMetadata)));
+  }
+
+  @Test
   public void fromThrowableWithNestedStatusRuntimeException() {
     StatusRuntimeException sre = StatusProto.toStatusRuntimeException(STATUS_PROTO);
     Throwable nestedSre = new Throwable(sre);
