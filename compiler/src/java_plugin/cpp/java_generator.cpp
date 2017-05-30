@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <vector>
 #include <google/protobuf/compiler/java/java_names.h>
