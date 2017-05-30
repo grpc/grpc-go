@@ -222,18 +222,38 @@ public final class FakeClock {
    * @return the number of tasks run by this call
    */
   public int runDueTasks() {
+    return runDueTasks(new TaskFilter() {
+      @Override
+      public boolean shouldRun(Runnable runnable) {
+        return true;
+      }
+    });
+  }
+
+  /**
+   * Run all due tasks that match the {@link TaskFilter}.
+   *
+   * @return the number of tasks run by this call
+   */
+  public int runDueTasks(TaskFilter filter) {
     int count = 0;
+    List<ScheduledTask> putBack = new ArrayList<ScheduledTask>();
     while (true) {
       ScheduledTask task = tasks.peek();
       if (task == null || task.dueTimeNanos > currentTimeNanos) {
         break;
       }
       if (tasks.remove(task)) {
-        task.command.run();
-        task.complete();
-        count++;
+        if (filter.shouldRun(task.command)) {
+          task.command.run();
+          task.complete();
+          count++;
+        } else {
+          putBack.add(task);
+        }
       }
     }
+    tasks.addAll(putBack);
     return count;
   }
 
@@ -287,5 +307,15 @@ public final class FakeClock {
   public long currentTimeMillis() {
     // Normally millis and nanos are of different epochs. Add an offset to simulate that.
     return TimeUnit.NANOSECONDS.toMillis(currentTimeNanos + 123456789L);
+  }
+
+  /**
+   * A filter that allows us to have fine grained control over which tasks are run.
+   */
+  public interface TaskFilter {
+    /**
+     * Inspect the Runnable and returns true if it should be run.
+     */
+    boolean shouldRun(Runnable runnable);
   }
 }

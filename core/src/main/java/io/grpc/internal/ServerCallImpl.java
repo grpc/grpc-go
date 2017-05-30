@@ -39,6 +39,7 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
 import io.grpc.Codec;
 import io.grpc.Compressor;
@@ -221,6 +222,17 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
       this.call = checkNotNull(call, "call");
       this.listener = checkNotNull(listener, "listener must not be null");
       this.context = checkNotNull(context, "context");
+      // Wire ourselves up so that if the context is cancelled, our flag call.cancelled also
+      // reflects the new state. Use a DirectExecutor so that it happens in the same thread
+      // as the caller of {@link Context#cancel}.
+      this.context.addListener(
+          new Context.CancellationListener() {
+            @Override
+            public void cancelled(Context context) {
+              ServerStreamListenerImpl.this.call.cancelled = true;
+            }
+          },
+          MoreExecutors.directExecutor());
     }
 
     @SuppressWarnings("Finally") // The code avoids suppressing the exception thrown from try

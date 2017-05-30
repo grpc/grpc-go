@@ -392,7 +392,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       }
 
       final JumpToApplicationThreadServerStreamListener jumpListener
-          = new JumpToApplicationThreadServerStreamListener(wrappedExecutor, stream, context);
+          = new JumpToApplicationThreadServerStreamListener(
+              wrappedExecutor, executor, stream, context);
       stream.setListener(jumpListener);
       // Run in wrappedExecutor so jumpListener.setListener() is called before any callbacks
       // are delivered, including any errors. Callbacks can still be triggered, but they will be
@@ -512,18 +513,23 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   @VisibleForTesting
   static class JumpToApplicationThreadServerStreamListener implements ServerStreamListener {
     private final Executor callExecutor;
+    private final Executor cancelExecutor;
     private final Context.CancellableContext context;
     private final ServerStream stream;
     // Only accessed from callExecutor.
     private ServerStreamListener listener;
 
     public JumpToApplicationThreadServerStreamListener(Executor executor,
-        ServerStream stream, Context.CancellableContext context) {
+        Executor cancelExecutor, ServerStream stream, Context.CancellableContext context) {
       this.callExecutor = executor;
+      this.cancelExecutor = cancelExecutor;
       this.stream = stream;
       this.context = context;
     }
 
+    /**
+     * This call MUST be serialized on callExecutor to avoid races.
+     */
     private ServerStreamListener getListener() {
       if (listener == null) {
         throw new IllegalStateException("listener unset");
@@ -584,16 +590,20 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
     @Override
     public void closed(final Status status) {
+      // For cancellations, promptly inform any users of the context that their work should be
+      // aborted. Otherwise, we can wait until pending work is done.
+      if (!status.isOk()) {
+        // The callExecutor might be busy doing user work. To avoid waiting, use an executor that
+        // is not serializing.
+        cancelExecutor.execute(new ContextCloser(context, status.getCause()));
+      }
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
-          try {
-            getListener().closed(status);
-          } finally {
-            // Regardless of the status code we cancel the context so that listeners
-            // are aware that the call is done.
+          if (status.isOk()) {
             context.cancel(status.getCause());
           }
+          getListener().closed(status);
         }
       });
     }
@@ -614,6 +624,22 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           }
         }
       });
+    }
+  }
+
+  @VisibleForTesting
+  static class ContextCloser implements Runnable {
+    private final Context.CancellableContext context;
+    private final Throwable cause;
+
+    ContextCloser(Context.CancellableContext context, Throwable cause) {
+      this.context = context;
+      this.cause = cause;
+    }
+
+    @Override
+    public void run() {
+      context.cancel(cause);
     }
   }
 }

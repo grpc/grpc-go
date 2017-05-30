@@ -39,6 +39,7 @@ import com.google.common.base.Stopwatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -169,6 +170,37 @@ public class FakeClockTest {
 
     assertEquals(2, fakeClock.numPendingTasks());
     assertEquals(0, fakeClock.getDueTasks().size());
+  }
+
+  @Test
+  public void testTaskFilter() {
+    FakeClock fakeClock = new FakeClock();
+    ScheduledExecutorService scheduledExecutorService = fakeClock.getScheduledExecutorService();
+    final AtomicBoolean selectedDone = new AtomicBoolean();
+    final AtomicBoolean ignoredDone = new AtomicBoolean();
+    final Runnable selectedRunnable = new Runnable() {
+      @Override
+      public void run() {
+        selectedDone.set(true);
+      }
+    };
+    Runnable ignoredRunnable = new Runnable() {
+      @Override
+      public void run() {
+        ignoredDone.set(true);
+      }
+    };
+    scheduledExecutorService.execute(selectedRunnable);
+    scheduledExecutorService.execute(ignoredRunnable);
+    assertEquals(2, fakeClock.numPendingTasks());
+    assertEquals(1, fakeClock.runDueTasks(new FakeClock.TaskFilter() {
+      @Override
+      public boolean shouldRun(Runnable runnable) {
+        return runnable == selectedRunnable;
+      }
+    }));
+    assertTrue(selectedDone.get());
+    assertFalse(ignoredDone.get());
   }
 
   private Runnable newRunnable() {
