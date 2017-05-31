@@ -288,7 +288,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 		s.ctx, err = t.inTapHandle(s.ctx, info)
 		if err != nil {
-			grpclog.Printf("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
+			grpclog.Warningf("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
 			t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
 			return
 		}
@@ -306,7 +306,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if s.id%2 != 1 || s.id <= t.maxStreamID {
 		t.mu.Unlock()
 		// illegal gRPC stream id.
-		grpclog.Println("transport: http2Server.HandleStreams received an illegal stream id: ", s.id)
+		grpclog.Errorf("transport: http2Server.HandleStreams received an illegal stream id: ", s.id)
 		return true
 	}
 	t.maxStreamID = s.id
@@ -344,13 +344,13 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
 		// Only log if it isn't a simple tcp accept check (ie: tcp balancer doing open/close socket)
 		if err != io.EOF {
-			grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+			grpclog.Errorf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
 		}
 		t.Close()
 		return
 	}
 	if !bytes.Equal(preface, clientPreface) {
-		grpclog.Printf("transport: http2Server.HandleStreams received bogus greeting from client: %q", preface)
+		grpclog.Errorf("transport: http2Server.HandleStreams received bogus greeting from client: %q", preface)
 		t.Close()
 		return
 	}
@@ -361,14 +361,14 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		return
 	}
 	if err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to read initial settings frame: %v", err)
+		grpclog.Errorf("transport: http2Server.HandleStreams failed to read initial settings frame: %v", err)
 		t.Close()
 		return
 	}
 	atomic.StoreUint32(&t.activity, 1)
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		grpclog.Printf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
+		grpclog.Errorf("transport: http2Server.HandleStreams saw invalid preface type %T from client", frame)
 		t.Close()
 		return
 	}
@@ -392,7 +392,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				t.Close()
 				return
 			}
-			grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
+			grpclog.Warningf("transport: http2Server.HandleStreams failed to read frame: %v", err)
 			t.Close()
 			return
 		}
@@ -415,7 +415,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		case *http2.GoAwayFrame:
 			// TODO: Handle GoAway from the client appropriately.
 		default:
-			grpclog.Printf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
+			grpclog.Errorf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 		}
 	}
 }
@@ -514,7 +514,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		t.controlBuf.put(bdpPing)
 	} else {
 		if err := t.fc.onData(uint32(size)); err != nil {
-			grpclog.Printf("transport: http2Server %v", err)
+			grpclog.Errorf("transport: http2Server %v", err)
 			t.Close()
 			return
 		}
@@ -1048,7 +1048,7 @@ func (t *http2Server) controller() {
 					}
 					t.framer.writePing(true, i.ack, i.data)
 				default:
-					grpclog.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
+					grpclog.Errorf("transport: http2Server.controller got unexpected item type %v\n", i)
 				}
 				t.writableChan <- 0
 				continue
