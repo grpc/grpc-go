@@ -1164,6 +1164,102 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	server.stop()
 }
 
+func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
+	connectOptions := ConnectOptions{
+		InitialWindowSize:     defaultWindowSize,
+		InitialConnWindowSize: defaultWindowSize,
+	}
+	server, client := setUpWithOptions(t, 0, &ServerConfig{}, suspended, connectOptions)
+	defer server.stop()
+	defer client.Close()
+
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
+		}
+		return false, nil
+	})
+
+	var st *http2Server
+	server.mu.Lock()
+	for k := range server.conns {
+		st = k.(*http2Server)
+	}
+	server.mu.Unlock()
+	cstream1, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Client failed to create first stream. Err: %v", err)
+	}
+
+	var sstream1 *Stream
+	// Access stream on the server.
+	waitWhileTrue(t, func() (bool, error) {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+
+		if len(st.activeStreams) != 1 {
+			return true, fmt.Errorf("timed-out while waiting for server to have created a stream")
+		}
+		for _, v := range st.activeStreams {
+			sstream1 = v
+		}
+		return false, nil
+	})
+
+	// Exhaust client's conneciton window.
+	<-st.writableChan
+	if err := st.framer.writeData(true, sstream1.id, true, make([]byte, defaultWindowSize)); err != nil {
+		st.writableChan <- 0
+		t.Fatalf("Server failed to write data. Err: %v", err)
+	}
+	st.writableChan <- 0
+	// Create another stream on client.
+	cstream2, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
+	if err != nil {
+		t.Fatalf("Client failed to create second stream. Err: %v", err)
+	}
+
+	var sstream2 *Stream
+	waitWhileTrue(t, func() (bool, error) {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+
+		if len(st.activeStreams) != 2 {
+			return true, fmt.Errorf("timed-out while waiting for server to have created the second stream")
+		}
+		for _, v := range st.activeStreams {
+			if v.id == cstream2.id {
+				sstream2 = v
+			}
+		}
+		if sstream2 == nil {
+			return true, fmt.Errorf("didn't find stream corresponding to client cstream.id: %v on the server", cstream2.id)
+		}
+		return false, nil
+	})
+
+	// Server should be able to send data on the new stream, even though the client hasn't read anything on the first stream.
+	<-st.writableChan
+	if err := st.framer.writeData(true, sstream2.id, true, make([]byte, defaultWindowSize)); err != nil {
+		st.writableChan <- 0
+		t.Fatalf("Server failed to write data. Err: %v", err)
+	}
+	st.writableChan <- 0
+
+	// Client should be able to read data on second stream.
+	if _, err := cstream2.Read(make([]byte, defaultWindowSize)); err != nil {
+		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
+	}
+
+	// Client should be able to read data on first stream.
+	if _, err := cstream1.Read(make([]byte, defaultWindowSize)); err != nil {
+		t.Fatalf("_.Read(_) = _, %v, want _, <nil>", err)
+	}
+}
+
 func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	serverConfig := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
