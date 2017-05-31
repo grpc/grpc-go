@@ -34,7 +34,7 @@
 // Package main implements a simple gRPC client that demonstrates how to use gRPC-Go libraries
 // to perform unary, client streaming, server streaming and full duplex RPCs.
 //
-// It interacts with the route guide service whose definition can be found in proto/route_guide.proto.
+// It interacts with the route guide service whose definition can be found in routeguide/route_guide.proto.
 package main
 
 import (
