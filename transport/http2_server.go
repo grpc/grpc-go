@@ -863,9 +863,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			t.Close()
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
-		if t.framer.adjustNumWriters(-1) == 0 {
-			t.framer.flushWrite()
-		}
+		t.framer.adjustNumWriters(-1)
 		t.writableChan <- 0
 	}
 
