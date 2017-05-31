@@ -1166,7 +1166,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			t.mu.Lock()
 			for _, stream := range t.activeStreams {
 				// Adjust the sending quota for each stream.
-				stream.sendQuotaPool.add(int(s.Val - t.streamSendQuota))
+				stream.sendQuotaPool.add(int(s.Val) - int(t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
 			t.mu.Unlock()
