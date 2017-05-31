@@ -318,7 +318,7 @@ subprojects {
                     email "grpc-io@googlegroups.com"
                     url "http://grpc.io/"
                     // https://issues.gradle.org/browse/GRADLE-2719
-                    organization = "Google, Inc."
+                    organization = "gRPC Authors"
                     organizationUrl "https://www.google.com"
                 }
             }
