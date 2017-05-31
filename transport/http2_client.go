@@ -704,6 +704,7 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
+	var forceFlush bool
 	r := bytes.NewBuffer(data)
 	for {
 		var p []byte
@@ -720,9 +721,11 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 				return err
 			}
 			if sq < size {
+				forceFlush = true
 				size = sq
 			}
 			if tq < size {
+				forceFlush = true
 				size = tq
 			}
 			p = r.Next(size)
@@ -736,10 +739,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 				t.sendQuotaPool.add(tq - ps)
 			}
 		}
-		var (
-			endStream  bool
-			forceFlush bool
-		)
+		var endStream bool
 		if opts.Last && r.Len() == 0 {
 			endStream = true
 		}

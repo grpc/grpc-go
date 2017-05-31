@@ -775,6 +775,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
+	var forceFlush bool
 	// TODO(zhaoq): Support multi-writers for a single stream.
 	var writeHeaderFrame bool
 	s.mu.Lock()
@@ -813,9 +814,11 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			return err
 		}
 		if sq < size {
+			forceFlush = true
 			size = sq
 		}
 		if tq < size {
+			forceFlush = true
 			size = tq
 		}
 		p := r.Next(size)
@@ -855,7 +858,6 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			return ContextErr(s.ctx.Err())
 		default:
 		}
-		var forceFlush bool
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
 			forceFlush = true
 		}
