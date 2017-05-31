@@ -475,6 +475,13 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		return
 	}
 	// Decouple connection's flow control from application's read.
+	// An update on connection's flow control should not depend on
+	// whether user-applicaiton has read the data or not. Such a
+	// restriction is already imposed on the stream's flow control,
+	// and therefore the sender will be blocked anyways.
+	// Decoupling the connection flow control will prevent other
+	// active(fast) streams from starving in presence of slow or
+	// inactive streams.
 	if w := t.fc.onRead(uint32(size)); w > 0 {
 		t.controlBuf.put(&windowUpdate{0, w})
 	}
