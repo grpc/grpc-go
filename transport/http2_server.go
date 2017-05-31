@@ -877,7 +877,7 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			for _, stream := range t.activeStreams {
-				stream.sendQuotaPool.add(int(s.Val - t.streamSendQuota))
+				stream.sendQuotaPool.add(int(s.Val) - int(t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
 		}
