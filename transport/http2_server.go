@@ -487,7 +487,6 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		s.mu.Lock()
 		if s.state == streamDone {
 			s.mu.Unlock()
-			// The stream has been closed. Release the corresponding quota.
 			return
 		}
 		if err := s.fc.onData(uint32(size)); err != nil {
