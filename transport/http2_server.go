@@ -814,11 +814,9 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			return err
 		}
 		if sq < size {
-			forceFlush = true
 			size = sq
 		}
 		if tq < size {
-			forceFlush = true
 			size = tq
 		}
 		p := r.Next(size)
@@ -826,10 +824,14 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 		if ps < sq {
 			// Overbooked stream quota. Return it back.
 			s.sendQuotaPool.add(sq - ps)
+		} else {
+			forceFlush = true
 		}
 		if ps < tq {
 			// Overbooked transport quota. Return it back.
 			t.sendQuotaPool.add(tq - ps)
+		} else {
+			forceFlush = true
 		}
 		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the

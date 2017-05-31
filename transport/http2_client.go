@@ -721,11 +721,9 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 				return err
 			}
 			if sq < size {
-				forceFlush = true
 				size = sq
 			}
 			if tq < size {
-				forceFlush = true
 				size = tq
 			}
 			p = r.Next(size)
@@ -733,10 +731,14 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			if ps < sq {
 				// Overbooked stream quota. Return it back.
 				s.sendQuotaPool.add(sq - ps)
+			} else {
+				forceFlush = true
 			}
 			if ps < tq {
 				// Overbooked transport quota. Return it back.
 				t.sendQuotaPool.add(tq - ps)
+			} else {
+				forceFlush = true
 			}
 		}
 		var endStream bool
