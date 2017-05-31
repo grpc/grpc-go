@@ -292,18 +292,26 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   }
 
   private class DeadlineTimer implements Runnable {
+    private final long remainingNanos;
+
+    DeadlineTimer(long remainingNanos) {
+      this.remainingNanos = remainingNanos;
+    }
+
     @Override
     public void run() {
       // DelayedStream.cancel() is safe to call from a thread that is different from where the
       // stream is created.
-      stream.cancel(DEADLINE_EXCEEDED);
+      stream.cancel(DEADLINE_EXCEEDED.augmentDescription(
+          String.format("deadline exceeded after %dns", remainingNanos)));
     }
   }
 
   private ScheduledFuture<?> startDeadlineTimer(Deadline deadline) {
+    long remainingNanos = deadline.timeRemaining(TimeUnit.NANOSECONDS);
     return deadlineCancellationExecutor.schedule(
-        new LogExceptionRunnable(new DeadlineTimer()), deadline.timeRemaining(TimeUnit.NANOSECONDS),
-        TimeUnit.NANOSECONDS);
+        new LogExceptionRunnable(
+            new DeadlineTimer(remainingNanos)), remainingNanos, TimeUnit.NANOSECONDS);
   }
 
   @Nullable
