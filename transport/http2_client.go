@@ -813,7 +813,11 @@ func (t *http2Client) adjustWindow(s *Stream, n uint32) {
 		return
 	}
 	if w := s.fc.maybeAdjust(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{s.id, w})
+		// Piggyback conneciton's window update along.
+		if cw := t.fc.resetPendingUpdate(); cw > 0 {
+			t.controlBuf.put(&windowUpdate{0, cw, false})
+		}
+		t.controlBuf.put(&windowUpdate{s.id, w, true})
 	}
 }
 
@@ -827,7 +831,10 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 		return
 	}
 	if w := s.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{s.id, w})
+		if cw := t.fc.resetPendingUpdate(); cw > 0 {
+			t.controlBuf.put(&windowUpdate{0, cw, false})
+		}
+		t.controlBuf.put(&windowUpdate{s.id, w, true})
 	}
 }
 
@@ -846,7 +853,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// active(fast) streams from starving in presence of slow or
 	// inactive streams.
 	if w := t.fc.onRead(uint32(size)); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w})
+		t.controlBuf.put(&windowUpdate{0, w, true})
 	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
@@ -869,7 +876,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{s.id, w})
+				t.controlBuf.put(&windowUpdate{s.id, w, true})
 			}
 		}
 		s.mu.Unlock()
@@ -1185,7 +1192,7 @@ func (t *http2Client) controller() {
 			case <-t.writableChan:
 				switch i := i.(type) {
 				case *windowUpdate:
-					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
+					t.framer.writeWindowUpdate(i.flush, i.streamID, i.increment)
 				case *settings:
 					if i.ack {
 						t.framer.writeSettingsAck(true)
