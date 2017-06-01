@@ -36,6 +36,7 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
 	"strconv"
 
 	"google.golang.org/grpc"
@@ -94,7 +95,7 @@ func main() {
 			var err error
 			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
 			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
+				fatalf("Failed to create TLS credentials %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)
@@ -105,13 +106,13 @@ func main() {
 		} else if *testCase == "service_account_creds" {
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "jwt_token_creds" {
 			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
 			if err != nil {
-				grpclog.Fatalf("Failed to create JWT credentials: %v", err)
+				fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_auth_token" {
@@ -122,7 +123,7 @@ func main() {
 	}
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("Fail to dial: %v", err)
+		fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
 	tc := testpb.NewTestServiceClient(conn)
@@ -150,31 +151,31 @@ func main() {
 		grpclog.Println("TimeoutOnSleepingServer done")
 	case "compute_engine_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
+			fatalf("TLS is not enabled. TLS is required to execute compute_engine_creds test case.")
 		}
 		interop.DoComputeEngineCreds(tc, *defaultServiceAccount, *oauthScope)
 		grpclog.Println("ComputeEngineCreds done")
 	case "service_account_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
+			fatalf("TLS is not enabled. TLS is required to execute service_account_creds test case.")
 		}
 		interop.DoServiceAccountCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Println("ServiceAccountCreds done")
 	case "jwt_token_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
+			fatalf("TLS is not enabled. TLS is required to execute jwt_token_creds test case.")
 		}
 		interop.DoJWTTokenCreds(tc, *serviceAccountKeyFile)
 		grpclog.Println("JWTtokenCreds done")
 	case "per_rpc_creds":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
+			fatalf("TLS is not enabled. TLS is required to execute per_rpc_creds test case.")
 		}
 		interop.DoPerRPCCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Println("PerRPCCreds done")
 	case "oauth2_auth_token":
 		if !*useTLS {
-			grpclog.Fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
+			fatalf("TLS is not enabled. TLS is required to execute oauth2_auth_token test case.")
 		}
 		interop.DoOauth2TokenCreds(tc, *serviceAccountKeyFile, *oauthScope)
 		grpclog.Println("Oauth2TokenCreds done")
@@ -197,6 +198,11 @@ func main() {
 		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
 		grpclog.Println("UnimplementedService done")
 	default:
-		grpclog.Fatal("Unsupported test case: ", *testCase)
+		fatalf("Unsupported test case: %v", *testCase)
 	}
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

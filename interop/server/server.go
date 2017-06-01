@@ -36,6 +36,7 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
 	"strconv"
 
 	"google.golang.org/grpc"
@@ -57,17 +58,22 @@ func main() {
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
 	if err != nil {
-		grpclog.Fatalf("failed to listen: %v", err)
+		fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *useTLS {
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			grpclog.Fatalf("Failed to generate credentials %v", err)
+			fatalf("Failed to generate credentials %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	server := grpc.NewServer(opts...)
 	testpb.RegisterTestServiceServer(server, interop.NewTestServer())
 	server.Serve(lis)
+}
+
+func fatalf(format string, args ...interface{}) {
+	grpclog.Printf(format, args...)
+	os.Exit(1)
 }

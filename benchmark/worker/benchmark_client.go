@@ -312,7 +312,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			c := testpb.NewBenchmarkServiceClient(conn)
 			stream, err := c.StreamingCall(context.Background())
 			if err != nil {
-				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
+				fatalf("%v.StreamingCall(_) = _, %v", c, err)
 			}
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j

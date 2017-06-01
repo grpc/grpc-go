@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/grpclog"
 )
 
 func runUnary(b *testing.B, maxConcurrentCalls int) {
@@ -23,7 +22,9 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
-		unaryCaller(tc)
+		if err := DoUnaryCall(tc, 1, 1); err != nil {
+			b.Fatalf("DoUnaryCall failed: %v", err)
+		}
 	}
 	ch := make(chan int, maxConcurrentCalls*4)
 	var (
@@ -37,7 +38,9 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 		go func() {
 			for range ch {
 				start := time.Now()
-				unaryCaller(tc)
+				if err := DoUnaryCall(tc, 1, 1); err != nil {
+					b.Fatalf("DoUnaryCall failed: %v", err)
+				}
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -70,7 +73,9 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
 	for i := 0; i < 10; i++ {
-		streamCaller(stream)
+		if err := DoStreamingRoundTrip(stream, 1, 1); err != nil {
+			b.Fatalf("DoStreamingRoundTrip failed: %v", err)
+		}
 	}
 
 	ch := make(chan struct{}, maxConcurrentCalls*4)
@@ -89,7 +94,9 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		go func() {
 			for range ch {
 				start := time.Now()
-				streamCaller(stream)
+				if err := DoStreamingRoundTrip(stream, 1, 1); err != nil {
+					b.Fatalf("DoStreamingRoundTrip failed: %v", err)
+				}
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -106,17 +113,6 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	close(ch)
 	wg.Wait()
 	conn.Close()
-}
-func unaryCaller(client testpb.BenchmarkServiceClient) {
-	if err := DoUnaryCall(client, 1, 1); err != nil {
-		grpclog.Fatalf("DoUnaryCall failed: %v", err)
-	}
-}
-
-func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
-	if err := DoStreamingRoundTrip(stream, 1, 1); err != nil {
-		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
-	}
 }
 
 func BenchmarkClientStreamc1(b *testing.B) {

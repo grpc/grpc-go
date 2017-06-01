@@ -49,22 +49,6 @@ func init() {
 
 type glogger struct{}
 
-func (g *glogger) Fatal(args ...interface{}) {
-	glog.FatalDepth(2, args...)
-}
-
-func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintf(format, args...))
-}
-
-func (g *glogger) Fatalln(args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintln(args...))
-}
-
-func (g *glogger) Print(args ...interface{}) {
-	glog.InfoDepth(2, args...)
-}
-
 func (g *glogger) Printf(format string, args ...interface{}) {
 	glog.InfoDepth(2, fmt.Sprintf(format, args...))
 }

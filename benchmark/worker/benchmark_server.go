@@ -107,7 +107,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	if config.SecurityParams != nil {
 		creds, err := credentials.NewServerTLSFromFile(abs(certFile), abs(keyFile))
 		if err != nil {
-			grpclog.Fatalf("failed to generate credentials %v", err)
+			fatalf("failed to generate credentials %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	}
@@ -155,7 +155,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 	addrSplitted := strings.Split(addr, ":")
 	p, err := strconv.Atoi(addrSplitted[len(addrSplitted)-1])
 	if err != nil {
-		grpclog.Fatalf("failed to get port number from server address: %v", err)
+		fatalf("failed to get port number from server address: %v", err)
 	}
 
 	rusage := new(syscall.Rusage)
