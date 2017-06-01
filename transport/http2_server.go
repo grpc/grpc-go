@@ -347,7 +347,17 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
 		// Only log if it isn't a simple tcp accept check (ie: tcp balancer doing open/close socket)
-		if err != io.EOF {
+		isLivenessProbe := err == io.EOF
+		if !isLivenessProbe {
+			// If it's not an io.EOF error, indicating a proper SYN/ACK close,
+			// it might still have been closed with a TCP RST by the client.
+			// To test this we can try and check if it's a "Temporary" error. See:
+			//   https://github.com/golang/go/blob/2f73efa97136a6d4a602a94e87d2a948240e7e8a/src/syscall/syscall_unix.go#L114
+			//   https://github.com/golang/go/blob/2f73efa97136a6d4a602a94e87d2a948240e7e8a/src/syscall/syscall_windows.go#L113
+			err, ok := err.(net.Error)
+			isLivenessProbe = ok && err.Temporary()
+		}
+		if !isLivenessProbe {
 			grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
 		}
 		t.Close()
