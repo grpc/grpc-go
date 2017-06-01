@@ -382,6 +382,43 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 	return tr
 }
 
+// TestInflightStreamClosing ensures that closing in-flight stream
+// sends StreamError to concurrent stream reader.
+func TestInflightStreamClosing(t *testing.T) {
+	serverConfig := &ServerConfig{}
+	server, client := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
+	defer server.stop()
+	defer client.Close()
+
+	stream, err := client.NewStream(context.Background(), &CallHdr{})
+	if err != nil {
+		t.Fatalf("Client failed to create RPC request: %v", err)
+	}
+
+	donec := make(chan struct{})
+	serr := StreamError{Desc: "client connection is closing"}
+	go func() {
+		defer close(donec)
+		if _, err := stream.Read(make([]byte, defaultWindowSize)); err != serr {
+			t.Errorf("unexpected Stream error %v, expected %v", err, serr)
+		}
+	}()
+
+	// should unblock concurrent stream.Read
+	client.CloseStream(stream, serr)
+
+	// wait for stream.Read error
+	timeout := time.NewTimer(5 * time.Second)
+	select {
+	case <-donec:
+		if !timeout.Stop() {
+			<-timeout.C
+		}
+	case <-timeout.C:
+		t.Fatalf("Test timed out, expected a StreamError.")
+	}
+}
+
 // TestMaxConnectionIdle tests that a server will send GoAway to a idle client.
 // An idle client is one who doesn't make any RPC calls for a duration of
 // MaxConnectionIdle time.
