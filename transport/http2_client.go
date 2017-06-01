@@ -839,7 +839,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	}
 	// Decouple connection's flow control from application's read.
 	// An update on connection's flow control should not depend on
-	// whether user-applicaiton has read the data or not. Such a
+	// whether user application has read the data or not. Such a
 	// restriction is already imposed on the stream's flow control,
 	// and therefore the sender will be blocked anyways.
 	// Decoupling the connection flow control will prevent other

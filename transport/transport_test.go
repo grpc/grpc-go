@@ -481,7 +481,7 @@ func TestMaxConnectionAge(t *testing.T) {
 	}
 }
 
-// TestKeepaliveServer tests that a server closes conneciton with a client that doesn't respond to keepalive pings.
+// TestKeepaliveServer tests that a server closes connection with a client that doesn't respond to keepalive pings.
 func TestKeepaliveServer(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
@@ -1209,7 +1209,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		return false, nil
 	})
 
-	// Exhaust client's conneciton window.
+	// Exhaust client's connection window.
 	<-st.writableChan
 	if err := st.framer.writeData(true, sstream1.id, true, make([]byte, defaultWindowSize)); err != nil {
 		st.writableChan <- 0
