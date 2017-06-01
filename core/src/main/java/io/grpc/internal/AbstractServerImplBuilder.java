@@ -31,6 +31,7 @@ import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
 import io.grpc.Internal;
 import io.grpc.InternalNotifyOnServerBuild;
+import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
@@ -155,7 +156,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   @Override
-  public ServerImpl build() {
+  public Server build() {
     ArrayList<ServerStreamTracer.Factory> tracerFactories =
         new ArrayList<ServerStreamTracer.Factory>();
     StatsContextFactory statsFactory =

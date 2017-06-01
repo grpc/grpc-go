@@ -17,13 +17,13 @@
 package io.grpc.benchmarks.driver;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.benchmarks.proto.Control;
 import io.grpc.benchmarks.proto.Control.ClientArgs;
 import io.grpc.benchmarks.proto.Control.ServerArgs;
 import io.grpc.benchmarks.proto.Control.ServerArgs.ArgtypeCase;
 import io.grpc.benchmarks.proto.WorkerServiceGrpc;
-import io.grpc.internal.ServerImpl;
 import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -39,7 +39,7 @@ public class LoadWorker {
   private static final Logger log = Logger.getLogger(LoadWorker.class.getName());
 
   private final int serverPort;
-  private final ServerImpl driverServer;
+  private final Server driverServer;
 
   LoadWorker(int driverPort, int serverPort) throws Exception {
     this.serverPort = serverPort;

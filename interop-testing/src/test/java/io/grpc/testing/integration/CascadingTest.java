@@ -29,6 +29,7 @@ import io.grpc.Context.CancellableContext;
 import io.grpc.Deadline;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
+import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -37,7 +38,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.internal.ServerImpl;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.testing.integration.Messages.SimpleRequest;
@@ -67,7 +67,7 @@ public class CascadingTest {
   @Mock
   TestServiceGrpc.TestServiceImplBase service;
   private ManagedChannel channel;
-  private ServerImpl server;
+  private Server server;
   private CountDownLatch observedCancellations;
   private CountDownLatch receivedCancellations;
   private TestServiceGrpc.TestServiceBlockingStub blockingStub;
