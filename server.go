@@ -664,8 +664,14 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	}
 	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
 	if err != nil {
-		grpclog.Println("grpc: server failed to encode response: ", err)
-		return err
+		// This typically indicates a fatal issue (e.g., memory
+		// corruption or hardware faults) the application program
+		// cannot handle.
+		//
+		// TODO(zhaoq): There exist other options also such as only closing the
+		// faulty stream locally and remotely (Other streams can keep going). Find
+		// the optimal option.
+		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
 	}
 	if len(p) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
