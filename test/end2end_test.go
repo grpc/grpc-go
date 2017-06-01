@@ -454,7 +454,6 @@ type test struct {
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
-	customCodec                 grpc.Codec
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
