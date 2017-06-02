@@ -4795,3 +4795,46 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
+
+type errCodec struct {
+	noError bool
+}
+
+func (c *errCodec) Marshal(v interface{}) ([]byte, error) {
+	if c.noError {
+		return []byte{}, nil
+	}
+	return nil, fmt.Errorf("3987^12 + 4365^12 = 4472^12")
+}
+
+func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
+	return nil
+}
+
+func (c *errCodec) String() string {
+	return "Fermat's near-miss."
+}
+
+func TestEncodeDoesntPanic(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testEncodeDoesntPanic(t, e)
+	}
+}
+
+func testEncodeDoesntPanic(t *testing.T, e env) {
+	te := newTest(t, e)
+	erc := &errCodec{}
+	te.customCodec = erc
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	te.customCodec = nil
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	// Failure case, should not panic.
+	tc.EmptyCall(context.Background(), &testpb.Empty{})
+	erc.noError = true
+	// Passing case.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+}
