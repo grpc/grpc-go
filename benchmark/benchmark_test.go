@@ -11,11 +11,13 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
+	"fmt"
 )
 
-func runUnary(b *testing.B, maxConcurrentCalls int) {
+func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
+
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(target, grpc.WithInsecure())
@@ -23,7 +25,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
-		unaryCaller(tc)
+		unaryCaller(tc, reqSize, respSize)
 	}
 	ch := make(chan int, maxConcurrentCalls*4)
 	var (
@@ -37,7 +39,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 		go func() {
 			for range ch {
 				start := time.Now()
-				unaryCaller(tc)
+				unaryCaller(tc, reqSize, respSize)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -56,7 +58,7 @@ func runUnary(b *testing.B, maxConcurrentCalls int) {
 	conn.Close()
 }
 
-func runStream(b *testing.B, maxConcurrentCalls int) {
+func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
@@ -70,7 +72,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
 	for i := 0; i < 10; i++ {
-		streamCaller(stream)
+		streamCaller(stream, reqSize, respSize)
 	}
 
 	ch := make(chan struct{}, maxConcurrentCalls*4)
@@ -89,7 +91,7 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 		go func() {
 			for range ch {
 				start := time.Now()
-				streamCaller(stream)
+				streamCaller(stream, reqSize, respSize)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -107,94 +109,74 @@ func runStream(b *testing.B, maxConcurrentCalls int) {
 	wg.Wait()
 	conn.Close()
 }
-func unaryCaller(client testpb.BenchmarkServiceClient) {
-	if err := DoUnaryCall(client, 1, 1); err != nil {
+
+func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
+	if err := DoUnaryCall(client, reqSize, respSize); err != nil {
 		grpclog.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
 
-func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {
-	if err := DoStreamingRoundTrip(stream, 1, 1); err != nil {
+func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+	if err := DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
 		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }
 
-func BenchmarkClientStreamc1(b *testing.B) {
+func benchmarkClientUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = true
-	runStream(b, 1)
+	runUnary(b, maxConcurrentCalls, reqSize, respSize )
 }
 
-func BenchmarkClientStreamc8(b *testing.B) {
+func benchmarkClientStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = true
-	runStream(b, 8)
+	runStream(b, maxConcurrentCalls, reqSize, respSize )
 }
 
-func BenchmarkClientStreamc64(b *testing.B) {
-	grpc.EnableTracing = true
-	runStream(b, 64)
-}
-
-func BenchmarkClientStreamc512(b *testing.B) {
-	grpc.EnableTracing = true
-	runStream(b, 512)
-}
-func BenchmarkClientUnaryc1(b *testing.B) {
-	grpc.EnableTracing = true
-	runUnary(b, 1)
-}
-
-func BenchmarkClientUnaryc8(b *testing.B) {
-	grpc.EnableTracing = true
-	runUnary(b, 8)
-}
-
-func BenchmarkClientUnaryc64(b *testing.B) {
-	grpc.EnableTracing = true
-	runUnary(b, 64)
-}
-
-func BenchmarkClientUnaryc512(b *testing.B) {
-	grpc.EnableTracing = true
-	runUnary(b, 512)
-}
-
-func BenchmarkClientStreamNoTracec1(b *testing.B) {
+func benchmarkClientUnaryNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = false
-	runStream(b, 1)
+	runUnary(b, maxConcurrentCalls, reqSize, respSize )
 }
 
-func BenchmarkClientStreamNoTracec8(b *testing.B) {
+func benchmarkClientStreamNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = false
-	runStream(b, 8)
+	runStream(b, maxConcurrentCalls, reqSize, respSize )
 }
 
-func BenchmarkClientStreamNoTracec64(b *testing.B) {
-	grpc.EnableTracing = false
-	runStream(b, 64)
-}
+func BenchmarkClient(b *testing.B) {
+	benchmarks := []struct{
+		maxConcurrentCalls int
+		reqSize int
+		respSize int
+	}{
+		{1, 1, 1},
+		{8, 1, 1},
+		{64, 1, 1},
+		{512, 1, 1},
+	}
 
-func BenchmarkClientStreamNoTracec512(b *testing.B) {
-	grpc.EnableTracing = false
-	runStream(b, 512)
-}
-func BenchmarkClientUnaryNoTracec1(b *testing.B) {
-	grpc.EnableTracing = false
-	runUnary(b, 1)
-}
+	for _, bm := range benchmarks {
+		maxC, reqS, respS := bm.maxConcurrentCalls, bm.reqSize, bm.respSize
 
-func BenchmarkClientUnaryNoTracec8(b *testing.B) {
-	grpc.EnableTracing = false
-	runUnary(b, 8)
-}
+		b.Run(fmt.Sprintf("Unary-Trace maxConcurrentCalls: " +
+				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+			benchmarkClientUnary(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
+		})
 
-func BenchmarkClientUnaryNoTracec64(b *testing.B) {
-	grpc.EnableTracing = false
-	runUnary(b, 64)
-}
+		b.Run(fmt.Sprintf("Stream-Trace maxConcurrentCalls: " +
+				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+			benchmarkClientStream(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
+		})
 
-func BenchmarkClientUnaryNoTracec512(b *testing.B) {
-	grpc.EnableTracing = false
-	runUnary(b, 512)
+		b.Run(fmt.Sprintf("Unary-NoTrace maxConcurrentCalls: " +
+				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+			benchmarkClientUnaryNoTrace(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
+		})
+
+		b.Run(fmt.Sprintf("Stream-NoTrace maxConcurrentCalls: " +
+				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+			benchmarkClientStreamNoTrace(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
+		})
+	}
 }
 
 func TestMain(m *testing.M) {
