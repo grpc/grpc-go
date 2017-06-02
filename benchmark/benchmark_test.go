@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
-	"fmt"
 )
 
 func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
@@ -124,29 +124,29 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, r
 
 func benchmarkClientUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = true
-	runUnary(b, maxConcurrentCalls, reqSize, respSize )
+	runUnary(b, maxConcurrentCalls, reqSize, respSize)
 }
 
 func benchmarkClientStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = true
-	runStream(b, maxConcurrentCalls, reqSize, respSize )
+	runStream(b, maxConcurrentCalls, reqSize, respSize)
 }
 
 func benchmarkClientUnaryNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = false
-	runUnary(b, maxConcurrentCalls, reqSize, respSize )
+	runUnary(b, maxConcurrentCalls, reqSize, respSize)
 }
 
 func benchmarkClientStreamNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	grpc.EnableTracing = false
-	runStream(b, maxConcurrentCalls, reqSize, respSize )
+	runStream(b, maxConcurrentCalls, reqSize, respSize)
 }
 
 func BenchmarkClient(b *testing.B) {
-	benchmarks := []struct{
+	benchmarks := []struct {
 		maxConcurrentCalls int
-		reqSize int
-		respSize int
+		reqSize            int
+		respSize           int
 	}{
 		{1, 1, 1},
 		{8, 1, 1},
@@ -157,23 +157,23 @@ func BenchmarkClient(b *testing.B) {
 	for _, bm := range benchmarks {
 		maxC, reqS, respS := bm.maxConcurrentCalls, bm.reqSize, bm.respSize
 
-		b.Run(fmt.Sprintf("Unary-Trace maxConcurrentCalls: " +
-				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Unary-Trace maxConcurrentCalls: "+
+			"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
 			benchmarkClientUnary(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
 		})
 
-		b.Run(fmt.Sprintf("Stream-Trace maxConcurrentCalls: " +
-				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Stream-Trace maxConcurrentCalls: "+
+			"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
 			benchmarkClientStream(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
 		})
 
-		b.Run(fmt.Sprintf("Unary-NoTrace maxConcurrentCalls: " +
-				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Unary-NoTrace maxConcurrentCalls: "+
+			"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
 			benchmarkClientUnaryNoTrace(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
 		})
 
-		b.Run(fmt.Sprintf("Stream-NoTrace maxConcurrentCalls: " +
-				"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Stream-NoTrace maxConcurrentCalls: "+
+			"%#v, reqSize: %#v, respSize: %#v", maxC, reqS, respS), func(b *testing.B) {
 			benchmarkClientStreamNoTrace(b, bm.maxConcurrentCalls, bm.reqSize, bm.respSize)
 		})
 	}
