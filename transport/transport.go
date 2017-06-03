@@ -102,8 +102,7 @@ func (b *recvBuffer) load() {
 	if len(b.backlog) > 0 {
 		select {
 		case b.c <- b.backlog[0]:
-			b.backlog[0].data = nil
-			b.backlog[0].err = nil
+			b.backlog[0] = recvMsg{}
 			b.backlog = b.backlog[1:]
 		default:
 		}
