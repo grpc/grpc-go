@@ -237,7 +237,6 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-
 func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	s := stats.AddStats(b, 38)
 	b.StopTimer()
