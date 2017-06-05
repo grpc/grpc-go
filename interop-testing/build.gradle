@@ -29,8 +29,16 @@ test {
 task test_client(type: CreateStartScripts) {
     mainClassName = "io.grpc.testing.integration.TestServiceClient"
     applicationName = "test-client"
+    defaultJvmOpts = ["-javaagent:JAVAAGENT_APP_HOME" + configurations.alpnagent.singleFile.name]
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + configurations.runtime
+    dependencies {
+        runtime configurations.alpnagent
+    }
+    doLast {
+        unixScript.text = unixScript.text.replace('JAVAAGENT_APP_HOME', '\$APP_HOME/lib/')
+        windowsScript.text = windowsScript.text.replace('JAVAAGENT_APP_HOME', '%APP_HOME%\\lib\\')
+    }
 }
 
 task test_server(type: CreateStartScripts) {
