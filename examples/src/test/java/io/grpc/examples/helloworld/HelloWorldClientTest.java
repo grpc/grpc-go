@@ -20,12 +20,10 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.Server;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-import org.junit.After;
+import io.grpc.testing.GrpcServerRule;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -42,31 +40,22 @@ import org.mockito.Matchers;
  */
 @RunWith(JUnit4.class)
 public class HelloWorldClientTest {
-  private final GreeterGrpc.GreeterImplBase serviceImpl = spy(new GreeterGrpc.GreeterImplBase() {});
+  /**
+   * This creates and starts an in-process server, and creates a client with an in-process channel.
+   * When the test is done, it also shuts down the in-process client and server.
+   */
+  @Rule
+  public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
-  private Server fakeServer;
+  private final GreeterGrpc.GreeterImplBase serviceImpl = spy(new GreeterGrpc.GreeterImplBase() {});
   private HelloWorldClient client;
 
-  /**
-   * Creates and starts a fake in-process server, and creates a client with an in-process channel.
-   */
   @Before
   public void setUp() throws Exception {
-    String uniqueServerName = "fake server for " + getClass();
-    fakeServer = InProcessServerBuilder
-        .forName(uniqueServerName).directExecutor().addService(serviceImpl).build().start();
-    InProcessChannelBuilder channelBuilder =
-        InProcessChannelBuilder.forName(uniqueServerName).directExecutor();
-    client = new HelloWorldClient(channelBuilder);
-  }
-
-  /**
-   * Shuts down the client and server.
-   */
-  @After
-  public void tearDown() throws Exception {
-    client.shutdown();
-    fakeServer.shutdownNow();
+    // Add service.
+    grpcServerRule.getServiceRegistry().addService(serviceImpl);
+    // Create a HelloWorldClient using the in-process channel;
+    client = new HelloWorldClient(grpcServerRule.getChannel());
   }
 
   /**

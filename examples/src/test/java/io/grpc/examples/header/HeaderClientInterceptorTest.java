@@ -21,9 +21,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import io.grpc.ManagedChannel;
+import io.grpc.ClientInterceptors;
 import io.grpc.Metadata;
-import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
@@ -35,10 +34,8 @@ import io.grpc.examples.helloworld.GreeterGrpc.GreeterBlockingStub;
 import io.grpc.examples.helloworld.GreeterGrpc.GreeterImplBase;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
-import org.junit.After;
-import org.junit.Before;
+import io.grpc.testing.GrpcServerRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -55,6 +52,12 @@ import org.mockito.Matchers;
  */
 @RunWith(JUnit4.class)
 public class HeaderClientInterceptorTest {
+  /**
+   * This creates and starts an in-process server, and creates a client with an in-process channel.
+   * When the test is done, it also shuts down the in-process client and server.
+   */
+  @Rule
+  public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
   private final ServerInterceptor mockServerInterceptor = spy(
       new ServerInterceptor() {
@@ -65,32 +68,12 @@ public class HeaderClientInterceptorTest {
         }
       });
 
-  private Server fakeServer;
-  private ManagedChannel inProcessChannel;
-
-  @Before
-  public void setUp() throws Exception {
-    String uniqueServerName = "fake server for " + getClass();
-    fakeServer = InProcessServerBuilder.forName(uniqueServerName)
-        .addService(ServerInterceptors.intercept(new GreeterImplBase() {}, mockServerInterceptor))
-        .directExecutor()
-        .build()
-        .start();
-    inProcessChannel = InProcessChannelBuilder.forName(uniqueServerName)
-        .intercept(new HeaderClientInterceptor())
-        .directExecutor()
-        .build();
-  }
-
-  @After
-  public void tearDown() {
-    inProcessChannel.shutdownNow();
-    fakeServer.shutdownNow();
-  }
-
   @Test
   public void clientHeaderDeliveredToServer() {
-    GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(inProcessChannel);
+    grpcServerRule.getServiceRegistry()
+        .addService(ServerInterceptors.intercept(new GreeterImplBase() {}, mockServerInterceptor));
+    GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(
+        ClientInterceptors.intercept(grpcServerRule.getChannel(), new HeaderClientInterceptor()));
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 
     try {

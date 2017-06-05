@@ -68,3 +68,7 @@ with a mock/fake service implementation.
 
 For testing a gRPC server, create the server as an InProcessServer,
 and test it against a real client stub with an InProcessChannel.
+
+The gRPC-java library also provides a JUnit rule,
+[GrpcServerRule](../testing/src/main/java/io/grpc/testing/GrpcServerRule.java), to do the starting
+up and shutting down boilerplate for you.

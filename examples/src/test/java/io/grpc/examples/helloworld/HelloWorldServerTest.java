@@ -18,13 +18,9 @@ package io.grpc.examples.helloworld;
 
 import static org.junit.Assert.assertEquals;
 
-import io.grpc.ManagedChannel;
-import io.grpc.Server;
 import io.grpc.examples.helloworld.HelloWorldServer.GreeterImpl;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
-import org.junit.After;
-import org.junit.Before;
+import io.grpc.testing.GrpcServerRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,30 +35,12 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class HelloWorldServerTest {
-  private static final String UNIQUE_SERVER_NAME =
-      "in-process server for " + HelloWorldServerTest.class;
-  private final Server inProcessServer = InProcessServerBuilder
-      .forName(UNIQUE_SERVER_NAME).addService(new GreeterImpl()).directExecutor().build();
-  private final ManagedChannel inProcessChannel =
-      InProcessChannelBuilder.forName(UNIQUE_SERVER_NAME).directExecutor().build();
-
   /**
-   * Creates and starts the server with the {@link InProcessServerBuilder},
-   * and creates an in-process channel with the {@link InProcessChannelBuilder}.
+   * This creates and starts an in-process server, and creates a client with an in-process channel.
+   * When the test is done, it also shuts down the in-process client and server.
    */
-  @Before
-  public void setUp() throws Exception {
-    inProcessServer.start();
-  }
-
-  /**
-   * Shuts down the in-process channel and server.
-   */
-  @After
-  public void tearDown() {
-    inProcessChannel.shutdownNow();
-    inProcessServer.shutdownNow();
-  }
+  @Rule
+  public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
   /**
    * To test the server, make calls with a real stub using the in-process channel, and verify
@@ -70,7 +48,11 @@ public class HelloWorldServerTest {
    */
   @Test
   public void greeterImpl_replyMessage() throws Exception {
-    GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(inProcessChannel);
+    // Add the service to the in-process server.
+    grpcServerRule.getServiceRegistry().addService(new GreeterImpl());
+
+    GreeterGrpc.GreeterBlockingStub blockingStub =
+        GreeterGrpc.newBlockingStub(grpcServerRule.getChannel());
     String testName = "test name";
 
     HelloReply reply = blockingStub.sayHello(HelloRequest.newBuilder().setName(testName).build());

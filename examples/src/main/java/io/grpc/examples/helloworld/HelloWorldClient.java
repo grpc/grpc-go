@@ -37,12 +37,13 @@ public class HelloWorldClient {
     this(ManagedChannelBuilder.forAddress(host, port)
         // Channels are secure by default (via SSL/TLS). For the example we disable TLS to avoid
         // needing certificates.
-        .usePlaintext(true));
+        .usePlaintext(true)
+        .build());
   }
 
   /** Construct client for accessing RouteGuide server using the existing channel. */
-  HelloWorldClient(ManagedChannelBuilder<?> channelBuilder) {
-    channel = channelBuilder.build();
+  HelloWorldClient(ManagedChannel channel) {
+    this.channel = channel;
     blockingStub = GreeterGrpc.newBlockingStub(channel);
   }
 
