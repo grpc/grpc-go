@@ -50,7 +50,7 @@ func AddStatsWithName(b *testing.B, name string, numBuckets int) *Stats {
 		}
 		p := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		benchName = p[len(p)-1]
-		if strings.HasPrefix(benchName, "benchmark") {
+		if strings.HasPrefix(benchName, "Bench") {
 			break
 		}
 	}
