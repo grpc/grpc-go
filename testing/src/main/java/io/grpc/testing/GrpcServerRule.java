@@ -16,6 +16,8 @@
 
 package io.grpc.testing;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import io.grpc.BindableService;
 import io.grpc.ExperimentalApi;
 import io.grpc.ManagedChannel;
@@ -49,9 +51,10 @@ public class GrpcServerRule extends ExternalResource {
 
   /**
    * Returns {@code this} configured to use a direct executor for the {@link ManagedChannel} and
-   * {@link Server}.
+   * {@link Server}. This can only be called at the rule instantiation.
    */
   public final GrpcServerRule directExecutor() {
+    checkState(serverName == null, "directExecutor() can only be called at the rule instantiation");
     useDirectExecutor = true;
     return this;
   }

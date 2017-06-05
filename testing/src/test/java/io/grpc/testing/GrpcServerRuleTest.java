@@ -95,6 +95,11 @@ public class GrpcServerRuleTest {
 
       assertThat(testService.lastEmptyCallRequestThread).isNotEqualTo(Thread.currentThread());
     }
+
+    @Test(expected = IllegalStateException.class)
+    public void callDirectExecutorNotAtRuleInstantiation() {
+      grpcServerRule.directExecutor();
+    }
   }
 
   @RunWith(JUnit4.class)
