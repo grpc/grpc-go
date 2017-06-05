@@ -381,13 +381,6 @@ public final class NettyChannelBuilder
       case PLAINTEXT_UPGRADE:
         return ProtocolNegotiators.plaintextUpgrade();
       case TLS:
-        if (sslContext == null) {
-          try {
-            sslContext = GrpcSslContexts.forClient().build();
-          } catch (SSLException ex) {
-            throw new RuntimeException(ex);
-          }
-        }
         return ProtocolNegotiators.tls(sslContext, authority);
       default:
         throw new IllegalArgumentException("Unsupported negotiationType: " + negotiationType);
@@ -459,6 +452,13 @@ public final class NettyChannelBuilder
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
+      if (negotiationType == NegotiationType.TLS && sslContext == null) {
+        try {
+          sslContext = GrpcSslContexts.forClient().build();
+        } catch (SSLException ex) {
+          throw new RuntimeException(ex);
+        }
+      }
       this.sslContext = sslContext;
 
       if (transportCreationParamsFilterFactory == null) {
