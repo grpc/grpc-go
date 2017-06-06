@@ -254,7 +254,13 @@ func (s *Stream) GoAway() <-chan struct{} {
 func (s *Stream) Header() (metadata.MD, error) {
 	select {
 	case <-s.ctx.Done():
-		return nil, ContextErr(s.ctx.Err())
+		// Even if the stream is closed, header is returned if available.
+		select {
+		case <-s.headerChan:
+			return s.header.Copy(), nil
+		default:
+			return nil, ContextErr(s.ctx.Err())
+		}
 	case <-s.goAway:
 		return nil, ErrStreamDrain
 	case <-s.headerChan:
