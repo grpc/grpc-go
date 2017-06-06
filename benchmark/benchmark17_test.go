@@ -13,7 +13,7 @@ import (
 )
 
 func BenchClient(b *testing.B, maxConcurrentCalls, reqSize, respSize int, runMode, enableTrace string) {
-	if strings.EqualFold(enableTrace, "Trace") {
+	if strings.EqualFold(enableTrace, "Tracing") {
 		grpc.EnableTracing = true
 	} else {
 		grpc.EnableTracing = false
@@ -30,9 +30,9 @@ func BenchmarkClient(b *testing.B) {
 		runMode     string
 		enableTrace string
 	}{
-		{"Unary", "Trace"},
+		{"Unary", "Tracing"},
 		{"Unary", "noTrace"},
-		{"Stream", "Trace"},
+		{"Stream", "Tracing"},
 		{"Stream", "noTrace"},
 	}
 	maxConcurrentCalls := []int{1, 8, 64, 512}
