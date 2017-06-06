@@ -26,7 +26,7 @@ func BenchClient(b *testing.B, maxConcurrentCalls, reqSize, respSize int, runMod
 }
 
 func BenchmarkClient(b *testing.B) {
-	mode_trace := []struct {
+	modeTrace := []struct {
 		runMode     string
 		enableTrace string
 	}{
@@ -38,7 +38,7 @@ func BenchmarkClient(b *testing.B) {
 	maxConcurrentCalls := []int{1, 8, 64, 512}
 	reqSize := []int{1, 1024}
 	respSize := []int{1, 1024}
-	for _, mt := range mode_trace {
+	for _, mt := range modeTrace {
 		for _, maxC := range maxConcurrentCalls {
 			for _, reqS := range reqSize {
 				for _, respS := range respSize {
