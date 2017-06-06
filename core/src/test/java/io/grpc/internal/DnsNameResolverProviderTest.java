@@ -22,7 +22,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.grpc.Attributes;
-import io.grpc.NameResolverProvider;
 import java.net.URI;
 import org.junit.Test;
 import org.junit.runner.RunWith;

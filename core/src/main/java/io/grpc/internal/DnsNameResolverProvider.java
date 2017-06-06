@@ -18,7 +18,6 @@ package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
-import io.grpc.NameResolverProvider;
 import java.net.URI;
 
 /**
@@ -60,12 +59,12 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
   }
 
   @Override
-  protected boolean isAvailable() {
+  public boolean isAvailable() {
     return true;
   }
 
   @Override
-  protected int priority() {
+  public int priority() {
     return 5;
   }
 }
