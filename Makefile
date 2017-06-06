@@ -36,7 +36,7 @@ testrace: testdeps
 	go test -v -race -cpu 1,4 google.golang.org/grpc/...
 
 benchmark: benchdeps
-	go test benchmark/benchmark17_test.go benchmark/benchmark.go -benchmem -bench=. -timeout 1h | tee results && benchstat results && rm results
+	go test google.golang.org/grpc/benchmark/... -benchmem -bench=. | tee /tmp/tmp.result && benchstat /tmp/tmp.result && rm /tmp/tmp.result
 
 clean:
 	go clean -i google.golang.org/grpc/...
