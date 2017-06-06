@@ -68,6 +68,7 @@ const (
 type windowUpdate struct {
 	streamID  uint32
 	increment uint32
+	flush     bool
 }
 
 func (*windowUpdate) item() {}
@@ -239,4 +240,12 @@ func (f *inFlow) onRead(n uint32) uint32 {
 		return wu
 	}
 	return 0
+}
+
+func (f *inFlow) resetPendingUpdate() uint32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := f.pendingUpdate
+	f.pendingUpdate = 0
+	return n
 }
