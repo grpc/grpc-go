@@ -87,8 +87,10 @@ import java.util.logging.Logger;
  * they store.</li>
  *    <li>Context is not intended for passing optional parameters to an API and developers should
  * take care to avoid excessive dependence on context when designing an API.</li>
+ *    <li>Do not mock this class.  Use {@link #ROOT} for a non-null instance.
  * </ul>
  */
+/* @DoNotMock("Use ROOT for a non-null Context") // commented out to avoid dependencies  */
 public class Context {
 
   private static final Logger log = Logger.getLogger(Context.class.getName());
