@@ -22,27 +22,6 @@ func BenchClient(b *testing.B, maxConcurrentCalls, reqSize, respSize int, enable
 	}
 }
 
-/*
-func BenchClientUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
-	grpc.EnableTracing = true
-	runUnary(b, maxConcurrentCalls, reqSize, respSize)
-}
-
-func BenchClientStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
-	grpc.EnableTracing = true
-	runStream(b, maxConcurrentCalls, reqSize, respSize)
-}
-
-func BenchClientUnaryNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
-	grpc.EnableTracing = false
-	runUnary(b, maxConcurrentCalls, reqSize, respSize)
-}
-
-func BenchClientStreamNoTrace(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
-	grpc.EnableTracing = false
-	runStream(b, maxConcurrentCalls, reqSize, respSize)
-}
-*/
 func BenchmarkClient(b *testing.B) {
 	maxConcurrentCalls := []int{1, 8, 64, 512}
 	reqSize := []int{1, 1024}
