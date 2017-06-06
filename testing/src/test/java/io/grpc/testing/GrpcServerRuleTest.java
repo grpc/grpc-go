@@ -34,181 +34,166 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.junit.runners.model.Statement;
 
+/** Unit tests for {@link GrpcServerRule}. */
+@RunWith(JUnit4.class)
 public class GrpcServerRuleTest {
 
-  @RunWith(JUnit4.class)
-  public static class WithoutDirectExecutor {
+  @Rule public final GrpcServerRule grpcServerRule1 = new GrpcServerRule();
+  @Rule public final GrpcServerRule grpcServerRule2 = new GrpcServerRule().directExecutor();
 
-    @Rule
-    public final GrpcServerRule grpcServerRule = new GrpcServerRule();
+  @Test
+  public void serverAndChannelAreStarted_withoutDirectExecutor() {
+    assertThat(grpcServerRule1.getServer().isShutdown()).isFalse();
+    assertThat(grpcServerRule1.getServer().isTerminated()).isFalse();
 
-    @Test
-    public void serverAndChannelAreStarted() {
-      assertThat(grpcServerRule.getServer().isShutdown()).isFalse();
-      assertThat(grpcServerRule.getServer().isTerminated()).isFalse();
+    assertThat(grpcServerRule1.getChannel().isShutdown()).isFalse();
+    assertThat(grpcServerRule1.getChannel().isTerminated()).isFalse();
 
-      assertThat(grpcServerRule.getChannel().isShutdown()).isFalse();
-      assertThat(grpcServerRule.getChannel().isTerminated()).isFalse();
-
-      assertThat(grpcServerRule.getServerName()).isNotNull();
-      assertThat(grpcServerRule.getServiceRegistry()).isNotNull();
-    }
-
-    @Test
-    public void serverAllowsServicesToBeAddedViaServiceRegistry() {
-      TestServiceImpl testService = new TestServiceImpl();
-
-      grpcServerRule.getServiceRegistry().addService(testService);
-
-      TestServiceGrpc.TestServiceBlockingStub stub =
-          TestServiceGrpc.newBlockingStub(grpcServerRule.getChannel());
-
-      Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
-          .setPayload(Messages.Payload.newBuilder()
-                          .setBody(ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-          .build();
-
-      Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
-          .setPayload(Messages.Payload.newBuilder()
-                          .setBody(ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-          .build();
-
-      stub.unaryCall(request1);
-      stub.unaryCall(request2);
-
-      assertThat(testService.unaryCallRequests)
-          .containsExactly(request1, request2);
-    }
-
-    @Test
-    public void serviceIsNotRunOnSameThreadAsTest() {
-      TestServiceImpl testService = new TestServiceImpl();
-
-      grpcServerRule.getServiceRegistry().addService(testService);
-
-      TestServiceGrpc.TestServiceBlockingStub stub =
-          TestServiceGrpc.newBlockingStub(grpcServerRule.getChannel());
-
-      // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
-      stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-      stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-
-      assertThat(testService.lastEmptyCallRequestThread).isNotEqualTo(Thread.currentThread());
-    }
-
-    @Test(expected = IllegalStateException.class)
-    public void callDirectExecutorNotAtRuleInstantiation() {
-      grpcServerRule.directExecutor();
-    }
+    assertThat(grpcServerRule1.getServerName()).isNotNull();
+    assertThat(grpcServerRule1.getServiceRegistry()).isNotNull();
   }
 
-  @RunWith(JUnit4.class)
-  public static class WithDirectExecutor {
+  @Test
+  public void serverAllowsServicesToBeAddedViaServiceRegistry_withoutDirectExecutor() {
+    TestServiceImpl testService = new TestServiceImpl();
 
-    @Rule
-    public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
+    grpcServerRule1.getServiceRegistry().addService(testService);
 
-    @Test
-    public void serverAndChannelAreStarted() {
-      assertThat(grpcServerRule.getServer().isShutdown()).isFalse();
-      assertThat(grpcServerRule.getServer().isTerminated()).isFalse();
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
 
-      assertThat(grpcServerRule.getChannel().isShutdown()).isFalse();
-      assertThat(grpcServerRule.getChannel().isTerminated()).isFalse();
+    Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
+        .setPayload(Messages.Payload.newBuilder().setBody(
+            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
+        .build();
 
-      assertThat(grpcServerRule.getServerName()).isNotNull();
-      assertThat(grpcServerRule.getServiceRegistry()).isNotNull();
-    }
+    Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
+        .setPayload(Messages.Payload.newBuilder().setBody(
+            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
+        .build();
 
-    @Test
-    public void serverAllowsServicesToBeAddedViaServiceRegistry() {
-      TestServiceImpl testService = new TestServiceImpl();
+    stub.unaryCall(request1);
+    stub.unaryCall(request2);
 
-      grpcServerRule.getServiceRegistry().addService(testService);
-
-      TestServiceGrpc.TestServiceBlockingStub stub =
-          TestServiceGrpc.newBlockingStub(grpcServerRule.getChannel());
-
-      Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
-          .setPayload(Messages.Payload.newBuilder()
-                          .setBody(ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-          .build();
-
-      Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
-          .setPayload(Messages.Payload.newBuilder()
-                          .setBody(ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-          .build();
-
-      stub.unaryCall(request1);
-      stub.unaryCall(request2);
-
-      assertThat(testService.unaryCallRequests)
-          .containsExactly(request1, request2);
-    }
-
-    @Test
-    public void serviceIsRunOnSameThreadAsTest() {
-      TestServiceImpl testService = new TestServiceImpl();
-
-      grpcServerRule.getServiceRegistry().addService(testService);
-
-      TestServiceGrpc.TestServiceBlockingStub stub =
-          TestServiceGrpc.newBlockingStub(grpcServerRule.getChannel());
-
-      // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
-      stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-      stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-
-      assertThat(testService.lastEmptyCallRequestThread).isEqualTo(Thread.currentThread());
-    }
+    assertThat(testService.unaryCallRequests).containsExactly(request1, request2);
   }
 
-  @RunWith(JUnit4.class)
-  public static class ResourceCleanup {
+  @Test
+  public void serviceIsNotRunOnSameThreadAsTest_withoutDirectExecutor() {
+    TestServiceImpl testService = new TestServiceImpl();
 
-    @Test
-    public void serverAndChannelAreShutdownAfterRule() throws Throwable {
-      GrpcServerRule grpcServerRule = new GrpcServerRule();
+    grpcServerRule1.getServiceRegistry().addService(testService);
 
-      // Before the rule has been executed, all of its resources should be null.
-      assertThat(grpcServerRule.getChannel()).isNull();
-      assertThat(grpcServerRule.getServer()).isNull();
-      assertThat(grpcServerRule.getServerName()).isNull();
-      assertThat(grpcServerRule.getServiceRegistry()).isNull();
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
 
-      // The TestStatement stores the channel and server instances so that we can inspect them after
-      // the rule cleans up.
-      TestStatement statement = new TestStatement(grpcServerRule);
+    // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
+    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
+    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
 
-      grpcServerRule.apply(statement, null).evaluate();
+    assertThat(testService.lastEmptyCallRequestThread).isNotEqualTo(Thread.currentThread());
+  }
 
-      // Ensure that the stored channel and server instances were shut down.
-      assertThat(statement.channel.isShutdown()).isTrue();
-      assertThat(statement.server.isShutdown()).isTrue();
+  @Test(expected = IllegalStateException.class)
+  public void callDirectExecutorNotAtRuleInstantiation_withoutDirectExecutor() {
+    grpcServerRule1.directExecutor();
+  }
 
-      // All references to the resources that we created should be set to null.
-      assertThat(grpcServerRule.getChannel()).isNull();
-      assertThat(grpcServerRule.getServer()).isNull();
-      assertThat(grpcServerRule.getServerName()).isNull();
-      assertThat(grpcServerRule.getServiceRegistry()).isNull();
+  @Test
+  public void serverAndChannelAreStarted_withDirectExecutor() {
+    assertThat(grpcServerRule2.getServer().isShutdown()).isFalse();
+    assertThat(grpcServerRule2.getServer().isTerminated()).isFalse();
+
+    assertThat(grpcServerRule2.getChannel().isShutdown()).isFalse();
+    assertThat(grpcServerRule2.getChannel().isTerminated()).isFalse();
+
+    assertThat(grpcServerRule2.getServerName()).isNotNull();
+    assertThat(grpcServerRule2.getServiceRegistry()).isNotNull();
+  }
+
+  @Test
+  public void serverAllowsServicesToBeAddedViaServiceRegistry_withDirectExecutor() {
+    TestServiceImpl testService = new TestServiceImpl();
+
+    grpcServerRule2.getServiceRegistry().addService(testService);
+
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
+
+    Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
+        .setPayload(Messages.Payload.newBuilder().setBody(
+            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
+        .build();
+
+    Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
+        .setPayload(Messages.Payload.newBuilder().setBody(
+            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
+        .build();
+
+    stub.unaryCall(request1);
+    stub.unaryCall(request2);
+
+    assertThat(testService.unaryCallRequests).containsExactly(request1, request2);
+  }
+
+  @Test
+  public void serviceIsRunOnSameThreadAsTest_withDirectExecutor() {
+    TestServiceImpl testService = new TestServiceImpl();
+
+    grpcServerRule2.getServiceRegistry().addService(testService);
+
+    TestServiceGrpc.TestServiceBlockingStub stub =
+        TestServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
+
+    // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
+    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
+    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
+
+    assertThat(testService.lastEmptyCallRequestThread).isEqualTo(Thread.currentThread());
+  }
+
+  @Test
+  public void serverAndChannelAreShutdownAfterRule() throws Throwable {
+    GrpcServerRule grpcServerRule = new GrpcServerRule();
+
+    // Before the rule has been executed, all of its resources should be null.
+    assertThat(grpcServerRule.getChannel()).isNull();
+    assertThat(grpcServerRule.getServer()).isNull();
+    assertThat(grpcServerRule.getServerName()).isNull();
+    assertThat(grpcServerRule.getServiceRegistry()).isNull();
+
+    // The TestStatement stores the channel and server instances so that we can inspect them after
+    // the rule cleans up.
+    TestStatement statement = new TestStatement(grpcServerRule);
+
+    grpcServerRule.apply(statement, null).evaluate();
+
+    // Ensure that the stored channel and server instances were shut down.
+    assertThat(statement.channel.isShutdown()).isTrue();
+    assertThat(statement.server.isShutdown()).isTrue();
+
+    // All references to the resources that we created should be set to null.
+    assertThat(grpcServerRule.getChannel()).isNull();
+    assertThat(grpcServerRule.getServer()).isNull();
+    assertThat(grpcServerRule.getServerName()).isNull();
+    assertThat(grpcServerRule.getServiceRegistry()).isNull();
+  }
+
+  private static class TestStatement extends Statement {
+
+    private final GrpcServerRule grpcServerRule;
+
+    private ManagedChannel channel;
+    private Server server;
+
+    private TestStatement(GrpcServerRule grpcServerRule) {
+      this.grpcServerRule = grpcServerRule;
     }
 
-    private static class TestStatement extends Statement {
-
-      private final GrpcServerRule grpcServerRule;
-
-      private ManagedChannel channel;
-      private Server server;
-
-      private TestStatement(GrpcServerRule grpcServerRule) {
-        this.grpcServerRule = grpcServerRule;
-      }
-
-      @Override
-      public void evaluate() throws Throwable {
-        channel = grpcServerRule.getChannel();
-        server = grpcServerRule.getServer();
-      }
+    @Override
+    public void evaluate() throws Throwable {
+      channel = grpcServerRule.getChannel();
+      server = grpcServerRule.getServer();
     }
   }
 
@@ -221,8 +206,7 @@ public class GrpcServerRuleTest {
 
     @Override
     public void emptyCall(
-        EmptyProtos.Empty request,
-        StreamObserver<EmptyProtos.Empty> responseObserver) {
+        EmptyProtos.Empty request, StreamObserver<EmptyProtos.Empty> responseObserver) {
 
       lastEmptyCallRequestThread = Thread.currentThread();
 
@@ -233,8 +217,7 @@ public class GrpcServerRuleTest {
 
     @Override
     public void unaryCall(
-        Messages.SimpleRequest request,
-        StreamObserver<Messages.SimpleResponse> responseObserver) {
+        Messages.SimpleRequest request, StreamObserver<Messages.SimpleResponse> responseObserver) {
 
       unaryCallRequests.add(request);
 
