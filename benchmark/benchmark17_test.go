@@ -31,8 +31,8 @@ func BenchmarkClient(b *testing.B) {
 		megabyte         = 1048576
 	)
 	maxConcurrentCalls := []int{1, 8, 64, 512}
-	reqSizeBytes := []int{1, 1 * 1024}
-	reqspSizeBytes := []int{1, 1 * 1024}
+	reqSizeBytes := []int{1, 1 * megabyte}
+	reqspSizeBytes := []int{1, 1 * megabyte}
 
 	for _, mode := range []bool{runModeUnary, runModeStreaming} {
 		for _, enableTracing := range []bool{true, false} {
