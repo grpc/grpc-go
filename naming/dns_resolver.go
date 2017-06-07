@@ -1,6 +1,7 @@
 package naming
 
 import (
+	"fmt"
 	"google.golang.org/grpc/grpclog"
 	"net"
 	"sort"
@@ -75,6 +76,15 @@ func compileUpdate(oldAddrs []string, newAddrs []string) []*Update {
 }
 
 func (w *DNSWatcher) Next() ([]*Update, error) {
+	cname, srvAddrs, err := net.LookupSRV("grpclb", "tcp", w.hostname)
+	if err != nil {
+		grpclog.Printf("grpc: failed dns srv lookup due to %v.\n", err)
+		return nil, err
+	}
+	fmt.Println(cname)
+	for _, addr := range srvAddrs {
+		fmt.Printf("%s %d %d %d", addr.Target, addr.Port, addr.Priority, addr.Weight)
+	}
 	addrs, err := net.LookupHost(w.hostname)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns resolution due to %v.\n", err)
