@@ -186,8 +186,8 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error 
 	return nil
 }
 
-// DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+// DoStreamingSend performs a Send for a streaming rpc.
+func DoStreamingSend(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -197,6 +197,11 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
 	}
+	return nil
+}
+
+// DoStreamingRecv performs a Recv for a streaming rpc.
+func DoStreamingRecv(stream testpb.BenchmarkService_StreamingCallClient) error {
 	if _, err := stream.Recv(); err != nil {
 		// EOF is a valid error here.
 		if err == io.EOF {
@@ -207,12 +212,28 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 	return nil
 }
 
-// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
-func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+// DoStreamingRoundTrip performs a round trip for a single streaming rpc.
+func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+	if err := DoStreamingSend(stream, reqSize, respSize); err != nil {
+		return err
+	}
+	if err := DoStreamingRecv(stream); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DoByteBufStreamingSendMsg performs a SendMsg for a streaming rpc, using custom codec.
+func DoByteBufStreamingSendMsg(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)
 	}
+	return nil
+}
+
+// DoByteBufStreamingRecvMsg performs a RecvMsg for a streaming rpc, using custom codec.
+func DoByteBufStreamingRecvMsg(stream testpb.BenchmarkService_StreamingCallClient) error {
 	var in []byte
 	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
 		// EOF is a valid error here.
@@ -220,6 +241,17 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 			return nil
 		}
 		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).RecvMsg(_) = %v, want <nil>", err)
+	}
+	return nil
+}
+
+// DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using custom codec.
+func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+	if err := DoByteBufStreamingSendMsg(stream, reqSize, respSize); err != nil {
+		return err
+	}
+	if err := DoByteBufStreamingRecvMsg(stream); err != nil {
+		return err
 	}
 	return nil
 }

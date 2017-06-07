@@ -35,6 +35,7 @@ package main
 
 import (
 	"math"
+	"math/rand"
 	"runtime"
 	"sync"
 	"syscall"
@@ -171,6 +172,15 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 	}, nil
 }
 
+// poissonNextDelay creates a closure on qps.
+// It returns a function, which generates a random exponential distributed delay every time based on the enclosed qps.
+func poissonNextDelay(qps float64) func() time.Duration {
+	targetQPS := qps
+	return func() time.Duration {
+		return time.Duration(rand.ExpFloat64() * float64(time.Second) / targetQPS)
+	}
+}
+
 func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benchmarkClient) error {
 	// Read payload size and type from config.
 	var (
@@ -192,24 +202,31 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		}
 	}
 
-	// TODO add open loop distribution.
-	switch config.LoadParams.Load.(type) {
+	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
+
+	var nextRPCDelay func() time.Duration
+	switch lp := config.LoadParams.Load.(type) {
 	case *testpb.LoadParams_ClosedLoop:
 	case *testpb.LoadParams_Poisson:
-		return grpc.Errorf(codes.Unimplemented, "unsupported load params: %v", config.LoadParams)
+		// The qps used by poisson should be qps for each goroutine.
+		nextRPCDelay = poissonNextDelay(lp.Poisson.OfferedLoad / float64(rpcCountPerConn*len(conns)))
 	default:
 		return grpc.Errorf(codes.InvalidArgument, "unknown load params: %v", config.LoadParams)
 	}
 
-	rpcCountPerConn := int(config.OutstandingRpcsPerChannel)
-
 	switch config.RpcType {
 	case testpb.RpcType_UNARY:
-		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
-		// TODO open loop.
+		if nextRPCDelay == nil {
+			bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
+		} else {
+			bc.doOpenLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, nextRPCDelay)
+		}
 	case testpb.RpcType_STREAMING:
-		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
-		// TODO open loop.
+		if nextRPCDelay == nil {
+			bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
+		} else {
+			bc.doOpenLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType, nextRPCDelay)
+		}
 	default:
 		return grpc.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
 	}
@@ -264,8 +281,8 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			// Start goroutine on the created mutex and histogram.
-			go func(idx int) {
+			// Start goroutine on the lockingHistogram.
+			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -294,7 +311,64 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 					case <-done:
 					}
 				}
-			}(idx)
+			}()
+		}
+	}
+}
+
+func (bc *benchmarkClient) doOpenLoopUnary(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, nextRPCDelay func() time.Duration) {
+	for ic, conn := range conns {
+		client := testpb.NewBenchmarkServiceClient(conn)
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		for j := 0; j < rpcCountPerConn; j++ {
+			var delay time.Duration
+			next := make(chan bool)
+			// Create histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
+			// Start goroutine on the lockingHistogram.
+			go func() {
+				// TODO: do warm up if necessary.
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
+				// before starting benchmark.
+				done := make(chan bool)
+				for range next {
+					go func() {
+						start := time.Now()
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						elapse := time.Since(start)
+						bc.lockingHistograms[idx].add(int64(elapse))
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			go func() {
+				for {
+					select {
+					case <-bc.stop:
+						close(next)
+						return
+					case <-time.After(delay):
+						next <- true
+						delay = nextRPCDelay()
+					}
+				}
+			}()
 		}
 	}
 }
@@ -317,8 +391,8 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
-			// Start goroutine on the created mutex and histogram.
-			go func(idx int) {
+			// Start goroutine on the lockingHistogram.
+			go func() {
 				// TODO: do warm up if necessary.
 				// Now relying on worker client to reserve time to do warm up.
 				// The worker client needs to wait for some time after client is created,
@@ -336,7 +410,115 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 					default:
 					}
 				}
-			}(idx)
+			}()
+		}
+	}
+}
+
+func (bc *benchmarkClient) doOpenLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string, nextRPCDelay func() time.Duration) {
+	var (
+		doRPCSend func(testpb.BenchmarkService_StreamingCallClient, int, int) error
+		doRPCRecv func(testpb.BenchmarkService_StreamingCallClient) error
+	)
+	if payloadType == "bytebuf" {
+		doRPCSend = benchmark.DoByteBufStreamingSendMsg
+		doRPCRecv = benchmark.DoByteBufStreamingRecvMsg
+	} else {
+		doRPCSend = benchmark.DoStreamingSend
+		doRPCRecv = benchmark.DoStreamingRecv
+	}
+	for ic, conn := range conns {
+		// For each connection, create rpcCountPerConn goroutines to do rpc.
+		for j := 0; j < rpcCountPerConn; j++ {
+			var delay time.Duration
+			next := make(chan bool)
+
+			c := testpb.NewBenchmarkServiceClient(conn)
+			stream, err := c.StreamingCall(context.Background())
+			if err != nil {
+				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", c, err)
+			}
+			// Create histogram for each goroutine.
+			idx := ic*rpcCountPerConn + j
+			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
+			// The buffer size should be bigger enough to store all the startTimes
+			// between a request is sent and its response is received.
+			// TODO: change buffer size if 10000 is not appropriate.
+			startTimeChan := make(chan time.Time, 10000)
+			// Create benchmark rpc goroutine to recv on stream.
+			go func() {
+				done := make(chan bool)
+				for {
+					go func() {
+						if err := doRPCRecv(stream); err != nil {
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						// This receive from channel should never block.
+						// There should be at least one start time available in the channel.
+						start := <-startTimeChan
+						elapse := time.Since(start)
+						bc.lockingHistograms[idx].add(int64(elapse))
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			// Create benchmark rpc goroutine to send on stream.
+			go func() {
+				// TODO: do warm up if necessary.
+				// Now relying on worker client to reserve time to do warm up.
+				// The worker client needs to wait for some time after client is created,
+				// before starting benchmark.
+				done := make(chan bool)
+				for range next {
+					go func() {
+						start := time.Now()
+						if err := doRPCSend(stream, reqSize, respSize); err != nil {
+							// On error, don't send start to startTimeChan.
+							select {
+							case <-bc.stop:
+							case done <- false:
+							}
+							return
+						}
+						// This send to channel should never block.
+						// Space should always be available for a new startTime.
+						startTimeChan <- start
+						select {
+						case <-bc.stop:
+						case done <- true:
+						}
+					}()
+					select {
+					case <-bc.stop:
+						return
+					case <-done:
+					}
+				}
+			}()
+			go func() {
+				for {
+					select {
+					case <-bc.stop:
+						close(next)
+						return
+					case <-time.After(delay):
+						next <- true
+						delay = nextRPCDelay()
+					}
+				}
+			}()
 		}
 	}
 }
