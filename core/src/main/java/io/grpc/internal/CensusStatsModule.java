@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.instrumentation.stats.ContextUtils.STATS_CONTEXT_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
@@ -67,11 +68,6 @@ final class CensusStatsModule {
   private static final Logger logger = Logger.getLogger(CensusStatsModule.class.getName());
   private static final double NANOS_PER_MILLI = TimeUnit.MILLISECONDS.toNanos(1);
   private static final ClientTracer BLANK_CLIENT_TRACER = new ClientTracer();
-
-  // TODO(zhangkun): point to Census's StatsContext key once they've made it public
-  @VisibleForTesting
-  static final Context.Key<StatsContext> STATS_CONTEXT_KEY =
-      Context.key("io.grpc.internal.StatsContext"); 
 
   private final StatsContextFactory statsCtxFactory;
   private final Supplier<Stopwatch> stopwatchSupplier;
@@ -329,10 +325,7 @@ final class CensusStatsModule {
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
       // New RPCs on client-side inherit the stats context from the current Context.
-      StatsContext parentCtx = STATS_CONTEXT_KEY.get();
-      if (parentCtx == null) {
-        parentCtx = statsCtxFactory.getDefault();
-      }
+      StatsContext parentCtx = statsCtxFactory.getCurrentStatsContext();
       final ClientCallTracer tracerFactory =
           newClientCallTracer(parentCtx, method.getFullMethodName());
       ClientCall<ReqT, RespT> call =

@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.instrumentation.stats.ContextUtils.STATS_CONTEXT_KEY;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -258,7 +259,7 @@ public class CensusModulesTest {
     if (nonDefaultContext) {
       Context ctx =
           Context.ROOT.withValues(
-              CensusStatsModule.STATS_CONTEXT_KEY,
+              STATS_CONTEXT_KEY,
               statsCtxFactory.getDefault().with(
                   StatsTestUtils.EXTRA_TAG, TagValue.create("extra value")),
               ContextUtils.CONTEXT_SPAN_KEY,
@@ -270,7 +271,7 @@ public class CensusModulesTest {
         ctx.detach(origCtx);
       }
     } else {
-      assertNull(CensusStatsModule.STATS_CONTEXT_KEY.get());
+      assertNull(STATS_CONTEXT_KEY.get());
       assertNull(ContextUtils.CONTEXT_SPAN_KEY.get());
       call = interceptedChannel.newCall(method, CALL_OPTIONS);
     }
@@ -475,7 +476,7 @@ public class CensusModulesTest {
     // propagated tags.
     Context serverContext = serverTracer.filterContext(Context.ROOT);
     // It also put clientCtx in the Context seen by the call handler
-    assertEquals(clientCtx, CensusStatsModule.STATS_CONTEXT_KEY.get(serverContext));
+    assertEquals(clientCtx, STATS_CONTEXT_KEY.get(serverContext));
 
     // Verifies that the server tracer records the status with the propagated tag
     serverTracer.streamClosed(Status.OK);
@@ -596,7 +597,7 @@ public class CensusModulesTest {
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
 
     Context filteredContext = tracer.filterContext(Context.ROOT);
-    assertNull(CensusStatsModule.STATS_CONTEXT_KEY.get(filteredContext));
+    assertNull(STATS_CONTEXT_KEY.get(filteredContext));
 
     tracer.inboundWireSize(34);
     tracer.inboundUncompressedSize(67);
