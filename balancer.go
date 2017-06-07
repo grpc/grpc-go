@@ -403,6 +403,7 @@ func (rr *roundRobin) Close() error {
 	}
 	if rr.addrCh != nil {
 		close(rr.addrCh)
+		rr.addrCh = nil
 	}
 	return nil
 }
