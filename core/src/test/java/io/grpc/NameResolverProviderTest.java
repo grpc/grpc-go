@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -24,9 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
-import io.grpc.Attributes;
-import io.grpc.NameResolver;
-import io.grpc.ReplacingClassLoader;
+import io.grpc.internal.DnsNameResolverProvider;
 import java.net.URI;
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +36,7 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link NameResolverProvider}. */
 @RunWith(JUnit4.class)
 public class NameResolverProviderTest {
-  private final String serviceFile = "META-INF/services/io.grpc.internal.NameResolverProvider";
+  private final String serviceFile = "META-INF/services/io.grpc.NameResolverProvider";
   private final URI uri = URI.create("dns:///localhost");
   private final Attributes attributes = Attributes.EMPTY;
 
@@ -46,7 +44,7 @@ public class NameResolverProviderTest {
   public void noProvider() {
     ClassLoader cl = new ReplacingClassLoader(
         getClass().getClassLoader(), serviceFile,
-        "io/grpc/internal/NameResolverProviderTest-doesNotExist.txt");
+        "io/grpc/NameResolverProviderTest-doesNotExist.txt");
     List<NameResolverProvider> providers = NameResolverProvider.load(cl);
     assertEquals(Collections.<NameResolverProvider>emptyList(), providers);
   }
@@ -55,7 +53,7 @@ public class NameResolverProviderTest {
   public void multipleProvider() {
     ClassLoader cl = new ReplacingClassLoader(
         getClass().getClassLoader(), serviceFile,
-        "io/grpc/internal/NameResolverProviderTest-multipleProvider.txt");
+        "io/grpc/NameResolverProviderTest-multipleProvider.txt");
     List<NameResolverProvider> providers = NameResolverProvider.load(cl);
     assertEquals(3, providers.size());
     assertSame(Available7Provider.class, providers.get(0).getClass());
@@ -71,7 +69,7 @@ public class NameResolverProviderTest {
   public void unavailableProvider() {
     ClassLoader cl = new ReplacingClassLoader(
         getClass().getClassLoader(), serviceFile,
-        "io/grpc/internal/NameResolverProviderTest-unavailableProvider.txt");
+        "io/grpc/NameResolverProviderTest-unavailableProvider.txt");
     assertEquals(Collections.<NameResolverProvider>emptyList(), NameResolverProvider.load(cl));
   }
 
@@ -172,12 +170,12 @@ public class NameResolverProviderTest {
     }
 
     @Override
-    public boolean isAvailable() {
+    protected boolean isAvailable() {
       return isAvailable;
     }
 
     @Override
-    public int priority() {
+    protected int priority() {
       return priority;
     }
 
@@ -223,7 +221,7 @@ public class NameResolverProviderTest {
     }
 
     @Override
-    public int priority() {
+    protected int priority() {
       throw new RuntimeException("purposefully broken");
     }
   }

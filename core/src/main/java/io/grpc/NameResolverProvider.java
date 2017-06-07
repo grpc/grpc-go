@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import io.grpc.Attributes;
-import io.grpc.NameResolver;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,6 +33,7 @@ import java.util.ServiceLoader;
  * exceptions may reasonably occur for implementation-specific reasons, implementations should
  * generally handle the exception gracefully and return {@code false} from {@link #isAvailable()}.
  */
+@Internal
 public abstract class NameResolverProvider extends NameResolver.Factory {
   /**
    * The port number used in case the target or the underlying naming system doesn't provide a
@@ -146,7 +145,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
    * Whether this provider is available for use, taking the current environment into consideration.
    * If {@code false}, no other methods are safe to be called.
    */
-  public abstract boolean isAvailable();
+  protected abstract boolean isAvailable();
 
   /**
    * A priority, from 0 to 10 that this provider should be used, taking the current environment into
@@ -154,7 +153,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
    * detection. A priority of 0 does not imply that the provider wouldn't work; just that it should
    * be last in line.
    */
-  public abstract int priority();
+  protected abstract int priority();
 
   private static class NameResolverFactory extends NameResolver.Factory {
     private final List<NameResolverProvider> providers;

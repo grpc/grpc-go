@@ -35,6 +35,7 @@ import io.grpc.LoadBalancer;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
+import io.grpc.NameResolverProvider;
 import io.grpc.PickFirstBalancerFactory;
 import java.net.SocketAddress;
 import java.net.URI;

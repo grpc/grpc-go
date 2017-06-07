@@ -162,7 +162,7 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * Provides a custom {@link NameResolver.Factory} for the channel.
    *
    * <p>If this method is not called, the builder will try the providers listed by {@link
-   * io.grpc.internal.NameResolverProvider#providers()} for the given target.
+   * NameResolverProvider#providers()} for the given target.
    *
    * @return this
    * @since 1.0.0

@@ -1,0 +1,3 @@
+io.grpc.NameResolverProviderTest$Available5Provider
+io.grpc.NameResolverProviderTest$Available7Provider
+io.grpc.NameResolverProviderTest$Available0Provider
