@@ -76,15 +76,32 @@ func compileUpdate(oldAddrs []string, newAddrs []string) []*Update {
 }
 
 func (w *DNSWatcher) Next() ([]*Update, error) {
-	cname, srvAddrs, err := net.LookupSRV("grpclb", "tcp", w.hostname)
+	cname, srvs, err := net.LookupSRV("grpclb", "tcp", w.hostname)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns srv lookup due to %v.\n", err)
-		return nil, err
 	}
 	fmt.Println(cname)
-	for _, addr := range srvAddrs {
-		fmt.Printf("%s %d %d %d", addr.Target, addr.Port, addr.Priority, addr.Weight)
+	for _, rc := range srvs {
+		fmt.Printf("%s %d %d %d\n", rc.Target, rc.Port, rc.Priority, rc.Weight)
 	}
+	// target has SRV records associated with it
+	newAddrs := make([]string, 0, 1000 /* TODO: decide the number here*/)
+	if len(srvs) > 0 {
+		for _, r := range srvs {
+			lbAddrs, err := net.LookupHost(r.Target)
+			if err != nil {
+				grpclog.Printf("grpc: failed dns srv load banlacer address lookup due to %v.\n", err)
+			}
+			for _, a := range lbAddrs {
+				newAddrs = append(newAddrs, a)
+			}
+		}
+		sort.Strings(newAddrs)
+		result := compileUpdate(w.curAddrs, newAddrs)
+		w.curAddrs = newAddrs
+		return result, nil
+	}
+
 	addrs, err := net.LookupHost(w.hostname)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns resolution due to %v.\n", err)
