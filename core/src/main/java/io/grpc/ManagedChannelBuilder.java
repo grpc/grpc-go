@@ -159,10 +159,14 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T usePlaintext(boolean skipNegotiation);
 
   /**
-   * Provides a custom {@link NameResolver.Factory} for the channel.
+   * Provides a custom {@link NameResolver.Factory} for the channel. If this method is not called,
+   * the builder will try the providers listed by {@link NameResolverProvider#providers()} for the
+   * given target.
    *
-   * <p>If this method is not called, the builder will try the providers listed by {@link
-   * NameResolverProvider#providers()} for the given target.
+   * <p>This method should rarely be used, as name resolvers should provide a {@code
+   * NameResolverProvider} and users rely on service loading to find implementations in the class
+   * path. That allows application's configuration to easily choose the name resolver via the
+   * 'target' string passed to {@link ManagedChannelBuilder#forTarget(String)}.
    *
    * @return this
    * @since 1.0.0
