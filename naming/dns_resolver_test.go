@@ -44,7 +44,15 @@ func TestCompileUpdate(t *testing.T) {
 
 	for i, c := range testcases {
 		fmt.Printf("%d: ", i)
-		r := compileUpdate(c.oldAddrs, c.newAddrs)
+		oldUpdates := make([]*Update, len(c.oldAddrs))
+		newUpdates := make([]*Update, len(c.newAddrs))
+		for i, a := range c.oldAddrs {
+			oldUpdates[i] = &Update{Addr: a}
+		}
+		for i, a := range c.newAddrs {
+			newUpdates[i] = &Update{Addr: a}
+		}
+		r := compileUpdate(oldUpdates, newUpdates)
 		for _, u := range r {
 			if u.Op == Add {
 				fmt.Print("Add ")
