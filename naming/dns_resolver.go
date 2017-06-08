@@ -46,7 +46,7 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 	idx1, idx2 := 0, 0
 	for idx1 < len(oldAddrs) || idx2 < len(newAddrs) {
 		if idx1 == len(oldAddrs) {
-			// add all adrress left in addrs
+			// add all adrress left in newAddrs
 			for _, addr := range newAddrs[idx2:] {
 				u := *addr
 				u.Op = Add
@@ -55,7 +55,7 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 			return result
 		}
 		if idx2 == len(newAddrs) {
-			// remove all address left in cur addrs
+			// remove all address left in oldAddrs
 			for _, addr := range oldAddrs[idx1:] {
 				u := *addr
 				u.Op = Delete
@@ -91,15 +91,26 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 }
 
 func (w *DNSWatcher) Next() ([]*Update, error) {
-	// TODO(yuxuanli): handling port?
-	cname, srvs, err := net.LookupSRV("grpclb", "tcp", w.hostname)
+	// TODO(yuxuanli): IPv6 address handling. We should check the validity of the hostname somewhere else,
+	// so we can assume the hostname here always follow the spec.
+	cmp := strings.Split(w.hostname, ":")
+	port := "443" /*default port number*/
+	if len(cmp) > 1 {
+		port = cmp[1]
+	}
+	dnsName := cmp[0]
+
+	cname, srvs, err := net.LookupSRV("grpclb", "tcp", dnsName)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns srv lookup due to %v.\n", err)
 	}
+
+	// TODO(yuxuanli): delete the below code segment
 	fmt.Println(cname)
 	for _, rc := range srvs {
 		fmt.Printf("%s %d %d %d\n", rc.Target, rc.Port, rc.Priority, rc.Weight)
 	}
+
 	// target has SRV records associated with it
 	if len(srvs) > 0 {
 		newAddrs := make([]*Update, 0, 1000 /* TODO: decide the number here*/)
@@ -120,14 +131,15 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 		return result, nil
 	}
 
-	addrs, err := net.LookupHost(w.hostname)
+	// If target doesn't have SRV records associated with it, return any A record info available.
+	addrs, err := net.LookupHost(dnsName)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns resolution due to %v.\n", err)
 	}
 	sort.Strings(addrs)
 	newAddrs := make([]*Update, len(addrs))
 	for i, a := range addrs {
-		newAddrs[i] = &Update{Addr: a}
+		newAddrs[i] = &Update{Addr: a + ":" + port}
 	}
 	result := compileUpdate(w.curAddrs, newAddrs)
 	w.curAddrs = newAddrs
