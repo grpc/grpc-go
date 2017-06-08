@@ -41,6 +41,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.io.BaseEncoding;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
@@ -458,7 +459,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
 
   private Http2Headers grpcResponseTrailers(Status status) {
     Metadata trailers = new Metadata();
-    trailers.put(Status.CODE_KEY, status);
+    trailers.put(InternalStatus.CODE_KEY, status);
     return Utils.convertTrailers(trailers, true);
   }
 

@@ -27,6 +27,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream.TransportState;
@@ -208,14 +209,15 @@ public class AbstractServerStreamTest {
     // stream actually mutates trailers, so we can't check that the fields here are the same as
     // the captured ones.
     Metadata trailers = new Metadata();
-    trailers.put(Status.CODE_KEY, Status.OK);
-    trailers.put(Status.MESSAGE_KEY, "Everything's super.");
+    trailers.put(InternalStatus.CODE_KEY, Status.OK);
+    trailers.put(InternalStatus.MESSAGE_KEY, "Everything's super.");
 
     stream.close(Status.INTERNAL.withDescription("bad"), trailers);
 
     verify(sink).writeTrailers(metadataCaptor.capture(), eq(false));
-    assertEquals(Status.Code.INTERNAL, metadataCaptor.getValue().get(Status.CODE_KEY).getCode());
-    assertEquals("bad", metadataCaptor.getValue().get(Status.MESSAGE_KEY));
+    assertEquals(
+        Status.Code.INTERNAL, metadataCaptor.getValue().get(InternalStatus.CODE_KEY).getCode());
+    assertEquals("bad", metadataCaptor.getValue().get(InternalStatus.MESSAGE_KEY));
   }
 
   private static class ServerStreamListenerBase implements ServerStreamListener {

@@ -48,6 +48,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
@@ -1608,7 +1609,7 @@ public class OkHttpClientTransportTest {
 
   private List<Header> grpcResponseTrailers() {
     return ImmutableList.of(
-        new Header(Status.CODE_KEY.name(), "0"),
+        new Header(InternalStatus.CODE_KEY.name(), "0"),
         // Adding Content-Type and :status for testing responses with only a single HEADERS frame.
         new Header(":status", "200"),
         CONTENT_TYPE_HEADER);

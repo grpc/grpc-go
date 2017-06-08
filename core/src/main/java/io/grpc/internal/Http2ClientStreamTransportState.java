@@ -19,6 +19,7 @@ package io.grpc.internal;
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import io.grpc.InternalMetadata;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import java.nio.charset.Charset;
@@ -176,9 +177,9 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
    * Extract the response status from trailers.
    */
   private Status statusFromTrailers(Metadata trailers) {
-    Status status = trailers.get(Status.CODE_KEY);
+    Status status = trailers.get(InternalStatus.CODE_KEY);
     if (status != null) {
-      return status.withDescription(trailers.get(Status.MESSAGE_KEY));
+      return status.withDescription(trailers.get(InternalStatus.MESSAGE_KEY));
     }
     // No status; something is broken. Try to provide a resonanable error.
     if (headersReceived) {
@@ -236,7 +237,7 @@ public abstract class Http2ClientStreamTransportState extends AbstractClientStre
    */
   private static void stripTransportDetails(Metadata metadata) {
     metadata.discardAll(HTTP2_STATUS);
-    metadata.discardAll(Status.CODE_KEY);
-    metadata.discardAll(Status.MESSAGE_KEY);
+    metadata.discardAll(InternalStatus.CODE_KEY);
+    metadata.discardAll(InternalStatus.MESSAGE_KEY);
   }
 }

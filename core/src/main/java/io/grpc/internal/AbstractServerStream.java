@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
+import io.grpc.InternalStatus;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import javax.annotation.Nullable;
@@ -131,11 +132,11 @@ public abstract class AbstractServerStream extends AbstractStream
   }
 
   private void addStatusToTrailers(Metadata trailers, Status status) {
-    trailers.discardAll(Status.CODE_KEY);
-    trailers.discardAll(Status.MESSAGE_KEY);
-    trailers.put(Status.CODE_KEY, status);
+    trailers.discardAll(InternalStatus.CODE_KEY);
+    trailers.discardAll(InternalStatus.MESSAGE_KEY);
+    trailers.put(InternalStatus.CODE_KEY, status);
     if (status.getDescription() != null) {
-      trailers.put(Status.MESSAGE_KEY, status.getDescription());
+      trailers.put(InternalStatus.MESSAGE_KEY, status.getDescription());
     }
   }
 
