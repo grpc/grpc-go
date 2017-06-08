@@ -61,6 +61,11 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+const (
+	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
+	defaultServerMaxSendMessageSize    = 1024 * 1024 * 4
+)
+
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor UnaryServerInterceptor) (interface{}, error)
 
 // MethodDesc represents an RPC service's method specification.
@@ -112,12 +117,13 @@ type options struct {
 	codecs                map[string]Codec
 	cp                    Compressor
 	dc                    Decompressor
-	maxMsgSize            int
 	unaryInt              UnaryServerInterceptor
 	streamInt             StreamServerInterceptor
 	inTapHandle           tap.ServerInHandle
 	statsHandler          stats.Handler
 	maxConcurrentStreams  uint32
+	maxReceiveMessageSize int
+	maxSendMessageSize    int
 	useHandlerImpl        bool // use http.Handler-based server
 	unknownStreamDesc     *StreamDesc
 	keepaliveParams       keepalive.ServerParameters
@@ -126,7 +132,10 @@ type options struct {
 	initialConnWindowSize int32
 }
 
-var defaultMaxMsgSize = 1024 * 1024 * 4 // use 4MB as the default message size limit
+var defaultServerOptions = options{
+	maxReceiveMessageSize: defaultServerMaxReceiveMessageSize,
+	maxSendMessageSize:    defaultServerMaxSendMessageSize,
+}
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
@@ -206,11 +215,25 @@ func RPCDecompressor(dc Decompressor) ServerOption {
 	}
 }
 
-// MaxMsgSize returns a ServerOption to set the max message size in bytes for inbound mesages.
-// If this is not set, gRPC uses the default 4MB.
+// MaxMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
+// If this is not set, gRPC uses the default limit. Deprecated: use MaxRecvMsgSize instead.
 func MaxMsgSize(m int) ServerOption {
+	return MaxRecvMsgSize(m)
+}
+
+// MaxRecvMsgSize returns a ServerOption to set the max message size in bytes the server can receive.
+// If this is not set, gRPC uses the default 4MB.
+func MaxRecvMsgSize(m int) ServerOption {
 	return func(o *options) {
-		o.maxMsgSize = m
+		o.maxReceiveMessageSize = m
+	}
+}
+
+// MaxSendMsgSize returns a ServerOption to set the max message size in bytes the server can send.
+// If this is not set, gRPC uses the default 4MB.
+func MaxSendMsgSize(m int) ServerOption {
+	return func(o *options) {
+		o.maxSendMessageSize = m
 	}
 }
 
@@ -291,8 +314,7 @@ func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 // NewServer creates a gRPC server which has no service registered and has not
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
-	var opts options
-	opts.maxMsgSize = defaultMaxMsgSize
+	opts := defaultServerOptions
 	for _, o := range opt {
 		o(&opts)
 	}
@@ -470,10 +492,12 @@ func (s *Server) Serve(lis net.Listener) error {
 				s.mu.Lock()
 				s.printf("Accept error: %v; retrying in %v", err, tempDelay)
 				s.mu.Unlock()
+				timer := time.NewTimer(tempDelay)
 				select {
-				case <-time.After(tempDelay):
+				case <-timer.C:
 				case <-s.ctx.Done():
 				}
+				timer.Stop()
 				continue
 			}
 			s.mu.Lock()
@@ -676,14 +700,11 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	}
 	p, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, cbuf, outPayload)
 	if err != nil {
-		// This typically indicates a fatal issue (e.g., memory
-		// corruption or hardware faults) the application program
-		// cannot handle.
-		//
-		// TODO(zhaoq): There exist other options also such as only closing the
-		// faulty stream locally and remotely (Other streams can keep going). Find
-		// the optimal option.
-		grpclog.Fatalf("grpc: Server failed to encode response %v", err)
+		grpclog.Println("grpc: server failed to encode response: ", err)
+		return err
+	}
+	if len(p) > s.opts.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, p, opts)
 	if err == nil && outPayload != nil {
@@ -726,139 +747,137 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	p := &parser{r: stream}
-	for { // TODO: delete
-		pf, req, err := p.recvMsg(s.opts.maxMsgSize)
+	pf, req, err := p.recvMsg(s.opts.maxReceiveMessageSize)
+	if err == io.EOF {
+		// The entire stream is done (for unary RPC only).
+		return err
+	}
+	if err == io.ErrUnexpectedEOF {
+		err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
+	}
+	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, st); e != nil {
+				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+			}
+		} else {
+			switch st := err.(type) {
+			case transport.ConnectionError:
+				// Nothing to do here.
+			case transport.StreamError:
+				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+				}
+			default:
+				panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
+			}
+		}
+		return err
+	}
+
+	if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
+		if st, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, st); e != nil {
+				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+			}
+			return err
+		}
+		if e := t.WriteStatus(stream, status.New(codes.Internal, err.Error())); e != nil {
+			grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
+		}
+
+		// TODO checkRecvPayload always return RPC error. Add a return here if necessary.
+	}
+	var inPayload *stats.InPayload
+	if sh != nil {
+		inPayload = &stats.InPayload{
+			RecvTime: time.Now(),
+		}
+	}
+	df := func(v interface{}) error {
+		if inPayload != nil {
+			inPayload.WireLength = len(req)
+		}
+		if pf == compressionMade {
+			var err error
+			req, err = s.opts.dc.Do(bytes.NewReader(req))
+			if err != nil {
+				return Errorf(codes.Internal, err.Error())
+			}
+		}
+		if len(req) > s.opts.maxReceiveMessageSize {
+			// TODO: Revisit the error code. Currently keep it consistent with
+			// java implementation.
+			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
+		}
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
+			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
+		}
+		if inPayload != nil {
+			inPayload.Payload = v
+			inPayload.Data = req
+			inPayload.Length = len(req)
+			sh.HandleRPC(stream.Context(), inPayload)
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
+		}
+		return nil
+	}
+	reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
+	if appErr != nil {
+		appStatus, ok := status.FromError(appErr)
+		if !ok {
+			// Convert appErr if it is not a grpc status error.
+			appErr = status.Error(convertCode(appErr), appErr.Error())
+			appStatus, _ = status.FromError(appErr)
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
+			trInfo.tr.SetError()
+		}
+		if e := t.WriteStatus(stream, appStatus); e != nil {
+			grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+		}
+		return appErr
+	}
+	if trInfo != nil {
+		trInfo.tr.LazyLog(stringer("OK"), false)
+	}
+	opts := &transport.Options{
+		Last:  true,
+		Delay: false,
+	}
+	if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
 		}
-		if err == io.ErrUnexpectedEOF {
-			err = Errorf(codes.Internal, io.ErrUnexpectedEOF.Error())
-		}
-		if err != nil {
-			if st, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, st); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
-			} else {
-				switch st := err.(type) {
-				case transport.ConnectionError:
-					// Nothing to do here.
-				case transport.StreamError:
-					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-					}
-				default:
-					panic(fmt.Sprintf("grpc: Unexpected error (%T) from recvMsg: %v", st, st))
-				}
-			}
-			return err
-		}
-
-		if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
-			if st, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, st); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-				}
-				return err
-			}
-			if e := t.WriteStatus(stream, status.New(codes.Internal, err.Error())); e != nil {
-				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-			}
-
-			// TODO checkRecvPayload always return RPC error. Add a return here if necessary.
-		}
-		var inPayload *stats.InPayload
-		if sh != nil {
-			inPayload = &stats.InPayload{
-				RecvTime: time.Now(),
-			}
-		}
-		df := func(v interface{}) error {
-			if inPayload != nil {
-				inPayload.WireLength = len(req)
-			}
-			if pf == compressionMade {
-				var err error
-				req, err = s.opts.dc.Do(bytes.NewReader(req))
-				if err != nil {
-					return Errorf(codes.Internal, err.Error())
-				}
-			}
-			if len(req) > s.opts.maxMsgSize {
-				// TODO: Revisit the error code. Currently keep it consistent with
-				// java implementation.
-				return status.Errorf(codes.Internal, "grpc: server received a message of %d bytes exceeding %d limit", len(req), s.opts.maxMsgSize)
-			}
-			if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
-				return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
-			}
-			if inPayload != nil {
-				inPayload.Payload = v
-				inPayload.Data = req
-				inPayload.Length = len(req)
-				sh.HandleRPC(stream.Context(), inPayload)
-			}
-			if trInfo != nil {
-				trInfo.tr.LazyLog(&payload{sent: false, msg: v}, true)
-			}
-			return nil
-		}
-		reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
-		if appErr != nil {
-			appStatus, ok := status.FromError(appErr)
-			if !ok {
-				// Convert appErr if it is not a grpc status error.
-				appErr = status.Error(convertCode(appErr), appErr.Error())
-				appStatus, _ = status.FromError(appErr)
-			}
-			if trInfo != nil {
-				trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
-				trInfo.tr.SetError()
-			}
-			if e := t.WriteStatus(stream, appStatus); e != nil {
+		if s, ok := status.FromError(err); ok {
+			if e := t.WriteStatus(stream, s); e != nil {
 				grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
 			}
-			return appErr
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(stringer("OK"), false)
-		}
-		opts := &transport.Options{
-			Last:  true,
-			Delay: false,
-		}
-		if err := s.sendResponse(t, stream, reply, s.opts.cp, opts); err != nil {
-			if err == io.EOF {
-				// The entire stream is done (for unary RPC only).
-				return err
-			}
-			if s, ok := status.FromError(err); ok {
-				if e := t.WriteStatus(stream, s); e != nil {
-					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status: %v", e)
+		} else {
+			switch st := err.(type) {
+			case transport.ConnectionError:
+				// Nothing to do here.
+			case transport.StreamError:
+				if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
+					grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
 				}
-			} else {
-				switch st := err.(type) {
-				case transport.ConnectionError:
-					// Nothing to do here.
-				case transport.StreamError:
-					if e := t.WriteStatus(stream, status.New(st.Code, st.Desc)); e != nil {
-						grpclog.Printf("grpc: Server.processUnaryRPC failed to write status %v", e)
-					}
-				default:
-					panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
-				}
+			default:
+				panic(fmt.Sprintf("grpc: Unexpected error (%T) from sendResponse: %v", st, st))
 			}
-			return err
 		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
-		}
-		// TODO: Should we be logging if writing status failed here, like above?
-		// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
-		// error or allow the stats handler to see it?
-		return t.WriteStatus(stream, status.New(codes.OK, ""))
+		return err
 	}
+	if trInfo != nil {
+		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
+	}
+	// TODO: Should we be logging if writing status failed here, like above?
+	// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
+	// error or allow the stats handler to see it?
+	return t.WriteStatus(stream, status.New(codes.OK, ""))
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, srv *service, sd *StreamDesc, trInfo *traceInfo) (err error) {
@@ -882,15 +901,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	ss := &serverStream{
-		t:            t,
-		s:            stream,
-		p:            &parser{r: stream},
-		codec:        s.getCodec(stream.ContentSubtype()),
-		cp:           s.opts.cp,
-		dc:           s.opts.dc,
-		maxMsgSize:   s.opts.maxMsgSize,
-		trInfo:       trInfo,
-		statsHandler: sh,
+		t:     t,
+		s:     stream,
+		p:     &parser{r: stream},
+		codec: s.getCodec(stream.ContentSubtype()),
+		cp:    s.opts.cp,
+		dc:    s.opts.dc,
+		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
+		maxSendMessageSize:    s.opts.maxSendMessageSize,
+		trInfo:                trInfo,
+		statsHandler:          sh,
 	}
 	if ss.cp != nil {
 		ss.cbuf = new(bytes.Buffer)
@@ -965,7 +985,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 			trInfo.tr.SetError()
 		}
 		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
-		if err := t.WriteStatus(stream, status.New(codes.InvalidArgument, errDesc)); err != nil {
+		if err := t.WriteStatus(stream, status.New(codes.ResourceExhausted, errDesc)); err != nil {
 			if trInfo != nil {
 				trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 				trInfo.tr.SetError()

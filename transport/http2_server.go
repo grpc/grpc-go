@@ -275,10 +275,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if len(state.mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, state.mdata)
 	}
-
-	s.dec = &recvBufferReader{
-		ctx:  s.ctx,
-		recv: s.buf,
+	s.trReader = &transportReader{
+		reader: &recvBufferReader{
+			ctx:  s.ctx,
+			recv: s.buf,
+		},
+		windowHandler: func(n int) {
+			t.updateWindow(s, uint32(n))
+		},
 	}
 	s.recvCompress = state.encoding
 	s.method = state.method
@@ -317,8 +321,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.idle = time.Time{}
 	}
 	t.mu.Unlock()
-	s.windowHandler = func(n int) {
-		t.updateWindow(s, uint32(n))
+	s.requestRead = func(n int) {
+		t.adjustWindow(s, uint32(n))
 	}
 	s.ctx = traceCtx(s.ctx, s.method)
 	if t.stats != nil {
@@ -343,7 +347,10 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+		// Only log if it isn't a simple tcp accept check (ie: tcp balancer doing open/close socket)
+		if err != io.EOF {
+			grpclog.Printf("transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
+		}
 		t.Close()
 		return
 	}
@@ -359,7 +366,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		return
 	}
 	if err != nil {
-		grpclog.Printf("transport: http2Server.HandleStreams failed to read frame: %v", err)
+		grpclog.Printf("transport: http2Server.HandleStreams failed to read initial settings frame: %v", err)
 		t.Close()
 		return
 	}
@@ -433,6 +440,23 @@ func (t *http2Server) getStream(f http2.Frame) (*Stream, bool) {
 	return s, true
 }
 
+// adjustWindow sends out extra window update over the initial window size
+// of stream if the application is requesting data larger in size than
+// the window.
+func (t *http2Server) adjustWindow(s *Stream, n uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == streamDone {
+		return
+	}
+	if w := s.fc.maybeAdjust(n); w > 0 {
+		if cw := t.fc.resetPendingUpdate(); cw > 0 {
+			t.controlBuf.put(&windowUpdate{0, cw, false})
+		}
+		t.controlBuf.put(&windowUpdate{s.id, w, true})
+	}
+}
+
 // updateWindow adjusts the inbound quota for the stream and the transport.
 // Window updates will deliver to the controller for sending when
 // the cumulative quota exceeds the corresponding threshold.
@@ -442,11 +466,11 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	if s.state == streamDone {
 		return
 	}
-	if w := t.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w})
-	}
 	if w := s.fc.onRead(n); w > 0 {
-		t.controlBuf.put(&windowUpdate{s.id, w})
+		if cw := t.fc.resetPendingUpdate(); cw > 0 {
+			t.controlBuf.put(&windowUpdate{0, cw, false})
+		}
+		t.controlBuf.put(&windowUpdate{s.id, w, true})
 	}
 }
 
@@ -457,27 +481,26 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		t.Close()
 		return
 	}
+	// Decouple connection's flow control from application's read.
+	// An update on connection's flow control should not depend on
+	// whether user application has read the data or not. Such a
+	// restriction is already imposed on the stream's flow control,
+	// and therefore the sender will be blocked anyways.
+	// Decoupling the connection flow control will prevent other
+	// active(fast) streams from starving in presence of slow or
+	// inactive streams.
+	if w := t.fc.onRead(uint32(size)); w > 0 {
+		t.controlBuf.put(&windowUpdate{0, w, true})
+	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
-		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
-		}
 		return
 	}
 	if size > 0 {
-		if f.Header().Flags.Has(http2.FlagDataPadded) {
-			if w := t.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
-		}
 		s.mu.Lock()
 		if s.state == streamDone {
 			s.mu.Unlock()
-			// The stream has been closed. Release the corresponding quota.
-			if w := t.fc.onRead(uint32(size)); w > 0 {
-				t.controlBuf.put(&windowUpdate{0, w})
-			}
 			return
 		}
 		if err := s.fc.onData(uint32(size)); err != nil {
@@ -488,7 +511,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{s.id, w})
+				t.controlBuf.put(&windowUpdate{s.id, w, true})
 			}
 		}
 		s.mu.Unlock()
@@ -859,7 +882,7 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			for _, stream := range t.activeStreams {
-				stream.sendQuotaPool.add(int(s.Val - t.streamSendQuota))
+				stream.sendQuotaPool.add(int(s.Val) - int(t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
 		}
@@ -963,7 +986,7 @@ func (t *http2Server) controller() {
 			case <-t.writableChan:
 				switch i := i.(type) {
 				case *windowUpdate:
-					t.framer.writeWindowUpdate(true, i.streamID, i.increment)
+					t.framer.writeWindowUpdate(i.flush, i.streamID, i.increment)
 				case *settings:
 					if i.ack {
 						t.framer.writeSettingsAck(true)
@@ -1048,11 +1071,6 @@ func (t *http2Server) closeStream(s *Stream) {
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 	s.mu.Lock()
-	if q := s.fc.resetPendingData(); q > 0 {
-		if w := t.fc.onRead(q); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w})
-		}
-	}
 	if s.state == streamDone {
 		s.mu.Unlock()
 		return
