@@ -1,4 +1,4 @@
-// +build go1.6,!go1.7
+// +build go1.6
 
 /*
  * Copyright 2016, Google Inc.
