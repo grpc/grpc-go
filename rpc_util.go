@@ -144,8 +144,8 @@ type callInfo struct {
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
 	creds                 credentials.PerRPCCredentials
-	codec          Codec
-	contentSubtype string
+	codec                 Codec
+	contentSubtype        string
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -225,7 +225,8 @@ func FailFast(failFast bool) CallOption {
 func CallCodec(codec Codec) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.codec = codec
-	}
+		return nil
+	})
 }
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
@@ -249,7 +250,8 @@ func MaxCallSendMsgSize(s int) CallOption {
 func CallContentSubtype(contentSubtype string) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.contentSubtype = contentSubtype
-	}
+		return nil
+	})
 }
 
 // PerRPCCredentials returns a CallOption that sets credentials.PerRPCCredentials
