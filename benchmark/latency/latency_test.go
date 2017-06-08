@@ -172,13 +172,10 @@ func TestListenerAndDialer(t *testing.T) {
 	l = n.Listener(l)
 
 	var serverConn net.Conn
+	var scErr error
 	scDone := make(chan struct{})
 	go func() {
-		var err error
-		serverConn, err = l.Accept()
-		if err != nil {
-			t.Fatalf("Unexpected error listening: %v", err)
-		}
+		serverConn, scErr = l.Accept()
 		close(scDone)
 	}()
 
@@ -191,6 +188,9 @@ func TestListenerAndDialer(t *testing.T) {
 
 	// Block until server's Conn is available.
 	<-scDone
+	if scErr != nil {
+		t.Fatalf("Unexpected error listening: %v", scErr)
+	}
 	defer serverConn.Close()
 
 	// sleep (only) advances tn.   Done after connections established so sync detects zero delay.
