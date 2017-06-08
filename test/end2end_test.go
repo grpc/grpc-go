@@ -4120,7 +4120,7 @@ func TestFlowControlLogicalRace(t *testing.T) {
 		recvCount   = 2
 		maxFailures = 3
 
-		requestTimeout = time.Second
+		requestTimeout = time.Second * 5
 	)
 
 	requestCount := 10000
