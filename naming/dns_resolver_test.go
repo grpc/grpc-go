@@ -67,7 +67,7 @@ func TestCompileUpdate(t *testing.T) {
 
 func TestResolver(t *testing.T) {
 	r := DNSResolver{}
-	w, err := r.Resolve("216.58.195.238")
+	w, err := r.Resolve("www.google.com")
 	updates, err := w.Next()
 	if err != nil {
 		t.Errorf("%v\n", err)

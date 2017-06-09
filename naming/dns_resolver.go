@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"google.golang.org/grpc/grpclog"
 	"net"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,14 +14,30 @@ type DNSResolver struct {
 }
 
 func (r *DNSResolver) Resolve(target string) (DNSWatcher, error) {
+	// try to separate name and port if the target is in name:port format
+	port := "443"
+	name := target
+	re := regexp.MustCompile("(:[0-9]+){1}$")
+	if p := re.FindString(target); p != "" {
+		// target in the format of {ip|target}:port
+		name = target[:re.FindStringIndex(target)[0]]
+		port = p[1:]
+	}
+	fmt.Println("name: ", name, "\tport: ", port)
 	return DNSWatcher{
-		hostname: target,
+		target: target,
+		name:   name,
+		port:   port,
 	}, nil
 }
 
 type DNSWatcher struct {
-	// hostname to watch address Update
-	hostname string
+	// target to watch address Update. TODO(yuxuanli): delete this? since its info is redundant
+	target string
+	// hostname
+	name string
+	// port number
+	port string
 	// The latest resolved address list
 	curAddrs []*Update
 }
@@ -91,16 +108,7 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 }
 
 func (w *DNSWatcher) Next() ([]*Update, error) {
-	// TODO(yuxuanli): IPv6 address handling. We should check the validity of the hostname somewhere else,
-	// so we can assume the hostname here always follow the spec.
-	cmp := strings.Split(w.hostname, ":")
-	port := "443" /*default port number*/
-	if len(cmp) > 1 {
-		port = cmp[1]
-	}
-	dnsName := cmp[0]
-
-	cname, srvs, err := net.LookupSRV("grpclb", "tcp", dnsName)
+	cname, srvs, err := net.LookupSRV("grpclb", "tcp", w.name)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns srv lookup due to %v.\n", err)
 	}
@@ -108,7 +116,7 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 	// TODO(yuxuanli): delete the below code segment
 	fmt.Println(cname)
 	for _, rc := range srvs {
-		fmt.Printf("%s %d %d %d\n", rc.Target, rc.Port, rc.Priority, rc.Weight)
+		fmt.Printf("srv: %s %d %d %d\n", rc.Target, rc.Port, rc.Priority, rc.Weight)
 	}
 
 	// target has SRV records associated with it
@@ -132,14 +140,14 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 	}
 
 	// If target doesn't have SRV records associated with it, return any A record info available.
-	addrs, err := net.LookupHost(dnsName)
+	addrs, err := net.LookupHost(w.name)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns resolution due to %v.\n", err)
 	}
 	sort.Strings(addrs)
 	newAddrs := make([]*Update, len(addrs))
 	for i, a := range addrs {
-		newAddrs[i] = &Update{Addr: a + ":" + port}
+		newAddrs[i] = &Update{Addr: a + ":" + w.port}
 	}
 	result := compileUpdate(w.curAddrs, newAddrs)
 	w.curAddrs = newAddrs
