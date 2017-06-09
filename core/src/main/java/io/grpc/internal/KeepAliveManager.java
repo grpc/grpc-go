@@ -73,8 +73,7 @@ public class KeepAliveManager {
           // We have received some data. Reschedule the ping with the new time.
           pingFuture = scheduler.schedule(
               sendPing,
-              // normalized as some Netty executor service does not accept a negative delay
-              Math.max(nextKeepaliveTime - ticker.read(), 0L),
+              nextKeepaliveTime - ticker.read(),
               TimeUnit.NANOSECONDS);
           state = State.PING_SCHEDULED;
         }
@@ -186,8 +185,7 @@ public class KeepAliveManager {
       state = State.PING_SCHEDULED;
       pingFuture = scheduler.schedule(
           sendPing,
-          // normalized as some Netty executor service does not accept a negative delay
-          Math.max(nextKeepaliveTime - ticker.read(), 0L),
+          nextKeepaliveTime - ticker.read(),
           TimeUnit.NANOSECONDS);
     } else if (state == State.IDLE_AND_PING_SENT) {
       state = State.PING_SENT;
