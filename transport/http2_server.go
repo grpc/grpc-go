@@ -764,6 +764,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
+	var forceFlush bool
 	// TODO(zhaoq): Support multi-writers for a single stream.
 	var writeHeaderFrame bool
 	s.mu.Lock()
@@ -812,10 +813,14 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 		if ps < sq {
 			// Overbooked stream quota. Return it back.
 			s.sendQuotaPool.add(sq - ps)
+		} else {
+			forceFlush = true
 		}
 		if ps < tq {
 			// Overbooked transport quota. Return it back.
 			t.sendQuotaPool.add(tq - ps)
+		} else {
+			forceFlush = true
 		}
 		t.framer.adjustNumWriters(1)
 		// Got some quota. Try to acquire writing privilege on the
@@ -844,7 +849,6 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			return ContextErr(s.ctx.Err())
 		default:
 		}
-		var forceFlush bool
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
 			forceFlush = true
 		}
@@ -852,9 +856,7 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 			t.Close()
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
-		if t.framer.adjustNumWriters(-1) == 0 {
-			t.framer.flushWrite()
-		}
+		t.framer.adjustNumWriters(-1)
 		t.writableChan <- 0
 	}
 

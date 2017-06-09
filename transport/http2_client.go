@@ -684,6 +684,7 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
+	var forceFlush bool
 	r := bytes.NewBuffer(data)
 	for {
 		var p []byte
@@ -710,16 +711,17 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			if ps < sq {
 				// Overbooked stream quota. Return it back.
 				s.sendQuotaPool.add(sq - ps)
+			} else {
+				forceFlush = true
 			}
 			if ps < tq {
 				// Overbooked transport quota. Return it back.
 				t.sendQuotaPool.add(tq - ps)
+			} else {
+				forceFlush = true
 			}
 		}
-		var (
-			endStream  bool
-			forceFlush bool
-		)
+		var endStream bool
 		if opts.Last && r.Len() == 0 {
 			endStream = true
 		}
@@ -762,9 +764,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			t.notifyError(err)
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
-		if t.framer.adjustNumWriters(-1) == 0 {
-			t.framer.flushWrite()
-		}
+		t.framer.adjustNumWriters(-1)
 		t.writableChan <- 0
 		if r.Len() == 0 {
 			break
