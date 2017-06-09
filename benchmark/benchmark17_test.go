@@ -11,47 +11,28 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 )
 
-func BenchClient(b *testing.B, maxConcurrentCalls, reqSize, respSize int, unaryMode, enableTrace bool) {
-	if enableTrace {
-		grpc.EnableTracing = true
-	} else {
-		grpc.EnableTracing = false
-	}
-	if unaryMode {
-		runUnary(b, maxConcurrentCalls, reqSize, respSize)
-	} else {
-		runStream(b, maxConcurrentCalls, reqSize, respSize)
-	}
-}
-
 func BenchmarkClient(b *testing.B) {
-	const (
-		runModeUnary     = true
-		runModeStreaming = false
-		megabyte         = 1048576
-	)
 	maxConcurrentCalls := []int{1, 8, 64, 512}
-	reqSizeBytes := []int{1, 1 * megabyte}
-	reqspSizeBytes := []int{1, 1 * megabyte}
-
-	for _, mode := range []bool{runModeUnary, runModeStreaming} {
-		for _, enableTracing := range []bool{true, false} {
-			for _, maxC := range maxConcurrentCalls {
-				for _, reqS := range reqSizeBytes {
-					for _, respS := range reqspSizeBytes {
-						tracing := "Tracing"
-						if !enableTracing {
-							tracing = "noTrace"
-						}
-						runMode := "Unary"
-						if !mode {
-							runMode = "Stream"
-						}
-						b.Run(fmt.Sprintf("%s-%s-maxConcurrentCalls_"+
-							"%#v-reqSize_%#v-respSize_%#v", runMode, tracing, maxC, reqS, respS), func(b *testing.B) {
-							BenchClient(b, maxC, reqS, respS, mode, enableTracing)
-						})
-					}
+	reqSizeBytes := []int{1, 1024}
+	reqspSizeBytes := []int{1, 1024}
+	for _, enableTracing := range []bool{true, false} {
+		tracing := "Tracing"
+		grpc.EnableTracing = true
+		if !enableTracing {
+			tracing = "noTrace"
+			grpc.EnableTracing = false
+		}
+		for _, maxC := range maxConcurrentCalls {
+			for _, reqS := range reqSizeBytes {
+				for _, respS := range reqspSizeBytes {
+					b.Run(fmt.Sprintf("Unary-%s-maxConcurrentCalls_"+
+						"%#v-reqSize_%#vB-respSize_%#vB", tracing, maxC, reqS, respS), func(b *testing.B) {
+						runUnary(b, maxC, reqS, respS)
+					})
+					b.Run(fmt.Sprintf("Stream-%s-maxConcurrentCalls_"+
+						"%#v-reqSize_%#vB-respSize_%#vB", tracing, maxC, reqS, respS), func(b *testing.B) {
+						runStream(b, maxC, reqS, respS)
+					})
 				}
 			}
 		}
