@@ -200,7 +200,9 @@ public final class MethodDescriptor<ReqT, RespT> {
    * @param requestMarshaller the marshaller used to encode and decode requests
    * @param responseMarshaller the marshaller used to encode and decode responses
    * @since 1.0.0
+   * @deprecated use {@link #newBuilder()}.
    */
+  @Deprecated
   public static <RequestT, ResponseT> MethodDescriptor<RequestT, ResponseT> create(
       MethodType type, String fullMethodName,
       Marshaller<RequestT> requestMarshaller,

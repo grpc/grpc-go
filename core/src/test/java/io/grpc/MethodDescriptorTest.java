@@ -32,6 +32,7 @@ import org.junit.runners.JUnit4;
 public class MethodDescriptorTest {
   @Test
   public void createMethodDescriptor() {
+    @SuppressWarnings("deprecation") // MethodDescriptor.create
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>create(
         MethodType.CLIENT_STREAMING, "/package.service/method", new StringMarshaller(),
         new StringMarshaller());

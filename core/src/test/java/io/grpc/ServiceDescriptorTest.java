@@ -63,6 +63,7 @@ public class ServiceDescriptorTest {
 
   @Test
   public void failsOnNonMatchingNames() {
+    @SuppressWarnings("deprecation") // MethodDescriptor.create
     List<MethodDescriptor<?, ?>> descriptors = Collections.<MethodDescriptor<?, ?>>singletonList(
         MethodDescriptor.create(
             MethodType.UNARY,
@@ -78,6 +79,7 @@ public class ServiceDescriptorTest {
 
   @Test
   public void failsOnNonDuplicateNames() {
+    @SuppressWarnings("deprecation") // MethodDescriptor.create
     List<MethodDescriptor<?, ?>> descriptors = Arrays.<MethodDescriptor<?, ?>>asList(
         MethodDescriptor.create(
             MethodType.UNARY,

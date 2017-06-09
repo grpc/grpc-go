@@ -131,9 +131,13 @@ public class CensusModulesTest {
         }
       };
 
-  private final MethodDescriptor<String, String> method = MethodDescriptor.create(
-      MethodDescriptor.MethodType.UNKNOWN, "package1.service2/method3",
-      MARSHALLER, MARSHALLER);
+  private final MethodDescriptor<String, String> method =
+      MethodDescriptor.<String, String>newBuilder()
+          .setType(MethodDescriptor.MethodType.UNKNOWN)
+          .setRequestMarshaller(MARSHALLER)
+          .setResponseMarshaller(MARSHALLER)
+          .setFullMethodName("package1.service2/method3")
+          .build();
   private final FakeClock fakeClock = new FakeClock();
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
   private final Random random = new Random(0);
