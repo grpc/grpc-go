@@ -16,11 +16,10 @@ func BenchmarkClient(b *testing.B) {
 	reqSizeBytes := []int{1, 1024}
 	reqspSizeBytes := []int{1, 1024}
 	for _, enableTracing := range []bool{true, false} {
+		grpc.EnableTracing = enableTracing
 		tracing := "Tracing"
-		grpc.EnableTracing = true
 		if !enableTracing {
 			tracing = "noTrace"
-			grpc.EnableTracing = false
 		}
 		for _, maxC := range maxConcurrentCalls {
 			for _, reqS := range reqSizeBytes {
