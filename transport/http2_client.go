@@ -35,7 +35,6 @@ package transport
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -209,9 +208,11 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	if kp.Timeout == 0 {
 		kp.Timeout = defaultClientKeepaliveTimeout
 	}
-	icwz := int32(initialConnWindowSize)
+	dynamicWindow := true
+	icwz := int32(initialWindowSize)
 	if opts.InitialConnWindowSize >= defaultWindowSize {
 		icwz = opts.InitialConnWindowSize
+		dynamicWindow = false
 	}
 	var buf bytes.Buffer
 	t := &http2Client{
@@ -250,17 +251,34 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
+		dynamicWindow = false
 	}
-	t.bdpEst = &bdpEstimator{
-		p: &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
-		send: func(p *ping) {
-			t.controlBuf.put(p)
-		},
-		updateConnWindow: func(n uint32) {
-			fmt.Println("BDP estimation on client:", n)
-		},
+	if dynamicWindow {
+		t.bdpEst = &bdpEstimator{
+			p:   &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
+			bdp: initialWindowSize,
+			send: func(p *ping) {
+				t.controlBuf.put(p)
+			},
+			updateFlowControl: func(n uint32) {
+				t.mu.Lock()
+				for _, s := range t.activeStreams {
+					s.fc.newLimit(n)
+				}
+				t.mu.Unlock()
+				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
+				t.controlBuf.put(&settings{
+					ack: false,
+					ss: []http2.Setting{
+						http2.Setting{
+							ID:  http2.SettingInitialWindowSize,
+							Val: uint32(n),
+						},
+					},
+				})
+			},
+		}
 	}
-
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
 	t.awakenKeepalive <- struct{}{}

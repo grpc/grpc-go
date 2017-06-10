@@ -159,10 +159,9 @@ func (qb *quotaPool) acquire() <-chan int {
 
 // inFlow deals with inbound flow control
 type inFlow struct {
+	mu sync.Mutex
 	// The inbound flow control limit for pending data.
 	limit uint32
-
-	mu sync.Mutex
 	// pendingData is the overall data which have been received but not been
 	// consumed by applications.
 	pendingData uint32
@@ -172,6 +171,14 @@ type inFlow struct {
 	// delta is the extra window update given by receiver when an application
 	// is reading data bigger in size than the inFlow limit.
 	delta uint32
+}
+
+func (f *inFlow) newLimit(n uint32) uint32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d := n - f.limit
+	f.limit = n
+	return d
 }
 
 func (f *inFlow) maybeAdjust(n uint32) uint32 {

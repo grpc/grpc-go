@@ -36,7 +36,6 @@ package transport
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -135,32 +134,35 @@ type http2Server struct {
 func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	framer := newFramer(conn)
 	// Send initial settings as connection preface to client.
-	var settings []http2.Setting
+	var isettings []http2.Setting
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
 	maxStreams := config.MaxStreams
 	if maxStreams == 0 {
 		maxStreams = math.MaxUint32
 	} else {
-		settings = append(settings, http2.Setting{
+		isettings = append(isettings, http2.Setting{
 			ID:  http2.SettingMaxConcurrentStreams,
 			Val: maxStreams,
 		})
 	}
+	dynamicWindow := true
 	iwz := int32(initialWindowSize)
 	if config.InitialWindowSize >= defaultWindowSize {
 		iwz = config.InitialWindowSize
+		dynamicWindow = false
 	}
-	icwz := int32(initialConnWindowSize)
+	icwz := int32(initialWindowSize)
 	if config.InitialConnWindowSize >= defaultWindowSize {
 		icwz = config.InitialConnWindowSize
+		dynamicWindow = false
 	}
 	if iwz != defaultWindowSize {
-		settings = append(settings, http2.Setting{
+		isettings = append(isettings, http2.Setting{
 			ID:  http2.SettingInitialWindowSize,
 			Val: uint32(iwz)})
 	}
-	if err := framer.writeSettings(true, settings...); err != nil {
+	if err := framer.writeSettings(true, isettings...); err != nil {
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
@@ -217,14 +219,32 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep:               kep,
 		initialWindowSize: iwz,
 	}
-	t.bdpEst = &bdpEstimator{
-		p: &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
-		send: func(p *ping) {
-			t.controlBuf.put(p)
-		},
-		updateConnWindow: func(n uint32) {
-			fmt.Println("BDP estimation on Server:", n)
-		},
+	if dynamicWindow {
+		t.bdpEst = &bdpEstimator{
+			p:   &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
+			bdp: initialWindowSize,
+			send: func(p *ping) {
+				t.controlBuf.put(p)
+			},
+			updateFlowControl: func(n uint32) {
+				t.mu.Lock()
+				for _, s := range t.activeStreams {
+					s.fc.newLimit(n)
+				}
+				t.mu.Unlock()
+				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
+				t.controlBuf.put(&settings{
+					ack: false,
+					ss: []http2.Setting{
+						http2.Setting{
+							ID:  http2.SettingInitialWindowSize,
+							Val: uint32(n),
+						},
+					},
+				})
+
+			},
+		}
 	}
 	if t.stats != nil {
 		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
@@ -804,13 +824,6 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 	if writeHeaderFrame {
 		t.WriteHeader(s, nil)
 	}
-	defer func() {
-		if err == nil {
-			// Reset ping strikes when sending data since this might cause
-			// the peer to send ping.
-			atomic.StoreUint32(&t.resetPingStrikes, 1)
-		}
-	}()
 	r := bytes.NewBuffer(data)
 	for {
 		if r.Len() == 0 {
@@ -874,6 +887,9 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
 			forceFlush = true
 		}
+		// Reset ping strikes when sending data since this might cause
+		// the peer to send ping.
+		atomic.StoreUint32(&t.resetPingStrikes, 1)
 		if err := t.framer.writeData(forceFlush, s.id, false, p); err != nil {
 			t.Close()
 			return connectionErrorf(true, err, "transport: %v", err)
