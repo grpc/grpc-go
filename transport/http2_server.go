@@ -206,18 +206,15 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{
-			p:   &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}},
 			bdp: initialWindowSize,
-			send: func(p *ping) {
-				t.controlBuf.put(p)
-			},
 			updateFlowControl: func(n uint32) {
 				t.mu.Lock()
 				for _, s := range t.activeStreams {
 					s.fc.newLimit(n)
 				}
+				t.initialWindowSize = int32(n)
 				t.mu.Unlock()
-				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
+				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
 				t.controlBuf.put(&settings{
 					ack: false,
 					ss: []http2.Setting{
@@ -229,6 +226,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 				})
 
 			},
+			side: "server",
 		}
 	}
 	if t.stats != nil {
@@ -492,12 +490,10 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
 	size := f.Header().Length
-	if err := t.fc.onData(uint32(size)); err != nil {
-		grpclog.Printf("transport: http2Server %v", err)
-		t.Close()
-		return
+	var sendBDPPing bool
+	if t.bdpEst != nil {
+		sendBDPPing = t.bdpEst.add(uint32(size))
 	}
-	t.bdpEst.add(uint32(size))
 	// Decouple connection's flow control from application's read.
 	// An update on connection's flow control should not depend on
 	// whether user application has read the data or not. Such a
@@ -506,8 +502,21 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// Decoupling the connection flow control will prevent other
 	// active(fast) streams from starving in presence of slow or
 	// inactive streams.
-	if w := t.fc.onRead(uint32(size)); w > 0 {
-		t.controlBuf.put(&windowUpdate{0, w, true})
+	//
+	// Furthermore, if a bdpPing is being sent out we can piggyback
+	// connection's window update for the bytes we just received.
+	if sendBDPPing {
+		t.controlBuf.put(&windowUpdate{0, uint32(size), false})
+		t.controlBuf.put(bdpPing)
+	} else {
+		if err := t.fc.onData(uint32(size)); err != nil {
+			grpclog.Printf("transport: http2Server %v", err)
+			t.Close()
+			return
+		}
+		if w := t.fc.onRead(uint32(size)); w > 0 {
+			t.controlBuf.put(&windowUpdate{0, w, true})
+		}
 	}
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
@@ -581,7 +590,9 @@ const (
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() { // Do nothing.
 		// Maybe it's a BDP ping.
-		t.bdpEst.calculate(f.Data)
+		if t.bdpEst != nil {
+			t.bdpEst.calculate(f.Data)
+		}
 		return
 	}
 	pingAck := &ping{ack: true}
@@ -1029,6 +1040,9 @@ func (t *http2Server) controller() {
 					t.framer.flushWrite()
 				case *ping:
 					t.framer.writePing(true, i.ack, i.data)
+					if !i.ack {
+						t.bdpEst.timesnap(i.data)
+					}
 				default:
 					grpclog.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
 				}
