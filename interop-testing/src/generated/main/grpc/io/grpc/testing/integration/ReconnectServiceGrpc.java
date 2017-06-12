@@ -41,6 +41,7 @@ public final class ReconnectServiceGrpc {
               com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
+          .setSchemaDescriptor(new ReconnectServiceMethodDescriptorSupplier("Start"))
           .build();
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
   public static final io.grpc.MethodDescriptor<com.google.protobuf.EmptyProtos.Empty,
@@ -53,6 +54,7 @@ public final class ReconnectServiceGrpc {
               com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.testing.integration.Messages.ReconnectInfo.getDefaultInstance()))
+          .setSchemaDescriptor(new ReconnectServiceMethodDescriptorSupplier("Stop"))
           .build();
 
   /**
@@ -275,10 +277,38 @@ public final class ReconnectServiceGrpc {
     }
   }
 
-  private static final class ReconnectServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+  private static abstract class ReconnectServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
+    ReconnectServiceBaseDescriptorSupplier() {}
+
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.testing.integration.Test.getDescriptor();
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {
+      return getFileDescriptor().findServiceByName("ReconnectService");
+    }
+  }
+
+  private static final class ReconnectServiceFileDescriptorSupplier
+      extends ReconnectServiceBaseDescriptorSupplier {
+    ReconnectServiceFileDescriptorSupplier() {}
+  }
+
+  private static final class ReconnectServiceMethodDescriptorSupplier
+      extends ReconnectServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
+    private final String methodName;
+
+    ReconnectServiceMethodDescriptorSupplier(String methodName) {
+      this.methodName = methodName;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {
+      return getServiceDescriptor().findMethodByName(methodName);
     }
   }
 
@@ -291,7 +321,7 @@ public final class ReconnectServiceGrpc {
         result = serviceDescriptor;
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
-              .setSchemaDescriptor(new ReconnectServiceDescriptorSupplier())
+              .setSchemaDescriptor(new ReconnectServiceFileDescriptorSupplier())
               .addMethod(METHOD_START)
               .addMethod(METHOD_STOP)
               .build();

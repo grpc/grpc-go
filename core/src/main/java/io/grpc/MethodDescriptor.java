@@ -42,6 +42,7 @@ public final class MethodDescriptor<ReqT, RespT> {
   private final String fullMethodName;
   private final Marshaller<ReqT> requestMarshaller;
   private final Marshaller<RespT> responseMarshaller;
+  private final @Nullable Object schemaDescriptor;
   private final boolean idempotent;
   private final boolean safe;
 
@@ -208,7 +209,7 @@ public final class MethodDescriptor<ReqT, RespT> {
       Marshaller<RequestT> requestMarshaller,
       Marshaller<ResponseT> responseMarshaller) {
     return new MethodDescriptor<RequestT, ResponseT>(
-        type, fullMethodName, requestMarshaller, responseMarshaller, false, false);
+        type, fullMethodName, requestMarshaller, responseMarshaller, null, false, false);
   }
 
   private MethodDescriptor(
@@ -216,6 +217,7 @@ public final class MethodDescriptor<ReqT, RespT> {
       String fullMethodName,
       Marshaller<ReqT> requestMarshaller,
       Marshaller<RespT> responseMarshaller,
+      Object schemaDescriptor,
       boolean idempotent,
       boolean safe) {
 
@@ -223,6 +225,7 @@ public final class MethodDescriptor<ReqT, RespT> {
     this.fullMethodName = Preconditions.checkNotNull(fullMethodName, "fullMethodName");
     this.requestMarshaller = Preconditions.checkNotNull(requestMarshaller, "requestMarshaller");
     this.responseMarshaller = Preconditions.checkNotNull(responseMarshaller, "responseMarshaller");
+    this.schemaDescriptor = schemaDescriptor;
     this.idempotent = idempotent;
     this.safe = safe;
     Preconditions.checkArgument(!safe || type == MethodType.UNARY,
@@ -309,6 +312,20 @@ public final class MethodDescriptor<ReqT, RespT> {
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2592")
   public Marshaller<RespT> getResponseMarshaller() {
     return responseMarshaller;
+  }
+
+  /**
+   * Returns the schema descriptor for this method. A schema descriptor is an object that is not
+   * used by gRPC core but includes information related to the service method. The type of the
+   * object is specific to the consumer, so both the code setting the schema descriptor and the code
+   * calling {@link #getSchemaDescriptor()} must coordinate.  For example, protobuf generated code
+   * sets this value, in order to be consumed by the server reflection service.  See also:
+   * {@code io.grpc.protobuf.ProtoMethodDescriptorSupplier}.
+   *
+   * @since 1.7.0
+   */
+  public @Nullable Object getSchemaDescriptor() {
+    return schemaDescriptor;
   }
 
   /**
@@ -425,6 +442,7 @@ public final class MethodDescriptor<ReqT, RespT> {
     private String fullMethodName;
     private boolean idempotent;
     private boolean safe;
+    private Object schemaDescriptor;
 
     private Builder() {}
 
@@ -474,6 +492,20 @@ public final class MethodDescriptor<ReqT, RespT> {
     }
 
     /**
+     * Sets the schema descriptor for this builder.  A schema descriptor is an object that is not
+     * used by gRPC core but includes information related to the methods. The type of the object
+     * is specific to the consumer, so both the code calling this and the code calling
+     * {@link MethodDescriptor#getSchemaDescriptor()} must coordinate.
+     *
+     * @param schemaDescriptor an object that describes the service structure.  Should be immutable.
+     * @since 1.7.0
+     */
+    public Builder<ReqT, RespT> setSchemaDescriptor(@Nullable Object schemaDescriptor) {
+      this.schemaDescriptor = schemaDescriptor;
+      return this;
+    }
+
+    /**
      * Sets whether the method is idempotent.  If true, calling this method more than once doesn't
      * have additional side effects.
      *
@@ -509,6 +541,7 @@ public final class MethodDescriptor<ReqT, RespT> {
           fullMethodName,
           requestMarshaller,
           responseMarshaller,
+          schemaDescriptor,
           idempotent,
           safe);
     }

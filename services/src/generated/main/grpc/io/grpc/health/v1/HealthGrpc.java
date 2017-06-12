@@ -38,6 +38,7 @@ public final class HealthGrpc {
               io.grpc.health.v1.HealthCheckRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.health.v1.HealthCheckResponse.getDefaultInstance()))
+          .setSchemaDescriptor(new HealthMethodDescriptorSupplier("Check"))
           .build();
 
   /**
@@ -206,10 +207,38 @@ public final class HealthGrpc {
     }
   }
 
-  private static final class HealthDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+  private static abstract class HealthBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
+    HealthBaseDescriptorSupplier() {}
+
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.health.v1.HealthProto.getDescriptor();
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {
+      return getFileDescriptor().findServiceByName("Health");
+    }
+  }
+
+  private static final class HealthFileDescriptorSupplier
+      extends HealthBaseDescriptorSupplier {
+    HealthFileDescriptorSupplier() {}
+  }
+
+  private static final class HealthMethodDescriptorSupplier
+      extends HealthBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
+    private final String methodName;
+
+    HealthMethodDescriptorSupplier(String methodName) {
+      this.methodName = methodName;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {
+      return getServiceDescriptor().findMethodByName(methodName);
     }
   }
 
@@ -222,7 +251,7 @@ public final class HealthGrpc {
         result = serviceDescriptor;
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
-              .setSchemaDescriptor(new HealthDescriptorSupplier())
+              .setSchemaDescriptor(new HealthFileDescriptorSupplier())
               .addMethod(METHOD_CHECK)
               .build();
         }

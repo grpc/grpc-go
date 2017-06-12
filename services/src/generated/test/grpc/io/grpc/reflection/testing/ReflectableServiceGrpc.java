@@ -38,6 +38,7 @@ public final class ReflectableServiceGrpc {
               io.grpc.reflection.testing.Request.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.reflection.testing.Reply.getDefaultInstance()))
+          .setSchemaDescriptor(new ReflectableServiceMethodDescriptorSupplier("Method"))
           .build();
 
   /**
@@ -206,10 +207,38 @@ public final class ReflectableServiceGrpc {
     }
   }
 
-  private static final class ReflectableServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+  private static abstract class ReflectableServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
+    ReflectableServiceBaseDescriptorSupplier() {}
+
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.reflection.testing.ReflectionTestProto.getDescriptor();
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {
+      return getFileDescriptor().findServiceByName("ReflectableService");
+    }
+  }
+
+  private static final class ReflectableServiceFileDescriptorSupplier
+      extends ReflectableServiceBaseDescriptorSupplier {
+    ReflectableServiceFileDescriptorSupplier() {}
+  }
+
+  private static final class ReflectableServiceMethodDescriptorSupplier
+      extends ReflectableServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
+    private final String methodName;
+
+    ReflectableServiceMethodDescriptorSupplier(String methodName) {
+      this.methodName = methodName;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {
+      return getServiceDescriptor().findMethodByName(methodName);
     }
   }
 
@@ -222,7 +251,7 @@ public final class ReflectableServiceGrpc {
         result = serviceDescriptor;
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
-              .setSchemaDescriptor(new ReflectableServiceDescriptorSupplier())
+              .setSchemaDescriptor(new ReflectableServiceFileDescriptorSupplier())
               .addMethod(METHOD_METHOD)
               .build();
         }

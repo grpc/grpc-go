@@ -38,6 +38,7 @@ public final class ReportQpsScenarioServiceGrpc {
               io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()))
+          .setSchemaDescriptor(new ReportQpsScenarioServiceMethodDescriptorSupplier("ReportScenario"))
           .build();
 
   /**
@@ -218,10 +219,38 @@ public final class ReportQpsScenarioServiceGrpc {
     }
   }
 
-  private static final class ReportQpsScenarioServiceDescriptorSupplier implements io.grpc.protobuf.ProtoFileDescriptorSupplier {
+  private static abstract class ReportQpsScenarioServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoFileDescriptorSupplier, io.grpc.protobuf.ProtoServiceDescriptorSupplier {
+    ReportQpsScenarioServiceBaseDescriptorSupplier() {}
+
     @java.lang.Override
     public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {
       return io.grpc.benchmarks.proto.Services.getDescriptor();
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {
+      return getFileDescriptor().findServiceByName("ReportQpsScenarioService");
+    }
+  }
+
+  private static final class ReportQpsScenarioServiceFileDescriptorSupplier
+      extends ReportQpsScenarioServiceBaseDescriptorSupplier {
+    ReportQpsScenarioServiceFileDescriptorSupplier() {}
+  }
+
+  private static final class ReportQpsScenarioServiceMethodDescriptorSupplier
+      extends ReportQpsScenarioServiceBaseDescriptorSupplier
+      implements io.grpc.protobuf.ProtoMethodDescriptorSupplier {
+    private final String methodName;
+
+    ReportQpsScenarioServiceMethodDescriptorSupplier(String methodName) {
+      this.methodName = methodName;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {
+      return getServiceDescriptor().findMethodByName(methodName);
     }
   }
 
@@ -234,7 +263,7 @@ public final class ReportQpsScenarioServiceGrpc {
         result = serviceDescriptor;
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
-              .setSchemaDescriptor(new ReportQpsScenarioServiceDescriptorSupplier())
+              .setSchemaDescriptor(new ReportQpsScenarioServiceFileDescriptorSupplier())
               .addMethod(METHOD_REPORT_SCENARIO)
               .build();
         }

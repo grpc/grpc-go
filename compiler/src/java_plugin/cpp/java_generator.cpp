@@ -367,7 +367,17 @@ static void PrintMethodFields(
           "        .setRequestMarshaller($ProtoUtils$.marshaller(\n"
           "            $input_type$.getDefaultInstance()))\n"
           "        .setResponseMarshaller($ProtoUtils$.marshaller(\n"
-          "            $output_type$.getDefaultInstance()))\n"
+          "            $output_type$.getDefaultInstance()))\n");
+
+      (*vars)["proto_method_descriptor_supplier"] = service->name() + "MethodDescriptorSupplier";
+      if (flavor == ProtoFlavor::NORMAL) {
+        p->Print(
+            *vars,
+          "        .setSchemaDescriptor(new $proto_method_descriptor_supplier$(\"$method_name$\"))\n");
+      }
+
+      p->Print(
+          *vars,
           "        .build();\n");
     }
   }
@@ -893,22 +903,46 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
 
 
   if (flavor == ProtoFlavor::NORMAL) {
-    (*vars)["proto_descriptor_supplier"] = service->name() + "DescriptorSupplier";
+    (*vars)["proto_base_descriptor_supplier"] = service->name() + "BaseDescriptorSupplier";
+    (*vars)["proto_file_descriptor_supplier"] = service->name() + "FileDescriptorSupplier";
+    (*vars)["proto_method_descriptor_supplier"] = service->name() + "MethodDescriptorSupplier";
     (*vars)["proto_class_name"] = google::protobuf::compiler::java::ClassName(service->file());
     p->Print(
         *vars,
-        "private static final class $proto_descriptor_supplier$ implements $ProtoFileDescriptorSupplier$ {\n");
-    p->Indent();
-    p->Print(*vars, "@$Override$\n");
-    p->Print(
-        *vars,
-        "public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {\n");
-    p->Indent();
-    p->Print(*vars, "return $proto_class_name$.getDescriptor();\n");
-    p->Outdent();
-    p->Print(*vars, "}\n");
-    p->Outdent();
-    p->Print(*vars, "}\n\n");
+        "private static abstract class $proto_base_descriptor_supplier$\n"
+        "    implements $ProtoFileDescriptorSupplier$, $ProtoServiceDescriptorSupplier$ {\n"
+        "  $proto_base_descriptor_supplier$() {}\n"
+        "\n"
+        "  @$Override$\n"
+        "  public com.google.protobuf.Descriptors.FileDescriptor getFileDescriptor() {\n"
+        "    return $proto_class_name$.getDescriptor();\n"
+        "  }\n"
+        "\n"
+        "  @$Override$\n"
+        "  public com.google.protobuf.Descriptors.ServiceDescriptor getServiceDescriptor() {\n"
+        "    return getFileDescriptor().findServiceByName(\"$service_name$\");\n"
+        "  }\n"
+        "}\n"
+        "\n"
+        "private static final class $proto_file_descriptor_supplier$\n"
+        "    extends $proto_base_descriptor_supplier$ {\n"
+        "  $proto_file_descriptor_supplier$() {}\n"
+        "}\n"
+        "\n"
+        "private static final class $proto_method_descriptor_supplier$\n"
+        "    extends $proto_base_descriptor_supplier$\n"
+        "    implements $ProtoMethodDescriptorSupplier$ {\n"
+        "  private final String methodName;\n"
+        "\n"
+        "  $proto_method_descriptor_supplier$(String methodName) {\n"
+        "    this.methodName = methodName;\n"
+        "  }\n"
+        "\n"
+        "  @$Override$\n"
+        "  public com.google.protobuf.Descriptors.MethodDescriptor getMethodDescriptor() {\n"
+        "    return getServiceDescriptor().findMethodByName(methodName);\n"
+        "  }\n"
+        "}\n\n");
   }
 
   p->Print(
@@ -940,7 +974,7 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   if (flavor == ProtoFlavor::NORMAL) {
     p->Print(
         *vars,
-        "\n.setSchemaDescriptor(new $proto_descriptor_supplier$())");
+        "\n.setSchemaDescriptor(new $proto_file_descriptor_supplier$())");
   }
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
@@ -1190,6 +1224,10 @@ void GenerateService(const ServiceDescriptor* service,
       "io.grpc.ServiceDescriptor";
   vars["ProtoFileDescriptorSupplier"] =
       "io.grpc.protobuf.ProtoFileDescriptorSupplier";
+  vars["ProtoServiceDescriptorSupplier"] =
+      "io.grpc.protobuf.ProtoServiceDescriptorSupplier";
+  vars["ProtoMethodDescriptorSupplier"] =
+      "io.grpc.protobuf.ProtoMethodDescriptorSupplier";
   vars["AbstractStub"] = "io.grpc.stub.AbstractStub";
   vars["MethodDescriptor"] = "io.grpc.MethodDescriptor";
   vars["NanoUtils"] = "io.grpc.protobuf.nano.NanoUtils";
