@@ -105,11 +105,11 @@ func TestCompileUpdate(t *testing.T) {
 }
 
 var addrToResolve = []string{
-	"www.google.com",
+// "www.google.com",
 }
 
 var addrResolved = [][]*Update{
-	{newUpdate(Add, "216.58.194.196:443"), newUpdate(Add, "2607:f8b0:4005:808::2004:443")},
+// {newUpdate(Add, "216.58.194.196:443"), newUpdate(Add, "2607:f8b0:4005:808::2004:443")},
 }
 
 func TestResolver(t *testing.T) {
@@ -121,7 +121,7 @@ func TestResolver(t *testing.T) {
 			t.Errorf("%v\n", err)
 		}
 		if !checkEquality(addrResolved[i], updates) {
-			t.Errorf("Wrong resolved update , idx: %d, name %s\n", i, a)
+			t.Errorf("Wrong resolved update , idx: %d, name: %s\n", i, a)
 		}
 		for _, u := range updates {
 			if u.Op == Add {
