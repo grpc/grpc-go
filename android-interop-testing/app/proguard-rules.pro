@@ -13,6 +13,7 @@
 -dontwarn com.google.common.**
 -dontwarn javax.naming.**
 -dontwarn okio.**
+-dontwarn org.junit.**
 -dontwarn org.mockito.**
 -dontwarn sun.reflect.**
 # Ignores: can't find referenced class javax.lang.model.element.Modifier

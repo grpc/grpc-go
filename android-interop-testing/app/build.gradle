@@ -11,6 +11,7 @@ android {
         targetSdkVersion 22
         versionCode 1
         versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         debug {
@@ -55,14 +56,19 @@ protobuf {
 }
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:22.1.1'
+    compile 'com.android.support:appcompat-v7:22.2.1'
+    compile 'com.android.support:support-annotations:23.1.1'
     compile 'com.google.android.gms:play-services-base:7.3.0'
-    // You need to build grpc-java to obtain these libraries below.
+    // You need to build grpc-java to obtain the grpc libraries below.
     compile 'io.grpc:grpc-protobuf-nano:1.5.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-okhttp:1.5.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-stub:1.5.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'io.grpc:grpc-testing:1.5.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
+    compile 'junit:junit:4.12'
+
+    androidTestCompile 'com.android.support.test:rules:0.5'
+    androidTestCompile 'com.android.support.test:runner:0.5'
 }
 
 gradle.projectsEvaluated {
