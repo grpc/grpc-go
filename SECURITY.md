@@ -62,7 +62,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
-      <version>1.1.33.Fork26</version>
+      <version>2.0.3.Final</version>
     </dependency>
   </dependencies>
 </project>
@@ -80,7 +80,7 @@ buildscript {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative-boringssl-static:1.1.33.Fork26'
+    compile 'io.netty:netty-tcnative-boringssl-static:2.0.3.Final'
 }
 ```
 
@@ -115,7 +115,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative</artifactId>
-      <version>1.1.33.Fork26</version>
+      <version>2.0.3.Final</version>
       <classifier>${tcnative.classifier}</classifier>
     </dependency>
   </dependencies>
@@ -183,7 +183,7 @@ if (osdetector.os == "linux" && osdetector.release.isLike("fedora")) {
 }
 
 dependencies {
-    compile 'io.netty:netty-tcnative:1.1.33.Fork26:' + tcnative_classifier
+    compile 'io.netty:netty-tcnative:2.0.3.Final:' + tcnative_classifier
 }
 ```
 
