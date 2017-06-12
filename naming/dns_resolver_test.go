@@ -37,31 +37,31 @@ func checkEquality(a []*Update, b []*Update) bool {
 }
 
 var updateTestcases = []testcase{
-	testcase{
+	{
 		oldAddrs: []string{},
 		newAddrs: []string{"1.0.0.1"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.1"},
 		newAddrs: []string{"1.0.0.1"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.0"},
 		newAddrs: []string{"1.0.0.1"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.1"},
 		newAddrs: []string{"1.0.0.0"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.1"},
 		newAddrs: []string{"1.0.0.1", "1.0.0.2", "1.0.0.3"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.1", "1.0.0.2", "1.0.0.3"},
 		newAddrs: []string{"1.0.0.0"},
 	},
-	testcase{
+	{
 		oldAddrs: []string{"1.0.0.1", "1.0.0.3", "1.0.0.5"},
 		newAddrs: []string{"1.0.0.2", "1.0.0.3", "1.0.0.6"},
 	},

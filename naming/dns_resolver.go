@@ -1,13 +1,14 @@
 package naming
 
 import (
-	"google.golang.org/grpc/grpclog"
 	"net"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/grpclog"
 )
 
 type DNSResolver struct {
