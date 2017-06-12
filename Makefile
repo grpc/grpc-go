@@ -28,6 +28,12 @@ proto:
 	for dir in $$(git ls-files '*.proto' | xargs -n1 dirname | uniq); do \
 		protoc -I $$dir --go_out=plugins=grpc:$$dir $$dir/*.proto; \
 	done
+	cat grpclb/grpc_lb_v1/load_balancer.pb.go | \
+		sed 's!^package.*!&;import lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1"!' | \
+		sed 's/LoadBalanceRequest/lbpb.LoadBalanceRequest/g' | \
+		sed 's/LoadBalanceResponse/lbpb.LoadBalanceResponse/g' | \
+		sed 's/package grpc_lb_v1/package grpclb/' | gofmt > grpclb/grpclb_load_balancer.pb.go
+	rm grpclb/grpc_lb_v1/load_balancer.pb.go
 
 test: testdeps
 	go test -v -cpu 1,4 google.golang.org/grpc/...

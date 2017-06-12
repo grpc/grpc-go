@@ -193,7 +193,7 @@ func (b *remoteBalancer) stop() {
 	close(b.done)
 }
 
-func (b *remoteBalancer) BalanceLoad(stream *loadBalancerBalanceLoadServer) error {
+func (b *remoteBalancer) BalanceLoad(stream LoadBalancer_BalanceLoadServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -342,7 +342,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		return
 	}
 	ls = newRemoteBalancer(nil, nil)
-	registerLoadBalancerServer(lb, ls)
+	RegisterLoadBalancerServer(lb, ls)
 	go func() {
 		lb.Serve(lbLis)
 	}()

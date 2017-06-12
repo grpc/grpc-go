@@ -10,8 +10,10 @@ go_import_path: google.golang.org/grpc
 before_install:
   - if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then go get -u github.com/golang/lint/golint honnef.co/go/tools/cmd/staticcheck; fi
   - go get -u golang.org/x/tools/cmd/goimports github.com/axw/gocov/gocov github.com/mattn/goveralls golang.org/x/tools/cmd/cover
+  - if [ "$TRAVIS_EVENT_TYPE" = cron ]; then PROTOBUF_VERSION=3.1.0 ./install-protobuf.sh && PATH=/home/travis/bin:$PATH protoc --version; fi
 
 script:
+  - if [ "$TRAVIS_EVENT_TYPE" = cron ]; then PATH=/home/travis/bin:$PATH make proto && ! git status --porcelain | read || (git status; git diff; exit 1); fi
   - '! gofmt -s -d -l . 2>&1 | read'
   - '! goimports -l . | read'
   - 'if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then ! golint ./... | grep -vE "(_mock|_string|\.pb)\.go:"; fi'
