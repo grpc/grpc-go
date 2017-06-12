@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -367,6 +368,28 @@ public class ServerImplTest {
     verify(streamTracerFactory).newServerStreamTracer(eq("Waiter/nonexist"), same(requestHeaders));
     verify(streamTracer, never()).serverCallStarted(any(ServerCall.class));
     assertEquals(Status.Code.UNIMPLEMENTED, statusCaptor.getValue().getCode());
+  }
+
+  @Test
+  public void decompressorNotFound() throws Exception {
+    String decompressorName = "NON_EXISTENT_DECOMPRESSOR";
+    createAndStartServer(NO_FILTERS);
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+    Metadata requestHeaders = new Metadata();
+    requestHeaders.put(MESSAGE_ENCODING_KEY, decompressorName);
+    StatsTraceContext statsTraceCtx =
+        StatsTraceContext.newServerContext(
+            streamTracerFactories, "Waiter/nonexist", requestHeaders);
+    when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
+
+    transportListener.streamCreated(stream, "Waiter/nonexist", requestHeaders);
+
+    verify(stream).close(statusCaptor.capture(), any(Metadata.class));
+    Status status = statusCaptor.getValue();
+    assertEquals(Status.Code.UNIMPLEMENTED, status.getCode());
+    assertEquals("Can't find decompressor for " + decompressorName, status.getDescription());
+    verifyNoMoreInteractions(stream);
   }
 
   @Test

@@ -30,7 +30,6 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
-import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.InternalDecompressorRegistry;
 import io.grpc.Metadata;
@@ -65,17 +64,6 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     this.messageAcceptEncoding = inboundHeaders.get(MESSAGE_ACCEPT_ENCODING_KEY);
     this.decompressorRegistry = decompressorRegistry;
     this.compressorRegistry = compressorRegistry;
-
-    if (inboundHeaders.containsKey(MESSAGE_ENCODING_KEY)) {
-      String encoding = inboundHeaders.get(MESSAGE_ENCODING_KEY);
-      Decompressor decompressor = decompressorRegistry.lookupDecompressor(encoding);
-      if (decompressor == null) {
-        throw Status.UNIMPLEMENTED
-            .withDescription(String.format("Can't find decompressor for %s", encoding))
-            .asRuntimeException();
-      }
-      stream.setDecompressor(decompressor);
-    }
   }
 
   @Override
