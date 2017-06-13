@@ -235,8 +235,15 @@ func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
 	)
 	for _, s := range servers {
 		md := metadata.Pairs("lb-token", s.LoadBalanceToken)
+		ip := net.IP(s.IpAddress)
+		ipStr := ip.String()
+		if ip.To4() == nil {
+			// Add square brackets to ipv6 addresses, otherwise net.Dial() and
+			// net.SplitHostPort() will return too many colons error.
+			ipStr = fmt.Sprintf("[%s]", ipStr)
+		}
 		addr := Address{
-			Addr:     fmt.Sprintf("%s:%d", net.IP(s.IpAddress), s.Port),
+			Addr:     fmt.Sprintf("%s:%d", ipStr, s.Port),
 			Metadata: &md,
 		}
 		sl = append(sl, &grpclbAddrInfo{

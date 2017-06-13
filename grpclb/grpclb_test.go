@@ -129,8 +129,9 @@ func (r *testNameResolver) inject(updates []*naming.Update) {
 }
 
 type serverNameCheckCreds struct {
-	expected string
+	mu       sync.Mutex
 	sn       string
+	expected string
 }
 
 func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -141,6 +142,8 @@ func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, cred
 	return rawConn, nil, nil
 }
 func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	b := make([]byte, len(c.expected))
 	if _, err := rawConn.Read(b); err != nil {
 		fmt.Printf("Failed to read the server name from the server %v", err)
@@ -153,14 +156,20 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string,
 	return rawConn, nil, nil
 }
 func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return credentials.ProtocolInfo{}
 }
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return &serverNameCheckCreds{
 		expected: c.expected,
 	}
 }
 func (c *serverNameCheckCreds) OverrideServerName(s string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.expected = s
 	return nil
 }
