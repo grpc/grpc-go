@@ -92,7 +92,8 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	// If the current sample (which is smaller than or equal to the 1.5 times the real BDP) is
 	// greater than or equal to 2/3rd our perceived bdp AND this is the maximum bandwidth seen so far, we
 	// should update our perception of the network BDP.
-	if float64(b.sample) >= float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
+	//if float64(b.sample) >= float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
+	if bwCurrent == b.bwMax {
 		// debug beg
 		//fmt.Printf("The sample causing bdp to go up on %s-side: %v\n", b.side, b.sample)
 		// debug end
@@ -100,11 +101,19 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 		// Put our bdp to be smaller than or equal to twice the real BDP.
 		// We really should multiply with 4/3, however to round things out
 		// we use 2 as the multiplication factor.
-		b.bdp = uint32(float64(2) * float64(b.sample))
+		//b.bdp = uint32(float64(2) * float64(b.sample))
+		// trying a different mechanism to grow bdp
+		bdp := uint32(bwCurrent*b.rtt) * 2
+		if bdp > b.bdp {
+			b.bdp = bdp
+		} else {
+			b.mu.Unlock()
+			return
+		}
 		if b.bdp > limit {
 			b.bdp = limit
 		}
-		bdp := b.bdp
+		bdp = b.bdp
 		b.mu.Unlock()
 		// debug beg
 		fmt.Println(b.side, " updating bdp to:", bdp)
