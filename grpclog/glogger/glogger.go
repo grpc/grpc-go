@@ -16,9 +16,7 @@
  *
  */
 
-/*
-Package glogger defines glog-based logging for grpc.
-*/
+// Package glogger defines glog-based logging for grpc.
 package glogger
 
 import (

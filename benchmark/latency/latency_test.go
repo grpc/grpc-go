@@ -15,6 +15,7 @@
  * limitations under the License.
  *
  */
+
 package latency
 
 import (
