@@ -3,6 +3,7 @@ package naming
 import (
 	"net"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,7 +130,19 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 					})
 				}
 			}
-			sort.SliceStable(newAddrs, func(i, j int) bool { return strings.Compare(newAddrs[i].Addr, newAddrs[j].Addr) < 0 })
+			r := regexp.MustCompile("[0-9]+.[0-9]+")
+			if strings.Compare(r.FindString(runtime.Version()), "1.8") >= 0 {
+				sort.Slice(newAddrs, func(i, j int) bool { return strings.Compare(newAddrs[i].Addr, newAddrs[j].Addr) < 0 })
+			} else {
+				// Use insertion sort to do the sorting for go1.6 and go1.7 where sort.Slice is not implemented.
+				for i := 1; i < len(newAddrs); i++ {
+					for j := i; j > 0 && strings.Compare(newAddrs[j-1].Addr, newAddrs[j].Addr) > 0; j-- {
+						tmp := newAddrs[j]
+						newAddrs[j] = newAddrs[j-1]
+						newAddrs[j-1] = tmp
+					}
+				}
+			}
 		} else {
 			// If target doesn't have SRV records associated with it, return any A record info available.
 			addrs, err := net.LookupHost(w.name)
