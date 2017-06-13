@@ -1039,10 +1039,10 @@ func (t *http2Server) controller() {
 				case *flushIO:
 					t.framer.flushWrite()
 				case *ping:
-					t.framer.writePing(true, i.ack, i.data)
 					if !i.ack {
 						t.bdpEst.timesnap(i.data)
 					}
+					t.framer.writePing(true, i.ack, i.data)
 				default:
 					grpclog.Printf("transport: http2Server.controller got unexpected item type %v\n", i)
 				}

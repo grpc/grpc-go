@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -49,7 +50,8 @@ func (b *bdpEstimator) add(n uint32) bool {
 	}
 	if !b.isSent {
 		b.isSent = true
-		b.sample = 0
+		b.sample = n
+		b.sentAt = time.Time{}
 		return true
 	}
 	b.sample += n
@@ -70,19 +72,25 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	bwCurrent := float64(b.sample) / rtt
 	if bwCurrent > b.bwMax {
 		// debug beg
-		//fmt.Printf("Max bw noted on %s-side: %v. Sample was: %v and  RTT was %v secs\n", b.side, bwCurrent, b.sample, rtt)
+		fmt.Printf("Max bw noted on %s-side: %v. Sample was: %v and  RTT was %v secs\n", b.side, bwCurrent, b.sample, rtt)
 		// debug end
 		b.bwMax = bwCurrent
 	}
-	if float64(b.sample) > 0.66*float64(b.bdp) && bwCurrent == b.bwMax {
+	if float64(b.sample) > float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
 		// debug beg
 		//fmt.Printf("The sample causing bdp to go up on %s-side: %v\n", b.side, b.sample)
 		// debug end
-		b.bdp *= 2
+		b.bdp = uint32(2) * b.sample
 		if b.bdp > limit {
 			b.bdp = limit
 		}
+		bdp := b.bdp
+		b.mu.Unlock()
+		// debug beg
+		fmt.Println(b.side, " updating bdp to:", bdp)
+		// debug end
+		b.updateFlowControl(bdp)
+		return
 	}
 	b.mu.Unlock()
-	b.updateFlowControl(b.bdp)
 }
