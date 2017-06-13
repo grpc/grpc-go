@@ -599,7 +599,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	testC := testpb.NewTestServiceClient(cc)
 	var previousTrailer string
 	trailer := metadata.MD{}
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	} else {
 		previousTrailer = trailer[testmdkey][0]
@@ -608,7 +608,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	// When lbs[0] is stopped, lbs[1] should be used.
 	lbs[0].Stop()
 	for {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		} else if trailer[testmdkey][0] != previousTrailer {
 			// A new backend server should receive the request.
@@ -631,7 +631,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	// Stop lbs[1]. Now lbs[0] and lbs[1] are all stopped. lbs[2] should be used.
 	lbs[1].Stop()
 	for {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		} else if trailer[testmdkey][0] != previousTrailer {
 			// A new backend server should receive the request.
