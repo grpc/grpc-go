@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/benchmark"
+	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -28,7 +29,8 @@ func main() {
 			grpclog.Fatalf("Failed to serve: %v", err)
 		}
 	}()
-	addr, stopper := benchmark.StartServer(benchmark.ServerInfo{Addr: ":0", Type: "protobuf"}) // listen on all interfaces
+	nw := &latency.Network{}
+	addr, stopper := benchmark.StartServer(nw, benchmark.ServerInfo{Addr: ":0", Type: "protobuf"}) // listen on all interfaces
 	grpclog.Println("Server Address: ", addr)
 	<-time.After(time.Duration(*duration) * time.Second)
 	stopper()

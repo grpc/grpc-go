@@ -85,7 +85,8 @@ func (stats *Stats) maybeUpdate() {
 	stats.histogram = NewHistogram(HistogramOptions{
 		NumBuckets: numBuckets,
 		// max-min(lower bound of last bucket) = (1 + growthFactor)^(numBuckets-2) * baseBucketSize.
-		GrowthFactor:   math.Pow(float64(stats.max-stats.min), 1/float64(numBuckets-2)) - 1,
+		// GrowthFactor can't be 0
+		GrowthFactor:   math.Pow(float64(stats.max-stats.min), 1/float64(numBuckets-2)) - 0.999,
 		BaseBucketSize: 1.0,
 		MinValue:       stats.min})
 

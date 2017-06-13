@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
+	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 )
@@ -137,8 +138,11 @@ type ServerInfo struct {
 
 // StartServer starts a gRPC server serving a benchmark service according to info.
 // It returns its listen address and a function to stop the server.
-func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
+func StartServer(nw *latency.Network, info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", info.Addr)
+	if nw != nil {
+		lis = nw.Listener(lis)
+	}
 	if err != nil {
 		grpclog.Fatalf("Failed to listen: %v", err)
 	}
@@ -222,12 +226,25 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
+func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
+	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
+	nw.Kbps = -1
 	b.StopTimer()
-	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	target, stopper := StartServer(nw, ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
-	conn := NewClientConn(target, grpc.WithInsecure())
+	conn := NewClientConn(
+		target,
+		grpc.WithInsecure(),
+		grpc.WithDialer(
+			func(address string, timeout time.Duration) (net.Conn, error) {
+				clientConn, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+				if err != nil {
+					b.Fatalf("Unexpected error dialing: %v", err)
+				}
+				return clientConn, err
+			}),
+	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
@@ -265,12 +282,24 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
 	conn.Close()
 }
 
-func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
+func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
+	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
-	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	target, stopper := StartServer(nw, ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
-	conn := NewClientConn(target, grpc.WithInsecure())
+	conn := NewClientConn(
+		target,
+		grpc.WithInsecure(),
+		grpc.WithDialer(
+			func(address string, timeout time.Duration) (net.Conn, error) {
+				clientConn, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+				if err != nil {
+					b.Fatalf("Unexpected error dialing: %v", err)
+				}
+				return clientConn, err
+			}),
+	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
 	// Warm up connection.
