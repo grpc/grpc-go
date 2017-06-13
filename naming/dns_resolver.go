@@ -107,22 +107,6 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 	return result
 }
 
-type updates []*Update
-
-func (u updates) Len() int {
-	return len(u)
-}
-
-func (u updates) Less(i, j int) bool {
-	return strings.Compare(u[i].Addr, u[j].Addr) < 0
-}
-
-func (u updates) Swap(i, j int) {
-	tmp := u[i]
-	u[i] = u[j]
-	u[j] = tmp
-}
-
 func (w *DNSWatcher) Next() ([]*Update, error) {
 	for {
 		_, srvs, err := net.LookupSRV("grpclb", "tcp", w.name)
@@ -145,7 +129,7 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 					})
 				}
 			}
-			sort.Sort(updates(newAddrs))
+			sortSlice(newAddrs)
 		} else {
 			// If target doesn't have SRV records associated with it, return any A record info available.
 			addrs, err := net.LookupHost(w.name)
