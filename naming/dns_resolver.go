@@ -11,9 +11,11 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// DNSResolver handles name resolution for names following the DNS scheme
 type DNSResolver struct {
 }
 
+// Resolve creates a watcher that watches the resolution of the targeted DNS name.
 func (r *DNSResolver) Resolve(target string) (DNSWatcher, error) {
 	// try to separate name and port if the target is in name:port format
 	port := "443"
@@ -31,6 +33,7 @@ func (r *DNSResolver) Resolve(target string) (DNSWatcher, error) {
 	}, nil
 }
 
+// DNSWatcher watches for the name resolution update for a specific target
 type DNSWatcher struct {
 	// target to watch address Update. TODO(yuxuanli): delete this? since its info is redundant
 	target string
@@ -42,6 +45,7 @@ type DNSWatcher struct {
 	curAddrs []*Update
 }
 
+// AddressType indicates the address type returned by name resolution.
 type AddressType uint8
 
 const (
@@ -51,6 +55,9 @@ const (
 	GRPCLB
 )
 
+// AddrMetadataGRPCLB contains the information the name resolver for grpclb should provide. The
+// name resolver used by the grpclb balancer is required to provide this type of metadata in
+// its address updates.
 type AddrMetadataGRPCLB struct {
 	// AddrType is the type of server (grpc load balancer or backend).
 	AddrType AddressType
@@ -107,6 +114,7 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 	return result
 }
 
+// Next returns the resolved address update for the target
 func (w *DNSWatcher) Next() ([]*Update, error) {
 	for {
 		_, srvs, err := net.LookupSRV("grpclb", "tcp", w.name)
@@ -151,5 +159,6 @@ func (w *DNSWatcher) Next() ([]*Update, error) {
 	}
 }
 
+// Close is a Noop for DNSWatcher
 func (w *DNSWatcher) Close() {
 }
