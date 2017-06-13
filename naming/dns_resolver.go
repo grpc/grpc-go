@@ -114,7 +114,8 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 	return result
 }
 
-// Next returns the resolved address update for the target
+// Next returns the resolved address update(delta) for the target. If there's no
+// change, it will sleep for 30 mins and try to resolve again after that.
 func (w *DNSWatcher) Next() ([]*Update, error) {
 	for {
 		_, srvs, err := net.LookupSRV("grpclb", "tcp", w.name)

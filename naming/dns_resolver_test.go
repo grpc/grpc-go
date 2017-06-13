@@ -116,6 +116,9 @@ func TestResolver(t *testing.T) {
 	for i, a := range addrToResolve {
 		r := DNSResolver{}
 		w, err := r.Resolve(a)
+		if err != nil {
+			t.Errorf("%v\n", err)
+		}
 		updates, err := w.Next()
 		if err != nil {
 			t.Errorf("%v\n", err)
