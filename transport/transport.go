@@ -235,14 +235,22 @@ func (s *Stream) GoAway() <-chan struct{} {
 // is available. It blocks until i) the metadata is ready or ii) there is no
 // header metadata or iii) the stream is canceled/expired.
 func (s *Stream) Header() (metadata.MD, error) {
+	var err error
 	select {
 	case <-s.ctx.Done():
-		return nil, ContextErr(s.ctx.Err())
+		err = ContextErr(s.ctx.Err())
 	case <-s.goAway:
-		return nil, ErrStreamDrain
+		err = ErrStreamDrain
 	case <-s.headerChan:
 		return s.header.Copy(), nil
 	}
+	// Even if the stream is closed, header is returned if available.
+	select {
+	case <-s.headerChan:
+		return s.header.Copy(), nil
+	default:
+	}
+	return nil, err
 }
 
 // Trailer returns the cached trailer metedata. Note that if it is not called
