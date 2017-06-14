@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -16,19 +15,20 @@ var (
 )
 
 type bdpEstimator struct {
+	side string
+
 	mu                sync.Mutex
 	bdp               uint32
-	sample            uint32    // Current bdp sample..
+	sample            uint32    // Current bdp sample.
 	sentAt            time.Time // Time when the ping was sent.
 	bwMax             float64
 	isSent            bool
 	updateFlowControl func(n uint32) // Callback to update window size.
-	side              string
 	sampleCount       uint64
 	rtt               float64
 }
 
-// timesnap registers the time the ping was sent out so that
+// timesnap registers the time bdp ping was sent out so that
 // network rtt can be calculated when it's ack is recieved.
 // It is called (by controller) when the bdpPing is
 // being written on the wire.
@@ -84,40 +84,21 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	// than or equal to 1.5 times the real BDP on a saturated connection.
 	bwCurrent := float64(b.sample) / (b.rtt * float64(1.5))
 	if bwCurrent > b.bwMax {
-		// debug beg
-		fmt.Printf("Max bw noted on %s-side: %v. Sample was: %v and  RTT was %v secs\n", b.side, bwCurrent, b.sample, b.rtt)
-		// debug end
 		b.bwMax = bwCurrent
 	}
 	// If the current sample (which is smaller than or equal to the 1.5 times the real BDP) is
 	// greater than or equal to 2/3rd our perceived bdp AND this is the maximum bandwidth seen so far, we
 	// should update our perception of the network BDP.
-	//if float64(b.sample) >= float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
-	if bwCurrent == b.bwMax {
-		// debug beg
-		//fmt.Printf("The sample causing bdp to go up on %s-side: %v\n", b.side, b.sample)
-		// debug end
-
+	if float64(b.sample) >= float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
 		// Put our bdp to be smaller than or equal to twice the real BDP.
 		// We really should multiply with 4/3, however to round things out
 		// we use 2 as the multiplication factor.
-		//b.bdp = uint32(float64(2) * float64(b.sample))
-		// trying a different mechanism to grow bdp
-		bdp := uint32(bwCurrent*b.rtt) * 2
-		if bdp > b.bdp {
-			b.bdp = bdp
-		} else {
-			b.mu.Unlock()
-			return
-		}
+		b.bdp = uint32(float64(2) * float64(b.sample))
 		if b.bdp > limit {
 			b.bdp = limit
 		}
-		bdp = b.bdp
+		bdp := b.bdp
 		b.mu.Unlock()
-		// debug beg
-		fmt.Println(b.side, " updating bdp to:", bdp)
-		// debug end
 		b.updateFlowControl(bdp)
 		return
 	}

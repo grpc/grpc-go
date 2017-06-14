@@ -31,8 +31,7 @@ const (
 	// The default value of flow control window size in HTTP2 spec.
 	defaultWindowSize = 65535
 	// The initial window size for flow control.
-	initialWindowSize = defaultWindowSize // for an RPC
-	//initialConnWindowSize         = defaultWindowSize * 16 // for a connection
+	initialWindowSize             = defaultWindowSize // for an RPC
 	infinity                      = time.Duration(math.MaxInt64)
 	defaultClientKeepaliveTime    = infinity
 	defaultClientKeepaliveTimeout = time.Duration(20 * time.Second)
@@ -159,6 +158,8 @@ type inFlow struct {
 	delta uint32
 }
 
+// newLimit updates the inflow window to a new value n.
+// It assumes that n is always greater than the old limit.
 func (f *inFlow) newLimit(n uint32) uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
