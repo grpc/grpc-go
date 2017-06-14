@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -86,7 +87,12 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 
 // Print writes textual output of the histogram values.
 func (h *Histogram) Print(w io.Writer) {
+	f, _ := os.OpenFile("testfile", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+
 	avg := float64(h.Sum) / float64(h.Count)
+	fmt.Fprintf(f, "Avg: %.2f\n", avg)
+
 	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", h.Count, h.Min, h.Max, avg)
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
 	if h.Count <= 0 {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"sort"
 	"time"
 )
 
@@ -48,6 +50,11 @@ func (stats *Stats) Clear() {
 	stats.dirty = false
 }
 
+//Sort method for durations
+func (a durationSlice) Len() int           { return len(a) }
+func (a durationSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a durationSlice) Less(i, j int) bool { return a[i] < a[j] }
+
 // maybeUpdate updates internal stat data if there was any newly added
 // stats since this was updated.
 func (stats *Stats) maybeUpdate() {
@@ -89,6 +96,8 @@ func (stats *Stats) maybeUpdate() {
 		BaseBucketSize: 1.0,
 		MinValue:       stats.min})
 
+	sort.Sort(stats.durations)
+
 	for _, d := range stats.durations {
 		stats.histogram.Add(int64(d / stats.unit))
 	}
@@ -99,6 +108,15 @@ func (stats *Stats) maybeUpdate() {
 // Print writes textual output of the Stats.
 func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
+
+	f, _ := os.OpenFile("testfile", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+	fmt.Fprintf(f, "%s %4d %4d %4d %4d ", fmt.Sprintf("%v", stats.unit)[1:],
+		stats.durations[stats.histogram.Count*5/10]/stats.unit,
+		stats.durations[stats.histogram.Count*9/10]/stats.unit,
+		stats.durations[stats.histogram.Count*99/100]/stats.unit-1,
+		stats.durations[stats.histogram.Count-1]/stats.unit,
+	)
 
 	if stats.histogram == nil {
 		fmt.Fprint(w, "Histogram (empty)\n")

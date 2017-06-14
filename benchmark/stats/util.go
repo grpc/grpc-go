@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -153,6 +154,10 @@ func injectStatsIfFinished(line string) {
 		return
 	}
 
+	f, _ := os.OpenFile("testfile", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	fmt.Fprintf(f, "\t%s\n", line)
+	defer f.Close()
+
 	if !curB.Failed() {
 		// Output all stats in alphabetical order.
 		names := make([]string, 0, len(curStats))
@@ -187,4 +192,108 @@ func resetCurBenchStats() {
 	curB = nil
 	curBenchName = ""
 	curStats = make(map[string]*Stats)
+}
+
+//function below are comparing the result between 2 benchmark results
+
+func CompareTwoBench(file1, file2 string) {
+	var BenchValueFile1 map[string][]string
+	var BenchValueFile2 map[string][]string
+	BenchValueFile1 = make(map[string][]string)
+	BenchValueFile2 = make(map[string][]string)
+
+	createMap(file1, BenchValueFile1)
+	createMap(file2, BenchValueFile2)
+
+	compareTwoMap(BenchValueFile1, BenchValueFile2)
+}
+
+func parser(s string) []string {
+	start, end := 0, 0
+	leng := len(s)
+	var result []string
+	for end < leng {
+		for end < leng && (s[end] == ' ' || s[end] == '\t') {
+			end++
+		}
+		start = end
+		for end < leng && s[end] != ' ' && s[end] != '\t' {
+			end++
+		}
+		tmp := s[start:end]
+		start = end
+		result = append(result, tmp)
+	}
+	return result
+}
+
+func createMap(fileName string, m map[string][]string) {
+	f, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println("read file err")
+	}
+	buf := bufio.NewReader(f)
+
+	for {
+		BenchName, err := buf.ReadString('\n')
+		if err != nil {
+			break
+		}
+		BenchName = strings.TrimSpace(BenchName)
+		part1 := parser(BenchName)
+		values, err := buf.ReadString('\n')
+		if err != nil {
+			break
+		}
+
+		values = strings.TrimSpace(values)
+		part2 := parser(values)
+		part1 = append(part1, part2...)
+		m[part1[0]] = part1[1:]
+	}
+}
+
+func combineString(title, val1, val2, percentChange string) string {
+	return title + ":\t" + val1 + " -> " + val2 + " " + percentChange + "\n"
+}
+
+func compareTwoMap(m1, m2 map[string][]string) {
+	unit2num := make(map[string]float64)
+	unit2num["s"] = 1000000000
+	unit2num["ms"] = 1000000
+	unit2num["µs"] = 1000
+	var titles [15]string
+	titles[8] = "50% latency: "
+	titles[9] = "90% latency: "
+	titles[10] = "99% latency: "
+	titles[11] = "100% latency: "
+	titles[13] = "average latency: "
+	for k2, v2 := range m2 {
+		if v1, ok := m1[k2]; ok {
+			var changes string = ""
+			var factor float64 = 1
+
+			for i := 0; i < 14; i++ {
+				num1, err := strconv.ParseFloat(v1[i], 64)
+				if err != nil {
+					continue
+				}
+				num2, err := strconv.ParseFloat(v2[i], 64)
+				percentChange := strconv.FormatFloat((num2-num1)*factor*100.0/num1, 'f', 2, 64) + "% "
+
+				switch {
+				case i == 0:
+					changes = changes + combineString("operations: ", v1[i], v2[i], percentChange)
+				case i <= 5:
+					changes = changes + combineString(v1[i+1], v1[i], v2[i], percentChange)
+				case i == 8:
+					factor = unit2num[v1[i-1]] / unit2num[v2[i-1]]
+					changes = changes + combineString(titles[i], v1[i]+v1[7], v2[i]+v2[7], percentChange)
+				case i >= 8:
+					changes = changes + combineString(titles[i], v1[i]+v1[7], v2[i]+v2[7], percentChange)
+				}
+			}
+			fmt.Println(k2, ":\n", changes)
+		}
+	}
 }
