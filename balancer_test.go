@@ -97,7 +97,7 @@ func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, *
 		s.wait(t, 2*time.Second)
 	}
 	// Point to server[0]
-	addr := "127.0.0.1:" + servers[0].port
+	addr := "localhost:" + servers[0].port
 	return servers, &testNameResolver{
 		addr: addr,
 	}
@@ -120,11 +120,11 @@ func TestNameDiscovery(t *testing.T) {
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
 		Op:   naming.Delete,
-		Addr: "127.0.0.1:" + servers[0].port,
+		Addr: "localhost:" + servers[0].port,
 	})
 	updates = append(updates, &naming.Update{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[1].port,
+		Addr: "localhost:" + servers[1].port,
 	})
 	r.w.inject(updates)
 	// Loop until the rpcs in flight talks to servers[1].
@@ -154,7 +154,7 @@ func TestEmptyAddrs(t *testing.T) {
 	// available after that.
 	u := &naming.Update{
 		Op:   naming.Delete,
-		Addr: "127.0.0.1:" + servers[0].port,
+		Addr: "localhost:" + servers[0].port,
 	}
 	r.w.inject([]*naming.Update{u})
 	// Loop until the above updates apply.
@@ -180,7 +180,7 @@ func TestRoundRobin(t *testing.T) {
 	// Add servers[1] to the service discovery.
 	u := &naming.Update{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[1].port,
+		Addr: "localhost:" + servers[1].port,
 	}
 	r.w.inject([]*naming.Update{u})
 	req := "port"
@@ -195,7 +195,7 @@ func TestRoundRobin(t *testing.T) {
 	// Add server2[2] to the service discovery.
 	u = &naming.Update{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[2].port,
+		Addr: "localhost:" + servers[2].port,
 	}
 	r.w.inject([]*naming.Update{u})
 	// Loop until both servers[2] are up.
@@ -230,7 +230,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	// Remove the server.
 	updates := []*naming.Update{{
 		Op:   naming.Delete,
-		Addr: "127.0.0.1:" + servers[0].port,
+		Addr: "localhost:" + servers[0].port,
 	}}
 	r.w.inject(updates)
 	// Loop until the above update applies.
@@ -274,7 +274,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	// Remove all servers so that all upcoming RPCs will block on waitCh.
 	updates := []*naming.Update{{
 		Op:   naming.Delete,
-		Addr: "127.0.0.1:" + servers[0].port,
+		Addr: "localhost:" + servers[0].port,
 	}}
 	r.w.inject(updates)
 	for {
@@ -297,7 +297,7 @@ func TestGetOnWaitChannel(t *testing.T) {
 	// Add a connected server to get the above RPC through.
 	updates = []*naming.Update{{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[0].port,
+		Addr: "localhost:" + servers[0].port,
 	}}
 	r.w.inject(updates)
 	// Wait until the above RPC succeeds.
@@ -318,7 +318,7 @@ func TestOneServerDown(t *testing.T) {
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[1].port,
+		Addr: "localhost:" + servers[1].port,
 	})
 	r.w.inject(updates)
 	req := "port"
@@ -372,7 +372,7 @@ func TestOneAddressRemoval(t *testing.T) {
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
 		Op:   naming.Add,
-		Addr: "127.0.0.1:" + servers[1].port,
+		Addr: "localhost:" + servers[1].port,
 	})
 	r.w.inject(updates)
 	req := "port"
@@ -395,7 +395,7 @@ func TestOneAddressRemoval(t *testing.T) {
 		var updates []*naming.Update
 		updates = append(updates, &naming.Update{
 			Op:   naming.Delete,
-			Addr: "127.0.0.1:" + servers[0].port,
+			Addr: "localhost:" + servers[0].port,
 		})
 		r.w.inject(updates)
 		wg.Done()

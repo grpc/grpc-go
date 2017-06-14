@@ -215,14 +215,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	if te.testServer != nil {
 		testpb.RegisterTestServiceServer(s, te.testServer)
 	}
-	_, port, err := net.SplitHostPort(lis.Addr().String())
-	if err != nil {
-		te.t.Fatalf("Failed to parse listener address: %v", err)
-	}
-	addr := "127.0.0.1:" + port
 
 	go s.Serve(lis)
-	te.srvAddr = addr
+	te.srvAddr = lis.Addr().String()
 }
 
 func (te *test) clientConn() *grpc.ClientConn {
