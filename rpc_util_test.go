@@ -148,7 +148,7 @@ func TestToRPCErr(t *testing.T) {
 		errOut error
 	}{
 		{transport.StreamError{Code: codes.Unknown, Desc: ""}, status.Error(codes.Unknown, "")},
-		{transport.ErrConnClosing, status.Error(codes.Internal, transport.ErrConnClosing.Desc)},
+		{transport.ErrConnClosing, status.Error(codes.Unavailable, transport.ErrConnClosing.Desc)},
 	} {
 		err := toRPCErr(test.errIn)
 		if _, ok := status.FromError(err); !ok {
