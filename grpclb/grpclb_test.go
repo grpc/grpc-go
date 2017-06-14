@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -46,8 +45,8 @@ var (
 	besn    = "foo.com"
 	lbToken = "iamatoken"
 
-	// Resolver replaces 127.0.0.1 with fakeName in Next().
-	// Dialer replaces fakeName with 127.0.0.1 when dialing.
+	// Resolver replaces localhost with fakeName in Next().
+	// Dialer replaces fakeName with localhost when dialing.
 	// This will test that custom dialer is passed from Dial to grpclb.
 	fakeName = "fake.Name"
 )
@@ -72,9 +71,9 @@ func (w *testWatcher) Next() (updates []*naming.Update, err error) {
 			break
 		}
 		if u != nil {
-			// Resolver replaces 127.0.0.1 with fakeName in Next().
-			// Custom dialer will replace fakeName with 127.0.0.1 when dialing.
-			u.Addr = strings.Replace(u.Addr, "127.0.0.1", fakeName, 1)
+			// Resolver replaces localhost with fakeName in Next().
+			// Custom dialer will replace fakeName with localhost when dialing.
+			u.Addr = strings.Replace(u.Addr, "localhost", fakeName, 1)
 			updates = append(updates, u)
 		}
 	}
@@ -174,10 +173,10 @@ func (c *serverNameCheckCreds) OverrideServerName(s string) error {
 	return nil
 }
 
-// fakeNameDialer replaces fakeName with 127.0.0.1 when dialing.
+// fakeNameDialer replaces fakeName with localhost when dialing.
 // This will test that custom dialer is passed from Dial to grpclb.
 func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	addr = strings.Replace(addr, fakeName, "127.0.0.1", 1)
+	addr = strings.Replace(addr, fakeName, "localhost", 1)
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
@@ -327,10 +326,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 			return
 		}
 		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
-
-		beAddr := strings.Split(beLis.Addr().String(), ":")
-		bePort, _ := strconv.Atoi(beAddr[1])
-		bePorts = append(bePorts, bePort)
+		bePorts = append(bePorts, beLis.Addr().(*net.TCPAddr).Port)
 
 		beListeners = append(beListeners, beLis)
 	}
