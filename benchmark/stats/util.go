@@ -23,6 +23,8 @@ var (
 
 	injectCond *sync.Cond
 	injectDone chan struct{}
+
+	oldBenchExist bool
 )
 
 // AddStats adds a new unnamed Stats instance to the current benchmark. You need
@@ -96,6 +98,7 @@ func startStatsInjector() {
 	nextOutPos = 0
 
 	resetCurBenchStats()
+	checkOldResultFile()
 
 	injectCond = sync.NewCond(&sync.Mutex{})
 	injectDone = make(chan struct{})
@@ -119,6 +122,9 @@ func stopStatsInjector() {
 	<-injectDone
 	injectCond = nil
 	os.Stdout = orgStdout
+	if oldBenchExist {
+		CompareTwoBench("oldfile", "testfile")
+	}
 }
 
 // splitLines is a split function for a bufio.Scanner that returns each line
@@ -192,6 +198,16 @@ func resetCurBenchStats() {
 	curB = nil
 	curBenchName = ""
 	curStats = make(map[string]*Stats)
+}
+
+// check
+func checkOldResultFile() {
+	if _, err := os.Stat("testfile"); err == nil {
+		oldBenchExist = true
+		os.Rename("testfile", "oldfile")
+	}else {
+		fmt.Println("file not exist")
+	}
 }
 
 //function below are comparing the result between 2 benchmark results
