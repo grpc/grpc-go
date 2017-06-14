@@ -56,7 +56,7 @@ func toRPCErr(err error) error {
 	case transport.StreamError:
 		return status.Error(e.Code, e.Desc)
 	case transport.ConnectionError:
-		return status.Error(codes.Internal, e.Desc)
+		return status.Error(codes.Unavailable, e.Desc)
 	default:
 		switch err {
 		case context.DeadlineExceeded, netctx.DeadlineExceeded:
