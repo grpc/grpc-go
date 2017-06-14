@@ -566,6 +566,10 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 		t.mu.Unlock()
 		return
 	}
+	if err != nil {
+		// notify in-flight streams, before the deletion
+		s.write(recvMsg{err: err})
+	}
 	delete(t.activeStreams, s.id)
 	if t.state == draining && len(t.activeStreams) == 0 {
 		// The transport is draining and s is the last live stream on t.
