@@ -252,7 +252,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 				t.controlBuf.put(&settings{
 					ack: false,
 					ss: []http2.Setting{
-						http2.Setting{
+						{
 							ID:  http2.SettingInitialWindowSize,
 							Val: uint32(n),
 						},

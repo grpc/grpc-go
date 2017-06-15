@@ -218,7 +218,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 				t.controlBuf.put(&settings{
 					ack: false,
 					ss: []http2.Setting{
-						http2.Setting{
+						{
 							ID:  http2.SettingInitialWindowSize,
 							Val: uint32(n),
 						},
