@@ -62,17 +62,24 @@ public class ServerCallsTest {
   static final MethodDescriptor<Integer, Integer> STREAMING_METHOD =
       MethodDescriptor.<Integer, Integer>newBuilder()
           .setType(MethodDescriptor.MethodType.BIDI_STREAMING)
-          .setFullMethodName("some/method")
+          .setFullMethodName("some/bidi_streaming")
           .setRequestMarshaller(new IntegerMarshaller())
           .setResponseMarshaller(new IntegerMarshaller())
           .build();
 
-  static final MethodDescriptor<Integer, Integer> UNARY_METHOD = STREAMING_METHOD.toBuilder()
-      .setType(MethodDescriptor.MethodType.UNARY)
-      .setFullMethodName("some/unarymethod")
-      .build();
+  static final MethodDescriptor<Integer, Integer> SERVER_STREAMING_METHOD =
+      STREAMING_METHOD.toBuilder()
+          .setType(MethodDescriptor.MethodType.SERVER_STREAMING)
+          .setFullMethodName("some/client_streaming")
+          .build();
 
-  private final ServerCallRecorder serverCall = new ServerCallRecorder();
+  static final MethodDescriptor<Integer, Integer> UNARY_METHOD =
+      STREAMING_METHOD.toBuilder()
+          .setType(MethodDescriptor.MethodType.UNARY)
+          .setFullMethodName("some/unary")
+          .build();
+
+  private final ServerCallRecorder serverCall = new ServerCallRecorder(UNARY_METHOD);
 
   @Test
   public void runtimeStreamObserverIsServerCallStreamObserver() throws Exception {
@@ -285,6 +292,85 @@ public class ServerCallsTest {
   }
 
   @Test
+  public void clientSendsOne_errorMissingRequest_unary() {
+    ServerCallRecorder serverCall = new ServerCallRecorder(UNARY_METHOD);
+    ServerCallHandler<Integer, Integer> callHandler =
+        ServerCalls.asyncUnaryCall(
+            new ServerCalls.UnaryMethod<Integer, Integer>() {
+              @Override
+              public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+                fail("should not be reached");
+              }
+            });
+    ServerCall.Listener<Integer> listener = callHandler.startCall(serverCall, new Metadata());
+    listener.onHalfClose();
+    assertThat(serverCall.responses).isEmpty();
+    assertEquals(Status.Code.INTERNAL, serverCall.status.getCode());
+    assertEquals(ServerCalls.MISSING_REQUEST, serverCall.status.getDescription());
+  }
+
+  @Test
+  public void clientSendsOne_errorMissingRequest_serverStreaming() {
+    ServerCallRecorder serverCall = new ServerCallRecorder(SERVER_STREAMING_METHOD);
+    ServerCallHandler<Integer, Integer> callHandler =
+        ServerCalls.asyncServerStreamingCall(
+            new ServerCalls.ServerStreamingMethod<Integer, Integer>() {
+              @Override
+              public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+                fail("should not be reached");
+              }
+            });
+    ServerCall.Listener<Integer> listener = callHandler.startCall(serverCall, new Metadata());
+    listener.onHalfClose();
+    assertThat(serverCall.responses).isEmpty();
+    assertEquals(Status.Code.INTERNAL, serverCall.status.getCode());
+    assertEquals(ServerCalls.MISSING_REQUEST, serverCall.status.getDescription());
+
+  }
+
+  @Test
+  public void clientSendsOne_errorTooManyRequests_unary() {
+    ServerCallRecorder serverCall = new ServerCallRecorder(UNARY_METHOD);
+    ServerCallHandler<Integer, Integer> callHandler =
+        ServerCalls.asyncUnaryCall(
+            new ServerCalls.UnaryMethod<Integer, Integer>() {
+              @Override
+              public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+                fail("should not be reached");
+              }
+            });
+    ServerCall.Listener<Integer> listener = callHandler.startCall(serverCall, new Metadata());
+    listener.onMessage(1);
+    listener.onMessage(1);
+    assertThat(serverCall.responses).isEmpty();
+    assertEquals(Status.Code.INTERNAL, serverCall.status.getCode());
+    assertEquals(ServerCalls.TOO_MANY_REQUESTS, serverCall.status.getDescription());
+    // ensure onHalfClose does not invoke
+    listener.onHalfClose();
+  }
+
+  @Test
+  public void clientSendsOne_errorTooManyRequests_serverStreaming() {
+    ServerCallRecorder serverCall = new ServerCallRecorder(SERVER_STREAMING_METHOD);
+    ServerCallHandler<Integer, Integer> callHandler =
+        ServerCalls.asyncServerStreamingCall(
+            new ServerCalls.ServerStreamingMethod<Integer, Integer>() {
+              @Override
+              public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+                fail("should not be reached");
+              }
+            });
+    ServerCall.Listener<Integer> listener = callHandler.startCall(serverCall, new Metadata());
+    listener.onMessage(1);
+    listener.onMessage(1);
+    assertThat(serverCall.responses).isEmpty();
+    assertEquals(Status.Code.INTERNAL, serverCall.status.getCode());
+    assertEquals(ServerCalls.TOO_MANY_REQUESTS, serverCall.status.getDescription());
+    // ensure onHalfClose does not invoke
+    listener.onHalfClose();
+  }
+
+  @Test
   public void inprocessTransportManualFlow() throws Exception {
     final Semaphore semaphore = new Semaphore(1);
     ServerServiceDefinition service = ServerServiceDefinition.builder(
@@ -374,14 +460,18 @@ public class ServerCallsTest {
   }
 
   private static class ServerCallRecorder extends ServerCall<Integer, Integer> {
-    private List<Integer> requestCalls = new ArrayList<Integer>();
+    private final MethodDescriptor<Integer, Integer> methodDescriptor;
+    private final List<Integer> requestCalls = new ArrayList<Integer>();
+    private final List<Integer> responses = new ArrayList<Integer>();
     private Metadata headers;
-    private Integer message;
     private Metadata trailers;
     private Status status;
     private boolean isCancelled;
-    private MethodDescriptor<Integer, Integer> methodDescriptor;
     private boolean isReady;
+
+    public ServerCallRecorder(MethodDescriptor<Integer, Integer> methodDescriptor) {
+      this.methodDescriptor = methodDescriptor;
+    }
 
     @Override
     public void request(int numMessages) {
@@ -395,7 +485,7 @@ public class ServerCallsTest {
 
     @Override
     public void sendMessage(Integer message) {
-      this.message = message;
+      this.responses.add(message);
     }
 
     @Override

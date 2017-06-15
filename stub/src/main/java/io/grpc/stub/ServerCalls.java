@@ -18,6 +18,7 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Preconditions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
@@ -29,6 +30,9 @@ import io.grpc.Status;
  * meant to be used by the generated code.
  */
 public final class ServerCalls {
+
+  static String TOO_MANY_REQUESTS = "Too many requests";
+  static String MISSING_REQUEST = "Half-closed without a request";
 
   private ServerCalls() {
   }
@@ -112,6 +116,9 @@ public final class ServerCalls {
       public ServerCall.Listener<ReqT> startCall(
           final ServerCall<ReqT, RespT> call,
           Metadata headers) {
+        Preconditions.checkArgument(
+            call.getMethodDescriptor().getType().clientSendsOneMessage(),
+            "asyncUnaryRequestCall is only for clientSendsOneMessage methods");
         final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
             new ServerCallStreamObserverImpl<ReqT, RespT>(call);
         // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
@@ -119,9 +126,19 @@ public final class ServerCalls {
         // inbound flow control has no effect on unary calls.
         call.request(2);
         return new EmptyServerCallListener<ReqT>() {
+          boolean canInvoke = true;
           ReqT request;
           @Override
           public void onMessage(ReqT request) {
+            if (this.request != null) {
+              // Safe to close the call, because the application has not yet been invoked
+              call.close(
+                  Status.INTERNAL.withDescription(TOO_MANY_REQUESTS),
+                  new Metadata());
+              canInvoke = false;
+              return;
+            }
+
             // We delay calling method.invoke() until onHalfClose() to make sure the client
             // half-closes.
             this.request = request;
@@ -129,17 +146,23 @@ public final class ServerCalls {
 
           @Override
           public void onHalfClose() {
-            if (request != null) {
-              method.invoke(request, responseObserver);
-              responseObserver.freeze();
-              if (call.isReady()) {
-                // Since we are calling invoke in halfClose we have missed the onReady
-                // event from the transport so recover it here.
-                onReady();
-              }
-            } else {
-              call.close(Status.INTERNAL.withDescription("Half-closed without a request"),
+            if (!canInvoke) {
+              return;
+            }
+            if (request == null) {
+              // Safe to close the call, because the application has not yet been invoked
+              call.close(
+                  Status.INTERNAL.withDescription(MISSING_REQUEST),
                   new Metadata());
+              return;
+            }
+
+            method.invoke(request, responseObserver);
+            responseObserver.freeze();
+            if (call.isReady()) {
+              // Since we are calling invoke in halfClose we have missed the onReady
+              // event from the transport so recover it here.
+              onReady();
             }
           }
 

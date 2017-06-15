@@ -23,7 +23,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.isA;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,9 +51,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 @RunWith(JUnit4.class)
@@ -58,17 +59,25 @@ public class ServerCallImplTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
   @Mock private ServerStream stream;
   @Mock private ServerCall.Listener<Long> callListener;
-  @Captor private ArgumentCaptor<Status> statusCaptor;
 
   private ServerCallImpl<Long, Long> call;
   private Context.CancellableContext context;
 
-  private final MethodDescriptor<Long, Long> method = MethodDescriptor.<Long, Long>newBuilder()
-      .setType(MethodType.UNARY)
-      .setFullMethodName("/service/method")
-      .setRequestMarshaller(new LongMarshaller())
-      .setResponseMarshaller(new LongMarshaller())
-      .build();
+  private static final MethodDescriptor<Long, Long> UNARY_METHOD =
+      MethodDescriptor.<Long, Long>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new LongMarshaller())
+          .setResponseMarshaller(new LongMarshaller())
+          .build();
+
+  private static final MethodDescriptor<Long, Long> CLIENT_STREAMING_METHOD =
+      MethodDescriptor.<Long, Long>newBuilder()
+          .setType(MethodType.UNARY)
+          .setFullMethodName("/service/method")
+          .setRequestMarshaller(new LongMarshaller())
+          .setResponseMarshaller(new LongMarshaller())
+          .build();
 
   private final Metadata requestHeaders = new Metadata();
 
@@ -76,7 +85,7 @@ public class ServerCallImplTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     context = Context.ROOT.withCancellation();
-    call = new ServerCallImpl<Long, Long>(stream, method, requestHeaders, context,
+    call = new ServerCallImpl<Long, Long>(stream, UNARY_METHOD, requestHeaders, context,
         DecompressorRegistry.getDefaultInstance(), CompressorRegistry.getDefaultInstance());
   }
 
@@ -156,6 +165,114 @@ public class ServerCallImplTest {
     }
 
     verify(stream).close(isA(Status.class), isA(Metadata.class));
+  }
+
+  @Test
+  public void sendMessage_serverSendsOne_closeOnSecondCall_unary() {
+    sendMessage_serverSendsOne_closeOnSecondCall(UNARY_METHOD);
+  }
+
+  @Test
+  public void sendMessage_serverSendsOne_closeOnSecondCall_clientStreaming() {
+    sendMessage_serverSendsOne_closeOnSecondCall(CLIENT_STREAMING_METHOD);
+  }
+
+  private void sendMessage_serverSendsOne_closeOnSecondCall(
+      MethodDescriptor<Long, Long> method) {
+    ServerCallImpl<Long, Long> serverCall = new ServerCallImpl<Long, Long>(
+        stream,
+        method,
+        requestHeaders,
+        context,
+        DecompressorRegistry.getDefaultInstance(),
+        CompressorRegistry.getDefaultInstance());
+    serverCall.sendHeaders(new Metadata());
+    serverCall.sendMessage(1L);
+    verify(stream, times(1)).writeMessage(any(InputStream.class));
+    verify(stream, never()).close(any(Status.class), any(Metadata.class));
+
+    // trying to send a second message causes gRPC to close the underlying stream
+    serverCall.sendMessage(1L);
+    verify(stream, times(1)).writeMessage(any(InputStream.class));
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(stream, times(1)).close(statusCaptor.capture(), metadataCaptor.capture());
+    assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals(ServerCallImpl.TOO_MANY_RESPONSES, statusCaptor.getValue().getDescription());
+    assertTrue(metadataCaptor.getValue().keys().isEmpty());
+  }
+
+  @Test
+  public void sendMessage_serverSendsOne_closeOnSecondCall_appRunToCompletion_unary() {
+    sendMessage_serverSendsOne_closeOnSecondCall_appRunToCompletion(UNARY_METHOD);
+  }
+
+  @Test
+  public void sendMessage_serverSendsOne_closeOnSecondCall_appRunToCompletion_clientStreaming() {
+    sendMessage_serverSendsOne_closeOnSecondCall_appRunToCompletion(CLIENT_STREAMING_METHOD);
+  }
+
+  private void sendMessage_serverSendsOne_closeOnSecondCall_appRunToCompletion(
+      MethodDescriptor<Long, Long> method) {
+    ServerCallImpl<Long, Long> serverCall = new ServerCallImpl<Long, Long>(
+        stream,
+        method,
+        requestHeaders,
+        context,
+        DecompressorRegistry.getDefaultInstance(),
+        CompressorRegistry.getDefaultInstance());
+    serverCall.sendHeaders(new Metadata());
+    serverCall.sendMessage(1L);
+    serverCall.sendMessage(1L);
+    verify(stream, times(1)).writeMessage(any(InputStream.class));
+    verify(stream, times(1)).close(any(Status.class), any(Metadata.class));
+
+    // App runs to completion but everything is ignored
+    serverCall.sendMessage(1L);
+    serverCall.close(Status.OK, new Metadata());
+    try {
+      serverCall.close(Status.OK, new Metadata());
+      fail("calling a second time should still cause an error");
+    } catch (IllegalStateException expected) {
+      // noop
+    }
+  }
+
+  @Test
+  public void serverSendsOne_okFailsOnMissingResponse_unary() {
+    serverSendsOne_okFailsOnMissingResponse(UNARY_METHOD);
+  }
+
+  @Test
+  public void serverSendsOne_okFailsOnMissingResponse_clientStreaming() {
+    serverSendsOne_okFailsOnMissingResponse(CLIENT_STREAMING_METHOD);
+  }
+
+  private void serverSendsOne_okFailsOnMissingResponse(
+      MethodDescriptor<Long, Long> method) {
+    ServerCallImpl<Long, Long> serverCall = new ServerCallImpl<Long, Long>(
+        stream,
+        method,
+        requestHeaders,
+        context,
+        DecompressorRegistry.getDefaultInstance(),
+        CompressorRegistry.getDefaultInstance());
+    serverCall.close(Status.OK, new Metadata());
+    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
+    ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+    verify(stream, times(1)).close(statusCaptor.capture(), metadataCaptor.capture());
+    assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
+    assertEquals(ServerCallImpl.MISSING_RESPONSE, statusCaptor.getValue().getDescription());
+    assertTrue(metadataCaptor.getValue().keys().isEmpty());
+  }
+
+  @Test
+  public void serverSendsOne_canErrorWithoutResponse() {
+    final String description = "test description";
+    final Status status = Status.RESOURCE_EXHAUSTED.withDescription(description);
+    final Metadata metadata = new Metadata();
+    call.close(status, metadata);
+    verify(stream, times(1)).close(same(status), same(metadata));
   }
 
   @Test
@@ -260,34 +377,20 @@ public class ServerCallImplTest {
   public void streamListener_messageRead() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messageRead(method.streamRequest(1234L));
+    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
 
     verify(callListener).onMessage(1234L);
-  }
-
-  @Test
-  public void streamListener_messageRead_unaryFailsOnMultiple() {
-    ServerStreamListenerImpl<Long> streamListener =
-        new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messageRead(method.streamRequest(1234L));
-    streamListener.messageRead(method.streamRequest(1234L));
-
-    // Makes sure this was only called once.
-    verify(callListener).onMessage(1234L);
-
-    verify(stream).close(statusCaptor.capture(), Mockito.isA(Metadata.class));
-    assertEquals(Status.Code.INTERNAL, statusCaptor.getValue().getCode());
   }
 
   @Test
   public void streamListener_messageRead_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messageRead(method.streamRequest(1234L));
+    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
 
-    streamListener.messageRead(method.streamRequest(1234L));
+    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
 
     verify(callListener).onMessage(1234L);
   }
@@ -300,7 +403,7 @@ public class ServerCallImplTest {
         .when(callListener)
         .onMessage(any(Long.class));
 
-    InputStream inputStream = method.streamRequest(1234L);
+    InputStream inputStream = UNARY_METHOD.streamRequest(1234L);
 
     thrown.expect(RuntimeException.class);
     thrown.expectMessage("unexpected exception");

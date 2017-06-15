@@ -304,52 +304,6 @@ public class RouteGuideClientTest {
    * Example for testing async client-streaming.
    */
   @Test
-  public void recordRoute_wrongResponse() throws Exception {
-    client.setRandom(noRandomness);
-    Point point1 = Point.newBuilder().setLatitude(1).setLongitude(1).build();
-    final Feature requestFeature1 =
-        Feature.newBuilder().setLocation(point1).build();
-    final List<Feature> features = Arrays.asList(requestFeature1);
-
-    // implement the fake service
-    RouteGuideImplBase recordRouteImpl =
-        new RouteGuideImplBase() {
-          @Override
-          public StreamObserver<Point> recordRoute(StreamObserver<RouteSummary> responseObserver) {
-            RouteSummary response = RouteSummary.getDefaultInstance();
-            // sending more than one responses is not right for client-streaming call.
-            responseObserver.onNext(response);
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
-
-            return new StreamObserver<Point>() {
-              @Override
-              public void onNext(Point value) {
-              }
-
-              @Override
-              public void onError(Throwable t) {
-              }
-
-              @Override
-              public void onCompleted() {
-              }
-            };
-          }
-        };
-    serviceRegistry.addService(recordRouteImpl);
-
-    client.recordRoute(features, 4);
-
-    ArgumentCaptor<Throwable> errorCaptor = ArgumentCaptor.forClass(Throwable.class);
-    verify(testHelper).onRpcError(errorCaptor.capture());
-    assertEquals(Status.Code.CANCELLED, Status.fromThrowable(errorCaptor.getValue()).getCode());
-  }
-
-  /**
-   * Example for testing async client-streaming.
-   */
-  @Test
   public void recordRoute_serverError() throws Exception {
     client.setRandom(noRandomness);
     Point point1 = Point.newBuilder().setLatitude(1).setLongitude(1).build();

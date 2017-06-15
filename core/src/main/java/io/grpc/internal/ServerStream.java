@@ -42,6 +42,10 @@ public interface ServerStream extends Stream {
    * {@link io.grpc.Status.Code#OK} implies normal termination of the
    * stream. Any other value implies abnormal termination.
    *
+   * <p>Attempts to read from or write to the stream after closing
+   * should be ignored by implementations, and should not throw
+   * exceptions.
+   *
    * @param status details of the closure
    * @param trailers an additional block of metadata to pass to the client on stream closure.
    */
