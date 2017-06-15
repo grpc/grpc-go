@@ -1417,7 +1417,12 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 }
 
 func TestClientWithMisbehavedServer(t *testing.T) {
-	server, ct := setUp(t, 0, math.MaxUint32, misbehaved)
+	// Turn off BDP estimation so that the server can
+	// violate stream window.
+	connectOptions := ConnectOptions{
+		InitialWindowSize: initialWindowSize,
+	}
+	server, ct := setUpWithOptions(t, 0, &ServerConfig{}, misbehaved, connectOptions)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Stream",
