@@ -27,6 +27,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
 import java.net.SocketAddress;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 
 final class CallCredentialsApplyingTransportFactory implements ClientTransportFactory {
@@ -44,6 +45,11 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
       SocketAddress serverAddress, String authority, @Nullable String userAgent) {
     return new CallCredentialsApplyingTransport(
         delegate.newClientTransport(serverAddress, authority, userAgent), authority);
+  }
+
+  @Override
+  public ScheduledExecutorService getScheduledExecutorService() {
+    return delegate.getScheduledExecutorService();
   }
 
   @Override

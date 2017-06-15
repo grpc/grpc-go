@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import java.io.Closeable;
 import java.net.SocketAddress;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 
 /** Pre-configured factory for creating {@link ConnectionClientTransport} instances. */
@@ -30,6 +31,18 @@ public interface ClientTransportFactory extends Closeable {
    */
   ConnectionClientTransport newClientTransport(SocketAddress serverAddress, String authority,
       @Nullable String userAgent);
+
+  /**
+   * Returns an executor for scheduling provided by the transport. The service should be configured
+   * to allow cancelled scheduled runnables to be GCed.
+   *
+   * <p>The executor should not be used after the factory has been closed. The caller should ensure
+   * any outstanding tasks are cancelled before the factory is closed. However, it is a
+   * <a href="https://github.com/grpc/grpc-java/issues/1981">known issue</a> that ClientCallImpl may
+   * use this executor after close, so implementations should not go out of their way to prevent
+   * usage.
+   */
+  ScheduledExecutorService getScheduledExecutorService();
 
   /**
    * Releases any resources.

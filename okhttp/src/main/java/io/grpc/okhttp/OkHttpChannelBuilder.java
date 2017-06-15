@@ -46,6 +46,7 @@ import java.security.SecureRandom;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import javax.net.ssl.HostnameVerifier;
@@ -382,6 +383,8 @@ public class OkHttpChannelBuilder extends
     private final AtomicBackoff keepAliveTimeNanos;
     private final long keepAliveTimeoutNanos;
     private final boolean keepAliveWithoutCalls;
+    private final ScheduledExecutorService timeoutService =
+        SharedResourceHolder.get(GrpcUtil.TIMER_SERVICE);
     private boolean closed;
 
     private OkHttpTransportFactory(Executor executor,
@@ -446,11 +449,17 @@ public class OkHttpChannelBuilder extends
     }
 
     @Override
+    public ScheduledExecutorService getScheduledExecutorService() {
+      return timeoutService;
+    }
+
+    @Override
     public void close() {
       if (closed) {
         return;
       }
       closed = true;
+      SharedResourceHolder.release(GrpcUtil.TIMER_SERVICE, timeoutService);
 
       if (usingSharedExecutor) {
         SharedResourceHolder.release(SHARED_EXECUTOR, (ExecutorService) executor);

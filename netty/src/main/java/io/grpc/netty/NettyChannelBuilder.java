@@ -46,6 +46,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
@@ -495,6 +496,11 @@ public final class NettyChannelBuilder
           keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent(),
           tooManyPingsRunnable);
       return transport;
+    }
+
+    @Override
+    public ScheduledExecutorService getScheduledExecutorService() {
+      return group;
     }
 
     @Override
