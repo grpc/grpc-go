@@ -76,7 +76,7 @@ func compareTwoMap(m1, m2 map[string][]string) {
 		if v1, ok := m1[k2]; ok {
 			var changes string = ""
 			var factor float64 = 1
-			for i := 0; i < 17; i++ {
+			for i := 0; i < 18; i++ {
 				if i == 6 {
 					factor = unit2num[v1[7]] / unit2num[v2[7]]
 				}
@@ -93,7 +93,7 @@ func compareTwoMap(m1, m2 map[string][]string) {
 				case i >= 1 && i <= 5:
 					changes = changes + combineString(v1[i+1], v1[i], v2[i], percentChange)
 				case i > 5:
-					changes = changes + combineString(v1[i+1], v1[i]+v1[7], v2[i]+v2[7], percentChange)
+					changes = changes + combineString(v1[i-1], v1[i]+v1[7], v2[i]+v2[7], percentChange)
 				}
 			}
 			fmt.Printf("%s, %s\n", k2, changes)
