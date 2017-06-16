@@ -12,42 +12,117 @@ import (
 )
 
 const (
+	defaultPort = "443"
 	defaultFreq = time.Minute * 30
+	// https://github.com/golang/go/blob/master/src/net/ipsock.go error string defined here.
+	missingPortErr = "missing port in address"
+	missingAddrErr = "missing address"
+	watcherClose   = "watcher has been closed"
 )
+
+var (
+	lookupHost = net.LookupHost
+	lookupSRV  = net.LookupSRV
+)
+
+// NewDNSResolverWithFreq creates a DNS Resolver that can resolve DNS names, and
+// the watchers created by which will poll the DNS server using the frequency
+// set by freq.
+func NewDNSResolverWithFreq(freq time.Duration) (Resolver, error) {
+	return &dnsResolver{freq: freq}, nil
+}
 
 // NewDNSResolver creates a DNS Resolver that can resolve DNS names.
 func NewDNSResolver() (Resolver, error) {
-	return &dnsResolver{}, nil
+	return &dnsResolver{freq: defaultFreq}, nil
 }
 
 // dnsResolver handles name resolution for names following the DNS scheme
 type dnsResolver struct {
+	// frequency of polling the DNS server that the watchers created by this resolver will use.
+	freq time.Duration
+}
+
+// formatIP returns ok = false if addr is not a valid textual representation of an IP address.
+// If addr is an IPv4 address, return the addr and ok = true.
+// If addr is an IPv6 address, return the addr enclosed in square brackets and ok = true.
+func formatIP(addr string) (addrIP string, ok bool) {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return "", false
+	}
+	if ip.To4() != nil {
+		return addr, true
+	}
+	return "[" + addr + "]", true
+}
+
+// setHostPort takes the user input target string, returns formatted host and port info.
+// If target doesn't specify a port, set the port to be the defaultPort.
+// If target is in IPv6 format and host-name is enclosed in sqarue brackets, brackets
+// are strippd when setting the host.
+// examples:
+// target: "www.google.com" returns host: "www.google.com", port: "443"
+// target: "ipv4-host:80" returns host: "ipv4-host", port: "80"
+// target: "[ipv6-host]" returns host: "ipv6-host", port: "443"
+func setHostPort(target string) (host, port string, err error) {
+	if target == "" {
+		return "", "", errors.New(missingAddrErr)
+	}
+	host, port = target, defaultPort
+	if _, ok := formatIP(target); !ok {
+		host, port, err = net.SplitHostPort(target)
+		if err != nil {
+			if err.(*net.AddrError).Err != missingPortErr {
+				return "", "", err
+			}
+			// The target is missing a port. We append the default port to the target.
+			host, port, err = net.SplitHostPort(target + ":" + defaultPort)
+			if err != nil {
+				return "", "", err
+			}
+		}
+	}
+	// Keep consistent with net.Dial(): If the host is empty, as in ":80", the local system is assumed.
+	if host == "" {
+		host = "localhost"
+	}
+	return host, port, nil
 }
 
 // Resolve creates a watcher that watches the name resolution of the target.
 func (r *dnsResolver) Resolve(target string) (Watcher, error) {
-	host, port, err := net.SplitHostPort(target)
+	host, port, err := setHostPort(target)
 	if err != nil {
-		if err.(*net.AddrError).Err != "missing port in address" {
-			return &dnsWatcher{}, err
-		} else {
-			host = target
-			port = "443"
-		}
+		return nil, err
 	}
+
+	if net.ParseIP(host) != nil {
+		ipWatcher := &IPWatcher{
+			r:      r,
+			target: target,
+			host:   host,
+			port:   port,
+			IPAddr: make(chan *Update, 1),
+			done:   make(chan struct{}),
+		}
+		host, _ = formatIP(host)
+		ipWatcher.IPAddr <- &Update{Op: Add, Addr: host + ":" + port}
+		return ipWatcher, nil
+	}
+
 	return &dnsWatcher{
+		r:      r,
 		target: target,
 		host:   host,
 		port:   port,
 		done:   make(chan struct{}),
-		freq:   defaultFreq,
 	}, nil
 }
 
 // dnsWatcher watches for the name resolution update for a specific target
 type dnsWatcher struct {
-	dnsResolver
-	// target to watch address Update. TODO(yuxuanli): delete this? since its info is redundant
+	r      *dnsResolver
 	target string
 	host   string
 	port   string
@@ -55,8 +130,35 @@ type dnsWatcher struct {
 	curAddrs []*Update
 	// done channel is closed to notify Next() to exit.
 	done chan struct{}
-	// frequency of polling the DNS server.
-	freq time.Duration
+}
+
+// IPWatcher watches for the name resolution update for an IP address.
+type IPWatcher struct {
+	r      *dnsResolver
+	target string
+	host   string
+	port   string
+	IPAddr chan *Update
+	// done channel is closed to notify Next() to exit.
+	done chan struct{}
+}
+
+// Next returns the adrress resolution Update for the target. For IP address,
+// the resolution is itself, thus polling name server is unncessary. Therefore,
+// Next() will return an Update the first time it is called, and will be blocked
+// for all following calls as no Update exisits until watcher is closed.
+func (i *IPWatcher) Next() ([]*Update, error) {
+	select {
+	case u := <-i.IPAddr:
+		return []*Update{u}, nil
+	case <-i.done:
+		return nil, errors.New(watcherClose)
+	}
+}
+
+// Close closes the IPWatcher.
+func (i *IPWatcher) Close() {
+	close(i.done)
 }
 
 // AddressType indicates the address type returned by name resolution.
@@ -130,13 +232,8 @@ func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
 	return result
 }
 
-// Set the frequency at which the watcher polls the DNS server.
-func (w *dnsWatcher) SetFreq(d time.Duration) {
-	w.freq = d
-}
-
 func (w *dnsWatcher) lookup() ([]*Update, error) {
-	_, srvs, err := net.LookupSRV("grpclb", "tcp", w.host)
+	_, srvs, err := lookupSRV("grpclb", "tcp", w.host)
 	if err != nil {
 		grpclog.Printf("grpc: failed dns SRV record lookup due to %v.\n", err)
 	}
@@ -145,28 +242,36 @@ func (w *dnsWatcher) lookup() ([]*Update, error) {
 	if len(srvs) > 0 {
 		// target has SRV records associated with it
 		for _, r := range srvs {
-			lbAddrs, err := net.LookupHost(r.Target)
+			lbAddrs, err := lookupHost(r.Target)
 			if err != nil {
 				// TODO(yuxuanli): For service that doesn't use service config, this will
 				// result in a certain amount of unncessary logs.
 				grpclog.Printf("grpc: failed dns srv load banlacer address lookup due to %v.\n", err)
 			}
 			for _, a := range lbAddrs {
-				newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(r.Port)),
-					Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: r.Target},
-				})
+				if a, ok := formatIP(a); ok {
+					newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(r.Port)),
+						Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: r.Target},
+					})
+				} else {
+					grpclog.Printf("grpc: failed IP parsing due to %v.\n", err)
+				}
 			}
 		}
 		sortSlice(newAddrs)
 	} else {
 		// If target doesn't have SRV records associated with it, return any A record info available.
-		addrs, err := net.LookupHost(w.host)
+		addrs, err := lookupHost(w.host)
 		if err != nil {
 			grpclog.Printf("grpc: failed dns A record lookup due to %v.\n", err)
 		}
 		sort.Strings(addrs)
 		for _, a := range addrs {
-			newAddrs = append(newAddrs, &Update{Addr: a + ":" + w.port})
+			if a, ok := formatIP(a); ok {
+				newAddrs = append(newAddrs, &Update{Addr: a + ":" + w.port})
+			} else {
+				grpclog.Printf("grpc: failed IP parsing due to %v.\n", err)
+			}
 		}
 	}
 	result := compileUpdate(w.curAddrs, newAddrs)
@@ -184,11 +289,11 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 	if len(result) > 0 {
 		return result, nil
 	}
-	ticker := time.NewTicker(w.freq)
+	ticker := time.NewTicker(w.r.freq)
 	for {
 		select {
 		case <-w.done:
-			return nil, errors.New("watcher has been closed")
+			return nil, errors.New(watcherClose)
 		case <-ticker.C:
 			result, err := w.lookup()
 			if err != nil {
