@@ -1,0 +1,38 @@
+BenchmarkClient/Unary-Tracing-maxConcurrentCalls_8-reqSize_1B-respSize_1B-12         	   30000	     41717 ns/op	    6285 B/op	     134 allocs/op
+Latency - unit: µs 
+	  --------------------
+	|    50%   |     315 µs |
+	|    90%   |     427 µs |
+	|    99%   |     822 µs |
+	|   100%   |    1211 µs |
+	| Average  |  333.14 µs |
+	  --------------------
+BenchmarkClient/Unary-Tracing-maxConcurrentCalls_8-reqSize_1B-respSize_1024B-12      	   30000	     41180 ns/op	   14667 B/op	     134 allocs/op
+Latency - unit: µs 
+	  --------------------
+	|    50%   |     295 µs |
+	|    90%   |     491 µs |
+	|    99%   |     843 µs |
+	|   100%   |    1726 µs |
+	| Average  |  328.93 µs |
+	  --------------------
+BenchmarkClient/Unary-Tracing-maxConcurrentCalls_8-reqSize_1024B-respSize_1B-12      	   30000	     41040 ns/op	   14739 B/op	     134 allocs/op
+Latency - unit: µs 
+	  --------------------
+	|    50%   |     292 µs |
+	|    90%   |     490 µs |
+	|    99%   |     842 µs |
+	|   100%   |    4205 µs |
+	| Average  |  327.72 µs |
+	  --------------------
+BenchmarkClient/Unary-Tracing-maxConcurrentCalls_8-reqSize_1024B-respSize_1024B-12   	   30000	     44797 ns/op	   23024 B/op	     134 allocs/op
+Latency - unit: µs 
+	  --------------------
+	|    50%   |     306 µs |
+	|    90%   |     603 µs |
+	|    99%   |     899 µs |
+	|   100%   |    3240 µs |
+	| Average  |  357.86 µs |
+	  --------------------
+PASS
+ok  	command-line-arguments	6.971s

@@ -59,6 +59,10 @@ func createMap(fileName string, m map[string][]string) {
 			part2 = append(part2, parserLine[1], parserLine[3])
 		}
 	}
+	if part2 != nil {
+		part1 = append(part1, part2...)
+		m[part1[0]] = part1[1:]
+	}
 }
 
 func combineString(title, val1, val2, percentChange string) string {
