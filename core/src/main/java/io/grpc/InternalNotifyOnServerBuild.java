@@ -21,7 +21,7 @@ package io.grpc;
  * {@link ServerBuilder} is that this method will be called on all registered services implementing
  * the interface after build() has been called and before the {@link Server} instance is returned.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/2222")
+@Internal
 public interface InternalNotifyOnServerBuild {
   /** Notifies the service that the server has been built. */
   void notifyOnBuild(Server server);
