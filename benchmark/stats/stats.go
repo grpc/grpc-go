@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sort"
 	"time"
+	"strings"
 )
+
+var printHistogram bool = false
 
 // Stats is a simple helper for gathering additional statistics like histogram
 // during benchmarks. This is not thread safe.
@@ -105,24 +107,30 @@ func (stats *Stats) maybeUpdate() {
 	stats.dirty = false
 }
 
+
+
 // Print writes textual output of the Stats.
 func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
 
-	f, _ := os.OpenFile("testfile", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-	defer f.Close()
-	fmt.Fprintf(f, "%s %4d %4d %4d %4d ", fmt.Sprintf("%v", stats.unit)[1:],
-		stats.durations[stats.histogram.Count*5/10]/stats.unit,
-		stats.durations[stats.histogram.Count*9/10]/stats.unit,
-		stats.durations[stats.histogram.Count*99/100]/stats.unit-1,
-		stats.durations[stats.histogram.Count-1]/stats.unit,
-	)
+	avg := float64(stats.histogram.Sum) / float64(stats.histogram.Count)
+	var percentToObserve = []int64{50, 90, 99, 100}
+	fmt.Fprintf(w, "Latency - unit: %s \n", fmt.Sprintf("%v", stats.unit)[1:])
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 20))
+	for _, position := range percentToObserve {
+		fmt.Fprintf(w, "|   %*d%%   | %*d %s |\n", 3, position, 7,
+			stats.durations[stats.histogram.Count*position/100-1]/stats.unit, fmt.Sprintf("%v", stats.unit)[1:])
+	}
+	fmt.Fprintf(w, "| Average  | %7.2f %s |\n", avg, fmt.Sprintf("%v", stats.unit)[1:])
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 20))
 
-	if stats.histogram == nil {
-		fmt.Fprint(w, "Histogram (empty)\n")
-	} else {
-		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.Print(w)
+	if printHistogram {
+		if stats.histogram == nil {
+			fmt.Fprint(w, "Histogram (empty)\n")
+		} else {
+			fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
+			stats.histogram.Print(w)
+		}
 	}
 }
 
