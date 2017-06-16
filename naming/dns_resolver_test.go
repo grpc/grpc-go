@@ -218,13 +218,17 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		time.Sleep(slp)
 
 		if !reflect.DeepEqual(addrResolved[i], updates) {
-			t.Errorf("Wrong resolved update , idx: %d, target: %s\n", i, a)
+			t.Errorf("Wrong resolved update , idx: %d, target: %s, len of updates: %d\n", i, a, len(updates))
+			for _, u := range updates {
+				fmt.Println(*u)
+			}
 		}
 	}
 }
 
 func TestResolve(t *testing.T) {
 	// Test with real lookup functions (i.e. net.LookupHost, net.LookupSRV) and real addresses.
+	// TODO(yuxuanli): it fails on travis
 	testResolver(t, time.Millisecond*500, time.Second*1)
 
 	// Test with mocked address lookup functions and made-up addresses.
