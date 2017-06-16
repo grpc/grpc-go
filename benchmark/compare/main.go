@@ -51,11 +51,9 @@ func createMap(fileName string, m map[string][]string) {
 				part2 = nil
 			}
 			part1 = parserLine
-		} else
-		if strings.HasPrefix(line, "Latency") {
+		} else if strings.HasPrefix(line, "Latency") {
 			part1 = append(part1, parserLine[3])
-		} else
-		if strings.Contains(line, "|") {
+		} else if strings.Contains(line, "|") {
 			part2 = append(part2, parserLine[1], parserLine[3])
 		}
 	}
@@ -66,7 +64,7 @@ func createMap(fileName string, m map[string][]string) {
 }
 
 func combineString(title, val1, val2, percentChange string) string {
-	return fmt.Sprintf("%10s | %8s -> %8s => %8s \n",title,val1,val2,percentChange)
+	return fmt.Sprintf("%10s | %8s -> %8s => %8s \n", title, val1, val2, percentChange)
 }
 
 func compareTwoMap(m1, m2 map[string][]string) {
@@ -92,10 +90,10 @@ func compareTwoMap(m1, m2 map[string][]string) {
 				switch {
 				case i == 0:
 					changes = changes + combineString("\noperations", v1[i], v2[i], "")
-				case i >= 1 && i<= 5:
+				case i >= 1 && i <= 5:
 					changes = changes + combineString(v1[i+1], v1[i], v2[i], percentChange)
 				case i > 5:
-					changes = changes + combineString(v1[i+1], v1[i] + v1[7], v2[i] + v2[7], percentChange)
+					changes = changes + combineString(v1[i+1], v1[i]+v1[7], v2[i]+v2[7], percentChange)
 				}
 			}
 			fmt.Printf("%s, %s\n", k2, changes)

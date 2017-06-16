@@ -6,8 +6,8 @@ import (
 	"io"
 	"math"
 	"sort"
-	"time"
 	"strings"
+	"time"
 )
 
 var printHistogram bool = false
@@ -106,8 +106,6 @@ func (stats *Stats) maybeUpdate() {
 
 	stats.dirty = false
 }
-
-
 
 // Print writes textual output of the Stats.
 func (stats *Stats) Print(w io.Writer) {
