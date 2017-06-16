@@ -10,4 +10,8 @@ dependencies {
     signature "org.codehaus.mojo.signature:java16:+@signature"
 }
 
-javadoc.exclude 'io/grpc/internal/**'
+javadoc {
+    // We want io.grpc.Internal, but not io.grpc.Internal*
+    exclude 'io/grpc/Internal?*.java'
+    exclude 'io/grpc/internal/**'
+}

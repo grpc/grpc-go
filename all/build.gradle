@@ -46,7 +46,6 @@ javadoc {
         source subproject.javadoc.source
         options.links subproject.javadoc.options.links.toArray(new String[0])
     }
-    exclude 'io/grpc/internal/**'
 }
 
 task jacocoMerge(type: JacocoMerge) {

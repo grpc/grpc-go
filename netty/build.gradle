@@ -16,7 +16,10 @@ dependencies {
   it.options.compilerArgs += ["-Xep:FutureReturnValueIgnored:OFF"]
 }
 
-javadoc.options.links 'http://netty.io/4.1/api/'
+javadoc {
+    options.links 'http://netty.io/4.1/api/'
+    exclude 'io/grpc/netty/Internal*'
+}
 
 project.sourceSets {
     main {
