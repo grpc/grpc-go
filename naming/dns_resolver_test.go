@@ -123,13 +123,11 @@ func TestResolveFunc(t *testing.T) {
 	}
 }
 
-var realAddrToResolve = []string{
-	"localhost",
-}
+//TODO(yuxuanli): Do we need to test with net.LookupHost, net.LookupSRV and real target? If not, delete this.
+var realAddrToResolve = []string{}
 
-var realAddrResolved = [][]*Update{
-	{newUpdate(Add, "127.0.0.1"+colonDefaultPort), newUpdate(Add, "[::1]"+colonDefaultPort)},
-}
+//TODO(yuxuanli): Do we need to test with net.LookupHost, net.LookupSRV and real target? If not, delete this.
+var realAddrResolved = [][]*Update{}
 
 var fakeAddrToResolve = []string{
 	"foo.bar.com",
@@ -144,9 +142,13 @@ var fakeAddrResolved = [][]*Update{
 	{newUpdate(Add, "1.2.3.4"+colonDefaultPort), newUpdate(Add, "5.6.7.8"+colonDefaultPort)},
 	{newUpdate(Add, "1.2.3.4:1234"), newUpdate(Add, "5.6.7.8:1234")},
 	{newUpdateWithMD(Add, "1.2.3.4:1234", "ipv4.single.fake")},
-	{newUpdateWithMD(Add, "1.2.3.4:1234", "ipv4.multi.fake"), newUpdateWithMD(Add, "5.6.7.8:1234", "ipv4.multi.fake"), newUpdateWithMD(Add, "9.10.11.12:1234", "ipv4.multi.fake")},
+	{newUpdateWithMD(Add, "1.2.3.4:1234", "ipv4.multi.fake"),
+		newUpdateWithMD(Add, "5.6.7.8:1234", "ipv4.multi.fake"),
+		newUpdateWithMD(Add, "9.10.11.12:1234", "ipv4.multi.fake")},
 	{newUpdateWithMD(Add, "[2607:f8b0:400a:801::1001]:1234", "ipv6.single.fake")},
-	{newUpdateWithMD(Add, "[2607:f8b0:400a:801::1001]:1234", "ipv6.multi.fake"), newUpdateWithMD(Add, "[2607:f8b0:400a:801::1002]:1234", "ipv6.multi.fake"), newUpdateWithMD(Add, "[2607:f8b0:400a:801::1003]:1234", "ipv6.multi.fake")},
+	{newUpdateWithMD(Add, "[2607:f8b0:400a:801::1001]:1234", "ipv6.multi.fake"),
+		newUpdateWithMD(Add, "[2607:f8b0:400a:801::1002]:1234", "ipv6.multi.fake"),
+		newUpdateWithMD(Add, "[2607:f8b0:400a:801::1003]:1234", "ipv6.multi.fake")},
 }
 
 var (
@@ -193,6 +195,14 @@ func replaceNetFunc() func() {
 	}
 }
 
+func updatesToSlice(updates []*Update) []Update {
+	res := make([]Update, len(updates))
+	for i, u := range updates {
+		res[i] = *u
+	}
+	return res
+}
+
 func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 	for i, a := range addrToResolve {
 		r, err := NewDNSResolverWithFreq(freq)
@@ -218,17 +228,14 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		time.Sleep(slp)
 
 		if !reflect.DeepEqual(addrResolved[i], updates) {
-			t.Errorf("Wrong resolved update , idx: %d, target: %s, len of updates: %d\n", i, a, len(updates))
-			for _, u := range updates {
-				fmt.Println(*u)
-			}
+			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", a, updatesToSlice(updates))
 		}
 	}
 }
 
 func TestResolve(t *testing.T) {
 	// Test with real lookup functions (i.e. net.LookupHost, net.LookupSRV) and real addresses.
-	// TODO(yuxuanli): it fails on travis
+	//TODO(yuxuanli): Do we need to test with net.LookupHost, net.LookupSRV and real target? If not, delete this.
 	testResolver(t, time.Millisecond*500, time.Second*1)
 
 	// Test with mocked address lookup functions and made-up addresses.
@@ -278,10 +285,10 @@ func TestIPWatcher(t *testing.T) {
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(time.Second * 1)
 		if !reflect.DeepEqual(v, updates) {
-			t.Errorf("wrong resolved update, target %s", k)
+			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", k, updatesToSlice(updates))
 		}
 		if count != 1 {
-			t.Errorf("IPWatcher Next() should return once, not %d times", count)
+			t.Errorf("IPWatcher Next() should return once, not %d times\n", count)
 		}
 	}
 }
