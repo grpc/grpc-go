@@ -261,7 +261,7 @@ var IPAddrs = map[string][]*Update{
 
 func TestIPWatcher(t *testing.T) {
 	for k, v := range IPAddrs {
-		r, err := NewDNSResolverWithFreq(time.Millisecond * 500)
+		r, err := NewDNSResolverWithFreq(time.Millisecond * 5)
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -283,7 +283,7 @@ func TestIPWatcher(t *testing.T) {
 			}
 		}()
 		// Sleep for sometime to let watcher do more than one lookup
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Millisecond * 10)
 		if !reflect.DeepEqual(v, updates) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", k, updatesToSlice(updates))
 		}
