@@ -373,12 +373,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       Supplier<Stopwatch> stopwatchSupplier,
       List<ClientInterceptor> interceptors) {
     this.target = checkNotNull(builder.target, "target");
-    NameResolver.Factory tmpNameResolverFactory = builder.nameResolverFactory;
-    if (builder.authorityOverride != null) {
-      tmpNameResolverFactory = new OverrideAuthorityNameResolverFactory(
-          tmpNameResolverFactory, builder.authorityOverride);
-    }
-    this.nameResolverFactory = tmpNameResolverFactory;
+    this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
     this.nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
     this.loadBalancerFactory =
