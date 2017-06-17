@@ -644,8 +644,7 @@ public final class Metadata {
 
     private Key(String name) {
       this.originalName = checkNotNull(name, "name");
-      // Intern the result for faster string identity checking.
-      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT)).intern();
+      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT));
       this.nameBytes = this.name.getBytes(US_ASCII);
     }
 
