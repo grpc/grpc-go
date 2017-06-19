@@ -18,21 +18,34 @@ syntax = "proto3";
 
 import "messages.proto";
 import "control.proto";
+import "stats.proto";
 
 package grpc.testing;
 
 option java_package = "io.grpc.benchmarks.proto";
 option java_outer_classname = "Services";
 
-
 service BenchmarkService {
   // One request followed by one response.
   // The server returns the client payload as-is.
   rpc UnaryCall(SimpleRequest) returns (SimpleResponse);
 
-  // One request followed by one response.
-  // The server returns the client payload as-is.
+  // Repeated sequence of one request followed by one response.
+  // Should be called streaming ping-pong
+  // The server returns the client payload as-is on each response
   rpc StreamingCall(stream SimpleRequest) returns (stream SimpleResponse);
+
+  // Single-sided unbounded streaming from client to server
+  // The server returns the client payload as-is once the client does WritesDone
+  rpc StreamingFromClient(stream SimpleRequest) returns (SimpleResponse);
+
+  // Single-sided unbounded streaming from server to client
+  // The server repeatedly returns the client payload as-is
+  rpc StreamingFromServer(SimpleRequest) returns (stream SimpleResponse);
+
+  // Two-sided unbounded streaming between server to client
+  // Both sides send the content of their own choice to the other
+  rpc StreamingBothWays(stream SimpleRequest) returns (stream SimpleResponse);
 }
 
 service WorkerService {
@@ -57,4 +70,9 @@ service WorkerService {
 
   // Quit this worker
   rpc QuitWorker(Void) returns (Void);
+}
+
+service ReportQpsScenarioService {
+  // Report results of a QPS test benchmark scenario.
+  rpc ReportScenario(ScenarioResult) returns (Void);
 }

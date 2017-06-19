@@ -20,6 +20,11 @@ public final class Control {
   public enum ClientType
       implements com.google.protobuf.ProtocolMessageEnum {
     /**
+     * <pre>
+     * Many languages support a basic distinction between using
+     * sync or async client, and this allows the specification
+     * </pre>
+     *
      * <code>SYNC_CLIENT = 0;</code>
      */
     SYNC_CLIENT(0),
@@ -27,10 +32,23 @@ public final class Control {
      * <code>ASYNC_CLIENT = 1;</code>
      */
     ASYNC_CLIENT(1),
+    /**
+     * <pre>
+     * used for some language-specific variants
+     * </pre>
+     *
+     * <code>OTHER_CLIENT = 2;</code>
+     */
+    OTHER_CLIENT(2),
     UNRECOGNIZED(-1),
     ;
 
     /**
+     * <pre>
+     * Many languages support a basic distinction between using
+     * sync or async client, and this allows the specification
+     * </pre>
+     *
      * <code>SYNC_CLIENT = 0;</code>
      */
     public static final int SYNC_CLIENT_VALUE = 0;
@@ -38,6 +56,14 @@ public final class Control {
      * <code>ASYNC_CLIENT = 1;</code>
      */
     public static final int ASYNC_CLIENT_VALUE = 1;
+    /**
+     * <pre>
+     * used for some language-specific variants
+     * </pre>
+     *
+     * <code>OTHER_CLIENT = 2;</code>
+     */
+    public static final int OTHER_CLIENT_VALUE = 2;
 
 
     public final int getNumber() {
@@ -60,6 +86,7 @@ public final class Control {
       switch (value) {
         case 0: return SYNC_CLIENT;
         case 1: return ASYNC_CLIENT;
+        case 2: return OTHER_CLIENT;
         default: return null;
       }
     }
@@ -129,6 +156,14 @@ public final class Control {
      * <code>ASYNC_GENERIC_SERVER = 2;</code>
      */
     ASYNC_GENERIC_SERVER(2),
+    /**
+     * <pre>
+     * used for some language-specific variants
+     * </pre>
+     *
+     * <code>OTHER_SERVER = 3;</code>
+     */
+    OTHER_SERVER(3),
     UNRECOGNIZED(-1),
     ;
 
@@ -144,6 +179,14 @@ public final class Control {
      * <code>ASYNC_GENERIC_SERVER = 2;</code>
      */
     public static final int ASYNC_GENERIC_SERVER_VALUE = 2;
+    /**
+     * <pre>
+     * used for some language-specific variants
+     * </pre>
+     *
+     * <code>OTHER_SERVER = 3;</code>
+     */
+    public static final int OTHER_SERVER_VALUE = 3;
 
 
     public final int getNumber() {
@@ -167,6 +210,7 @@ public final class Control {
         case 0: return SYNC_SERVER;
         case 1: return ASYNC_SERVER;
         case 2: return ASYNC_GENERIC_SERVER;
+        case 3: return OTHER_SERVER;
         default: return null;
       }
     }
@@ -232,6 +276,18 @@ public final class Control {
      * <code>STREAMING = 1;</code>
      */
     STREAMING(1),
+    /**
+     * <code>STREAMING_FROM_CLIENT = 2;</code>
+     */
+    STREAMING_FROM_CLIENT(2),
+    /**
+     * <code>STREAMING_FROM_SERVER = 3;</code>
+     */
+    STREAMING_FROM_SERVER(3),
+    /**
+     * <code>STREAMING_BOTH_WAYS = 4;</code>
+     */
+    STREAMING_BOTH_WAYS(4),
     UNRECOGNIZED(-1),
     ;
 
@@ -243,6 +299,18 @@ public final class Control {
      * <code>STREAMING = 1;</code>
      */
     public static final int STREAMING_VALUE = 1;
+    /**
+     * <code>STREAMING_FROM_CLIENT = 2;</code>
+     */
+    public static final int STREAMING_FROM_CLIENT_VALUE = 2;
+    /**
+     * <code>STREAMING_FROM_SERVER = 3;</code>
+     */
+    public static final int STREAMING_FROM_SERVER_VALUE = 3;
+    /**
+     * <code>STREAMING_BOTH_WAYS = 4;</code>
+     */
+    public static final int STREAMING_BOTH_WAYS_VALUE = 4;
 
 
     public final int getNumber() {
@@ -265,6 +333,9 @@ public final class Control {
       switch (value) {
         case 0: return UNARY;
         case 1: return STREAMING;
+        case 2: return STREAMING_FROM_CLIENT;
+        case 3: return STREAMING_FROM_SERVER;
+        case 4: return STREAMING_BOTH_WAYS;
         default: return null;
       }
     }
@@ -790,1467 +861,6 @@ public final class Control {
 
   }
 
-  public interface UniformParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.UniformParams)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>double interarrival_lo = 1;</code>
-     */
-    double getInterarrivalLo();
-
-    /**
-     * <code>double interarrival_hi = 2;</code>
-     */
-    double getInterarrivalHi();
-  }
-  /**
-   * Protobuf type {@code grpc.testing.UniformParams}
-   */
-  public  static final class UniformParams extends
-      com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.UniformParams)
-      UniformParamsOrBuilder {
-    // Use UniformParams.newBuilder() to construct.
-    private UniformParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
-      super(builder);
-    }
-    private UniformParams() {
-      interarrivalLo_ = 0D;
-      interarrivalHi_ = 0D;
-    }
-
-    @java.lang.Override
-    public final com.google.protobuf.UnknownFieldSet
-    getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
-    }
-    private UniformParams(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      int mutable_bitField0_ = 0;
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            default: {
-              if (!input.skipField(tag)) {
-                done = true;
-              }
-              break;
-            }
-            case 9: {
-
-              interarrivalLo_ = input.readDouble();
-              break;
-            }
-            case 17: {
-
-              interarrivalHi_ = input.readDouble();
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        makeExtensionsImmutable();
-      }
-    }
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
-    }
-
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.grpc.benchmarks.proto.Control.UniformParams.class, io.grpc.benchmarks.proto.Control.UniformParams.Builder.class);
-    }
-
-    public static final int INTERARRIVAL_LO_FIELD_NUMBER = 1;
-    private double interarrivalLo_;
-    /**
-     * <code>double interarrival_lo = 1;</code>
-     */
-    public double getInterarrivalLo() {
-      return interarrivalLo_;
-    }
-
-    public static final int INTERARRIVAL_HI_FIELD_NUMBER = 2;
-    private double interarrivalHi_;
-    /**
-     * <code>double interarrival_hi = 2;</code>
-     */
-    public double getInterarrivalHi() {
-      return interarrivalHi_;
-    }
-
-    private byte memoizedIsInitialized = -1;
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (interarrivalLo_ != 0D) {
-        output.writeDouble(1, interarrivalLo_);
-      }
-      if (interarrivalHi_ != 0D) {
-        output.writeDouble(2, interarrivalHi_);
-      }
-    }
-
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (interarrivalLo_ != 0D) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(1, interarrivalLo_);
-      }
-      if (interarrivalHi_ != 0D) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(2, interarrivalHi_);
-      }
-      memoizedSize = size;
-      return size;
-    }
-
-    private static final long serialVersionUID = 0L;
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.grpc.benchmarks.proto.Control.UniformParams)) {
-        return super.equals(obj);
-      }
-      io.grpc.benchmarks.proto.Control.UniformParams other = (io.grpc.benchmarks.proto.Control.UniformParams) obj;
-
-      boolean result = true;
-      result = result && (
-          java.lang.Double.doubleToLongBits(getInterarrivalLo())
-          == java.lang.Double.doubleToLongBits(
-              other.getInterarrivalLo()));
-      result = result && (
-          java.lang.Double.doubleToLongBits(getInterarrivalHi())
-          == java.lang.Double.doubleToLongBits(
-              other.getInterarrivalHi()));
-      return result;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + INTERARRIVAL_LO_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getInterarrivalLo()));
-      hash = (37 * hash) + INTERARRIVAL_HI_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getInterarrivalHi()));
-      hash = (29 * hash) + unknownFields.hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.UniformParams parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.UniformParams prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
-    /**
-     * Protobuf type {@code grpc.testing.UniformParams}
-     */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.UniformParams)
-        io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
-      }
-
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.grpc.benchmarks.proto.Control.UniformParams.class, io.grpc.benchmarks.proto.Control.UniformParams.Builder.class);
-      }
-
-      // Construct using io.grpc.benchmarks.proto.Control.UniformParams.newBuilder()
-      private Builder() {
-        maybeForceBuilderInitialization();
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-        super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
-      }
-      public Builder clear() {
-        super.clear();
-        interarrivalLo_ = 0D;
-
-        interarrivalHi_ = 0D;
-
-        return this;
-      }
-
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_UniformParams_descriptor;
-      }
-
-      public io.grpc.benchmarks.proto.Control.UniformParams getDefaultInstanceForType() {
-        return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-      }
-
-      public io.grpc.benchmarks.proto.Control.UniformParams build() {
-        io.grpc.benchmarks.proto.Control.UniformParams result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
-        }
-        return result;
-      }
-
-      public io.grpc.benchmarks.proto.Control.UniformParams buildPartial() {
-        io.grpc.benchmarks.proto.Control.UniformParams result = new io.grpc.benchmarks.proto.Control.UniformParams(this);
-        result.interarrivalLo_ = interarrivalLo_;
-        result.interarrivalHi_ = interarrivalHi_;
-        onBuilt();
-        return result;
-      }
-
-      public Builder clone() {
-        return (Builder) super.clone();
-      }
-      public Builder setField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.setField(field, value);
-      }
-      public Builder clearField(
-          com.google.protobuf.Descriptors.FieldDescriptor field) {
-        return (Builder) super.clearField(field);
-      }
-      public Builder clearOneof(
-          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
-        return (Builder) super.clearOneof(oneof);
-      }
-      public Builder setRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
-        return (Builder) super.setRepeatedField(field, index, value);
-      }
-      public Builder addRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.addRepeatedField(field, value);
-      }
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.grpc.benchmarks.proto.Control.UniformParams) {
-          return mergeFrom((io.grpc.benchmarks.proto.Control.UniformParams)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
-        }
-      }
-
-      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.UniformParams other) {
-        if (other == io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance()) return this;
-        if (other.getInterarrivalLo() != 0D) {
-          setInterarrivalLo(other.getInterarrivalLo());
-        }
-        if (other.getInterarrivalHi() != 0D) {
-          setInterarrivalHi(other.getInterarrivalHi());
-        }
-        onChanged();
-        return this;
-      }
-
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        io.grpc.benchmarks.proto.Control.UniformParams parsedMessage = null;
-        try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.grpc.benchmarks.proto.Control.UniformParams) e.getUnfinishedMessage();
-          throw e.unwrapIOException();
-        } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
-        return this;
-      }
-
-      private double interarrivalLo_ ;
-      /**
-       * <code>double interarrival_lo = 1;</code>
-       */
-      public double getInterarrivalLo() {
-        return interarrivalLo_;
-      }
-      /**
-       * <code>double interarrival_lo = 1;</code>
-       */
-      public Builder setInterarrivalLo(double value) {
-        
-        interarrivalLo_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double interarrival_lo = 1;</code>
-       */
-      public Builder clearInterarrivalLo() {
-        
-        interarrivalLo_ = 0D;
-        onChanged();
-        return this;
-      }
-
-      private double interarrivalHi_ ;
-      /**
-       * <code>double interarrival_hi = 2;</code>
-       */
-      public double getInterarrivalHi() {
-        return interarrivalHi_;
-      }
-      /**
-       * <code>double interarrival_hi = 2;</code>
-       */
-      public Builder setInterarrivalHi(double value) {
-        
-        interarrivalHi_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double interarrival_hi = 2;</code>
-       */
-      public Builder clearInterarrivalHi() {
-        
-        interarrivalHi_ = 0D;
-        onChanged();
-        return this;
-      }
-      public final Builder setUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-      public final Builder mergeUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-
-      // @@protoc_insertion_point(builder_scope:grpc.testing.UniformParams)
-    }
-
-    // @@protoc_insertion_point(class_scope:grpc.testing.UniformParams)
-    private static final io.grpc.benchmarks.proto.Control.UniformParams DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.UniformParams();
-    }
-
-    public static io.grpc.benchmarks.proto.Control.UniformParams getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<UniformParams>
-        PARSER = new com.google.protobuf.AbstractParser<UniformParams>() {
-      public UniformParams parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-          return new UniformParams(input, extensionRegistry);
-      }
-    };
-
-    public static com.google.protobuf.Parser<UniformParams> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<UniformParams> getParserForType() {
-      return PARSER;
-    }
-
-    public io.grpc.benchmarks.proto.Control.UniformParams getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
-  public interface DeterministicParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.DeterministicParams)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>double offered_load = 1;</code>
-     */
-    double getOfferedLoad();
-  }
-  /**
-   * Protobuf type {@code grpc.testing.DeterministicParams}
-   */
-  public  static final class DeterministicParams extends
-      com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.DeterministicParams)
-      DeterministicParamsOrBuilder {
-    // Use DeterministicParams.newBuilder() to construct.
-    private DeterministicParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
-      super(builder);
-    }
-    private DeterministicParams() {
-      offeredLoad_ = 0D;
-    }
-
-    @java.lang.Override
-    public final com.google.protobuf.UnknownFieldSet
-    getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
-    }
-    private DeterministicParams(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      int mutable_bitField0_ = 0;
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            default: {
-              if (!input.skipField(tag)) {
-                done = true;
-              }
-              break;
-            }
-            case 9: {
-
-              offeredLoad_ = input.readDouble();
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        makeExtensionsImmutable();
-      }
-    }
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
-    }
-
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.grpc.benchmarks.proto.Control.DeterministicParams.class, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder.class);
-    }
-
-    public static final int OFFERED_LOAD_FIELD_NUMBER = 1;
-    private double offeredLoad_;
-    /**
-     * <code>double offered_load = 1;</code>
-     */
-    public double getOfferedLoad() {
-      return offeredLoad_;
-    }
-
-    private byte memoizedIsInitialized = -1;
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (offeredLoad_ != 0D) {
-        output.writeDouble(1, offeredLoad_);
-      }
-    }
-
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (offeredLoad_ != 0D) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(1, offeredLoad_);
-      }
-      memoizedSize = size;
-      return size;
-    }
-
-    private static final long serialVersionUID = 0L;
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.grpc.benchmarks.proto.Control.DeterministicParams)) {
-        return super.equals(obj);
-      }
-      io.grpc.benchmarks.proto.Control.DeterministicParams other = (io.grpc.benchmarks.proto.Control.DeterministicParams) obj;
-
-      boolean result = true;
-      result = result && (
-          java.lang.Double.doubleToLongBits(getOfferedLoad())
-          == java.lang.Double.doubleToLongBits(
-              other.getOfferedLoad()));
-      return result;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + OFFERED_LOAD_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getOfferedLoad()));
-      hash = (29 * hash) + unknownFields.hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.DeterministicParams prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
-    /**
-     * Protobuf type {@code grpc.testing.DeterministicParams}
-     */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.DeterministicParams)
-        io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
-      }
-
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.grpc.benchmarks.proto.Control.DeterministicParams.class, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder.class);
-      }
-
-      // Construct using io.grpc.benchmarks.proto.Control.DeterministicParams.newBuilder()
-      private Builder() {
-        maybeForceBuilderInitialization();
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-        super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
-      }
-      public Builder clear() {
-        super.clear();
-        offeredLoad_ = 0D;
-
-        return this;
-      }
-
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_DeterministicParams_descriptor;
-      }
-
-      public io.grpc.benchmarks.proto.Control.DeterministicParams getDefaultInstanceForType() {
-        return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-      }
-
-      public io.grpc.benchmarks.proto.Control.DeterministicParams build() {
-        io.grpc.benchmarks.proto.Control.DeterministicParams result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
-        }
-        return result;
-      }
-
-      public io.grpc.benchmarks.proto.Control.DeterministicParams buildPartial() {
-        io.grpc.benchmarks.proto.Control.DeterministicParams result = new io.grpc.benchmarks.proto.Control.DeterministicParams(this);
-        result.offeredLoad_ = offeredLoad_;
-        onBuilt();
-        return result;
-      }
-
-      public Builder clone() {
-        return (Builder) super.clone();
-      }
-      public Builder setField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.setField(field, value);
-      }
-      public Builder clearField(
-          com.google.protobuf.Descriptors.FieldDescriptor field) {
-        return (Builder) super.clearField(field);
-      }
-      public Builder clearOneof(
-          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
-        return (Builder) super.clearOneof(oneof);
-      }
-      public Builder setRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
-        return (Builder) super.setRepeatedField(field, index, value);
-      }
-      public Builder addRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.addRepeatedField(field, value);
-      }
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.grpc.benchmarks.proto.Control.DeterministicParams) {
-          return mergeFrom((io.grpc.benchmarks.proto.Control.DeterministicParams)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
-        }
-      }
-
-      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.DeterministicParams other) {
-        if (other == io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance()) return this;
-        if (other.getOfferedLoad() != 0D) {
-          setOfferedLoad(other.getOfferedLoad());
-        }
-        onChanged();
-        return this;
-      }
-
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        io.grpc.benchmarks.proto.Control.DeterministicParams parsedMessage = null;
-        try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.grpc.benchmarks.proto.Control.DeterministicParams) e.getUnfinishedMessage();
-          throw e.unwrapIOException();
-        } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
-        return this;
-      }
-
-      private double offeredLoad_ ;
-      /**
-       * <code>double offered_load = 1;</code>
-       */
-      public double getOfferedLoad() {
-        return offeredLoad_;
-      }
-      /**
-       * <code>double offered_load = 1;</code>
-       */
-      public Builder setOfferedLoad(double value) {
-        
-        offeredLoad_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double offered_load = 1;</code>
-       */
-      public Builder clearOfferedLoad() {
-        
-        offeredLoad_ = 0D;
-        onChanged();
-        return this;
-      }
-      public final Builder setUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-      public final Builder mergeUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-
-      // @@protoc_insertion_point(builder_scope:grpc.testing.DeterministicParams)
-    }
-
-    // @@protoc_insertion_point(class_scope:grpc.testing.DeterministicParams)
-    private static final io.grpc.benchmarks.proto.Control.DeterministicParams DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.DeterministicParams();
-    }
-
-    public static io.grpc.benchmarks.proto.Control.DeterministicParams getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<DeterministicParams>
-        PARSER = new com.google.protobuf.AbstractParser<DeterministicParams>() {
-      public DeterministicParams parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-          return new DeterministicParams(input, extensionRegistry);
-      }
-    };
-
-    public static com.google.protobuf.Parser<DeterministicParams> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<DeterministicParams> getParserForType() {
-      return PARSER;
-    }
-
-    public io.grpc.benchmarks.proto.Control.DeterministicParams getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
-  public interface ParetoParamsOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:grpc.testing.ParetoParams)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>double interarrival_base = 1;</code>
-     */
-    double getInterarrivalBase();
-
-    /**
-     * <code>double alpha = 2;</code>
-     */
-    double getAlpha();
-  }
-  /**
-   * Protobuf type {@code grpc.testing.ParetoParams}
-   */
-  public  static final class ParetoParams extends
-      com.google.protobuf.GeneratedMessageV3 implements
-      // @@protoc_insertion_point(message_implements:grpc.testing.ParetoParams)
-      ParetoParamsOrBuilder {
-    // Use ParetoParams.newBuilder() to construct.
-    private ParetoParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
-      super(builder);
-    }
-    private ParetoParams() {
-      interarrivalBase_ = 0D;
-      alpha_ = 0D;
-    }
-
-    @java.lang.Override
-    public final com.google.protobuf.UnknownFieldSet
-    getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
-    }
-    private ParetoParams(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      this();
-      int mutable_bitField0_ = 0;
-      try {
-        boolean done = false;
-        while (!done) {
-          int tag = input.readTag();
-          switch (tag) {
-            case 0:
-              done = true;
-              break;
-            default: {
-              if (!input.skipField(tag)) {
-                done = true;
-              }
-              break;
-            }
-            case 9: {
-
-              interarrivalBase_ = input.readDouble();
-              break;
-            }
-            case 17: {
-
-              alpha_ = input.readDouble();
-              break;
-            }
-          }
-        }
-      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        throw e.setUnfinishedMessage(this);
-      } catch (java.io.IOException e) {
-        throw new com.google.protobuf.InvalidProtocolBufferException(
-            e).setUnfinishedMessage(this);
-      } finally {
-        makeExtensionsImmutable();
-      }
-    }
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
-    }
-
-    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.grpc.benchmarks.proto.Control.ParetoParams.class, io.grpc.benchmarks.proto.Control.ParetoParams.Builder.class);
-    }
-
-    public static final int INTERARRIVAL_BASE_FIELD_NUMBER = 1;
-    private double interarrivalBase_;
-    /**
-     * <code>double interarrival_base = 1;</code>
-     */
-    public double getInterarrivalBase() {
-      return interarrivalBase_;
-    }
-
-    public static final int ALPHA_FIELD_NUMBER = 2;
-    private double alpha_;
-    /**
-     * <code>double alpha = 2;</code>
-     */
-    public double getAlpha() {
-      return alpha_;
-    }
-
-    private byte memoizedIsInitialized = -1;
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (interarrivalBase_ != 0D) {
-        output.writeDouble(1, interarrivalBase_);
-      }
-      if (alpha_ != 0D) {
-        output.writeDouble(2, alpha_);
-      }
-    }
-
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      if (interarrivalBase_ != 0D) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(1, interarrivalBase_);
-      }
-      if (alpha_ != 0D) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeDoubleSize(2, alpha_);
-      }
-      memoizedSize = size;
-      return size;
-    }
-
-    private static final long serialVersionUID = 0L;
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ParetoParams)) {
-        return super.equals(obj);
-      }
-      io.grpc.benchmarks.proto.Control.ParetoParams other = (io.grpc.benchmarks.proto.Control.ParetoParams) obj;
-
-      boolean result = true;
-      result = result && (
-          java.lang.Double.doubleToLongBits(getInterarrivalBase())
-          == java.lang.Double.doubleToLongBits(
-              other.getInterarrivalBase()));
-      result = result && (
-          java.lang.Double.doubleToLongBits(getAlpha())
-          == java.lang.Double.doubleToLongBits(
-              other.getAlpha()));
-      return result;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + INTERARRIVAL_BASE_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getInterarrivalBase()));
-      hash = (37 * hash) + ALPHA_FIELD_NUMBER;
-      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-          java.lang.Double.doubleToLongBits(getAlpha()));
-      hash = (29 * hash) + unknownFields.hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.grpc.benchmarks.proto.Control.ParetoParams parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessageV3
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.ParetoParams prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
-    /**
-     * Protobuf type {@code grpc.testing.ParetoParams}
-     */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:grpc.testing.ParetoParams)
-        io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
-      }
-
-      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.grpc.benchmarks.proto.Control.ParetoParams.class, io.grpc.benchmarks.proto.Control.ParetoParams.Builder.class);
-      }
-
-      // Construct using io.grpc.benchmarks.proto.Control.ParetoParams.newBuilder()
-      private Builder() {
-        maybeForceBuilderInitialization();
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
-        super(parent);
-        maybeForceBuilderInitialization();
-      }
-      private void maybeForceBuilderInitialization() {
-        if (com.google.protobuf.GeneratedMessageV3
-                .alwaysUseFieldBuilders) {
-        }
-      }
-      public Builder clear() {
-        super.clear();
-        interarrivalBase_ = 0D;
-
-        alpha_ = 0D;
-
-        return this;
-      }
-
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ParetoParams_descriptor;
-      }
-
-      public io.grpc.benchmarks.proto.Control.ParetoParams getDefaultInstanceForType() {
-        return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-      }
-
-      public io.grpc.benchmarks.proto.Control.ParetoParams build() {
-        io.grpc.benchmarks.proto.Control.ParetoParams result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
-        }
-        return result;
-      }
-
-      public io.grpc.benchmarks.proto.Control.ParetoParams buildPartial() {
-        io.grpc.benchmarks.proto.Control.ParetoParams result = new io.grpc.benchmarks.proto.Control.ParetoParams(this);
-        result.interarrivalBase_ = interarrivalBase_;
-        result.alpha_ = alpha_;
-        onBuilt();
-        return result;
-      }
-
-      public Builder clone() {
-        return (Builder) super.clone();
-      }
-      public Builder setField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.setField(field, value);
-      }
-      public Builder clearField(
-          com.google.protobuf.Descriptors.FieldDescriptor field) {
-        return (Builder) super.clearField(field);
-      }
-      public Builder clearOneof(
-          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
-        return (Builder) super.clearOneof(oneof);
-      }
-      public Builder setRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
-        return (Builder) super.setRepeatedField(field, index, value);
-      }
-      public Builder addRepeatedField(
-          com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
-        return (Builder) super.addRepeatedField(field, value);
-      }
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.grpc.benchmarks.proto.Control.ParetoParams) {
-          return mergeFrom((io.grpc.benchmarks.proto.Control.ParetoParams)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
-        }
-      }
-
-      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.ParetoParams other) {
-        if (other == io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance()) return this;
-        if (other.getInterarrivalBase() != 0D) {
-          setInterarrivalBase(other.getInterarrivalBase());
-        }
-        if (other.getAlpha() != 0D) {
-          setAlpha(other.getAlpha());
-        }
-        onChanged();
-        return this;
-      }
-
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        io.grpc.benchmarks.proto.Control.ParetoParams parsedMessage = null;
-        try {
-          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          parsedMessage = (io.grpc.benchmarks.proto.Control.ParetoParams) e.getUnfinishedMessage();
-          throw e.unwrapIOException();
-        } finally {
-          if (parsedMessage != null) {
-            mergeFrom(parsedMessage);
-          }
-        }
-        return this;
-      }
-
-      private double interarrivalBase_ ;
-      /**
-       * <code>double interarrival_base = 1;</code>
-       */
-      public double getInterarrivalBase() {
-        return interarrivalBase_;
-      }
-      /**
-       * <code>double interarrival_base = 1;</code>
-       */
-      public Builder setInterarrivalBase(double value) {
-        
-        interarrivalBase_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double interarrival_base = 1;</code>
-       */
-      public Builder clearInterarrivalBase() {
-        
-        interarrivalBase_ = 0D;
-        onChanged();
-        return this;
-      }
-
-      private double alpha_ ;
-      /**
-       * <code>double alpha = 2;</code>
-       */
-      public double getAlpha() {
-        return alpha_;
-      }
-      /**
-       * <code>double alpha = 2;</code>
-       */
-      public Builder setAlpha(double value) {
-        
-        alpha_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>double alpha = 2;</code>
-       */
-      public Builder clearAlpha() {
-        
-        alpha_ = 0D;
-        onChanged();
-        return this;
-      }
-      public final Builder setUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-      public final Builder mergeUnknownFields(
-          final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
-      }
-
-
-      // @@protoc_insertion_point(builder_scope:grpc.testing.ParetoParams)
-    }
-
-    // @@protoc_insertion_point(class_scope:grpc.testing.ParetoParams)
-    private static final io.grpc.benchmarks.proto.Control.ParetoParams DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ParetoParams();
-    }
-
-    public static io.grpc.benchmarks.proto.Control.ParetoParams getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<ParetoParams>
-        PARSER = new com.google.protobuf.AbstractParser<ParetoParams>() {
-      public ParetoParams parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-          return new ParetoParams(input, extensionRegistry);
-      }
-    };
-
-    public static com.google.protobuf.Parser<ParetoParams> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<ParetoParams> getParserForType() {
-      return PARSER;
-    }
-
-    public io.grpc.benchmarks.proto.Control.ParetoParams getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
   public interface ClosedLoopParamsOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.ClosedLoopParams)
       com.google.protobuf.MessageOrBuilder {
@@ -2659,33 +1269,6 @@ public final class Control {
      */
     io.grpc.benchmarks.proto.Control.PoissonParamsOrBuilder getPoissonOrBuilder();
 
-    /**
-     * <code>.grpc.testing.UniformParams uniform = 3;</code>
-     */
-    io.grpc.benchmarks.proto.Control.UniformParams getUniform();
-    /**
-     * <code>.grpc.testing.UniformParams uniform = 3;</code>
-     */
-    io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder();
-
-    /**
-     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-     */
-    io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm();
-    /**
-     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-     */
-    io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder();
-
-    /**
-     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-     */
-    io.grpc.benchmarks.proto.Control.ParetoParams getPareto();
-    /**
-     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-     */
-    io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder();
-
     public io.grpc.benchmarks.proto.Control.LoadParams.LoadCase getLoadCase();
   }
   /**
@@ -2755,48 +1338,6 @@ public final class Control {
               loadCase_ = 2;
               break;
             }
-            case 26: {
-              io.grpc.benchmarks.proto.Control.UniformParams.Builder subBuilder = null;
-              if (loadCase_ == 3) {
-                subBuilder = ((io.grpc.benchmarks.proto.Control.UniformParams) load_).toBuilder();
-              }
-              load_ =
-                  input.readMessage(io.grpc.benchmarks.proto.Control.UniformParams.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom((io.grpc.benchmarks.proto.Control.UniformParams) load_);
-                load_ = subBuilder.buildPartial();
-              }
-              loadCase_ = 3;
-              break;
-            }
-            case 34: {
-              io.grpc.benchmarks.proto.Control.DeterministicParams.Builder subBuilder = null;
-              if (loadCase_ == 4) {
-                subBuilder = ((io.grpc.benchmarks.proto.Control.DeterministicParams) load_).toBuilder();
-              }
-              load_ =
-                  input.readMessage(io.grpc.benchmarks.proto.Control.DeterministicParams.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom((io.grpc.benchmarks.proto.Control.DeterministicParams) load_);
-                load_ = subBuilder.buildPartial();
-              }
-              loadCase_ = 4;
-              break;
-            }
-            case 42: {
-              io.grpc.benchmarks.proto.Control.ParetoParams.Builder subBuilder = null;
-              if (loadCase_ == 5) {
-                subBuilder = ((io.grpc.benchmarks.proto.Control.ParetoParams) load_).toBuilder();
-              }
-              load_ =
-                  input.readMessage(io.grpc.benchmarks.proto.Control.ParetoParams.parser(), extensionRegistry);
-              if (subBuilder != null) {
-                subBuilder.mergeFrom((io.grpc.benchmarks.proto.Control.ParetoParams) load_);
-                load_ = subBuilder.buildPartial();
-              }
-              loadCase_ = 5;
-              break;
-            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -2826,9 +1367,6 @@ public final class Control {
         implements com.google.protobuf.Internal.EnumLite {
       CLOSED_LOOP(1),
       POISSON(2),
-      UNIFORM(3),
-      DETERM(4),
-      PARETO(5),
       LOAD_NOT_SET(0);
       private final int value;
       private LoadCase(int value) {
@@ -2846,9 +1384,6 @@ public final class Control {
         switch (value) {
           case 1: return CLOSED_LOOP;
           case 2: return POISSON;
-          case 3: return UNIFORM;
-          case 4: return DETERM;
-          case 5: return PARETO;
           case 0: return LOAD_NOT_SET;
           default: return null;
         }
@@ -2904,66 +1439,6 @@ public final class Control {
       return io.grpc.benchmarks.proto.Control.PoissonParams.getDefaultInstance();
     }
 
-    public static final int UNIFORM_FIELD_NUMBER = 3;
-    /**
-     * <code>.grpc.testing.UniformParams uniform = 3;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
-      if (loadCase_ == 3) {
-         return (io.grpc.benchmarks.proto.Control.UniformParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-    }
-    /**
-     * <code>.grpc.testing.UniformParams uniform = 3;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
-      if (loadCase_ == 3) {
-         return (io.grpc.benchmarks.proto.Control.UniformParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-    }
-
-    public static final int DETERM_FIELD_NUMBER = 4;
-    /**
-     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
-      if (loadCase_ == 4) {
-         return (io.grpc.benchmarks.proto.Control.DeterministicParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-    }
-    /**
-     * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
-      if (loadCase_ == 4) {
-         return (io.grpc.benchmarks.proto.Control.DeterministicParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-    }
-
-    public static final int PARETO_FIELD_NUMBER = 5;
-    /**
-     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
-      if (loadCase_ == 5) {
-         return (io.grpc.benchmarks.proto.Control.ParetoParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-    }
-    /**
-     * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-     */
-    public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
-      if (loadCase_ == 5) {
-         return (io.grpc.benchmarks.proto.Control.ParetoParams) load_;
-      }
-      return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-    }
-
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -2982,15 +1457,6 @@ public final class Control {
       if (loadCase_ == 2) {
         output.writeMessage(2, (io.grpc.benchmarks.proto.Control.PoissonParams) load_);
       }
-      if (loadCase_ == 3) {
-        output.writeMessage(3, (io.grpc.benchmarks.proto.Control.UniformParams) load_);
-      }
-      if (loadCase_ == 4) {
-        output.writeMessage(4, (io.grpc.benchmarks.proto.Control.DeterministicParams) load_);
-      }
-      if (loadCase_ == 5) {
-        output.writeMessage(5, (io.grpc.benchmarks.proto.Control.ParetoParams) load_);
-      }
     }
 
     public int getSerializedSize() {
@@ -3005,18 +1471,6 @@ public final class Control {
       if (loadCase_ == 2) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, (io.grpc.benchmarks.proto.Control.PoissonParams) load_);
-      }
-      if (loadCase_ == 3) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(3, (io.grpc.benchmarks.proto.Control.UniformParams) load_);
-      }
-      if (loadCase_ == 4) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(4, (io.grpc.benchmarks.proto.Control.DeterministicParams) load_);
-      }
-      if (loadCase_ == 5) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeMessageSize(5, (io.grpc.benchmarks.proto.Control.ParetoParams) load_);
       }
       memoizedSize = size;
       return size;
@@ -3046,18 +1500,6 @@ public final class Control {
           result = result && getPoisson()
               .equals(other.getPoisson());
           break;
-        case 3:
-          result = result && getUniform()
-              .equals(other.getUniform());
-          break;
-        case 4:
-          result = result && getDeterm()
-              .equals(other.getDeterm());
-          break;
-        case 5:
-          result = result && getPareto()
-              .equals(other.getPareto());
-          break;
         case 0:
         default:
       }
@@ -3079,18 +1521,6 @@ public final class Control {
         case 2:
           hash = (37 * hash) + POISSON_FIELD_NUMBER;
           hash = (53 * hash) + getPoisson().hashCode();
-          break;
-        case 3:
-          hash = (37 * hash) + UNIFORM_FIELD_NUMBER;
-          hash = (53 * hash) + getUniform().hashCode();
-          break;
-        case 4:
-          hash = (37 * hash) + DETERM_FIELD_NUMBER;
-          hash = (53 * hash) + getDeterm().hashCode();
-          break;
-        case 5:
-          hash = (37 * hash) + PARETO_FIELD_NUMBER;
-          hash = (53 * hash) + getPareto().hashCode();
           break;
         case 0:
         default:
@@ -3262,27 +1692,6 @@ public final class Control {
             result.load_ = poissonBuilder_.build();
           }
         }
-        if (loadCase_ == 3) {
-          if (uniformBuilder_ == null) {
-            result.load_ = load_;
-          } else {
-            result.load_ = uniformBuilder_.build();
-          }
-        }
-        if (loadCase_ == 4) {
-          if (determBuilder_ == null) {
-            result.load_ = load_;
-          } else {
-            result.load_ = determBuilder_.build();
-          }
-        }
-        if (loadCase_ == 5) {
-          if (paretoBuilder_ == null) {
-            result.load_ = load_;
-          } else {
-            result.load_ = paretoBuilder_.build();
-          }
-        }
         result.loadCase_ = loadCase_;
         onBuilt();
         return result;
@@ -3332,18 +1741,6 @@ public final class Control {
           }
           case POISSON: {
             mergePoisson(other.getPoisson());
-            break;
-          }
-          case UNIFORM: {
-            mergeUniform(other.getUniform());
-            break;
-          }
-          case DETERM: {
-            mergeDeterm(other.getDeterm());
-            break;
-          }
-          case PARETO: {
-            mergePareto(other.getPareto());
             break;
           }
           case LOAD_NOT_SET: {
@@ -3649,396 +2046,6 @@ public final class Control {
         loadCase_ = 2;
         onChanged();;
         return poissonBuilder_;
-      }
-
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> uniformBuilder_;
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.UniformParams getUniform() {
-        if (uniformBuilder_ == null) {
-          if (loadCase_ == 3) {
-            return (io.grpc.benchmarks.proto.Control.UniformParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-        } else {
-          if (loadCase_ == 3) {
-            return uniformBuilder_.getMessage();
-          }
-          return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public Builder setUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
-        if (uniformBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          load_ = value;
-          onChanged();
-        } else {
-          uniformBuilder_.setMessage(value);
-        }
-        loadCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public Builder setUniform(
-          io.grpc.benchmarks.proto.Control.UniformParams.Builder builderForValue) {
-        if (uniformBuilder_ == null) {
-          load_ = builderForValue.build();
-          onChanged();
-        } else {
-          uniformBuilder_.setMessage(builderForValue.build());
-        }
-        loadCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public Builder mergeUniform(io.grpc.benchmarks.proto.Control.UniformParams value) {
-        if (uniformBuilder_ == null) {
-          if (loadCase_ == 3 &&
-              load_ != io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance()) {
-            load_ = io.grpc.benchmarks.proto.Control.UniformParams.newBuilder((io.grpc.benchmarks.proto.Control.UniformParams) load_)
-                .mergeFrom(value).buildPartial();
-          } else {
-            load_ = value;
-          }
-          onChanged();
-        } else {
-          if (loadCase_ == 3) {
-            uniformBuilder_.mergeFrom(value);
-          }
-          uniformBuilder_.setMessage(value);
-        }
-        loadCase_ = 3;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public Builder clearUniform() {
-        if (uniformBuilder_ == null) {
-          if (loadCase_ == 3) {
-            loadCase_ = 0;
-            load_ = null;
-            onChanged();
-          }
-        } else {
-          if (loadCase_ == 3) {
-            loadCase_ = 0;
-            load_ = null;
-          }
-          uniformBuilder_.clear();
-        }
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.UniformParams.Builder getUniformBuilder() {
-        return getUniformFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder getUniformOrBuilder() {
-        if ((loadCase_ == 3) && (uniformBuilder_ != null)) {
-          return uniformBuilder_.getMessageOrBuilder();
-        } else {
-          if (loadCase_ == 3) {
-            return (io.grpc.benchmarks.proto.Control.UniformParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.UniformParams uniform = 3;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder> 
-          getUniformFieldBuilder() {
-        if (uniformBuilder_ == null) {
-          if (!(loadCase_ == 3)) {
-            load_ = io.grpc.benchmarks.proto.Control.UniformParams.getDefaultInstance();
-          }
-          uniformBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              io.grpc.benchmarks.proto.Control.UniformParams, io.grpc.benchmarks.proto.Control.UniformParams.Builder, io.grpc.benchmarks.proto.Control.UniformParamsOrBuilder>(
-                  (io.grpc.benchmarks.proto.Control.UniformParams) load_,
-                  getParentForChildren(),
-                  isClean());
-          load_ = null;
-        }
-        loadCase_ = 3;
-        onChanged();;
-        return uniformBuilder_;
-      }
-
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> determBuilder_;
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.DeterministicParams getDeterm() {
-        if (determBuilder_ == null) {
-          if (loadCase_ == 4) {
-            return (io.grpc.benchmarks.proto.Control.DeterministicParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-        } else {
-          if (loadCase_ == 4) {
-            return determBuilder_.getMessage();
-          }
-          return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public Builder setDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
-        if (determBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          load_ = value;
-          onChanged();
-        } else {
-          determBuilder_.setMessage(value);
-        }
-        loadCase_ = 4;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public Builder setDeterm(
-          io.grpc.benchmarks.proto.Control.DeterministicParams.Builder builderForValue) {
-        if (determBuilder_ == null) {
-          load_ = builderForValue.build();
-          onChanged();
-        } else {
-          determBuilder_.setMessage(builderForValue.build());
-        }
-        loadCase_ = 4;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public Builder mergeDeterm(io.grpc.benchmarks.proto.Control.DeterministicParams value) {
-        if (determBuilder_ == null) {
-          if (loadCase_ == 4 &&
-              load_ != io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance()) {
-            load_ = io.grpc.benchmarks.proto.Control.DeterministicParams.newBuilder((io.grpc.benchmarks.proto.Control.DeterministicParams) load_)
-                .mergeFrom(value).buildPartial();
-          } else {
-            load_ = value;
-          }
-          onChanged();
-        } else {
-          if (loadCase_ == 4) {
-            determBuilder_.mergeFrom(value);
-          }
-          determBuilder_.setMessage(value);
-        }
-        loadCase_ = 4;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public Builder clearDeterm() {
-        if (determBuilder_ == null) {
-          if (loadCase_ == 4) {
-            loadCase_ = 0;
-            load_ = null;
-            onChanged();
-          }
-        } else {
-          if (loadCase_ == 4) {
-            loadCase_ = 0;
-            load_ = null;
-          }
-          determBuilder_.clear();
-        }
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.DeterministicParams.Builder getDetermBuilder() {
-        return getDetermFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder getDetermOrBuilder() {
-        if ((loadCase_ == 4) && (determBuilder_ != null)) {
-          return determBuilder_.getMessageOrBuilder();
-        } else {
-          if (loadCase_ == 4) {
-            return (io.grpc.benchmarks.proto.Control.DeterministicParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.DeterministicParams determ = 4;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder> 
-          getDetermFieldBuilder() {
-        if (determBuilder_ == null) {
-          if (!(loadCase_ == 4)) {
-            load_ = io.grpc.benchmarks.proto.Control.DeterministicParams.getDefaultInstance();
-          }
-          determBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              io.grpc.benchmarks.proto.Control.DeterministicParams, io.grpc.benchmarks.proto.Control.DeterministicParams.Builder, io.grpc.benchmarks.proto.Control.DeterministicParamsOrBuilder>(
-                  (io.grpc.benchmarks.proto.Control.DeterministicParams) load_,
-                  getParentForChildren(),
-                  isClean());
-          load_ = null;
-        }
-        loadCase_ = 4;
-        onChanged();;
-        return determBuilder_;
-      }
-
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> paretoBuilder_;
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.ParetoParams getPareto() {
-        if (paretoBuilder_ == null) {
-          if (loadCase_ == 5) {
-            return (io.grpc.benchmarks.proto.Control.ParetoParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-        } else {
-          if (loadCase_ == 5) {
-            return paretoBuilder_.getMessage();
-          }
-          return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public Builder setPareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
-        if (paretoBuilder_ == null) {
-          if (value == null) {
-            throw new NullPointerException();
-          }
-          load_ = value;
-          onChanged();
-        } else {
-          paretoBuilder_.setMessage(value);
-        }
-        loadCase_ = 5;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public Builder setPareto(
-          io.grpc.benchmarks.proto.Control.ParetoParams.Builder builderForValue) {
-        if (paretoBuilder_ == null) {
-          load_ = builderForValue.build();
-          onChanged();
-        } else {
-          paretoBuilder_.setMessage(builderForValue.build());
-        }
-        loadCase_ = 5;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public Builder mergePareto(io.grpc.benchmarks.proto.Control.ParetoParams value) {
-        if (paretoBuilder_ == null) {
-          if (loadCase_ == 5 &&
-              load_ != io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance()) {
-            load_ = io.grpc.benchmarks.proto.Control.ParetoParams.newBuilder((io.grpc.benchmarks.proto.Control.ParetoParams) load_)
-                .mergeFrom(value).buildPartial();
-          } else {
-            load_ = value;
-          }
-          onChanged();
-        } else {
-          if (loadCase_ == 5) {
-            paretoBuilder_.mergeFrom(value);
-          }
-          paretoBuilder_.setMessage(value);
-        }
-        loadCase_ = 5;
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public Builder clearPareto() {
-        if (paretoBuilder_ == null) {
-          if (loadCase_ == 5) {
-            loadCase_ = 0;
-            load_ = null;
-            onChanged();
-          }
-        } else {
-          if (loadCase_ == 5) {
-            loadCase_ = 0;
-            load_ = null;
-          }
-          paretoBuilder_.clear();
-        }
-        return this;
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.ParetoParams.Builder getParetoBuilder() {
-        return getParetoFieldBuilder().getBuilder();
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      public io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder getParetoOrBuilder() {
-        if ((loadCase_ == 5) && (paretoBuilder_ != null)) {
-          return paretoBuilder_.getMessageOrBuilder();
-        } else {
-          if (loadCase_ == 5) {
-            return (io.grpc.benchmarks.proto.Control.ParetoParams) load_;
-          }
-          return io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-        }
-      }
-      /**
-       * <code>.grpc.testing.ParetoParams pareto = 5;</code>
-       */
-      private com.google.protobuf.SingleFieldBuilderV3<
-          io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder> 
-          getParetoFieldBuilder() {
-        if (paretoBuilder_ == null) {
-          if (!(loadCase_ == 5)) {
-            load_ = io.grpc.benchmarks.proto.Control.ParetoParams.getDefaultInstance();
-          }
-          paretoBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-              io.grpc.benchmarks.proto.Control.ParetoParams, io.grpc.benchmarks.proto.Control.ParetoParams.Builder, io.grpc.benchmarks.proto.Control.ParetoParamsOrBuilder>(
-                  (io.grpc.benchmarks.proto.Control.ParetoParams) load_,
-                  getParentForChildren(),
-                  isClean());
-          load_ = null;
-        }
-        loadCase_ = 5;
-        onChanged();;
-        return paretoBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -4675,6 +2682,831 @@ public final class Control {
 
   }
 
+  public interface ChannelArgOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ChannelArg)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>string name = 1;</code>
+     */
+    java.lang.String getName();
+    /**
+     * <code>string name = 1;</code>
+     */
+    com.google.protobuf.ByteString
+        getNameBytes();
+
+    /**
+     * <code>string str_value = 2;</code>
+     */
+    java.lang.String getStrValue();
+    /**
+     * <code>string str_value = 2;</code>
+     */
+    com.google.protobuf.ByteString
+        getStrValueBytes();
+
+    /**
+     * <code>int32 int_value = 3;</code>
+     */
+    int getIntValue();
+
+    public io.grpc.benchmarks.proto.Control.ChannelArg.ValueCase getValueCase();
+  }
+  /**
+   * Protobuf type {@code grpc.testing.ChannelArg}
+   */
+  public  static final class ChannelArg extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ChannelArg)
+      ChannelArgOrBuilder {
+    // Use ChannelArg.newBuilder() to construct.
+    private ChannelArg(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ChannelArg() {
+      name_ = "";
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ChannelArg(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 10: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              name_ = s;
+              break;
+            }
+            case 18: {
+              java.lang.String s = input.readStringRequireUtf8();
+              valueCase_ = 2;
+              value_ = s;
+              break;
+            }
+            case 24: {
+              valueCase_ = 3;
+              value_ = input.readInt32();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ChannelArg_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ChannelArg_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Control.ChannelArg.class, io.grpc.benchmarks.proto.Control.ChannelArg.Builder.class);
+    }
+
+    private int valueCase_ = 0;
+    private java.lang.Object value_;
+    public enum ValueCase
+        implements com.google.protobuf.Internal.EnumLite {
+      STR_VALUE(2),
+      INT_VALUE(3),
+      VALUE_NOT_SET(0);
+      private final int value;
+      private ValueCase(int value) {
+        this.value = value;
+      }
+      /**
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
+      public static ValueCase valueOf(int value) {
+        return forNumber(value);
+      }
+
+      public static ValueCase forNumber(int value) {
+        switch (value) {
+          case 2: return STR_VALUE;
+          case 3: return INT_VALUE;
+          case 0: return VALUE_NOT_SET;
+          default: return null;
+        }
+      }
+      public int getNumber() {
+        return this.value;
+      }
+    };
+
+    public ValueCase
+    getValueCase() {
+      return ValueCase.forNumber(
+          valueCase_);
+    }
+
+    public static final int NAME_FIELD_NUMBER = 1;
+    private volatile java.lang.Object name_;
+    /**
+     * <code>string name = 1;</code>
+     */
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        name_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string name = 1;</code>
+     */
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        name_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int STR_VALUE_FIELD_NUMBER = 2;
+    /**
+     * <code>string str_value = 2;</code>
+     */
+    public java.lang.String getStrValue() {
+      java.lang.Object ref = "";
+      if (valueCase_ == 2) {
+        ref = value_;
+      }
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        if (valueCase_ == 2) {
+          value_ = s;
+        }
+        return s;
+      }
+    }
+    /**
+     * <code>string str_value = 2;</code>
+     */
+    public com.google.protobuf.ByteString
+        getStrValueBytes() {
+      java.lang.Object ref = "";
+      if (valueCase_ == 2) {
+        ref = value_;
+      }
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        if (valueCase_ == 2) {
+          value_ = b;
+        }
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int INT_VALUE_FIELD_NUMBER = 3;
+    /**
+     * <code>int32 int_value = 3;</code>
+     */
+    public int getIntValue() {
+      if (valueCase_ == 3) {
+        return (java.lang.Integer) value_;
+      }
+      return 0;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (!getNameBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, name_);
+      }
+      if (valueCase_ == 2) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
+      }
+      if (valueCase_ == 3) {
+        output.writeInt32(
+            3, (int)((java.lang.Integer) value_));
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (!getNameBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, name_);
+      }
+      if (valueCase_ == 2) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
+      }
+      if (valueCase_ == 3) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(
+              3, (int)((java.lang.Integer) value_));
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ChannelArg)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ChannelArg other = (io.grpc.benchmarks.proto.Control.ChannelArg) obj;
+
+      boolean result = true;
+      result = result && getName()
+          .equals(other.getName());
+      result = result && getValueCase().equals(
+          other.getValueCase());
+      if (!result) return false;
+      switch (valueCase_) {
+        case 2:
+          result = result && getStrValue()
+              .equals(other.getStrValue());
+          break;
+        case 3:
+          result = result && (getIntValue()
+              == other.getIntValue());
+          break;
+        case 0:
+        default:
+      }
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + NAME_FIELD_NUMBER;
+      hash = (53 * hash) + getName().hashCode();
+      switch (valueCase_) {
+        case 2:
+          hash = (37 * hash) + STR_VALUE_FIELD_NUMBER;
+          hash = (53 * hash) + getStrValue().hashCode();
+          break;
+        case 3:
+          hash = (37 * hash) + INT_VALUE_FIELD_NUMBER;
+          hash = (53 * hash) + getIntValue();
+          break;
+        case 0:
+        default:
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ChannelArg parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.ChannelArg prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code grpc.testing.ChannelArg}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ChannelArg)
+        io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ChannelArg_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ChannelArg_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Control.ChannelArg.class, io.grpc.benchmarks.proto.Control.ChannelArg.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Control.ChannelArg.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        name_ = "";
+
+        valueCase_ = 0;
+        value_ = null;
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ChannelArg_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ChannelArg getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Control.ChannelArg.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Control.ChannelArg build() {
+        io.grpc.benchmarks.proto.Control.ChannelArg result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ChannelArg buildPartial() {
+        io.grpc.benchmarks.proto.Control.ChannelArg result = new io.grpc.benchmarks.proto.Control.ChannelArg(this);
+        result.name_ = name_;
+        if (valueCase_ == 2) {
+          result.value_ = value_;
+        }
+        if (valueCase_ == 3) {
+          result.value_ = value_;
+        }
+        result.valueCase_ = valueCase_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Control.ChannelArg) {
+          return mergeFrom((io.grpc.benchmarks.proto.Control.ChannelArg)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.ChannelArg other) {
+        if (other == io.grpc.benchmarks.proto.Control.ChannelArg.getDefaultInstance()) return this;
+        if (!other.getName().isEmpty()) {
+          name_ = other.name_;
+          onChanged();
+        }
+        switch (other.getValueCase()) {
+          case STR_VALUE: {
+            valueCase_ = 2;
+            value_ = other.value_;
+            onChanged();
+            break;
+          }
+          case INT_VALUE: {
+            setIntValue(other.getIntValue());
+            break;
+          }
+          case VALUE_NOT_SET: {
+            break;
+          }
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Control.ChannelArg parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Control.ChannelArg) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int valueCase_ = 0;
+      private java.lang.Object value_;
+      public ValueCase
+          getValueCase() {
+        return ValueCase.forNumber(
+            valueCase_);
+      }
+
+      public Builder clearValue() {
+        valueCase_ = 0;
+        value_ = null;
+        onChanged();
+        return this;
+      }
+
+
+      private java.lang.Object name_ = "";
+      /**
+       * <code>string name = 1;</code>
+       */
+      public java.lang.String getName() {
+        java.lang.Object ref = name_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          name_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string name = 1;</code>
+       */
+      public com.google.protobuf.ByteString
+          getNameBytes() {
+        java.lang.Object ref = name_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          name_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string name = 1;</code>
+       */
+      public Builder setName(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        name_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string name = 1;</code>
+       */
+      public Builder clearName() {
+        
+        name_ = getDefaultInstance().getName();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string name = 1;</code>
+       */
+      public Builder setNameBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        name_ = value;
+        onChanged();
+        return this;
+      }
+
+      /**
+       * <code>string str_value = 2;</code>
+       */
+      public java.lang.String getStrValue() {
+        java.lang.Object ref = "";
+        if (valueCase_ == 2) {
+          ref = value_;
+        }
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          if (valueCase_ == 2) {
+            value_ = s;
+          }
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string str_value = 2;</code>
+       */
+      public com.google.protobuf.ByteString
+          getStrValueBytes() {
+        java.lang.Object ref = "";
+        if (valueCase_ == 2) {
+          ref = value_;
+        }
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          if (valueCase_ == 2) {
+            value_ = b;
+          }
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string str_value = 2;</code>
+       */
+      public Builder setStrValue(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  valueCase_ = 2;
+        value_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string str_value = 2;</code>
+       */
+      public Builder clearStrValue() {
+        if (valueCase_ == 2) {
+          valueCase_ = 0;
+          value_ = null;
+          onChanged();
+        }
+        return this;
+      }
+      /**
+       * <code>string str_value = 2;</code>
+       */
+      public Builder setStrValueBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        valueCase_ = 2;
+        value_ = value;
+        onChanged();
+        return this;
+      }
+
+      /**
+       * <code>int32 int_value = 3;</code>
+       */
+      public int getIntValue() {
+        if (valueCase_ == 3) {
+          return (java.lang.Integer) value_;
+        }
+        return 0;
+      }
+      /**
+       * <code>int32 int_value = 3;</code>
+       */
+      public Builder setIntValue(int value) {
+        valueCase_ = 3;
+        value_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int32 int_value = 3;</code>
+       */
+      public Builder clearIntValue() {
+        if (valueCase_ == 3) {
+          valueCase_ = 0;
+          value_ = null;
+          onChanged();
+        }
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ChannelArg)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ChannelArg)
+    private static final io.grpc.benchmarks.proto.Control.ChannelArg DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ChannelArg();
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ChannelArg getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ChannelArg>
+        PARSER = new com.google.protobuf.AbstractParser<ChannelArg>() {
+      public ChannelArg parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new ChannelArg(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<ChannelArg> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ChannelArg> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Control.ChannelArg getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface ClientConfigOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.ClientConfig)
       com.google.protobuf.MessageOrBuilder {
@@ -4854,6 +3686,57 @@ public final class Control {
      * <code>int32 core_limit = 14;</code>
      */
     int getCoreLimit();
+
+    /**
+     * <pre>
+     * If we use an OTHER_CLIENT client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_client_api = 15;</code>
+     */
+    java.lang.String getOtherClientApi();
+    /**
+     * <pre>
+     * If we use an OTHER_CLIENT client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_client_api = 15;</code>
+     */
+    com.google.protobuf.ByteString
+        getOtherClientApiBytes();
+
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg> 
+        getChannelArgsList();
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ChannelArg getChannelArgs(int index);
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    int getChannelArgsCount();
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    java.util.List<? extends io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder> 
+        getChannelArgsOrBuilderList();
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder getChannelArgsOrBuilder(
+        int index);
+
+    /**
+     * <pre>
+     * Number of messages on a stream before it gets finished/restarted
+     * </pre>
+     *
+     * <code>int32 messages_per_stream = 18;</code>
+     */
+    int getMessagesPerStream();
   }
   /**
    * Protobuf type {@code grpc.testing.ClientConfig}
@@ -4875,6 +3758,9 @@ public final class Control {
       rpcType_ = 0;
       coreList_ = java.util.Collections.emptyList();
       coreLimit_ = 0;
+      otherClientApi_ = "";
+      channelArgs_ = java.util.Collections.emptyList();
+      messagesPerStream_ = 0;
     }
 
     @java.lang.Override
@@ -5016,6 +3902,26 @@ public final class Control {
               coreLimit_ = input.readInt32();
               break;
             }
+            case 122: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              otherClientApi_ = s;
+              break;
+            }
+            case 130: {
+              if (!((mutable_bitField0_ & 0x00002000) == 0x00002000)) {
+                channelArgs_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Control.ChannelArg>();
+                mutable_bitField0_ |= 0x00002000;
+              }
+              channelArgs_.add(
+                  input.readMessage(io.grpc.benchmarks.proto.Control.ChannelArg.parser(), extensionRegistry));
+              break;
+            }
+            case 144: {
+
+              messagesPerStream_ = input.readInt32();
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -5029,6 +3935,9 @@ public final class Control {
         }
         if (((mutable_bitField0_ & 0x00000400) == 0x00000400)) {
           coreList_ = java.util.Collections.unmodifiableList(coreList_);
+        }
+        if (((mutable_bitField0_ & 0x00002000) == 0x00002000)) {
+          channelArgs_ = java.util.Collections.unmodifiableList(channelArgs_);
         }
         makeExtensionsImmutable();
       }
@@ -5304,6 +4213,96 @@ public final class Control {
       return coreLimit_;
     }
 
+    public static final int OTHER_CLIENT_API_FIELD_NUMBER = 15;
+    private volatile java.lang.Object otherClientApi_;
+    /**
+     * <pre>
+     * If we use an OTHER_CLIENT client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_client_api = 15;</code>
+     */
+    public java.lang.String getOtherClientApi() {
+      java.lang.Object ref = otherClientApi_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        otherClientApi_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * If we use an OTHER_CLIENT client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_client_api = 15;</code>
+     */
+    public com.google.protobuf.ByteString
+        getOtherClientApiBytes() {
+      java.lang.Object ref = otherClientApi_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        otherClientApi_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int CHANNEL_ARGS_FIELD_NUMBER = 16;
+    private java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg> channelArgs_;
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    public java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg> getChannelArgsList() {
+      return channelArgs_;
+    }
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    public java.util.List<? extends io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder> 
+        getChannelArgsOrBuilderList() {
+      return channelArgs_;
+    }
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    public int getChannelArgsCount() {
+      return channelArgs_.size();
+    }
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ChannelArg getChannelArgs(int index) {
+      return channelArgs_.get(index);
+    }
+    /**
+     * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder getChannelArgsOrBuilder(
+        int index) {
+      return channelArgs_.get(index);
+    }
+
+    public static final int MESSAGES_PER_STREAM_FIELD_NUMBER = 18;
+    private int messagesPerStream_;
+    /**
+     * <pre>
+     * Number of messages on a stream before it gets finished/restarted
+     * </pre>
+     *
+     * <code>int32 messages_per_stream = 18;</code>
+     */
+    public int getMessagesPerStream() {
+      return messagesPerStream_;
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -5356,6 +4355,15 @@ public final class Control {
       }
       if (coreLimit_ != 0) {
         output.writeInt32(14, coreLimit_);
+      }
+      if (!getOtherClientApiBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 15, otherClientApi_);
+      }
+      for (int i = 0; i < channelArgs_.size(); i++) {
+        output.writeMessage(16, channelArgs_.get(i));
+      }
+      if (messagesPerStream_ != 0) {
+        output.writeInt32(18, messagesPerStream_);
       }
     }
 
@@ -5426,6 +4434,17 @@ public final class Control {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(14, coreLimit_);
       }
+      if (!getOtherClientApiBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(15, otherClientApi_);
+      }
+      for (int i = 0; i < channelArgs_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(16, channelArgs_.get(i));
+      }
+      if (messagesPerStream_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(18, messagesPerStream_);
+      }
       memoizedSize = size;
       return size;
     }
@@ -5476,6 +4495,12 @@ public final class Control {
           .equals(other.getCoreListList());
       result = result && (getCoreLimit()
           == other.getCoreLimit());
+      result = result && getOtherClientApi()
+          .equals(other.getOtherClientApi());
+      result = result && getChannelArgsList()
+          .equals(other.getChannelArgsList());
+      result = result && (getMessagesPerStream()
+          == other.getMessagesPerStream());
       return result;
     }
 
@@ -5522,6 +4547,14 @@ public final class Control {
       }
       hash = (37 * hash) + CORE_LIMIT_FIELD_NUMBER;
       hash = (53 * hash) + getCoreLimit();
+      hash = (37 * hash) + OTHER_CLIENT_API_FIELD_NUMBER;
+      hash = (53 * hash) + getOtherClientApi().hashCode();
+      if (getChannelArgsCount() > 0) {
+        hash = (37 * hash) + CHANNEL_ARGS_FIELD_NUMBER;
+        hash = (53 * hash) + getChannelArgsList().hashCode();
+      }
+      hash = (37 * hash) + MESSAGES_PER_STREAM_FIELD_NUMBER;
+      hash = (53 * hash) + getMessagesPerStream();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -5647,6 +4680,7 @@ public final class Control {
       private void maybeForceBuilderInitialization() {
         if (com.google.protobuf.GeneratedMessageV3
                 .alwaysUseFieldBuilders) {
+          getChannelArgsFieldBuilder();
         }
       }
       public Builder clear() {
@@ -5690,6 +4724,16 @@ public final class Control {
         coreList_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000400);
         coreLimit_ = 0;
+
+        otherClientApi_ = "";
+
+        if (channelArgsBuilder_ == null) {
+          channelArgs_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00002000);
+        } else {
+          channelArgsBuilder_.clear();
+        }
+        messagesPerStream_ = 0;
 
         return this;
       }
@@ -5751,6 +4795,17 @@ public final class Control {
         }
         result.coreList_ = coreList_;
         result.coreLimit_ = coreLimit_;
+        result.otherClientApi_ = otherClientApi_;
+        if (channelArgsBuilder_ == null) {
+          if (((bitField0_ & 0x00002000) == 0x00002000)) {
+            channelArgs_ = java.util.Collections.unmodifiableList(channelArgs_);
+            bitField0_ = (bitField0_ & ~0x00002000);
+          }
+          result.channelArgs_ = channelArgs_;
+        } else {
+          result.channelArgs_ = channelArgsBuilder_.build();
+        }
+        result.messagesPerStream_ = messagesPerStream_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -5842,6 +4897,39 @@ public final class Control {
         }
         if (other.getCoreLimit() != 0) {
           setCoreLimit(other.getCoreLimit());
+        }
+        if (!other.getOtherClientApi().isEmpty()) {
+          otherClientApi_ = other.otherClientApi_;
+          onChanged();
+        }
+        if (channelArgsBuilder_ == null) {
+          if (!other.channelArgs_.isEmpty()) {
+            if (channelArgs_.isEmpty()) {
+              channelArgs_ = other.channelArgs_;
+              bitField0_ = (bitField0_ & ~0x00002000);
+            } else {
+              ensureChannelArgsIsMutable();
+              channelArgs_.addAll(other.channelArgs_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.channelArgs_.isEmpty()) {
+            if (channelArgsBuilder_.isEmpty()) {
+              channelArgsBuilder_.dispose();
+              channelArgsBuilder_ = null;
+              channelArgs_ = other.channelArgs_;
+              bitField0_ = (bitField0_ & ~0x00002000);
+              channelArgsBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getChannelArgsFieldBuilder() : null;
+            } else {
+              channelArgsBuilder_.addAllMessages(other.channelArgs_);
+            }
+          }
+        }
+        if (other.getMessagesPerStream() != 0) {
+          setMessagesPerStream(other.getMessagesPerStream());
         }
         onChanged();
         return this;
@@ -6828,6 +5916,373 @@ public final class Control {
       public Builder clearCoreLimit() {
         
         coreLimit_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object otherClientApi_ = "";
+      /**
+       * <pre>
+       * If we use an OTHER_CLIENT client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_client_api = 15;</code>
+       */
+      public java.lang.String getOtherClientApi() {
+        java.lang.Object ref = otherClientApi_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          otherClientApi_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_CLIENT client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_client_api = 15;</code>
+       */
+      public com.google.protobuf.ByteString
+          getOtherClientApiBytes() {
+        java.lang.Object ref = otherClientApi_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          otherClientApi_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_CLIENT client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_client_api = 15;</code>
+       */
+      public Builder setOtherClientApi(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        otherClientApi_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_CLIENT client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_client_api = 15;</code>
+       */
+      public Builder clearOtherClientApi() {
+        
+        otherClientApi_ = getDefaultInstance().getOtherClientApi();
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_CLIENT client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_client_api = 15;</code>
+       */
+      public Builder setOtherClientApiBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        otherClientApi_ = value;
+        onChanged();
+        return this;
+      }
+
+      private java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg> channelArgs_ =
+        java.util.Collections.emptyList();
+      private void ensureChannelArgsIsMutable() {
+        if (!((bitField0_ & 0x00002000) == 0x00002000)) {
+          channelArgs_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Control.ChannelArg>(channelArgs_);
+          bitField0_ |= 0x00002000;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ChannelArg, io.grpc.benchmarks.proto.Control.ChannelArg.Builder, io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder> channelArgsBuilder_;
+
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg> getChannelArgsList() {
+        if (channelArgsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(channelArgs_);
+        } else {
+          return channelArgsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public int getChannelArgsCount() {
+        if (channelArgsBuilder_ == null) {
+          return channelArgs_.size();
+        } else {
+          return channelArgsBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ChannelArg getChannelArgs(int index) {
+        if (channelArgsBuilder_ == null) {
+          return channelArgs_.get(index);
+        } else {
+          return channelArgsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder setChannelArgs(
+          int index, io.grpc.benchmarks.proto.Control.ChannelArg value) {
+        if (channelArgsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureChannelArgsIsMutable();
+          channelArgs_.set(index, value);
+          onChanged();
+        } else {
+          channelArgsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder setChannelArgs(
+          int index, io.grpc.benchmarks.proto.Control.ChannelArg.Builder builderForValue) {
+        if (channelArgsBuilder_ == null) {
+          ensureChannelArgsIsMutable();
+          channelArgs_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          channelArgsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder addChannelArgs(io.grpc.benchmarks.proto.Control.ChannelArg value) {
+        if (channelArgsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureChannelArgsIsMutable();
+          channelArgs_.add(value);
+          onChanged();
+        } else {
+          channelArgsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder addChannelArgs(
+          int index, io.grpc.benchmarks.proto.Control.ChannelArg value) {
+        if (channelArgsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureChannelArgsIsMutable();
+          channelArgs_.add(index, value);
+          onChanged();
+        } else {
+          channelArgsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder addChannelArgs(
+          io.grpc.benchmarks.proto.Control.ChannelArg.Builder builderForValue) {
+        if (channelArgsBuilder_ == null) {
+          ensureChannelArgsIsMutable();
+          channelArgs_.add(builderForValue.build());
+          onChanged();
+        } else {
+          channelArgsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder addChannelArgs(
+          int index, io.grpc.benchmarks.proto.Control.ChannelArg.Builder builderForValue) {
+        if (channelArgsBuilder_ == null) {
+          ensureChannelArgsIsMutable();
+          channelArgs_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          channelArgsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder addAllChannelArgs(
+          java.lang.Iterable<? extends io.grpc.benchmarks.proto.Control.ChannelArg> values) {
+        if (channelArgsBuilder_ == null) {
+          ensureChannelArgsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, channelArgs_);
+          onChanged();
+        } else {
+          channelArgsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder clearChannelArgs() {
+        if (channelArgsBuilder_ == null) {
+          channelArgs_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00002000);
+          onChanged();
+        } else {
+          channelArgsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public Builder removeChannelArgs(int index) {
+        if (channelArgsBuilder_ == null) {
+          ensureChannelArgsIsMutable();
+          channelArgs_.remove(index);
+          onChanged();
+        } else {
+          channelArgsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ChannelArg.Builder getChannelArgsBuilder(
+          int index) {
+        return getChannelArgsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder getChannelArgsOrBuilder(
+          int index) {
+        if (channelArgsBuilder_ == null) {
+          return channelArgs_.get(index);  } else {
+          return channelArgsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public java.util.List<? extends io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder> 
+           getChannelArgsOrBuilderList() {
+        if (channelArgsBuilder_ != null) {
+          return channelArgsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(channelArgs_);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ChannelArg.Builder addChannelArgsBuilder() {
+        return getChannelArgsFieldBuilder().addBuilder(
+            io.grpc.benchmarks.proto.Control.ChannelArg.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ChannelArg.Builder addChannelArgsBuilder(
+          int index) {
+        return getChannelArgsFieldBuilder().addBuilder(
+            index, io.grpc.benchmarks.proto.Control.ChannelArg.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .grpc.testing.ChannelArg channel_args = 16;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Control.ChannelArg.Builder> 
+           getChannelArgsBuilderList() {
+        return getChannelArgsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ChannelArg, io.grpc.benchmarks.proto.Control.ChannelArg.Builder, io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder> 
+          getChannelArgsFieldBuilder() {
+        if (channelArgsBuilder_ == null) {
+          channelArgsBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.ChannelArg, io.grpc.benchmarks.proto.Control.ChannelArg.Builder, io.grpc.benchmarks.proto.Control.ChannelArgOrBuilder>(
+                  channelArgs_,
+                  ((bitField0_ & 0x00002000) == 0x00002000),
+                  getParentForChildren(),
+                  isClean());
+          channelArgs_ = null;
+        }
+        return channelArgsBuilder_;
+      }
+
+      private int messagesPerStream_ ;
+      /**
+       * <pre>
+       * Number of messages on a stream before it gets finished/restarted
+       * </pre>
+       *
+       * <code>int32 messages_per_stream = 18;</code>
+       */
+      public int getMessagesPerStream() {
+        return messagesPerStream_;
+      }
+      /**
+       * <pre>
+       * Number of messages on a stream before it gets finished/restarted
+       * </pre>
+       *
+       * <code>int32 messages_per_stream = 18;</code>
+       */
+      public Builder setMessagesPerStream(int value) {
+        
+        messagesPerStream_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of messages on a stream before it gets finished/restarted
+       * </pre>
+       *
+       * <code>int32 messages_per_stream = 18;</code>
+       */
+      public Builder clearMessagesPerStream() {
+        
+        messagesPerStream_ = 0;
         onChanged();
         return this;
       }
@@ -8824,7 +8279,10 @@ public final class Control {
 
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -8832,7 +8290,10 @@ public final class Control {
     boolean hasPayloadConfig();
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -8840,7 +8301,10 @@ public final class Control {
     io.grpc.benchmarks.proto.Payloads.PayloadConfig getPayloadConfig();
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -8871,6 +8335,33 @@ public final class Control {
      * <code>repeated int32 core_list = 10;</code>
      */
     int getCoreList(int index);
+
+    /**
+     * <pre>
+     * If we use an OTHER_SERVER client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_server_api = 11;</code>
+     */
+    java.lang.String getOtherServerApi();
+    /**
+     * <pre>
+     * If we use an OTHER_SERVER client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_server_api = 11;</code>
+     */
+    com.google.protobuf.ByteString
+        getOtherServerApiBytes();
+
+    /**
+     * <pre>
+     * Buffer pool size (no buffer pool specified if unset)
+     * </pre>
+     *
+     * <code>int32 resource_quota_size = 1001;</code>
+     */
+    int getResourceQuotaSize();
   }
   /**
    * Protobuf type {@code grpc.testing.ServerConfig}
@@ -8889,6 +8380,8 @@ public final class Control {
       asyncServerThreads_ = 0;
       coreLimit_ = 0;
       coreList_ = java.util.Collections.emptyList();
+      otherServerApi_ = "";
+      resourceQuotaSize_ = 0;
     }
 
     @java.lang.Override
@@ -8982,6 +8475,17 @@ public final class Control {
                 coreList_.add(input.readInt32());
               }
               input.popLimit(limit);
+              break;
+            }
+            case 90: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              otherServerApi_ = s;
+              break;
+            }
+            case 8008: {
+
+              resourceQuotaSize_ = input.readInt32();
               break;
             }
           }
@@ -9091,7 +8595,10 @@ public final class Control {
     private io.grpc.benchmarks.proto.Payloads.PayloadConfig payloadConfig_;
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9101,7 +8608,10 @@ public final class Control {
     }
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9111,7 +8621,10 @@ public final class Control {
     }
     /**
      * <pre>
-     * payload config, used in generic server
+     * payload config, used in generic server.
+     * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+     * 'response sizes' must be configured from the 'response_size' field of the
+     * 'SimpleRequest' objects in RPC requests.
      * </pre>
      *
      * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9155,6 +8668,61 @@ public final class Control {
     }
     private int coreListMemoizedSerializedSize = -1;
 
+    public static final int OTHER_SERVER_API_FIELD_NUMBER = 11;
+    private volatile java.lang.Object otherServerApi_;
+    /**
+     * <pre>
+     * If we use an OTHER_SERVER client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_server_api = 11;</code>
+     */
+    public java.lang.String getOtherServerApi() {
+      java.lang.Object ref = otherServerApi_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        otherServerApi_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * If we use an OTHER_SERVER client_type, this string gives more detail
+     * </pre>
+     *
+     * <code>string other_server_api = 11;</code>
+     */
+    public com.google.protobuf.ByteString
+        getOtherServerApiBytes() {
+      java.lang.Object ref = otherServerApi_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        otherServerApi_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int RESOURCE_QUOTA_SIZE_FIELD_NUMBER = 1001;
+    private int resourceQuotaSize_;
+    /**
+     * <pre>
+     * Buffer pool size (no buffer pool specified if unset)
+     * </pre>
+     *
+     * <code>int32 resource_quota_size = 1001;</code>
+     */
+    public int getResourceQuotaSize() {
+      return resourceQuotaSize_;
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -9192,6 +8760,12 @@ public final class Control {
       }
       for (int i = 0; i < coreList_.size(); i++) {
         output.writeInt32NoTag(coreList_.get(i));
+      }
+      if (!getOtherServerApiBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 11, otherServerApi_);
+      }
+      if (resourceQuotaSize_ != 0) {
+        output.writeInt32(1001, resourceQuotaSize_);
       }
     }
 
@@ -9238,6 +8812,13 @@ public final class Control {
         }
         coreListMemoizedSerializedSize = dataSize;
       }
+      if (!getOtherServerApiBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(11, otherServerApi_);
+      }
+      if (resourceQuotaSize_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(1001, resourceQuotaSize_);
+      }
       memoizedSize = size;
       return size;
     }
@@ -9273,6 +8854,10 @@ public final class Control {
       }
       result = result && getCoreListList()
           .equals(other.getCoreListList());
+      result = result && getOtherServerApi()
+          .equals(other.getOtherServerApi());
+      result = result && (getResourceQuotaSize()
+          == other.getResourceQuotaSize());
       return result;
     }
 
@@ -9303,6 +8888,10 @@ public final class Control {
         hash = (37 * hash) + CORE_LIST_FIELD_NUMBER;
         hash = (53 * hash) + getCoreListList().hashCode();
       }
+      hash = (37 * hash) + OTHER_SERVER_API_FIELD_NUMBER;
+      hash = (53 * hash) + getOtherServerApi().hashCode();
+      hash = (37 * hash) + RESOURCE_QUOTA_SIZE_FIELD_NUMBER;
+      hash = (53 * hash) + getResourceQuotaSize();
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -9454,6 +9043,10 @@ public final class Control {
         }
         coreList_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000040);
+        otherServerApi_ = "";
+
+        resourceQuotaSize_ = 0;
+
         return this;
       }
 
@@ -9497,6 +9090,8 @@ public final class Control {
           bitField0_ = (bitField0_ & ~0x00000040);
         }
         result.coreList_ = coreList_;
+        result.otherServerApi_ = otherServerApi_;
+        result.resourceQuotaSize_ = resourceQuotaSize_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -9566,6 +9161,13 @@ public final class Control {
             coreList_.addAll(other.coreList_);
           }
           onChanged();
+        }
+        if (!other.getOtherServerApi().isEmpty()) {
+          otherServerApi_ = other.otherServerApi_;
+          onChanged();
+        }
+        if (other.getResourceQuotaSize() != 0) {
+          setResourceQuotaSize(other.getResourceQuotaSize());
         }
         onChanged();
         return this;
@@ -9874,7 +9476,10 @@ public final class Control {
           io.grpc.benchmarks.proto.Payloads.PayloadConfig, io.grpc.benchmarks.proto.Payloads.PayloadConfig.Builder, io.grpc.benchmarks.proto.Payloads.PayloadConfigOrBuilder> payloadConfigBuilder_;
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9884,7 +9489,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9898,7 +9506,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9918,7 +9529,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9936,7 +9550,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9958,7 +9575,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9976,7 +9596,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -9988,7 +9611,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -10003,7 +9629,10 @@ public final class Control {
       }
       /**
        * <pre>
-       * payload config, used in generic server
+       * payload config, used in generic server.
+       * Note this must NOT be used in proto (non-generic) servers. For proto servers,
+       * 'response sizes' must be configured from the 'response_size' field of the
+       * 'SimpleRequest' objects in RPC requests.
        * </pre>
        *
        * <code>.grpc.testing.PayloadConfig payload_config = 9;</code>
@@ -10112,6 +9741,133 @@ public final class Control {
       public Builder clearCoreList() {
         coreList_ = java.util.Collections.emptyList();
         bitField0_ = (bitField0_ & ~0x00000040);
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object otherServerApi_ = "";
+      /**
+       * <pre>
+       * If we use an OTHER_SERVER client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_server_api = 11;</code>
+       */
+      public java.lang.String getOtherServerApi() {
+        java.lang.Object ref = otherServerApi_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          otherServerApi_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_SERVER client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_server_api = 11;</code>
+       */
+      public com.google.protobuf.ByteString
+          getOtherServerApiBytes() {
+        java.lang.Object ref = otherServerApi_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          otherServerApi_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_SERVER client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_server_api = 11;</code>
+       */
+      public Builder setOtherServerApi(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        otherServerApi_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_SERVER client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_server_api = 11;</code>
+       */
+      public Builder clearOtherServerApi() {
+        
+        otherServerApi_ = getDefaultInstance().getOtherServerApi();
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * If we use an OTHER_SERVER client_type, this string gives more detail
+       * </pre>
+       *
+       * <code>string other_server_api = 11;</code>
+       */
+      public Builder setOtherServerApiBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        otherServerApi_ = value;
+        onChanged();
+        return this;
+      }
+
+      private int resourceQuotaSize_ ;
+      /**
+       * <pre>
+       * Buffer pool size (no buffer pool specified if unset)
+       * </pre>
+       *
+       * <code>int32 resource_quota_size = 1001;</code>
+       */
+      public int getResourceQuotaSize() {
+        return resourceQuotaSize_;
+      }
+      /**
+       * <pre>
+       * Buffer pool size (no buffer pool specified if unset)
+       * </pre>
+       *
+       * <code>int32 resource_quota_size = 1001;</code>
+       */
+      public Builder setResourceQuotaSize(int value) {
+        
+        resourceQuotaSize_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Buffer pool size (no buffer pool specified if unset)
+       * </pre>
+       *
+       * <code>int32 resource_quota_size = 1001;</code>
+       */
+      public Builder clearResourceQuotaSize() {
+        
+        resourceQuotaSize_ = 0;
         onChanged();
         return this;
       }
@@ -12962,26 +12718,7090 @@ public final class Control {
 
   }
 
+  public interface ScenarioOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Scenario)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * Human readable name for this scenario
+     * </pre>
+     *
+     * <code>string name = 1;</code>
+     */
+    java.lang.String getName();
+    /**
+     * <pre>
+     * Human readable name for this scenario
+     * </pre>
+     *
+     * <code>string name = 1;</code>
+     */
+    com.google.protobuf.ByteString
+        getNameBytes();
+
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    boolean hasClientConfig();
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ClientConfig getClientConfig();
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getClientConfigOrBuilder();
+
+    /**
+     * <pre>
+     * Number of clients to start for the test
+     * </pre>
+     *
+     * <code>int32 num_clients = 3;</code>
+     */
+    int getNumClients();
+
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    boolean hasServerConfig();
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ServerConfig getServerConfig();
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getServerConfigOrBuilder();
+
+    /**
+     * <pre>
+     * Number of servers to start for the test
+     * </pre>
+     *
+     * <code>int32 num_servers = 5;</code>
+     */
+    int getNumServers();
+
+    /**
+     * <pre>
+     * Warmup period, in seconds
+     * </pre>
+     *
+     * <code>int32 warmup_seconds = 6;</code>
+     */
+    int getWarmupSeconds();
+
+    /**
+     * <pre>
+     * Benchmark time, in seconds
+     * </pre>
+     *
+     * <code>int32 benchmark_seconds = 7;</code>
+     */
+    int getBenchmarkSeconds();
+
+    /**
+     * <pre>
+     * Number of workers to spawn locally (usually zero)
+     * </pre>
+     *
+     * <code>int32 spawn_local_worker_count = 8;</code>
+     */
+    int getSpawnLocalWorkerCount();
+  }
+  /**
+   * <pre>
+   * A single performance scenario: input to qps_json_driver
+   * </pre>
+   *
+   * Protobuf type {@code grpc.testing.Scenario}
+   */
+  public  static final class Scenario extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.Scenario)
+      ScenarioOrBuilder {
+    // Use Scenario.newBuilder() to construct.
+    private Scenario(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private Scenario() {
+      name_ = "";
+      numClients_ = 0;
+      numServers_ = 0;
+      warmupSeconds_ = 0;
+      benchmarkSeconds_ = 0;
+      spawnLocalWorkerCount_ = 0;
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private Scenario(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 10: {
+              java.lang.String s = input.readStringRequireUtf8();
+
+              name_ = s;
+              break;
+            }
+            case 18: {
+              io.grpc.benchmarks.proto.Control.ClientConfig.Builder subBuilder = null;
+              if (clientConfig_ != null) {
+                subBuilder = clientConfig_.toBuilder();
+              }
+              clientConfig_ = input.readMessage(io.grpc.benchmarks.proto.Control.ClientConfig.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(clientConfig_);
+                clientConfig_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 24: {
+
+              numClients_ = input.readInt32();
+              break;
+            }
+            case 34: {
+              io.grpc.benchmarks.proto.Control.ServerConfig.Builder subBuilder = null;
+              if (serverConfig_ != null) {
+                subBuilder = serverConfig_.toBuilder();
+              }
+              serverConfig_ = input.readMessage(io.grpc.benchmarks.proto.Control.ServerConfig.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(serverConfig_);
+                serverConfig_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 40: {
+
+              numServers_ = input.readInt32();
+              break;
+            }
+            case 48: {
+
+              warmupSeconds_ = input.readInt32();
+              break;
+            }
+            case 56: {
+
+              benchmarkSeconds_ = input.readInt32();
+              break;
+            }
+            case 64: {
+
+              spawnLocalWorkerCount_ = input.readInt32();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenario_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenario_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Control.Scenario.class, io.grpc.benchmarks.proto.Control.Scenario.Builder.class);
+    }
+
+    public static final int NAME_FIELD_NUMBER = 1;
+    private volatile java.lang.Object name_;
+    /**
+     * <pre>
+     * Human readable name for this scenario
+     * </pre>
+     *
+     * <code>string name = 1;</code>
+     */
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs = 
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        name_ = s;
+        return s;
+      }
+    }
+    /**
+     * <pre>
+     * Human readable name for this scenario
+     * </pre>
+     *
+     * <code>string name = 1;</code>
+     */
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        name_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int CLIENT_CONFIG_FIELD_NUMBER = 2;
+    private io.grpc.benchmarks.proto.Control.ClientConfig clientConfig_;
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    public boolean hasClientConfig() {
+      return clientConfig_ != null;
+    }
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ClientConfig getClientConfig() {
+      return clientConfig_ == null ? io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance() : clientConfig_;
+    }
+    /**
+     * <pre>
+     * Client configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getClientConfigOrBuilder() {
+      return getClientConfig();
+    }
+
+    public static final int NUM_CLIENTS_FIELD_NUMBER = 3;
+    private int numClients_;
+    /**
+     * <pre>
+     * Number of clients to start for the test
+     * </pre>
+     *
+     * <code>int32 num_clients = 3;</code>
+     */
+    public int getNumClients() {
+      return numClients_;
+    }
+
+    public static final int SERVER_CONFIG_FIELD_NUMBER = 4;
+    private io.grpc.benchmarks.proto.Control.ServerConfig serverConfig_;
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    public boolean hasServerConfig() {
+      return serverConfig_ != null;
+    }
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ServerConfig getServerConfig() {
+      return serverConfig_ == null ? io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance() : serverConfig_;
+    }
+    /**
+     * <pre>
+     * Server configuration
+     * </pre>
+     *
+     * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getServerConfigOrBuilder() {
+      return getServerConfig();
+    }
+
+    public static final int NUM_SERVERS_FIELD_NUMBER = 5;
+    private int numServers_;
+    /**
+     * <pre>
+     * Number of servers to start for the test
+     * </pre>
+     *
+     * <code>int32 num_servers = 5;</code>
+     */
+    public int getNumServers() {
+      return numServers_;
+    }
+
+    public static final int WARMUP_SECONDS_FIELD_NUMBER = 6;
+    private int warmupSeconds_;
+    /**
+     * <pre>
+     * Warmup period, in seconds
+     * </pre>
+     *
+     * <code>int32 warmup_seconds = 6;</code>
+     */
+    public int getWarmupSeconds() {
+      return warmupSeconds_;
+    }
+
+    public static final int BENCHMARK_SECONDS_FIELD_NUMBER = 7;
+    private int benchmarkSeconds_;
+    /**
+     * <pre>
+     * Benchmark time, in seconds
+     * </pre>
+     *
+     * <code>int32 benchmark_seconds = 7;</code>
+     */
+    public int getBenchmarkSeconds() {
+      return benchmarkSeconds_;
+    }
+
+    public static final int SPAWN_LOCAL_WORKER_COUNT_FIELD_NUMBER = 8;
+    private int spawnLocalWorkerCount_;
+    /**
+     * <pre>
+     * Number of workers to spawn locally (usually zero)
+     * </pre>
+     *
+     * <code>int32 spawn_local_worker_count = 8;</code>
+     */
+    public int getSpawnLocalWorkerCount() {
+      return spawnLocalWorkerCount_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (!getNameBytes().isEmpty()) {
+        com.google.protobuf.GeneratedMessageV3.writeString(output, 1, name_);
+      }
+      if (clientConfig_ != null) {
+        output.writeMessage(2, getClientConfig());
+      }
+      if (numClients_ != 0) {
+        output.writeInt32(3, numClients_);
+      }
+      if (serverConfig_ != null) {
+        output.writeMessage(4, getServerConfig());
+      }
+      if (numServers_ != 0) {
+        output.writeInt32(5, numServers_);
+      }
+      if (warmupSeconds_ != 0) {
+        output.writeInt32(6, warmupSeconds_);
+      }
+      if (benchmarkSeconds_ != 0) {
+        output.writeInt32(7, benchmarkSeconds_);
+      }
+      if (spawnLocalWorkerCount_ != 0) {
+        output.writeInt32(8, spawnLocalWorkerCount_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (!getNameBytes().isEmpty()) {
+        size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, name_);
+      }
+      if (clientConfig_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(2, getClientConfig());
+      }
+      if (numClients_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(3, numClients_);
+      }
+      if (serverConfig_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(4, getServerConfig());
+      }
+      if (numServers_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(5, numServers_);
+      }
+      if (warmupSeconds_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(6, warmupSeconds_);
+      }
+      if (benchmarkSeconds_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(7, benchmarkSeconds_);
+      }
+      if (spawnLocalWorkerCount_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(8, spawnLocalWorkerCount_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.Scenario)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.Scenario other = (io.grpc.benchmarks.proto.Control.Scenario) obj;
+
+      boolean result = true;
+      result = result && getName()
+          .equals(other.getName());
+      result = result && (hasClientConfig() == other.hasClientConfig());
+      if (hasClientConfig()) {
+        result = result && getClientConfig()
+            .equals(other.getClientConfig());
+      }
+      result = result && (getNumClients()
+          == other.getNumClients());
+      result = result && (hasServerConfig() == other.hasServerConfig());
+      if (hasServerConfig()) {
+        result = result && getServerConfig()
+            .equals(other.getServerConfig());
+      }
+      result = result && (getNumServers()
+          == other.getNumServers());
+      result = result && (getWarmupSeconds()
+          == other.getWarmupSeconds());
+      result = result && (getBenchmarkSeconds()
+          == other.getBenchmarkSeconds());
+      result = result && (getSpawnLocalWorkerCount()
+          == other.getSpawnLocalWorkerCount());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + NAME_FIELD_NUMBER;
+      hash = (53 * hash) + getName().hashCode();
+      if (hasClientConfig()) {
+        hash = (37 * hash) + CLIENT_CONFIG_FIELD_NUMBER;
+        hash = (53 * hash) + getClientConfig().hashCode();
+      }
+      hash = (37 * hash) + NUM_CLIENTS_FIELD_NUMBER;
+      hash = (53 * hash) + getNumClients();
+      if (hasServerConfig()) {
+        hash = (37 * hash) + SERVER_CONFIG_FIELD_NUMBER;
+        hash = (53 * hash) + getServerConfig().hashCode();
+      }
+      hash = (37 * hash) + NUM_SERVERS_FIELD_NUMBER;
+      hash = (53 * hash) + getNumServers();
+      hash = (37 * hash) + WARMUP_SECONDS_FIELD_NUMBER;
+      hash = (53 * hash) + getWarmupSeconds();
+      hash = (37 * hash) + BENCHMARK_SECONDS_FIELD_NUMBER;
+      hash = (53 * hash) + getBenchmarkSeconds();
+      hash = (37 * hash) + SPAWN_LOCAL_WORKER_COUNT_FIELD_NUMBER;
+      hash = (53 * hash) + getSpawnLocalWorkerCount();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenario parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.Scenario prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * A single performance scenario: input to qps_json_driver
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.Scenario}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Scenario)
+        io.grpc.benchmarks.proto.Control.ScenarioOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenario_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenario_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Control.Scenario.class, io.grpc.benchmarks.proto.Control.Scenario.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Control.Scenario.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        name_ = "";
+
+        if (clientConfigBuilder_ == null) {
+          clientConfig_ = null;
+        } else {
+          clientConfig_ = null;
+          clientConfigBuilder_ = null;
+        }
+        numClients_ = 0;
+
+        if (serverConfigBuilder_ == null) {
+          serverConfig_ = null;
+        } else {
+          serverConfig_ = null;
+          serverConfigBuilder_ = null;
+        }
+        numServers_ = 0;
+
+        warmupSeconds_ = 0;
+
+        benchmarkSeconds_ = 0;
+
+        spawnLocalWorkerCount_ = 0;
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenario_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenario getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenario build() {
+        io.grpc.benchmarks.proto.Control.Scenario result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenario buildPartial() {
+        io.grpc.benchmarks.proto.Control.Scenario result = new io.grpc.benchmarks.proto.Control.Scenario(this);
+        result.name_ = name_;
+        if (clientConfigBuilder_ == null) {
+          result.clientConfig_ = clientConfig_;
+        } else {
+          result.clientConfig_ = clientConfigBuilder_.build();
+        }
+        result.numClients_ = numClients_;
+        if (serverConfigBuilder_ == null) {
+          result.serverConfig_ = serverConfig_;
+        } else {
+          result.serverConfig_ = serverConfigBuilder_.build();
+        }
+        result.numServers_ = numServers_;
+        result.warmupSeconds_ = warmupSeconds_;
+        result.benchmarkSeconds_ = benchmarkSeconds_;
+        result.spawnLocalWorkerCount_ = spawnLocalWorkerCount_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Control.Scenario) {
+          return mergeFrom((io.grpc.benchmarks.proto.Control.Scenario)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.Scenario other) {
+        if (other == io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance()) return this;
+        if (!other.getName().isEmpty()) {
+          name_ = other.name_;
+          onChanged();
+        }
+        if (other.hasClientConfig()) {
+          mergeClientConfig(other.getClientConfig());
+        }
+        if (other.getNumClients() != 0) {
+          setNumClients(other.getNumClients());
+        }
+        if (other.hasServerConfig()) {
+          mergeServerConfig(other.getServerConfig());
+        }
+        if (other.getNumServers() != 0) {
+          setNumServers(other.getNumServers());
+        }
+        if (other.getWarmupSeconds() != 0) {
+          setWarmupSeconds(other.getWarmupSeconds());
+        }
+        if (other.getBenchmarkSeconds() != 0) {
+          setBenchmarkSeconds(other.getBenchmarkSeconds());
+        }
+        if (other.getSpawnLocalWorkerCount() != 0) {
+          setSpawnLocalWorkerCount(other.getSpawnLocalWorkerCount());
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Control.Scenario parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Control.Scenario) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private java.lang.Object name_ = "";
+      /**
+       * <pre>
+       * Human readable name for this scenario
+       * </pre>
+       *
+       * <code>string name = 1;</code>
+       */
+      public java.lang.String getName() {
+        java.lang.Object ref = name_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          name_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <pre>
+       * Human readable name for this scenario
+       * </pre>
+       *
+       * <code>string name = 1;</code>
+       */
+      public com.google.protobuf.ByteString
+          getNameBytes() {
+        java.lang.Object ref = name_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b = 
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          name_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <pre>
+       * Human readable name for this scenario
+       * </pre>
+       *
+       * <code>string name = 1;</code>
+       */
+      public Builder setName(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  
+        name_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Human readable name for this scenario
+       * </pre>
+       *
+       * <code>string name = 1;</code>
+       */
+      public Builder clearName() {
+        
+        name_ = getDefaultInstance().getName();
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Human readable name for this scenario
+       * </pre>
+       *
+       * <code>string name = 1;</code>
+       */
+      public Builder setNameBytes(
+          com.google.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+        
+        name_ = value;
+        onChanged();
+        return this;
+      }
+
+      private io.grpc.benchmarks.proto.Control.ClientConfig clientConfig_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> clientConfigBuilder_;
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public boolean hasClientConfig() {
+        return clientConfigBuilder_ != null || clientConfig_ != null;
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ClientConfig getClientConfig() {
+        if (clientConfigBuilder_ == null) {
+          return clientConfig_ == null ? io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance() : clientConfig_;
+        } else {
+          return clientConfigBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public Builder setClientConfig(io.grpc.benchmarks.proto.Control.ClientConfig value) {
+        if (clientConfigBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          clientConfig_ = value;
+          onChanged();
+        } else {
+          clientConfigBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public Builder setClientConfig(
+          io.grpc.benchmarks.proto.Control.ClientConfig.Builder builderForValue) {
+        if (clientConfigBuilder_ == null) {
+          clientConfig_ = builderForValue.build();
+          onChanged();
+        } else {
+          clientConfigBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public Builder mergeClientConfig(io.grpc.benchmarks.proto.Control.ClientConfig value) {
+        if (clientConfigBuilder_ == null) {
+          if (clientConfig_ != null) {
+            clientConfig_ =
+              io.grpc.benchmarks.proto.Control.ClientConfig.newBuilder(clientConfig_).mergeFrom(value).buildPartial();
+          } else {
+            clientConfig_ = value;
+          }
+          onChanged();
+        } else {
+          clientConfigBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public Builder clearClientConfig() {
+        if (clientConfigBuilder_ == null) {
+          clientConfig_ = null;
+          onChanged();
+        } else {
+          clientConfig_ = null;
+          clientConfigBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ClientConfig.Builder getClientConfigBuilder() {
+        
+        onChanged();
+        return getClientConfigFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder getClientConfigOrBuilder() {
+        if (clientConfigBuilder_ != null) {
+          return clientConfigBuilder_.getMessageOrBuilder();
+        } else {
+          return clientConfig_ == null ?
+              io.grpc.benchmarks.proto.Control.ClientConfig.getDefaultInstance() : clientConfig_;
+        }
+      }
+      /**
+       * <pre>
+       * Client configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ClientConfig client_config = 2;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder> 
+          getClientConfigFieldBuilder() {
+        if (clientConfigBuilder_ == null) {
+          clientConfigBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.ClientConfig, io.grpc.benchmarks.proto.Control.ClientConfig.Builder, io.grpc.benchmarks.proto.Control.ClientConfigOrBuilder>(
+                  getClientConfig(),
+                  getParentForChildren(),
+                  isClean());
+          clientConfig_ = null;
+        }
+        return clientConfigBuilder_;
+      }
+
+      private int numClients_ ;
+      /**
+       * <pre>
+       * Number of clients to start for the test
+       * </pre>
+       *
+       * <code>int32 num_clients = 3;</code>
+       */
+      public int getNumClients() {
+        return numClients_;
+      }
+      /**
+       * <pre>
+       * Number of clients to start for the test
+       * </pre>
+       *
+       * <code>int32 num_clients = 3;</code>
+       */
+      public Builder setNumClients(int value) {
+        
+        numClients_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of clients to start for the test
+       * </pre>
+       *
+       * <code>int32 num_clients = 3;</code>
+       */
+      public Builder clearNumClients() {
+        
+        numClients_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private io.grpc.benchmarks.proto.Control.ServerConfig serverConfig_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> serverConfigBuilder_;
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public boolean hasServerConfig() {
+        return serverConfigBuilder_ != null || serverConfig_ != null;
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ServerConfig getServerConfig() {
+        if (serverConfigBuilder_ == null) {
+          return serverConfig_ == null ? io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance() : serverConfig_;
+        } else {
+          return serverConfigBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public Builder setServerConfig(io.grpc.benchmarks.proto.Control.ServerConfig value) {
+        if (serverConfigBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          serverConfig_ = value;
+          onChanged();
+        } else {
+          serverConfigBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public Builder setServerConfig(
+          io.grpc.benchmarks.proto.Control.ServerConfig.Builder builderForValue) {
+        if (serverConfigBuilder_ == null) {
+          serverConfig_ = builderForValue.build();
+          onChanged();
+        } else {
+          serverConfigBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public Builder mergeServerConfig(io.grpc.benchmarks.proto.Control.ServerConfig value) {
+        if (serverConfigBuilder_ == null) {
+          if (serverConfig_ != null) {
+            serverConfig_ =
+              io.grpc.benchmarks.proto.Control.ServerConfig.newBuilder(serverConfig_).mergeFrom(value).buildPartial();
+          } else {
+            serverConfig_ = value;
+          }
+          onChanged();
+        } else {
+          serverConfigBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public Builder clearServerConfig() {
+        if (serverConfigBuilder_ == null) {
+          serverConfig_ = null;
+          onChanged();
+        } else {
+          serverConfig_ = null;
+          serverConfigBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ServerConfig.Builder getServerConfigBuilder() {
+        
+        onChanged();
+        return getServerConfigFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder getServerConfigOrBuilder() {
+        if (serverConfigBuilder_ != null) {
+          return serverConfigBuilder_.getMessageOrBuilder();
+        } else {
+          return serverConfig_ == null ?
+              io.grpc.benchmarks.proto.Control.ServerConfig.getDefaultInstance() : serverConfig_;
+        }
+      }
+      /**
+       * <pre>
+       * Server configuration
+       * </pre>
+       *
+       * <code>.grpc.testing.ServerConfig server_config = 4;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder> 
+          getServerConfigFieldBuilder() {
+        if (serverConfigBuilder_ == null) {
+          serverConfigBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.ServerConfig, io.grpc.benchmarks.proto.Control.ServerConfig.Builder, io.grpc.benchmarks.proto.Control.ServerConfigOrBuilder>(
+                  getServerConfig(),
+                  getParentForChildren(),
+                  isClean());
+          serverConfig_ = null;
+        }
+        return serverConfigBuilder_;
+      }
+
+      private int numServers_ ;
+      /**
+       * <pre>
+       * Number of servers to start for the test
+       * </pre>
+       *
+       * <code>int32 num_servers = 5;</code>
+       */
+      public int getNumServers() {
+        return numServers_;
+      }
+      /**
+       * <pre>
+       * Number of servers to start for the test
+       * </pre>
+       *
+       * <code>int32 num_servers = 5;</code>
+       */
+      public Builder setNumServers(int value) {
+        
+        numServers_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of servers to start for the test
+       * </pre>
+       *
+       * <code>int32 num_servers = 5;</code>
+       */
+      public Builder clearNumServers() {
+        
+        numServers_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int warmupSeconds_ ;
+      /**
+       * <pre>
+       * Warmup period, in seconds
+       * </pre>
+       *
+       * <code>int32 warmup_seconds = 6;</code>
+       */
+      public int getWarmupSeconds() {
+        return warmupSeconds_;
+      }
+      /**
+       * <pre>
+       * Warmup period, in seconds
+       * </pre>
+       *
+       * <code>int32 warmup_seconds = 6;</code>
+       */
+      public Builder setWarmupSeconds(int value) {
+        
+        warmupSeconds_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Warmup period, in seconds
+       * </pre>
+       *
+       * <code>int32 warmup_seconds = 6;</code>
+       */
+      public Builder clearWarmupSeconds() {
+        
+        warmupSeconds_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int benchmarkSeconds_ ;
+      /**
+       * <pre>
+       * Benchmark time, in seconds
+       * </pre>
+       *
+       * <code>int32 benchmark_seconds = 7;</code>
+       */
+      public int getBenchmarkSeconds() {
+        return benchmarkSeconds_;
+      }
+      /**
+       * <pre>
+       * Benchmark time, in seconds
+       * </pre>
+       *
+       * <code>int32 benchmark_seconds = 7;</code>
+       */
+      public Builder setBenchmarkSeconds(int value) {
+        
+        benchmarkSeconds_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Benchmark time, in seconds
+       * </pre>
+       *
+       * <code>int32 benchmark_seconds = 7;</code>
+       */
+      public Builder clearBenchmarkSeconds() {
+        
+        benchmarkSeconds_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private int spawnLocalWorkerCount_ ;
+      /**
+       * <pre>
+       * Number of workers to spawn locally (usually zero)
+       * </pre>
+       *
+       * <code>int32 spawn_local_worker_count = 8;</code>
+       */
+      public int getSpawnLocalWorkerCount() {
+        return spawnLocalWorkerCount_;
+      }
+      /**
+       * <pre>
+       * Number of workers to spawn locally (usually zero)
+       * </pre>
+       *
+       * <code>int32 spawn_local_worker_count = 8;</code>
+       */
+      public Builder setSpawnLocalWorkerCount(int value) {
+        
+        spawnLocalWorkerCount_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of workers to spawn locally (usually zero)
+       * </pre>
+       *
+       * <code>int32 spawn_local_worker_count = 8;</code>
+       */
+      public Builder clearSpawnLocalWorkerCount() {
+        
+        spawnLocalWorkerCount_ = 0;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Scenario)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.Scenario)
+    private static final io.grpc.benchmarks.proto.Control.Scenario DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.Scenario();
+    }
+
+    public static io.grpc.benchmarks.proto.Control.Scenario getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<Scenario>
+        PARSER = new com.google.protobuf.AbstractParser<Scenario>() {
+      public Scenario parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new Scenario(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<Scenario> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<Scenario> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Control.Scenario getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface ScenariosOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.Scenarios)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    java.util.List<io.grpc.benchmarks.proto.Control.Scenario> 
+        getScenariosList();
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    io.grpc.benchmarks.proto.Control.Scenario getScenarios(int index);
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    int getScenariosCount();
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    java.util.List<? extends io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> 
+        getScenariosOrBuilderList();
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenariosOrBuilder(
+        int index);
+  }
+  /**
+   * <pre>
+   * A set of scenarios to be run with qps_json_driver
+   * </pre>
+   *
+   * Protobuf type {@code grpc.testing.Scenarios}
+   */
+  public  static final class Scenarios extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.Scenarios)
+      ScenariosOrBuilder {
+    // Use Scenarios.newBuilder() to construct.
+    private Scenarios(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private Scenarios() {
+      scenarios_ = java.util.Collections.emptyList();
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private Scenarios(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 10: {
+              if (!((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+                scenarios_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Control.Scenario>();
+                mutable_bitField0_ |= 0x00000001;
+              }
+              scenarios_.add(
+                  input.readMessage(io.grpc.benchmarks.proto.Control.Scenario.parser(), extensionRegistry));
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
+          scenarios_ = java.util.Collections.unmodifiableList(scenarios_);
+        }
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenarios_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenarios_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Control.Scenarios.class, io.grpc.benchmarks.proto.Control.Scenarios.Builder.class);
+    }
+
+    public static final int SCENARIOS_FIELD_NUMBER = 1;
+    private java.util.List<io.grpc.benchmarks.proto.Control.Scenario> scenarios_;
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    public java.util.List<io.grpc.benchmarks.proto.Control.Scenario> getScenariosList() {
+      return scenarios_;
+    }
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    public java.util.List<? extends io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> 
+        getScenariosOrBuilderList() {
+      return scenarios_;
+    }
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    public int getScenariosCount() {
+      return scenarios_.size();
+    }
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.Scenario getScenarios(int index) {
+      return scenarios_.get(index);
+    }
+    /**
+     * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenariosOrBuilder(
+        int index) {
+      return scenarios_.get(index);
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      for (int i = 0; i < scenarios_.size(); i++) {
+        output.writeMessage(1, scenarios_.get(i));
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      for (int i = 0; i < scenarios_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(1, scenarios_.get(i));
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.Scenarios)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.Scenarios other = (io.grpc.benchmarks.proto.Control.Scenarios) obj;
+
+      boolean result = true;
+      result = result && getScenariosList()
+          .equals(other.getScenariosList());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (getScenariosCount() > 0) {
+        hash = (37 * hash) + SCENARIOS_FIELD_NUMBER;
+        hash = (53 * hash) + getScenariosList().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.Scenarios parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.Scenarios prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * A set of scenarios to be run with qps_json_driver
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.Scenarios}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.Scenarios)
+        io.grpc.benchmarks.proto.Control.ScenariosOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenarios_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenarios_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Control.Scenarios.class, io.grpc.benchmarks.proto.Control.Scenarios.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Control.Scenarios.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+          getScenariosFieldBuilder();
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        if (scenariosBuilder_ == null) {
+          scenarios_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000001);
+        } else {
+          scenariosBuilder_.clear();
+        }
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_Scenarios_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenarios getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Control.Scenarios.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenarios build() {
+        io.grpc.benchmarks.proto.Control.Scenarios result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Control.Scenarios buildPartial() {
+        io.grpc.benchmarks.proto.Control.Scenarios result = new io.grpc.benchmarks.proto.Control.Scenarios(this);
+        int from_bitField0_ = bitField0_;
+        if (scenariosBuilder_ == null) {
+          if (((bitField0_ & 0x00000001) == 0x00000001)) {
+            scenarios_ = java.util.Collections.unmodifiableList(scenarios_);
+            bitField0_ = (bitField0_ & ~0x00000001);
+          }
+          result.scenarios_ = scenarios_;
+        } else {
+          result.scenarios_ = scenariosBuilder_.build();
+        }
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Control.Scenarios) {
+          return mergeFrom((io.grpc.benchmarks.proto.Control.Scenarios)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.Scenarios other) {
+        if (other == io.grpc.benchmarks.proto.Control.Scenarios.getDefaultInstance()) return this;
+        if (scenariosBuilder_ == null) {
+          if (!other.scenarios_.isEmpty()) {
+            if (scenarios_.isEmpty()) {
+              scenarios_ = other.scenarios_;
+              bitField0_ = (bitField0_ & ~0x00000001);
+            } else {
+              ensureScenariosIsMutable();
+              scenarios_.addAll(other.scenarios_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.scenarios_.isEmpty()) {
+            if (scenariosBuilder_.isEmpty()) {
+              scenariosBuilder_.dispose();
+              scenariosBuilder_ = null;
+              scenarios_ = other.scenarios_;
+              bitField0_ = (bitField0_ & ~0x00000001);
+              scenariosBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getScenariosFieldBuilder() : null;
+            } else {
+              scenariosBuilder_.addAllMessages(other.scenarios_);
+            }
+          }
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Control.Scenarios parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Control.Scenarios) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private java.util.List<io.grpc.benchmarks.proto.Control.Scenario> scenarios_ =
+        java.util.Collections.emptyList();
+      private void ensureScenariosIsMutable() {
+        if (!((bitField0_ & 0x00000001) == 0x00000001)) {
+          scenarios_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Control.Scenario>(scenarios_);
+          bitField0_ |= 0x00000001;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> scenariosBuilder_;
+
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Control.Scenario> getScenariosList() {
+        if (scenariosBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(scenarios_);
+        } else {
+          return scenariosBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public int getScenariosCount() {
+        if (scenariosBuilder_ == null) {
+          return scenarios_.size();
+        } else {
+          return scenariosBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario getScenarios(int index) {
+        if (scenariosBuilder_ == null) {
+          return scenarios_.get(index);
+        } else {
+          return scenariosBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder setScenarios(
+          int index, io.grpc.benchmarks.proto.Control.Scenario value) {
+        if (scenariosBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureScenariosIsMutable();
+          scenarios_.set(index, value);
+          onChanged();
+        } else {
+          scenariosBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder setScenarios(
+          int index, io.grpc.benchmarks.proto.Control.Scenario.Builder builderForValue) {
+        if (scenariosBuilder_ == null) {
+          ensureScenariosIsMutable();
+          scenarios_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          scenariosBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder addScenarios(io.grpc.benchmarks.proto.Control.Scenario value) {
+        if (scenariosBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureScenariosIsMutable();
+          scenarios_.add(value);
+          onChanged();
+        } else {
+          scenariosBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder addScenarios(
+          int index, io.grpc.benchmarks.proto.Control.Scenario value) {
+        if (scenariosBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureScenariosIsMutable();
+          scenarios_.add(index, value);
+          onChanged();
+        } else {
+          scenariosBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder addScenarios(
+          io.grpc.benchmarks.proto.Control.Scenario.Builder builderForValue) {
+        if (scenariosBuilder_ == null) {
+          ensureScenariosIsMutable();
+          scenarios_.add(builderForValue.build());
+          onChanged();
+        } else {
+          scenariosBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder addScenarios(
+          int index, io.grpc.benchmarks.proto.Control.Scenario.Builder builderForValue) {
+        if (scenariosBuilder_ == null) {
+          ensureScenariosIsMutable();
+          scenarios_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          scenariosBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder addAllScenarios(
+          java.lang.Iterable<? extends io.grpc.benchmarks.proto.Control.Scenario> values) {
+        if (scenariosBuilder_ == null) {
+          ensureScenariosIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, scenarios_);
+          onChanged();
+        } else {
+          scenariosBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder clearScenarios() {
+        if (scenariosBuilder_ == null) {
+          scenarios_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000001);
+          onChanged();
+        } else {
+          scenariosBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public Builder removeScenarios(int index) {
+        if (scenariosBuilder_ == null) {
+          ensureScenariosIsMutable();
+          scenarios_.remove(index);
+          onChanged();
+        } else {
+          scenariosBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario.Builder getScenariosBuilder(
+          int index) {
+        return getScenariosFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenariosOrBuilder(
+          int index) {
+        if (scenariosBuilder_ == null) {
+          return scenarios_.get(index);  } else {
+          return scenariosBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public java.util.List<? extends io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> 
+           getScenariosOrBuilderList() {
+        if (scenariosBuilder_ != null) {
+          return scenariosBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(scenarios_);
+        }
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario.Builder addScenariosBuilder() {
+        return getScenariosFieldBuilder().addBuilder(
+            io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario.Builder addScenariosBuilder(
+          int index) {
+        return getScenariosFieldBuilder().addBuilder(
+            index, io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .grpc.testing.Scenario scenarios = 1;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Control.Scenario.Builder> 
+           getScenariosBuilderList() {
+        return getScenariosFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> 
+          getScenariosFieldBuilder() {
+        if (scenariosBuilder_ == null) {
+          scenariosBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder>(
+                  scenarios_,
+                  ((bitField0_ & 0x00000001) == 0x00000001),
+                  getParentForChildren(),
+                  isClean());
+          scenarios_ = null;
+        }
+        return scenariosBuilder_;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.Scenarios)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.Scenarios)
+    private static final io.grpc.benchmarks.proto.Control.Scenarios DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.Scenarios();
+    }
+
+    public static io.grpc.benchmarks.proto.Control.Scenarios getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<Scenarios>
+        PARSER = new com.google.protobuf.AbstractParser<Scenarios>() {
+      public Scenarios parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new Scenarios(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<Scenarios> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<Scenarios> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Control.Scenarios getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface ScenarioResultSummaryOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ScenarioResultSummary)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * Total number of operations per second over all clients.
+     * </pre>
+     *
+     * <code>double qps = 1;</code>
+     */
+    double getQps();
+
+    /**
+     * <pre>
+     * QPS per one server core.
+     * </pre>
+     *
+     * <code>double qps_per_server_core = 2;</code>
+     */
+    double getQpsPerServerCore();
+
+    /**
+     * <pre>
+     * server load based on system_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double server_system_time = 3;</code>
+     */
+    double getServerSystemTime();
+
+    /**
+     * <pre>
+     * server load based on user_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double server_user_time = 4;</code>
+     */
+    double getServerUserTime();
+
+    /**
+     * <pre>
+     * client load based on system_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double client_system_time = 5;</code>
+     */
+    double getClientSystemTime();
+
+    /**
+     * <pre>
+     * client load based on user_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double client_user_time = 6;</code>
+     */
+    double getClientUserTime();
+
+    /**
+     * <pre>
+     * X% latency percentiles (in nanoseconds)
+     * </pre>
+     *
+     * <code>double latency_50 = 7;</code>
+     */
+    double getLatency50();
+
+    /**
+     * <code>double latency_90 = 8;</code>
+     */
+    double getLatency90();
+
+    /**
+     * <code>double latency_95 = 9;</code>
+     */
+    double getLatency95();
+
+    /**
+     * <code>double latency_99 = 10;</code>
+     */
+    double getLatency99();
+
+    /**
+     * <code>double latency_999 = 11;</code>
+     */
+    double getLatency999();
+
+    /**
+     * <pre>
+     * server cpu usage percentage
+     * </pre>
+     *
+     * <code>double server_cpu_usage = 12;</code>
+     */
+    double getServerCpuUsage();
+
+    /**
+     * <pre>
+     * Number of requests that succeeded/failed
+     * </pre>
+     *
+     * <code>double successful_requests_per_second = 13;</code>
+     */
+    double getSuccessfulRequestsPerSecond();
+
+    /**
+     * <code>double failed_requests_per_second = 14;</code>
+     */
+    double getFailedRequestsPerSecond();
+
+    /**
+     * <pre>
+     * Number of polls called inside completion queue per request
+     * </pre>
+     *
+     * <code>double client_polls_per_request = 15;</code>
+     */
+    double getClientPollsPerRequest();
+
+    /**
+     * <code>double server_polls_per_request = 16;</code>
+     */
+    double getServerPollsPerRequest();
+  }
+  /**
+   * <pre>
+   * Basic summary that can be computed from ClientStats and ServerStats
+   * once the scenario has finished.
+   * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ScenarioResultSummary}
+   */
+  public  static final class ScenarioResultSummary extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ScenarioResultSummary)
+      ScenarioResultSummaryOrBuilder {
+    // Use ScenarioResultSummary.newBuilder() to construct.
+    private ScenarioResultSummary(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ScenarioResultSummary() {
+      qps_ = 0D;
+      qpsPerServerCore_ = 0D;
+      serverSystemTime_ = 0D;
+      serverUserTime_ = 0D;
+      clientSystemTime_ = 0D;
+      clientUserTime_ = 0D;
+      latency50_ = 0D;
+      latency90_ = 0D;
+      latency95_ = 0D;
+      latency99_ = 0D;
+      latency999_ = 0D;
+      serverCpuUsage_ = 0D;
+      successfulRequestsPerSecond_ = 0D;
+      failedRequestsPerSecond_ = 0D;
+      clientPollsPerRequest_ = 0D;
+      serverPollsPerRequest_ = 0D;
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ScenarioResultSummary(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 9: {
+
+              qps_ = input.readDouble();
+              break;
+            }
+            case 17: {
+
+              qpsPerServerCore_ = input.readDouble();
+              break;
+            }
+            case 25: {
+
+              serverSystemTime_ = input.readDouble();
+              break;
+            }
+            case 33: {
+
+              serverUserTime_ = input.readDouble();
+              break;
+            }
+            case 41: {
+
+              clientSystemTime_ = input.readDouble();
+              break;
+            }
+            case 49: {
+
+              clientUserTime_ = input.readDouble();
+              break;
+            }
+            case 57: {
+
+              latency50_ = input.readDouble();
+              break;
+            }
+            case 65: {
+
+              latency90_ = input.readDouble();
+              break;
+            }
+            case 73: {
+
+              latency95_ = input.readDouble();
+              break;
+            }
+            case 81: {
+
+              latency99_ = input.readDouble();
+              break;
+            }
+            case 89: {
+
+              latency999_ = input.readDouble();
+              break;
+            }
+            case 97: {
+
+              serverCpuUsage_ = input.readDouble();
+              break;
+            }
+            case 105: {
+
+              successfulRequestsPerSecond_ = input.readDouble();
+              break;
+            }
+            case 113: {
+
+              failedRequestsPerSecond_ = input.readDouble();
+              break;
+            }
+            case 121: {
+
+              clientPollsPerRequest_ = input.readDouble();
+              break;
+            }
+            case 129: {
+
+              serverPollsPerRequest_ = input.readDouble();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResultSummary_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResultSummary_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Control.ScenarioResultSummary.class, io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder.class);
+    }
+
+    public static final int QPS_FIELD_NUMBER = 1;
+    private double qps_;
+    /**
+     * <pre>
+     * Total number of operations per second over all clients.
+     * </pre>
+     *
+     * <code>double qps = 1;</code>
+     */
+    public double getQps() {
+      return qps_;
+    }
+
+    public static final int QPS_PER_SERVER_CORE_FIELD_NUMBER = 2;
+    private double qpsPerServerCore_;
+    /**
+     * <pre>
+     * QPS per one server core.
+     * </pre>
+     *
+     * <code>double qps_per_server_core = 2;</code>
+     */
+    public double getQpsPerServerCore() {
+      return qpsPerServerCore_;
+    }
+
+    public static final int SERVER_SYSTEM_TIME_FIELD_NUMBER = 3;
+    private double serverSystemTime_;
+    /**
+     * <pre>
+     * server load based on system_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double server_system_time = 3;</code>
+     */
+    public double getServerSystemTime() {
+      return serverSystemTime_;
+    }
+
+    public static final int SERVER_USER_TIME_FIELD_NUMBER = 4;
+    private double serverUserTime_;
+    /**
+     * <pre>
+     * server load based on user_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double server_user_time = 4;</code>
+     */
+    public double getServerUserTime() {
+      return serverUserTime_;
+    }
+
+    public static final int CLIENT_SYSTEM_TIME_FIELD_NUMBER = 5;
+    private double clientSystemTime_;
+    /**
+     * <pre>
+     * client load based on system_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double client_system_time = 5;</code>
+     */
+    public double getClientSystemTime() {
+      return clientSystemTime_;
+    }
+
+    public static final int CLIENT_USER_TIME_FIELD_NUMBER = 6;
+    private double clientUserTime_;
+    /**
+     * <pre>
+     * client load based on user_time (0.85 =&gt; 85%)
+     * </pre>
+     *
+     * <code>double client_user_time = 6;</code>
+     */
+    public double getClientUserTime() {
+      return clientUserTime_;
+    }
+
+    public static final int LATENCY_50_FIELD_NUMBER = 7;
+    private double latency50_;
+    /**
+     * <pre>
+     * X% latency percentiles (in nanoseconds)
+     * </pre>
+     *
+     * <code>double latency_50 = 7;</code>
+     */
+    public double getLatency50() {
+      return latency50_;
+    }
+
+    public static final int LATENCY_90_FIELD_NUMBER = 8;
+    private double latency90_;
+    /**
+     * <code>double latency_90 = 8;</code>
+     */
+    public double getLatency90() {
+      return latency90_;
+    }
+
+    public static final int LATENCY_95_FIELD_NUMBER = 9;
+    private double latency95_;
+    /**
+     * <code>double latency_95 = 9;</code>
+     */
+    public double getLatency95() {
+      return latency95_;
+    }
+
+    public static final int LATENCY_99_FIELD_NUMBER = 10;
+    private double latency99_;
+    /**
+     * <code>double latency_99 = 10;</code>
+     */
+    public double getLatency99() {
+      return latency99_;
+    }
+
+    public static final int LATENCY_999_FIELD_NUMBER = 11;
+    private double latency999_;
+    /**
+     * <code>double latency_999 = 11;</code>
+     */
+    public double getLatency999() {
+      return latency999_;
+    }
+
+    public static final int SERVER_CPU_USAGE_FIELD_NUMBER = 12;
+    private double serverCpuUsage_;
+    /**
+     * <pre>
+     * server cpu usage percentage
+     * </pre>
+     *
+     * <code>double server_cpu_usage = 12;</code>
+     */
+    public double getServerCpuUsage() {
+      return serverCpuUsage_;
+    }
+
+    public static final int SUCCESSFUL_REQUESTS_PER_SECOND_FIELD_NUMBER = 13;
+    private double successfulRequestsPerSecond_;
+    /**
+     * <pre>
+     * Number of requests that succeeded/failed
+     * </pre>
+     *
+     * <code>double successful_requests_per_second = 13;</code>
+     */
+    public double getSuccessfulRequestsPerSecond() {
+      return successfulRequestsPerSecond_;
+    }
+
+    public static final int FAILED_REQUESTS_PER_SECOND_FIELD_NUMBER = 14;
+    private double failedRequestsPerSecond_;
+    /**
+     * <code>double failed_requests_per_second = 14;</code>
+     */
+    public double getFailedRequestsPerSecond() {
+      return failedRequestsPerSecond_;
+    }
+
+    public static final int CLIENT_POLLS_PER_REQUEST_FIELD_NUMBER = 15;
+    private double clientPollsPerRequest_;
+    /**
+     * <pre>
+     * Number of polls called inside completion queue per request
+     * </pre>
+     *
+     * <code>double client_polls_per_request = 15;</code>
+     */
+    public double getClientPollsPerRequest() {
+      return clientPollsPerRequest_;
+    }
+
+    public static final int SERVER_POLLS_PER_REQUEST_FIELD_NUMBER = 16;
+    private double serverPollsPerRequest_;
+    /**
+     * <code>double server_polls_per_request = 16;</code>
+     */
+    public double getServerPollsPerRequest() {
+      return serverPollsPerRequest_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (qps_ != 0D) {
+        output.writeDouble(1, qps_);
+      }
+      if (qpsPerServerCore_ != 0D) {
+        output.writeDouble(2, qpsPerServerCore_);
+      }
+      if (serverSystemTime_ != 0D) {
+        output.writeDouble(3, serverSystemTime_);
+      }
+      if (serverUserTime_ != 0D) {
+        output.writeDouble(4, serverUserTime_);
+      }
+      if (clientSystemTime_ != 0D) {
+        output.writeDouble(5, clientSystemTime_);
+      }
+      if (clientUserTime_ != 0D) {
+        output.writeDouble(6, clientUserTime_);
+      }
+      if (latency50_ != 0D) {
+        output.writeDouble(7, latency50_);
+      }
+      if (latency90_ != 0D) {
+        output.writeDouble(8, latency90_);
+      }
+      if (latency95_ != 0D) {
+        output.writeDouble(9, latency95_);
+      }
+      if (latency99_ != 0D) {
+        output.writeDouble(10, latency99_);
+      }
+      if (latency999_ != 0D) {
+        output.writeDouble(11, latency999_);
+      }
+      if (serverCpuUsage_ != 0D) {
+        output.writeDouble(12, serverCpuUsage_);
+      }
+      if (successfulRequestsPerSecond_ != 0D) {
+        output.writeDouble(13, successfulRequestsPerSecond_);
+      }
+      if (failedRequestsPerSecond_ != 0D) {
+        output.writeDouble(14, failedRequestsPerSecond_);
+      }
+      if (clientPollsPerRequest_ != 0D) {
+        output.writeDouble(15, clientPollsPerRequest_);
+      }
+      if (serverPollsPerRequest_ != 0D) {
+        output.writeDouble(16, serverPollsPerRequest_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (qps_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(1, qps_);
+      }
+      if (qpsPerServerCore_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(2, qpsPerServerCore_);
+      }
+      if (serverSystemTime_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(3, serverSystemTime_);
+      }
+      if (serverUserTime_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(4, serverUserTime_);
+      }
+      if (clientSystemTime_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(5, clientSystemTime_);
+      }
+      if (clientUserTime_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(6, clientUserTime_);
+      }
+      if (latency50_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(7, latency50_);
+      }
+      if (latency90_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(8, latency90_);
+      }
+      if (latency95_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(9, latency95_);
+      }
+      if (latency99_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(10, latency99_);
+      }
+      if (latency999_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(11, latency999_);
+      }
+      if (serverCpuUsage_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(12, serverCpuUsage_);
+      }
+      if (successfulRequestsPerSecond_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(13, successfulRequestsPerSecond_);
+      }
+      if (failedRequestsPerSecond_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(14, failedRequestsPerSecond_);
+      }
+      if (clientPollsPerRequest_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(15, clientPollsPerRequest_);
+      }
+      if (serverPollsPerRequest_ != 0D) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeDoubleSize(16, serverPollsPerRequest_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ScenarioResultSummary)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ScenarioResultSummary other = (io.grpc.benchmarks.proto.Control.ScenarioResultSummary) obj;
+
+      boolean result = true;
+      result = result && (
+          java.lang.Double.doubleToLongBits(getQps())
+          == java.lang.Double.doubleToLongBits(
+              other.getQps()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getQpsPerServerCore())
+          == java.lang.Double.doubleToLongBits(
+              other.getQpsPerServerCore()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getServerSystemTime())
+          == java.lang.Double.doubleToLongBits(
+              other.getServerSystemTime()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getServerUserTime())
+          == java.lang.Double.doubleToLongBits(
+              other.getServerUserTime()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getClientSystemTime())
+          == java.lang.Double.doubleToLongBits(
+              other.getClientSystemTime()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getClientUserTime())
+          == java.lang.Double.doubleToLongBits(
+              other.getClientUserTime()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getLatency50())
+          == java.lang.Double.doubleToLongBits(
+              other.getLatency50()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getLatency90())
+          == java.lang.Double.doubleToLongBits(
+              other.getLatency90()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getLatency95())
+          == java.lang.Double.doubleToLongBits(
+              other.getLatency95()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getLatency99())
+          == java.lang.Double.doubleToLongBits(
+              other.getLatency99()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getLatency999())
+          == java.lang.Double.doubleToLongBits(
+              other.getLatency999()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getServerCpuUsage())
+          == java.lang.Double.doubleToLongBits(
+              other.getServerCpuUsage()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getSuccessfulRequestsPerSecond())
+          == java.lang.Double.doubleToLongBits(
+              other.getSuccessfulRequestsPerSecond()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getFailedRequestsPerSecond())
+          == java.lang.Double.doubleToLongBits(
+              other.getFailedRequestsPerSecond()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getClientPollsPerRequest())
+          == java.lang.Double.doubleToLongBits(
+              other.getClientPollsPerRequest()));
+      result = result && (
+          java.lang.Double.doubleToLongBits(getServerPollsPerRequest())
+          == java.lang.Double.doubleToLongBits(
+              other.getServerPollsPerRequest()));
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + QPS_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getQps()));
+      hash = (37 * hash) + QPS_PER_SERVER_CORE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getQpsPerServerCore()));
+      hash = (37 * hash) + SERVER_SYSTEM_TIME_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getServerSystemTime()));
+      hash = (37 * hash) + SERVER_USER_TIME_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getServerUserTime()));
+      hash = (37 * hash) + CLIENT_SYSTEM_TIME_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getClientSystemTime()));
+      hash = (37 * hash) + CLIENT_USER_TIME_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getClientUserTime()));
+      hash = (37 * hash) + LATENCY_50_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getLatency50()));
+      hash = (37 * hash) + LATENCY_90_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getLatency90()));
+      hash = (37 * hash) + LATENCY_95_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getLatency95()));
+      hash = (37 * hash) + LATENCY_99_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getLatency99()));
+      hash = (37 * hash) + LATENCY_999_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getLatency999()));
+      hash = (37 * hash) + SERVER_CPU_USAGE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getServerCpuUsage()));
+      hash = (37 * hash) + SUCCESSFUL_REQUESTS_PER_SECOND_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getSuccessfulRequestsPerSecond()));
+      hash = (37 * hash) + FAILED_REQUESTS_PER_SECOND_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getFailedRequestsPerSecond()));
+      hash = (37 * hash) + CLIENT_POLLS_PER_REQUEST_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getClientPollsPerRequest()));
+      hash = (37 * hash) + SERVER_POLLS_PER_REQUEST_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+          java.lang.Double.doubleToLongBits(getServerPollsPerRequest()));
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.ScenarioResultSummary prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * Basic summary that can be computed from ClientStats and ServerStats
+     * once the scenario has finished.
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ScenarioResultSummary}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ScenarioResultSummary)
+        io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResultSummary_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResultSummary_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Control.ScenarioResultSummary.class, io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Control.ScenarioResultSummary.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        qps_ = 0D;
+
+        qpsPerServerCore_ = 0D;
+
+        serverSystemTime_ = 0D;
+
+        serverUserTime_ = 0D;
+
+        clientSystemTime_ = 0D;
+
+        clientUserTime_ = 0D;
+
+        latency50_ = 0D;
+
+        latency90_ = 0D;
+
+        latency95_ = 0D;
+
+        latency99_ = 0D;
+
+        latency999_ = 0D;
+
+        serverCpuUsage_ = 0D;
+
+        successfulRequestsPerSecond_ = 0D;
+
+        failedRequestsPerSecond_ = 0D;
+
+        clientPollsPerRequest_ = 0D;
+
+        serverPollsPerRequest_ = 0D;
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResultSummary_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummary getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Control.ScenarioResultSummary.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummary build() {
+        io.grpc.benchmarks.proto.Control.ScenarioResultSummary result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummary buildPartial() {
+        io.grpc.benchmarks.proto.Control.ScenarioResultSummary result = new io.grpc.benchmarks.proto.Control.ScenarioResultSummary(this);
+        result.qps_ = qps_;
+        result.qpsPerServerCore_ = qpsPerServerCore_;
+        result.serverSystemTime_ = serverSystemTime_;
+        result.serverUserTime_ = serverUserTime_;
+        result.clientSystemTime_ = clientSystemTime_;
+        result.clientUserTime_ = clientUserTime_;
+        result.latency50_ = latency50_;
+        result.latency90_ = latency90_;
+        result.latency95_ = latency95_;
+        result.latency99_ = latency99_;
+        result.latency999_ = latency999_;
+        result.serverCpuUsage_ = serverCpuUsage_;
+        result.successfulRequestsPerSecond_ = successfulRequestsPerSecond_;
+        result.failedRequestsPerSecond_ = failedRequestsPerSecond_;
+        result.clientPollsPerRequest_ = clientPollsPerRequest_;
+        result.serverPollsPerRequest_ = serverPollsPerRequest_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Control.ScenarioResultSummary) {
+          return mergeFrom((io.grpc.benchmarks.proto.Control.ScenarioResultSummary)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.ScenarioResultSummary other) {
+        if (other == io.grpc.benchmarks.proto.Control.ScenarioResultSummary.getDefaultInstance()) return this;
+        if (other.getQps() != 0D) {
+          setQps(other.getQps());
+        }
+        if (other.getQpsPerServerCore() != 0D) {
+          setQpsPerServerCore(other.getQpsPerServerCore());
+        }
+        if (other.getServerSystemTime() != 0D) {
+          setServerSystemTime(other.getServerSystemTime());
+        }
+        if (other.getServerUserTime() != 0D) {
+          setServerUserTime(other.getServerUserTime());
+        }
+        if (other.getClientSystemTime() != 0D) {
+          setClientSystemTime(other.getClientSystemTime());
+        }
+        if (other.getClientUserTime() != 0D) {
+          setClientUserTime(other.getClientUserTime());
+        }
+        if (other.getLatency50() != 0D) {
+          setLatency50(other.getLatency50());
+        }
+        if (other.getLatency90() != 0D) {
+          setLatency90(other.getLatency90());
+        }
+        if (other.getLatency95() != 0D) {
+          setLatency95(other.getLatency95());
+        }
+        if (other.getLatency99() != 0D) {
+          setLatency99(other.getLatency99());
+        }
+        if (other.getLatency999() != 0D) {
+          setLatency999(other.getLatency999());
+        }
+        if (other.getServerCpuUsage() != 0D) {
+          setServerCpuUsage(other.getServerCpuUsage());
+        }
+        if (other.getSuccessfulRequestsPerSecond() != 0D) {
+          setSuccessfulRequestsPerSecond(other.getSuccessfulRequestsPerSecond());
+        }
+        if (other.getFailedRequestsPerSecond() != 0D) {
+          setFailedRequestsPerSecond(other.getFailedRequestsPerSecond());
+        }
+        if (other.getClientPollsPerRequest() != 0D) {
+          setClientPollsPerRequest(other.getClientPollsPerRequest());
+        }
+        if (other.getServerPollsPerRequest() != 0D) {
+          setServerPollsPerRequest(other.getServerPollsPerRequest());
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Control.ScenarioResultSummary parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Control.ScenarioResultSummary) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private double qps_ ;
+      /**
+       * <pre>
+       * Total number of operations per second over all clients.
+       * </pre>
+       *
+       * <code>double qps = 1;</code>
+       */
+      public double getQps() {
+        return qps_;
+      }
+      /**
+       * <pre>
+       * Total number of operations per second over all clients.
+       * </pre>
+       *
+       * <code>double qps = 1;</code>
+       */
+      public Builder setQps(double value) {
+        
+        qps_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Total number of operations per second over all clients.
+       * </pre>
+       *
+       * <code>double qps = 1;</code>
+       */
+      public Builder clearQps() {
+        
+        qps_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double qpsPerServerCore_ ;
+      /**
+       * <pre>
+       * QPS per one server core.
+       * </pre>
+       *
+       * <code>double qps_per_server_core = 2;</code>
+       */
+      public double getQpsPerServerCore() {
+        return qpsPerServerCore_;
+      }
+      /**
+       * <pre>
+       * QPS per one server core.
+       * </pre>
+       *
+       * <code>double qps_per_server_core = 2;</code>
+       */
+      public Builder setQpsPerServerCore(double value) {
+        
+        qpsPerServerCore_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * QPS per one server core.
+       * </pre>
+       *
+       * <code>double qps_per_server_core = 2;</code>
+       */
+      public Builder clearQpsPerServerCore() {
+        
+        qpsPerServerCore_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double serverSystemTime_ ;
+      /**
+       * <pre>
+       * server load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_system_time = 3;</code>
+       */
+      public double getServerSystemTime() {
+        return serverSystemTime_;
+      }
+      /**
+       * <pre>
+       * server load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_system_time = 3;</code>
+       */
+      public Builder setServerSystemTime(double value) {
+        
+        serverSystemTime_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * server load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_system_time = 3;</code>
+       */
+      public Builder clearServerSystemTime() {
+        
+        serverSystemTime_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double serverUserTime_ ;
+      /**
+       * <pre>
+       * server load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_user_time = 4;</code>
+       */
+      public double getServerUserTime() {
+        return serverUserTime_;
+      }
+      /**
+       * <pre>
+       * server load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_user_time = 4;</code>
+       */
+      public Builder setServerUserTime(double value) {
+        
+        serverUserTime_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * server load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double server_user_time = 4;</code>
+       */
+      public Builder clearServerUserTime() {
+        
+        serverUserTime_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double clientSystemTime_ ;
+      /**
+       * <pre>
+       * client load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_system_time = 5;</code>
+       */
+      public double getClientSystemTime() {
+        return clientSystemTime_;
+      }
+      /**
+       * <pre>
+       * client load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_system_time = 5;</code>
+       */
+      public Builder setClientSystemTime(double value) {
+        
+        clientSystemTime_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * client load based on system_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_system_time = 5;</code>
+       */
+      public Builder clearClientSystemTime() {
+        
+        clientSystemTime_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double clientUserTime_ ;
+      /**
+       * <pre>
+       * client load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_user_time = 6;</code>
+       */
+      public double getClientUserTime() {
+        return clientUserTime_;
+      }
+      /**
+       * <pre>
+       * client load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_user_time = 6;</code>
+       */
+      public Builder setClientUserTime(double value) {
+        
+        clientUserTime_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * client load based on user_time (0.85 =&gt; 85%)
+       * </pre>
+       *
+       * <code>double client_user_time = 6;</code>
+       */
+      public Builder clearClientUserTime() {
+        
+        clientUserTime_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double latency50_ ;
+      /**
+       * <pre>
+       * X% latency percentiles (in nanoseconds)
+       * </pre>
+       *
+       * <code>double latency_50 = 7;</code>
+       */
+      public double getLatency50() {
+        return latency50_;
+      }
+      /**
+       * <pre>
+       * X% latency percentiles (in nanoseconds)
+       * </pre>
+       *
+       * <code>double latency_50 = 7;</code>
+       */
+      public Builder setLatency50(double value) {
+        
+        latency50_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * X% latency percentiles (in nanoseconds)
+       * </pre>
+       *
+       * <code>double latency_50 = 7;</code>
+       */
+      public Builder clearLatency50() {
+        
+        latency50_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double latency90_ ;
+      /**
+       * <code>double latency_90 = 8;</code>
+       */
+      public double getLatency90() {
+        return latency90_;
+      }
+      /**
+       * <code>double latency_90 = 8;</code>
+       */
+      public Builder setLatency90(double value) {
+        
+        latency90_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double latency_90 = 8;</code>
+       */
+      public Builder clearLatency90() {
+        
+        latency90_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double latency95_ ;
+      /**
+       * <code>double latency_95 = 9;</code>
+       */
+      public double getLatency95() {
+        return latency95_;
+      }
+      /**
+       * <code>double latency_95 = 9;</code>
+       */
+      public Builder setLatency95(double value) {
+        
+        latency95_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double latency_95 = 9;</code>
+       */
+      public Builder clearLatency95() {
+        
+        latency95_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double latency99_ ;
+      /**
+       * <code>double latency_99 = 10;</code>
+       */
+      public double getLatency99() {
+        return latency99_;
+      }
+      /**
+       * <code>double latency_99 = 10;</code>
+       */
+      public Builder setLatency99(double value) {
+        
+        latency99_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double latency_99 = 10;</code>
+       */
+      public Builder clearLatency99() {
+        
+        latency99_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double latency999_ ;
+      /**
+       * <code>double latency_999 = 11;</code>
+       */
+      public double getLatency999() {
+        return latency999_;
+      }
+      /**
+       * <code>double latency_999 = 11;</code>
+       */
+      public Builder setLatency999(double value) {
+        
+        latency999_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double latency_999 = 11;</code>
+       */
+      public Builder clearLatency999() {
+        
+        latency999_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double serverCpuUsage_ ;
+      /**
+       * <pre>
+       * server cpu usage percentage
+       * </pre>
+       *
+       * <code>double server_cpu_usage = 12;</code>
+       */
+      public double getServerCpuUsage() {
+        return serverCpuUsage_;
+      }
+      /**
+       * <pre>
+       * server cpu usage percentage
+       * </pre>
+       *
+       * <code>double server_cpu_usage = 12;</code>
+       */
+      public Builder setServerCpuUsage(double value) {
+        
+        serverCpuUsage_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * server cpu usage percentage
+       * </pre>
+       *
+       * <code>double server_cpu_usage = 12;</code>
+       */
+      public Builder clearServerCpuUsage() {
+        
+        serverCpuUsage_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double successfulRequestsPerSecond_ ;
+      /**
+       * <pre>
+       * Number of requests that succeeded/failed
+       * </pre>
+       *
+       * <code>double successful_requests_per_second = 13;</code>
+       */
+      public double getSuccessfulRequestsPerSecond() {
+        return successfulRequestsPerSecond_;
+      }
+      /**
+       * <pre>
+       * Number of requests that succeeded/failed
+       * </pre>
+       *
+       * <code>double successful_requests_per_second = 13;</code>
+       */
+      public Builder setSuccessfulRequestsPerSecond(double value) {
+        
+        successfulRequestsPerSecond_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of requests that succeeded/failed
+       * </pre>
+       *
+       * <code>double successful_requests_per_second = 13;</code>
+       */
+      public Builder clearSuccessfulRequestsPerSecond() {
+        
+        successfulRequestsPerSecond_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double failedRequestsPerSecond_ ;
+      /**
+       * <code>double failed_requests_per_second = 14;</code>
+       */
+      public double getFailedRequestsPerSecond() {
+        return failedRequestsPerSecond_;
+      }
+      /**
+       * <code>double failed_requests_per_second = 14;</code>
+       */
+      public Builder setFailedRequestsPerSecond(double value) {
+        
+        failedRequestsPerSecond_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double failed_requests_per_second = 14;</code>
+       */
+      public Builder clearFailedRequestsPerSecond() {
+        
+        failedRequestsPerSecond_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double clientPollsPerRequest_ ;
+      /**
+       * <pre>
+       * Number of polls called inside completion queue per request
+       * </pre>
+       *
+       * <code>double client_polls_per_request = 15;</code>
+       */
+      public double getClientPollsPerRequest() {
+        return clientPollsPerRequest_;
+      }
+      /**
+       * <pre>
+       * Number of polls called inside completion queue per request
+       * </pre>
+       *
+       * <code>double client_polls_per_request = 15;</code>
+       */
+      public Builder setClientPollsPerRequest(double value) {
+        
+        clientPollsPerRequest_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of polls called inside completion queue per request
+       * </pre>
+       *
+       * <code>double client_polls_per_request = 15;</code>
+       */
+      public Builder clearClientPollsPerRequest() {
+        
+        clientPollsPerRequest_ = 0D;
+        onChanged();
+        return this;
+      }
+
+      private double serverPollsPerRequest_ ;
+      /**
+       * <code>double server_polls_per_request = 16;</code>
+       */
+      public double getServerPollsPerRequest() {
+        return serverPollsPerRequest_;
+      }
+      /**
+       * <code>double server_polls_per_request = 16;</code>
+       */
+      public Builder setServerPollsPerRequest(double value) {
+        
+        serverPollsPerRequest_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>double server_polls_per_request = 16;</code>
+       */
+      public Builder clearServerPollsPerRequest() {
+        
+        serverPollsPerRequest_ = 0D;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ScenarioResultSummary)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ScenarioResultSummary)
+    private static final io.grpc.benchmarks.proto.Control.ScenarioResultSummary DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ScenarioResultSummary();
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ScenarioResultSummary getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ScenarioResultSummary>
+        PARSER = new com.google.protobuf.AbstractParser<ScenarioResultSummary>() {
+      public ScenarioResultSummary parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new ScenarioResultSummary(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<ScenarioResultSummary> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ScenarioResultSummary> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Control.ScenarioResultSummary getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface ScenarioResultOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ScenarioResult)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    boolean hasScenario();
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    io.grpc.benchmarks.proto.Control.Scenario getScenario();
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenarioOrBuilder();
+
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    boolean hasLatencies();
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.HistogramData getLatencies();
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder();
+
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats> 
+        getClientStatsList();
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.ClientStats getClientStats(int index);
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    int getClientStatsCount();
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    java.util.List<? extends io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
+        getClientStatsOrBuilderList();
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getClientStatsOrBuilder(
+        int index);
+
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats> 
+        getServerStatsList();
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.ServerStats getServerStats(int index);
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    int getServerStatsCount();
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    java.util.List<? extends io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
+        getServerStatsOrBuilderList();
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getServerStatsOrBuilder(
+        int index);
+
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    java.util.List<java.lang.Integer> getServerCoresList();
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    int getServerCoresCount();
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    int getServerCores(int index);
+
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    boolean hasSummary();
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ScenarioResultSummary getSummary();
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder getSummaryOrBuilder();
+
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    java.util.List<java.lang.Boolean> getClientSuccessList();
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    int getClientSuccessCount();
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    boolean getClientSuccess(int index);
+
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    java.util.List<java.lang.Boolean> getServerSuccessList();
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    int getServerSuccessCount();
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    boolean getServerSuccess(int index);
+
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount> 
+        getRequestResultsList();
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.RequestResultCount getRequestResults(int index);
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    int getRequestResultsCount();
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    java.util.List<? extends io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder> 
+        getRequestResultsOrBuilderList();
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder getRequestResultsOrBuilder(
+        int index);
+  }
+  /**
+   * <pre>
+   * Results of a single benchmark scenario.
+   * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ScenarioResult}
+   */
+  public  static final class ScenarioResult extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ScenarioResult)
+      ScenarioResultOrBuilder {
+    // Use ScenarioResult.newBuilder() to construct.
+    private ScenarioResult(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ScenarioResult() {
+      clientStats_ = java.util.Collections.emptyList();
+      serverStats_ = java.util.Collections.emptyList();
+      serverCores_ = java.util.Collections.emptyList();
+      clientSuccess_ = java.util.Collections.emptyList();
+      serverSuccess_ = java.util.Collections.emptyList();
+      requestResults_ = java.util.Collections.emptyList();
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ScenarioResult(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 10: {
+              io.grpc.benchmarks.proto.Control.Scenario.Builder subBuilder = null;
+              if (scenario_ != null) {
+                subBuilder = scenario_.toBuilder();
+              }
+              scenario_ = input.readMessage(io.grpc.benchmarks.proto.Control.Scenario.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(scenario_);
+                scenario_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 18: {
+              io.grpc.benchmarks.proto.Stats.HistogramData.Builder subBuilder = null;
+              if (latencies_ != null) {
+                subBuilder = latencies_.toBuilder();
+              }
+              latencies_ = input.readMessage(io.grpc.benchmarks.proto.Stats.HistogramData.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(latencies_);
+                latencies_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 26: {
+              if (!((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+                clientStats_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.ClientStats>();
+                mutable_bitField0_ |= 0x00000004;
+              }
+              clientStats_.add(
+                  input.readMessage(io.grpc.benchmarks.proto.Stats.ClientStats.parser(), extensionRegistry));
+              break;
+            }
+            case 34: {
+              if (!((mutable_bitField0_ & 0x00000008) == 0x00000008)) {
+                serverStats_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.ServerStats>();
+                mutable_bitField0_ |= 0x00000008;
+              }
+              serverStats_.add(
+                  input.readMessage(io.grpc.benchmarks.proto.Stats.ServerStats.parser(), extensionRegistry));
+              break;
+            }
+            case 40: {
+              if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+                serverCores_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000010;
+              }
+              serverCores_.add(input.readInt32());
+              break;
+            }
+            case 42: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000010) == 0x00000010) && input.getBytesUntilLimit() > 0) {
+                serverCores_ = new java.util.ArrayList<java.lang.Integer>();
+                mutable_bitField0_ |= 0x00000010;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                serverCores_.add(input.readInt32());
+              }
+              input.popLimit(limit);
+              break;
+            }
+            case 50: {
+              io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder subBuilder = null;
+              if (summary_ != null) {
+                subBuilder = summary_.toBuilder();
+              }
+              summary_ = input.readMessage(io.grpc.benchmarks.proto.Control.ScenarioResultSummary.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(summary_);
+                summary_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 56: {
+              if (!((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
+                clientSuccess_ = new java.util.ArrayList<java.lang.Boolean>();
+                mutable_bitField0_ |= 0x00000040;
+              }
+              clientSuccess_.add(input.readBool());
+              break;
+            }
+            case 58: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000040) == 0x00000040) && input.getBytesUntilLimit() > 0) {
+                clientSuccess_ = new java.util.ArrayList<java.lang.Boolean>();
+                mutable_bitField0_ |= 0x00000040;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                clientSuccess_.add(input.readBool());
+              }
+              input.popLimit(limit);
+              break;
+            }
+            case 64: {
+              if (!((mutable_bitField0_ & 0x00000080) == 0x00000080)) {
+                serverSuccess_ = new java.util.ArrayList<java.lang.Boolean>();
+                mutable_bitField0_ |= 0x00000080;
+              }
+              serverSuccess_.add(input.readBool());
+              break;
+            }
+            case 66: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              if (!((mutable_bitField0_ & 0x00000080) == 0x00000080) && input.getBytesUntilLimit() > 0) {
+                serverSuccess_ = new java.util.ArrayList<java.lang.Boolean>();
+                mutable_bitField0_ |= 0x00000080;
+              }
+              while (input.getBytesUntilLimit() > 0) {
+                serverSuccess_.add(input.readBool());
+              }
+              input.popLimit(limit);
+              break;
+            }
+            case 74: {
+              if (!((mutable_bitField0_ & 0x00000100) == 0x00000100)) {
+                requestResults_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.RequestResultCount>();
+                mutable_bitField0_ |= 0x00000100;
+              }
+              requestResults_.add(
+                  input.readMessage(io.grpc.benchmarks.proto.Stats.RequestResultCount.parser(), extensionRegistry));
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        if (((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
+          clientStats_ = java.util.Collections.unmodifiableList(clientStats_);
+        }
+        if (((mutable_bitField0_ & 0x00000008) == 0x00000008)) {
+          serverStats_ = java.util.Collections.unmodifiableList(serverStats_);
+        }
+        if (((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+          serverCores_ = java.util.Collections.unmodifiableList(serverCores_);
+        }
+        if (((mutable_bitField0_ & 0x00000040) == 0x00000040)) {
+          clientSuccess_ = java.util.Collections.unmodifiableList(clientSuccess_);
+        }
+        if (((mutable_bitField0_ & 0x00000080) == 0x00000080)) {
+          serverSuccess_ = java.util.Collections.unmodifiableList(serverSuccess_);
+        }
+        if (((mutable_bitField0_ & 0x00000100) == 0x00000100)) {
+          requestResults_ = java.util.Collections.unmodifiableList(requestResults_);
+        }
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResult_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResult_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Control.ScenarioResult.class, io.grpc.benchmarks.proto.Control.ScenarioResult.Builder.class);
+    }
+
+    private int bitField0_;
+    public static final int SCENARIO_FIELD_NUMBER = 1;
+    private io.grpc.benchmarks.proto.Control.Scenario scenario_;
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    public boolean hasScenario() {
+      return scenario_ != null;
+    }
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.Scenario getScenario() {
+      return scenario_ == null ? io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance() : scenario_;
+    }
+    /**
+     * <pre>
+     * Inputs used to run the scenario.
+     * </pre>
+     *
+     * <code>.grpc.testing.Scenario scenario = 1;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenarioOrBuilder() {
+      return getScenario();
+    }
+
+    public static final int LATENCIES_FIELD_NUMBER = 2;
+    private io.grpc.benchmarks.proto.Stats.HistogramData latencies_;
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    public boolean hasLatencies() {
+      return latencies_ != null;
+    }
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
+      return latencies_ == null ? io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
+    }
+    /**
+     * <pre>
+     * Histograms from all clients merged into one histogram.
+     * </pre>
+     *
+     * <code>.grpc.testing.HistogramData latencies = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
+      return getLatencies();
+    }
+
+    public static final int CLIENT_STATS_FIELD_NUMBER = 3;
+    private java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats> clientStats_;
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    public java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats> getClientStatsList() {
+      return clientStats_;
+    }
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    public java.util.List<? extends io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
+        getClientStatsOrBuilderList() {
+      return clientStats_;
+    }
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    public int getClientStatsCount() {
+      return clientStats_.size();
+    }
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.ClientStats getClientStats(int index) {
+      return clientStats_.get(index);
+    }
+    /**
+     * <pre>
+     * Client stats for each client
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getClientStatsOrBuilder(
+        int index) {
+      return clientStats_.get(index);
+    }
+
+    public static final int SERVER_STATS_FIELD_NUMBER = 4;
+    private java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats> serverStats_;
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    public java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats> getServerStatsList() {
+      return serverStats_;
+    }
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    public java.util.List<? extends io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
+        getServerStatsOrBuilderList() {
+      return serverStats_;
+    }
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    public int getServerStatsCount() {
+      return serverStats_.size();
+    }
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.ServerStats getServerStats(int index) {
+      return serverStats_.get(index);
+    }
+    /**
+     * <pre>
+     * Server stats for each server
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getServerStatsOrBuilder(
+        int index) {
+      return serverStats_.get(index);
+    }
+
+    public static final int SERVER_CORES_FIELD_NUMBER = 5;
+    private java.util.List<java.lang.Integer> serverCores_;
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    public java.util.List<java.lang.Integer>
+        getServerCoresList() {
+      return serverCores_;
+    }
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    public int getServerCoresCount() {
+      return serverCores_.size();
+    }
+    /**
+     * <pre>
+     * Number of cores available to each server
+     * </pre>
+     *
+     * <code>repeated int32 server_cores = 5;</code>
+     */
+    public int getServerCores(int index) {
+      return serverCores_.get(index);
+    }
+    private int serverCoresMemoizedSerializedSize = -1;
+
+    public static final int SUMMARY_FIELD_NUMBER = 6;
+    private io.grpc.benchmarks.proto.Control.ScenarioResultSummary summary_;
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    public boolean hasSummary() {
+      return summary_ != null;
+    }
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ScenarioResultSummary getSummary() {
+      return summary_ == null ? io.grpc.benchmarks.proto.Control.ScenarioResultSummary.getDefaultInstance() : summary_;
+    }
+    /**
+     * <pre>
+     * An after-the-fact computed summary
+     * </pre>
+     *
+     * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+     */
+    public io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder getSummaryOrBuilder() {
+      return getSummary();
+    }
+
+    public static final int CLIENT_SUCCESS_FIELD_NUMBER = 7;
+    private java.util.List<java.lang.Boolean> clientSuccess_;
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    public java.util.List<java.lang.Boolean>
+        getClientSuccessList() {
+      return clientSuccess_;
+    }
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    public int getClientSuccessCount() {
+      return clientSuccess_.size();
+    }
+    /**
+     * <pre>
+     * Information on success or failure of each worker
+     * </pre>
+     *
+     * <code>repeated bool client_success = 7;</code>
+     */
+    public boolean getClientSuccess(int index) {
+      return clientSuccess_.get(index);
+    }
+    private int clientSuccessMemoizedSerializedSize = -1;
+
+    public static final int SERVER_SUCCESS_FIELD_NUMBER = 8;
+    private java.util.List<java.lang.Boolean> serverSuccess_;
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    public java.util.List<java.lang.Boolean>
+        getServerSuccessList() {
+      return serverSuccess_;
+    }
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    public int getServerSuccessCount() {
+      return serverSuccess_.size();
+    }
+    /**
+     * <code>repeated bool server_success = 8;</code>
+     */
+    public boolean getServerSuccess(int index) {
+      return serverSuccess_.get(index);
+    }
+    private int serverSuccessMemoizedSerializedSize = -1;
+
+    public static final int REQUEST_RESULTS_FIELD_NUMBER = 9;
+    private java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount> requestResults_;
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    public java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount> getRequestResultsList() {
+      return requestResults_;
+    }
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    public java.util.List<? extends io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder> 
+        getRequestResultsOrBuilderList() {
+      return requestResults_;
+    }
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    public int getRequestResultsCount() {
+      return requestResults_.size();
+    }
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.RequestResultCount getRequestResults(int index) {
+      return requestResults_.get(index);
+    }
+    /**
+     * <pre>
+     * Number of failed requests (one row per status code seen)
+     * </pre>
+     *
+     * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+     */
+    public io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder getRequestResultsOrBuilder(
+        int index) {
+      return requestResults_.get(index);
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      getSerializedSize();
+      if (scenario_ != null) {
+        output.writeMessage(1, getScenario());
+      }
+      if (latencies_ != null) {
+        output.writeMessage(2, getLatencies());
+      }
+      for (int i = 0; i < clientStats_.size(); i++) {
+        output.writeMessage(3, clientStats_.get(i));
+      }
+      for (int i = 0; i < serverStats_.size(); i++) {
+        output.writeMessage(4, serverStats_.get(i));
+      }
+      if (getServerCoresList().size() > 0) {
+        output.writeUInt32NoTag(42);
+        output.writeUInt32NoTag(serverCoresMemoizedSerializedSize);
+      }
+      for (int i = 0; i < serverCores_.size(); i++) {
+        output.writeInt32NoTag(serverCores_.get(i));
+      }
+      if (summary_ != null) {
+        output.writeMessage(6, getSummary());
+      }
+      if (getClientSuccessList().size() > 0) {
+        output.writeUInt32NoTag(58);
+        output.writeUInt32NoTag(clientSuccessMemoizedSerializedSize);
+      }
+      for (int i = 0; i < clientSuccess_.size(); i++) {
+        output.writeBoolNoTag(clientSuccess_.get(i));
+      }
+      if (getServerSuccessList().size() > 0) {
+        output.writeUInt32NoTag(66);
+        output.writeUInt32NoTag(serverSuccessMemoizedSerializedSize);
+      }
+      for (int i = 0; i < serverSuccess_.size(); i++) {
+        output.writeBoolNoTag(serverSuccess_.get(i));
+      }
+      for (int i = 0; i < requestResults_.size(); i++) {
+        output.writeMessage(9, requestResults_.get(i));
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (scenario_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(1, getScenario());
+      }
+      if (latencies_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(2, getLatencies());
+      }
+      for (int i = 0; i < clientStats_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(3, clientStats_.get(i));
+      }
+      for (int i = 0; i < serverStats_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(4, serverStats_.get(i));
+      }
+      {
+        int dataSize = 0;
+        for (int i = 0; i < serverCores_.size(); i++) {
+          dataSize += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(serverCores_.get(i));
+        }
+        size += dataSize;
+        if (!getServerCoresList().isEmpty()) {
+          size += 1;
+          size += com.google.protobuf.CodedOutputStream
+              .computeInt32SizeNoTag(dataSize);
+        }
+        serverCoresMemoizedSerializedSize = dataSize;
+      }
+      if (summary_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(6, getSummary());
+      }
+      {
+        int dataSize = 0;
+        dataSize = 1 * getClientSuccessList().size();
+        size += dataSize;
+        if (!getClientSuccessList().isEmpty()) {
+          size += 1;
+          size += com.google.protobuf.CodedOutputStream
+              .computeInt32SizeNoTag(dataSize);
+        }
+        clientSuccessMemoizedSerializedSize = dataSize;
+      }
+      {
+        int dataSize = 0;
+        dataSize = 1 * getServerSuccessList().size();
+        size += dataSize;
+        if (!getServerSuccessList().isEmpty()) {
+          size += 1;
+          size += com.google.protobuf.CodedOutputStream
+              .computeInt32SizeNoTag(dataSize);
+        }
+        serverSuccessMemoizedSerializedSize = dataSize;
+      }
+      for (int i = 0; i < requestResults_.size(); i++) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(9, requestResults_.get(i));
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Control.ScenarioResult)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Control.ScenarioResult other = (io.grpc.benchmarks.proto.Control.ScenarioResult) obj;
+
+      boolean result = true;
+      result = result && (hasScenario() == other.hasScenario());
+      if (hasScenario()) {
+        result = result && getScenario()
+            .equals(other.getScenario());
+      }
+      result = result && (hasLatencies() == other.hasLatencies());
+      if (hasLatencies()) {
+        result = result && getLatencies()
+            .equals(other.getLatencies());
+      }
+      result = result && getClientStatsList()
+          .equals(other.getClientStatsList());
+      result = result && getServerStatsList()
+          .equals(other.getServerStatsList());
+      result = result && getServerCoresList()
+          .equals(other.getServerCoresList());
+      result = result && (hasSummary() == other.hasSummary());
+      if (hasSummary()) {
+        result = result && getSummary()
+            .equals(other.getSummary());
+      }
+      result = result && getClientSuccessList()
+          .equals(other.getClientSuccessList());
+      result = result && getServerSuccessList()
+          .equals(other.getServerSuccessList());
+      result = result && getRequestResultsList()
+          .equals(other.getRequestResultsList());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      if (hasScenario()) {
+        hash = (37 * hash) + SCENARIO_FIELD_NUMBER;
+        hash = (53 * hash) + getScenario().hashCode();
+      }
+      if (hasLatencies()) {
+        hash = (37 * hash) + LATENCIES_FIELD_NUMBER;
+        hash = (53 * hash) + getLatencies().hashCode();
+      }
+      if (getClientStatsCount() > 0) {
+        hash = (37 * hash) + CLIENT_STATS_FIELD_NUMBER;
+        hash = (53 * hash) + getClientStatsList().hashCode();
+      }
+      if (getServerStatsCount() > 0) {
+        hash = (37 * hash) + SERVER_STATS_FIELD_NUMBER;
+        hash = (53 * hash) + getServerStatsList().hashCode();
+      }
+      if (getServerCoresCount() > 0) {
+        hash = (37 * hash) + SERVER_CORES_FIELD_NUMBER;
+        hash = (53 * hash) + getServerCoresList().hashCode();
+      }
+      if (hasSummary()) {
+        hash = (37 * hash) + SUMMARY_FIELD_NUMBER;
+        hash = (53 * hash) + getSummary().hashCode();
+      }
+      if (getClientSuccessCount() > 0) {
+        hash = (37 * hash) + CLIENT_SUCCESS_FIELD_NUMBER;
+        hash = (53 * hash) + getClientSuccessList().hashCode();
+      }
+      if (getServerSuccessCount() > 0) {
+        hash = (37 * hash) + SERVER_SUCCESS_FIELD_NUMBER;
+        hash = (53 * hash) + getServerSuccessList().hashCode();
+      }
+      if (getRequestResultsCount() > 0) {
+        hash = (37 * hash) + REQUEST_RESULTS_FIELD_NUMBER;
+        hash = (53 * hash) + getRequestResultsList().hashCode();
+      }
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Control.ScenarioResult prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * Results of a single benchmark scenario.
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ScenarioResult}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ScenarioResult)
+        io.grpc.benchmarks.proto.Control.ScenarioResultOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResult_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResult_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Control.ScenarioResult.class, io.grpc.benchmarks.proto.Control.ScenarioResult.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Control.ScenarioResult.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+          getClientStatsFieldBuilder();
+          getServerStatsFieldBuilder();
+          getRequestResultsFieldBuilder();
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        if (scenarioBuilder_ == null) {
+          scenario_ = null;
+        } else {
+          scenario_ = null;
+          scenarioBuilder_ = null;
+        }
+        if (latenciesBuilder_ == null) {
+          latencies_ = null;
+        } else {
+          latencies_ = null;
+          latenciesBuilder_ = null;
+        }
+        if (clientStatsBuilder_ == null) {
+          clientStats_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000004);
+        } else {
+          clientStatsBuilder_.clear();
+        }
+        if (serverStatsBuilder_ == null) {
+          serverStats_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000008);
+        } else {
+          serverStatsBuilder_.clear();
+        }
+        serverCores_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000010);
+        if (summaryBuilder_ == null) {
+          summary_ = null;
+        } else {
+          summary_ = null;
+          summaryBuilder_ = null;
+        }
+        clientSuccess_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000040);
+        serverSuccess_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000080);
+        if (requestResultsBuilder_ == null) {
+          requestResults_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000100);
+        } else {
+          requestResultsBuilder_.clear();
+        }
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Control.internal_static_grpc_testing_ScenarioResult_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResult getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResult build() {
+        io.grpc.benchmarks.proto.Control.ScenarioResult result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Control.ScenarioResult buildPartial() {
+        io.grpc.benchmarks.proto.Control.ScenarioResult result = new io.grpc.benchmarks.proto.Control.ScenarioResult(this);
+        int from_bitField0_ = bitField0_;
+        int to_bitField0_ = 0;
+        if (scenarioBuilder_ == null) {
+          result.scenario_ = scenario_;
+        } else {
+          result.scenario_ = scenarioBuilder_.build();
+        }
+        if (latenciesBuilder_ == null) {
+          result.latencies_ = latencies_;
+        } else {
+          result.latencies_ = latenciesBuilder_.build();
+        }
+        if (clientStatsBuilder_ == null) {
+          if (((bitField0_ & 0x00000004) == 0x00000004)) {
+            clientStats_ = java.util.Collections.unmodifiableList(clientStats_);
+            bitField0_ = (bitField0_ & ~0x00000004);
+          }
+          result.clientStats_ = clientStats_;
+        } else {
+          result.clientStats_ = clientStatsBuilder_.build();
+        }
+        if (serverStatsBuilder_ == null) {
+          if (((bitField0_ & 0x00000008) == 0x00000008)) {
+            serverStats_ = java.util.Collections.unmodifiableList(serverStats_);
+            bitField0_ = (bitField0_ & ~0x00000008);
+          }
+          result.serverStats_ = serverStats_;
+        } else {
+          result.serverStats_ = serverStatsBuilder_.build();
+        }
+        if (((bitField0_ & 0x00000010) == 0x00000010)) {
+          serverCores_ = java.util.Collections.unmodifiableList(serverCores_);
+          bitField0_ = (bitField0_ & ~0x00000010);
+        }
+        result.serverCores_ = serverCores_;
+        if (summaryBuilder_ == null) {
+          result.summary_ = summary_;
+        } else {
+          result.summary_ = summaryBuilder_.build();
+        }
+        if (((bitField0_ & 0x00000040) == 0x00000040)) {
+          clientSuccess_ = java.util.Collections.unmodifiableList(clientSuccess_);
+          bitField0_ = (bitField0_ & ~0x00000040);
+        }
+        result.clientSuccess_ = clientSuccess_;
+        if (((bitField0_ & 0x00000080) == 0x00000080)) {
+          serverSuccess_ = java.util.Collections.unmodifiableList(serverSuccess_);
+          bitField0_ = (bitField0_ & ~0x00000080);
+        }
+        result.serverSuccess_ = serverSuccess_;
+        if (requestResultsBuilder_ == null) {
+          if (((bitField0_ & 0x00000100) == 0x00000100)) {
+            requestResults_ = java.util.Collections.unmodifiableList(requestResults_);
+            bitField0_ = (bitField0_ & ~0x00000100);
+          }
+          result.requestResults_ = requestResults_;
+        } else {
+          result.requestResults_ = requestResultsBuilder_.build();
+        }
+        result.bitField0_ = to_bitField0_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Control.ScenarioResult) {
+          return mergeFrom((io.grpc.benchmarks.proto.Control.ScenarioResult)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Control.ScenarioResult other) {
+        if (other == io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance()) return this;
+        if (other.hasScenario()) {
+          mergeScenario(other.getScenario());
+        }
+        if (other.hasLatencies()) {
+          mergeLatencies(other.getLatencies());
+        }
+        if (clientStatsBuilder_ == null) {
+          if (!other.clientStats_.isEmpty()) {
+            if (clientStats_.isEmpty()) {
+              clientStats_ = other.clientStats_;
+              bitField0_ = (bitField0_ & ~0x00000004);
+            } else {
+              ensureClientStatsIsMutable();
+              clientStats_.addAll(other.clientStats_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.clientStats_.isEmpty()) {
+            if (clientStatsBuilder_.isEmpty()) {
+              clientStatsBuilder_.dispose();
+              clientStatsBuilder_ = null;
+              clientStats_ = other.clientStats_;
+              bitField0_ = (bitField0_ & ~0x00000004);
+              clientStatsBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getClientStatsFieldBuilder() : null;
+            } else {
+              clientStatsBuilder_.addAllMessages(other.clientStats_);
+            }
+          }
+        }
+        if (serverStatsBuilder_ == null) {
+          if (!other.serverStats_.isEmpty()) {
+            if (serverStats_.isEmpty()) {
+              serverStats_ = other.serverStats_;
+              bitField0_ = (bitField0_ & ~0x00000008);
+            } else {
+              ensureServerStatsIsMutable();
+              serverStats_.addAll(other.serverStats_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.serverStats_.isEmpty()) {
+            if (serverStatsBuilder_.isEmpty()) {
+              serverStatsBuilder_.dispose();
+              serverStatsBuilder_ = null;
+              serverStats_ = other.serverStats_;
+              bitField0_ = (bitField0_ & ~0x00000008);
+              serverStatsBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getServerStatsFieldBuilder() : null;
+            } else {
+              serverStatsBuilder_.addAllMessages(other.serverStats_);
+            }
+          }
+        }
+        if (!other.serverCores_.isEmpty()) {
+          if (serverCores_.isEmpty()) {
+            serverCores_ = other.serverCores_;
+            bitField0_ = (bitField0_ & ~0x00000010);
+          } else {
+            ensureServerCoresIsMutable();
+            serverCores_.addAll(other.serverCores_);
+          }
+          onChanged();
+        }
+        if (other.hasSummary()) {
+          mergeSummary(other.getSummary());
+        }
+        if (!other.clientSuccess_.isEmpty()) {
+          if (clientSuccess_.isEmpty()) {
+            clientSuccess_ = other.clientSuccess_;
+            bitField0_ = (bitField0_ & ~0x00000040);
+          } else {
+            ensureClientSuccessIsMutable();
+            clientSuccess_.addAll(other.clientSuccess_);
+          }
+          onChanged();
+        }
+        if (!other.serverSuccess_.isEmpty()) {
+          if (serverSuccess_.isEmpty()) {
+            serverSuccess_ = other.serverSuccess_;
+            bitField0_ = (bitField0_ & ~0x00000080);
+          } else {
+            ensureServerSuccessIsMutable();
+            serverSuccess_.addAll(other.serverSuccess_);
+          }
+          onChanged();
+        }
+        if (requestResultsBuilder_ == null) {
+          if (!other.requestResults_.isEmpty()) {
+            if (requestResults_.isEmpty()) {
+              requestResults_ = other.requestResults_;
+              bitField0_ = (bitField0_ & ~0x00000100);
+            } else {
+              ensureRequestResultsIsMutable();
+              requestResults_.addAll(other.requestResults_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.requestResults_.isEmpty()) {
+            if (requestResultsBuilder_.isEmpty()) {
+              requestResultsBuilder_.dispose();
+              requestResultsBuilder_ = null;
+              requestResults_ = other.requestResults_;
+              bitField0_ = (bitField0_ & ~0x00000100);
+              requestResultsBuilder_ = 
+                com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                   getRequestResultsFieldBuilder() : null;
+            } else {
+              requestResultsBuilder_.addAllMessages(other.requestResults_);
+            }
+          }
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Control.ScenarioResult parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Control.ScenarioResult) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+      private int bitField0_;
+
+      private io.grpc.benchmarks.proto.Control.Scenario scenario_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> scenarioBuilder_;
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public boolean hasScenario() {
+        return scenarioBuilder_ != null || scenario_ != null;
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario getScenario() {
+        if (scenarioBuilder_ == null) {
+          return scenario_ == null ? io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance() : scenario_;
+        } else {
+          return scenarioBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public Builder setScenario(io.grpc.benchmarks.proto.Control.Scenario value) {
+        if (scenarioBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          scenario_ = value;
+          onChanged();
+        } else {
+          scenarioBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public Builder setScenario(
+          io.grpc.benchmarks.proto.Control.Scenario.Builder builderForValue) {
+        if (scenarioBuilder_ == null) {
+          scenario_ = builderForValue.build();
+          onChanged();
+        } else {
+          scenarioBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public Builder mergeScenario(io.grpc.benchmarks.proto.Control.Scenario value) {
+        if (scenarioBuilder_ == null) {
+          if (scenario_ != null) {
+            scenario_ =
+              io.grpc.benchmarks.proto.Control.Scenario.newBuilder(scenario_).mergeFrom(value).buildPartial();
+          } else {
+            scenario_ = value;
+          }
+          onChanged();
+        } else {
+          scenarioBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public Builder clearScenario() {
+        if (scenarioBuilder_ == null) {
+          scenario_ = null;
+          onChanged();
+        } else {
+          scenario_ = null;
+          scenarioBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.Scenario.Builder getScenarioBuilder() {
+        
+        onChanged();
+        return getScenarioFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ScenarioOrBuilder getScenarioOrBuilder() {
+        if (scenarioBuilder_ != null) {
+          return scenarioBuilder_.getMessageOrBuilder();
+        } else {
+          return scenario_ == null ?
+              io.grpc.benchmarks.proto.Control.Scenario.getDefaultInstance() : scenario_;
+        }
+      }
+      /**
+       * <pre>
+       * Inputs used to run the scenario.
+       * </pre>
+       *
+       * <code>.grpc.testing.Scenario scenario = 1;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder> 
+          getScenarioFieldBuilder() {
+        if (scenarioBuilder_ == null) {
+          scenarioBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.Scenario, io.grpc.benchmarks.proto.Control.Scenario.Builder, io.grpc.benchmarks.proto.Control.ScenarioOrBuilder>(
+                  getScenario(),
+                  getParentForChildren(),
+                  isClean());
+          scenario_ = null;
+        }
+        return scenarioBuilder_;
+      }
+
+      private io.grpc.benchmarks.proto.Stats.HistogramData latencies_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> latenciesBuilder_;
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public boolean hasLatencies() {
+        return latenciesBuilder_ != null || latencies_ != null;
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.HistogramData getLatencies() {
+        if (latenciesBuilder_ == null) {
+          return latencies_ == null ? io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
+        } else {
+          return latenciesBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public Builder setLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
+        if (latenciesBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          latencies_ = value;
+          onChanged();
+        } else {
+          latenciesBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public Builder setLatencies(
+          io.grpc.benchmarks.proto.Stats.HistogramData.Builder builderForValue) {
+        if (latenciesBuilder_ == null) {
+          latencies_ = builderForValue.build();
+          onChanged();
+        } else {
+          latenciesBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public Builder mergeLatencies(io.grpc.benchmarks.proto.Stats.HistogramData value) {
+        if (latenciesBuilder_ == null) {
+          if (latencies_ != null) {
+            latencies_ =
+              io.grpc.benchmarks.proto.Stats.HistogramData.newBuilder(latencies_).mergeFrom(value).buildPartial();
+          } else {
+            latencies_ = value;
+          }
+          onChanged();
+        } else {
+          latenciesBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public Builder clearLatencies() {
+        if (latenciesBuilder_ == null) {
+          latencies_ = null;
+          onChanged();
+        } else {
+          latencies_ = null;
+          latenciesBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.HistogramData.Builder getLatenciesBuilder() {
+        
+        onChanged();
+        return getLatenciesFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder getLatenciesOrBuilder() {
+        if (latenciesBuilder_ != null) {
+          return latenciesBuilder_.getMessageOrBuilder();
+        } else {
+          return latencies_ == null ?
+              io.grpc.benchmarks.proto.Stats.HistogramData.getDefaultInstance() : latencies_;
+        }
+      }
+      /**
+       * <pre>
+       * Histograms from all clients merged into one histogram.
+       * </pre>
+       *
+       * <code>.grpc.testing.HistogramData latencies = 2;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder> 
+          getLatenciesFieldBuilder() {
+        if (latenciesBuilder_ == null) {
+          latenciesBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Stats.HistogramData, io.grpc.benchmarks.proto.Stats.HistogramData.Builder, io.grpc.benchmarks.proto.Stats.HistogramDataOrBuilder>(
+                  getLatencies(),
+                  getParentForChildren(),
+                  isClean());
+          latencies_ = null;
+        }
+        return latenciesBuilder_;
+      }
+
+      private java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats> clientStats_ =
+        java.util.Collections.emptyList();
+      private void ensureClientStatsIsMutable() {
+        if (!((bitField0_ & 0x00000004) == 0x00000004)) {
+          clientStats_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.ClientStats>(clientStats_);
+          bitField0_ |= 0x00000004;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> clientStatsBuilder_;
+
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats> getClientStatsList() {
+        if (clientStatsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(clientStats_);
+        } else {
+          return clientStatsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public int getClientStatsCount() {
+        if (clientStatsBuilder_ == null) {
+          return clientStats_.size();
+        } else {
+          return clientStatsBuilder_.getCount();
+        }
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ClientStats getClientStats(int index) {
+        if (clientStatsBuilder_ == null) {
+          return clientStats_.get(index);
+        } else {
+          return clientStatsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder setClientStats(
+          int index, io.grpc.benchmarks.proto.Stats.ClientStats value) {
+        if (clientStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureClientStatsIsMutable();
+          clientStats_.set(index, value);
+          onChanged();
+        } else {
+          clientStatsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder setClientStats(
+          int index, io.grpc.benchmarks.proto.Stats.ClientStats.Builder builderForValue) {
+        if (clientStatsBuilder_ == null) {
+          ensureClientStatsIsMutable();
+          clientStats_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          clientStatsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder addClientStats(io.grpc.benchmarks.proto.Stats.ClientStats value) {
+        if (clientStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureClientStatsIsMutable();
+          clientStats_.add(value);
+          onChanged();
+        } else {
+          clientStatsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder addClientStats(
+          int index, io.grpc.benchmarks.proto.Stats.ClientStats value) {
+        if (clientStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureClientStatsIsMutable();
+          clientStats_.add(index, value);
+          onChanged();
+        } else {
+          clientStatsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder addClientStats(
+          io.grpc.benchmarks.proto.Stats.ClientStats.Builder builderForValue) {
+        if (clientStatsBuilder_ == null) {
+          ensureClientStatsIsMutable();
+          clientStats_.add(builderForValue.build());
+          onChanged();
+        } else {
+          clientStatsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder addClientStats(
+          int index, io.grpc.benchmarks.proto.Stats.ClientStats.Builder builderForValue) {
+        if (clientStatsBuilder_ == null) {
+          ensureClientStatsIsMutable();
+          clientStats_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          clientStatsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder addAllClientStats(
+          java.lang.Iterable<? extends io.grpc.benchmarks.proto.Stats.ClientStats> values) {
+        if (clientStatsBuilder_ == null) {
+          ensureClientStatsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, clientStats_);
+          onChanged();
+        } else {
+          clientStatsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder clearClientStats() {
+        if (clientStatsBuilder_ == null) {
+          clientStats_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000004);
+          onChanged();
+        } else {
+          clientStatsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public Builder removeClientStats(int index) {
+        if (clientStatsBuilder_ == null) {
+          ensureClientStatsIsMutable();
+          clientStats_.remove(index);
+          onChanged();
+        } else {
+          clientStatsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ClientStats.Builder getClientStatsBuilder(
+          int index) {
+        return getClientStatsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder getClientStatsOrBuilder(
+          int index) {
+        if (clientStatsBuilder_ == null) {
+          return clientStats_.get(index);  } else {
+          return clientStatsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public java.util.List<? extends io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
+           getClientStatsOrBuilderList() {
+        if (clientStatsBuilder_ != null) {
+          return clientStatsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(clientStats_);
+        }
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ClientStats.Builder addClientStatsBuilder() {
+        return getClientStatsFieldBuilder().addBuilder(
+            io.grpc.benchmarks.proto.Stats.ClientStats.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ClientStats.Builder addClientStatsBuilder(
+          int index) {
+        return getClientStatsFieldBuilder().addBuilder(
+            index, io.grpc.benchmarks.proto.Stats.ClientStats.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Client stats for each client
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ClientStats client_stats = 3;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.ClientStats.Builder> 
+           getClientStatsBuilderList() {
+        return getClientStatsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder> 
+          getClientStatsFieldBuilder() {
+        if (clientStatsBuilder_ == null) {
+          clientStatsBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              io.grpc.benchmarks.proto.Stats.ClientStats, io.grpc.benchmarks.proto.Stats.ClientStats.Builder, io.grpc.benchmarks.proto.Stats.ClientStatsOrBuilder>(
+                  clientStats_,
+                  ((bitField0_ & 0x00000004) == 0x00000004),
+                  getParentForChildren(),
+                  isClean());
+          clientStats_ = null;
+        }
+        return clientStatsBuilder_;
+      }
+
+      private java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats> serverStats_ =
+        java.util.Collections.emptyList();
+      private void ensureServerStatsIsMutable() {
+        if (!((bitField0_ & 0x00000008) == 0x00000008)) {
+          serverStats_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.ServerStats>(serverStats_);
+          bitField0_ |= 0x00000008;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> serverStatsBuilder_;
+
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats> getServerStatsList() {
+        if (serverStatsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(serverStats_);
+        } else {
+          return serverStatsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public int getServerStatsCount() {
+        if (serverStatsBuilder_ == null) {
+          return serverStats_.size();
+        } else {
+          return serverStatsBuilder_.getCount();
+        }
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ServerStats getServerStats(int index) {
+        if (serverStatsBuilder_ == null) {
+          return serverStats_.get(index);
+        } else {
+          return serverStatsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder setServerStats(
+          int index, io.grpc.benchmarks.proto.Stats.ServerStats value) {
+        if (serverStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureServerStatsIsMutable();
+          serverStats_.set(index, value);
+          onChanged();
+        } else {
+          serverStatsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder setServerStats(
+          int index, io.grpc.benchmarks.proto.Stats.ServerStats.Builder builderForValue) {
+        if (serverStatsBuilder_ == null) {
+          ensureServerStatsIsMutable();
+          serverStats_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          serverStatsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder addServerStats(io.grpc.benchmarks.proto.Stats.ServerStats value) {
+        if (serverStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureServerStatsIsMutable();
+          serverStats_.add(value);
+          onChanged();
+        } else {
+          serverStatsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder addServerStats(
+          int index, io.grpc.benchmarks.proto.Stats.ServerStats value) {
+        if (serverStatsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureServerStatsIsMutable();
+          serverStats_.add(index, value);
+          onChanged();
+        } else {
+          serverStatsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder addServerStats(
+          io.grpc.benchmarks.proto.Stats.ServerStats.Builder builderForValue) {
+        if (serverStatsBuilder_ == null) {
+          ensureServerStatsIsMutable();
+          serverStats_.add(builderForValue.build());
+          onChanged();
+        } else {
+          serverStatsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder addServerStats(
+          int index, io.grpc.benchmarks.proto.Stats.ServerStats.Builder builderForValue) {
+        if (serverStatsBuilder_ == null) {
+          ensureServerStatsIsMutable();
+          serverStats_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          serverStatsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder addAllServerStats(
+          java.lang.Iterable<? extends io.grpc.benchmarks.proto.Stats.ServerStats> values) {
+        if (serverStatsBuilder_ == null) {
+          ensureServerStatsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, serverStats_);
+          onChanged();
+        } else {
+          serverStatsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder clearServerStats() {
+        if (serverStatsBuilder_ == null) {
+          serverStats_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000008);
+          onChanged();
+        } else {
+          serverStatsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public Builder removeServerStats(int index) {
+        if (serverStatsBuilder_ == null) {
+          ensureServerStatsIsMutable();
+          serverStats_.remove(index);
+          onChanged();
+        } else {
+          serverStatsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ServerStats.Builder getServerStatsBuilder(
+          int index) {
+        return getServerStatsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder getServerStatsOrBuilder(
+          int index) {
+        if (serverStatsBuilder_ == null) {
+          return serverStats_.get(index);  } else {
+          return serverStatsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public java.util.List<? extends io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
+           getServerStatsOrBuilderList() {
+        if (serverStatsBuilder_ != null) {
+          return serverStatsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(serverStats_);
+        }
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ServerStats.Builder addServerStatsBuilder() {
+        return getServerStatsFieldBuilder().addBuilder(
+            io.grpc.benchmarks.proto.Stats.ServerStats.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.ServerStats.Builder addServerStatsBuilder(
+          int index) {
+        return getServerStatsFieldBuilder().addBuilder(
+            index, io.grpc.benchmarks.proto.Stats.ServerStats.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Server stats for each server
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.ServerStats server_stats = 4;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.ServerStats.Builder> 
+           getServerStatsBuilderList() {
+        return getServerStatsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder> 
+          getServerStatsFieldBuilder() {
+        if (serverStatsBuilder_ == null) {
+          serverStatsBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              io.grpc.benchmarks.proto.Stats.ServerStats, io.grpc.benchmarks.proto.Stats.ServerStats.Builder, io.grpc.benchmarks.proto.Stats.ServerStatsOrBuilder>(
+                  serverStats_,
+                  ((bitField0_ & 0x00000008) == 0x00000008),
+                  getParentForChildren(),
+                  isClean());
+          serverStats_ = null;
+        }
+        return serverStatsBuilder_;
+      }
+
+      private java.util.List<java.lang.Integer> serverCores_ = java.util.Collections.emptyList();
+      private void ensureServerCoresIsMutable() {
+        if (!((bitField0_ & 0x00000010) == 0x00000010)) {
+          serverCores_ = new java.util.ArrayList<java.lang.Integer>(serverCores_);
+          bitField0_ |= 0x00000010;
+         }
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public java.util.List<java.lang.Integer>
+          getServerCoresList() {
+        return java.util.Collections.unmodifiableList(serverCores_);
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public int getServerCoresCount() {
+        return serverCores_.size();
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public int getServerCores(int index) {
+        return serverCores_.get(index);
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public Builder setServerCores(
+          int index, int value) {
+        ensureServerCoresIsMutable();
+        serverCores_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public Builder addServerCores(int value) {
+        ensureServerCoresIsMutable();
+        serverCores_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public Builder addAllServerCores(
+          java.lang.Iterable<? extends java.lang.Integer> values) {
+        ensureServerCoresIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, serverCores_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of cores available to each server
+       * </pre>
+       *
+       * <code>repeated int32 server_cores = 5;</code>
+       */
+      public Builder clearServerCores() {
+        serverCores_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000010);
+        onChanged();
+        return this;
+      }
+
+      private io.grpc.benchmarks.proto.Control.ScenarioResultSummary summary_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ScenarioResultSummary, io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder, io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder> summaryBuilder_;
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public boolean hasSummary() {
+        return summaryBuilder_ != null || summary_ != null;
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummary getSummary() {
+        if (summaryBuilder_ == null) {
+          return summary_ == null ? io.grpc.benchmarks.proto.Control.ScenarioResultSummary.getDefaultInstance() : summary_;
+        } else {
+          return summaryBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public Builder setSummary(io.grpc.benchmarks.proto.Control.ScenarioResultSummary value) {
+        if (summaryBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          summary_ = value;
+          onChanged();
+        } else {
+          summaryBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public Builder setSummary(
+          io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder builderForValue) {
+        if (summaryBuilder_ == null) {
+          summary_ = builderForValue.build();
+          onChanged();
+        } else {
+          summaryBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public Builder mergeSummary(io.grpc.benchmarks.proto.Control.ScenarioResultSummary value) {
+        if (summaryBuilder_ == null) {
+          if (summary_ != null) {
+            summary_ =
+              io.grpc.benchmarks.proto.Control.ScenarioResultSummary.newBuilder(summary_).mergeFrom(value).buildPartial();
+          } else {
+            summary_ = value;
+          }
+          onChanged();
+        } else {
+          summaryBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public Builder clearSummary() {
+        if (summaryBuilder_ == null) {
+          summary_ = null;
+          onChanged();
+        } else {
+          summary_ = null;
+          summaryBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder getSummaryBuilder() {
+        
+        onChanged();
+        return getSummaryFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      public io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder getSummaryOrBuilder() {
+        if (summaryBuilder_ != null) {
+          return summaryBuilder_.getMessageOrBuilder();
+        } else {
+          return summary_ == null ?
+              io.grpc.benchmarks.proto.Control.ScenarioResultSummary.getDefaultInstance() : summary_;
+        }
+      }
+      /**
+       * <pre>
+       * An after-the-fact computed summary
+       * </pre>
+       *
+       * <code>.grpc.testing.ScenarioResultSummary summary = 6;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Control.ScenarioResultSummary, io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder, io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder> 
+          getSummaryFieldBuilder() {
+        if (summaryBuilder_ == null) {
+          summaryBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Control.ScenarioResultSummary, io.grpc.benchmarks.proto.Control.ScenarioResultSummary.Builder, io.grpc.benchmarks.proto.Control.ScenarioResultSummaryOrBuilder>(
+                  getSummary(),
+                  getParentForChildren(),
+                  isClean());
+          summary_ = null;
+        }
+        return summaryBuilder_;
+      }
+
+      private java.util.List<java.lang.Boolean> clientSuccess_ = java.util.Collections.emptyList();
+      private void ensureClientSuccessIsMutable() {
+        if (!((bitField0_ & 0x00000040) == 0x00000040)) {
+          clientSuccess_ = new java.util.ArrayList<java.lang.Boolean>(clientSuccess_);
+          bitField0_ |= 0x00000040;
+         }
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public java.util.List<java.lang.Boolean>
+          getClientSuccessList() {
+        return java.util.Collections.unmodifiableList(clientSuccess_);
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public int getClientSuccessCount() {
+        return clientSuccess_.size();
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public boolean getClientSuccess(int index) {
+        return clientSuccess_.get(index);
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public Builder setClientSuccess(
+          int index, boolean value) {
+        ensureClientSuccessIsMutable();
+        clientSuccess_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public Builder addClientSuccess(boolean value) {
+        ensureClientSuccessIsMutable();
+        clientSuccess_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public Builder addAllClientSuccess(
+          java.lang.Iterable<? extends java.lang.Boolean> values) {
+        ensureClientSuccessIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, clientSuccess_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * Information on success or failure of each worker
+       * </pre>
+       *
+       * <code>repeated bool client_success = 7;</code>
+       */
+      public Builder clearClientSuccess() {
+        clientSuccess_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000040);
+        onChanged();
+        return this;
+      }
+
+      private java.util.List<java.lang.Boolean> serverSuccess_ = java.util.Collections.emptyList();
+      private void ensureServerSuccessIsMutable() {
+        if (!((bitField0_ & 0x00000080) == 0x00000080)) {
+          serverSuccess_ = new java.util.ArrayList<java.lang.Boolean>(serverSuccess_);
+          bitField0_ |= 0x00000080;
+         }
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public java.util.List<java.lang.Boolean>
+          getServerSuccessList() {
+        return java.util.Collections.unmodifiableList(serverSuccess_);
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public int getServerSuccessCount() {
+        return serverSuccess_.size();
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public boolean getServerSuccess(int index) {
+        return serverSuccess_.get(index);
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public Builder setServerSuccess(
+          int index, boolean value) {
+        ensureServerSuccessIsMutable();
+        serverSuccess_.set(index, value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public Builder addServerSuccess(boolean value) {
+        ensureServerSuccessIsMutable();
+        serverSuccess_.add(value);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public Builder addAllServerSuccess(
+          java.lang.Iterable<? extends java.lang.Boolean> values) {
+        ensureServerSuccessIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, serverSuccess_);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>repeated bool server_success = 8;</code>
+       */
+      public Builder clearServerSuccess() {
+        serverSuccess_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000080);
+        onChanged();
+        return this;
+      }
+
+      private java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount> requestResults_ =
+        java.util.Collections.emptyList();
+      private void ensureRequestResultsIsMutable() {
+        if (!((bitField0_ & 0x00000100) == 0x00000100)) {
+          requestResults_ = new java.util.ArrayList<io.grpc.benchmarks.proto.Stats.RequestResultCount>(requestResults_);
+          bitField0_ |= 0x00000100;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.RequestResultCount, io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder, io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder> requestResultsBuilder_;
+
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount> getRequestResultsList() {
+        if (requestResultsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(requestResults_);
+        } else {
+          return requestResultsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public int getRequestResultsCount() {
+        if (requestResultsBuilder_ == null) {
+          return requestResults_.size();
+        } else {
+          return requestResultsBuilder_.getCount();
+        }
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.RequestResultCount getRequestResults(int index) {
+        if (requestResultsBuilder_ == null) {
+          return requestResults_.get(index);
+        } else {
+          return requestResultsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder setRequestResults(
+          int index, io.grpc.benchmarks.proto.Stats.RequestResultCount value) {
+        if (requestResultsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureRequestResultsIsMutable();
+          requestResults_.set(index, value);
+          onChanged();
+        } else {
+          requestResultsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder setRequestResults(
+          int index, io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder builderForValue) {
+        if (requestResultsBuilder_ == null) {
+          ensureRequestResultsIsMutable();
+          requestResults_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          requestResultsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder addRequestResults(io.grpc.benchmarks.proto.Stats.RequestResultCount value) {
+        if (requestResultsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureRequestResultsIsMutable();
+          requestResults_.add(value);
+          onChanged();
+        } else {
+          requestResultsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder addRequestResults(
+          int index, io.grpc.benchmarks.proto.Stats.RequestResultCount value) {
+        if (requestResultsBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          ensureRequestResultsIsMutable();
+          requestResults_.add(index, value);
+          onChanged();
+        } else {
+          requestResultsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder addRequestResults(
+          io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder builderForValue) {
+        if (requestResultsBuilder_ == null) {
+          ensureRequestResultsIsMutable();
+          requestResults_.add(builderForValue.build());
+          onChanged();
+        } else {
+          requestResultsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder addRequestResults(
+          int index, io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder builderForValue) {
+        if (requestResultsBuilder_ == null) {
+          ensureRequestResultsIsMutable();
+          requestResults_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          requestResultsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder addAllRequestResults(
+          java.lang.Iterable<? extends io.grpc.benchmarks.proto.Stats.RequestResultCount> values) {
+        if (requestResultsBuilder_ == null) {
+          ensureRequestResultsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, requestResults_);
+          onChanged();
+        } else {
+          requestResultsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder clearRequestResults() {
+        if (requestResultsBuilder_ == null) {
+          requestResults_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000100);
+          onChanged();
+        } else {
+          requestResultsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public Builder removeRequestResults(int index) {
+        if (requestResultsBuilder_ == null) {
+          ensureRequestResultsIsMutable();
+          requestResults_.remove(index);
+          onChanged();
+        } else {
+          requestResultsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder getRequestResultsBuilder(
+          int index) {
+        return getRequestResultsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder getRequestResultsOrBuilder(
+          int index) {
+        if (requestResultsBuilder_ == null) {
+          return requestResults_.get(index);  } else {
+          return requestResultsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public java.util.List<? extends io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder> 
+           getRequestResultsOrBuilderList() {
+        if (requestResultsBuilder_ != null) {
+          return requestResultsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(requestResults_);
+        }
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder addRequestResultsBuilder() {
+        return getRequestResultsFieldBuilder().addBuilder(
+            io.grpc.benchmarks.proto.Stats.RequestResultCount.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder addRequestResultsBuilder(
+          int index) {
+        return getRequestResultsFieldBuilder().addBuilder(
+            index, io.grpc.benchmarks.proto.Stats.RequestResultCount.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Number of failed requests (one row per status code seen)
+       * </pre>
+       *
+       * <code>repeated .grpc.testing.RequestResultCount request_results = 9;</code>
+       */
+      public java.util.List<io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder> 
+           getRequestResultsBuilderList() {
+        return getRequestResultsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilderV3<
+          io.grpc.benchmarks.proto.Stats.RequestResultCount, io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder, io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder> 
+          getRequestResultsFieldBuilder() {
+        if (requestResultsBuilder_ == null) {
+          requestResultsBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+              io.grpc.benchmarks.proto.Stats.RequestResultCount, io.grpc.benchmarks.proto.Stats.RequestResultCount.Builder, io.grpc.benchmarks.proto.Stats.RequestResultCountOrBuilder>(
+                  requestResults_,
+                  ((bitField0_ & 0x00000100) == 0x00000100),
+                  getParentForChildren(),
+                  isClean());
+          requestResults_ = null;
+        }
+        return requestResultsBuilder_;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ScenarioResult)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ScenarioResult)
+    private static final io.grpc.benchmarks.proto.Control.ScenarioResult DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Control.ScenarioResult();
+    }
+
+    public static io.grpc.benchmarks.proto.Control.ScenarioResult getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ScenarioResult>
+        PARSER = new com.google.protobuf.AbstractParser<ScenarioResult>() {
+      public ScenarioResult parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new ScenarioResult(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<ScenarioResult> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ScenarioResult> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Control.ScenarioResult getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_PoissonParams_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_PoissonParams_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_UniformParams_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_grpc_testing_UniformParams_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_DeterministicParams_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_grpc_testing_DeterministicParams_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_grpc_testing_ParetoParams_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
-      internal_static_grpc_testing_ParetoParams_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClosedLoopParams_descriptor;
   private static final 
@@ -12997,6 +19817,11 @@ public final class Control {
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_SecurityParams_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ChannelArg_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_ChannelArg_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ClientConfig_descriptor;
   private static final 
@@ -13047,6 +19872,26 @@ public final class Control {
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_Void_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_Scenario_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_Scenario_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_Scenarios_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_Scenarios_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ScenarioResultSummary_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_ScenarioResultSummary_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ScenarioResult_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_ScenarioResult_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -13058,54 +19903,84 @@ public final class Control {
     java.lang.String[] descriptorData = {
       "\n\rcontrol.proto\022\014grpc.testing\032\016payloads." +
       "proto\032\013stats.proto\"%\n\rPoissonParams\022\024\n\014o" +
-      "ffered_load\030\001 \001(\001\"A\n\rUniformParams\022\027\n\017in" +
-      "terarrival_lo\030\001 \001(\001\022\027\n\017interarrival_hi\030\002" +
-      " \001(\001\"+\n\023DeterministicParams\022\024\n\014offered_l" +
-      "oad\030\001 \001(\001\"8\n\014ParetoParams\022\031\n\021interarriva" +
-      "l_base\030\001 \001(\001\022\r\n\005alpha\030\002 \001(\001\"\022\n\020ClosedLoo" +
-      "pParams\"\216\002\n\nLoadParams\0225\n\013closed_loop\030\001 " +
-      "\001(\0132\036.grpc.testing.ClosedLoopParamsH\000\022.\n" +
-      "\007poisson\030\002 \001(\0132\033.grpc.testing.PoissonPar",
-      "amsH\000\022.\n\007uniform\030\003 \001(\0132\033.grpc.testing.Un" +
-      "iformParamsH\000\0223\n\006determ\030\004 \001(\0132!.grpc.tes" +
-      "ting.DeterministicParamsH\000\022,\n\006pareto\030\005 \001" +
-      "(\0132\032.grpc.testing.ParetoParamsH\000B\006\n\004load" +
-      "\"C\n\016SecurityParams\022\023\n\013use_test_ca\030\001 \001(\010\022" +
-      "\034\n\024server_host_override\030\002 \001(\t\"\326\003\n\014Client" +
-      "Config\022\026\n\016server_targets\030\001 \003(\t\022-\n\013client" +
-      "_type\030\002 \001(\0162\030.grpc.testing.ClientType\0225\n" +
-      "\017security_params\030\003 \001(\0132\034.grpc.testing.Se" +
-      "curityParams\022$\n\034outstanding_rpcs_per_cha",
-      "nnel\030\004 \001(\005\022\027\n\017client_channels\030\005 \001(\005\022\034\n\024a" +
-      "sync_client_threads\030\007 \001(\005\022\'\n\010rpc_type\030\010 " +
-      "\001(\0162\025.grpc.testing.RpcType\022-\n\013load_param" +
-      "s\030\n \001(\0132\030.grpc.testing.LoadParams\0223\n\016pay" +
-      "load_config\030\013 \001(\0132\033.grpc.testing.Payload" +
-      "Config\0227\n\020histogram_params\030\014 \001(\0132\035.grpc." +
-      "testing.HistogramParams\022\021\n\tcore_list\030\r \003" +
-      "(\005\022\022\n\ncore_limit\030\016 \001(\005\"8\n\014ClientStatus\022(" +
-      "\n\005stats\030\001 \001(\0132\031.grpc.testing.ClientStats" +
-      "\"\025\n\004Mark\022\r\n\005reset\030\001 \001(\010\"h\n\nClientArgs\022+\n",
-      "\005setup\030\001 \001(\0132\032.grpc.testing.ClientConfig" +
-      "H\000\022\"\n\004mark\030\002 \001(\0132\022.grpc.testing.MarkH\000B\t" +
-      "\n\007argtype\"\374\001\n\014ServerConfig\022-\n\013server_typ" +
-      "e\030\001 \001(\0162\030.grpc.testing.ServerType\0225\n\017sec" +
-      "urity_params\030\002 \001(\0132\034.grpc.testing.Securi" +
-      "tyParams\022\014\n\004port\030\004 \001(\005\022\034\n\024async_server_t" +
-      "hreads\030\007 \001(\005\022\022\n\ncore_limit\030\010 \001(\005\0223\n\016payl" +
-      "oad_config\030\t \001(\0132\033.grpc.testing.PayloadC" +
-      "onfig\022\021\n\tcore_list\030\n \003(\005\"h\n\nServerArgs\022+" +
-      "\n\005setup\030\001 \001(\0132\032.grpc.testing.ServerConfi",
+      "ffered_load\030\001 \001(\001\"\022\n\020ClosedLoopParams\"{\n" +
+      "\nLoadParams\0225\n\013closed_loop\030\001 \001(\0132\036.grpc." +
+      "testing.ClosedLoopParamsH\000\022.\n\007poisson\030\002 " +
+      "\001(\0132\033.grpc.testing.PoissonParamsH\000B\006\n\004lo" +
+      "ad\"C\n\016SecurityParams\022\023\n\013use_test_ca\030\001 \001(" +
+      "\010\022\034\n\024server_host_override\030\002 \001(\t\"M\n\nChann" +
+      "elArg\022\014\n\004name\030\001 \001(\t\022\023\n\tstr_value\030\002 \001(\tH\000" +
+      "\022\023\n\tint_value\030\003 \001(\005H\000B\007\n\005value\"\275\004\n\014Clien",
+      "tConfig\022\026\n\016server_targets\030\001 \003(\t\022-\n\013clien" +
+      "t_type\030\002 \001(\0162\030.grpc.testing.ClientType\0225" +
+      "\n\017security_params\030\003 \001(\0132\034.grpc.testing.S" +
+      "ecurityParams\022$\n\034outstanding_rpcs_per_ch" +
+      "annel\030\004 \001(\005\022\027\n\017client_channels\030\005 \001(\005\022\034\n\024" +
+      "async_client_threads\030\007 \001(\005\022\'\n\010rpc_type\030\010" +
+      " \001(\0162\025.grpc.testing.RpcType\022-\n\013load_para" +
+      "ms\030\n \001(\0132\030.grpc.testing.LoadParams\0223\n\016pa" +
+      "yload_config\030\013 \001(\0132\033.grpc.testing.Payloa" +
+      "dConfig\0227\n\020histogram_params\030\014 \001(\0132\035.grpc",
+      ".testing.HistogramParams\022\021\n\tcore_list\030\r " +
+      "\003(\005\022\022\n\ncore_limit\030\016 \001(\005\022\030\n\020other_client_" +
+      "api\030\017 \001(\t\022.\n\014channel_args\030\020 \003(\0132\030.grpc.t" +
+      "esting.ChannelArg\022\033\n\023messages_per_stream" +
+      "\030\022 \001(\005\"8\n\014ClientStatus\022(\n\005stats\030\001 \001(\0132\031." +
+      "grpc.testing.ClientStats\"\025\n\004Mark\022\r\n\005rese" +
+      "t\030\001 \001(\010\"h\n\nClientArgs\022+\n\005setup\030\001 \001(\0132\032.g" +
+      "rpc.testing.ClientConfigH\000\022\"\n\004mark\030\002 \001(\013" +
+      "2\022.grpc.testing.MarkH\000B\t\n\007argtype\"\264\002\n\014Se" +
+      "rverConfig\022-\n\013server_type\030\001 \001(\0162\030.grpc.t",
+      "esting.ServerType\0225\n\017security_params\030\002 \001" +
+      "(\0132\034.grpc.testing.SecurityParams\022\014\n\004port" +
+      "\030\004 \001(\005\022\034\n\024async_server_threads\030\007 \001(\005\022\022\n\n" +
+      "core_limit\030\010 \001(\005\0223\n\016payload_config\030\t \001(\013" +
+      "2\033.grpc.testing.PayloadConfig\022\021\n\tcore_li" +
+      "st\030\n \003(\005\022\030\n\020other_server_api\030\013 \001(\t\022\034\n\023re" +
+      "source_quota_size\030\351\007 \001(\005\"h\n\nServerArgs\022+" +
+      "\n\005setup\030\001 \001(\0132\032.grpc.testing.ServerConfi" +
       "gH\000\022\"\n\004mark\030\002 \001(\0132\022.grpc.testing.MarkH\000B" +
-      "\t\n\007argtype\"U\n\014ServerStatus\022(\n\005stats\030\001 \001(" +
+      "\t\n\007argtype\"U\n\014ServerStatus\022(\n\005stats\030\001 \001(",
       "\0132\031.grpc.testing.ServerStats\022\014\n\004port\030\002 \001" +
       "(\005\022\r\n\005cores\030\003 \001(\005\"\r\n\013CoreRequest\"\035\n\014Core" +
-      "Response\022\r\n\005cores\030\001 \001(\005\"\006\n\004Void*/\n\nClien" +
-      "tType\022\017\n\013SYNC_CLIENT\020\000\022\020\n\014ASYNC_CLIENT\020\001" +
-      "*I\n\nServerType\022\017\n\013SYNC_SERVER\020\000\022\020\n\014ASYNC" +
-      "_SERVER\020\001\022\030\n\024ASYNC_GENERIC_SERVER\020\002*#\n\007R" +
-      "pcType\022\t\n\005UNARY\020\000\022\r\n\tSTREAMING\020\001B#\n\030io.g" +
-      "rpc.benchmarks.protoB\007Controlb\006proto3"
+      "Response\022\r\n\005cores\030\001 \001(\005\"\006\n\004Void\"\375\001\n\010Scen" +
+      "ario\022\014\n\004name\030\001 \001(\t\0221\n\rclient_config\030\002 \001(" +
+      "\0132\032.grpc.testing.ClientConfig\022\023\n\013num_cli" +
+      "ents\030\003 \001(\005\0221\n\rserver_config\030\004 \001(\0132\032.grpc" +
+      ".testing.ServerConfig\022\023\n\013num_servers\030\005 \001" +
+      "(\005\022\026\n\016warmup_seconds\030\006 \001(\005\022\031\n\021benchmark_" +
+      "seconds\030\007 \001(\005\022 \n\030spawn_local_worker_coun" +
+      "t\030\010 \001(\005\"6\n\tScenarios\022)\n\tscenarios\030\001 \003(\0132",
+      "\026.grpc.testing.Scenario\"\274\003\n\025ScenarioResu" +
+      "ltSummary\022\013\n\003qps\030\001 \001(\001\022\033\n\023qps_per_server" +
+      "_core\030\002 \001(\001\022\032\n\022server_system_time\030\003 \001(\001\022" +
+      "\030\n\020server_user_time\030\004 \001(\001\022\032\n\022client_syst" +
+      "em_time\030\005 \001(\001\022\030\n\020client_user_time\030\006 \001(\001\022" +
+      "\022\n\nlatency_50\030\007 \001(\001\022\022\n\nlatency_90\030\010 \001(\001\022" +
+      "\022\n\nlatency_95\030\t \001(\001\022\022\n\nlatency_99\030\n \001(\001\022" +
+      "\023\n\013latency_999\030\013 \001(\001\022\030\n\020server_cpu_usage" +
+      "\030\014 \001(\001\022&\n\036successful_requests_per_second" +
+      "\030\r \001(\001\022\"\n\032failed_requests_per_second\030\016 \001",
+      "(\001\022 \n\030client_polls_per_request\030\017 \001(\001\022 \n\030" +
+      "server_polls_per_request\030\020 \001(\001\"\203\003\n\016Scena" +
+      "rioResult\022(\n\010scenario\030\001 \001(\0132\026.grpc.testi" +
+      "ng.Scenario\022.\n\tlatencies\030\002 \001(\0132\033.grpc.te" +
+      "sting.HistogramData\022/\n\014client_stats\030\003 \003(" +
+      "\0132\031.grpc.testing.ClientStats\022/\n\014server_s" +
+      "tats\030\004 \003(\0132\031.grpc.testing.ServerStats\022\024\n" +
+      "\014server_cores\030\005 \003(\005\0224\n\007summary\030\006 \001(\0132#.g" +
+      "rpc.testing.ScenarioResultSummary\022\026\n\016cli" +
+      "ent_success\030\007 \003(\010\022\026\n\016server_success\030\010 \003(",
+      "\010\0229\n\017request_results\030\t \003(\0132 .grpc.testin" +
+      "g.RequestResultCount*A\n\nClientType\022\017\n\013SY" +
+      "NC_CLIENT\020\000\022\020\n\014ASYNC_CLIENT\020\001\022\020\n\014OTHER_C" +
+      "LIENT\020\002*[\n\nServerType\022\017\n\013SYNC_SERVER\020\000\022\020" +
+      "\n\014ASYNC_SERVER\020\001\022\030\n\024ASYNC_GENERIC_SERVER" +
+      "\020\002\022\020\n\014OTHER_SERVER\020\003*r\n\007RpcType\022\t\n\005UNARY" +
+      "\020\000\022\r\n\tSTREAMING\020\001\022\031\n\025STREAMING_FROM_CLIE" +
+      "NT\020\002\022\031\n\025STREAMING_FROM_SERVER\020\003\022\027\n\023STREA" +
+      "MING_BOTH_WAYS\020\004B#\n\030io.grpc.benchmarks.p" +
+      "rotoB\007Controlb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -13127,102 +20002,114 @@ public final class Control {
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_PoissonParams_descriptor,
         new java.lang.String[] { "OfferedLoad", });
-    internal_static_grpc_testing_UniformParams_descriptor =
-      getDescriptor().getMessageTypes().get(1);
-    internal_static_grpc_testing_UniformParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_grpc_testing_UniformParams_descriptor,
-        new java.lang.String[] { "InterarrivalLo", "InterarrivalHi", });
-    internal_static_grpc_testing_DeterministicParams_descriptor =
-      getDescriptor().getMessageTypes().get(2);
-    internal_static_grpc_testing_DeterministicParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_grpc_testing_DeterministicParams_descriptor,
-        new java.lang.String[] { "OfferedLoad", });
-    internal_static_grpc_testing_ParetoParams_descriptor =
-      getDescriptor().getMessageTypes().get(3);
-    internal_static_grpc_testing_ParetoParams_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
-        internal_static_grpc_testing_ParetoParams_descriptor,
-        new java.lang.String[] { "InterarrivalBase", "Alpha", });
     internal_static_grpc_testing_ClosedLoopParams_descriptor =
-      getDescriptor().getMessageTypes().get(4);
+      getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_testing_ClosedLoopParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClosedLoopParams_descriptor,
         new java.lang.String[] { });
     internal_static_grpc_testing_LoadParams_descriptor =
-      getDescriptor().getMessageTypes().get(5);
+      getDescriptor().getMessageTypes().get(2);
     internal_static_grpc_testing_LoadParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_LoadParams_descriptor,
-        new java.lang.String[] { "ClosedLoop", "Poisson", "Uniform", "Determ", "Pareto", "Load", });
+        new java.lang.String[] { "ClosedLoop", "Poisson", "Load", });
     internal_static_grpc_testing_SecurityParams_descriptor =
-      getDescriptor().getMessageTypes().get(6);
+      getDescriptor().getMessageTypes().get(3);
     internal_static_grpc_testing_SecurityParams_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SecurityParams_descriptor,
         new java.lang.String[] { "UseTestCa", "ServerHostOverride", });
+    internal_static_grpc_testing_ChannelArg_descriptor =
+      getDescriptor().getMessageTypes().get(4);
+    internal_static_grpc_testing_ChannelArg_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_ChannelArg_descriptor,
+        new java.lang.String[] { "Name", "StrValue", "IntValue", "Value", });
     internal_static_grpc_testing_ClientConfig_descriptor =
-      getDescriptor().getMessageTypes().get(7);
+      getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_testing_ClientConfig_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientConfig_descriptor,
-        new java.lang.String[] { "ServerTargets", "ClientType", "SecurityParams", "OutstandingRpcsPerChannel", "ClientChannels", "AsyncClientThreads", "RpcType", "LoadParams", "PayloadConfig", "HistogramParams", "CoreList", "CoreLimit", });
+        new java.lang.String[] { "ServerTargets", "ClientType", "SecurityParams", "OutstandingRpcsPerChannel", "ClientChannels", "AsyncClientThreads", "RpcType", "LoadParams", "PayloadConfig", "HistogramParams", "CoreList", "CoreLimit", "OtherClientApi", "ChannelArgs", "MessagesPerStream", });
     internal_static_grpc_testing_ClientStatus_descriptor =
-      getDescriptor().getMessageTypes().get(8);
+      getDescriptor().getMessageTypes().get(6);
     internal_static_grpc_testing_ClientStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientStatus_descriptor,
         new java.lang.String[] { "Stats", });
     internal_static_grpc_testing_Mark_descriptor =
-      getDescriptor().getMessageTypes().get(9);
+      getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_testing_Mark_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_Mark_descriptor,
         new java.lang.String[] { "Reset", });
     internal_static_grpc_testing_ClientArgs_descriptor =
-      getDescriptor().getMessageTypes().get(10);
+      getDescriptor().getMessageTypes().get(8);
     internal_static_grpc_testing_ClientArgs_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ClientArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
     internal_static_grpc_testing_ServerConfig_descriptor =
-      getDescriptor().getMessageTypes().get(11);
+      getDescriptor().getMessageTypes().get(9);
     internal_static_grpc_testing_ServerConfig_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerConfig_descriptor,
-        new java.lang.String[] { "ServerType", "SecurityParams", "Port", "AsyncServerThreads", "CoreLimit", "PayloadConfig", "CoreList", });
+        new java.lang.String[] { "ServerType", "SecurityParams", "Port", "AsyncServerThreads", "CoreLimit", "PayloadConfig", "CoreList", "OtherServerApi", "ResourceQuotaSize", });
     internal_static_grpc_testing_ServerArgs_descriptor =
-      getDescriptor().getMessageTypes().get(12);
+      getDescriptor().getMessageTypes().get(10);
     internal_static_grpc_testing_ServerArgs_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerArgs_descriptor,
         new java.lang.String[] { "Setup", "Mark", "Argtype", });
     internal_static_grpc_testing_ServerStatus_descriptor =
-      getDescriptor().getMessageTypes().get(13);
+      getDescriptor().getMessageTypes().get(11);
     internal_static_grpc_testing_ServerStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ServerStatus_descriptor,
         new java.lang.String[] { "Stats", "Port", "Cores", });
     internal_static_grpc_testing_CoreRequest_descriptor =
-      getDescriptor().getMessageTypes().get(14);
+      getDescriptor().getMessageTypes().get(12);
     internal_static_grpc_testing_CoreRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_CoreRequest_descriptor,
         new java.lang.String[] { });
     internal_static_grpc_testing_CoreResponse_descriptor =
-      getDescriptor().getMessageTypes().get(15);
+      getDescriptor().getMessageTypes().get(13);
     internal_static_grpc_testing_CoreResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_CoreResponse_descriptor,
         new java.lang.String[] { "Cores", });
     internal_static_grpc_testing_Void_descriptor =
-      getDescriptor().getMessageTypes().get(16);
+      getDescriptor().getMessageTypes().get(14);
     internal_static_grpc_testing_Void_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_Void_descriptor,
         new java.lang.String[] { });
+    internal_static_grpc_testing_Scenario_descriptor =
+      getDescriptor().getMessageTypes().get(15);
+    internal_static_grpc_testing_Scenario_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_Scenario_descriptor,
+        new java.lang.String[] { "Name", "ClientConfig", "NumClients", "ServerConfig", "NumServers", "WarmupSeconds", "BenchmarkSeconds", "SpawnLocalWorkerCount", });
+    internal_static_grpc_testing_Scenarios_descriptor =
+      getDescriptor().getMessageTypes().get(16);
+    internal_static_grpc_testing_Scenarios_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_Scenarios_descriptor,
+        new java.lang.String[] { "Scenarios", });
+    internal_static_grpc_testing_ScenarioResultSummary_descriptor =
+      getDescriptor().getMessageTypes().get(17);
+    internal_static_grpc_testing_ScenarioResultSummary_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_ScenarioResultSummary_descriptor,
+        new java.lang.String[] { "Qps", "QpsPerServerCore", "ServerSystemTime", "ServerUserTime", "ClientSystemTime", "ClientUserTime", "Latency50", "Latency90", "Latency95", "Latency99", "Latency999", "ServerCpuUsage", "SuccessfulRequestsPerSecond", "FailedRequestsPerSecond", "ClientPollsPerRequest", "ServerPollsPerRequest", });
+    internal_static_grpc_testing_ScenarioResult_descriptor =
+      getDescriptor().getMessageTypes().get(18);
+    internal_static_grpc_testing_ScenarioResult_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_ScenarioResult_descriptor,
+        new java.lang.String[] { "Scenario", "Latencies", "ClientStats", "ServerStats", "ServerCores", "Summary", "ClientSuccess", "ServerSuccess", "RequestResults", });
     io.grpc.benchmarks.proto.Payloads.getDescriptor();
     io.grpc.benchmarks.proto.Stats.getDescriptor();
   }

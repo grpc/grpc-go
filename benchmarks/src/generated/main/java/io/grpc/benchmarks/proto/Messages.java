@@ -16,6 +16,7 @@ public final class Messages {
   }
   /**
    * <pre>
+   * DEPRECATED, don't use. To be removed shortly.
    * The type of payload that should be returned.
    * </pre>
    *
@@ -31,22 +32,6 @@ public final class Messages {
      * <code>COMPRESSABLE = 0;</code>
      */
     COMPRESSABLE(0),
-    /**
-     * <pre>
-     * Uncompressable binary format.
-     * </pre>
-     *
-     * <code>UNCOMPRESSABLE = 1;</code>
-     */
-    UNCOMPRESSABLE(1),
-    /**
-     * <pre>
-     * Randomly chosen from all other formats defined in this enum.
-     * </pre>
-     *
-     * <code>RANDOM = 2;</code>
-     */
-    RANDOM(2),
     UNRECOGNIZED(-1),
     ;
 
@@ -58,22 +43,6 @@ public final class Messages {
      * <code>COMPRESSABLE = 0;</code>
      */
     public static final int COMPRESSABLE_VALUE = 0;
-    /**
-     * <pre>
-     * Uncompressable binary format.
-     * </pre>
-     *
-     * <code>UNCOMPRESSABLE = 1;</code>
-     */
-    public static final int UNCOMPRESSABLE_VALUE = 1;
-    /**
-     * <pre>
-     * Randomly chosen from all other formats defined in this enum.
-     * </pre>
-     *
-     * <code>RANDOM = 2;</code>
-     */
-    public static final int RANDOM_VALUE = 2;
 
 
     public final int getNumber() {
@@ -95,8 +64,6 @@ public final class Messages {
     public static PayloadType forNumber(int value) {
       switch (value) {
         case 0: return COMPRESSABLE;
-        case 1: return UNCOMPRESSABLE;
-        case 2: return RANDOM;
         default: return null;
       }
     }
@@ -149,123 +116,477 @@ public final class Messages {
     // @@protoc_insertion_point(enum_scope:grpc.testing.PayloadType)
   }
 
+  public interface BoolValueOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.BoolValue)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <pre>
+     * The bool value.
+     * </pre>
+     *
+     * <code>bool value = 1;</code>
+     */
+    boolean getValue();
+  }
   /**
    * <pre>
-   * Compression algorithms
+   * TODO(dgq): Go back to using well-known types once
+   * https://github.com/grpc/grpc/issues/6980 has been fixed.
+   * import "google/protobuf/wrappers.proto";
    * </pre>
    *
-   * Protobuf enum {@code grpc.testing.CompressionType}
+   * Protobuf type {@code grpc.testing.BoolValue}
    */
-  public enum CompressionType
-      implements com.google.protobuf.ProtocolMessageEnum {
-    /**
-     * <pre>
-     * No compression
-     * </pre>
-     *
-     * <code>NONE = 0;</code>
-     */
-    NONE(0),
-    /**
-     * <code>GZIP = 1;</code>
-     */
-    GZIP(1),
-    /**
-     * <code>DEFLATE = 2;</code>
-     */
-    DEFLATE(2),
-    UNRECOGNIZED(-1),
-    ;
-
-    /**
-     * <pre>
-     * No compression
-     * </pre>
-     *
-     * <code>NONE = 0;</code>
-     */
-    public static final int NONE_VALUE = 0;
-    /**
-     * <code>GZIP = 1;</code>
-     */
-    public static final int GZIP_VALUE = 1;
-    /**
-     * <code>DEFLATE = 2;</code>
-     */
-    public static final int DEFLATE_VALUE = 2;
-
-
-    public final int getNumber() {
-      if (this == UNRECOGNIZED) {
-        throw new java.lang.IllegalArgumentException(
-            "Can't get the number of an unknown enum value.");
-      }
-      return value;
+  public  static final class BoolValue extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.BoolValue)
+      BoolValueOrBuilder {
+    // Use BoolValue.newBuilder() to construct.
+    private BoolValue(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private BoolValue() {
+      value_ = false;
     }
 
-    /**
-     * @deprecated Use {@link #forNumber(int)} instead.
-     */
-    @java.lang.Deprecated
-    public static CompressionType valueOf(int value) {
-      return forNumber(value);
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
     }
-
-    public static CompressionType forNumber(int value) {
-      switch (value) {
-        case 0: return NONE;
-        case 1: return GZIP;
-        case 2: return DEFLATE;
-        default: return null;
-      }
-    }
-
-    public static com.google.protobuf.Internal.EnumLiteMap<CompressionType>
-        internalGetValueMap() {
-      return internalValueMap;
-    }
-    private static final com.google.protobuf.Internal.EnumLiteMap<
-        CompressionType> internalValueMap =
-          new com.google.protobuf.Internal.EnumLiteMap<CompressionType>() {
-            public CompressionType findValueByNumber(int number) {
-              return CompressionType.forNumber(number);
+    private BoolValue(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
             }
-          };
+            case 8: {
 
-    public final com.google.protobuf.Descriptors.EnumValueDescriptor
-        getValueDescriptor() {
-      return getDescriptor().getValues().get(ordinal());
+              value_ = input.readBool();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
     }
-    public final com.google.protobuf.Descriptors.EnumDescriptor
-        getDescriptorForType() {
-      return getDescriptor();
-    }
-    public static final com.google.protobuf.Descriptors.EnumDescriptor
+    public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.benchmarks.proto.Messages.getDescriptor().getEnumTypes().get(1);
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_BoolValue_descriptor;
     }
 
-    private static final CompressionType[] VALUES = values();
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_BoolValue_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Messages.BoolValue.class, io.grpc.benchmarks.proto.Messages.BoolValue.Builder.class);
+    }
 
-    public static CompressionType valueOf(
-        com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
-      if (desc.getType() != getDescriptor()) {
-        throw new java.lang.IllegalArgumentException(
-          "EnumValueDescriptor is not for this type.");
+    public static final int VALUE_FIELD_NUMBER = 1;
+    private boolean value_;
+    /**
+     * <pre>
+     * The bool value.
+     * </pre>
+     *
+     * <code>bool value = 1;</code>
+     */
+    public boolean getValue() {
+      return value_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (value_ != false) {
+        output.writeBool(1, value_);
       }
-      if (desc.getIndex() == -1) {
-        return UNRECOGNIZED;
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (value_ != false) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeBoolSize(1, value_);
       }
-      return VALUES[desc.getIndex()];
+      memoizedSize = size;
+      return size;
     }
 
-    private final int value;
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Messages.BoolValue)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Messages.BoolValue other = (io.grpc.benchmarks.proto.Messages.BoolValue) obj;
 
-    private CompressionType(int value) {
-      this.value = value;
+      boolean result = true;
+      result = result && (getValue()
+          == other.getValue());
+      return result;
     }
 
-    // @@protoc_insertion_point(enum_scope:grpc.testing.CompressionType)
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + VALUE_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getValue());
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.BoolValue parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Messages.BoolValue prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * TODO(dgq): Go back to using well-known types once
+     * https://github.com/grpc/grpc/issues/6980 has been fixed.
+     * import "google/protobuf/wrappers.proto";
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.BoolValue}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.BoolValue)
+        io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_BoolValue_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_BoolValue_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Messages.BoolValue.class, io.grpc.benchmarks.proto.Messages.BoolValue.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Messages.BoolValue.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        value_ = false;
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_BoolValue_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Messages.BoolValue getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Messages.BoolValue build() {
+        io.grpc.benchmarks.proto.Messages.BoolValue result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Messages.BoolValue buildPartial() {
+        io.grpc.benchmarks.proto.Messages.BoolValue result = new io.grpc.benchmarks.proto.Messages.BoolValue(this);
+        result.value_ = value_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Messages.BoolValue) {
+          return mergeFrom((io.grpc.benchmarks.proto.Messages.BoolValue)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Messages.BoolValue other) {
+        if (other == io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance()) return this;
+        if (other.getValue() != false) {
+          setValue(other.getValue());
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Messages.BoolValue parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Messages.BoolValue) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private boolean value_ ;
+      /**
+       * <pre>
+       * The bool value.
+       * </pre>
+       *
+       * <code>bool value = 1;</code>
+       */
+      public boolean getValue() {
+        return value_;
+      }
+      /**
+       * <pre>
+       * The bool value.
+       * </pre>
+       *
+       * <code>bool value = 1;</code>
+       */
+      public Builder setValue(boolean value) {
+        
+        value_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <pre>
+       * The bool value.
+       * </pre>
+       *
+       * <code>bool value = 1;</code>
+       */
+      public Builder clearValue() {
+        
+        value_ = false;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.BoolValue)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.BoolValue)
+    private static final io.grpc.benchmarks.proto.Messages.BoolValue DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.BoolValue();
+    }
+
+    public static io.grpc.benchmarks.proto.Messages.BoolValue getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<BoolValue>
+        PARSER = new com.google.protobuf.AbstractParser<BoolValue>() {
+      public BoolValue parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new BoolValue(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<BoolValue> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<BoolValue> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Messages.BoolValue getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
   }
 
   public interface PayloadOrBuilder extends
@@ -274,6 +595,7 @@ public final class Messages {
 
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * The type of data in body.
      * </pre>
      *
@@ -282,6 +604,7 @@ public final class Messages {
     int getTypeValue();
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * The type of data in body.
      * </pre>
      *
@@ -381,6 +704,7 @@ public final class Messages {
     private int type_;
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * The type of data in body.
      * </pre>
      *
@@ -391,6 +715,7 @@ public final class Messages {
     }
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * The type of data in body.
      * </pre>
      *
@@ -717,6 +1042,7 @@ public final class Messages {
       private int type_ = 0;
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * The type of data in body.
        * </pre>
        *
@@ -727,6 +1053,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * The type of data in body.
        * </pre>
        *
@@ -739,6 +1066,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * The type of data in body.
        * </pre>
        *
@@ -750,6 +1078,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * The type of data in body.
        * </pre>
        *
@@ -766,6 +1095,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * The type of data in body.
        * </pre>
        *
@@ -1460,6 +1790,7 @@ public final class Messages {
 
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
@@ -1469,6 +1800,7 @@ public final class Messages {
     int getResponseTypeValue();
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
@@ -1480,7 +1812,6 @@ public final class Messages {
     /**
      * <pre>
      * Desired payload size in the response from the server.
-     * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
      * <code>int32 response_size = 2;</code>
@@ -1532,20 +1863,37 @@ public final class Messages {
 
     /**
      * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
      * </pre>
      *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
      */
-    int getResponseCompressionValue();
+    boolean hasResponseCompressed();
     /**
      * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
      * </pre>
      *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
      */
-    io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression();
+    io.grpc.benchmarks.proto.Messages.BoolValue getResponseCompressed();
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getResponseCompressedOrBuilder();
 
     /**
      * <pre>
@@ -1571,6 +1919,31 @@ public final class Messages {
      * <code>.grpc.testing.EchoStatus response_status = 7;</code>
      */
     io.grpc.benchmarks.proto.Messages.EchoStatusOrBuilder getResponseStatusOrBuilder();
+
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    boolean hasExpectCompressed();
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed();
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder();
   }
   /**
    * <pre>
@@ -1592,7 +1965,6 @@ public final class Messages {
       responseSize_ = 0;
       fillUsername_ = false;
       fillOauthScope_ = false;
-      responseCompression_ = 0;
     }
 
     @java.lang.Override
@@ -1654,10 +2026,17 @@ public final class Messages {
               fillOauthScope_ = input.readBool();
               break;
             }
-            case 48: {
-              int rawValue = input.readEnum();
+            case 50: {
+              io.grpc.benchmarks.proto.Messages.BoolValue.Builder subBuilder = null;
+              if (responseCompressed_ != null) {
+                subBuilder = responseCompressed_.toBuilder();
+              }
+              responseCompressed_ = input.readMessage(io.grpc.benchmarks.proto.Messages.BoolValue.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(responseCompressed_);
+                responseCompressed_ = subBuilder.buildPartial();
+              }
 
-              responseCompression_ = rawValue;
               break;
             }
             case 58: {
@@ -1669,6 +2048,19 @@ public final class Messages {
               if (subBuilder != null) {
                 subBuilder.mergeFrom(responseStatus_);
                 responseStatus_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 66: {
+              io.grpc.benchmarks.proto.Messages.BoolValue.Builder subBuilder = null;
+              if (expectCompressed_ != null) {
+                subBuilder = expectCompressed_.toBuilder();
+              }
+              expectCompressed_ = input.readMessage(io.grpc.benchmarks.proto.Messages.BoolValue.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(expectCompressed_);
+                expectCompressed_ = subBuilder.buildPartial();
               }
 
               break;
@@ -1700,6 +2092,7 @@ public final class Messages {
     private int responseType_;
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
@@ -1711,6 +2104,7 @@ public final class Messages {
     }
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, server randomly chooses one from other formats.
      * </pre>
@@ -1727,7 +2121,6 @@ public final class Messages {
     /**
      * <pre>
      * Desired payload size in the response from the server.
-     * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
      * <code>int32 response_size = 2;</code>
@@ -1795,28 +2188,46 @@ public final class Messages {
       return fillOauthScope_;
     }
 
-    public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
-    private int responseCompression_;
+    public static final int RESPONSE_COMPRESSED_FIELD_NUMBER = 6;
+    private io.grpc.benchmarks.proto.Messages.BoolValue responseCompressed_;
     /**
      * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
      * </pre>
      *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
      */
-    public int getResponseCompressionValue() {
-      return responseCompression_;
+    public boolean hasResponseCompressed() {
+      return responseCompressed_ != null;
     }
     /**
      * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
      * </pre>
      *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
      */
-    public io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression() {
-      io.grpc.benchmarks.proto.Messages.CompressionType result = io.grpc.benchmarks.proto.Messages.CompressionType.valueOf(responseCompression_);
-      return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
+    public io.grpc.benchmarks.proto.Messages.BoolValue getResponseCompressed() {
+      return responseCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : responseCompressed_;
+    }
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getResponseCompressedOrBuilder() {
+      return getResponseCompressed();
     }
 
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
@@ -1852,6 +2263,39 @@ public final class Messages {
       return getResponseStatus();
     }
 
+    public static final int EXPECT_COMPRESSED_FIELD_NUMBER = 8;
+    private io.grpc.benchmarks.proto.Messages.BoolValue expectCompressed_;
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    public boolean hasExpectCompressed() {
+      return expectCompressed_ != null;
+    }
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed() {
+      return expectCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+    }
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder() {
+      return getExpectCompressed();
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -1879,11 +2323,14 @@ public final class Messages {
       if (fillOauthScope_ != false) {
         output.writeBool(5, fillOauthScope_);
       }
-      if (responseCompression_ != io.grpc.benchmarks.proto.Messages.CompressionType.NONE.getNumber()) {
-        output.writeEnum(6, responseCompression_);
+      if (responseCompressed_ != null) {
+        output.writeMessage(6, getResponseCompressed());
       }
       if (responseStatus_ != null) {
         output.writeMessage(7, getResponseStatus());
+      }
+      if (expectCompressed_ != null) {
+        output.writeMessage(8, getExpectCompressed());
       }
     }
 
@@ -1912,13 +2359,17 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeBoolSize(5, fillOauthScope_);
       }
-      if (responseCompression_ != io.grpc.benchmarks.proto.Messages.CompressionType.NONE.getNumber()) {
+      if (responseCompressed_ != null) {
         size += com.google.protobuf.CodedOutputStream
-          .computeEnumSize(6, responseCompression_);
+          .computeMessageSize(6, getResponseCompressed());
       }
       if (responseStatus_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(7, getResponseStatus());
+      }
+      if (expectCompressed_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(8, getExpectCompressed());
       }
       memoizedSize = size;
       return size;
@@ -1948,11 +2399,20 @@ public final class Messages {
           == other.getFillUsername());
       result = result && (getFillOauthScope()
           == other.getFillOauthScope());
-      result = result && responseCompression_ == other.responseCompression_;
+      result = result && (hasResponseCompressed() == other.hasResponseCompressed());
+      if (hasResponseCompressed()) {
+        result = result && getResponseCompressed()
+            .equals(other.getResponseCompressed());
+      }
       result = result && (hasResponseStatus() == other.hasResponseStatus());
       if (hasResponseStatus()) {
         result = result && getResponseStatus()
             .equals(other.getResponseStatus());
+      }
+      result = result && (hasExpectCompressed() == other.hasExpectCompressed());
+      if (hasExpectCompressed()) {
+        result = result && getExpectCompressed()
+            .equals(other.getExpectCompressed());
       }
       return result;
     }
@@ -1978,11 +2438,17 @@ public final class Messages {
       hash = (37 * hash) + FILL_OAUTH_SCOPE_FIELD_NUMBER;
       hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
           getFillOauthScope());
-      hash = (37 * hash) + RESPONSE_COMPRESSION_FIELD_NUMBER;
-      hash = (53 * hash) + responseCompression_;
+      if (hasResponseCompressed()) {
+        hash = (37 * hash) + RESPONSE_COMPRESSED_FIELD_NUMBER;
+        hash = (53 * hash) + getResponseCompressed().hashCode();
+      }
       if (hasResponseStatus()) {
         hash = (37 * hash) + RESPONSE_STATUS_FIELD_NUMBER;
         hash = (53 * hash) + getResponseStatus().hashCode();
+      }
+      if (hasExpectCompressed()) {
+        hash = (37 * hash) + EXPECT_COMPRESSED_FIELD_NUMBER;
+        hash = (53 * hash) + getExpectCompressed().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -2131,13 +2597,23 @@ public final class Messages {
 
         fillOauthScope_ = false;
 
-        responseCompression_ = 0;
-
+        if (responseCompressedBuilder_ == null) {
+          responseCompressed_ = null;
+        } else {
+          responseCompressed_ = null;
+          responseCompressedBuilder_ = null;
+        }
         if (responseStatusBuilder_ == null) {
           responseStatus_ = null;
         } else {
           responseStatus_ = null;
           responseStatusBuilder_ = null;
+        }
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = null;
+        } else {
+          expectCompressed_ = null;
+          expectCompressedBuilder_ = null;
         }
         return this;
       }
@@ -2170,11 +2646,20 @@ public final class Messages {
         }
         result.fillUsername_ = fillUsername_;
         result.fillOauthScope_ = fillOauthScope_;
-        result.responseCompression_ = responseCompression_;
+        if (responseCompressedBuilder_ == null) {
+          result.responseCompressed_ = responseCompressed_;
+        } else {
+          result.responseCompressed_ = responseCompressedBuilder_.build();
+        }
         if (responseStatusBuilder_ == null) {
           result.responseStatus_ = responseStatus_;
         } else {
           result.responseStatus_ = responseStatusBuilder_.build();
+        }
+        if (expectCompressedBuilder_ == null) {
+          result.expectCompressed_ = expectCompressed_;
+        } else {
+          result.expectCompressed_ = expectCompressedBuilder_.build();
         }
         onBuilt();
         return result;
@@ -2232,11 +2717,14 @@ public final class Messages {
         if (other.getFillOauthScope() != false) {
           setFillOauthScope(other.getFillOauthScope());
         }
-        if (other.responseCompression_ != 0) {
-          setResponseCompressionValue(other.getResponseCompressionValue());
+        if (other.hasResponseCompressed()) {
+          mergeResponseCompressed(other.getResponseCompressed());
         }
         if (other.hasResponseStatus()) {
           mergeResponseStatus(other.getResponseStatus());
+        }
+        if (other.hasExpectCompressed()) {
+          mergeExpectCompressed(other.getExpectCompressed());
         }
         onChanged();
         return this;
@@ -2267,6 +2755,7 @@ public final class Messages {
       private int responseType_ = 0;
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
@@ -2278,6 +2767,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
@@ -2291,6 +2781,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
@@ -2303,6 +2794,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
@@ -2320,6 +2812,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, server randomly chooses one from other formats.
        * </pre>
@@ -2337,7 +2830,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload size in the response from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 response_size = 2;</code>
@@ -2348,7 +2840,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload size in the response from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 response_size = 2;</code>
@@ -2362,7 +2853,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload size in the response from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 response_size = 2;</code>
@@ -2603,68 +3093,184 @@ public final class Messages {
         return this;
       }
 
-      private int responseCompression_ = 0;
+      private io.grpc.benchmarks.proto.Messages.BoolValue responseCompressed_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> responseCompressedBuilder_;
       /**
        * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
        * </pre>
        *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
        */
-      public int getResponseCompressionValue() {
-        return responseCompression_;
+      public boolean hasResponseCompressed() {
+        return responseCompressedBuilder_ != null || responseCompressed_ != null;
       }
       /**
        * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
        * </pre>
        *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
        */
-      public Builder setResponseCompressionValue(int value) {
-        responseCompression_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression() {
-        io.grpc.benchmarks.proto.Messages.CompressionType result = io.grpc.benchmarks.proto.Messages.CompressionType.valueOf(responseCompression_);
-        return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public Builder setResponseCompression(io.grpc.benchmarks.proto.Messages.CompressionType value) {
-        if (value == null) {
-          throw new NullPointerException();
+      public io.grpc.benchmarks.proto.Messages.BoolValue getResponseCompressed() {
+        if (responseCompressedBuilder_ == null) {
+          return responseCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : responseCompressed_;
+        } else {
+          return responseCompressedBuilder_.getMessage();
         }
-        
-        responseCompression_ = value.getNumber();
-        onChanged();
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      public Builder setResponseCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (responseCompressedBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          responseCompressed_ = value;
+          onChanged();
+        } else {
+          responseCompressedBuilder_.setMessage(value);
+        }
+
         return this;
       }
       /**
        * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
        * </pre>
        *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
        */
-      public Builder clearResponseCompression() {
-        
-        responseCompression_ = 0;
-        onChanged();
+      public Builder setResponseCompressed(
+          io.grpc.benchmarks.proto.Messages.BoolValue.Builder builderForValue) {
+        if (responseCompressedBuilder_ == null) {
+          responseCompressed_ = builderForValue.build();
+          onChanged();
+        } else {
+          responseCompressedBuilder_.setMessage(builderForValue.build());
+        }
+
         return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      public Builder mergeResponseCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (responseCompressedBuilder_ == null) {
+          if (responseCompressed_ != null) {
+            responseCompressed_ =
+              io.grpc.benchmarks.proto.Messages.BoolValue.newBuilder(responseCompressed_).mergeFrom(value).buildPartial();
+          } else {
+            responseCompressed_ = value;
+          }
+          onChanged();
+        } else {
+          responseCompressedBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      public Builder clearResponseCompressed() {
+        if (responseCompressedBuilder_ == null) {
+          responseCompressed_ = null;
+          onChanged();
+        } else {
+          responseCompressed_ = null;
+          responseCompressedBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue.Builder getResponseCompressedBuilder() {
+        
+        onChanged();
+        return getResponseCompressedFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getResponseCompressedOrBuilder() {
+        if (responseCompressedBuilder_ != null) {
+          return responseCompressedBuilder_.getMessageOrBuilder();
+        } else {
+          return responseCompressed_ == null ?
+              io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : responseCompressed_;
+        }
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue response_compressed = 6;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> 
+          getResponseCompressedFieldBuilder() {
+        if (responseCompressedBuilder_ == null) {
+          responseCompressedBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder>(
+                  getResponseCompressed(),
+                  getParentForChildren(),
+                  isClean());
+          responseCompressed_ = null;
+        }
+        return responseCompressedBuilder_;
       }
 
       private io.grpc.benchmarks.proto.Messages.EchoStatus responseStatus_ = null;
@@ -2818,6 +3424,159 @@ public final class Messages {
           responseStatus_ = null;
         }
         return responseStatusBuilder_;
+      }
+
+      private io.grpc.benchmarks.proto.Messages.BoolValue expectCompressed_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> expectCompressedBuilder_;
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public boolean hasExpectCompressed() {
+        return expectCompressedBuilder_ != null || expectCompressed_ != null;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed() {
+        if (expectCompressedBuilder_ == null) {
+          return expectCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+        } else {
+          return expectCompressedBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public Builder setExpectCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (expectCompressedBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          expectCompressed_ = value;
+          onChanged();
+        } else {
+          expectCompressedBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public Builder setExpectCompressed(
+          io.grpc.benchmarks.proto.Messages.BoolValue.Builder builderForValue) {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = builderForValue.build();
+          onChanged();
+        } else {
+          expectCompressedBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public Builder mergeExpectCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (expectCompressedBuilder_ == null) {
+          if (expectCompressed_ != null) {
+            expectCompressed_ =
+              io.grpc.benchmarks.proto.Messages.BoolValue.newBuilder(expectCompressed_).mergeFrom(value).buildPartial();
+          } else {
+            expectCompressed_ = value;
+          }
+          onChanged();
+        } else {
+          expectCompressedBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public Builder clearExpectCompressed() {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = null;
+          onChanged();
+        } else {
+          expectCompressed_ = null;
+          expectCompressedBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue.Builder getExpectCompressedBuilder() {
+        
+        onChanged();
+        return getExpectCompressedFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder() {
+        if (expectCompressedBuilder_ != null) {
+          return expectCompressedBuilder_.getMessageOrBuilder();
+        } else {
+          return expectCompressed_ == null ?
+              io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+        }
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 8;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> 
+          getExpectCompressedFieldBuilder() {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressedBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder>(
+                  getExpectCompressed(),
+                  getParentForChildren(),
+                  isClean());
+          expectCompressed_ = null;
+        }
+        return expectCompressedBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -3890,6 +4649,40 @@ public final class Messages {
      * <code>.grpc.testing.Payload payload = 1;</code>
      */
     io.grpc.benchmarks.proto.Messages.PayloadOrBuilder getPayloadOrBuilder();
+
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    boolean hasExpectCompressed();
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed();
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder();
   }
   /**
    * <pre>
@@ -3943,6 +4736,19 @@ public final class Messages {
               if (subBuilder != null) {
                 subBuilder.mergeFrom(payload_);
                 payload_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
+            case 18: {
+              io.grpc.benchmarks.proto.Messages.BoolValue.Builder subBuilder = null;
+              if (expectCompressed_ != null) {
+                subBuilder = expectCompressed_.toBuilder();
+              }
+              expectCompressed_ = input.readMessage(io.grpc.benchmarks.proto.Messages.BoolValue.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(expectCompressed_);
+                expectCompressed_ = subBuilder.buildPartial();
               }
 
               break;
@@ -4003,6 +4809,48 @@ public final class Messages {
       return getPayload();
     }
 
+    public static final int EXPECT_COMPRESSED_FIELD_NUMBER = 2;
+    private io.grpc.benchmarks.proto.Messages.BoolValue expectCompressed_;
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    public boolean hasExpectCompressed() {
+      return expectCompressed_ != null;
+    }
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed() {
+      return expectCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+    }
+    /**
+     * <pre>
+     * Whether the server should expect this request to be compressed. This field
+     * is "nullable" in order to interoperate seamlessly with servers not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the request's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder() {
+      return getExpectCompressed();
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -4018,6 +4866,9 @@ public final class Messages {
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
+      if (expectCompressed_ != null) {
+        output.writeMessage(2, getExpectCompressed());
+      }
     }
 
     public int getSerializedSize() {
@@ -4028,6 +4879,10 @@ public final class Messages {
       if (payload_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getPayload());
+      }
+      if (expectCompressed_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(2, getExpectCompressed());
       }
       memoizedSize = size;
       return size;
@@ -4050,6 +4905,11 @@ public final class Messages {
         result = result && getPayload()
             .equals(other.getPayload());
       }
+      result = result && (hasExpectCompressed() == other.hasExpectCompressed());
+      if (hasExpectCompressed()) {
+        result = result && getExpectCompressed()
+            .equals(other.getExpectCompressed());
+      }
       return result;
     }
 
@@ -4063,6 +4923,10 @@ public final class Messages {
       if (hasPayload()) {
         hash = (37 * hash) + PAYLOAD_FIELD_NUMBER;
         hash = (53 * hash) + getPayload().hashCode();
+      }
+      if (hasExpectCompressed()) {
+        hash = (37 * hash) + EXPECT_COMPRESSED_FIELD_NUMBER;
+        hash = (53 * hash) + getExpectCompressed().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -4203,6 +5067,12 @@ public final class Messages {
           payload_ = null;
           payloadBuilder_ = null;
         }
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = null;
+        } else {
+          expectCompressed_ = null;
+          expectCompressedBuilder_ = null;
+        }
         return this;
       }
 
@@ -4229,6 +5099,11 @@ public final class Messages {
           result.payload_ = payload_;
         } else {
           result.payload_ = payloadBuilder_.build();
+        }
+        if (expectCompressedBuilder_ == null) {
+          result.expectCompressed_ = expectCompressed_;
+        } else {
+          result.expectCompressed_ = expectCompressedBuilder_.build();
         }
         onBuilt();
         return result;
@@ -4273,6 +5148,9 @@ public final class Messages {
         if (other == io.grpc.benchmarks.proto.Messages.StreamingInputCallRequest.getDefaultInstance()) return this;
         if (other.hasPayload()) {
           mergePayload(other.getPayload());
+        }
+        if (other.hasExpectCompressed()) {
+          mergeExpectCompressed(other.getExpectCompressed());
         }
         onChanged();
         return this;
@@ -4451,6 +5329,186 @@ public final class Messages {
           payload_ = null;
         }
         return payloadBuilder_;
+      }
+
+      private io.grpc.benchmarks.proto.Messages.BoolValue expectCompressed_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> expectCompressedBuilder_;
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public boolean hasExpectCompressed() {
+        return expectCompressedBuilder_ != null || expectCompressed_ != null;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue getExpectCompressed() {
+        if (expectCompressedBuilder_ == null) {
+          return expectCompressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+        } else {
+          return expectCompressedBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public Builder setExpectCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (expectCompressedBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          expectCompressed_ = value;
+          onChanged();
+        } else {
+          expectCompressedBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public Builder setExpectCompressed(
+          io.grpc.benchmarks.proto.Messages.BoolValue.Builder builderForValue) {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = builderForValue.build();
+          onChanged();
+        } else {
+          expectCompressedBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public Builder mergeExpectCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (expectCompressedBuilder_ == null) {
+          if (expectCompressed_ != null) {
+            expectCompressed_ =
+              io.grpc.benchmarks.proto.Messages.BoolValue.newBuilder(expectCompressed_).mergeFrom(value).buildPartial();
+          } else {
+            expectCompressed_ = value;
+          }
+          onChanged();
+        } else {
+          expectCompressedBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public Builder clearExpectCompressed() {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressed_ = null;
+          onChanged();
+        } else {
+          expectCompressed_ = null;
+          expectCompressedBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue.Builder getExpectCompressedBuilder() {
+        
+        onChanged();
+        return getExpectCompressedFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getExpectCompressedOrBuilder() {
+        if (expectCompressedBuilder_ != null) {
+          return expectCompressedBuilder_.getMessageOrBuilder();
+        } else {
+          return expectCompressed_ == null ?
+              io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : expectCompressed_;
+        }
+      }
+      /**
+       * <pre>
+       * Whether the server should expect this request to be compressed. This field
+       * is "nullable" in order to interoperate seamlessly with servers not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the request's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue expect_compressed = 2;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> 
+          getExpectCompressedFieldBuilder() {
+        if (expectCompressedBuilder_ == null) {
+          expectCompressedBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder>(
+                  getExpectCompressed(),
+                  getParentForChildren(),
+                  isClean());
+          expectCompressed_ = null;
+        }
+        return expectCompressedBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -4976,7 +6034,6 @@ public final class Messages {
     /**
      * <pre>
      * Desired payload sizes in responses from the server.
-     * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
      * <code>int32 size = 1;</code>
@@ -4992,6 +6049,40 @@ public final class Messages {
      * <code>int32 interval_us = 2;</code>
      */
     int getIntervalUs();
+
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    boolean hasCompressed();
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValue getCompressed();
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getCompressedOrBuilder();
   }
   /**
    * <pre>
@@ -5048,6 +6139,19 @@ public final class Messages {
               intervalUs_ = input.readInt32();
               break;
             }
+            case 26: {
+              io.grpc.benchmarks.proto.Messages.BoolValue.Builder subBuilder = null;
+              if (compressed_ != null) {
+                subBuilder = compressed_.toBuilder();
+              }
+              compressed_ = input.readMessage(io.grpc.benchmarks.proto.Messages.BoolValue.parser(), extensionRegistry);
+              if (subBuilder != null) {
+                subBuilder.mergeFrom(compressed_);
+                compressed_ = subBuilder.buildPartial();
+              }
+
+              break;
+            }
           }
         }
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -5076,7 +6180,6 @@ public final class Messages {
     /**
      * <pre>
      * Desired payload sizes in responses from the server.
-     * If response_type is COMPRESSABLE, this denotes the size before compression.
      * </pre>
      *
      * <code>int32 size = 1;</code>
@@ -5099,6 +6202,48 @@ public final class Messages {
       return intervalUs_;
     }
 
+    public static final int COMPRESSED_FIELD_NUMBER = 3;
+    private io.grpc.benchmarks.proto.Messages.BoolValue compressed_;
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    public boolean hasCompressed() {
+      return compressed_ != null;
+    }
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValue getCompressed() {
+      return compressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : compressed_;
+    }
+    /**
+     * <pre>
+     * Whether to request the server to compress the response. This field is
+     * "nullable" in order to interoperate seamlessly with clients not able to
+     * implement the full compression tests by introspecting the call to verify
+     * the response's compression status.
+     * </pre>
+     *
+     * <code>.grpc.testing.BoolValue compressed = 3;</code>
+     */
+    public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getCompressedOrBuilder() {
+      return getCompressed();
+    }
+
     private byte memoizedIsInitialized = -1;
     public final boolean isInitialized() {
       byte isInitialized = memoizedIsInitialized;
@@ -5117,6 +6262,9 @@ public final class Messages {
       if (intervalUs_ != 0) {
         output.writeInt32(2, intervalUs_);
       }
+      if (compressed_ != null) {
+        output.writeMessage(3, getCompressed());
+      }
     }
 
     public int getSerializedSize() {
@@ -5131,6 +6279,10 @@ public final class Messages {
       if (intervalUs_ != 0) {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, intervalUs_);
+      }
+      if (compressed_ != null) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeMessageSize(3, getCompressed());
       }
       memoizedSize = size;
       return size;
@@ -5152,6 +6304,11 @@ public final class Messages {
           == other.getSize());
       result = result && (getIntervalUs()
           == other.getIntervalUs());
+      result = result && (hasCompressed() == other.hasCompressed());
+      if (hasCompressed()) {
+        result = result && getCompressed()
+            .equals(other.getCompressed());
+      }
       return result;
     }
 
@@ -5166,6 +6323,10 @@ public final class Messages {
       hash = (53 * hash) + getSize();
       hash = (37 * hash) + INTERVAL_US_FIELD_NUMBER;
       hash = (53 * hash) + getIntervalUs();
+      if (hasCompressed()) {
+        hash = (37 * hash) + COMPRESSED_FIELD_NUMBER;
+        hash = (53 * hash) + getCompressed().hashCode();
+      }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -5303,6 +6464,12 @@ public final class Messages {
 
         intervalUs_ = 0;
 
+        if (compressedBuilder_ == null) {
+          compressed_ = null;
+        } else {
+          compressed_ = null;
+          compressedBuilder_ = null;
+        }
         return this;
       }
 
@@ -5327,6 +6494,11 @@ public final class Messages {
         io.grpc.benchmarks.proto.Messages.ResponseParameters result = new io.grpc.benchmarks.proto.Messages.ResponseParameters(this);
         result.size_ = size_;
         result.intervalUs_ = intervalUs_;
+        if (compressedBuilder_ == null) {
+          result.compressed_ = compressed_;
+        } else {
+          result.compressed_ = compressedBuilder_.build();
+        }
         onBuilt();
         return result;
       }
@@ -5374,6 +6546,9 @@ public final class Messages {
         if (other.getIntervalUs() != 0) {
           setIntervalUs(other.getIntervalUs());
         }
+        if (other.hasCompressed()) {
+          mergeCompressed(other.getCompressed());
+        }
         onChanged();
         return this;
       }
@@ -5404,7 +6579,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload sizes in responses from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 size = 1;</code>
@@ -5415,7 +6589,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload sizes in responses from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 size = 1;</code>
@@ -5429,7 +6602,6 @@ public final class Messages {
       /**
        * <pre>
        * Desired payload sizes in responses from the server.
-       * If response_type is COMPRESSABLE, this denotes the size before compression.
        * </pre>
        *
        * <code>int32 size = 1;</code>
@@ -5480,6 +6652,186 @@ public final class Messages {
         intervalUs_ = 0;
         onChanged();
         return this;
+      }
+
+      private io.grpc.benchmarks.proto.Messages.BoolValue compressed_ = null;
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> compressedBuilder_;
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public boolean hasCompressed() {
+        return compressedBuilder_ != null || compressed_ != null;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue getCompressed() {
+        if (compressedBuilder_ == null) {
+          return compressed_ == null ? io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : compressed_;
+        } else {
+          return compressedBuilder_.getMessage();
+        }
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public Builder setCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (compressedBuilder_ == null) {
+          if (value == null) {
+            throw new NullPointerException();
+          }
+          compressed_ = value;
+          onChanged();
+        } else {
+          compressedBuilder_.setMessage(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public Builder setCompressed(
+          io.grpc.benchmarks.proto.Messages.BoolValue.Builder builderForValue) {
+        if (compressedBuilder_ == null) {
+          compressed_ = builderForValue.build();
+          onChanged();
+        } else {
+          compressedBuilder_.setMessage(builderForValue.build());
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public Builder mergeCompressed(io.grpc.benchmarks.proto.Messages.BoolValue value) {
+        if (compressedBuilder_ == null) {
+          if (compressed_ != null) {
+            compressed_ =
+              io.grpc.benchmarks.proto.Messages.BoolValue.newBuilder(compressed_).mergeFrom(value).buildPartial();
+          } else {
+            compressed_ = value;
+          }
+          onChanged();
+        } else {
+          compressedBuilder_.mergeFrom(value);
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public Builder clearCompressed() {
+        if (compressedBuilder_ == null) {
+          compressed_ = null;
+          onChanged();
+        } else {
+          compressed_ = null;
+          compressedBuilder_ = null;
+        }
+
+        return this;
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValue.Builder getCompressedBuilder() {
+        
+        onChanged();
+        return getCompressedFieldBuilder().getBuilder();
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      public io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder getCompressedOrBuilder() {
+        if (compressedBuilder_ != null) {
+          return compressedBuilder_.getMessageOrBuilder();
+        } else {
+          return compressed_ == null ?
+              io.grpc.benchmarks.proto.Messages.BoolValue.getDefaultInstance() : compressed_;
+        }
+      }
+      /**
+       * <pre>
+       * Whether to request the server to compress the response. This field is
+       * "nullable" in order to interoperate seamlessly with clients not able to
+       * implement the full compression tests by introspecting the call to verify
+       * the response's compression status.
+       * </pre>
+       *
+       * <code>.grpc.testing.BoolValue compressed = 3;</code>
+       */
+      private com.google.protobuf.SingleFieldBuilderV3<
+          io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder> 
+          getCompressedFieldBuilder() {
+        if (compressedBuilder_ == null) {
+          compressedBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
+              io.grpc.benchmarks.proto.Messages.BoolValue, io.grpc.benchmarks.proto.Messages.BoolValue.Builder, io.grpc.benchmarks.proto.Messages.BoolValueOrBuilder>(
+                  getCompressed(),
+                  getParentForChildren(),
+                  isClean());
+          compressed_ = null;
+        }
+        return compressedBuilder_;
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
@@ -5536,6 +6888,7 @@ public final class Messages {
 
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
@@ -5547,6 +6900,7 @@ public final class Messages {
     int getResponseTypeValue();
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
@@ -5628,23 +6982,6 @@ public final class Messages {
 
     /**
      * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
-     * </pre>
-     *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-     */
-    int getResponseCompressionValue();
-    /**
-     * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
-     * </pre>
-     *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-     */
-    io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression();
-
-    /**
-     * <pre>
      * Whether server should return a given status
      * </pre>
      *
@@ -5686,7 +7023,6 @@ public final class Messages {
     private StreamingOutputCallRequest() {
       responseType_ = 0;
       responseParameters_ = java.util.Collections.emptyList();
-      responseCompression_ = 0;
     }
 
     @java.lang.Override
@@ -5742,12 +7078,6 @@ public final class Messages {
 
               break;
             }
-            case 48: {
-              int rawValue = input.readEnum();
-
-              responseCompression_ = rawValue;
-              break;
-            }
             case 58: {
               io.grpc.benchmarks.proto.Messages.EchoStatus.Builder subBuilder = null;
               if (responseStatus_ != null) {
@@ -5792,6 +7122,7 @@ public final class Messages {
     private int responseType_;
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
@@ -5805,6 +7136,7 @@ public final class Messages {
     }
     /**
      * <pre>
+     * DEPRECATED, don't use. To be removed shortly.
      * Desired payload type in the response from the server.
      * If response_type is RANDOM, the payload from each response in the stream
      * might be of different types. This is to simulate a mixed type of payload
@@ -5906,30 +7238,6 @@ public final class Messages {
       return getPayload();
     }
 
-    public static final int RESPONSE_COMPRESSION_FIELD_NUMBER = 6;
-    private int responseCompression_;
-    /**
-     * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
-     * </pre>
-     *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-     */
-    public int getResponseCompressionValue() {
-      return responseCompression_;
-    }
-    /**
-     * <pre>
-     * Compression algorithm to be used by the server for the response (stream)
-     * </pre>
-     *
-     * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-     */
-    public io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression() {
-      io.grpc.benchmarks.proto.Messages.CompressionType result = io.grpc.benchmarks.proto.Messages.CompressionType.valueOf(responseCompression_);
-      return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
-    }
-
     public static final int RESPONSE_STATUS_FIELD_NUMBER = 7;
     private io.grpc.benchmarks.proto.Messages.EchoStatus responseStatus_;
     /**
@@ -5984,9 +7292,6 @@ public final class Messages {
       if (payload_ != null) {
         output.writeMessage(3, getPayload());
       }
-      if (responseCompression_ != io.grpc.benchmarks.proto.Messages.CompressionType.NONE.getNumber()) {
-        output.writeEnum(6, responseCompression_);
-      }
       if (responseStatus_ != null) {
         output.writeMessage(7, getResponseStatus());
       }
@@ -6008,10 +7313,6 @@ public final class Messages {
       if (payload_ != null) {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getPayload());
-      }
-      if (responseCompression_ != io.grpc.benchmarks.proto.Messages.CompressionType.NONE.getNumber()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeEnumSize(6, responseCompression_);
       }
       if (responseStatus_ != null) {
         size += com.google.protobuf.CodedOutputStream
@@ -6041,7 +7342,6 @@ public final class Messages {
         result = result && getPayload()
             .equals(other.getPayload());
       }
-      result = result && responseCompression_ == other.responseCompression_;
       result = result && (hasResponseStatus() == other.hasResponseStatus());
       if (hasResponseStatus()) {
         result = result && getResponseStatus()
@@ -6067,8 +7367,6 @@ public final class Messages {
         hash = (37 * hash) + PAYLOAD_FIELD_NUMBER;
         hash = (53 * hash) + getPayload().hashCode();
       }
-      hash = (37 * hash) + RESPONSE_COMPRESSION_FIELD_NUMBER;
-      hash = (53 * hash) + responseCompression_;
       if (hasResponseStatus()) {
         hash = (37 * hash) + RESPONSE_STATUS_FIELD_NUMBER;
         hash = (53 * hash) + getResponseStatus().hashCode();
@@ -6221,8 +7519,6 @@ public final class Messages {
           payload_ = null;
           payloadBuilder_ = null;
         }
-        responseCompression_ = 0;
-
         if (responseStatusBuilder_ == null) {
           responseStatus_ = null;
         } else {
@@ -6268,7 +7564,6 @@ public final class Messages {
         } else {
           result.payload_ = payloadBuilder_.build();
         }
-        result.responseCompression_ = responseCompression_;
         if (responseStatusBuilder_ == null) {
           result.responseStatus_ = responseStatus_;
         } else {
@@ -6348,9 +7643,6 @@ public final class Messages {
         if (other.hasPayload()) {
           mergePayload(other.getPayload());
         }
-        if (other.responseCompression_ != 0) {
-          setResponseCompressionValue(other.getResponseCompressionValue());
-        }
         if (other.hasResponseStatus()) {
           mergeResponseStatus(other.getResponseStatus());
         }
@@ -6384,6 +7676,7 @@ public final class Messages {
       private int responseType_ = 0;
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
@@ -6397,6 +7690,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
@@ -6412,6 +7706,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
@@ -6426,6 +7721,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
@@ -6445,6 +7741,7 @@ public final class Messages {
       }
       /**
        * <pre>
+       * DEPRECATED, don't use. To be removed shortly.
        * Desired payload type in the response from the server.
        * If response_type is RANDOM, the payload from each response in the stream
        * might be of different types. This is to simulate a mixed type of payload
@@ -6923,70 +8220,6 @@ public final class Messages {
           payload_ = null;
         }
         return payloadBuilder_;
-      }
-
-      private int responseCompression_ = 0;
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public int getResponseCompressionValue() {
-        return responseCompression_;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public Builder setResponseCompressionValue(int value) {
-        responseCompression_ = value;
-        onChanged();
-        return this;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public io.grpc.benchmarks.proto.Messages.CompressionType getResponseCompression() {
-        io.grpc.benchmarks.proto.Messages.CompressionType result = io.grpc.benchmarks.proto.Messages.CompressionType.valueOf(responseCompression_);
-        return result == null ? io.grpc.benchmarks.proto.Messages.CompressionType.UNRECOGNIZED : result;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public Builder setResponseCompression(io.grpc.benchmarks.proto.Messages.CompressionType value) {
-        if (value == null) {
-          throw new NullPointerException();
-        }
-        
-        responseCompression_ = value.getNumber();
-        onChanged();
-        return this;
-      }
-      /**
-       * <pre>
-       * Compression algorithm to be used by the server for the response (stream)
-       * </pre>
-       *
-       * <code>.grpc.testing.CompressionType response_compression = 6;</code>
-       */
-      public Builder clearResponseCompression() {
-        
-        responseCompression_ = 0;
-        onChanged();
-        return this;
       }
 
       private io.grpc.benchmarks.proto.Messages.EchoStatus responseStatus_ = null;
@@ -7829,6 +9062,456 @@ public final class Messages {
 
   }
 
+  public interface ReconnectParamsOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectParams)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>int32 max_reconnect_backoff_ms = 1;</code>
+     */
+    int getMaxReconnectBackoffMs();
+  }
+  /**
+   * <pre>
+   * For reconnect interop test only.
+   * Client tells server what reconnection parameters it used.
+   * </pre>
+   *
+   * Protobuf type {@code grpc.testing.ReconnectParams}
+   */
+  public  static final class ReconnectParams extends
+      com.google.protobuf.GeneratedMessageV3 implements
+      // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectParams)
+      ReconnectParamsOrBuilder {
+    // Use ReconnectParams.newBuilder() to construct.
+    private ReconnectParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+      super(builder);
+    }
+    private ReconnectParams() {
+      maxReconnectBackoffMs_ = 0;
+    }
+
+    @java.lang.Override
+    public final com.google.protobuf.UnknownFieldSet
+    getUnknownFields() {
+      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    }
+    private ReconnectParams(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      this();
+      int mutable_bitField0_ = 0;
+      try {
+        boolean done = false;
+        while (!done) {
+          int tag = input.readTag();
+          switch (tag) {
+            case 0:
+              done = true;
+              break;
+            default: {
+              if (!input.skipField(tag)) {
+                done = true;
+              }
+              break;
+            }
+            case 8: {
+
+              maxReconnectBackoffMs_ = input.readInt32();
+              break;
+            }
+          }
+        }
+      } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+        throw e.setUnfinishedMessage(this);
+      } catch (java.io.IOException e) {
+        throw new com.google.protobuf.InvalidProtocolBufferException(
+            e).setUnfinishedMessage(this);
+      } finally {
+        makeExtensionsImmutable();
+      }
+    }
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+    }
+
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectParams_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.grpc.benchmarks.proto.Messages.ReconnectParams.class, io.grpc.benchmarks.proto.Messages.ReconnectParams.Builder.class);
+    }
+
+    public static final int MAX_RECONNECT_BACKOFF_MS_FIELD_NUMBER = 1;
+    private int maxReconnectBackoffMs_;
+    /**
+     * <code>int32 max_reconnect_backoff_ms = 1;</code>
+     */
+    public int getMaxReconnectBackoffMs() {
+      return maxReconnectBackoffMs_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (maxReconnectBackoffMs_ != 0) {
+        output.writeInt32(1, maxReconnectBackoffMs_);
+      }
+    }
+
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      if (maxReconnectBackoffMs_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(1, maxReconnectBackoffMs_);
+      }
+      memoizedSize = size;
+      return size;
+    }
+
+    private static final long serialVersionUID = 0L;
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.grpc.benchmarks.proto.Messages.ReconnectParams)) {
+        return super.equals(obj);
+      }
+      io.grpc.benchmarks.proto.Messages.ReconnectParams other = (io.grpc.benchmarks.proto.Messages.ReconnectParams) obj;
+
+      boolean result = true;
+      result = result && (getMaxReconnectBackoffMs()
+          == other.getMaxReconnectBackoffMs());
+      return result;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + MAX_RECONNECT_BACKOFF_MS_FIELD_NUMBER;
+      hash = (53 * hash) + getMaxReconnectBackoffMs();
+      hash = (29 * hash) + unknownFields.hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessageV3
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.grpc.benchmarks.proto.Messages.ReconnectParams prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * <pre>
+     * For reconnect interop test only.
+     * Client tells server what reconnection parameters it used.
+     * </pre>
+     *
+     * Protobuf type {@code grpc.testing.ReconnectParams}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:grpc.testing.ReconnectParams)
+        io.grpc.benchmarks.proto.Messages.ReconnectParamsOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+      }
+
+      protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectParams_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.grpc.benchmarks.proto.Messages.ReconnectParams.class, io.grpc.benchmarks.proto.Messages.ReconnectParams.Builder.class);
+      }
+
+      // Construct using io.grpc.benchmarks.proto.Messages.ReconnectParams.newBuilder()
+      private Builder() {
+        maybeForceBuilderInitialization();
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
+        super(parent);
+        maybeForceBuilderInitialization();
+      }
+      private void maybeForceBuilderInitialization() {
+        if (com.google.protobuf.GeneratedMessageV3
+                .alwaysUseFieldBuilders) {
+        }
+      }
+      public Builder clear() {
+        super.clear();
+        maxReconnectBackoffMs_ = 0;
+
+        return this;
+      }
+
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.grpc.benchmarks.proto.Messages.internal_static_grpc_testing_ReconnectParams_descriptor;
+      }
+
+      public io.grpc.benchmarks.proto.Messages.ReconnectParams getDefaultInstanceForType() {
+        return io.grpc.benchmarks.proto.Messages.ReconnectParams.getDefaultInstance();
+      }
+
+      public io.grpc.benchmarks.proto.Messages.ReconnectParams build() {
+        io.grpc.benchmarks.proto.Messages.ReconnectParams result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      public io.grpc.benchmarks.proto.Messages.ReconnectParams buildPartial() {
+        io.grpc.benchmarks.proto.Messages.ReconnectParams result = new io.grpc.benchmarks.proto.Messages.ReconnectParams(this);
+        result.maxReconnectBackoffMs_ = maxReconnectBackoffMs_;
+        onBuilt();
+        return result;
+      }
+
+      public Builder clone() {
+        return (Builder) super.clone();
+      }
+      public Builder setField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.setField(field, value);
+      }
+      public Builder clearField(
+          com.google.protobuf.Descriptors.FieldDescriptor field) {
+        return (Builder) super.clearField(field);
+      }
+      public Builder clearOneof(
+          com.google.protobuf.Descriptors.OneofDescriptor oneof) {
+        return (Builder) super.clearOneof(oneof);
+      }
+      public Builder setRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          int index, Object value) {
+        return (Builder) super.setRepeatedField(field, index, value);
+      }
+      public Builder addRepeatedField(
+          com.google.protobuf.Descriptors.FieldDescriptor field,
+          Object value) {
+        return (Builder) super.addRepeatedField(field, value);
+      }
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.grpc.benchmarks.proto.Messages.ReconnectParams) {
+          return mergeFrom((io.grpc.benchmarks.proto.Messages.ReconnectParams)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.grpc.benchmarks.proto.Messages.ReconnectParams other) {
+        if (other == io.grpc.benchmarks.proto.Messages.ReconnectParams.getDefaultInstance()) return this;
+        if (other.getMaxReconnectBackoffMs() != 0) {
+          setMaxReconnectBackoffMs(other.getMaxReconnectBackoffMs());
+        }
+        onChanged();
+        return this;
+      }
+
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        io.grpc.benchmarks.proto.Messages.ReconnectParams parsedMessage = null;
+        try {
+          parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          parsedMessage = (io.grpc.benchmarks.proto.Messages.ReconnectParams) e.getUnfinishedMessage();
+          throw e.unwrapIOException();
+        } finally {
+          if (parsedMessage != null) {
+            mergeFrom(parsedMessage);
+          }
+        }
+        return this;
+      }
+
+      private int maxReconnectBackoffMs_ ;
+      /**
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public int getMaxReconnectBackoffMs() {
+        return maxReconnectBackoffMs_;
+      }
+      /**
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public Builder setMaxReconnectBackoffMs(int value) {
+        
+        maxReconnectBackoffMs_ = value;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>int32 max_reconnect_backoff_ms = 1;</code>
+       */
+      public Builder clearMaxReconnectBackoffMs() {
+        
+        maxReconnectBackoffMs_ = 0;
+        onChanged();
+        return this;
+      }
+      public final Builder setUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+      public final Builder mergeUnknownFields(
+          final com.google.protobuf.UnknownFieldSet unknownFields) {
+        return this;
+      }
+
+
+      // @@protoc_insertion_point(builder_scope:grpc.testing.ReconnectParams)
+    }
+
+    // @@protoc_insertion_point(class_scope:grpc.testing.ReconnectParams)
+    private static final io.grpc.benchmarks.proto.Messages.ReconnectParams DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.grpc.benchmarks.proto.Messages.ReconnectParams();
+    }
+
+    public static io.grpc.benchmarks.proto.Messages.ReconnectParams getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<ReconnectParams>
+        PARSER = new com.google.protobuf.AbstractParser<ReconnectParams>() {
+      public ReconnectParams parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+          return new ReconnectParams(input, extensionRegistry);
+      }
+    };
+
+    public static com.google.protobuf.Parser<ReconnectParams> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<ReconnectParams> getParserForType() {
+      return PARSER;
+    }
+
+    public io.grpc.benchmarks.proto.Messages.ReconnectParams getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface ReconnectInfoOrBuilder extends
       // @@protoc_insertion_point(interface_extends:grpc.testing.ReconnectInfo)
       com.google.protobuf.MessageOrBuilder {
@@ -8460,6 +10143,11 @@ public final class Messages {
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_BoolValue_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_BoolValue_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_Payload_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
@@ -8505,6 +10193,11 @@ public final class Messages {
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_grpc_testing_ReconnectParams_descriptor;
+  private static final 
+    com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
+      internal_static_grpc_testing_ReconnectParams_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_grpc_testing_ReconnectInfo_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
@@ -8518,39 +10211,41 @@ public final class Messages {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\016messages.proto\022\014grpc.testing\"@\n\007Payloa" +
-      "d\022\'\n\004type\030\001 \001(\0162\031.grpc.testing.PayloadTy" +
-      "pe\022\014\n\004body\030\002 \001(\014\"+\n\nEchoStatus\022\014\n\004code\030\001" +
-      " \001(\005\022\017\n\007message\030\002 \001(\t\"\241\002\n\rSimpleRequest\022" +
-      "0\n\rresponse_type\030\001 \001(\0162\031.grpc.testing.Pa" +
-      "yloadType\022\025\n\rresponse_size\030\002 \001(\005\022&\n\007payl" +
-      "oad\030\003 \001(\0132\025.grpc.testing.Payload\022\025\n\rfill" +
-      "_username\030\004 \001(\010\022\030\n\020fill_oauth_scope\030\005 \001(" +
-      "\010\022;\n\024response_compression\030\006 \001(\0162\035.grpc.t" +
-      "esting.CompressionType\0221\n\017response_statu",
-      "s\030\007 \001(\0132\030.grpc.testing.EchoStatus\"_\n\016Sim" +
-      "pleResponse\022&\n\007payload\030\001 \001(\0132\025.grpc.test" +
-      "ing.Payload\022\020\n\010username\030\002 \001(\t\022\023\n\013oauth_s" +
-      "cope\030\003 \001(\t\"C\n\031StreamingInputCallRequest\022" +
-      "&\n\007payload\030\001 \001(\0132\025.grpc.testing.Payload\"" +
-      "=\n\032StreamingInputCallResponse\022\037\n\027aggrega" +
-      "ted_payload_size\030\001 \001(\005\"7\n\022ResponseParame" +
-      "ters\022\014\n\004size\030\001 \001(\005\022\023\n\013interval_us\030\002 \001(\005\"" +
-      "\245\002\n\032StreamingOutputCallRequest\0220\n\rrespon" +
-      "se_type\030\001 \001(\0162\031.grpc.testing.PayloadType",
-      "\022=\n\023response_parameters\030\002 \003(\0132 .grpc.tes" +
-      "ting.ResponseParameters\022&\n\007payload\030\003 \001(\013" +
-      "2\025.grpc.testing.Payload\022;\n\024response_comp" +
-      "ression\030\006 \001(\0162\035.grpc.testing.Compression" +
-      "Type\0221\n\017response_status\030\007 \001(\0132\030.grpc.tes" +
-      "ting.EchoStatus\"E\n\033StreamingOutputCallRe" +
-      "sponse\022&\n\007payload\030\001 \001(\0132\025.grpc.testing.P" +
-      "ayload\"3\n\rReconnectInfo\022\016\n\006passed\030\001 \001(\010\022" +
-      "\022\n\nbackoff_ms\030\002 \003(\005*?\n\013PayloadType\022\020\n\014CO" +
-      "MPRESSABLE\020\000\022\022\n\016UNCOMPRESSABLE\020\001\022\n\n\006RAND",
-      "OM\020\002*2\n\017CompressionType\022\010\n\004NONE\020\000\022\010\n\004GZI" +
-      "P\020\001\022\013\n\007DEFLATE\020\002B$\n\030io.grpc.benchmarks.p" +
-      "rotoB\010Messagesb\006proto3"
+      "\n\016messages.proto\022\014grpc.testing\"\032\n\tBoolVa" +
+      "lue\022\r\n\005value\030\001 \001(\010\"@\n\007Payload\022\'\n\004type\030\001 " +
+      "\001(\0162\031.grpc.testing.PayloadType\022\014\n\004body\030\002" +
+      " \001(\014\"+\n\nEchoStatus\022\014\n\004code\030\001 \001(\005\022\017\n\007mess" +
+      "age\030\002 \001(\t\"\316\002\n\rSimpleRequest\0220\n\rresponse_" +
+      "type\030\001 \001(\0162\031.grpc.testing.PayloadType\022\025\n" +
+      "\rresponse_size\030\002 \001(\005\022&\n\007payload\030\003 \001(\0132\025." +
+      "grpc.testing.Payload\022\025\n\rfill_username\030\004 " +
+      "\001(\010\022\030\n\020fill_oauth_scope\030\005 \001(\010\0224\n\023respons" +
+      "e_compressed\030\006 \001(\0132\027.grpc.testing.BoolVa",
+      "lue\0221\n\017response_status\030\007 \001(\0132\030.grpc.test" +
+      "ing.EchoStatus\0222\n\021expect_compressed\030\010 \001(" +
+      "\0132\027.grpc.testing.BoolValue\"_\n\016SimpleResp" +
+      "onse\022&\n\007payload\030\001 \001(\0132\025.grpc.testing.Pay" +
+      "load\022\020\n\010username\030\002 \001(\t\022\023\n\013oauth_scope\030\003 " +
+      "\001(\t\"w\n\031StreamingInputCallRequest\022&\n\007payl" +
+      "oad\030\001 \001(\0132\025.grpc.testing.Payload\0222\n\021expe" +
+      "ct_compressed\030\002 \001(\0132\027.grpc.testing.BoolV" +
+      "alue\"=\n\032StreamingInputCallResponse\022\037\n\027ag" +
+      "gregated_payload_size\030\001 \001(\005\"d\n\022ResponseP",
+      "arameters\022\014\n\004size\030\001 \001(\005\022\023\n\013interval_us\030\002" +
+      " \001(\005\022+\n\ncompressed\030\003 \001(\0132\027.grpc.testing." +
+      "BoolValue\"\350\001\n\032StreamingOutputCallRequest" +
+      "\0220\n\rresponse_type\030\001 \001(\0162\031.grpc.testing.P" +
+      "ayloadType\022=\n\023response_parameters\030\002 \003(\0132" +
+      " .grpc.testing.ResponseParameters\022&\n\007pay" +
+      "load\030\003 \001(\0132\025.grpc.testing.Payload\0221\n\017res" +
+      "ponse_status\030\007 \001(\0132\030.grpc.testing.EchoSt" +
+      "atus\"E\n\033StreamingOutputCallResponse\022&\n\007p" +
+      "ayload\030\001 \001(\0132\025.grpc.testing.Payload\"3\n\017R",
+      "econnectParams\022 \n\030max_reconnect_backoff_" +
+      "ms\030\001 \001(\005\"3\n\rReconnectInfo\022\016\n\006passed\030\001 \001(" +
+      "\010\022\022\n\nbackoff_ms\030\002 \003(\005*\037\n\013PayloadType\022\020\n\014" +
+      "COMPRESSABLE\020\000B$\n\030io.grpc.benchmarks.pro" +
+      "toB\010Messagesb\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -8564,62 +10259,74 @@ public final class Messages {
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         }, assigner);
-    internal_static_grpc_testing_Payload_descriptor =
+    internal_static_grpc_testing_BoolValue_descriptor =
       getDescriptor().getMessageTypes().get(0);
+    internal_static_grpc_testing_BoolValue_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_BoolValue_descriptor,
+        new java.lang.String[] { "Value", });
+    internal_static_grpc_testing_Payload_descriptor =
+      getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_testing_Payload_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_Payload_descriptor,
         new java.lang.String[] { "Type", "Body", });
     internal_static_grpc_testing_EchoStatus_descriptor =
-      getDescriptor().getMessageTypes().get(1);
+      getDescriptor().getMessageTypes().get(2);
     internal_static_grpc_testing_EchoStatus_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_EchoStatus_descriptor,
         new java.lang.String[] { "Code", "Message", });
     internal_static_grpc_testing_SimpleRequest_descriptor =
-      getDescriptor().getMessageTypes().get(2);
+      getDescriptor().getMessageTypes().get(3);
     internal_static_grpc_testing_SimpleRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SimpleRequest_descriptor,
-        new java.lang.String[] { "ResponseType", "ResponseSize", "Payload", "FillUsername", "FillOauthScope", "ResponseCompression", "ResponseStatus", });
+        new java.lang.String[] { "ResponseType", "ResponseSize", "Payload", "FillUsername", "FillOauthScope", "ResponseCompressed", "ResponseStatus", "ExpectCompressed", });
     internal_static_grpc_testing_SimpleResponse_descriptor =
-      getDescriptor().getMessageTypes().get(3);
+      getDescriptor().getMessageTypes().get(4);
     internal_static_grpc_testing_SimpleResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SimpleResponse_descriptor,
         new java.lang.String[] { "Payload", "Username", "OauthScope", });
     internal_static_grpc_testing_StreamingInputCallRequest_descriptor =
-      getDescriptor().getMessageTypes().get(4);
+      getDescriptor().getMessageTypes().get(5);
     internal_static_grpc_testing_StreamingInputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_StreamingInputCallRequest_descriptor,
-        new java.lang.String[] { "Payload", });
+        new java.lang.String[] { "Payload", "ExpectCompressed", });
     internal_static_grpc_testing_StreamingInputCallResponse_descriptor =
-      getDescriptor().getMessageTypes().get(5);
+      getDescriptor().getMessageTypes().get(6);
     internal_static_grpc_testing_StreamingInputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_StreamingInputCallResponse_descriptor,
         new java.lang.String[] { "AggregatedPayloadSize", });
     internal_static_grpc_testing_ResponseParameters_descriptor =
-      getDescriptor().getMessageTypes().get(6);
+      getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_testing_ResponseParameters_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ResponseParameters_descriptor,
-        new java.lang.String[] { "Size", "IntervalUs", });
+        new java.lang.String[] { "Size", "IntervalUs", "Compressed", });
     internal_static_grpc_testing_StreamingOutputCallRequest_descriptor =
-      getDescriptor().getMessageTypes().get(7);
+      getDescriptor().getMessageTypes().get(8);
     internal_static_grpc_testing_StreamingOutputCallRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_StreamingOutputCallRequest_descriptor,
-        new java.lang.String[] { "ResponseType", "ResponseParameters", "Payload", "ResponseCompression", "ResponseStatus", });
+        new java.lang.String[] { "ResponseType", "ResponseParameters", "Payload", "ResponseStatus", });
     internal_static_grpc_testing_StreamingOutputCallResponse_descriptor =
-      getDescriptor().getMessageTypes().get(8);
+      getDescriptor().getMessageTypes().get(9);
     internal_static_grpc_testing_StreamingOutputCallResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_StreamingOutputCallResponse_descriptor,
         new java.lang.String[] { "Payload", });
+    internal_static_grpc_testing_ReconnectParams_descriptor =
+      getDescriptor().getMessageTypes().get(10);
+    internal_static_grpc_testing_ReconnectParams_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
+        internal_static_grpc_testing_ReconnectParams_descriptor,
+        new java.lang.String[] { "MaxReconnectBackoffMs", });
     internal_static_grpc_testing_ReconnectInfo_descriptor =
-      getDescriptor().getMessageTypes().get(9);
+      getDescriptor().getMessageTypes().get(11);
     internal_static_grpc_testing_ReconnectInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_ReconnectInfo_descriptor,
