@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -214,7 +215,10 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 			t.Fatalf("%v\n", err)
 		}
 		var updates []*Update
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				u, err := w.Next()
 				if err != nil {
@@ -226,6 +230,7 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(slp)
 		w.Close()
+		wg.Wait()
 		if !reflect.DeepEqual(addrResolved[i], updates) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", a, updatesToSlice(updates))
 		}
@@ -269,8 +274,11 @@ func TestIPWatcher(t *testing.T) {
 			t.Fatalf("%v\n", err)
 		}
 		var updates []*Update
+		var wg sync.WaitGroup
+		wg.Add(1)
 		count := 0
 		go func() {
+			defer wg.Done()
 			for {
 				u, err := w.Next()
 				if err != nil {
@@ -283,6 +291,7 @@ func TestIPWatcher(t *testing.T) {
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(time.Millisecond * 10)
 		w.Close()
+		wg.Wait()
 		if !reflect.DeepEqual(v, updates) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", k, updatesToSlice(updates))
 		}
