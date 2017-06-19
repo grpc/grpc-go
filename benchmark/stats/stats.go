@@ -76,8 +76,8 @@ func (stats *Stats) maybeUpdate() {
 	}
 
 	// Adjust the min/max according to the new unit.
-	stats.min /= int64(stats.unit)
-	stats.max /= int64(stats.unit)
+	// stats.min /= int64(stats.unit)
+	// stats.max /= int64(stats.unit)
 	numBuckets := stats.numBuckets
 	if n := int(stats.max - stats.min + 1); n < numBuckets {
 		numBuckets = n
@@ -85,13 +85,14 @@ func (stats *Stats) maybeUpdate() {
 	stats.histogram = NewHistogram(HistogramOptions{
 		NumBuckets: numBuckets,
 		// max-min(lower bound of last bucket) = (1 + growthFactor)^(numBuckets-2) * baseBucketSize.
-		// GrowthFactor can't be 0
-		GrowthFactor:   math.Pow(float64(stats.max-stats.min), 1/float64(numBuckets-2)) - 0.999,
+		GrowthFactor:   math.Pow(float64(stats.max-stats.min), 1/float64(numBuckets-2)) - 1,
 		BaseBucketSize: 1.0,
 		MinValue:       stats.min})
+	stats.histogram.Unit = stats.unit
 
 	for _, d := range stats.durations {
-		stats.histogram.Add(int64(d / stats.unit))
+		//stats.histogram.Add(int64(d / stats.unit))
+		stats.histogram.Add(int64(d))
 	}
 
 	stats.dirty = false

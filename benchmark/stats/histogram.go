@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Histogram accumulates values in the form of a histogram with
@@ -25,6 +26,8 @@ type Histogram struct {
 	Max int64
 	// Buckets contains all the buckets of the histogram.
 	Buckets []HistogramBucket
+	// Unit is the time unit when print the histogram
+	Unit time.Duration
 
 	opts                          HistogramOptions
 	logBaseBucketSize             float64
@@ -87,7 +90,7 @@ func NewHistogram(opts HistogramOptions) *Histogram {
 // Print writes textual output of the histogram values.
 func (h *Histogram) Print(w io.Writer) {
 	avg := float64(h.Sum) / float64(h.Count)
-	fmt.Fprintf(w, "Count: %d  Min: %d  Max: %d  Avg: %.2f\n", h.Count, h.Min, h.Max, avg)
+	fmt.Fprintf(w, "Count: %d  Min: %5.1f  Max: %5.1f  Avg: %.2f\n", h.Count, float64(h.Min)/float64(h.Unit), float64(h.Max)/float64(h.Unit), avg/float64(h.Unit))
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
 	if h.Count <= 0 {
 		return
@@ -103,9 +106,9 @@ func (h *Histogram) Print(w io.Writer) {
 
 	accCount := int64(0)
 	for i, b := range h.Buckets {
-		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound)
+		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound/float64(h.Unit))
 		if i+1 < len(h.Buckets) {
-			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound)
+			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound/float64(h.Unit))
 		} else {
 			fmt.Fprintf(w, "%*s)", maxBucketDigitLen, "inf")
 		}

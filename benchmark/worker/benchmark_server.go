@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
@@ -110,18 +109,17 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		closeFunc func()
 		err       error
 	)
-	nw := &latency.Network{}
 	if config.PayloadConfig != nil {
 		switch payload := config.PayloadConfig.Payload.(type) {
 		case *testpb.PayloadConfig_BytebufParams:
 			opts = append(opts, grpc.CustomCodec(byteBufCodec{}))
-			addr, closeFunc = benchmark.StartServer(nw, benchmark.ServerInfo{
+			addr, closeFunc = benchmark.StartServer(benchmark.ServerInfo{
 				Addr:     ":" + strconv.Itoa(port),
 				Type:     "bytebuf",
 				Metadata: payload.BytebufParams.RespSize,
 			}, opts...)
 		case *testpb.PayloadConfig_SimpleParams:
-			addr, closeFunc = benchmark.StartServer(nw, benchmark.ServerInfo{
+			addr, closeFunc = benchmark.StartServer(benchmark.ServerInfo{
 				Addr: ":" + strconv.Itoa(port),
 				Type: "protobuf",
 			}, opts...)
@@ -132,7 +130,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}
 	} else {
 		// Start protobuf server if payload config is nil.
-		addr, closeFunc = benchmark.StartServer(nw, benchmark.ServerInfo{
+		addr, closeFunc = benchmark.StartServer(benchmark.ServerInfo{
 			Addr: ":" + strconv.Itoa(port),
 			Type: "protobuf",
 		}, opts...)

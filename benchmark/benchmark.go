@@ -134,12 +134,16 @@ type ServerInfo struct {
 	// For "protobuf", it's ignored.
 	// For "bytebuf", it should be an int representing response size.
 	Metadata interface{}
+
+	// Network can simulate latency
+	Network *latency.Network
 }
 
 // StartServer starts a gRPC server serving a benchmark service according to info.
 // It returns its listen address and a function to stop the server.
-func StartServer(nw *latency.Network, info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
+func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", info.Addr)
+	nw := info.Network
 	if nw != nil {
 		lis = nw.Listener(lis)
 	}
@@ -229,20 +233,19 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
-	nw.Kbps = -1
 	b.StopTimer()
-	target, stopper := StartServer(nw, ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
 		target,
 		grpc.WithInsecure(),
 		grpc.WithDialer(
 			func(address string, timeout time.Duration) (net.Conn, error) {
-				clientConn, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+				connTimeout, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
 				if err != nil {
-					b.Fatalf("Unexpected error dialing: %v", err)
+					return nil, err
 				}
-				return clientConn, err
+				return connTimeout, err
 			}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
@@ -286,18 +289,18 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
-	target, stopper := StartServer(nw, ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
 		target,
 		grpc.WithInsecure(),
 		grpc.WithDialer(
 			func(address string, timeout time.Duration) (net.Conn, error) {
-				clientConn, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+				connTimeout, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
 				if err != nil {
-					b.Fatalf("Unexpected error dialing: %v", err)
+					return nil, err
 				}
-				return clientConn, err
+				return connTimeout, err
 			}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
