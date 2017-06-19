@@ -654,7 +654,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	}
 	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
 	if err != nil {
-		grpclog.Println("grpc: server failed to encode response: ", err)
+		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
 	}
 	if len(p) > s.opts.maxSendMessageSize {
