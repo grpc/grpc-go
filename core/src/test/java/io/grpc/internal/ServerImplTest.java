@@ -146,6 +146,8 @@ public class ServerImplTest {
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
   @Captor
+  private ArgumentCaptor<Metadata> metadataCaptor;
+  @Captor
   private ArgumentCaptor<ServerStreamListener> streamListenerCaptor;
 
   @Mock
@@ -981,8 +983,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1006,8 +1007,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1030,8 +1030,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1054,8 +1053,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1078,8 +1076,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1102,8 +1099,7 @@ public class ServerImplTest {
       fail("Expected exception");
     } catch (Throwable t) {
       assertSame(expectedT, t);
-      verify(stream).close(statusCaptor.capture(), any(Metadata.class));
-      assertSame(expectedT, statusCaptor.getValue().getCause());
+      ensureServerStateNotLeaked();
     }
   }
 
@@ -1135,6 +1131,13 @@ public class ServerImplTest {
     verify(timerPool).returnObject(same(timer.getScheduledExecutorService()));
     verifyNoMoreInteractions(executorPool);
     verifyNoMoreInteractions(timerPool);
+  }
+
+  private void ensureServerStateNotLeaked() {
+    verify(stream).close(statusCaptor.capture(), metadataCaptor.capture());
+    assertEquals(Status.UNKNOWN, statusCaptor.getValue());
+    assertNull(statusCaptor.getValue().getCause());
+    assertTrue(metadataCaptor.getValue().keys().isEmpty());
   }
 
   private static class SimpleServer implements io.grpc.internal.InternalServer {

@@ -546,9 +546,9 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     /**
      * Like {@link ServerCall#close(Status, Metadata)}, but thread-safe for internal use.
      */
-    private void internalClose(Status status, Metadata trailers) {
+    private void internalClose() {
       // TODO(ejona86): this is not thread-safe :)
-      stream.close(status, trailers);
+      stream.close(Status.UNKNOWN, new Metadata());
     }
 
     @Override
@@ -559,10 +559,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           try {
             getListener().messageRead(message);
           } catch (RuntimeException e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           } catch (Error e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           }
         }
@@ -577,10 +577,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           try {
             getListener().halfClosed();
           } catch (RuntimeException e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           } catch (Error e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           }
         }
@@ -612,10 +612,10 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           try {
             getListener().onReady();
           } catch (RuntimeException e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           } catch (Error e) {
-            internalClose(Status.fromThrowable(e), new Metadata());
+            internalClose();
             throw e;
           }
         }
