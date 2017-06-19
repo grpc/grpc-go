@@ -17,41 +17,68 @@
  */
 
 // Package glogger defines glog-based logging for grpc.
+// Importing this package will install glog as the logger used by grpclog.
 package glogger
 
 import (
-	"fmt"
-
 	"github.com/golang/glog"
 	"google.golang.org/grpc/grpclog"
 )
 
 func init() {
-	grpclog.SetLogger(&glogger{})
+	grpclog.SetLoggerV2(&glogger{})
 }
 
 type glogger struct{}
 
-func (g *glogger) Fatal(args ...interface{}) {
-	glog.FatalDepth(2, args...)
+func (g *glogger) Info(args ...interface{}) {
+	glog.Info(args...)
 }
 
-func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintf(format, args...))
+func (g *glogger) Infoln(args ...interface{}) {
+	glog.Infoln(args...)
+}
+
+func (g *glogger) Infof(format string, args ...interface{}) {
+	glog.Infof(format, args...)
+}
+
+func (g *glogger) Warning(args ...interface{}) {
+	glog.Warning(args...)
+}
+
+func (g *glogger) Warningln(args ...interface{}) {
+	glog.Warningln(args...)
+}
+
+func (g *glogger) Warningf(format string, args ...interface{}) {
+	glog.Warningf(format, args...)
+}
+
+func (g *glogger) Error(args ...interface{}) {
+	glog.Error(args...)
+}
+
+func (g *glogger) Errorln(args ...interface{}) {
+	glog.Errorln(args...)
+}
+
+func (g *glogger) Errorf(format string, args ...interface{}) {
+	glog.Errorf(format, args...)
+}
+
+func (g *glogger) Fatal(args ...interface{}) {
+	glog.Fatal(args...)
 }
 
 func (g *glogger) Fatalln(args ...interface{}) {
-	glog.FatalDepth(2, fmt.Sprintln(args...))
+	glog.Fatalln(args...)
 }
 
-func (g *glogger) Print(args ...interface{}) {
-	glog.InfoDepth(2, args...)
+func (g *glogger) Fatalf(format string, args ...interface{}) {
+	glog.Fatalf(format, args...)
 }
 
-func (g *glogger) Printf(format string, args ...interface{}) {
-	glog.InfoDepth(2, fmt.Sprintf(format, args...))
-}
-
-func (g *glogger) Println(args ...interface{}) {
-	glog.InfoDepth(2, fmt.Sprintln(args...))
+func (g *glogger) V(l int) bool {
+	return bool(glog.V(glog.Level(l)))
 }
