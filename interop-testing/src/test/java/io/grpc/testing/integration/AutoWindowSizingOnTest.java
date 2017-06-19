@@ -17,7 +17,7 @@
 package io.grpc.testing.integration;
 
 import io.grpc.ManagedChannel;
-import io.grpc.netty.HandlerSettings;
+import io.grpc.netty.InternalHandlerSettings;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -31,8 +31,8 @@ public class AutoWindowSizingOnTest extends AbstractInteropTest {
 
   @BeforeClass
   public static void turnOnAutoWindow() {
-    HandlerSettings.enable(true);
-    HandlerSettings.autoWindowOn(true);
+    InternalHandlerSettings.enable(true);
+    InternalHandlerSettings.autoWindowOn(true);
     startStaticServer(
         NettyServerBuilder.forPort(0)
             .maxMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE));

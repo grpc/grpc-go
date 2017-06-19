@@ -24,7 +24,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
-import io.grpc.netty.HandlerSettings;
+import io.grpc.netty.InternalHandlerSettings;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
@@ -76,8 +76,8 @@ public class NettyFlowControlTest {
 
   @BeforeClass
   public static void setUp() {
-    HandlerSettings.enable(true);
-    HandlerSettings.autoWindowOn(true);
+    InternalHandlerSettings.enable(true);
+    InternalHandlerSettings.autoWindowOn(true);
   }
 
   @AfterClass
@@ -206,7 +206,7 @@ public class NettyFlowControlTest {
 
     @Override
     public void onNext(StreamingOutputCallResponse value) {
-      lastWindow = HandlerSettings.getLatestClientWindow();
+      lastWindow = InternalHandlerSettings.getLatestClientWindow();
       if (lastWindow >= expectedWindow) {
         onCompleted();
       }

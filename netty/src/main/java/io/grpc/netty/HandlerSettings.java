@@ -17,60 +17,31 @@
 package io.grpc.netty;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import io.grpc.Internal;
 
 /**
  * Allows autoFlowControl to be turned on and off from interop testing and flow control windows to
  * be accessed. For internal use only.
+ *
+ * @deprecated renamed to {@link InternalHandlerSettings} and should not be used externally
  */
 @VisibleForTesting // Visible for tests in other packages.
 @Internal
+@Deprecated
 public final class HandlerSettings {
-
-  private static volatile boolean enabled;
-
-  private static boolean autoFlowControlOn;
-  // These will be the most recently created handlers created using NettyClientTransport and
-  // NettyServerTransport
-  private static AbstractNettyHandler clientHandler;
-  private static AbstractNettyHandler serverHandler;
-
-  static void setAutoWindow(AbstractNettyHandler handler) {
-    if (!enabled) {
-      return;
-    }
-    synchronized (HandlerSettings.class) {
-      handler.setAutoTuneFlowControl(autoFlowControlOn);
-      if (handler instanceof NettyClientHandler) {
-        clientHandler = handler;
-      } else if (handler instanceof NettyServerHandler) {
-        serverHandler = handler;
-      } else {
-        throw new RuntimeException("Expecting NettyClientHandler or NettyServerHandler");
-      }
-    }
-  }
-
   public static void enable(boolean enable) {
-    enabled = enable;
+    InternalHandlerSettings.enable(enable);
   }
 
   public static synchronized void autoWindowOn(boolean autoFlowControl) {
-    autoFlowControlOn = autoFlowControl;
+    InternalHandlerSettings.autoWindowOn(autoFlowControl);
   }
 
   public static synchronized int getLatestClientWindow() {
-    return getLatestWindow(clientHandler);
+    return InternalHandlerSettings.getLatestServerWindow();
   }
 
   public static synchronized int getLatestServerWindow() {
-    return getLatestWindow(serverHandler);
-  }
-
-  private static synchronized int getLatestWindow(AbstractNettyHandler handler) {
-    Preconditions.checkNotNull(handler);
-    return handler.decoder().flowController()
-        .initialWindowSize(handler.connection().connectionStream());
+    return InternalHandlerSettings.getLatestServerWindow();
   }
 }
