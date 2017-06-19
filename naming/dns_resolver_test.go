@@ -213,7 +213,6 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		defer w.Close()
 		var updates []*Update
 		go func() {
 			for {
@@ -226,7 +225,7 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		}()
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(slp)
-
+		w.Close()
 		if !reflect.DeepEqual(addrResolved[i], updates) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", a, updatesToSlice(updates))
 		}
@@ -269,7 +268,6 @@ func TestIPWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		defer w.Close()
 		var updates []*Update
 		count := 0
 		go func() {
@@ -284,6 +282,7 @@ func TestIPWatcher(t *testing.T) {
 		}()
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(time.Millisecond * 10)
+		w.Close()
 		if !reflect.DeepEqual(v, updates) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", k, updatesToSlice(updates))
 		}
