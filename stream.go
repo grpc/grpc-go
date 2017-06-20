@@ -84,6 +84,11 @@ type ClientStream interface {
 	// CloseSend closes the send direction of the stream. It closes the stream
 	// when non-nil error is met.
 	CloseSend() error
+	// Stream.SendMsg() may return a non-nil error when something wrong happens sending
+	// the request. The returned error indicates the status of this sending, not the final
+	// status of the RPC.
+	// Always call Stream.RecvMsg() to get the final status if you care about the status of
+	// the RPC.
 	Stream
 }
 
