@@ -432,7 +432,6 @@ public final class NettyChannelBuilder
     private final Class<? extends Channel> channelType;
     private final Map<ChannelOption<?>, ?> channelOptions;
     private final NegotiationType negotiationType;
-    private final SslContext sslContext;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
@@ -452,23 +451,10 @@ public final class NettyChannelBuilder
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
-      if (negotiationType == NegotiationType.TLS && sslContext == null) {
-        try {
-          sslContext = GrpcSslContexts.forClient().build();
-        } catch (SSLException ex) {
-          throw new RuntimeException(ex);
-        }
-      }
-      this.sslContext = sslContext;
 
       if (transportCreationParamsFilterFactory == null) {
-        transportCreationParamsFilterFactory = new TransportCreationParamsFilterFactory() {
-          @Override
-          public TransportCreationParamsFilter create(
-              SocketAddress targetServerAddress, String authority, String userAgent) {
-            return new DynamicNettyTransportParams(targetServerAddress, authority, userAgent);
-          }
-        };
+        transportCreationParamsFilterFactory =
+            new DefaultNettyTransportCreationParamsFilterFactory(sslContext);
       }
       this.transportCreationParamsFilterFactory = transportCreationParamsFilterFactory;
 
@@ -523,38 +509,60 @@ public final class NettyChannelBuilder
       }
     }
 
-    @CheckReturnValue
-    private final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
+    private final class DefaultNettyTransportCreationParamsFilterFactory
+        implements TransportCreationParamsFilterFactory {
+      private final SslContext sslContext;
 
-      private final SocketAddress targetServerAddress;
-      private final String authority;
-      @Nullable private final String userAgent;
+      private DefaultNettyTransportCreationParamsFilterFactory(SslContext sslContext) {
+        if (negotiationType == NegotiationType.TLS && sslContext == null) {
+          try {
+            sslContext = GrpcSslContexts.forClient().build();
+          } catch (SSLException ex) {
+            throw new RuntimeException(ex);
+          }
+        }
+        this.sslContext = sslContext;
+      }
 
-      private DynamicNettyTransportParams(
+      @Override
+      public TransportCreationParamsFilter create(
           SocketAddress targetServerAddress, String authority, String userAgent) {
-        this.targetServerAddress = targetServerAddress;
-        this.authority = authority;
-        this.userAgent = userAgent;
+        return new DynamicNettyTransportParams(targetServerAddress, authority, userAgent);
       }
 
-      @Override
-      public SocketAddress getTargetServerAddress() {
-        return targetServerAddress;
-      }
+      @CheckReturnValue
+      private final class DynamicNettyTransportParams implements TransportCreationParamsFilter {
 
-      @Override
-      public String getAuthority() {
-        return authority;
-      }
+        private final SocketAddress targetServerAddress;
+        private final String authority;
+        @Nullable private final String userAgent;
 
-      @Override
-      public String getUserAgent() {
-        return userAgent;
-      }
+        private DynamicNettyTransportParams(
+            SocketAddress targetServerAddress, String authority, String userAgent) {
+          this.targetServerAddress = targetServerAddress;
+          this.authority = authority;
+          this.userAgent = userAgent;
+        }
 
-      @Override
-      public ProtocolNegotiator getProtocolNegotiator() {
-        return createProtocolNegotiator(authority, negotiationType, sslContext);
+        @Override
+        public SocketAddress getTargetServerAddress() {
+          return targetServerAddress;
+        }
+
+        @Override
+        public String getAuthority() {
+          return authority;
+        }
+
+        @Override
+        public String getUserAgent() {
+          return userAgent;
+        }
+
+        @Override
+        public ProtocolNegotiator getProtocolNegotiator() {
+          return createProtocolNegotiator(authority, negotiationType, sslContext);
+        }
       }
     }
   }
