@@ -88,6 +88,7 @@ func compareTwoMap(m1, m2 map[string][]string) {
 				percentChange := strconv.FormatFloat((num2-num1*factor)*100.0/(num1*factor), 'f', 2, 64) + "% "
 
 				switch {
+				// 0 to 5 are from benchmem, 6 to 18 are latency. v[i-1] is the name of the tile, v[i] is value.
 				case i == 0:
 					changes = changes + combineString("\noperations", v1[i], v2[i], "")
 				case i >= 1 && i <= 5:
@@ -104,14 +105,11 @@ func compareTwoMap(m1, m2 map[string][]string) {
 func main() {
 	file1 := os.Args[1]
 	file2 := os.Args[2]
-
 	var BenchValueFile1 map[string][]string
 	var BenchValueFile2 map[string][]string
 	BenchValueFile1 = make(map[string][]string)
 	BenchValueFile2 = make(map[string][]string)
-
 	createMap(file1, BenchValueFile1)
 	createMap(file2, BenchValueFile2)
-
 	compareTwoMap(BenchValueFile1, BenchValueFile2)
 }
