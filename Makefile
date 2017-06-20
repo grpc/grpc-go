@@ -9,6 +9,9 @@ updatedeps:
 testdeps:
 	go get -d -v -t google.golang.org/grpc/...
 
+benchdeps: testdeps
+	go get -d -v golang.org/x/perf/cmd/benchstat
+
 updatetestdeps:
 	go get -d -v -t -u -f google.golang.org/grpc/...
 
@@ -32,8 +35,8 @@ test: testdeps
 testrace: testdeps
 	go test -v -race -cpu 1,4 google.golang.org/grpc/...
 
-benchmark: testdeps
-	go test google.golang.org/grpc/benchmark/... -benchmem -bench=.
+benchmark: benchdeps
+	go test google.golang.org/grpc/benchmark/... -benchmem -bench=. | tee /tmp/tmp.result && benchstat /tmp/tmp.result && rm /tmp/tmp.result
 
 clean:
 	go clean -i google.golang.org/grpc/...
