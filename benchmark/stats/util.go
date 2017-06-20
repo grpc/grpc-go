@@ -188,7 +188,7 @@ func injectStatsIfFinished(line string) {
 				if name != "" {
 					name = ": " + name
 				}
-				fmt.Fprintf(orgStdout, "--- %s%s\n", lines[0], name)
+				fmt.Fprintf(orgStdout, "%s%s\n", lines[0], name)
 				for _, line := range lines[1 : n-1] {
 					fmt.Fprintf(orgStdout, "\t%s\n", line)
 				}

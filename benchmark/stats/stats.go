@@ -23,8 +23,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
+	"strings"
 	"time"
 )
+
+var printHistogram bool = false
 
 // Stats is a simple helper for gathering additional statistics like histogram
 // during benchmarks. This is not thread safe.
@@ -65,6 +69,11 @@ func (stats *Stats) Clear() {
 	stats.histogram = nil
 	stats.dirty = false
 }
+
+//Sort method for durations
+func (a durationSlice) Len() int           { return len(a) }
+func (a durationSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a durationSlice) Less(i, j int) bool { return a[i] < a[j] }
 
 // maybeUpdate updates internal stat data if there was any newly added
 // stats since this was updated.
@@ -107,6 +116,8 @@ func (stats *Stats) maybeUpdate() {
 		BaseBucketSize: 1.0,
 		MinValue:       stats.min})
 
+	sort.Sort(stats.durations)
+
 	for _, d := range stats.durations {
 		stats.histogram.Add(int64(d / stats.unit))
 	}
@@ -118,11 +129,24 @@ func (stats *Stats) maybeUpdate() {
 func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
 
-	if stats.histogram == nil {
-		fmt.Fprint(w, "Histogram (empty)\n")
-	} else {
-		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.Print(w)
+	avg := float64(stats.histogram.Sum) / float64(stats.histogram.Count)
+	var percentToObserve = []int64{50, 90, 99, 100}
+	fmt.Fprintf(w, "Latency - unit: %s \n", fmt.Sprintf("%v", stats.unit)[1:])
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 20))
+	for _, position := range percentToObserve {
+		fmt.Fprintf(w, "|   %*d%%   | %*d %s |\n", 3, position, 7,
+			stats.durations[stats.histogram.Count*position/100-1]/stats.unit, fmt.Sprintf("%v", stats.unit)[1:])
+	}
+	fmt.Fprintf(w, "| Average  | %7.2f %s |\n", avg, fmt.Sprintf("%v", stats.unit)[1:])
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 20))
+
+	if printHistogram {
+		if stats.histogram == nil {
+			fmt.Fprint(w, "Histogram (empty)\n")
+		} else {
+			fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
+			stats.histogram.Print(w)
+		}
 	}
 }
 
