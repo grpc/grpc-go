@@ -1,33 +1,18 @@
 /*
  *
- * Copyright 2016, Google Inc.
- * All rights reserved.
+ * Copyright 2016 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
@@ -39,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -61,8 +45,8 @@ var (
 	besn    = "foo.com"
 	lbToken = "iamatoken"
 
-	// Resolver replaces 127.0.0.1 with fakeName in Next().
-	// Dialer replaces fakeName with 127.0.0.1 when dialing.
+	// Resolver replaces localhost with fakeName in Next().
+	// Dialer replaces fakeName with localhost when dialing.
 	// This will test that custom dialer is passed from Dial to grpclb.
 	fakeName = "fake.Name"
 )
@@ -87,9 +71,9 @@ func (w *testWatcher) Next() (updates []*naming.Update, err error) {
 			break
 		}
 		if u != nil {
-			// Resolver replaces 127.0.0.1 with fakeName in Next().
-			// Custom dialer will replace fakeName with 127.0.0.1 when dialing.
-			u.Addr = strings.Replace(u.Addr, "127.0.0.1", fakeName, 1)
+			// Resolver replaces localhost with fakeName in Next().
+			// Custom dialer will replace fakeName with localhost when dialing.
+			u.Addr = strings.Replace(u.Addr, "localhost", fakeName, 1)
 			updates = append(updates, u)
 		}
 	}
@@ -144,8 +128,9 @@ func (r *testNameResolver) inject(updates []*naming.Update) {
 }
 
 type serverNameCheckCreds struct {
-	expected string
+	mu       sync.Mutex
 	sn       string
+	expected string
 }
 
 func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -156,6 +141,8 @@ func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, cred
 	return rawConn, nil, nil
 }
 func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	b := make([]byte, len(c.expected))
 	if _, err := rawConn.Read(b); err != nil {
 		fmt.Printf("Failed to read the server name from the server %v", err)
@@ -168,22 +155,28 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string,
 	return rawConn, nil, nil
 }
 func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return credentials.ProtocolInfo{}
 }
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return &serverNameCheckCreds{
 		expected: c.expected,
 	}
 }
 func (c *serverNameCheckCreds) OverrideServerName(s string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.expected = s
 	return nil
 }
 
-// fakeNameDialer replaces fakeName with 127.0.0.1 when dialing.
+// fakeNameDialer replaces fakeName with localhost when dialing.
 // This will test that custom dialer is passed from Dial to grpclb.
 func fakeNameDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	addr = strings.Replace(addr, fakeName, "127.0.0.1", 1)
+	addr = strings.Replace(addr, fakeName, "localhost", 1)
 	return net.DialTimeout("tcp", addr, timeout)
 }
 
@@ -333,10 +326,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 			return
 		}
 		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
-
-		beAddr := strings.Split(beLis.Addr().String(), ":")
-		bePort, _ := strconv.Atoi(beAddr[1])
-		bePorts = append(bePorts, bePort)
+		bePorts = append(bePorts, beLis.Addr().(*net.TCPAddr).Port)
 
 		beListeners = append(beListeners, beLis)
 	}
@@ -614,7 +604,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	testC := testpb.NewTestServiceClient(cc)
 	var previousTrailer string
 	trailer := metadata.MD{}
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	} else {
 		previousTrailer = trailer[testmdkey][0]
@@ -623,7 +613,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	// When lbs[0] is stopped, lbs[1] should be used.
 	lbs[0].Stop()
 	for {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		} else if trailer[testmdkey][0] != previousTrailer {
 			// A new backend server should receive the request.
@@ -646,7 +636,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	// Stop lbs[1]. Now lbs[0] and lbs[1] are all stopped. lbs[2] should be used.
 	lbs[1].Stop()
 	for {
-		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer)); err != nil {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Trailer(&trailer), grpc.FailFast(false)); err != nil {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		} else if trailer[testmdkey][0] != previousTrailer {
 			// A new backend server should receive the request.

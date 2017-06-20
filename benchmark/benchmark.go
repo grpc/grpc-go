@@ -1,33 +1,18 @@
 /*
  *
- * Copyright 2014, Google Inc.
- * All rights reserved.
+ * Copyright 2014 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
@@ -40,10 +25,14 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
+	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	testpb "google.golang.org/grpc/benchmark/grpc_testing"
+	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -231,4 +220,110 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
 	}
 	return conn
+}
+
+func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
+	s := stats.AddStats(b, 38)
+	b.StopTimer()
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	defer stopper()
+	conn := NewClientConn(target, grpc.WithInsecure())
+	tc := testpb.NewBenchmarkServiceClient(conn)
+
+	// Warm up connection.
+	for i := 0; i < 10; i++ {
+		unaryCaller(tc, reqSize, respSize)
+	}
+	ch := make(chan int, maxConcurrentCalls*4)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	wg.Add(maxConcurrentCalls)
+
+	// Distribute the b.N calls over maxConcurrentCalls workers.
+	for i := 0; i < maxConcurrentCalls; i++ {
+		go func() {
+			for range ch {
+				start := time.Now()
+				unaryCaller(tc, reqSize, respSize)
+				elapse := time.Since(start)
+				mu.Lock()
+				s.Add(elapse)
+				mu.Unlock()
+			}
+			wg.Done()
+		}()
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ch <- i
+	}
+	b.StopTimer()
+	close(ch)
+	wg.Wait()
+	conn.Close()
+}
+
+func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize int) {
+	s := stats.AddStats(b, 38)
+	b.StopTimer()
+	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf"}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
+	defer stopper()
+	conn := NewClientConn(target, grpc.WithInsecure())
+	tc := testpb.NewBenchmarkServiceClient(conn)
+
+	// Warm up connection.
+	stream, err := tc.StreamingCall(context.Background())
+	if err != nil {
+		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+	}
+	for i := 0; i < 10; i++ {
+		streamCaller(stream, reqSize, respSize)
+	}
+
+	ch := make(chan struct{}, maxConcurrentCalls*4)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	wg.Add(maxConcurrentCalls)
+
+	// Distribute the b.N calls over maxConcurrentCalls workers.
+	for i := 0; i < maxConcurrentCalls; i++ {
+		stream, err := tc.StreamingCall(context.Background())
+		if err != nil {
+			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+		}
+		go func() {
+			for range ch {
+				start := time.Now()
+				streamCaller(stream, reqSize, respSize)
+				elapse := time.Since(start)
+				mu.Lock()
+				s.Add(elapse)
+				mu.Unlock()
+			}
+			wg.Done()
+		}()
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		ch <- struct{}{}
+	}
+	b.StopTimer()
+	close(ch)
+	wg.Wait()
+	conn.Close()
+}
+func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
+	if err := DoUnaryCall(client, reqSize, respSize); err != nil {
+		grpclog.Fatalf("DoUnaryCall failed: %v", err)
+	}
+}
+
+func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+	if err := DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
+		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
+	}
 }
