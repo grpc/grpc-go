@@ -124,7 +124,7 @@ func NewLoggerV2(infoW, warningW, errorW io.Writer) LoggerV2 {
 // newLoggerV2 creates a loggerV2 to be used as default logger.
 // All logs are written to stderr.
 func newLoggerV2() LoggerV2 {
-	return NewLoggerV2(os.Stderr, ioutil.Discard, ioutil.Discard)
+	return NewLoggerV2(ioutil.Discard, ioutil.Discard, os.Stderr)
 }
 
 func (g *loggerT) Info(args ...interface{}) {
