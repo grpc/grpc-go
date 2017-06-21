@@ -143,12 +143,12 @@ type ServerInfo struct {
 // It returns its listen address and a function to stop the server.
 func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	lis, err := net.Listen("tcp", info.Addr)
+	if err != nil {
+		grpclog.Fatalf("Failed to listen: %v", err)
+	}
 	nw := info.Network
 	if nw != nil {
 		lis = nw.Listener(lis)
-	}
-	if err != nil {
-		grpclog.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(opts...)
 	switch info.Type {
@@ -241,11 +241,7 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int
 		grpc.WithInsecure(),
 		grpc.WithDialer(
 			func(address string, timeout time.Duration) (net.Conn, error) {
-				connTimeout, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-				if err != nil {
-					return nil, err
-				}
-				return connTimeout, err
+				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
 			}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
@@ -296,11 +292,7 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 		grpc.WithInsecure(),
 		grpc.WithDialer(
 			func(address string, timeout time.Duration) (net.Conn, error) {
-				connTimeout, err := nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-				if err != nil {
-					return nil, err
-				}
-				return connTimeout, err
+				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
 			}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)

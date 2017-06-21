@@ -85,7 +85,6 @@ func (stats *Stats) maybeUpdate() {
 		GrowthFactor:   math.Pow(float64(stats.max-stats.min), 1/float64(numBuckets-2)) - 1,
 		BaseBucketSize: 1.0,
 		MinValue:       stats.min})
-	stats.histogram.Unit = stats.unit
 
 	for _, d := range stats.durations {
 		stats.histogram.Add(int64(d))
@@ -102,7 +101,7 @@ func (stats *Stats) Print(w io.Writer) {
 		fmt.Fprint(w, "Histogram (empty)\n")
 	} else {
 		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.Print(w)
+		stats.histogram.PrintWithUnit(w, float64(stats.unit))
 	}
 }
 
