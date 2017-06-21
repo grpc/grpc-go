@@ -57,6 +57,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer;
 import io.grpc.ServerTransportFilter;
@@ -70,6 +71,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executor;
@@ -96,6 +99,13 @@ import org.mockito.MockitoAnnotations;
 public class ServerImplTest {
   private static final IntegerMarshaller INTEGER_MARSHALLER = IntegerMarshaller.INSTANCE;
   private static final StringMarshaller STRING_MARSHALLER = StringMarshaller.INSTANCE;
+  private static final MethodDescriptor<String, Integer> METHOD =
+      MethodDescriptor.<String, Integer>newBuilder()
+          .setType(MethodDescriptor.MethodType.UNKNOWN)
+          .setFullMethodName("Waiter/serve")
+          .setRequestMarshaller(STRING_MARSHALLER)
+          .setResponseMarshaller(INTEGER_MARSHALLER)
+          .build();
   private static final Context.Key<String> SERVER_ONLY = Context.key("serverOnly");
   private static final Context.Key<String> SERVER_TRACER_ADDED_KEY = Context.key("tracer-added");
   private static final Context.CancellableContext SERVER_CONTEXT =
@@ -402,16 +412,10 @@ public class ServerImplTest {
     final AtomicReference<ServerCall<String, Integer>> callReference
         = new AtomicReference<ServerCall<String, Integer>>();
     final AtomicReference<Context> callContextReference = new AtomicReference<Context>();
-    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("Waiter/serve")
-        .setRequestMarshaller(STRING_MARSHALLER)
-        .setResponseMarshaller(INTEGER_MARSHALLER)
-        .build();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
+        new ServiceDescriptor("Waiter", METHOD))
         .addMethod(
-            method,
+            METHOD,
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -570,18 +574,95 @@ public class ServerImplTest {
   }
 
   @Test
+  public void interceptors() throws Exception {
+    final LinkedList<Context> capturedContexts = new LinkedList<Context>();
+    final Context.Key<String> key1 = Context.key("key1");
+    final Context.Key<String> key2 = Context.key("key2");
+    final Context.Key<String> key3 = Context.key("key3");
+    ServerInterceptor intercepter1 = new ServerInterceptor() {
+        @Override
+        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+            ServerCall<ReqT, RespT> call,
+            Metadata headers,
+            ServerCallHandler<ReqT, RespT> next) {
+          Context ctx = Context.current().withValue(key1, "value1");
+          Context origCtx = ctx.attach();
+          try {
+            capturedContexts.add(ctx);
+            return next.startCall(call, headers);
+          } finally {
+            ctx.detach(origCtx);
+          }
+        }
+      };
+    ServerInterceptor intercepter2 = new ServerInterceptor() {
+        @Override
+        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+            ServerCall<ReqT, RespT> call,
+            Metadata headers,
+            ServerCallHandler<ReqT, RespT> next) {
+          Context ctx = Context.current().withValue(key2, "value2");
+          Context origCtx = ctx.attach();
+          try {
+            capturedContexts.add(ctx);
+            return next.startCall(call, headers);
+          } finally {
+            ctx.detach(origCtx);
+          }
+        }
+      };
+    ServerCallHandler<String, Integer> callHandler = new ServerCallHandler<String, Integer>() {
+        @Override
+        public ServerCall.Listener<String> startCall(
+            ServerCall<String, Integer> call,
+            Metadata headers) {
+          capturedContexts.add(Context.current().withValue(key3, "value3"));
+          return callListener;
+        }
+      };
+
+    mutableFallbackRegistry.addService(
+        ServerServiceDefinition.builder(new ServiceDescriptor("Waiter", METHOD))
+            .addMethod(METHOD, callHandler).build());
+    createServer(NO_FILTERS, Arrays.asList(intercepter2, intercepter1));
+    server.start();
+
+    ServerTransportListener transportListener
+        = transportServer.registerNewServerTransport(new SimpleServerTransport());
+
+    Metadata requestHeaders = new Metadata();
+    StatsTraceContext statsTraceCtx =
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
+    when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
+
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
+    assertEquals(1, executor.runDueTasks());
+
+    Context ctx1 = capturedContexts.poll();
+    assertEquals("value1", key1.get(ctx1));
+    assertNull(key2.get(ctx1));
+    assertNull(key3.get(ctx1));
+
+    Context ctx2 = capturedContexts.poll();
+    assertEquals("value1", key1.get(ctx2));
+    assertEquals("value2", key2.get(ctx2));
+    assertNull(key3.get(ctx2));
+
+    Context ctx3 = capturedContexts.poll();
+    assertEquals("value1", key1.get(ctx3));
+    assertEquals("value2", key2.get(ctx3));
+    assertEquals("value3", key3.get(ctx3));
+
+    assertTrue(capturedContexts.isEmpty());
+  }
+
+  @Test
   public void exceptionInStartCallPropagatesToStream() throws Exception {
     createAndStartServer(NO_FILTERS);
     final Status status = Status.ABORTED.withDescription("Oh, no!");
-    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("Waiter/serve")
-        .setRequestMarshaller(STRING_MARSHALLER)
-        .setResponseMarshaller(INTEGER_MARSHALLER)
-        .build();
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
-        .addMethod(method,
+        new ServiceDescriptor("Waiter", METHOD))
+        .addMethod(METHOD,
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -695,20 +776,14 @@ public class ServerImplTest {
   @Test
   public void testCallContextIsBoundInListenerCallbacks() throws Exception {
     createAndStartServer(NO_FILTERS);
-    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("Waiter/serve")
-        .setRequestMarshaller(STRING_MARSHALLER)
-        .setResponseMarshaller(INTEGER_MARSHALLER)
-        .build();
     final AtomicBoolean  onReadyCalled = new AtomicBoolean(false);
     final AtomicBoolean onMessageCalled = new AtomicBoolean(false);
     final AtomicBoolean onHalfCloseCalled = new AtomicBoolean(false);
     final AtomicBoolean onCancelCalled = new AtomicBoolean(false);
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
+        new ServiceDescriptor("Waiter", METHOD))
         .addMethod(
-            method,
+            METHOD,
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -809,16 +884,9 @@ public class ServerImplTest {
       }
     };
 
-    MethodDescriptor<String, Integer> method = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("Waiter/serve")
-        .setRequestMarshaller(STRING_MARSHALLER)
-        .setResponseMarshaller(INTEGER_MARSHALLER)
-        .build();
-
     mutableFallbackRegistry.addService(ServerServiceDefinition.builder(
-        new ServiceDescriptor("Waiter", method))
-        .addMethod(method,
+        new ServiceDescriptor("Waiter", METHOD))
+        .addMethod(METHOD,
             new ServerCallHandler<String, Integer>() {
               @Override
               public ServerCall.Listener<String> startCall(
@@ -928,15 +996,9 @@ public class ServerImplTest {
   @Test
   public void handlerRegistryPriorities() throws Exception {
     fallbackRegistry = mock(HandlerRegistry.class);
-    MethodDescriptor<String, Integer> method1 = MethodDescriptor.<String, Integer>newBuilder()
-        .setType(MethodDescriptor.MethodType.UNKNOWN)
-        .setFullMethodName("Service1/Method1")
-        .setRequestMarshaller(STRING_MARSHALLER)
-        .setResponseMarshaller(INTEGER_MARSHALLER)
-        .build();
     registry = new InternalHandlerRegistry.Builder()
-        .addService(ServerServiceDefinition.builder(new ServiceDescriptor("Service1", method1))
-            .addMethod(method1, callHandler).build())
+        .addService(ServerServiceDefinition.builder(new ServiceDescriptor("Waiter", METHOD))
+            .addMethod(METHOD, callHandler).build())
         .build();
     transportServer = new SimpleServer();
     createAndStartServer(NO_FILTERS);
@@ -945,11 +1007,11 @@ public class ServerImplTest {
         = transportServer.registerNewServerTransport(new SimpleServerTransport());
     Metadata requestHeaders = new Metadata();
     StatsTraceContext statsTraceCtx =
-        StatsTraceContext.newServerContext(streamTracerFactories, "Waitier/serve", requestHeaders);
+        StatsTraceContext.newServerContext(streamTracerFactories, "Waiter/serve", requestHeaders);
     when(stream.statsTraceContext()).thenReturn(statsTraceCtx);
 
     // This call will be handled by callHandler from the internal registry
-    transportListener.streamCreated(stream, "Service1/Method1", requestHeaders);
+    transportListener.streamCreated(stream, "Waiter/serve", requestHeaders);
     assertEquals(1, executor.runDueTasks());
     verify(callHandler).startCall(Matchers.<ServerCall<String, Integer>>anyObject(),
         Matchers.<Metadata>anyObject());
@@ -1109,9 +1171,15 @@ public class ServerImplTest {
   }
 
   private void createServer(List<ServerTransportFilter> filters) {
+    createServer(filters, Collections.<ServerInterceptor>emptyList());
+  }
+
+  private void createServer(
+      List<ServerTransportFilter> filters, List<ServerInterceptor> interceptors) {
     assertNull(server);
     server = new ServerImpl(executorPool, timerPool, registry, fallbackRegistry,
-        transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry, filters);
+        transportServer, SERVER_CONTEXT, decompressorRegistry, compressorRegistry, filters,
+        interceptors);
   }
 
   private void verifyExecutorsAcquired() {

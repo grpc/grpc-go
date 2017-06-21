@@ -33,6 +33,7 @@ import io.grpc.Internal;
 import io.grpc.InternalNotifyOnServerBuild;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer;
@@ -69,6 +70,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
 
   private final ArrayList<ServerTransportFilter> transportFilters =
       new ArrayList<ServerTransportFilter>();
+
+  private final ArrayList<ServerInterceptor> interceptors =
+      new ArrayList<ServerInterceptor>();
 
   private final List<InternalNotifyOnServerBuild> notifyOnBuildList =
       new ArrayList<InternalNotifyOnServerBuild>();
@@ -119,6 +123,12 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Override
   public final T addTransportFilter(ServerTransportFilter filter) {
     transportFilters.add(checkNotNull(filter, "filter"));
+    return thisT();
+  }
+
+  @Override
+  public final T intercept(ServerInterceptor interceptor) {
+    interceptors.add(interceptor);
     return thisT();
   }
 
@@ -179,7 +189,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
         firstNonNull(fallbackRegistry, EMPTY_FALLBACK_REGISTRY), transportServer,
         Context.ROOT, firstNonNull(decompressorRegistry, DecompressorRegistry.getDefaultInstance()),
         firstNonNull(compressorRegistry, CompressorRegistry.getDefaultInstance()),
-        transportFilters);
+        transportFilters, interceptors);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {
       notifyTarget.notifyOnBuild(server);
     }

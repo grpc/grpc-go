@@ -89,6 +89,20 @@ public abstract class ServerBuilder<T extends ServerBuilder<T>> {
   public abstract T addService(BindableService bindableService);
 
   /**
+   * Adds a {@link ServerInterceptor} that is run for all services on the server.  Interceptors
+   * added through this method always run before per-service interceptors added through {@link
+   * ServerInterceptors}.  Interceptors run in the reverse order in which they are added.
+   *
+   * @param interceptor the all-service interceptor
+   * @return this
+   * @since 1.5.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3117")
+  public T intercept(ServerInterceptor interceptor) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Adds a {@link ServerTransportFilter}. The order of filters being added is the order they will
    * be executed.
    *

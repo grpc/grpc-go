@@ -207,7 +207,7 @@ public final class ServerInterceptors {
     serviceDefBuilder.addMethod(method.withServerCallHandler(callHandler));
   }
 
-  private static class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
+  static class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
     public static <ReqT, RespT> InterceptCallHandler<ReqT, RespT> create(
         ServerInterceptor interceptor, ServerCallHandler<ReqT, RespT> callHandler) {
       return new InterceptCallHandler<ReqT, RespT>(interceptor, callHandler);

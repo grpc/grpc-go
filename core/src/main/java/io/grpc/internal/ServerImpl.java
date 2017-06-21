@@ -32,8 +32,11 @@ import io.grpc.Context;
 import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.HandlerRegistry;
+import io.grpc.InternalServerInterceptors;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerTransportFilter;
@@ -74,6 +77,9 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   private final InternalHandlerRegistry registry;
   private final HandlerRegistry fallbackRegistry;
   private final List<ServerTransportFilter> transportFilters;
+  // This is iterated on a per-call basis.  Use an array instead of a Collection to avoid iterator
+  // creations.
+  private final ServerInterceptor[] interceptors;
   @GuardedBy("lock") private boolean started;
   @GuardedBy("lock") private boolean shutdown;
   /** non-{@code null} if immediate shutdown has been requested. */
@@ -109,7 +115,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       InternalHandlerRegistry registry, HandlerRegistry fallbackRegistry,
       InternalServer transportServer, Context rootContext,
       DecompressorRegistry decompressorRegistry, CompressorRegistry compressorRegistry,
-      List<ServerTransportFilter> transportFilters) {
+      List<ServerTransportFilter> transportFilters, List<ServerInterceptor> interceptors) {
     this.executorPool = Preconditions.checkNotNull(executorPool, "executorPool");
     this.timeoutServicePool = Preconditions.checkNotNull(timeoutServicePool, "timeoutServicePool");
     this.registry = Preconditions.checkNotNull(registry, "registry");
@@ -122,6 +128,7 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     this.compressorRegistry = compressorRegistry;
     this.transportFilters = Collections.unmodifiableList(
         new ArrayList<ServerTransportFilter>(transportFilters));
+    this.interceptors = interceptors.toArray(new ServerInterceptor[interceptors.size()]);
   }
 
   /**
@@ -469,9 +476,12 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       ServerCallImpl<ReqT, RespT> call = new ServerCallImpl<ReqT, RespT>(
           stream, methodDef.getMethodDescriptor(), headers, context,
           decompressorRegistry, compressorRegistry);
+      ServerCallHandler<ReqT, RespT> callHandler = methodDef.getServerCallHandler();
       statsTraceCtx.serverCallStarted(call);
-      ServerCall.Listener<ReqT> listener =
-          methodDef.getServerCallHandler().startCall(call, headers);
+      for (ServerInterceptor interceptor : interceptors) {
+        callHandler = InternalServerInterceptors.interceptCallHandler(interceptor, callHandler);
+      }
+      ServerCall.Listener<ReqT> listener = callHandler.startCall(call, headers);
       if (listener == null) {
         throw new NullPointerException(
             "startCall() returned a null listener for method " + fullMethodName);
