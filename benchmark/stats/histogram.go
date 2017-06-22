@@ -89,11 +89,11 @@ func (h *Histogram) Print(w io.Writer) {
 	h.PrintWithUnit(w, 1)
 }
 
-// PrintWithUnit writes textual output of the histogram valuse.
+// PrintWithUnit writes textual output of the histogram values	.
 // Data in histogram is divided by a Unit before print.
-func (h *Histogram) PrintWithUnit(w io.Writer, timeUnit float64) {
+func (h *Histogram) PrintWithUnit(w io.Writer, unit float64) {
 	avg := float64(h.Sum) / float64(h.Count)
-	fmt.Fprintf(w, "Count: %d  Min: %5.1f  Max: %5.1f  Avg: %.2f\n", h.Count, float64(h.Min)/timeUnit, float64(h.Max)/timeUnit, avg/timeUnit)
+	fmt.Fprintf(w, "Count: %d  Min: %5.1f  Max: %5.1f  Avg: %.2f\n", h.Count, float64(h.Min)/unit, float64(h.Max)/unit, avg/unit)
 	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 60))
 	if h.Count <= 0 {
 		return
@@ -109,9 +109,9 @@ func (h *Histogram) PrintWithUnit(w io.Writer, timeUnit float64) {
 
 	accCount := int64(0)
 	for i, b := range h.Buckets {
-		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound/timeUnit)
+		fmt.Fprintf(w, "[%*f, ", maxBucketDigitLen, b.LowBound/unit)
 		if i+1 < len(h.Buckets) {
-			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound/timeUnit)
+			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound/unit)
 		} else {
 			fmt.Fprintf(w, "%*s)", maxBucketDigitLen, "inf")
 		}
