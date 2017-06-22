@@ -31,17 +31,20 @@ import (
 	"google.golang.org/grpc"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
+	pbv3 "google.golang.org/grpc/reflection/grpc_testingv3"
 )
 
 var (
 	s = &serverReflectionServer{}
 	// fileDescriptor of each test proto file.
 	fdTest       *dpb.FileDescriptorProto
+	fdTestv3     *dpb.FileDescriptorProto
 	fdProto2     *dpb.FileDescriptorProto
 	fdProto2Ext  *dpb.FileDescriptorProto
 	fdProto2Ext2 *dpb.FileDescriptorProto
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
+	fdTestv3Byte     []byte
 	fdProto2Byte     []byte
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
@@ -65,6 +68,7 @@ func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 
 func init() {
 	fdTest, fdTestByte = loadFileDesc("test.proto")
+	fdTestv3, fdTestv3Byte = loadFileDesc("testv3.proto")
 	fdProto2, fdProto2Byte = loadFileDesc("proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("proto2_ext2.proto")
@@ -163,6 +167,16 @@ func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) 
 	return nil
 }
 
+type serverV3 struct{}
+
+func (s *serverV3) Search(ctx context.Context, in *pbv3.SearchRequestV3) (*pbv3.SearchResponseV3, error) {
+	return &pbv3.SearchResponseV3{}, nil
+}
+
+func (s *serverV3) StreamingSearch(stream pbv3.SearchServiceV3_StreamingSearchServer) error {
+	return nil
+}
+
 func TestReflectionEnd2end(t *testing.T) {
 	// Start server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -171,6 +185,7 @@ func TestReflectionEnd2end(t *testing.T) {
 	}
 	s := grpc.NewServer()
 	pb.RegisterSearchServiceServer(s, &server{})
+	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 	// Register reflection service on s.
 	Register(s)
 	go s.Serve(lis)
@@ -271,6 +286,11 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testing.SearchService.StreamingSearch", fdTestByte},
 		{"grpc.testing.SearchResponse", fdTestByte},
 		{"grpc.testing.ToBeExtended", fdProto2Byte},
+		// Test support package v3.
+		{"grpc.testingv3.SearchServiceV3", fdTestv3Byte},
+		{"grpc.testingv3.SearchServiceV3.Search", fdTestv3Byte},
+		{"grpc.testingv3.SearchServiceV3.StreamingSearch", fdTestv3Byte},
+		{"grpc.testingv3.SearchResponseV3", fdTestv3Byte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
@@ -469,7 +489,11 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	switch r.MessageResponse.(type) {
 	case *rpb.ServerReflectionResponse_ListServicesResponse:
 		services := r.GetListServicesResponse().Service
-		want := []string{"grpc.testing.SearchService", "grpc.reflection.v1alpha.ServerReflection"}
+		want := []string{
+			"grpc.testingv3.SearchServiceV3",
+			"grpc.testing.SearchService",
+			"grpc.reflection.v1alpha.ServerReflection",
+		}
 		// Compare service names in response with want.
 		if len(services) != len(want) {
 			t.Errorf("= %v, want service names: %v", services, want)
