@@ -14,8 +14,8 @@ import (
 
 func BenchmarkClient(b *testing.B) {
 	maxConcurrentCalls := []int{1, 8, 64, 512}
-	reqSizeBytes := []int{1, 1024, 1024*1024}
-	reqspSizeBytes := []int{1, 1024, 1024*1024}
+	reqSizeBytes := []int{1, 1024, 1024 * 1024}
+	reqspSizeBytes := []int{1, 1024, 1024 * 1024}
 	kbps := []int{0, 10240} // if non-positive, infinite
 	MTU := []int{0, 10}     // if non-positive, infinite
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
