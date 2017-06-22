@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentMap;
 import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe
-class InProcessServer implements InternalServer {
+final class InProcessServer implements InternalServer {
   private static final ConcurrentMap<String, InProcessServer> registry
       = new ConcurrentHashMap<String, InProcessServer>();
 

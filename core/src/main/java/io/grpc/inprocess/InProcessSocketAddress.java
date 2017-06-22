@@ -21,7 +21,7 @@ import java.net.SocketAddress;
 /**
  * Custom SocketAddress class for {@link InProcessTransport}.
  */
-public class InProcessSocketAddress extends SocketAddress {
+public final class InProcessSocketAddress extends SocketAddress {
   private static final long serialVersionUID = -2803441206326023474L;
 
   private final String name;

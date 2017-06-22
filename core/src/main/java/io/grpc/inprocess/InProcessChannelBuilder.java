@@ -31,7 +31,7 @@ import java.net.SocketAddress;
  * <p>The channel is intended to be fully-featured, high performance, and useful in testing.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1783")
-public class InProcessChannelBuilder extends
+public final class InProcessChannelBuilder extends
         AbstractManagedChannelImplBuilder<InProcessChannelBuilder> {
   /**
    * Create a channel builder that will connect to the server with the given name.
