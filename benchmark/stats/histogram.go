@@ -89,6 +89,8 @@ func (h *Histogram) Print(w io.Writer) {
 	h.PrintWithUnit(w, 1)
 }
 
+// PrintWithUnit writes textual output of the histogram valuse.
+// Data in histogram is divided by a Unit before print.
 func (h *Histogram) PrintWithUnit(w io.Writer, timeUnit float64) {
 	avg := float64(h.Sum) / float64(h.Count)
 	fmt.Fprintf(w, "Count: %d  Min: %5.1f  Max: %5.1f  Avg: %.2f\n", h.Count, float64(h.Min)/timeUnit, float64(h.Max)/timeUnit, avg/timeUnit)
