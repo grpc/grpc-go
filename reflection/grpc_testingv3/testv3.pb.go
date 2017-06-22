@@ -61,27 +61,6 @@ func (m *SearchResponseV3_Result) String() string            { return proto.Comp
 func (*SearchResponseV3_Result) ProtoMessage()               {}
 func (*SearchResponseV3_Result) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
-func (m *SearchResponseV3_Result) GetUrl() string {
-	if m != nil {
-		return m.Url
-	}
-	return ""
-}
-
-func (m *SearchResponseV3_Result) GetTitle() string {
-	if m != nil {
-		return m.Title
-	}
-	return ""
-}
-
-func (m *SearchResponseV3_Result) GetSnippets() []string {
-	if m != nil {
-		return m.Snippets
-	}
-	return nil
-}
-
 type SearchRequestV3 struct {
 	Query string `protobuf:"bytes,1,opt,name=query" json:"query,omitempty"`
 }
@@ -90,13 +69,6 @@ func (m *SearchRequestV3) Reset()                    { *m = SearchRequestV3{} }
 func (m *SearchRequestV3) String() string            { return proto.CompactTextString(m) }
 func (*SearchRequestV3) ProtoMessage()               {}
 func (*SearchRequestV3) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *SearchRequestV3) GetQuery() string {
-	if m != nil {
-		return m.Query
-	}
-	return ""
-}
 
 func init() {
 	proto.RegisterType((*SearchResponseV3)(nil), "grpc.testingv3.SearchResponseV3")
@@ -110,7 +82,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion3
 
 // Client API for SearchServiceV3 service
 
@@ -239,7 +211,7 @@ var _SearchServiceV3_serviceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "testv3.proto",
+	Metadata: fileDescriptor0,
 }
 
 func init() { proto.RegisterFile("testv3.proto", fileDescriptor0) }
