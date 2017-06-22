@@ -1,0 +1,28 @@
+java_library(
+    name = "netty",
+    srcs = glob([
+        "src/main/java/**/*.java",
+        "third_party/netty/java/**/*.java",
+    ]),
+    resources = glob([
+        "src/main/resources/**",
+    ]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core",
+        "//core:internal",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_errorprone_error_prone_annotations//jar",
+        "@com_google_guava//jar",
+        "@io_netty_buffer//jar",
+        "@io_netty_codec//jar",
+        "@io_netty_codec_http//jar",
+        "@io_netty_codec_http2//jar",
+        "@io_netty_codec_socks//jar",
+        "@io_netty_common//jar",
+        "@io_netty_handler//jar",
+        "@io_netty_handler_proxy//jar",
+        "@io_netty_resolver//jar",
+        "@io_netty_transport//jar",
+    ],
+)
