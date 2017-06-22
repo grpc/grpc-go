@@ -212,6 +212,24 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 	return nil, fmt.Errorf("unknown symbol: %v", name)
 }
 
+// parseMetadata finds the file descriptor bytes specified meta.
+// For SupportPackageIsVersion4, m is the name of the proto file, we
+// call proto.FileDescriptor to get the byte slice.
+// For SupportPackageIsVersion3, m is a byte slice itself.
+func parseMetadata(meta interface{}) ([]byte, bool) {
+	// Check if meta is the file name.
+	if fileNameForMeta, ok := meta.(string); ok {
+		return proto.FileDescriptor(fileNameForMeta), true
+	}
+
+	// Check if meta is the byte slice.
+	if enc, ok := meta.([]byte); ok {
+		return enc, true
+	}
+
+	return nil, false
+}
+
 // fileDescEncodingContainingSymbol finds the file descriptor containing the given symbol,
 // does marshalling on it and returns the marshalled result.
 // The given symbol can be a type, a service or a method.
@@ -234,12 +252,11 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string) (
 		}
 
 		// Metadata not valid.
-		fileNameForMeta, ok := meta.(string)
+		enc, ok := parseMetadata(meta)
 		if !ok {
 			return nil, fmt.Errorf("invalid file descriptor for symbol: %v", name)
 		}
 
-		enc := proto.FileDescriptor(fileNameForMeta)
 		fd, err = s.decodeFileDesc(enc)
 		if err != nil {
 			return nil, err
