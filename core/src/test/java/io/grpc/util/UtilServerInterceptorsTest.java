@@ -31,7 +31,7 @@ import io.grpc.ServerServiceDefinition;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.testing.NoopServerCall;
+import io.grpc.internal.NoopServerCall;
 import io.grpc.testing.TestMethodDescriptors;
 import java.util.Arrays;
 import org.junit.Test;

@@ -30,7 +30,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.Deadline;
 import io.grpc.MethodDescriptor;
-import io.grpc.testing.NoopClientCall;
+import io.grpc.internal.NoopClientCall;
 import io.grpc.testing.integration.Messages.SimpleRequest;
 import io.grpc.testing.integration.Messages.SimpleResponse;
 import io.grpc.testing.integration.TestServiceGrpc;
