@@ -237,12 +237,10 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
-		target,
-		grpc.WithInsecure(),
-		grpc.WithDialer(
-			func(address string, timeout time.Duration) (net.Conn, error) {
-				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-			}),
+		target, grpc.WithInsecure(),
+		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+		}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
@@ -288,12 +286,10 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
-		target,
-		grpc.WithInsecure(),
-		grpc.WithDialer(
-			func(address string, timeout time.Duration) (net.Conn, error) {
-				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-			}),
+		target, grpc.WithInsecure(),
+		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+		}),
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
