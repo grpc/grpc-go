@@ -2,10 +2,10 @@ package naming
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -14,13 +14,12 @@ import (
 const (
 	defaultPort = "443"
 	defaultFreq = time.Minute * 30
-	// https://github.com/golang/go/blob/master/src/net/ipsock.go error string defined here.
-	missingPortErr = "missing port in address"
-	missingAddrErr = "missing address"
-	watcherClose   = "watcher has been closed"
 )
 
 var (
+	errMissingAddr  = errors.New("missing address")
+	errWatcherClose = errors.New("watcher has been closed")
+
 	lookupHost = net.LookupHost
 	lookupSRV  = net.LookupSRV
 )
@@ -65,29 +64,34 @@ func formatIP(addr string) (addrIP string, ok bool) {
 // target: "www.google.com" returns host: "www.google.com", port: "443"
 // target: "ipv4-host:80" returns host: "ipv4-host", port: "80"
 // target: "[ipv6-host]" returns host: "ipv6-host", port: "443"
+// target: ":80" returns host: "localhost", port: "80"
+// target: ":" returns host: "localhost", port: "443"
 func setHostPort(target string) (host, port string, err error) {
 	if target == "" {
-		return "", "", errors.New(missingAddrErr)
+		return "", "", errMissingAddr
 	}
-	host, port = target, defaultPort
-	if _, ok := formatIP(target); !ok {
-		host, port, err = net.SplitHostPort(target)
-		if err != nil {
-			if err.(*net.AddrError).Err != missingPortErr {
-				return "", "", err
-			}
-			// The target is missing a port. We append the default port to the target.
-			host, port, err = net.SplitHostPort(target + ":" + defaultPort)
-			if err != nil {
-				return "", "", err
-			}
+
+	if ip := net.ParseIP(target); ip != nil {
+		// target is an IPv4 or IPv6(without brackets) address
+		return target, defaultPort, nil
+	}
+	if host, port, err := net.SplitHostPort(target); err == nil {
+		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
+		if host == "" {
+			// Keep consistent with net.Dial(): If the host is empty, as in ":80", the local system is assumed.
+			host = "localhost"
 		}
+		if port == "" {
+			// If the port field is empty(target ends with colon), e.g. "[::1]:", defaultPort is used.
+			port = defaultPort
+		}
+		return host, port, nil
 	}
-	// Keep consistent with net.Dial(): If the host is empty, as in ":80", the local system is assumed.
-	if host == "" {
-		host = "localhost"
+	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
+		// target doesn't have port
+		return host, port, nil
 	}
-	return host, port, nil
+	return "", "", fmt.Errorf("invalid target address %v", target)
 }
 
 // Resolve creates a watcher that watches the name resolution of the target.
@@ -98,47 +102,37 @@ func (r *dnsResolver) Resolve(target string) (Watcher, error) {
 	}
 
 	if net.ParseIP(host) != nil {
-		ipWatcher := &IPWatcher{
-			r:      r,
-			target: target,
-			host:   host,
-			port:   port,
-			IPAddr: make(chan *Update, 1),
-			done:   make(chan struct{}),
+		ipWatcher := &ipWatcher{
+			updateChan: make(chan *Update, 1),
+			done:       make(chan struct{}),
 		}
 		host, _ = formatIP(host)
-		ipWatcher.IPAddr <- &Update{Op: Add, Addr: host + ":" + port}
+		ipWatcher.updateChan <- &Update{Op: Add, Addr: host + ":" + port}
 		return ipWatcher, nil
 	}
 
 	return &dnsWatcher{
-		r:      r,
-		target: target,
-		host:   host,
-		port:   port,
-		done:   make(chan struct{}),
+		r:    r,
+		host: host,
+		port: port,
+		done: make(chan struct{}),
 	}, nil
 }
 
 // dnsWatcher watches for the name resolution update for a specific target
 type dnsWatcher struct {
-	r      *dnsResolver
-	target string
-	host   string
-	port   string
+	r    *dnsResolver
+	host string
+	port string
 	// The latest resolved address list
 	curAddrs []*Update
 	// done channel is closed to notify Next() to exit.
 	done chan struct{}
 }
 
-// IPWatcher watches for the name resolution update for an IP address.
-type IPWatcher struct {
-	r      *dnsResolver
-	target string
-	host   string
-	port   string
-	IPAddr chan *Update
+// ipWatcher watches for the name resolution update for an IP address.
+type ipWatcher struct {
+	updateChan chan *Update
 	// done channel is closed to notify Next() to exit.
 	done chan struct{}
 }
@@ -147,17 +141,17 @@ type IPWatcher struct {
 // the resolution is itself, thus polling name server is unncessary. Therefore,
 // Next() will return an Update the first time it is called, and will be blocked
 // for all following calls as no Update exisits until watcher is closed.
-func (i *IPWatcher) Next() ([]*Update, error) {
+func (i *ipWatcher) Next() ([]*Update, error) {
 	select {
-	case u := <-i.IPAddr:
+	case u := <-i.updateChan:
 		return []*Update{u}, nil
 	case <-i.done:
-		return nil, errors.New(watcherClose)
+		return nil, errWatcherClose
 	}
 }
 
-// Close closes the IPWatcher.
-func (i *IPWatcher) Close() {
+// Close closes the ipWatcher.
+func (i *ipWatcher) Close() {
 	close(i.done)
 }
 
@@ -184,52 +178,24 @@ type AddrMetadataGRPCLB struct {
 // compileUpdate compares the old resolved addresses and newly resolved addresses,
 // and generates an update list
 func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
-	result := make([]*Update, 0, len(oldAddrs)+len(newAddrs))
-	idx1, idx2 := 0, 0
-	for idx1 < len(oldAddrs) || idx2 < len(newAddrs) {
-		if idx1 == len(oldAddrs) {
-			// add all adrress left in newAddrs
-			for _, addr := range newAddrs[idx2:] {
-				u := *addr
-				u.Op = Add
-				result = append(result, &u)
-			}
-			return result
-		}
-		if idx2 == len(newAddrs) {
-			// remove all address left in oldAddrs
-			for _, addr := range oldAddrs[idx1:] {
-				u := *addr
-				u.Op = Delete
-				result = append(result, &u)
-			}
-			return result
-		}
-		switch strings.Compare(oldAddrs[idx1].Addr, newAddrs[idx2].Addr) {
-		case 0:
-			if oldAddrs[idx1].Metadata != newAddrs[idx2].Metadata {
-				uDel := *oldAddrs[idx1]
-				uDel.Op = Delete
-				result = append(result, &uDel)
-				uAdd := *newAddrs[idx2]
-				uAdd.Op = Add
-				result = append(result, &uAdd)
-			}
-			idx1++
-			idx2++
-		case -1:
-			u := *oldAddrs[idx1]
-			u.Op = Delete
-			result = append(result, &u)
-			idx1++
-		case 1:
-			u := *newAddrs[idx2]
-			u.Op = Add
-			result = append(result, &u)
-			idx2++
-		}
+	update := make(map[string]*Update)
+	for _, u := range newAddrs {
+		update[u.Addr] = u
 	}
-	return result
+	for _, u := range oldAddrs {
+		if ou, ok := update[u.Addr]; ok {
+			if ou.Metadata == u.Metadata {
+				delete(update, u.Addr)
+				continue
+			}
+		}
+		update[u.Addr] = &Update{Addr: u.Addr, Op: Delete, Metadata: u.Metadata}
+	}
+	res := make([]*Update, 0, len(update))
+	for _, v := range update {
+		res = append(res, v)
+	}
+	return res
 }
 
 func (w *dnsWatcher) lookup() ([]*Update, error) {
@@ -293,7 +259,7 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 	for {
 		select {
 		case <-w.done:
-			return nil, errors.New(watcherClose)
+			return nil, errWatcherClose
 		case <-ticker.C:
 			result, err := w.lookup()
 			if err != nil {

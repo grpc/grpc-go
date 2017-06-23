@@ -77,6 +77,14 @@ var updateResult = [][]*Update{
 	{newUpdate(Delete, "1.0.0.1"), newUpdate(Add, "1.0.0.2"), newUpdate(Delete, "1.0.0.5"), newUpdate(Add, "1.0.0.6")},
 }
 
+func converToMap(u []*Update) map[string]*Update {
+	m := make(map[string]*Update)
+	for _, v := range u {
+		m[v.Addr] = v
+	}
+	return m
+}
+
 func TestCompileUpdate(t *testing.T) {
 	for i, c := range updateTestcases {
 		oldUpdates := make([]*Update, len(c.oldAddrs))
@@ -88,7 +96,7 @@ func TestCompileUpdate(t *testing.T) {
 			newUpdates[i] = &Update{Addr: a}
 		}
 		r := compileUpdate(oldUpdates, newUpdates)
-		if !reflect.DeepEqual(updateResult[i], r) {
+		if !reflect.DeepEqual(converToMap(updateResult[i]), converToMap(r)) {
 			t.Errorf("Wrong update generated. idx: %d\n", i)
 		}
 	}
@@ -107,6 +115,7 @@ var testAddrs = map[string]bool{
 	"[fe80::1%lo0]:80":   true,
 	"golang.org:http":    true,
 	"[2001:db8::1]:http": true,
+	":":                  true,
 	"":                   false,
 	"[2001:db8:a0b:12f0::1": false,
 }
@@ -231,7 +240,7 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		time.Sleep(slp)
 		w.Close()
 		wg.Wait()
-		if !reflect.DeepEqual(addrResolved[i], updates) {
+		if !reflect.DeepEqual(converToMap(addrResolved[i]), converToMap(updates)) {
 			t.Errorf("wrong resolved update, target: %s, updates: %+v\n", a, updatesToSlice(updates))
 		}
 	}
@@ -251,10 +260,12 @@ func TestResolve(t *testing.T) {
 const colonDefaultPort = ":" + defaultPort
 
 var IPAddrs = map[string][]*Update{
-	"127.0.0.1":       {newUpdate(Add, "127.0.0.1"+colonDefaultPort)},
-	"127.0.0.1:12345": {newUpdate(Add, "127.0.0.1:12345")},
-	"[::1]":           {newUpdate(Add, "[::1]"+colonDefaultPort)},
-	"::1":             {newUpdate(Add, "[::1]"+colonDefaultPort)},
+	"127.0.0.1":                            {newUpdate(Add, "127.0.0.1"+colonDefaultPort)},
+	"127.0.0.1:12345":                      {newUpdate(Add, "127.0.0.1:12345")},
+	"[::1]":                                {newUpdate(Add, "[::1]"+colonDefaultPort)},
+	"::1":                                  {newUpdate(Add, "[::1]"+colonDefaultPort)},
+	"[::1]:12345":                          {newUpdate(Add, "[::1]:12345")},
+	"[::1]:":                               {newUpdate(Add, "[::1]:443")},
 	"2001:db8:85a3::8a2e:370:7334":         {newUpdate(Add, "[2001:db8:85a3::8a2e:370:7334]"+colonDefaultPort)},
 	"[2001:db8:85a3::8a2e:370:7334]":       {newUpdate(Add, "[2001:db8:85a3::8a2e:370:7334]"+colonDefaultPort)},
 	"[2001:db8:85a3::8a2e:370:7334]:12345": {newUpdate(Add, "[2001:db8:85a3::8a2e:370:7334]:12345")},
