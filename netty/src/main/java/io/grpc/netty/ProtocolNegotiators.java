@@ -27,6 +27,8 @@ import io.grpc.Internal;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerAdapter;
 import io.netty.channel.ChannelHandlerContext;
@@ -443,6 +445,25 @@ public final class ProtocolNegotiators {
       } else {
         super.channelRegistered(ctx);
       }
+    }
+
+    /**
+     * Do not rely on channel handlers to propagate exceptions to us.
+     * {@link NettyClientHandler} is an example of a class that does not propagate exceptions.
+     * Add a listener to the connect future directly and do appropriate error handling.
+     */
+    @Override
+    public void connect(final ChannelHandlerContext ctx, SocketAddress remoteAddress,
+        SocketAddress localAddress, ChannelPromise promise) throws Exception {
+      super.connect(ctx, remoteAddress, localAddress, promise);
+      promise.addListener(new ChannelFutureListener() {
+        @Override
+        public void operationComplete(ChannelFuture future) throws Exception {
+          if (!future.isSuccess()) {
+            fail(ctx, future.cause());
+          }
+        }
+      });
     }
 
     /**

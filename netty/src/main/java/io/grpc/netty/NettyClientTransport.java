@@ -40,7 +40,6 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
@@ -222,21 +221,7 @@ class NettyClientTransport implements ConnectionClientTransport {
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
     // Start the connection operation to the server.
-    channel.connect(address).addListener(new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          ChannelHandlerContext ctx = future.channel().pipeline().context(handler);
-          if (ctx != null) {
-            // NettyClientHandler doesn't propagate exceptions, but the negotiator will need the
-            // exception to fail any writes. Note that this fires after handler, because it is as if
-            // handler was propagating the notification.
-            ctx.fireExceptionCaught(future.cause());
-          }
-          future.channel().pipeline().fireExceptionCaught(future.cause());
-        }
-      }
-    });
+    channel.connect(address);
     // This write will have no effect, yet it will only complete once the negotiationHandler
     // flushes any pending writes.
     channel.write(NettyClientHandler.NOOP_MESSAGE).addListener(new ChannelFutureListener() {
