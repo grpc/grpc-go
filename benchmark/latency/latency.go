@@ -105,6 +105,13 @@ func (c *conn) Write(p []byte) (n int, err error) {
 		} else {
 			p = nil
 		}
+		if c.network.Kbps > 0 {
+			if congestion := c.lastSendEnd.Sub(tNow) - c.delay; congestion > 0 {
+				// The network is full; sleep until this packet can be sent.
+				sleep(congestion)
+				tNow = tNow.Add(congestion)
+			}
+		}
 		c.lastSendEnd = c.lastSendEnd.Add(c.network.pktTime(len(pkt)))
 		hdr := header{ReadTime: c.lastSendEnd.Add(c.delay).UnixNano(), Sz: int32(len(pkt))}
 		if err := binary.Write(c.Conn, binary.BigEndian, hdr); err != nil {
