@@ -240,26 +240,8 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{
-			bdp: initialWindowSize,
-			updateFlowControl: func(n uint32) {
-				t.mu.Lock()
-				for _, s := range t.activeStreams {
-					s.fc.newLimit(n)
-				}
-				t.initialWindowSize = int32(n)
-				t.mu.Unlock()
-				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
-				t.controlBuf.put(&settings{
-					ack: false,
-					ss: []http2.Setting{
-						{
-							ID:  http2.SettingInitialWindowSize,
-							Val: uint32(n),
-						},
-					},
-				})
-			},
-			side: "client",
+			bdp:               initialWindowSize,
+			updateFlowControl: t.updateFlowControl,
 		}
 	}
 	// Make sure awakenKeepalive can't be written upon.
@@ -852,6 +834,28 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 	}
 }
 
+// updateFlowControl updates the incoming flow control windows
+// for the transport and the stream based on the current bdp
+// estimation.
+func (t *http2Client) updateFlowControl(n uint32) {
+	t.mu.Lock()
+	for _, s := range t.activeStreams {
+		s.fc.newLimit(n)
+	}
+	t.initialWindowSize = int32(n)
+	t.mu.Unlock()
+	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
+	t.controlBuf.put(&settings{
+		ack: false,
+		ss: []http2.Setting{
+			{
+				ID:  http2.SettingInitialWindowSize,
+				Val: uint32(n),
+			},
+		},
+	})
+}
+
 func (t *http2Client) handleData(f *http2.DataFrame) {
 	size := f.Header().Length
 	var sendBDPPing bool
@@ -967,7 +971,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
-	if f.IsAck() { // Do nothing.
+	if f.IsAck() {
 		// Maybe it's a BDP ping.
 		if t.bdpEst != nil {
 			t.bdpEst.calculate(f.Data)

@@ -6,49 +6,66 @@ import (
 )
 
 const (
-	limit = (1 << 20) * 4
+	// bdpLimit is the maximum value the flow control windows
+	// will be increased to.
+	bdpLimit = (1 << 20) * 4
+	// alpha is a constant factor used to keep a moving average
+	// of RTTs.
 	alpha = 0.9
+	// If the current bdp sample is greater than or equal to
+	// our beta * our estimated bdp and the current bandwidth
+	// sample is the maximum bandwidth observed so far, we
+	// increase our bbp estimate by a factor of gamma.
+	beta  = 0.66
+	gamma = 2
 )
 
 var (
-	bdpPing = &ping{data: [8]byte{1, 2, 3, 4, 5, 6, 7, 8}}
+	// Adding arbitrary data to ping so that its ack can be
+	// identified.
+	bdpPing = &ping{data: [8]byte{2, 3, 5, 7, 11, 13, 17, 8}}
 )
 
 type bdpEstimator struct {
-	side string
+	// sentAt is the time when the ping was sent.
+	sentAt time.Time
 
-	mu                sync.Mutex
-	bdp               uint32
-	sample            uint32    // Current bdp sample.
-	sentAt            time.Time // Time when the ping was sent.
-	bwMax             float64
-	isSent            bool
-	updateFlowControl func(n uint32) // Callback to update window size.
-	sampleCount       uint64
-	rtt               float64
+	mu sync.Mutex
+	// bdp is the current bdp estimate.
+	bdp uint32
+	// sample is the number of bytes received in one measurement cycle.
+	sample uint32
+	// bwMax is the maximum bandwidth noted so far (bytes/sec).
+	bwMax float64
+	// bool to keep track of the begining of a new measurement cycle.
+	isSent bool
+	// Callback to update the window sizes.
+	updateFlowControl func(n uint32)
+	// sampleCount is the number of samples taken so far.
+	sampleCount uint64
+	// round trip time (seconds)
+	rtt float64
 }
 
 // timesnap registers the time bdp ping was sent out so that
-// network rtt can be calculated when it's ack is recieved.
+// network rtt can be calculated when its ack is recieved.
 // It is called (by controller) when the bdpPing is
 // being written on the wire.
 func (b *bdpEstimator) timesnap(d [8]byte) {
 	if bdpPing.data != d {
 		return
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.sentAt = time.Now()
 }
 
 // add adds bytes to the current sample for calculating bdp.
-// It returns true only if a ping is sent. This can be used
+// It returns true only if a ping must be sent. This can be used
 // by the caller (handleData) to make decision about batching
 // a window update with it.
 func (b *bdpEstimator) add(n uint32) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.bdp == limit {
+	if b.bdp == bdpLimit {
 		return false
 	}
 	if !b.isSent {
@@ -74,10 +91,10 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	rttSample := time.Since(b.sentAt).Seconds()
 	if b.sampleCount < 10 {
 		// Bootstrap rtt with an average of first 10 rtt samples.
-		b.rtt = b.rtt + (rttSample-b.rtt)/float64(b.sampleCount)
+		b.rtt += (rttSample - b.rtt) / float64(b.sampleCount)
 	} else {
 		// Heed to the recent past more.
-		b.rtt = b.rtt + (rttSample-b.rtt)*float64(alpha)
+		b.rtt += (rttSample - b.rtt) * float64(alpha)
 	}
 	b.isSent = false
 	// The number of bytes accumalated so far in the sample is smaller
@@ -89,13 +106,14 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	// If the current sample (which is smaller than or equal to the 1.5 times the real BDP) is
 	// greater than or equal to 2/3rd our perceived bdp AND this is the maximum bandwidth seen so far, we
 	// should update our perception of the network BDP.
-	if float64(b.sample) >= float64(0.66)*float64(b.bdp) && bwCurrent == b.bwMax {
+	if float64(b.sample) >= float64(beta)*float64(b.bdp) && bwCurrent == b.bwMax && b.bdp != bdpLimit {
 		// Put our bdp to be smaller than or equal to twice the real BDP.
 		// We really should multiply with 4/3, however to round things out
 		// we use 2 as the multiplication factor.
-		b.bdp = uint32(float64(2) * float64(b.sample))
-		if b.bdp > limit {
-			b.bdp = limit
+		sampleFloat := float64(b.sample)
+		b.bdp = uint32(gamma * sampleFloat)
+		if b.bdp > bdpLimit {
+			b.bdp = bdpLimit
 		}
 		bdp := b.bdp
 		b.mu.Unlock()

@@ -206,27 +206,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{
-			bdp: initialWindowSize,
-			updateFlowControl: func(n uint32) {
-				t.mu.Lock()
-				for _, s := range t.activeStreams {
-					s.fc.newLimit(n)
-				}
-				t.initialWindowSize = int32(n)
-				t.mu.Unlock()
-				t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
-				t.controlBuf.put(&settings{
-					ack: false,
-					ss: []http2.Setting{
-						{
-							ID:  http2.SettingInitialWindowSize,
-							Val: uint32(n),
-						},
-					},
-				})
-
-			},
-			side: "server",
+			bdp:               initialWindowSize,
+			updateFlowControl: t.updateFlowControl,
 		}
 	}
 	if t.stats != nil {
@@ -488,6 +469,29 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	}
 }
 
+// updateFlowControl updates the incoming flow control windows
+// for the transport and the stream based on the current bdp
+// estimation.
+func (t *http2Server) updateFlowControl(n uint32) {
+	t.mu.Lock()
+	for _, s := range t.activeStreams {
+		s.fc.newLimit(n)
+	}
+	t.initialWindowSize = int32(n)
+	t.mu.Unlock()
+	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
+	t.controlBuf.put(&settings{
+		ack: false,
+		ss: []http2.Setting{
+			{
+				ID:  http2.SettingInitialWindowSize,
+				Val: uint32(n),
+			},
+		},
+	})
+
+}
+
 func (t *http2Server) handleData(f *http2.DataFrame) {
 	size := f.Header().Length
 	var sendBDPPing bool
@@ -588,7 +592,7 @@ const (
 )
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
-	if f.IsAck() { // Do nothing.
+	if f.IsAck() {
 		// Maybe it's a BDP ping.
 		if t.bdpEst != nil {
 			t.bdpEst.calculate(f.Data)
