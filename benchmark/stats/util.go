@@ -68,7 +68,7 @@ func AddStatsWithName(b *testing.B, name string, numBuckets int) *Stats {
 		}
 		p := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		benchName = p[len(p)-1]
-		if strings.HasPrefix(benchName, "run") {
+		if strings.HasPrefix(benchName, "Benchmark") {
 			break
 		}
 	}
@@ -167,10 +167,9 @@ func injectStatsIfFinished(line string) {
 	injectCond.L.Lock()
 	defer injectCond.L.Unlock()
 	// We assume that the benchmark results start with "Benchmark".
-	if curB == nil || !strings.HasPrefix(line, "Benchmark") {
+	if curB == nil || !strings.HasPrefix(line, curBenchName) {
 		return
 	}
-
 	if !curB.Failed() {
 		// Output all stats in alphabetical order.
 		names := make([]string, 0, len(curStats))
