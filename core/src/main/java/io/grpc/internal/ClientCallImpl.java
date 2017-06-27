@@ -457,24 +457,32 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     }
 
     @Override
-    public void messageRead(final InputStream message) {
-      class MessageRead extends ContextRunnable {
-        MessageRead() {
+    public void messagesAvailable(final MessageProducer producer) {
+      class MessagesAvailable extends ContextRunnable {
+        MessagesAvailable() {
           super(context);
         }
 
         @Override
         public final void runInContext() {
+          if (closed) {
+            GrpcUtil.closeQuietly(producer);
+            return;
+          }
+
+          InputStream message;
           try {
-            if (closed) {
-              return;
-            }
-            try {
-              observer.onMessage(method.parseResponse(message));
-            } finally {
+            while ((message = producer.next()) != null) {
+              try {
+                observer.onMessage(method.parseResponse(message));
+              } catch (Throwable t) {
+                GrpcUtil.closeQuietly(message);
+                throw t;
+              }
               message.close();
             }
           } catch (Throwable t) {
+            GrpcUtil.closeQuietly(producer);
             Status status =
                 Status.CANCELLED.withCause(t).withDescription("Failed to read message.");
             stream.cancel(status);
@@ -483,7 +491,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         }
       }
 
-      callExecutor.execute(new MessageRead());
+      callExecutor.execute(new MessagesAvailable());
     }
 
     /**

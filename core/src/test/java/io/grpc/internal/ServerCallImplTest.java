@@ -41,6 +41,7 @@ import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.internal.ServerCallImpl.ServerStreamListenerImpl;
+import io.grpc.internal.testing.SingleMessageProducer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -377,7 +378,7 @@ public class ServerCallImplTest {
   public void streamListener_messageRead() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
 
     verify(callListener).onMessage(1234L);
   }
@@ -386,11 +387,11 @@ public class ServerCallImplTest {
   public void streamListener_messageRead_onlyOnce() {
     ServerStreamListenerImpl<Long> streamListener =
         new ServerCallImpl.ServerStreamListenerImpl<Long>(call, callListener, context);
-    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
     // canceling the call should short circuit future halfClosed() calls.
     streamListener.closed(Status.CANCELLED);
 
-    streamListener.messageRead(UNARY_METHOD.streamRequest(1234L));
+    streamListener.messagesAvailable(new SingleMessageProducer(UNARY_METHOD.streamRequest(1234L)));
 
     verify(callListener).onMessage(1234L);
   }
@@ -407,7 +408,7 @@ public class ServerCallImplTest {
 
     thrown.expect(RuntimeException.class);
     thrown.expectMessage("unexpected exception");
-    streamListener.messageRead(inputStream);
+    streamListener.messagesAvailable(new SingleMessageProducer(inputStream));
   }
 
   private static class LongMarshaller implements Marshaller<Long> {

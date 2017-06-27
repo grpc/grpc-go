@@ -44,13 +44,12 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 /**
  * Test for {@link AbstractClientStream}.  This class tries to test functionality in
- * AbstractClientStream2, but not in any super classes.
+ * AbstractClientStream, but not in any super classes.
  */
 @RunWith(JUnit4.class)
 public class AbstractClientStreamTest {
@@ -59,7 +58,6 @@ public class AbstractClientStreamTest {
 
   private final StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
   @Mock private ClientStreamListener mockListener;
-  @Captor private ArgumentCaptor<Status> statusCaptor;
 
   @Before
   public void setUp() {

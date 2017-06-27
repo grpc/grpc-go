@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, gRPC Authors All rights reserved.
+ * Copyright 2017, gRPC Authors All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package io.grpc.internal;
+package io.grpc.internal.testing;
 
-import io.grpc.Metadata;
-import io.grpc.Status;
+import io.grpc.internal.StreamListener;
+import java.io.InputStream;
+import javax.annotation.Nullable;
 
-/**
- * No-op base class for testing.
- */
-class NoopClientStreamListener implements ClientStreamListener {
+public class SingleMessageProducer implements StreamListener.MessageProducer {
+  private InputStream message;
+
+  public SingleMessageProducer(InputStream message) {
+    this.message = message;
+  }
+
+  @Nullable
   @Override
-  public void messagesAvailable(MessageProducer producer) {}
-
-  @Override
-  public void onReady() {}
-
-  @Override
-  public void headersRead(Metadata headers) {}
-
-  @Override
-  public void closed(Status status, Metadata trailers) {}
+  public InputStream next() {
+    InputStream messageToReturn = message;
+    message = null;
+    return messageToReturn;
+  }
 }

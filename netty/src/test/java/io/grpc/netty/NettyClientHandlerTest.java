@@ -36,6 +36,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.notNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,7 @@ import io.grpc.internal.ClientTransport.PingCallback;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ClientHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -73,7 +75,9 @@ import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.util.AsciiString;
 import java.io.InputStream;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -83,14 +87,18 @@ import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Tests for {@link NettyClientHandler}.
  */
 @RunWith(JUnit4.class)
 public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHandler> {
+
   private NettyClientStream.TransportState streamTransportState;
   private Http2Headers grpcHeaders;
   private long nanoTime; // backs a ticker, for testing ping round-trip time measurement
@@ -113,12 +121,31 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Mock
   private ClientStreamListener streamListener;
 
+  private final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+
   /**
    * Set up for test.
    */
   @Before
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
+
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) throws Throwable {
+              StreamListener.MessageProducer producer =
+                  (StreamListener.MessageProducer) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = producer.next()) != null) {
+                streamListenerMessageQueue.add(message);
+              }
+              return null;
+            }
+          })
+      .when(streamListener)
+      .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+
     lifecycleManager = new ClientTransportLifecycleManager(listener);
     // This mocks the keepalive manager only for there's in which we verify it. For other tests
     // it'll be null which will be testing if we behave correctly when it's not present.
@@ -273,11 +300,10 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     // Create a data frame and then trigger the handler to read it.
     ByteBuf frame = grpcDataFrame(3, false, contentAsArray());
     channelRead(frame);
-    ArgumentCaptor<InputStream> isCaptor = ArgumentCaptor.forClass(InputStream.class);
-    verify(streamListener).messageRead(isCaptor.capture());
-    assertArrayEquals(ByteBufUtil.getBytes(content()),
-        ByteStreams.toByteArray(isCaptor.getValue()));
-    isCaptor.getValue().close();
+    InputStream message = streamListenerMessageQueue.poll();
+    assertArrayEquals(ByteBufUtil.getBytes(content()), ByteStreams.toByteArray(message));
+    message.close();
+    assertNull("no additional message expected", streamListenerMessageQueue.poll());
   }
 
   @Test

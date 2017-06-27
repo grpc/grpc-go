@@ -1758,10 +1758,13 @@ public class OkHttpClientTransportTest {
     }
 
     @Override
-    public void messageRead(InputStream message) {
-      String msg = getContent(message);
-      if (msg != null) {
-        messages.add(msg);
+    public void messagesAvailable(MessageProducer producer) {
+      InputStream inputStream;
+      while ((inputStream = producer.next()) != null) {
+        String msg = getContent(inputStream);
+        if (msg != null) {
+          messages.add(msg);
+        }
       }
     }
 

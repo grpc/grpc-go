@@ -24,6 +24,7 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -142,7 +143,7 @@ public abstract class AbstractStream implements Stream {
 
     @Override
     public void messageRead(InputStream is) {
-      listener().messageRead(is);
+      listener().messagesAvailable(new SingleMessageProducer(is));
     }
 
     /**
@@ -285,6 +286,22 @@ public abstract class AbstractStream implements Stream {
       }
       if (doNotify) {
         listener().onReady();
+      }
+    }
+
+    public static class SingleMessageProducer implements StreamListener.MessageProducer {
+      private InputStream message;
+
+      private SingleMessageProducer(InputStream message) {
+        this.message = message;
+      }
+
+      @Nullable
+      @Override
+      public InputStream next() {
+        InputStream messageToReturn = message;
+        message = null;
+        return messageToReturn;
       }
     }
   }

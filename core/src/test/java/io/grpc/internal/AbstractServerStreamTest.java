@@ -17,14 +17,14 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.InternalStatus;
@@ -34,6 +34,8 @@ import io.grpc.internal.AbstractServerStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.Queue;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -67,17 +69,25 @@ public class AbstractServerStreamTest {
    */
   @Test
   public void frameShouldBeIgnoredAfterDeframerClosed() {
-    ServerStreamListener streamListener = mock(ServerStreamListener.class);
+    final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+    stream.transportState().setListener(new ServerStreamListenerBase() {
+      @Override
+      public void messagesAvailable(MessageProducer producer) {
+        InputStream message;
+        while ((message = producer.next()) != null) {
+          streamListenerMessageQueue.add(message);
+        }
+      }
+    });
     ReadableBuffer buffer = mock(ReadableBuffer.class);
 
-    stream.transportState().setListener(streamListener);
     // Close the deframer
     stream.transportState().complete();
     // Frame received after deframer closed, should be ignored and not trigger an exception
     stream.transportState().inboundDataReceived(buffer, true);
 
     verify(buffer).close();
-    verify(streamListener, times(0)).messageRead(any(InputStream.class));
+    assertNull("no message expected", streamListenerMessageQueue.poll());
   }
 
   /**
@@ -130,13 +140,21 @@ public class AbstractServerStreamTest {
 
   @Test
   public void messageRead_listenerCalled() {
-    final ServerStreamListener streamListener = mock(ServerStreamListener.class);
-    stream.transportState().setListener(streamListener);
+    final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
+    stream.transportState().setListener(new ServerStreamListenerBase() {
+      @Override
+      public void messagesAvailable(MessageProducer producer) {
+        InputStream message;
+        while ((message = producer.next()) != null) {
+          streamListenerMessageQueue.add(message);
+        }
+      }
+    });
 
     // Normally called by a deframe event.
     stream.transportState().messageRead(new ByteArrayInputStream(new byte[]{}));
 
-    verify(streamListener).messageRead(isA(InputStream.class));
+    assertNotNull(streamListenerMessageQueue.poll());
   }
 
   @Test
@@ -222,7 +240,7 @@ public class AbstractServerStreamTest {
 
   private static class ServerStreamListenerBase implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream message) {}
+    public void messagesAvailable(MessageProducer producer) {}
 
     @Override
     public void onReady() {}

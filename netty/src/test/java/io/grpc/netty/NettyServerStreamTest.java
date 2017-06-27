@@ -19,6 +19,7 @@ package io.grpc.netty;
 import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.netty.NettyTestUtil.messageFrame;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
@@ -40,6 +41,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.StreamListener;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -47,11 +49,15 @@ import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http2.DefaultHttp2Headers;
 import io.netty.util.AsciiString;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.LinkedList;
+import java.util.Queue;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -66,6 +72,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   private NettyServerHandler handler;
 
   private Metadata trailers = new Metadata();
+  private final Queue<InputStream> listenerMessageQueue = new LinkedList<InputStream>();
 
   @Before
   @Override
@@ -75,6 +82,22 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Verify onReady notification and then reset it.
     verify(listener()).onReady();
     reset(listener());
+
+    doAnswer(
+          new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) throws Throwable {
+              StreamListener.MessageProducer producer =
+                  (StreamListener.MessageProducer) invocation.getArguments()[0];
+              InputStream message;
+              while ((message = producer.next()) != null) {
+                listenerMessageQueue.add(message);
+              }
+              return null;
+            }
+          })
+      .when(serverListener)
+      .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
 
   @Test
@@ -147,6 +170,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().complete();
 
     verify(serverListener).closed(Status.OK);
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyZeroInteractions(serverListener);
   }
 
@@ -174,6 +198,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Sending complete. Listener gets closed()
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyZeroInteractions(serverListener);
   }
 
@@ -193,6 +218,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
 
     ArgumentCaptor<SendResponseHeadersCommand> cmdCap =
@@ -207,6 +233,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Sending and receiving complete. Listener gets closed()
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -217,6 +244,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(serverListener).closed(same(status));
     verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
     verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -230,6 +258,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Abort from the transport layer
     stream().transportState().transportReportStatus(status);
     verify(serverListener).closed(same(status));
+    assertNull("no message expected", listenerMessageQueue.poll());
     verifyNoMoreInteractions(serverListener);
   }
 
@@ -299,6 +328,11 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
   @Override
   protected ServerStreamListener listener() {
     return serverListener;
+  }
+
+  @Override
+  protected Queue<InputStream> listenerMessageQueue() {
+    return listenerMessageQueue;
   }
 
   private NettyServerStream stream() {

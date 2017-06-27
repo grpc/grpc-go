@@ -50,6 +50,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -67,6 +69,7 @@ import javax.annotation.concurrent.GuardedBy;
  * server stops servicing new requests and waits for all connections to terminate.
  */
 public final class ServerImpl extends io.grpc.Server implements WithLogId {
+  private static final Logger log = Logger.getLogger(ServerImpl.class.getName());
   private static final ServerStreamListener NOOP_LISTENER = new NoopListener();
 
   private final LogId logId = LogId.allocate(getClass().getName());
@@ -488,11 +491,23 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
 
   private static class NoopListener implements ServerStreamListener {
     @Override
-    public void messageRead(InputStream value) {
-      try {
-        value.close();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+    public void messagesAvailable(MessageProducer producer) {
+      InputStream message;
+      while ((message = producer.next()) != null) {
+        try {
+          message.close();
+        } catch (IOException e) {
+          // Close any remaining messages
+          while ((message = producer.next()) != null) {
+            try {
+              message.close();
+            } catch (IOException ioException) {
+              // just log additional exceptions as we are already going to throw
+              log.log(Level.WARNING, "Exception closing stream", ioException);
+            }
+          }
+          throw new RuntimeException(e);
+        }
       }
     }
 
@@ -553,12 +568,12 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
     }
 
     @Override
-    public void messageRead(final InputStream message) {
+    public void messagesAvailable(final MessageProducer producer) {
       callExecutor.execute(new ContextRunnable(context) {
         @Override
         public void runInContext() {
           try {
-            getListener().messageRead(message);
+            getListener().messagesAvailable(producer);
           } catch (RuntimeException e) {
             internalClose();
             throw e;
