@@ -36,7 +36,7 @@ final class NettyHandlerSettings {
     if (!enabled) {
       return;
     }
-    synchronized (InternalHandlerSettings.class) {
+    synchronized (NettyHandlerSettings.class) {
       handler.setAutoTuneFlowControl(autoFlowControlOn);
       if (handler instanceof NettyClientHandler) {
         clientHandler = handler;
