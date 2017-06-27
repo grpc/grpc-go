@@ -30,18 +30,18 @@ import io.grpc.Internal;
 @Deprecated
 public final class HandlerSettings {
   public static void enable(boolean enable) {
-    InternalHandlerSettings.enable(enable);
+    NettyHandlerSettings.enable(enable);
   }
 
   public static synchronized void autoWindowOn(boolean autoFlowControl) {
-    InternalHandlerSettings.autoWindowOn(autoFlowControl);
+    NettyHandlerSettings.autoWindowOn(autoFlowControl);
   }
 
   public static synchronized int getLatestClientWindow() {
-    return InternalHandlerSettings.getLatestServerWindow();
+    return NettyHandlerSettings.getLatestServerWindow();
   }
 
   public static synchronized int getLatestServerWindow() {
-    return InternalHandlerSettings.getLatestServerWindow();
+    return NettyHandlerSettings.getLatestServerWindow();
   }
 }

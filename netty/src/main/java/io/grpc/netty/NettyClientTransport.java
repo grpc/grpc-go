@@ -173,7 +173,7 @@ class NettyClientTransport implements ConnectionClientTransport {
 
     handler = NettyClientHandler.newHandler(lifecycleManager, keepAliveManager, flowControlWindow,
         maxHeaderListSize, Ticker.systemTicker(), tooManyPingsRunnable);
-    InternalHandlerSettings.setAutoWindow(handler);
+    NettyHandlerSettings.setAutoWindow(handler);
 
     negotiationHandler = negotiator.newHandler(handler);
 
