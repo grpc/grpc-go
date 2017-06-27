@@ -67,7 +67,7 @@ func combineString(title, val1, val2, percentChange string) string {
 	return fmt.Sprintf("%10s  %12s  %12s   %8s \n", title, val1, val2, percentChange)
 }
 
-func compareTwoMap(m1, m2 map[string][]string) {
+func compareTwoMap(m1, m2 map[string][]string, compareLatency string) {
 	unit2num := make(map[string]float64)
 	unit2num["s"] = 1000000000
 	unit2num["ms"] = 1000000
@@ -93,6 +93,9 @@ func compareTwoMap(m1, m2 map[string][]string) {
 				case i >= 1 && i <= 7:
 					changes = changes + combineString(v1[i+1], v1[i], v2[i], percentChange)
 				case i > 7:
+					if compareLatency=="0" {
+						break;
+					}
 					changes = changes + combineString(v1[i-1], v1[i]+v1[7], v2[i]+v2[7], percentChange)
 				}
 			}
@@ -102,8 +105,13 @@ func compareTwoMap(m1, m2 map[string][]string) {
 }
 
 func main() {
+
 	file1 := os.Args[1]
 	file2 := os.Args[2]
+	compareLatency := "1"
+	if len(os.Args) == 4 {
+		compareLatency = os.Args[3]
+	}
 
 	var BenchValueFile1 map[string][]string
 	var BenchValueFile2 map[string][]string
@@ -113,5 +121,5 @@ func main() {
 	createMap(file1, BenchValueFile1)
 	createMap(file2, BenchValueFile2)
 
-	compareTwoMap(BenchValueFile1, BenchValueFile2)
+	compareTwoMap(BenchValueFile1, BenchValueFile2, compareLatency)
 }

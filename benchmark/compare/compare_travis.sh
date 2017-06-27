@@ -13,7 +13,7 @@ if [ -d "benchmark/compare" ]; then
 
   cp -r benchmark tmpbenchmark
 
-  go test google.golang.org/grpc/benchmark/... -benchmem -bench=BenchmarkClient/Tracing-kbps_0-MTU_0-maxConcurrentCalls_1 | tee result1
+  go test google.golang.org/grpc/benchmark/... -benchmem -bench=BenchmarkClient/-Tracing-kbps_0-MTU_0-maxConcurrentCalls_1-latency_0s- | tee result1
   ls benchmark/compare/
   git reset --hard ${commits[0]}
   ls benchmark/compare/
@@ -23,6 +23,6 @@ if [ -d "benchmark/compare" ]; then
     rm -r benchmark
     mv tmpbenchmark benchmark
   fi
-  go test google.golang.org/grpc/benchmark/... -benchmem -bench=BenchmarkClient/Tracing-kbps_0-MTU_0-maxConcurrentCalls_1 | tee result2
-  go run benchmark/compare/main.go result1 result2
+  go test google.golang.org/grpc/benchmark/... -benchmem -bench=BenchmarkClient/-Tracing-kbps_0-MTU_0-maxConcurrentCalls_1-latency_0s- | tee result2
+  go run benchmark/compare/main.go result1 result2 0
 fi
