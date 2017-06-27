@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,8 +45,11 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 /**
  * Test for {@link AbstractClientStream}.  This class tries to test functionality in
@@ -62,6 +66,16 @@ public class AbstractClientStreamTest {
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+
+    doAnswer(new Answer<Void>() {
+      @Override
+      public Void answer(InvocationOnMock invocation) throws Throwable {
+        StreamListener.MessageProducer producer =
+            (StreamListener.MessageProducer) invocation.getArguments()[0];
+        while (producer.next() != null) {}
+        return null;
+      }
+    }).when(mockListener).messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
   }
 
   private final WritableBufferAllocator allocator = new WritableBufferAllocator() {
@@ -309,9 +323,14 @@ public class AbstractClientStreamTest {
     }
 
     @Override
-    protected void deframeFailed(Throwable cause) {}
+    public void deframeFailed(Throwable cause) {}
 
     @Override
     public void bytesRead(int processedBytes) {}
+
+    @Override
+    public void runOnTransportThread(Runnable r) {
+      r.run();
+    }
   }
 }

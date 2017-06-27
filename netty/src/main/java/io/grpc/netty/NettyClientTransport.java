@@ -144,7 +144,8 @@ class NettyClientTransport implements ConnectionClientTransport {
     }
     StatsTraceContext statsTraceCtx = StatsTraceContext.newClientContext(callOptions, headers);
     return new NettyClientStream(
-        new NettyClientStream.TransportState(handler, maxMessageSize, statsTraceCtx) {
+        new NettyClientStream.TransportState(handler, channel.eventLoop(), maxMessageSize,
+            statsTraceCtx) {
           @Override
           protected Status statusFromFailedFuture(ChannelFuture f) {
             return NettyClientTransport.this.statusFromFailedFuture(f);

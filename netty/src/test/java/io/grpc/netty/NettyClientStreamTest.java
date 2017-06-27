@@ -501,9 +501,9 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     return Utils.convertTrailers(trailers, true);
   }
 
-  private static class TransportStateImpl extends NettyClientStream.TransportState {
+  private class TransportStateImpl extends NettyClientStream.TransportState {
     public TransportStateImpl(NettyClientHandler handler, int maxMessageSize) {
-      super(handler, maxMessageSize, StatsTraceContext.NOOP);
+      super(handler, channel.eventLoop(), maxMessageSize, StatsTraceContext.NOOP);
     }
 
     @Override

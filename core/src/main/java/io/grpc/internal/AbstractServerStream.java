@@ -213,9 +213,10 @@ public abstract class AbstractServerStream extends AbstractStream
         if (!immediateCloseRequested && hasPartialMessage) {
           // We've received the entire stream and have data available but we don't have
           // enough to read the next frame ... this is bad.
-          deframeFailed(Status.INTERNAL
-              .withDescription("Encountered end-of-stream mid-frame")
-              .asRuntimeException());
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription("Encountered end-of-stream mid-frame")
+                  .asRuntimeException());
           deframerClosedTask = null;
           return;
         }

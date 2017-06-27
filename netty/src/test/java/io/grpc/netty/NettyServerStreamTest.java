@@ -171,7 +171,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     verify(serverListener).closed(Status.OK);
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyZeroInteractions(serverListener);
   }
 
   @Test
@@ -199,7 +198,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyZeroInteractions(serverListener);
   }
 
   @Test
@@ -219,7 +217,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     // Server closes. Status sent
     stream().close(Status.OK, trailers);
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyNoMoreInteractions(serverListener);
 
     ArgumentCaptor<SendResponseHeadersCommand> cmdCap =
         ArgumentCaptor.forClass(SendResponseHeadersCommand.class);
@@ -234,7 +231,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().complete();
     verify(serverListener).closed(Status.OK);
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -245,7 +241,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     verify(channel, never()).writeAndFlush(any(SendResponseHeadersCommand.class));
     verify(channel, never()).writeAndFlush(any(SendGrpcFrameCommand.class));
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -259,7 +254,6 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     stream().transportState().transportReportStatus(status);
     verify(serverListener).closed(same(status));
     assertNull("no message expected", listenerMessageQueue.poll());
-    verifyNoMoreInteractions(serverListener);
   }
 
   @Test
@@ -305,7 +299,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
     NettyServerStream.TransportState state = new NettyServerStream.TransportState(
-        handler, http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
+        handler, channel.eventLoop(), http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
     NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY,
         "test-authority", statsTraceCtx);
     stream.transportState().setListener(serverListener);

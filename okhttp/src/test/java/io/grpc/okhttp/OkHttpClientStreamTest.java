@@ -111,11 +111,11 @@ public class OkHttpClientStreamTest {
         assertTrue(Thread.holdsLock(lock));
         return null;
       }
-    }).when(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL, null);
+    }).when(transport).finishStream(1234, Status.CANCELLED, true, ErrorCode.CANCEL, null);
 
     stream.cancel(Status.CANCELLED);
 
-    verify(transport).finishStream(1234, Status.CANCELLED, ErrorCode.CANCEL, null);
+    verify(transport).finishStream(1234, Status.CANCELLED, true, ErrorCode.CANCEL, null);
   }
 
   @Test

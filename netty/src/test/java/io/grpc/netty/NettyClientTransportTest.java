@@ -624,8 +624,7 @@ public class NettyClientTransportTest {
         }
 
         @Override
-        public void transportTerminated() {
-        }
+        public void transportTerminated() {}
       };
     }
 

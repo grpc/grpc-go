@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -97,15 +96,18 @@ public class AbstractServerStreamTest {
   @Test
   public void queuedBytesInDeframerShouldNotBlockComplete() throws Exception {
     final SettableFuture<Status> closedFuture = SettableFuture.create();
-    stream.transportState().setListener(new ServerStreamListenerBase() {
-      @Override
-      public void closed(Status status) {
-        closedFuture.set(status);
-      }
-    });
+    stream
+        .transportState()
+        .setListener(
+            new ServerStreamListenerBase() {
+              @Override
+              public void closed(Status status) {
+                closedFuture.set(status);
+              }
+            });
 
     // Queue bytes in deframer
-    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[]{1}), false);
+    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[] {1}), false);
     stream.transportState().complete();
 
     assertEquals(Status.OK, closedFuture.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
@@ -114,15 +116,18 @@ public class AbstractServerStreamTest {
   @Test
   public void queuedBytesInDeframerShouldNotBlockTransportReportStatus() throws Exception {
     final SettableFuture<Status> closedFuture = SettableFuture.create();
-    stream.transportState().setListener(new ServerStreamListenerBase() {
-      @Override
-      public void closed(Status status) {
-        closedFuture.set(status);
-      }
-    });
+    stream
+        .transportState()
+        .setListener(
+            new ServerStreamListenerBase() {
+              @Override
+              public void closed(Status status) {
+                closedFuture.set(status);
+              }
+            });
 
     // Queue bytes in deframer
-    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[]{1}), false);
+    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[] {1}), false);
     stream.transportState().transportReportStatus(Status.CANCELLED);
 
     assertEquals(Status.CANCELLED, closedFuture.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
@@ -131,15 +136,18 @@ public class AbstractServerStreamTest {
   @Test
   public void partialMessageAtEndOfStreamShouldFail() throws Exception {
     final SettableFuture<Status> closedFuture = SettableFuture.create();
-    stream.transportState().setListener(new ServerStreamListenerBase() {
-      @Override
-      public void closed(Status status) {
-        closedFuture.set(status);
-      }
-    });
+    stream
+        .transportState()
+        .setListener(
+            new ServerStreamListenerBase() {
+              @Override
+              public void closed(Status status) {
+                closedFuture.set(status);
+              }
+            });
 
     // Queue a partial message in the deframer
-    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[]{1}), true);
+    stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[] {1}), true);
     stream.transportState().requestMessagesFromDeframer(1);
 
     Status status = closedFuture.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -194,6 +202,9 @@ public class AbstractServerStreamTest {
     state.setListener(null);
   }
 
+  // TODO(ericgribkoff) This test is only valid if deframeInTransportThread=true, as otherwise the
+  // message is queued.
+  /*
   @Test
   public void messageRead_listenerCalled() {
     final Queue<InputStream> streamListenerMessageQueue = new LinkedList<InputStream>();
@@ -212,6 +223,7 @@ public class AbstractServerStreamTest {
 
     assertNotNull(streamListenerMessageQueue.poll());
   }
+  */
 
   @Test
   public void writeHeaders_failsOnNullHeaders() {
@@ -344,13 +356,18 @@ public class AbstractServerStreamTest {
       }
 
       @Override
-      protected void deframeFailed(Throwable cause) {
+      public void deframeFailed(Throwable cause) {
         Status status = Status.fromThrowable(cause);
         transportReportStatus(status);
       }
 
       @Override
       public void bytesRead(int processedBytes) {}
+
+      @Override
+      public void runOnTransportThread(Runnable r) {
+        r.run();
+      }
     }
   }
 }

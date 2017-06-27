@@ -150,7 +150,7 @@ class OkHttpClientStream extends AbstractClientStream {
     @Override
     public void cancel(Status reason) {
       synchronized (state.lock) {
-        state.cancel(reason, null);
+        state.cancel(reason, true, null);
       }
     }
   }
@@ -227,18 +227,18 @@ class OkHttpClientStream extends AbstractClientStream {
 
     @GuardedBy("lock")
     @Override
-    protected void http2ProcessingFailed(Status status, Metadata trailers) {
-      cancel(status, trailers);
+    protected void http2ProcessingFailed(Status status, boolean stopDelivery, Metadata trailers) {
+      cancel(status, stopDelivery, trailers);
     }
 
-    @GuardedBy("lock")
     @Override
-    protected void deframeFailed(Throwable cause) {
-      http2ProcessingFailed(Status.fromThrowable(cause), new Metadata());
+    @GuardedBy("lock")
+    public void deframeFailed(Throwable cause) {
+      http2ProcessingFailed(Status.fromThrowable(cause), true, new Metadata());
     }
 
-    @GuardedBy("lock")
     @Override
+    @GuardedBy("lock")
     public void bytesRead(int processedBytes) {
       processedWindow -= processedBytes;
       if (processedWindow <= WINDOW_UPDATE_THRESHOLD) {
@@ -249,6 +249,21 @@ class OkHttpClientStream extends AbstractClientStream {
       }
     }
 
+    @Override
+    @GuardedBy("lock")
+    public void deframerClosed(boolean hasPartialMessageIgnored) {
+      onEndOfStream();
+      super.deframerClosed(hasPartialMessageIgnored);
+    }
+
+    @Override
+    @GuardedBy("lock")
+    public void runOnTransportThread(final Runnable r) {
+      synchronized (lock) {
+        r.run();
+      }
+    }
+
     /**
      * Must be called with holding the transport lock.
      */
@@ -256,7 +271,6 @@ class OkHttpClientStream extends AbstractClientStream {
     public void transportHeadersReceived(List<Header> headers, boolean endOfStream) {
       if (endOfStream) {
         transportTrailersReceived(Utils.convertTrailers(headers));
-        onEndOfStream();
       } else {
         transportHeadersReceived(Utils.convertHeaders(headers));
       }
@@ -274,13 +288,10 @@ class OkHttpClientStream extends AbstractClientStream {
       if (window < 0) {
         frameWriter.rstStream(id(), ErrorCode.FLOW_CONTROL_ERROR);
         transport.finishStream(id(), Status.INTERNAL.withDescription(
-            "Received data size exceeded our receiving window size"), null, null);
+            "Received data size exceeded our receiving window size"), false, null, null);
         return;
       }
       super.transportDataReceived(new OkHttpReadableBuffer(frame), endOfStream);
-      if (endOfStream) {
-        onEndOfStream();
-      }
     }
 
     @GuardedBy("lock")
@@ -288,15 +299,14 @@ class OkHttpClientStream extends AbstractClientStream {
       if (!framer().isClosed()) {
         // If server's end-of-stream is received before client sends end-of-stream, we just send a
         // reset to server to fully close the server side stream.
-        transport.finishStream(id(), null, ErrorCode.CANCEL, null);
+        transport.finishStream(id(), null, false, ErrorCode.CANCEL, null);
       } else {
-        transport.finishStream(id(), null, null, null);
+        transport.finishStream(id(), null, false, null, null);
       }
     }
 
-
     @GuardedBy("lock")
-    private void cancel(Status reason, Metadata trailers) {
+    private void cancel(Status reason, boolean stopDelivery, Metadata trailers) {
       if (cancelSent) {
         return;
       }
@@ -314,7 +324,7 @@ class OkHttpClientStream extends AbstractClientStream {
       } else {
         // If pendingData is null, start must have already been called, which means synStream has
         // been called as well.
-        transport.finishStream(id(), reason, ErrorCode.CANCEL, trailers);
+        transport.finishStream(id(), reason, stopDelivery, ErrorCode.CANCEL, trailers);
       }
     }
 

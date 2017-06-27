@@ -354,7 +354,7 @@ class NettyServerHandler extends AbstractNettyHandler {
           StatsTraceContext.newServerContext(streamTracerFactories, method, metadata);
 
       NettyServerStream.TransportState state = new NettyServerStream.TransportState(
-          this, http2Stream, maxMessageSize, statsTraceCtx);
+          this, ctx.channel().eventLoop(), http2Stream, maxMessageSize, statsTraceCtx);
       String authority = getOrUpdateAuthority((AsciiString)headers.authority());
       NettyServerStream stream = new NettyServerStream(ctx.channel(), state, attributes,
           authority, statsTraceCtx);
