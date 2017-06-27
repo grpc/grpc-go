@@ -200,7 +200,7 @@ public class AbstractClientStreamTest {
     // on the transport thread.
     stream.transportState().requestMessagesFromDeframer(1);
     // Send first byte of 2 byte message
-    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}), false);
+    stream.transportState().deframe(ReadableBuffers.wrap(new byte[] {0, 0, 0, 0, 2, 1}));
     Status status = Status.INTERNAL;
     // Simulate getting a reset
     stream.transportState().transportReportStatus(status, false /*stop delivery*/, new Metadata());

@@ -58,20 +58,14 @@ public class MessageDeframer implements Closeable {
     /**
      * Called to deliver the next complete message.
      *
-     * @param is stream containing the message.
+     * @param message stream containing the message.
      */
-    void messageRead(InputStream is);
+    void messageRead(InputStream message);
 
     /**
-     * Called when end-of-stream has not yet been reached but there are no complete messages
-     * remaining to be delivered.
+     * Called when the deframer closes.
      */
-    void deliveryStalled();
-
-    /**
-     * Called when the stream is complete and all messages have been successfully delivered.
-     */
-    void endOfStream();
+    void deframerClosed(boolean hasPartialMessage);
   }
 
   private enum State {
@@ -86,12 +80,12 @@ public class MessageDeframer implements Closeable {
   private State state = State.HEADER;
   private int requiredLength = HEADER_LENGTH;
   private boolean compressedFlag;
-  private boolean endOfStream;
   private CompositeReadableBuffer nextFrame;
   private CompositeReadableBuffer unprocessed = new CompositeReadableBuffer();
   private long pendingDeliveries;
-  private boolean deliveryStalled = true;
   private boolean inDelivery = false;
+
+  private boolean closeWhenComplete = false;
 
   /**
    * Create a deframer.
@@ -147,24 +141,18 @@ public class MessageDeframer implements Closeable {
    * Adds the given data to this deframer and attempts delivery to the listener.
    *
    * @param data the raw data read from the remote endpoint. Must be non-null.
-   * @param endOfStream if {@code true}, indicates that {@code data} is the end of the stream from
-   *        the remote endpoint.  End of stream should not be used in the event of a transport
-   *        error, such as a stream reset.
-   * @throws IllegalStateException if {@link #close()} has been called previously or if
-   *         this method has previously been called with {@code endOfStream=true}.
+   * @throws IllegalStateException if {@link #close()} or {@link #closeWhenComplete()} has been
+   *     called previously.
    */
-  public void deframe(ReadableBuffer data, boolean endOfStream) {
+  public void deframe(ReadableBuffer data) {
     Preconditions.checkNotNull(data, "data");
     boolean needToCloseData = true;
     try {
-      checkNotClosed();
-      Preconditions.checkState(!this.endOfStream, "Past end of stream");
+      checkNotClosedOrScheduledToClose();
 
       unprocessed.addBuffer(data);
       needToCloseData = false;
 
-      // Indicate that all of the data for this stream has been received.
-      this.endOfStream = endOfStream;
       deliver();
     } finally {
       if (needToCloseData) {
@@ -173,12 +161,17 @@ public class MessageDeframer implements Closeable {
     }
   }
 
-  /**
-   * Indicates whether delivery is currently stalled, pending receipt of more data.  This means
-   * that no additional data can be delivered to the application.
-   */
-  public boolean isStalled() {
-    return deliveryStalled;
+  /** Close when any messages currently in unprocessed have been requested and delivered. */
+  public void closeWhenComplete() {
+    if (unprocessed == null) {
+      return;
+    }
+    boolean stalled = unprocessed.readableBytes() == 0;
+    if (stalled) {
+      close();
+    } else {
+      closeWhenComplete = true;
+    }
   }
 
   /**
@@ -187,6 +180,10 @@ public class MessageDeframer implements Closeable {
    */
   @Override
   public void close() {
+    if (isClosed()) {
+      return;
+    }
+    boolean hasPartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
     try {
       if (unprocessed != null) {
         unprocessed.close();
@@ -198,6 +195,7 @@ public class MessageDeframer implements Closeable {
       unprocessed = null;
       nextFrame = null;
     }
+    listener.deframerClosed(hasPartialMessage);
   }
 
   /**
@@ -210,8 +208,9 @@ public class MessageDeframer implements Closeable {
   /**
    * Throws if this deframer has already been closed.
    */
-  private void checkNotClosed() {
+  private void checkNotClosedOrScheduledToClose() {
     Preconditions.checkState(!isClosed(), "MessageDeframer is already closed");
+    Preconditions.checkState(!closeWhenComplete, "MessageDeframer is scheduled to close");
   }
 
   /**
@@ -253,26 +252,8 @@ public class MessageDeframer implements Closeable {
        * be in unprocessed.
        */
       boolean stalled = unprocessed.readableBytes() == 0;
-
-      if (endOfStream && stalled) {
-        boolean havePartialMessage = nextFrame != null && nextFrame.readableBytes() > 0;
-        if (!havePartialMessage) {
-          listener.endOfStream();
-          deliveryStalled = false;
-          return;
-        } else {
-          // We've received the entire stream and have data available but we don't have
-          // enough to read the next frame ... this is bad.
-          throw Status.INTERNAL.withDescription(
-              debugString + ": Encountered end-of-stream mid-frame").asRuntimeException();
-        }
-      }
-
-      // If we're transitioning to the stalled state, notify the listener.
-      boolean previouslyStalled = deliveryStalled;
-      deliveryStalled = stalled;
-      if (stalled && !previouslyStalled) {
-        listener.deliveryStalled();
+      if (closeWhenComplete && stalled) {
+        close();
       }
     } finally {
       inDelivery = false;
