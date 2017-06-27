@@ -259,7 +259,7 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 				for {
 					go func() {
 						start := time.Now()
-						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+						if err := benchmark.DoUnaryCall(client, nil, reqSize, respSize); err != nil {
 							select {
 							case <-bc.stop:
 							case done <- false:
