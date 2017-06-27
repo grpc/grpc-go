@@ -16,14 +16,18 @@ const (
 	// our beta * our estimated bdp and the current bandwidth
 	// sample is the maximum bandwidth observed so far, we
 	// increase our bbp estimate by a factor of gamma.
-	beta  = 0.66
+	beta = 0.66
+	// To put our bdp to be smaller than or equal to twice the real BDP,
+	// we should multiply our current sample with 4/3, however to round things out
+	// we use 2 as the multiplication factor.
 	gamma = 2
 )
 
 var (
 	// Adding arbitrary data to ping so that its ack can be
 	// identified.
-	bdpPing = &ping{data: [8]byte{2, 3, 5, 7, 11, 13, 17, 8}}
+	// Easter-egg: what does the ping message say?
+	bdpPing = &ping{data: [8]byte{2, 4, 16, 16, 9, 14, 7, 7}}
 )
 
 type bdpEstimator struct {
@@ -106,10 +110,7 @@ func (b *bdpEstimator) calculate(d [8]byte) {
 	// If the current sample (which is smaller than or equal to the 1.5 times the real BDP) is
 	// greater than or equal to 2/3rd our perceived bdp AND this is the maximum bandwidth seen so far, we
 	// should update our perception of the network BDP.
-	if float64(b.sample) >= float64(beta)*float64(b.bdp) && bwCurrent == b.bwMax && b.bdp != bdpLimit {
-		// Put our bdp to be smaller than or equal to twice the real BDP.
-		// We really should multiply with 4/3, however to round things out
-		// we use 2 as the multiplication factor.
+	if float64(b.sample) >= beta*float64(b.bdp) && bwCurrent == b.bwMax && b.bdp != bdpLimit {
 		sampleFloat := float64(b.sample)
 		b.bdp = uint32(gamma * sampleFloat)
 		if b.bdp > bdpLimit {
