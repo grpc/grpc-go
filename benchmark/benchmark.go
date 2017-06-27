@@ -284,7 +284,6 @@ func runUnary(b *testing.B, s *stats.Stats, maxConcurrentCalls, reqSize, respSiz
 }
 
 func runStream(b *testing.B, s *stats.Stats, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
-	//fmt.Println(s)
 	if s == nil {
 		s = stats.AddStats(b, 38)
 	}
