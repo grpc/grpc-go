@@ -23,8 +23,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
+	"strings"
 	"time"
 )
+
+var printHistogram bool
 
 // Stats is a simple helper for gathering additional statistics like histogram
 // during benchmarks. This is not thread safe.
@@ -66,6 +70,11 @@ func (stats *Stats) Clear() {
 	stats.dirty = false
 }
 
+//Sort method for durations
+func (a durationSlice) Len() int           { return len(a) }
+func (a durationSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a durationSlice) Less(i, j int) bool { return a[i] < a[j] }
+
 // maybeUpdate updates internal stat data if there was any newly added
 // stats since this was updated.
 func (stats *Stats) maybeUpdate() {
@@ -73,16 +82,9 @@ func (stats *Stats) maybeUpdate() {
 		return
 	}
 
-	stats.min = math.MaxInt64
-	stats.max = 0
-	for _, d := range stats.durations {
-		if stats.min > int64(d) {
-			stats.min = int64(d)
-		}
-		if stats.max < int64(d) {
-			stats.max = int64(d)
-		}
-	}
+	sort.Sort(stats.durations)
+	stats.min = int64(stats.durations[0])
+	stats.max = int64(stats.durations[len(stats.durations)-1])
 
 	// Use the largest unit that can represent the minimum time duration.
 	stats.unit = time.Nanosecond
@@ -111,15 +113,41 @@ func (stats *Stats) maybeUpdate() {
 	stats.dirty = false
 }
 
+func max(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // Print writes textual output of the Stats.
 func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
+	if stats.durations.Len() != 0 {
+		avg := float64(stats.histogram.Sum) / float64(stats.histogram.Count)
+		var percentToObserve = []int64{50, 90, 99, 100}
+		var timeUnit = fmt.Sprintf("%v", stats.unit)[1:]
 
-	if stats.histogram == nil {
-		fmt.Fprint(w, "Histogram (empty)\n")
+		fmt.Fprintf(w, "Latency - unit: %s count: %d\n", timeUnit, stats.histogram.Count)
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 28))
+		//fmt.Fprintf(w, "stats.durations.Len(): %d, stats.hisgoram.count: %d \n", stats.durations.Len(), stats.histogram.Count)
+		for _, position := range percentToObserve {
+			fmt.Fprintf(w, "|   %*d%%   |   %9.4f %s   |\n", 3, position,
+				float64(stats.durations[max(stats.histogram.Count*position/100-1, 0)])/float64(stats.unit), timeUnit)
+		}
+		fmt.Fprintf(w, "| Average  |   %9.4f %s   |\n", avg/float64(stats.unit), fmt.Sprintf("%v", stats.unit)[1:])
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 28))
 	} else {
-		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.PrintWithUnit(w, float64(stats.unit))
+		fmt.Fprint(w, "No stats data\n")
+	}
+
+	if printHistogram {
+		if stats.histogram == nil {
+			fmt.Fprint(w, "Histogram (empty)\n")
+		} else {
+			fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
+			stats.histogram.Print(w)
+		}
 	}
 }
 
