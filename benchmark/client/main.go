@@ -47,7 +47,7 @@ var (
 )
 
 func unaryCaller(client testpb.BenchmarkServiceClient) {
-	benchmark.DoUnaryCall(client, 1, 1)
+	benchmark.DoUnaryCall(client, nil, 1, 1)
 }
 
 func streamCaller(stream testpb.BenchmarkService_StreamingCallClient) {

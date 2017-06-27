@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/metadata"
 )
 
 func BenchmarkClient(b *testing.B) {
@@ -39,29 +40,36 @@ func BenchmarkClient(b *testing.B) {
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
+	MD := []metadata.MD{{}, metadata.New(map[string]string{"key1": "val1"})}
 
-	for _, enableTracing := range []bool{true, false} {
-		grpc.EnableTracing = enableTracing
-		tracing := "Tracing"
-		if !enableTracing {
-			tracing = "noTrace"
+	for _, md := range MD {
+		hasMeta := "hasMetadata"
+		if len(md) == 0 {
+			hasMeta = "noMetadata"
 		}
-		for _, ltc := range latency {
-			for _, k := range kbps {
-				for _, mtu := range MTU {
-					for _, maxC := range maxConcurrentCalls {
-						for _, reqS := range reqSizeBytes {
-							for _, respS := range reqspSizeBytes {
-								b.Run(fmt.Sprintf("Unary-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-									"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-									tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
-									runUnary(b, maxC, reqS, respS, k, mtu, ltc)
-								})
-								b.Run(fmt.Sprintf("Stream-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-									"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-									tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
-									runStream(b, maxC, reqS, respS, k, mtu, ltc)
-								})
+		for _, enableTracing := range []bool{true, false} {
+			grpc.EnableTracing = enableTracing
+			tracing := "Trace"
+			if !enableTracing {
+				tracing = "noTrace"
+			}
+			for _, ltc := range latency {
+				for _, k := range kbps {
+					for _, mtu := range MTU {
+						for _, maxC := range maxConcurrentCalls {
+							for _, reqS := range reqSizeBytes {
+								for _, respS := range reqspSizeBytes {
+									b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+										"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+										hasMeta, tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
+										runUnary(b, md, maxC, reqS, respS, k, mtu, ltc)
+									})
+									b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+										"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+										hasMeta, tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
+										runStream(b, md, maxC, reqS, respS, k, mtu, ltc)
+									})
+								}
 							}
 						}
 					}

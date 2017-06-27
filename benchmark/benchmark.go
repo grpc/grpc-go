@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
 )
 
 // Allows reuse of the same testpb.Payload object.
@@ -101,10 +102,12 @@ type byteBufServer struct {
 // UnaryCall is an empty function and is not used for benchmark.
 // If bytebuf UnaryCall benchmark is needed later, the function body needs to be updated.
 func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	metadata.FromContext(ctx)
 	return &testpb.SimpleResponse{}, nil
 }
 
 func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+	metadata.FromContext(stream.Context())
 	for {
 		var in []byte
 		err := stream.(grpc.ServerStream).RecvMsg(&in)
@@ -170,14 +173,15 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error {
+func DoUnaryCall(tc testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) error {
 	pl := newPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
 		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		return fmt.Errorf("/BenchmarkService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	return nil
@@ -230,7 +234,7 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
+func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
@@ -246,7 +250,7 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int
 
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
-		unaryCaller(tc, reqSize, respSize)
+		unaryCaller(tc, md, reqSize, respSize)
 	}
 	ch := make(chan int, maxConcurrentCalls*4)
 	var (
@@ -260,7 +264,7 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int
 		go func() {
 			for range ch {
 				start := time.Now()
-				unaryCaller(tc, reqSize, respSize)
+				unaryCaller(tc, md, reqSize, respSize)
 				elapse := time.Since(start)
 				mu.Lock()
 				s.Add(elapse)
@@ -279,7 +283,7 @@ func runUnary(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int
 	conn.Close()
 }
 
-func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
+func runStream(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
@@ -293,8 +297,9 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 	)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 
+	ctx := metadata.NewContext(context.Background(), md)
 	// Warm up connection.
-	stream, err := tc.StreamingCall(context.Background())
+	stream, err := tc.StreamingCall(ctx)
 	if err != nil {
 		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 	}
@@ -311,7 +316,7 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 
 	// Distribute the b.N calls over maxConcurrentCalls workers.
 	for i := 0; i < maxConcurrentCalls; i++ {
-		stream, err := tc.StreamingCall(context.Background())
+		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
 			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
@@ -336,8 +341,8 @@ func runStream(b *testing.B, maxConcurrentCalls, reqSize, respSize, kbps, mtu in
 	wg.Wait()
 	conn.Close()
 }
-func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
-	if err := DoUnaryCall(client, reqSize, respSize); err != nil {
+func unaryCaller(client testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) {
+	if err := DoUnaryCall(client, md, reqSize, respSize); err != nil {
 		grpclog.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
