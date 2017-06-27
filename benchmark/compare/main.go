@@ -93,8 +93,8 @@ func compareTwoMap(m1, m2 map[string][]string, compareLatency string) {
 				case i >= 1 && i <= 7:
 					changes = changes + combineString(v1[i+1], v1[i], v2[i], percentChange)
 				case i > 7:
-					if compareLatency=="0" {
-						break;
+					if compareLatency == "0" {
+						break
 					}
 					changes = changes + combineString(v1[i-1], v1[i]+v1[7], v2[i]+v2[7], percentChange)
 				}
