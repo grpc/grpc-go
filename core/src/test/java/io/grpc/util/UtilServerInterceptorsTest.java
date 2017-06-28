@@ -17,9 +17,7 @@
 package io.grpc.util;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.junit.Assert.assertEquals;
 
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -37,7 +35,6 @@ import java.util.Arrays;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 /**
  * Unit test for {@link io.grpc.ServerInterceptor} implementations that come with gRPC. Not to be
@@ -46,7 +43,6 @@ import org.mockito.Mockito;
 @RunWith(JUnit4.class)
 public class UtilServerInterceptorsTest {
   private MethodDescriptor<String, Integer> flowMethod = TestMethodDescriptors.noopMethod();
-  private ServerCall<String, Integer> call = Mockito.spy(new NoopServerCall<String, Integer>());
   private final Metadata headers = new Metadata();
   private ServerCallHandler<String, Integer> handler = new ServerCallHandler<String, Integer>() {
       @Override
@@ -74,6 +70,8 @@ public class UtilServerInterceptorsTest {
   public void statusRuntimeExceptionTransmitter() {
     final Status expectedStatus = Status.UNAVAILABLE;
     final Metadata expectedMetadata = new Metadata();
+    FakeServerCall<String, Integer> call =
+        new FakeServerCall<String, Integer>(expectedStatus, expectedMetadata);
     final StatusRuntimeException exception =
         new StatusRuntimeException(expectedStatus, expectedMetadata);
     listener = new ServerCall.Listener<String>() {
@@ -113,6 +111,26 @@ public class UtilServerInterceptorsTest {
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onComplete();
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onHalfClose();
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onReady();
-    verify(call, times(5)).close(same(expectedStatus), same(expectedMetadata));
+    assertEquals(5, call.numCloses);
+  }
+
+  private static class FakeServerCall<ReqT, RespT> extends NoopServerCall<ReqT, RespT> {
+    final Status expectedStatus;
+    final Metadata expectedMetadata;
+
+    int numCloses;
+
+    FakeServerCall(Status expectedStatus, Metadata expectedMetadata) {
+      this.expectedStatus = expectedStatus;
+      this.expectedMetadata = expectedMetadata;
+    }
+
+    @Override
+    @SuppressWarnings("ReferenceEquality")
+    public void close(Status status, Metadata trailers) {
+      if (status == expectedStatus && trailers == expectedMetadata) {
+        numCloses++;
+      }
+    }
   }
 }
