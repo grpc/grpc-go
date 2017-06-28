@@ -23,24 +23,10 @@ package benchmark
 import (
 	"os"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/metadata"
 )
-
-type features struct {
-	enableTrace        bool
-	md                 metadata.MD
-	latency            time.Duration
-	kbps               int
-	mtu                int
-	maxConcurrentCalls int
-	maxConnCount       int
-	reqSizeBytes       int
-	respSizeBytes      int
-}
 
 func BenchmarkClientStreamc1(b *testing.B) {
 	grpc.EnableTracing = true

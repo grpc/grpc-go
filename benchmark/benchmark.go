@@ -38,6 +38,18 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+type features struct {
+	enableTrace        bool
+	md                 metadata.MD
+	latency            time.Duration
+	kbps               int
+	mtu                int
+	maxConcurrentCalls int
+	maxConnCount       int
+	reqSizeBytes       int
+	respSizeBytes      int
+}
+
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {

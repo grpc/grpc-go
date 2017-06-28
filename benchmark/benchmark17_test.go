@@ -32,18 +32,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-type features struct {
-	enableTrace        bool
-	md                 metadata.MD
-	latency            time.Duration
-	kbps               int
-	mtu                int
-	maxConcurrentCalls int
-	maxConnCount       int
-	reqSizeBytes       int
-	respSizeBytes      int
-}
-
 func (f features) String() string {
 	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
 		"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB",
