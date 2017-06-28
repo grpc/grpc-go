@@ -104,46 +104,7 @@ func BenchmarkClient(b *testing.B) {
 
 		Add(featuresPos, featuresNum)
 	}
-
-	/*
-		for _, enableTracing := range []bool{true, false} {
-			grpc.EnableTracing = enableTracing
-			tracing := "Trace"
-			if !enableTracing {
-				tracing = "noTrace"
-			}
-			for _, md := range md {
-				hasMeta := "hasMetadata"
-				if len(md) == 0 {
-					hasMeta = "noMetadata"
-				}
-				for _, ltc := range latency {
-					for _, k := range kbps {
-						for _, mtu := range mtu {
-							for _, maxC := range maxConcurrentCalls {
-								for _, connCount := range maxConnCount {
-									for _, reqS := range reqSizeBytes {
-										for _, respS := range reqspSizeBytes {
-											b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-												"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-												hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
-												runUnary(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
-											})
-											b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-												"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-												hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
-												runStream(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
-											})
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	*/
+	
 }
 
 func TestMain(m *testing.M) {
