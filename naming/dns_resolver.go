@@ -258,20 +258,20 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 	case <-w.done:
 		return nil, errWatcherClose
 	default:
-		result := w.lookup()
-		if len(result) > 0 {
-			return result, nil
-		}
-		ticker := time.NewTicker(w.r.freq)
-		for {
-			select {
-			case <-w.done:
-				return nil, errWatcherClose
-			case <-ticker.C:
-				result = w.lookup()
-				if len(result) > 0 {
-					return result, nil
-				}
+	}
+	result := w.lookup()
+	if len(result) > 0 {
+		return result, nil
+	}
+	ticker := time.NewTicker(w.r.freq)
+	for {
+		select {
+		case <-w.done:
+			return nil, errWatcherClose
+		case <-ticker.C:
+			result = w.lookup()
+			if len(result) > 0 {
+				return result, nil
 			}
 		}
 	}
