@@ -234,7 +234,16 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu, connCount int, ltc time.Duration) {
+func runUnary(b *testing.B, benchFeatures features) {
+	md := benchFeatures.md
+	maxConcurrentCalls := benchFeatures.maxConcurrentCalls
+	reqSize := benchFeatures.reqSizeBytes
+	respSize := benchFeatures.respSizeBytes
+	kbps := benchFeatures.kbps
+	mtu := benchFeatures.mtu
+	connCount := benchFeatures.maxConnCount
+	ltc := benchFeatures.latency
+
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
@@ -292,7 +301,15 @@ func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSiz
 	}
 }
 
-func runStream(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu, connCount int, ltc time.Duration) {
+func runStream(b *testing.B, benchFeatures features) {
+	md := benchFeatures.md
+	maxConcurrentCalls := benchFeatures.maxConcurrentCalls
+	reqSize := benchFeatures.reqSizeBytes
+	respSize := benchFeatures.respSizeBytes
+	kbps := benchFeatures.kbps
+	mtu := benchFeatures.mtu
+	connCount := benchFeatures.maxConnCount
+	ltc := benchFeatures.latency
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()

@@ -23,6 +23,7 @@ package benchmark
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -31,46 +32,121 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+type features struct {
+	enableTrace        bool
+	md                 metadata.MD
+	latency            time.Duration
+	kbps               int
+	mtu                int
+	maxConcurrentCalls int
+	maxConnCount       int
+	reqSizeBytes       int
+	respSizeBytes      int
+}
+
+func (f features) String() string {
+	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+		"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB",
+		f.latency.String(), f.kbps, f.mtu, f.maxConcurrentCalls, f.maxConnCount, f.reqSizeBytes, f.respSizeBytes)
+}
+
+func Add(features []int, upperBound []int) {
+	for i := len(features) - 1; i >= 0; i-- {
+		features[i] = (features[i] + 1)
+		if features[i]/upperBound[i] == 0 {
+			break
+		}
+		features[i] = features[i] % upperBound[i]
+	}
+}
+
 func BenchmarkClient(b *testing.B) {
+	enableTrace := []bool{true, false}
+	md := []metadata.MD{{}, metadata.New(map[string]string{"key1": "val1"})}
+	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
+	// because latency simulation section has extra operations
+	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
+	kbps := []int{0, 10240}                              // if non-positive, infinite
+	mtu := []int{0, 512}                                 // if non-positive, infinite
 	maxConcurrentCalls := []int{1, 8, 64, 512}
 	maxConnCount := []int{1, 4}
 	reqSizeBytes := []int{1, 1024, 1024 * 1024}
 	reqspSizeBytes := []int{1, 1024, 1024 * 1024}
-	kbps := []int{0, 10240} // if non-positive, infinite
-	MTU := []int{0, 10}     // if non-positive, infinite
-	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
-	// because latency simulation section has extra operations
-	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
-	MD := []metadata.MD{{}, metadata.New(map[string]string{"key1": "val1"})}
 
-	for _, md := range MD {
+	featuresPos := make([]int, 9)
+	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
+	featuresNum := []int{2, 2, 2, 2, 2, 4, 2, 3, 3}
+
+	// slice range preprocess
+	initalPos := make([]int, len(featuresPos))
+	// run benchmarks
+	start := true
+	for !reflect.DeepEqual(featuresPos, initalPos) || start {
+		start = false
+		tracing := "Trace"
+		if featuresPos[0] == 0 {
+			tracing = "noTrace"
+		}
 		hasMeta := "hasMetadata"
-		if len(md) == 0 {
+		if featuresPos[1] == 0 {
 			hasMeta = "noMetadata"
 		}
+
+		benchFeature := features{
+			enableTrace:        enableTrace[featuresPos[0]],
+			md:                 md[featuresPos[1]],
+			latency:            latency[featuresPos[2]],
+			kbps:               kbps[featuresPos[3]],
+			mtu:                mtu[featuresPos[4]],
+			maxConcurrentCalls: maxConcurrentCalls[featuresPos[5]],
+			maxConnCount:       maxConnCount[featuresPos[6]],
+			reqSizeBytes:       reqSizeBytes[featuresPos[7]],
+			respSizeBytes:      reqspSizeBytes[featuresPos[8]],
+		}
+
+		grpc.EnableTracing = enableTrace[featuresPos[0]]
+		b.Run(fmt.Sprintf("Unary-%s-%s-%s",
+			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
+			runUnary(b, benchFeature)
+		})
+		b.Run(fmt.Sprintf("Stream-%s-%s-%s",
+			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
+			runStream(b, benchFeature)
+		})
+
+		Add(featuresPos, featuresNum)
+	}
+
+	/*
 		for _, enableTracing := range []bool{true, false} {
 			grpc.EnableTracing = enableTracing
 			tracing := "Trace"
 			if !enableTracing {
 				tracing = "noTrace"
 			}
-			for _, ltc := range latency {
-				for _, k := range kbps {
-					for _, mtu := range MTU {
-						for _, maxC := range maxConcurrentCalls {
-							for _, connCount := range maxConnCount {
-								for _, reqS := range reqSizeBytes {
-									for _, respS := range reqspSizeBytes {
-										b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-											"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-											hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
-											runUnary(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
-										})
-										b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-											"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-											hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
-											runStream(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
-										})
+			for _, md := range md {
+				hasMeta := "hasMetadata"
+				if len(md) == 0 {
+					hasMeta = "noMetadata"
+				}
+				for _, ltc := range latency {
+					for _, k := range kbps {
+						for _, mtu := range mtu {
+							for _, maxC := range maxConcurrentCalls {
+								for _, connCount := range maxConnCount {
+									for _, reqS := range reqSizeBytes {
+										for _, respS := range reqspSizeBytes {
+											b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+												"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+												hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
+												runUnary(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
+											})
+											b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+												"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+												hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
+												runStream(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
+											})
+										}
 									}
 								}
 							}
@@ -79,8 +155,7 @@ func BenchmarkClient(b *testing.B) {
 				}
 			}
 		}
-	}
-
+	*/
 }
 
 func TestMain(m *testing.M) {
