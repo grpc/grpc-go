@@ -104,7 +104,7 @@ func BenchmarkClient(b *testing.B) {
 
 		Add(featuresPos, featuresNum)
 	}
-	
+
 }
 
 func TestMain(m *testing.M) {
