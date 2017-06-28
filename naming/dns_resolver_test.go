@@ -103,22 +103,22 @@ func TestCompileUpdate(t *testing.T) {
 	}
 }
 
-var testAddrs = map[string]bool{
+var testAddrs = map[string]error{
 	// TODO(yuxuanli): More false cases?
-	"www.google.com":            true,
-	"foo.bar:12345":             true,
-	"127.0.0.1":                 true,
-	"127.0.0.1:12345":           true,
-	"[::1]:80":                  true,
-	"[2001:db8:a0b:12f0::1]:21": true,
-	":80":                true,
-	"127.0.0...1:12345":  true,
-	"[fe80::1%lo0]:80":   true,
-	"golang.org:http":    true,
-	"[2001:db8::1]:http": true,
-	":":                  true,
-	"":                   false,
-	"[2001:db8:a0b:12f0::1": false,
+	"www.google.com":            nil,
+	"foo.bar:12345":             nil,
+	"127.0.0.1":                 nil,
+	"127.0.0.1:12345":           nil,
+	"[::1]:80":                  nil,
+	"[2001:db8:a0b:12f0::1]:21": nil,
+	":80":                nil,
+	"127.0.0...1:12345":  nil,
+	"[fe80::1%lo0]:80":   nil,
+	"golang.org:http":    nil,
+	"[2001:db8::1]:http": nil,
+	":":                  nil,
+	"":                   errMissingAddr,
+	"[2001:db8:a0b:12f0::1": fmt.Errorf("invalid target address %v", "[2001:db8:a0b:12f0::1"),
 }
 
 func TestResolveFunc(t *testing.T) {
@@ -128,8 +128,8 @@ func TestResolveFunc(t *testing.T) {
 	}
 	for k, v := range testAddrs {
 		_, err := r.Resolve(k)
-		if (err == nil) != v {
-			t.Errorf("%s is a %v address while it is returned as a %v address", k, v, err == nil)
+		if !reflect.DeepEqual(err, v) {
+			t.Errorf("expecting error = %+v, got error = %+v", v, err)
 		}
 	}
 }
