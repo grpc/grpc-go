@@ -23,87 +23,101 @@ package benchmark
 import (
 	"os"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/metadata"
 )
+
+type features struct {
+	enableTrace        bool
+	md                 metadata.MD
+	latency            time.Duration
+	kbps               int
+	mtu                int
+	maxConcurrentCalls int
+	maxConnCount       int
+	reqSizeBytes       int
+	respSizeBytes      int
+}
 
 func BenchmarkClientStreamc1(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, nil, 1, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{true, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc8(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, nil, 8, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{true, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc64(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, nil, 64, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{true, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc512(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, nil, 512, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{true, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 func BenchmarkClientUnaryc1(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, nil, 1, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{true, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc8(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, nil, 8, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{true, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc64(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, nil, 64, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{true, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc512(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, nil, 512, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{true, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, nil, 1, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{false, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec8(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, nil, 8, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{false, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, nil, 64, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{false, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, nil, 512, 1, 1, 1, 0, 0, 0)
+	runStream(b, features{false, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 func BenchmarkClientUnaryNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, nil, 1, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{false, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec8(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, nil, 8, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{false, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, nil, 64, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{false, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, nil, 512, 1, 1, 1, 0, 0, 0)
+	runUnary(b, features{false, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 
 func TestMain(m *testing.M) {
