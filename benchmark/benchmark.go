@@ -234,44 +234,51 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
+func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu, connCount int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
-	conn := NewClientConn(
-		target, grpc.WithInsecure(),
-		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-		}),
-	)
-	tc := testpb.NewBenchmarkServiceClient(conn)
-
-	// Warm up connection.
-	for i := 0; i < 10; i++ {
-		unaryCaller(tc, md, reqSize, respSize)
+	conns := make([]*grpc.ClientConn, connCount, connCount)
+	clients := make([]testpb.BenchmarkServiceClient, connCount, connCount)
+	for ic := 0; ic < connCount; ic++ {
+		conns[ic] = NewClientConn(
+			target, grpc.WithInsecure(),
+			grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+			}),
+		)
+		tc := testpb.NewBenchmarkServiceClient(conns[ic])
+		// Warm up.
+		for i := 0; i < 10; i++ {
+			unaryCaller(tc, md, reqSize, respSize)
+		}
+		clients[ic] = tc
 	}
-	ch := make(chan int, maxConcurrentCalls*4)
+
+	ch := make(chan int, connCount*maxConcurrentCalls*4)
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
 	)
-	wg.Add(maxConcurrentCalls)
+	wg.Add(connCount * maxConcurrentCalls)
 
 	// Distribute the b.N calls over maxConcurrentCalls workers.
-	for i := 0; i < maxConcurrentCalls; i++ {
-		go func() {
-			for range ch {
-				start := time.Now()
-				unaryCaller(tc, md, reqSize, respSize)
-				elapse := time.Since(start)
-				mu.Lock()
-				s.Add(elapse)
-				mu.Unlock()
-			}
-			wg.Done()
-		}()
+	for _, tc := range clients {
+		for i := 0; i < maxConcurrentCalls; i++ {
+			go func() {
+				for range ch {
+					start := time.Now()
+					unaryCaller(tc, md, reqSize, respSize)
+					elapse := time.Since(start)
+					mu.Lock()
+					s.Add(elapse)
+					mu.Unlock()
+				}
+				wg.Done()
+			}()
+		}
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -280,57 +287,63 @@ func runUnary(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSiz
 	b.StopTimer()
 	close(ch)
 	wg.Wait()
-	conn.Close()
+	for _, conn := range conns {
+		conn.Close()
+	}
 }
 
-func runStream(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu int, ltc time.Duration) {
+func runStream(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSize, kbps, mtu, connCount int, ltc time.Duration) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: kbps, Latency: ltc, MTU: mtu}
 	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(maxConcurrentCalls+1)))
 	defer stopper()
-	conn := NewClientConn(
-		target, grpc.WithInsecure(),
-		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-		}),
-	)
-	tc := testpb.NewBenchmarkServiceClient(conn)
-
+	conns := make([]*grpc.ClientConn, connCount, connCount)
+	clients := make([]testpb.BenchmarkServiceClient, connCount, connCount)
 	ctx := metadata.NewContext(context.Background(), md)
-	// Warm up connection.
-	stream, err := tc.StreamingCall(ctx)
-	if err != nil {
-		b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
-	}
-	for i := 0; i < 10; i++ {
-		streamCaller(stream, reqSize, respSize)
-	}
-
-	ch := make(chan struct{}, maxConcurrentCalls*4)
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-	wg.Add(maxConcurrentCalls)
-
-	// Distribute the b.N calls over maxConcurrentCalls workers.
-	for i := 0; i < maxConcurrentCalls; i++ {
+	for ic := 0; ic < connCount; ic++ {
+		conns[ic] = NewClientConn(
+			target, grpc.WithInsecure(),
+			grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+			}),
+		)
+		// Warm up connection.
+		tc := testpb.NewBenchmarkServiceClient(conns[ic])
 		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
 			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
-		go func() {
-			for range ch {
-				start := time.Now()
-				streamCaller(stream, reqSize, respSize)
-				elapse := time.Since(start)
-				mu.Lock()
-				s.Add(elapse)
-				mu.Unlock()
+		for i := 0; i < 10; i++ {
+			streamCaller(stream, reqSize, respSize)
+		}
+		clients[ic] = tc
+	}
+	ch := make(chan struct{}, connCount*maxConcurrentCalls*4)
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	wg.Add(connCount * maxConcurrentCalls)
+	// Distribute the b.N calls over maxConcurrentCalls workers.
+	for _, tc := range clients {
+		for i := 0; i < maxConcurrentCalls; i++ {
+			stream, err := tc.StreamingCall(ctx)
+			if err != nil {
+				b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 			}
-			wg.Done()
-		}()
+			go func() {
+				for range ch {
+					start := time.Now()
+					streamCaller(stream, reqSize, respSize)
+					elapse := time.Since(start)
+					mu.Lock()
+					s.Add(elapse)
+					mu.Unlock()
+				}
+				wg.Done()
+			}()
+		}
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -339,7 +352,9 @@ func runStream(b *testing.B, md metadata.MD, maxConcurrentCalls, reqSize, respSi
 	b.StopTimer()
 	close(ch)
 	wg.Wait()
-	conn.Close()
+	for _, conn := range conns {
+		conn.Close()
+	}
 }
 func unaryCaller(client testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) {
 	if err := DoUnaryCall(client, md, reqSize, respSize); err != nil {

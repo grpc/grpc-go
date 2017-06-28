@@ -33,6 +33,7 @@ import (
 
 func BenchmarkClient(b *testing.B) {
 	maxConcurrentCalls := []int{1, 8, 64, 512}
+	maxConnCount := []int{1, 4}
 	reqSizeBytes := []int{1, 1024, 1024 * 1024}
 	reqspSizeBytes := []int{1, 1024, 1024 * 1024}
 	kbps := []int{0, 10240} // if non-positive, infinite
@@ -57,18 +58,20 @@ func BenchmarkClient(b *testing.B) {
 				for _, k := range kbps {
 					for _, mtu := range MTU {
 						for _, maxC := range maxConcurrentCalls {
-							for _, reqS := range reqSizeBytes {
-								for _, respS := range reqspSizeBytes {
-									b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-										"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-										hasMeta, tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
-										runUnary(b, md, maxC, reqS, respS, k, mtu, ltc)
-									})
-									b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-										"%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
-										hasMeta, tracing, k, mtu, maxC, reqS, respS, ltc.String()), func(b *testing.B) {
-										runStream(b, md, maxC, reqS, respS, k, mtu, ltc)
-									})
+							for _, connCount := range maxConnCount {
+								for _, reqS := range reqSizeBytes {
+									for _, respS := range reqspSizeBytes {
+										b.Run(fmt.Sprintf("Unary-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+											"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+											hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
+											runUnary(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
+										})
+										b.Run(fmt.Sprintf("Stream-%s-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+											"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB-latency_%s",
+											hasMeta, tracing, k, mtu, maxC, connCount, reqS, respS, ltc.String()), func(b *testing.B) {
+											runStream(b, md, maxC, reqS, respS, k, mtu, connCount, ltc)
+										})
+									}
 								}
 							}
 						}
