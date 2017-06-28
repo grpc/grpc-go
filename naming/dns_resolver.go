@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
 	"strconv"
 	"time"
 
@@ -31,7 +30,9 @@ func NewDNSResolverWithFreq(freq time.Duration) (Resolver, error) {
 	return &dnsResolver{freq: freq}, nil
 }
 
-// NewDNSResolver creates a DNS Resolver that can resolve DNS names.
+// NewDNSResolver creates a DNS Resolver that can resolve DNS names, and the
+// watchers created by which will poll the DNS server using the default frequency
+// defined by defaultFreq.
 func NewDNSResolver() (Resolver, error) {
 	return &dnsResolver{freq: defaultFreq}, nil
 }
@@ -104,7 +105,6 @@ func (r *dnsResolver) Resolve(target string) (Watcher, error) {
 	if net.ParseIP(host) != nil {
 		ipWatcher := &ipWatcher{
 			updateChan: make(chan *Update, 1),
-			done:       make(chan struct{}),
 		}
 		host, _ = formatIP(host)
 		ipWatcher.updateChan <- &Update{Op: Add, Addr: host + ":" + port}
@@ -133,8 +133,6 @@ type dnsWatcher struct {
 // ipWatcher watches for the name resolution update for an IP address.
 type ipWatcher struct {
 	updateChan chan *Update
-	// done channel is closed to notify Next() to exit.
-	done chan struct{}
 }
 
 // Next returns the adrress resolution Update for the target. For IP address,
@@ -142,17 +140,16 @@ type ipWatcher struct {
 // Next() will return an Update the first time it is called, and will be blocked
 // for all following calls as no Update exisits until watcher is closed.
 func (i *ipWatcher) Next() ([]*Update, error) {
-	select {
-	case u := <-i.updateChan:
-		return []*Update{u}, nil
-	case <-i.done:
+	u, ok := <-i.updateChan
+	if !ok {
 		return nil, errWatcherClose
 	}
+	return []*Update{u}, nil
 }
 
 // Close closes the ipWatcher.
 func (i *ipWatcher) Close() {
-	close(i.done)
+	close(i.updateChan)
 }
 
 // AddressType indicates the address type returned by name resolution.
@@ -177,100 +174,107 @@ type AddrMetadataGRPCLB struct {
 
 // compileUpdate compares the old resolved addresses and newly resolved addresses,
 // and generates an update list
-func compileUpdate(oldAddrs []*Update, newAddrs []*Update) []*Update {
-	update := make(map[string]*Update)
+func (w *dnsWatcher) compileUpdate(newAddrs []*Update) []*Update {
+	update := make(map[Update]bool)
 	for _, u := range newAddrs {
-		update[u.Addr] = u
+		update[*u] = true
 	}
-	for _, u := range oldAddrs {
-		if ou, ok := update[u.Addr]; ok {
-			if ou.Metadata == u.Metadata {
-				delete(update, u.Addr)
-				continue
-			}
+	for _, u := range w.curAddrs {
+		if _, ok := update[*u]; ok {
+			delete(update, *u)
+			continue
 		}
-		update[u.Addr] = &Update{Addr: u.Addr, Op: Delete, Metadata: u.Metadata}
+		update[Update{Addr: u.Addr, Op: Delete, Metadata: u.Metadata}] = true
 	}
 	res := make([]*Update, 0, len(update))
-	for _, v := range update {
-		res = append(res, v)
+	for k := range update {
+		tmp := k
+		res = append(res, &tmp)
 	}
 	return res
 }
 
-func (w *dnsWatcher) lookup() ([]*Update, error) {
+func (w *dnsWatcher) lkpSRV() []*Update {
+	var newAddrs []*Update
 	_, srvs, err := lookupSRV("grpclb", "tcp", w.host)
 	if err != nil {
-		grpclog.Printf("grpc: failed dns SRV record lookup due to %v.\n", err)
+		grpclog.Infof("grpc: failed dns SRV record lookup due to %v.\n", err)
+		return nil
 	}
-
-	newAddrs := make([]*Update, 0, 100 /* TODO: decide the number here*/)
-	if len(srvs) > 0 {
-		// target has SRV records associated with it
-		for _, r := range srvs {
-			lbAddrs, err := lookupHost(r.Target)
-			if err != nil {
-				// TODO(yuxuanli): For service that doesn't use service config, this will
-				// result in a certain amount of unncessary logs.
-				grpclog.Printf("grpc: failed dns srv load banlacer address lookup due to %v.\n", err)
-			}
-			for _, a := range lbAddrs {
-				if a, ok := formatIP(a); ok {
-					newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(r.Port)),
-						Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: r.Target},
-					})
-				} else {
-					grpclog.Printf("grpc: failed IP parsing due to %v.\n", err)
-				}
-			}
-		}
-		sortSlice(newAddrs)
-	} else {
-		// If target doesn't have SRV records associated with it, return any A record info available.
-		addrs, err := lookupHost(w.host)
+	for _, r := range srvs {
+		lbAddrs, err := lookupHost(r.Target)
 		if err != nil {
-			grpclog.Printf("grpc: failed dns A record lookup due to %v.\n", err)
+			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
+			continue
 		}
-		sort.Strings(addrs)
-		for _, a := range addrs {
-			if a, ok := formatIP(a); ok {
-				newAddrs = append(newAddrs, &Update{Addr: a + ":" + w.port})
-			} else {
-				grpclog.Printf("grpc: failed IP parsing due to %v.\n", err)
+		for _, a := range lbAddrs {
+			a, ok := formatIP(a)
+			if !ok {
+				grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
+				continue
 			}
+			newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(r.Port)),
+				Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: r.Target}})
 		}
 	}
-	result := compileUpdate(w.curAddrs, newAddrs)
+	return newAddrs
+}
+
+func (w *dnsWatcher) lkpHost() []*Update {
+	var newAddrs []*Update
+	addrs, err := lookupHost(w.host)
+	if err != nil {
+		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
+		return nil
+	}
+	for _, a := range addrs {
+		a, ok := formatIP(a)
+		if !ok {
+			grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
+			continue
+		}
+		newAddrs = append(newAddrs, &Update{Addr: a + ":" + w.port})
+	}
+	return newAddrs
+}
+
+func (w *dnsWatcher) lookup() []*Update {
+	newAddrs := w.lkpSRV()
+	if newAddrs == nil {
+		// If failed to get any balancer address (either no corresponding SRV for the
+		// target, or caused by failure during resolution/parsing of the balancer target),
+		// return any A record info available.
+		newAddrs = w.lkpHost()
+	}
+	result := w.compileUpdate(newAddrs)
 	w.curAddrs = newAddrs
-	return result, nil
+	return result
 }
 
 // Next returns the resolved address update(delta) for the target. If there's no
 // change, it will sleep for 30 mins and try to resolve again after that.
 func (w *dnsWatcher) Next() ([]*Update, error) {
-	result, err := w.lookup()
-	if err != nil {
-		return nil, err
-	}
-	if len(result) > 0 {
-		return result, nil
-	}
-	ticker := time.NewTicker(w.r.freq)
-	for {
-		select {
-		case <-w.done:
-			return nil, errWatcherClose
-		case <-ticker.C:
-			result, err := w.lookup()
-			if err != nil {
-				return nil, err
-			}
-			if len(result) > 0 {
-				return result, nil
+	select {
+	case <-w.done:
+		return nil, errWatcherClose
+	default:
+		result := w.lookup()
+		if len(result) > 0 {
+			return result, nil
+		}
+		ticker := time.NewTicker(w.r.freq)
+		for {
+			select {
+			case <-w.done:
+				return nil, errWatcherClose
+			case <-ticker.C:
+				result = w.lookup()
+				if len(result) > 0 {
+					return result, nil
+				}
 			}
 		}
 	}
-
 }
 
 func (w *dnsWatcher) Close() {

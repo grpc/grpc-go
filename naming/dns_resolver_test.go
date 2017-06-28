@@ -86,16 +86,17 @@ func converToMap(u []*Update) map[string]*Update {
 }
 
 func TestCompileUpdate(t *testing.T) {
+	var w dnsWatcher
 	for i, c := range updateTestcases {
-		oldUpdates := make([]*Update, len(c.oldAddrs))
+		w.curAddrs = make([]*Update, len(c.oldAddrs))
 		newUpdates := make([]*Update, len(c.newAddrs))
 		for i, a := range c.oldAddrs {
-			oldUpdates[i] = &Update{Addr: a}
+			w.curAddrs[i] = &Update{Addr: a}
 		}
 		for i, a := range c.newAddrs {
 			newUpdates[i] = &Update{Addr: a}
 		}
-		r := compileUpdate(oldUpdates, newUpdates)
+		r := w.compileUpdate(newUpdates)
 		if !reflect.DeepEqual(converToMap(updateResult[i]), converToMap(r)) {
 			t.Errorf("Wrong update generated. idx: %d\n", i)
 		}
