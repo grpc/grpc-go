@@ -203,7 +203,5 @@ func (g *loggerT) Fatalf(format string, args ...interface{}) {
 }
 
 func (g *loggerT) V(l int) bool {
-	// Returns true for all verbose level.
-	// TODO support verbose level in the default logger.
-	return true
+	return l <= g.v
 }
