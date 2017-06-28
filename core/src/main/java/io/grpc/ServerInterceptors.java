@@ -207,7 +207,7 @@ public final class ServerInterceptors {
     serviceDefBuilder.addMethod(method.withServerCallHandler(callHandler));
   }
 
-  static class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
+  static final class InterceptCallHandler<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
     public static <ReqT, RespT> InterceptCallHandler<ReqT, RespT> create(
         ServerInterceptor interceptor, ServerCallHandler<ReqT, RespT> callHandler) {
       return new InterceptCallHandler<ReqT, RespT>(interceptor, callHandler);
@@ -216,8 +216,8 @@ public final class ServerInterceptors {
     private final ServerInterceptor interceptor;
     private final ServerCallHandler<ReqT, RespT> callHandler;
 
-    private InterceptCallHandler(ServerInterceptor interceptor,
-                                 ServerCallHandler<ReqT, RespT> callHandler) {
+    private InterceptCallHandler(
+        ServerInterceptor interceptor, ServerCallHandler<ReqT, RespT> callHandler) {
       this.interceptor = Preconditions.checkNotNull(interceptor, "interceptor");
       this.callHandler = callHandler;
     }
