@@ -305,7 +305,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if s.id%2 != 1 || s.id <= t.maxStreamID {
 		t.mu.Unlock()
 		// illegal gRPC stream id.
-		errorf("transport: http2Server.HandleStreams received an illegal stream id: ", s.id)
+		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", s.id)
 		return true
 	}
 	t.maxStreamID = s.id

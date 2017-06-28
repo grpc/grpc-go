@@ -188,7 +188,7 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerIn
 				}
 			}
 		default:
-			grpclog.Errorf("Unknown update.Op ", update.Op)
+			grpclog.Errorf("Unknown update.Op %v", update.Op)
 		}
 	}
 	// TODO: Fall back to the basic round-robin load balancing if the resulting address is
