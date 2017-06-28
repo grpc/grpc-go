@@ -50,6 +50,23 @@ type features struct {
 	respSizeBytes      int
 }
 
+func (f features) String() string {
+	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
+		"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB",
+		f.latency.String(), f.kbps, f.mtu, f.maxConcurrentCalls, f.maxConnCount, f.reqSizeBytes, f.respSizeBytes)
+}
+
+// add 1 to the features slice
+func addOne(features []int, upperBound []int) {
+	for i := len(features) - 1; i >= 0; i-- {
+		features[i] = (features[i] + 1)
+		if features[i]/upperBound[i] == 0 {
+			break
+		}
+		features[i] = features[i] % upperBound[i]
+	}
+}
+
 // Allows reuse of the same testpb.Payload object.
 func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	if size < 0 {

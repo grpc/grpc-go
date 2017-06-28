@@ -32,22 +32,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (f features) String() string {
-	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-		"%#v-maxConn_%#v-reqSize_%#vB-respSize_%#vB",
-		f.latency.String(), f.kbps, f.mtu, f.maxConcurrentCalls, f.maxConnCount, f.reqSizeBytes, f.respSizeBytes)
-}
-
-func Add(features []int, upperBound []int) {
-	for i := len(features) - 1; i >= 0; i-- {
-		features[i] = (features[i] + 1)
-		if features[i]/upperBound[i] == 0 {
-			break
-		}
-		features[i] = features[i] % upperBound[i]
-	}
-}
-
 func BenchmarkClient(b *testing.B) {
 	enableTrace := []bool{true, false}
 	md := []metadata.MD{{}, metadata.New(map[string]string{"key1": "val1"})}
@@ -102,7 +86,7 @@ func BenchmarkClient(b *testing.B) {
 			runStream(b, benchFeature)
 		})
 
-		Add(featuresPos, featuresNum)
+		addOne(featuresPos, featuresNum)
 	}
 
 }
