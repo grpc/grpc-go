@@ -1,0 +1,98 @@
+load("@grpc_java//:java_grpc_library.bzl", "java_grpc_library")
+
+proto_library(
+    name = "helloworld_proto",
+    srcs = ["src/main/proto/helloworld.proto"],
+)
+
+java_proto_library(
+    name = "helloworld_java_proto",
+    deps = [":helloworld_proto"],
+)
+
+java_grpc_library(
+    name = "helloworld_java_grpc",
+    srcs = [":helloworld_proto"],
+    deps = [":helloworld_java_proto"],
+)
+
+proto_library(
+    name = "route_guide_proto",
+    srcs = ["src/main/proto/route_guide.proto"],
+)
+
+java_proto_library(
+    name = "route_guide_java_proto",
+    deps = [":route_guide_proto"],
+)
+
+java_grpc_library(
+    name = "route_guide_java_grpc",
+    srcs = [":route_guide_proto"],
+    deps = [":route_guide_java_proto"],
+)
+
+java_library(
+    name = "examples",
+    testonly = 1,
+    srcs = glob(
+        ["src/main/java/**/*.java"],
+    ),
+    resources = glob(
+        ["src/main/resources/**"],
+    ),
+    deps = [
+        ":helloworld_java_grpc",
+        ":helloworld_java_proto",
+        ":route_guide_java_grpc",
+        ":route_guide_java_proto",
+        "@com_google_api_grpc_google_common_protos//jar",
+        "@com_google_code_findbugs_jsr305//jar",
+        "@com_google_guava//jar",
+        "@com_google_protobuf//:protobuf_java_util",
+        "@com_google_protobuf_java//:protobuf_java",
+        "@grpc_java//protobuf",
+        "@grpc_java//core",
+        "@grpc_java//stub",
+    ],
+)
+
+java_binary(
+    name = "hello-world-client",
+    testonly = 1,
+    main_class = "io.grpc.examples.helloworld.HelloWorldClient",
+    runtime_deps = [
+        ":examples",
+        "@grpc_java//netty",
+    ],
+)
+
+java_binary(
+    name = "hello-world-server",
+    testonly = 1,
+    main_class = "io.grpc.examples.helloworld.HelloWorldServer",
+    runtime_deps = [
+        ":examples",
+        "@grpc_java//netty",
+    ],
+)
+
+java_binary(
+    name = "route-guide-client",
+    testonly = 1,
+    main_class = "io.grpc.examples.routeguide.RouteGuideClient",
+    runtime_deps = [
+        ":examples",
+        "@grpc_java//netty",
+    ],
+)
+
+java_binary(
+    name = "route-guide-server",
+    testonly = 1,
+    main_class = "io.grpc.examples.routeguide.RouteGuideServer",
+    runtime_deps = [
+        ":examples",
+        "@grpc_java//netty",
+    ],
+)

@@ -49,6 +49,18 @@ $ # In another terminal run the client
 $ mvn exec:java -Dexec.mainClass=io.grpc.examples.helloworld.HelloWorldClient
 ```
 
+## Bazel
+
+If you prefer to use Bazel:
+```
+(With Bazel v0.4.5 or above.)
+$ bazel build :hello-world-server :hello-world-client
+$ # Run the server:
+$ bazel-bin/hello-world-server
+$ # In another terminal run the client
+$ bazel-bin/hello-world-client
+```
+
 Unit test examples
 ==============================================
 

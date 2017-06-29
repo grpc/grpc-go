@@ -9,6 +9,7 @@ target
 
 # Bazel
 bazel-bin
+bazel-examples
 bazel-genfiles
 bazel-grpc-java
 bazel-out
