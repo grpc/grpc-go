@@ -501,7 +501,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			endHeaders = true
 		}
 		var flush bool
-		if endHeaders && (hasMD || callHdr.Flush) {
+		if callHdr.Flush && endHeaders && hasMD {
 			flush = true
 		}
 		if first {

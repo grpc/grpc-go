@@ -130,7 +130,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
-		Flush:  desc.ServerStreams && desc.ClientStreams,
+		// If it's not client streaming, we should already have the request to be sent,
+		// so we don't flush the header.
+		// If it's client streaming, the user may never send a request or send it any
+		// time soon, so we ask the transport to flush the header.
+		Flush: desc.ClientStreams,
 	}
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
