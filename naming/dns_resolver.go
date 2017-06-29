@@ -19,9 +19,6 @@ const (
 var (
 	errMissingAddr  = errors.New("missing address")
 	errWatcherClose = errors.New("watcher has been closed")
-
-	lookupHost = net.DefaultResolver.LookupHost
-	lookupSRV  = net.DefaultResolver.LookupSRV
 )
 
 // NewDNSResolverWithFreq creates a DNS Resolver that can resolve DNS names, and
