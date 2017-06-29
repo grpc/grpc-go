@@ -47,7 +47,7 @@ func BenchmarkClient(b *testing.B) {
 
 	featuresPos := make([]int, 9)
 	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
-	featuresNum := []int{2, 2, 2, 2, 2, 4, 2, 3, 3}
+	featuresNum := []int{len(enableTrace), len(md), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(maxConnCount), len(reqSizeBytes), len(reqspSizeBytes)}
 
 	// slice range preprocess
 	initalPos := make([]int, len(featuresPos))
