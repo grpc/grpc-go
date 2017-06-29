@@ -184,6 +184,8 @@ var srvLookupTbl = map[string][]*net.SRV{
 }
 
 func replaceNetFunc() func() {
+	oldLookupHost := lookupHost
+	oldLookupSRV := lookupSRV
 	addrToResolve = fakeAddrToResolve
 	addrResolved = fakeAddrResolved
 	lookupHost = func(ctx context.Context, host string) ([]string, error) {
@@ -200,8 +202,8 @@ func replaceNetFunc() func() {
 		return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
 	}
 	return func() {
-		lookupHost = net.DefaultResolver.LookupHost
-		lookupSRV = net.DefaultResolver.LookupSRV
+		lookupHost = oldLookupHost
+		lookupSRV = oldLookupSRV
 		addrToResolve = realAddrToResolve
 		addrResolved = realAddrResolved
 	}
