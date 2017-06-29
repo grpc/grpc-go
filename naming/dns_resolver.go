@@ -1,6 +1,7 @@
 package naming
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,8 +20,8 @@ var (
 	errMissingAddr  = errors.New("missing address")
 	errWatcherClose = errors.New("watcher has been closed")
 
-	lookupHost = net.LookupHost
-	lookupSRV  = net.LookupSRV
+	lookupHost = net.DefaultResolver.LookupHost
+	lookupSRV  = net.DefaultResolver.LookupSRV
 )
 
 // NewDNSResolverWithFreq creates a DNS Resolver that can resolve DNS names, and
@@ -111,11 +112,13 @@ func (r *dnsResolver) Resolve(target string) (Watcher, error) {
 		return ipWatcher, nil
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &dnsWatcher{
-		r:    r,
-		host: host,
-		port: port,
-		done: make(chan struct{}),
+		r:      r,
+		host:   host,
+		port:   port,
+		ctx:    ctx,
+		cancel: cancel,
 	}, nil
 }
 
@@ -126,8 +129,8 @@ type dnsWatcher struct {
 	port string
 	// The latest resolved address list
 	curAddrs []*Update
-	// done channel is closed to notify Next() to exit.
-	done chan struct{}
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // ipWatcher watches for the name resolution update for an IP address.
@@ -196,13 +199,13 @@ func (w *dnsWatcher) compileUpdate(newAddrs []*Update) []*Update {
 
 func (w *dnsWatcher) lkpSRV() []*Update {
 	var newAddrs []*Update
-	_, srvs, err := lookupSRV("grpclb", "tcp", w.host)
+	_, srvs, err := lookupSRV(w.ctx, "grpclb", "tcp", w.host)
 	if err != nil {
 		grpclog.Infof("grpc: failed dns SRV record lookup due to %v.\n", err)
 		return nil
 	}
 	for _, r := range srvs {
-		lbAddrs, err := lookupHost(r.Target)
+		lbAddrs, err := lookupHost(w.ctx, r.Target)
 		if err != nil {
 			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
 			continue
@@ -222,7 +225,7 @@ func (w *dnsWatcher) lkpSRV() []*Update {
 
 func (w *dnsWatcher) lkpHost() []*Update {
 	var newAddrs []*Update
-	addrs, err := lookupHost(w.host)
+	addrs, err := lookupHost(w.ctx, w.host)
 	if err != nil {
 		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
 		return nil
@@ -255,7 +258,7 @@ func (w *dnsWatcher) lookup() []*Update {
 // change, it will sleep for 30 mins and try to resolve again after that.
 func (w *dnsWatcher) Next() ([]*Update, error) {
 	select {
-	case <-w.done:
+	case <-w.ctx.Done():
 		return nil, errWatcherClose
 	default:
 	}
@@ -266,7 +269,7 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 	ticker := time.NewTicker(w.r.freq)
 	for {
 		select {
-		case <-w.done:
+		case <-w.ctx.Done():
 			return nil, errWatcherClose
 		case <-ticker.C:
 			result = w.lookup()
@@ -278,5 +281,5 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 }
 
 func (w *dnsWatcher) Close() {
-	close(w.done)
+	w.cancel()
 }
