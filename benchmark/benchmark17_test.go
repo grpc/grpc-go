@@ -64,16 +64,16 @@ func BenchmarkClient(b *testing.B) {
 			hasMeta = "noMetadata"
 		}
 
-		benchFeature := features{
-			enableTrace:        enableTrace[featuresPos[0]],
-			md:                 md[featuresPos[1]],
-			latency:            latency[featuresPos[2]],
-			kbps:               kbps[featuresPos[3]],
-			mtu:                mtu[featuresPos[4]],
-			maxConcurrentCalls: maxConcurrentCalls[featuresPos[5]],
-			maxConnCount:       maxConnCount[featuresPos[6]],
-			reqSizeBytes:       reqSizeBytes[featuresPos[7]],
-			respSizeBytes:      reqspSizeBytes[featuresPos[8]],
+		benchFeature := Features{
+			EnableTrace:        enableTrace[featuresPos[0]],
+			Md:                 md[featuresPos[1]],
+			Latency:            latency[featuresPos[2]],
+			Kbps:               kbps[featuresPos[3]],
+			Mtu:                mtu[featuresPos[4]],
+			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[5]],
+			MaxConnCount:       maxConnCount[featuresPos[6]],
+			ReqSizeBytes:       reqSizeBytes[featuresPos[7]],
+			RespSizeBytes:      reqspSizeBytes[featuresPos[8]],
 		}
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
@@ -86,7 +86,7 @@ func BenchmarkClient(b *testing.B) {
 			runStream(b, benchFeature)
 		})
 
-		addOne(featuresPos, featuresNum)
+		AddOne(featuresPos, featuresNum)
 	}
 
 }
