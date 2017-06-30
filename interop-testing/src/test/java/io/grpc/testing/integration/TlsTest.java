@@ -90,7 +90,11 @@ public class TlsTest {
       Assume.assumeTrue(Arrays.asList(
           SSLContext.getDefault().getSupportedSSLParameters().getCipherSuites())
           .contains("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
-
+      try {
+        GrpcSslContexts.configure(SslContextBuilder.forClient(), SslProvider.JDK);
+      } catch (IllegalArgumentException ex) {
+        Assume.assumeNoException("Jetty ALPN does not seem available", ex);
+      }
     }
     clientContextBuilder = GrpcSslContexts.configure(SslContextBuilder.forClient(), sslProvider);
   }
