@@ -7,7 +7,7 @@ dependencies {
             project(':grpc-context'),
             libraries.instrumentation_api
     testCompile project(':grpc-testing')
-    signature "org.codehaus.mojo.signature:java16:+@signature"
+    signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
 
 javadoc {

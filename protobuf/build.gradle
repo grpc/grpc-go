@@ -25,7 +25,7 @@ dependencies {
         exclude group: 'com.google.protobuf', module: 'protobuf-lite'
     }
 
-    signature "org.codehaus.mojo.signature:java16:+@signature"
+    signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
 
 configureProtoCompilation()

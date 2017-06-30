@@ -19,7 +19,7 @@ dependencies {
 
     testProtobuf libraries.protobuf
 
-    signature "org.codehaus.mojo.signature:java16:+@signature"
+    signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
 
 compileTestJava {
