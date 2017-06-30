@@ -16,9 +16,14 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.grpc.Codec;
 import io.grpc.Compressor;
+import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import java.io.InputStream;
@@ -111,6 +116,11 @@ public abstract class AbstractClientStream extends AbstractStream
     transportState().setMaxInboundMessageSize(maxSize);
   }
 
+  @Override
+  public final void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
+    transportState().setDecompressorRegistry(decompressorRegistry);
+  }
+
   /** {@inheritDoc} */
   @Override
   protected abstract TransportState transportState();
@@ -172,6 +182,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private final StatsTraceContext statsTraceCtx;
     private boolean listenerClosed;
     private ClientStreamListener listener;
+    private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
 
     private Runnable deliveryStalledTask;
 
@@ -184,6 +195,12 @@ public abstract class AbstractClientStream extends AbstractStream
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    }
+
+    private void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
+      Preconditions.checkState(this.listener == null, "Already called start");
+      this.decompressorRegistry =
+          Preconditions.checkNotNull(decompressorRegistry, "decompressorRegistry");
     }
 
     @VisibleForTesting
@@ -218,6 +235,19 @@ public abstract class AbstractClientStream extends AbstractStream
     protected void inboundHeadersReceived(Metadata headers) {
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
+
+      Decompressor decompressor = Codec.Identity.NONE;
+      String encoding = headers.get(MESSAGE_ENCODING_KEY);
+      if (encoding != null) {
+        decompressor = decompressorRegistry.lookupDecompressor(encoding);
+        if (decompressor == null) {
+          deframeFailed(Status.INTERNAL.withDescription(
+              String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+          return;
+        }
+      }
+      setDecompressor(decompressor);
+
       listener().headersRead(headers);
     }
 

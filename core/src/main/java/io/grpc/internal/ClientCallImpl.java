@@ -37,7 +37,6 @@ import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
 import io.grpc.Deadline;
-import io.grpc.Decompressor;
 import io.grpc.DecompressorRegistry;
 import io.grpc.InternalDecompressorRegistry;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -222,6 +221,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
       stream.setMaxOutboundMessageSize(callOptions.getMaxOutboundMessageSize());
     }
     stream.setCompressor(compressor);
+    stream.setDecompressorRegistry(decompressorRegistry);
     stream.start(new ClientStreamListenerImpl(observer));
 
     // Delay any sources of cancellation after start(), because most of the transports are broken if
@@ -429,18 +429,6 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
 
     @Override
     public void headersRead(final Metadata headers) {
-      Decompressor decompressor = Codec.Identity.NONE;
-      if (headers.containsKey(MESSAGE_ENCODING_KEY)) {
-        String encoding = headers.get(MESSAGE_ENCODING_KEY);
-        decompressor = decompressorRegistry.lookupDecompressor(encoding);
-        if (decompressor == null) {
-          stream.cancel(Status.INTERNAL.withDescription(
-              String.format("Can't find decompressor for %s", encoding)));
-          return;
-        }
-      }
-      stream.setDecompressor(decompressor);
-
       class HeadersRead extends ContextRunnable {
         HeadersRead() {
           super(context);

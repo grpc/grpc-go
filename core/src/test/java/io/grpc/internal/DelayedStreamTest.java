@@ -34,6 +34,7 @@ import static org.mockito.Mockito.when;
 import io.grpc.Attributes;
 import io.grpc.Attributes.Key;
 import io.grpc.Codec;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import java.io.ByteArrayInputStream;
@@ -87,16 +88,11 @@ public class DelayedStreamTest {
     stream.start(mock(ClientStreamListener.class));
   }
 
-  @Test(expected = IllegalStateException.class)
-  public void setDecompressor_beforeSetStream() {
-    stream.start(listener);
-    stream.setDecompressor(Codec.Identity.NONE);
-  }
-
   @Test
   public void setStream_sendsAllMessages() {
     stream.start(listener);
     stream.setCompressor(Codec.Identity.NONE);
+    stream.setDecompressorRegistry(DecompressorRegistry.getDefaultInstance());
 
     stream.setMessageCompression(true);
     InputStream message = new ByteArrayInputStream(new byte[]{'a'});
@@ -105,10 +101,9 @@ public class DelayedStreamTest {
     stream.writeMessage(message);
 
     stream.setStream(realStream);
-    stream.setDecompressor(Codec.Identity.NONE);
 
     verify(realStream).setCompressor(Codec.Identity.NONE);
-    verify(realStream).setDecompressor(Codec.Identity.NONE);
+    verify(realStream).setDecompressorRegistry(DecompressorRegistry.getDefaultInstance());
 
     verify(realStream).setMessageCompression(true);
     verify(realStream).setMessageCompression(false);

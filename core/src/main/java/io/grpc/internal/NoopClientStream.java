@@ -18,7 +18,7 @@ package io.grpc.internal;
 
 import io.grpc.Attributes;
 import io.grpc.Compressor;
-import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
 import java.io.InputStream;
 
@@ -68,7 +68,7 @@ public class NoopClientStream implements ClientStream {
   public void setCompressor(Compressor compressor) {}
 
   @Override
-  public void setDecompressor(Decompressor decompressor) {}
+  public void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {}
 
   @Override
   public void setMaxInboundMessageSize(int maxSize) {}

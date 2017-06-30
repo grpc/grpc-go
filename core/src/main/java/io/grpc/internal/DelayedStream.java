@@ -22,7 +22,7 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
 import io.grpc.Compressor;
-import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import java.io.InputStream;
@@ -303,16 +303,14 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
-  public void setDecompressor(Decompressor decompressor) {
-    checkNotNull(decompressor, "decompressor");
-    // This method being called only makes sense after setStream() has been called (but not
-    // necessarily returned), but there is not necessarily a happens-before relationship. This
-    // synchronized block creates one.
-    synchronized (this) { }
-    checkState(realStream != null, "How did we receive a reply before the request is sent?");
-    // ClientStreamListenerImpl (in ClientCallImpl) requires setDecompressor to be set immediately,
-    // since messages may be processed immediately after this method returns.
-    realStream.setDecompressor(decompressor);
+  public void setDecompressorRegistry(final DecompressorRegistry decompressorRegistry) {
+    checkNotNull(decompressorRegistry, "decompressorRegistry");
+    delayOrExecute(new Runnable() {
+      @Override
+      public void run() {
+        realStream.setDecompressorRegistry(decompressorRegistry);
+      }
+    });
   }
 
   @Override

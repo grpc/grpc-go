@@ -22,6 +22,7 @@ import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Grpc;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -569,7 +570,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       public void setCompressor(Compressor compressor) {}
 
       @Override
-      public void setDecompressor(Decompressor decompressor) {}
+      public void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {}
 
       @Override
       public void setMaxInboundMessageSize(int maxSize) {}

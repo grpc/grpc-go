@@ -74,11 +74,6 @@ public abstract class AbstractStream implements Stream {
   }
 
   @Override
-  public final void setDecompressor(Decompressor decompressor) {
-    transportState().setDecompressor(checkNotNull(decompressor, "decompressor"));
-  }
-
-  @Override
   public boolean isReady() {
     if (framer().isClosed()) {
       return false;
@@ -207,7 +202,7 @@ public abstract class AbstractStream implements Stream {
       return statsTraceCtx;
     }
 
-    private void setDecompressor(Decompressor decompressor) {
+    protected final void setDecompressor(Decompressor decompressor) {
       if (deframer.isClosed()) {
         return;
       }

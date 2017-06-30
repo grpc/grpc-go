@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import io.grpc.Attributes;
+import io.grpc.Decompressor;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import javax.annotation.Nullable;
@@ -57,6 +58,14 @@ public interface ServerStream extends Stream {
    * times and from any thread.
    */
   void cancel(Status status);
+
+  /**
+   * Sets the decompressor on the deframer. If the transport does not support compression, this may
+   * do nothing.
+   *
+   * @param decompressor the decompressor to use.
+   */
+  void setDecompressor(Decompressor decompressor);
 
   /**
    * Attributes describing stream.  This is inherited from the transport attributes, and used

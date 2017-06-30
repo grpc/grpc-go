@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import io.grpc.Attributes;
+import io.grpc.DecompressorRegistry;
 import io.grpc.Status;
 
 /**
@@ -50,6 +51,14 @@ public interface ClientStream extends Stream {
    * #start}.
    */
   void setAuthority(String authority);
+
+  /**
+   * Sets the registry to find a decompressor for the framer. May only be called before {@link
+   * #start}. If the transport does not support compression, this may do nothing.
+   *
+   * @param decompressorRegistry the registry of decompressors for decoding responses
+   */
+  void setDecompressorRegistry(DecompressorRegistry decompressorRegistry);
 
   /**
    * Starts stream. This method may only be called once.  It is safe to do latent initialization of

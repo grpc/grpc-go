@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import io.grpc.Compressor;
-import io.grpc.Decompressor;
 import java.io.InputStream;
 
 /**
@@ -71,13 +70,6 @@ public interface Stream {
    * @param compressor the compressor to use
    */
   void setCompressor(Compressor compressor);
-
-  /**
-   * Sets the decompressor on the deframer.
-   *
-   * @param decompressor the decompressor to use.
-   */
-  void setDecompressor(Decompressor decompressor);
 
   /**
    * Enables per-message compression, if an encoding type has been negotiated.  If no message
