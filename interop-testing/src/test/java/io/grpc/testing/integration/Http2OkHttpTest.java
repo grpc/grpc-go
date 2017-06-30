@@ -51,6 +51,12 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class Http2OkHttpTest extends AbstractInteropTest {
+  @BeforeClass
+  public static void loadConscrypt() throws Exception {
+    // Load conscrypt if it is available. Either Conscrypt or Jetty ALPN needs to be available for
+    // OkHttp to negotiate.
+    Util.installConscryptIfAvailable();
+  }
 
   /** Starts the server with HTTPS. */
   @BeforeClass
