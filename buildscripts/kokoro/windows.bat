@@ -15,8 +15,8 @@ mkdir grpc-java-helper
 @rem Install 7za
 @rem TODO(mattkwong): After Windows tests are no longer running on Jenkins, 7za
 @rem doesn't need to be installed and make_dependencies.bat can use unzip instead
-wget http://www.7-zip.org/a/7za920.zip
-unzip 7za920.zip
+wget -q http://www.7-zip.org/a/7za920.zip >NUL
+unzip 7za920.zip >NUL
 mv 7za.exe grpc-java-helper
 
 cd grpc-java-helper
@@ -34,9 +34,11 @@ echo vcProtobufInclude=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-%PROTOBUF_VER%
 cmd.exe /C "%WORKSPACE%\gradlew.bat build"
 
 @rem Rename test results .xml files to format parsable by Kokoro
+@echo off
 for /r %%F in (TEST-*.xml) do (
   mkdir "%%~dpnF"
-  move "%%F" "%%~dpnF\sponge_log.xml"
+  move "%%F" "%%~dpnF\sponge_log.xml" >NUL
 )
+@echo on
 
 exit %%ERRORLEVEL%%
