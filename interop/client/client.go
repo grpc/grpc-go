@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
@@ -60,9 +61,6 @@ var (
         custom_metadata: server will echo custom metadata;
         unimplemented_method: client attempts to call unimplemented method;
         unimplemented_service: client attempts to call unimplemented service.`)
-
-	// The test CA root cert file
-	testCAFile = "testdata/ca.pem"
 )
 
 func main() {
@@ -77,7 +75,7 @@ func main() {
 		var creds credentials.TransportCredentials
 		if *testCA {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			creds, err = credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), sn)
 			if err != nil {
 				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}

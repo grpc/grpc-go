@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	metricspb "google.golang.org/grpc/stress/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
@@ -49,9 +50,6 @@ var (
 	useTLS               = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	testCA               = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	tlsServerName        = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
-
-	// The test CA root cert file
-	testCAFile = "testdata/ca.pem"
 )
 
 // testCaseWithWeight contains the test case type and its weight.
@@ -277,7 +275,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 		var creds credentials.TransportCredentials
 		if testCA {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(testCAFile, sn)
+			creds, err = credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), sn)
 			if err != nil {
 				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}
