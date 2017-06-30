@@ -3,7 +3,7 @@
 package naming
 
 import (
-	"context"
+	"golang.org/x/net/context"
 	"net"
 )
 
