@@ -101,7 +101,6 @@ func runUnary(benchFeatures bm.Features, timeout time.Duration) {
 		select {
 		case <-timeoutDur:
 			timeoutFlag = false
-			break
 		default:
 			ch <- 1
 			count++
@@ -186,7 +185,6 @@ func runStream(benchFeatures bm.Features, timeout time.Duration) {
 		select {
 		case <-timeoutDur:
 			timeoutFlag = false
-			break
 		default:
 			ch <- struct{}{}
 			count++
@@ -201,7 +199,7 @@ func runStream(benchFeatures bm.Features, timeout time.Duration) {
 		conn.Close()
 	}
 	fmt.Println(results.String())
-	fmt.Printf(s.String())
+	fmt.Println(s.String())
 }
 
 func unaryCaller(client testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) {
