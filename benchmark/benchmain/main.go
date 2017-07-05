@@ -75,19 +75,20 @@ func readTimeFromIntSlice(values *[]time.Duration, replace intSliceType) {
 }
 
 func readDataFromFlag(runMode *[]bool, enableTrace *[]bool, md *[]metadata.MD, latency *[]time.Duration, kbps *[]int, mtu *[]int,
-	maxConcurrentCalls *[]int, maxConnCount *[]int, reqSizeBytes *[]int, reqspSizeBytes *[]int) {
+	maxConcurrentCalls *[]int, maxConnCount *[]int, reqSizeBytes *[]int, reqspSizeBytes *[]int, timeout *time.Duration) {
 	var runUnary, runStream bool
-	var traceMode, tracexnoTrace bool
+	var traceMode, noTraceMode bool
 	var mdMode, mdxnomd bool
-	var readLatency string
+	var readLatency, readTimeout string
 	var readKbps, readMtu, readMaxConcurrentCalls, readMaxConnCount, readReqSizeBytes, readReqspSizeBytes intSliceType
 	flag.BoolVar(&runUnary, "runUnary", false, "runUnary")
 	flag.BoolVar(&runStream, "runStream", false, "runStream")
 	flag.BoolVar(&traceMode, "traceMode", false, "traceMode")
-	flag.BoolVar(&tracexnoTrace, "tracexnoTrace", false, "tracexnoTrace")
+	flag.BoolVar(&noTraceMode, "noTraceMode", false, "noTraceMode")
 	flag.BoolVar(&mdMode, "mdMode", false, "mdMode")
 	flag.BoolVar(&mdxnomd, "mdxnomd", false, "mdxnomd")
 	flag.StringVar(&readLatency, "latency", "", "latency")
+	flag.StringVar(&readTimeout, "timeout", "", "timeout")
 	flag.Var(&readKbps, "kbps", "kbps")
 	flag.Var(&readMtu, "mtu", "mtu")
 	flag.Var(&readMaxConcurrentCalls, "maxConcurrentCalls", "maxConcurrentCalls")
@@ -101,12 +102,11 @@ func readDataFromFlag(runMode *[]bool, enableTrace *[]bool, md *[]metadata.MD, l
 		(*runMode)[1] = runStream
 	}
 	// If node flags related to trace are set, it runs trace by default.
-	if !tracexnoTrace {
-		if traceMode {
-			*enableTrace = []bool{true}
-		} else {
-			*enableTrace = []bool{false}
-		}
+	if traceMode && !noTraceMode {
+		*enableTrace = []bool{true}
+	}
+	if !traceMode && noTraceMode {
+		*enableTrace = []bool{false}
 	}
 	// If node flags related to metadate are set, it runs hasMeta by default.
 	if !mdxnomd {
@@ -127,6 +127,14 @@ func readDataFromFlag(runMode *[]bool, enableTrace *[]bool, md *[]metadata.MD, l
 			}
 			*latency = append(*latency, duration)
 		}
+	}
+	if strings.Compare(readTimeout, "") != 0 {
+		duration, err := time.ParseDuration(readTimeout)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		*timeout = duration
 	}
 	readFromIntSlice(kbps, readKbps)
 	readFromIntSlice(mtu, readMtu)
@@ -152,8 +160,7 @@ func main() {
 	respSizeBytes := []int{1, 1024, 1024 * 1024}
 	timeout := time.Duration(1 * time.Second)
 
-	readDataFromFlag(&runMode, &enableTrace, &md, &latency, &kbps, &mtu, &maxConcurrentCalls, &maxConnCount, &reqSizeBytes, &respSizeBytes)
-
+	readDataFromFlag(&runMode, &enableTrace, &md, &latency, &kbps, &mtu, &maxConcurrentCalls, &maxConnCount, &reqSizeBytes, &respSizeBytes, &timeout)
 	featuresPos := make([]int, 9)
 	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
 	featuresNum := []int{len(enableTrace), len(md), len(latency), len(kbps), len(mtu),
@@ -171,7 +178,7 @@ func main() {
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
-		if featuresPos[0] == 0 {
+		if !enableTrace[featuresPos[0]] {
 			tracing = "noTrace"
 		}
 		hasMeta := "hasMetadata"

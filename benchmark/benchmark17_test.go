@@ -57,7 +57,7 @@ func BenchmarkClient(b *testing.B) {
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
-		if featuresPos[0] == 0 {
+		if !enableTrace[featuresPos[0]] {
 			tracing = "noTrace"
 		}
 		hasMeta := "hasMetadata"

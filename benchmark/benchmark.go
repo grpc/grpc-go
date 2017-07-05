@@ -327,9 +327,7 @@ func RunUnary(startTimer, stopTimer func(), stopBench func(chan int), s *stats.S
 	}
 }
 
-// RunStream runs unary mode.
-// startTimer() and stopTimer() calculate the stats. stopBench() defines how to stop bench, like for loop or timeout.
-// s passes the histogram out of the function.
+// RunStream runs stream mode.
 func RunStream(startTimer, stopTimer func(), stopBench func(chan int), s *stats.Stats, benchFeatures Features) {
 	if s == nil {
 		s = stats.AddStats(&testing.B{}, 38)
