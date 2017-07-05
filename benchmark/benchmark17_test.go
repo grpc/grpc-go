@@ -22,7 +22,6 @@ package benchmark
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -53,6 +52,8 @@ func BenchmarkClient(b *testing.B) {
 	initalPos := make([]int, len(featuresPos))
 	// run benchmarks
 	start := true
+	s := stats.NewStats(38)
+	isMatched := false
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
@@ -79,18 +80,40 @@ func BenchmarkClient(b *testing.B) {
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
 		b.Run(fmt.Sprintf("Unary-%s-%s-%s",
 			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
-			runUnary(b, benchFeature)
+			RunUnary(func() {
+				b.StartTimer()
+			}, func() {
+				b.StopTimer()
+			}, func(ch chan int) {
+				for i := 0; i < b.N; i++ {
+					ch <- 1
+				}
+			}, s, benchFeature)
+			isMatched = true
 		})
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+		}
+
 		b.Run(fmt.Sprintf("Stream-%s-%s-%s",
 			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
-			runStream(b, benchFeature)
+			RunStream(func() {
+				b.StartTimer()
+			}, func() {
+				b.StopTimer()
+			}, func(ch chan int) {
+				for i := 0; i < b.N; i++ {
+					ch <- 1
+				}
+			}, s, benchFeature)
+			isMatched = true
 		})
-
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+		}
 		AddOne(featuresPos, featuresNum)
 	}
 
-}
-
-func TestMain(m *testing.M) {
-	os.Exit(stats.RunTestMain(m))
 }

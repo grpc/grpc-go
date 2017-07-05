@@ -22,197 +22,20 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
-	"net"
 	"reflect"
 	"runtime"
-	"sync"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"flag"
-	"strconv"
-	"strings"
-
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	bm "google.golang.org/grpc/benchmark"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
-	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 )
-
-func runUnary(benchFeatures bm.Features, timeout time.Duration) {
-	s := stats.NewStats(38)
-	var memStats runtime.MemStats
-	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls+1)))
-	defer stopper()
-	conns := make([]*grpc.ClientConn, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
-	clients := make([]testpb.BenchmarkServiceClient, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
-	for ic := 0; ic < benchFeatures.MaxConnCount; ic++ {
-		conns[ic] = bm.NewClientConn(
-			target, grpc.WithInsecure(),
-			grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-			}),
-		)
-		tc := testpb.NewBenchmarkServiceClient(conns[ic])
-		// Warm up.
-		for i := 0; i < 10; i++ {
-			unaryCaller(tc, benchFeatures.Md, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-		}
-		clients[ic] = tc
-	}
-	ch := make(chan int, benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls*4)
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-	wg.Add(benchFeatures.MaxConnCount * benchFeatures.MaxConcurrentCalls)
-
-	// Distribute the b.N calls over maxConcurrentCalls workers.
-	for _, tc := range clients {
-		for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
-			go func() {
-				for range ch {
-					start := time.Now()
-					unaryCaller(tc, benchFeatures.Md, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-					elapse := time.Since(start)
-					mu.Lock()
-					s.Add(elapse)
-					mu.Unlock()
-				}
-				wg.Done()
-			}()
-		}
-	}
-
-	timeoutDur := time.After(timeout)
-	timeoutFlag := true
-	runtime.ReadMemStats(&memStats)
-	startAllocs := memStats.Mallocs
-	startBytes := memStats.TotalAlloc
-	start := time.Now()
-	count := 0
-	for timeoutFlag {
-		select {
-		case <-timeoutDur:
-			timeoutFlag = false
-		default:
-			ch <- 1
-			count++
-		}
-	}
-
-	runtime.ReadMemStats(&memStats)
-	close(ch)
-	results := testing.BenchmarkResult{N: count, T: time.Now().Sub(start), Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
-	//fmt.Println(mem1)
-	wg.Wait()
-	for _, conn := range conns {
-		conn.Close()
-	}
-	fmt.Println(results.String(), results.MemString())
-	fmt.Println(s.String())
-}
-
-func runStream(benchFeatures bm.Features, timeout time.Duration) {
-	s := stats.NewStats(38)
-	var memStats runtime.MemStats
-	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls+1)))
-	defer stopper()
-	conns := make([]*grpc.ClientConn, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
-	clients := make([]testpb.BenchmarkServiceClient, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
-	ctx := metadata.NewContext(context.Background(), benchFeatures.Md)
-	for ic := 0; ic < benchFeatures.MaxConnCount; ic++ {
-		conns[ic] = bm.NewClientConn(
-			target, grpc.WithInsecure(),
-			grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-				return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-			}),
-		)
-		// Warm up connection.
-		tc := testpb.NewBenchmarkServiceClient(conns[ic])
-		stream, err := tc.StreamingCall(ctx)
-		if err != nil {
-			fmt.Printf("%v.StreamingCall(_) = _, %v", tc, err)
-			return
-		}
-		for i := 0; i < 10; i++ {
-			streamCaller(stream, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-		}
-		clients[ic] = tc
-	}
-	ch := make(chan struct{}, benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls*4)
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-	wg.Add(benchFeatures.MaxConnCount * benchFeatures.MaxConcurrentCalls)
-	// Distribute the b.N calls over maxConcurrentCalls workers.
-	for _, tc := range clients {
-		for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
-			stream, err := tc.StreamingCall(ctx)
-			if err != nil {
-				fmt.Printf("%v.StreamingCall(_) = _, %v", tc, err)
-				return
-			}
-			go func() {
-				for range ch {
-					start := time.Now()
-					streamCaller(stream, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
-					elapse := time.Since(start)
-					mu.Lock()
-					s.Add(elapse)
-					mu.Unlock()
-				}
-				wg.Done()
-			}()
-		}
-	}
-	timeoutDur := time.After(timeout)
-	timeoutFlag := true
-	runtime.ReadMemStats(&memStats)
-	startAllocs := memStats.Mallocs
-	startBytes := memStats.TotalAlloc
-	start := time.Now()
-	count := 0
-	for timeoutFlag {
-		select {
-		case <-timeoutDur:
-			timeoutFlag = false
-		default:
-			ch <- struct{}{}
-			count++
-		}
-	}
-
-	runtime.ReadMemStats(&memStats)
-	close(ch)
-	results := testing.BenchmarkResult{N: count, T: time.Now().Sub(start), Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
-	wg.Wait()
-	for _, conn := range conns {
-		conn.Close()
-	}
-	fmt.Println(results.String())
-	fmt.Println(s.String())
-}
-
-func unaryCaller(client testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) {
-	if err := bm.DoUnaryCall(client, md, reqSize, respSize); err != nil {
-		grpclog.Fatalf("DoUnaryCall failed: %v", err)
-	}
-}
-
-func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
-	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
-		grpclog.Fatalf("DoStreamingRoundTrip failed: %v", err)
-	}
-}
 
 type intSliceType []int
 
@@ -327,7 +150,7 @@ func main() {
 	maxConnCount := []int{1, 4}
 	reqSizeBytes := []int{1, 1024, 1024 * 1024}
 	respSizeBytes := []int{1, 1024, 1024 * 1024}
-	timeout := time.Duration(5 * time.Second)
+	timeout := time.Duration(1 * time.Second)
 
 	readDataFromFlag(&runMode, &enableTrace, &md, &latency, &kbps, &mtu, &maxConcurrentCalls, &maxConnCount, &reqSizeBytes, &respSizeBytes)
 
@@ -338,6 +161,13 @@ func main() {
 
 	initalPos := make([]int, len(featuresPos))
 	start := true
+	s := stats.NewStats(38)
+	var memStats runtime.MemStats
+	var results testing.BenchmarkResult
+	var startAllocs, startBytes uint64
+	var count int
+	var startTime time.Time
+
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
@@ -363,11 +193,60 @@ func main() {
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
 		if runMode[0] {
 			fmt.Printf("Unary-%s-%s-%s: \n", tracing, hasMeta, benchFeature.String())
-			runUnary(benchFeature, timeout)
+			bm.RunUnary(func() {
+				runtime.ReadMemStats(&memStats)
+				startAllocs = memStats.Mallocs
+				startBytes = memStats.TotalAlloc
+				startTime = time.Now()
+				count = 0
+			}, func() {
+				runtime.ReadMemStats(&memStats)
+				results = testing.BenchmarkResult{N: count, T: time.Now().Sub(startTime),
+					Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
+			}, func(ch chan int) {
+				timeoutDur := time.After(timeout)
+				timeoutFlag := true
+				for timeoutFlag {
+					select {
+					case <-timeoutDur:
+						timeoutFlag = false
+					default:
+						ch <- 1
+						count++
+					}
+				}
+			}, s, benchFeature)
+			fmt.Println(results.String(), results.MemString())
+			fmt.Println(s.String())
 		}
+
 		if runMode[1] {
 			fmt.Printf("Stream-%s-%s-%s\n", tracing, hasMeta, benchFeature.String())
-			runStream(benchFeature, timeout)
+			bm.RunStream(func() {
+				runtime.ReadMemStats(&memStats)
+				startAllocs = memStats.Mallocs
+				startBytes = memStats.TotalAlloc
+				startTime = time.Now()
+				count = 0
+			}, func() {
+				runtime.ReadMemStats(&memStats)
+				results = testing.BenchmarkResult{N: count, T: time.Now().Sub(startTime),
+					Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
+			}, func(ch chan int) {
+				timeoutDur := time.After(timeout)
+				timeoutFlag := true
+				for timeoutFlag {
+					select {
+					case <-timeoutDur:
+						timeoutFlag = false
+					default:
+						ch <- 1
+						count++
+					}
+				}
+			}, s, benchFeature)
+			fmt.Println(results.String(), results.MemString())
+			fmt.Println(s.String())
 		}
 
 		bm.AddOne(featuresPos, featuresNum)

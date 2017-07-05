@@ -264,11 +264,17 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, benchFeatures Features) {
-
-	s := stats.AddStats(b, 38)
+// RunUnary runs unary mode.
+// startTimer() and stopTimer() calculate the stats. stopBench() defines how to stop bench, like for loop or timeout.
+// s passes the histogram out of the function.
+func RunUnary(startTimer, stopTimer func(), stopBench func(chan int), s *stats.Stats, benchFeatures Features) {
+	if s == nil {
+		s = stats.AddStats(&testing.B{}, 38)
+	} else {
+		s.Clear()
+	}
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	b.StopTimer()
+	stopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
 	conns := make([]*grpc.ClientConn, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
@@ -311,11 +317,9 @@ func runUnary(b *testing.B, benchFeatures Features) {
 			}()
 		}
 	}
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		ch <- i
-	}
-	b.StopTimer()
+	startTimer()
+	stopBench(ch)
+	stopTimer()
 	close(ch)
 	wg.Wait()
 	for _, conn := range conns {
@@ -323,10 +327,17 @@ func runUnary(b *testing.B, benchFeatures Features) {
 	}
 }
 
-func runStream(b *testing.B, benchFeatures Features) {
-	s := stats.AddStats(b, 38)
+// RunStream runs unary mode.
+// startTimer() and stopTimer() calculate the stats. stopBench() defines how to stop bench, like for loop or timeout.
+// s passes the histogram out of the function.
+func RunStream(startTimer, stopTimer func(), stopBench func(chan int), s *stats.Stats, benchFeatures Features) {
+	if s == nil {
+		s = stats.AddStats(&testing.B{}, 38)
+	} else {
+		s.Clear()
+	}
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	b.StopTimer()
+	stopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
 	conns := make([]*grpc.ClientConn, benchFeatures.MaxConnCount, benchFeatures.MaxConnCount)
@@ -343,14 +354,14 @@ func runStream(b *testing.B, benchFeatures Features) {
 		tc := testpb.NewBenchmarkServiceClient(conns[ic])
 		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
-			b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+			grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
 		for i := 0; i < 10; i++ {
 			streamCaller(stream, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
 		}
 		clients[ic] = tc
 	}
-	ch := make(chan struct{}, benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls*4)
+	ch := make(chan int, benchFeatures.MaxConnCount*benchFeatures.MaxConcurrentCalls*4)
 	var (
 		mu sync.Mutex
 		wg sync.WaitGroup
@@ -361,7 +372,7 @@ func runStream(b *testing.B, benchFeatures Features) {
 		for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
 			stream, err := tc.StreamingCall(ctx)
 			if err != nil {
-				b.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
+				grpclog.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 			}
 			go func() {
 				for range ch {
@@ -376,17 +387,16 @@ func runStream(b *testing.B, benchFeatures Features) {
 			}()
 		}
 	}
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		ch <- struct{}{}
-	}
-	b.StopTimer()
+	startTimer()
+	stopBench(ch)
+	stopTimer()
 	close(ch)
 	wg.Wait()
 	for _, conn := range conns {
 		conn.Close()
 	}
 }
+
 func unaryCaller(client testpb.BenchmarkServiceClient, md metadata.MD, reqSize, respSize int) {
 	if err := DoUnaryCall(client, md, reqSize, respSize); err != nil {
 		grpclog.Fatalf("DoUnaryCall failed: %v", err)

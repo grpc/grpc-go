@@ -28,82 +28,101 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 )
 
+func startTimer(b *testing.B) func() {
+	return func() {
+		b.StartTimer()
+	}
+}
+func stopTimer(b *testing.B) func() {
+	return func() {
+		b.StopTimer()
+	}
+}
+
+func stopBench(b *testing.B) func(chan int) {
+	return func(ch chan int) {
+		for i := 0; i < b.N; i++ {
+			ch <- 1
+		}
+	}
+}
+
 func BenchmarkClientStreamc1(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, Features{true, nil, 0, 0, 0, 1, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc8(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, Features{true, nil, 0, 0, 0, 8, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc64(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, Features{true, nil, 0, 0, 0, 64, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientStreamc512(b *testing.B) {
 	grpc.EnableTracing = true
-	runStream(b, Features{true, nil, 0, 0, 0, 512, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 func BenchmarkClientUnaryc1(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, Features{true, nil, 0, 0, 0, 1, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc8(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, Features{true, nil, 0, 0, 0, 8, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc64(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, Features{true, nil, 0, 0, 0, 64, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryc512(b *testing.B) {
 	grpc.EnableTracing = true
-	runUnary(b, Features{true, nil, 0, 0, 0, 512, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{true, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, Features{false, nil, 0, 0, 0, 1, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec8(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, Features{false, nil, 0, 0, 0, 8, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, Features{false, nil, 0, 0, 0, 64, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientStreamNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
-	runStream(b, Features{false, nil, 0, 0, 0, 512, 1, 1, 1})
+	RunStream(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 func BenchmarkClientUnaryNoTracec1(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, Features{false, nil, 0, 0, 0, 1, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 1, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec8(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, Features{false, nil, 0, 0, 0, 8, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 8, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec64(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, Features{false, nil, 0, 0, 0, 64, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 64, 1, 1, 1})
 }
 
 func BenchmarkClientUnaryNoTracec512(b *testing.B) {
 	grpc.EnableTracing = false
-	runUnary(b, Features{false, nil, 0, 0, 0, 512, 1, 1, 1})
+	RunUnary(startTimer(b), stopTimer(b), stopBench(b), nil, Features{false, nil, 0, 0, 0, 512, 1, 1, 1})
 }
 
 func TestMain(m *testing.M) {
