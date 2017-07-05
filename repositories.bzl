@@ -120,6 +120,9 @@ def com_google_instrumentation_api():
   )
 
 def com_google_protobuf():
+  # proto_library rules implicitly depend on @com_google_protobuf//:protoc,
+  # which is the proto-compiler.
+  # This statement defines the @com_google_protobuf repo.
   native.http_archive(
       name = "com_google_protobuf",
       sha256 = "df77b0e60afcd3d90b2654cd305e61ae8ae2e2281b4d6540c7093da4c4245d75",
@@ -128,6 +131,8 @@ def com_google_protobuf():
   )
 
 def com_google_protobuf_java():
+  # java_proto_library rules implicitly depend on @com_google_protobuf_java//:java_toolchain,
+  # which is the Java proto runtime (base classes and common utilities).
   native.http_archive(
       name = "com_google_protobuf_java",
       sha256 = "df77b0e60afcd3d90b2654cd305e61ae8ae2e2281b4d6540c7093da4c4245d75",

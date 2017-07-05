@@ -49,10 +49,10 @@ java_library(
         "@com_google_api_grpc_google_common_protos//jar",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava//jar",
-        "@com_google_protobuf//:protobuf_java_util",
         "@com_google_protobuf_java//:protobuf_java",
-        "@grpc_java//protobuf",
+        "@com_google_protobuf_java//:protobuf_java_util",
         "@grpc_java//core",
+        "@grpc_java//protobuf",
         "@grpc_java//stub",
     ],
 )

@@ -10,6 +10,6 @@ java_library(
         "//core:internal",
         "@com_google_code_findbugs_jsr305//jar",
         "@com_google_guava//jar",
-        "@com_google_protobuf//:protobuf_java",
+        "@com_google_protobuf_java//:protobuf_java",
     ],
 )
