@@ -539,8 +539,10 @@ type CallHdr struct {
 
 	// Flush indicates whether a new stream command should be sent
 	// to the peer without waiting for the first data. This is
-	// only a hint. The transport may modify the flush decision
+	// only a hint.
+	// If it's true, the transport may modify the flush decision
 	// for performance purposes.
+	// If it's false, new stream will never be flushed.
 	Flush bool
 }
 
