@@ -27,12 +27,3 @@ dependencies {
 
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
-
-configureProtoCompilation()
-
-idea {
-    module {
-        sourceDirs += file("${projectDir}/src/generated/main/grpc");
-        sourceDirs += file("${projectDir}/src/generated/main/java");
-    }
-}
