@@ -326,7 +326,7 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	}
 }
 
-func TestPreventReaddAddrConnAfterDeletingByBalancer(t *testing.T) {
+func TestPreventReaddAddrConnAfterDeletedByBalancer(t *testing.T) {
 	numServers := 2
 	servers, r := startServers(t, numServers, math.MaxUint32)
 	defer func() {
@@ -359,9 +359,18 @@ func TestPreventReaddAddrConnAfterDeletingByBalancer(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	if len(cc.conns) != 2 {
-		t.Fatalf("Number of addConns, want %d, got %d", 2, len(cc.conns))
+
+	getConnCount := func() int {
+		cc.mu.RLock()
+		defer cc.mu.RUnlock()
+		return len(cc.conns)
 	}
+
+	connCount := getConnCount()
+	if connCount != 2 {
+		t.Fatalf("Number of addConns, want %d, got %d", 2, connCount)
+	}
+
 	// Delete servers[1] by balancer
 	u := &naming.Update{
 		Op:   naming.Delete,
@@ -369,7 +378,7 @@ func TestPreventReaddAddrConnAfterDeletingByBalancer(t *testing.T) {
 	}
 	r.w.inject([]*naming.Update{u})
 	// Wait until the addrConn of services[1] is deleted
-	for len(cc.conns) != 1 {
+	for getConnCount() != 1 {
 		time.Sleep(10 * time.Millisecond)
 	}
 
@@ -379,7 +388,8 @@ func TestPreventReaddAddrConnAfterDeletingByBalancer(t *testing.T) {
 		t.Fatalf("Failed to reset addrConn: %v", err)
 	}
 
-	if len(cc.conns) != 1 {
-		t.Fatalf("Number of addConns, want %d, got %d", 1, len(cc.conns))
+	connCount = getConnCount()
+	if connCount != 1 {
+		t.Fatalf("Number of addConns, want %d, got %d", 1, connCount)
 	}
 }
