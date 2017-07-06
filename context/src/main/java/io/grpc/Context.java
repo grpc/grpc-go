@@ -19,6 +19,7 @@ package io.grpc;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -110,6 +111,8 @@ public class Context {
 
   // One and only one of them is non-null
   private static final Storage storage;
+  private static final LinkedBlockingQueue<ClassNotFoundException> storageOverrideNotFoundErrors =
+      new LinkedBlockingQueue<ClassNotFoundException>();
   private static final Exception storageInitError;
 
   static {
@@ -119,14 +122,10 @@ public class Context {
       Class<?> clazz = Class.forName("io.grpc.override.ContextStorageOverride");
       newStorage = (Storage) clazz.getConstructor().newInstance();
     } catch (ClassNotFoundException e) {
-      if (log.isLoggable(Level.FINE)) {
-        // Avoid writing to logger because custom log handlers may try to use Context, which is
-        // problemantic (e.g., NullPointerException) because the Context class has not done loading
-        // at this point.  The caveat is that in environments stderr may be disabled, thus this
-        // message would go nowhere.
-        System.err.println("io.grpc.Context: Storage override doesn't exist. Using default.");
-        e.printStackTrace();
-      }
+      // Avoid writing to logger because custom log handlers may try to use Context, which is
+      // problemantic (e.g., NullPointerException) because the Context class has not done loading
+      // at this point.
+      storageOverrideNotFoundErrors.add(e);
       newStorage = new ThreadLocalContextStorage();
     } catch (Exception e) {
       error = e;
@@ -212,6 +211,13 @@ public class Context {
     this.keyValueEntries = keyValueEntries;
     cascadesCancellation = true;
     canBeCancelled = isCancellable;
+  }
+
+  private static void maybeLogStorageOverrideNotFound() {
+    ClassNotFoundException e;
+    while ((e = storageOverrideNotFoundErrors.poll()) != null) {
+      log.log(Level.FINE, "Storage override doesn't exist. Using default.", e);
+    }
   }
 
   /**
@@ -381,6 +387,7 @@ public class Context {
    * }}</pre>
    */
   public Context attach() {
+    maybeLogStorageOverrideNotFound();
     Context previous = current();
     storage().attach(this);
     return previous;
