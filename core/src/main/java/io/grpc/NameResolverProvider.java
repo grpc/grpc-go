@@ -43,7 +43,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
       NameResolver.Factory.PARAMS_DEFAULT_PORT;
 
   private static final List<NameResolverProvider> providers
-      = load(getCorrectClassLoader());
+      = load(NameResolverProvider.class.getClassLoader());
   private static final NameResolver.Factory factory = new NameResolverFactory(providers);
 
   @VisibleForTesting
@@ -118,17 +118,6 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
   @VisibleForTesting
   static NameResolver.Factory asFactory(List<NameResolverProvider> providers) {
     return new NameResolverFactory(providers);
-  }
-
-  private static ClassLoader getCorrectClassLoader() {
-    if (isAndroid()) {
-      // When android:sharedUserId or android:process is used, Android will setup a dummy
-      // ClassLoader for the thread context (http://stackoverflow.com/questions/13407006),
-      // instead of letting users to manually set context class loader, we choose the
-      // correct class loader here.
-      return NameResolverProvider.class.getClassLoader();
-    }
-    return Thread.currentThread().getContextClassLoader();
   }
 
   private static boolean isAndroid() {

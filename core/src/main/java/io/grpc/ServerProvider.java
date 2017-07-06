@@ -30,7 +30,7 @@ import java.util.ServiceLoader;
 @Internal
 public abstract class ServerProvider {
   private static final ServerProvider provider =
-      load(Thread.currentThread().getContextClassLoader());
+      load(ServerProvider.class.getClassLoader());
 
   @VisibleForTesting
   static final ServerProvider load(ClassLoader cl) {
