@@ -3,6 +3,16 @@ apply plugin: 'application'
 description = "gRPC: Integration Testing"
 startScripts.enabled = false
 
+// Add dependency on the protobuf plugin
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath libraries.protobuf_plugin
+  }
+}
+
 dependencies {
     compile project(':grpc-auth'),
             project(':grpc-core'),
@@ -11,12 +21,13 @@ dependencies {
             project(':grpc-protobuf'),
             project(':grpc-stub'),
             project(':grpc-testing'),
-            project(':grpc-testing-proto'),
             libraries.junit,
             libraries.mockito,
             libraries.netty_tcnative,
             libraries.oauth_client
 }
+
+configureProtoCompilation()
 
 test {
     // For the automated tests, use Jetty ALPN.
@@ -77,4 +88,12 @@ applicationDistribution.into("bin") {
     from(stresstest_client)
     from(http2_client)
     fileMode = 0755
+}
+
+// Let intellij projects refer to generated code
+idea {
+  module {
+    sourceDirs += file("${projectDir}/src/generated/main/java")
+    sourceDirs += file("${projectDir}/src/generated/main/grpc")
+  }
 }

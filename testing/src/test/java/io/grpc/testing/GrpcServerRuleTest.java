@@ -18,15 +18,13 @@ package io.grpc.testing;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.EmptyProtos;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.integration.Messages;
-import io.grpc.testing.integration.TestServiceGrpc;
+import io.grpc.testing.protobuf.SimpleRequest;
+import io.grpc.testing.protobuf.SimpleResponse;
+import io.grpc.testing.protobuf.SimpleServiceGrpc;
 import java.util.Collection;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.Rule;
 import org.junit.Test;
@@ -59,21 +57,15 @@ public class GrpcServerRuleTest {
 
     grpcServerRule1.getServiceRegistry().addService(testService);
 
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
+    SimpleServiceGrpc.SimpleServiceBlockingStub stub =
+        SimpleServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
 
-    Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
-        .setPayload(Messages.Payload.newBuilder().setBody(
-            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-        .build();
+    SimpleRequest request1 = SimpleRequest.getDefaultInstance();
 
-    Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
-        .setPayload(Messages.Payload.newBuilder().setBody(
-            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-        .build();
+    SimpleRequest request2 = SimpleRequest.newBuilder().build();
 
-    stub.unaryCall(request1);
-    stub.unaryCall(request2);
+    stub.unaryRpc(request1);
+    stub.unaryRpc(request2);
 
     assertThat(testService.unaryCallRequests).containsExactly(request1, request2);
   }
@@ -84,14 +76,12 @@ public class GrpcServerRuleTest {
 
     grpcServerRule1.getServiceRegistry().addService(testService);
 
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
+    SimpleServiceGrpc.SimpleServiceBlockingStub stub =
+        SimpleServiceGrpc.newBlockingStub(grpcServerRule1.getChannel());
 
-    // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
-    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
+    stub.serverStreamingRpc(SimpleRequest.getDefaultInstance());
 
-    assertThat(testService.lastEmptyCallRequestThread).isNotEqualTo(Thread.currentThread());
+    assertThat(testService.lastServerStreamingRpcThread).isNotEqualTo(Thread.currentThread());
   }
 
   @Test(expected = IllegalStateException.class)
@@ -117,21 +107,15 @@ public class GrpcServerRuleTest {
 
     grpcServerRule2.getServiceRegistry().addService(testService);
 
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
+    SimpleServiceGrpc.SimpleServiceBlockingStub stub =
+        SimpleServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
 
-    Messages.SimpleRequest request1 = Messages.SimpleRequest.newBuilder()
-        .setPayload(Messages.Payload.newBuilder().setBody(
-            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-        .build();
+    SimpleRequest request1 = SimpleRequest.getDefaultInstance();
 
-    Messages.SimpleRequest request2 = Messages.SimpleRequest.newBuilder()
-        .setPayload(Messages.Payload.newBuilder().setBody(
-            ByteString.copyFromUtf8(UUID.randomUUID().toString())))
-        .build();
+    SimpleRequest request2 = SimpleRequest.newBuilder().build();
 
-    stub.unaryCall(request1);
-    stub.unaryCall(request2);
+    stub.unaryRpc(request1);
+    stub.unaryRpc(request2);
 
     assertThat(testService.unaryCallRequests).containsExactly(request1, request2);
   }
@@ -142,14 +126,12 @@ public class GrpcServerRuleTest {
 
     grpcServerRule2.getServiceRegistry().addService(testService);
 
-    TestServiceGrpc.TestServiceBlockingStub stub =
-        TestServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
+    SimpleServiceGrpc.SimpleServiceBlockingStub stub =
+        SimpleServiceGrpc.newBlockingStub(grpcServerRule2.getChannel());
 
-    // Make a garbage request first due to https://github.com/grpc/grpc-java/issues/2444.
-    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
-    stub.emptyCall(EmptyProtos.Empty.newBuilder().build());
+    stub.serverStreamingRpc(SimpleRequest.getDefaultInstance());
 
-    assertThat(testService.lastEmptyCallRequestThread).isEqualTo(Thread.currentThread());
+    assertThat(testService.lastServerStreamingRpcThread).isEqualTo(Thread.currentThread());
   }
 
   @Test
@@ -197,31 +179,31 @@ public class GrpcServerRuleTest {
     }
   }
 
-  private static class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
+  private static class TestServiceImpl extends SimpleServiceGrpc.SimpleServiceImplBase {
 
-    private final Collection<Messages.SimpleRequest> unaryCallRequests =
-        new ConcurrentLinkedQueue<Messages.SimpleRequest>();
+    private final Collection<SimpleRequest> unaryCallRequests =
+        new ConcurrentLinkedQueue<SimpleRequest>();
 
-    private volatile Thread lastEmptyCallRequestThread;
+    private volatile Thread lastServerStreamingRpcThread;
 
     @Override
-    public void emptyCall(
-        EmptyProtos.Empty request, StreamObserver<EmptyProtos.Empty> responseObserver) {
+    public void serverStreamingRpc(
+        SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
 
-      lastEmptyCallRequestThread = Thread.currentThread();
+      lastServerStreamingRpcThread = Thread.currentThread();
 
-      responseObserver.onNext(EmptyProtos.Empty.newBuilder().build());
+      responseObserver.onNext(SimpleResponse.getDefaultInstance());
 
       responseObserver.onCompleted();
     }
 
     @Override
-    public void unaryCall(
-        Messages.SimpleRequest request, StreamObserver<Messages.SimpleResponse> responseObserver) {
+    public void unaryRpc(
+        SimpleRequest request, StreamObserver<SimpleResponse> responseObserver) {
 
       unaryCallRequests.add(request);
 
-      responseObserver.onNext(Messages.SimpleResponse.newBuilder().build());
+      responseObserver.onNext(SimpleResponse.getDefaultInstance());
 
       responseObserver.onCompleted();
     }
