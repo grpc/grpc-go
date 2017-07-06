@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/naming"
 )
 
 const tlsDir = "testdata/"
@@ -321,5 +323,63 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	v := cc.mkp.Time
 	if v < 100*time.Millisecond {
 		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
+	}
+}
+
+func TestPreventReaddAddrConnAfterDeletingByBalancer(t *testing.T) {
+	numServers := 2
+	servers, r := startServers(t, numServers, math.MaxUint32)
+	defer func() {
+		for i := 0; i < numServers; i++ {
+			servers[i].stop()
+		}
+	}()
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	defer cc.Close()
+
+	req := "port"
+	var reply string
+	for i := 0; i < numServers; i++ {
+		if i != 0 {
+			// Add servers[i] to the service discovery
+			u := &naming.Update{
+				Op:   naming.Add,
+				Addr: "localhost:" + servers[i].port,
+			}
+			r.w.inject([]*naming.Update{u})
+		}
+		// Loop until servers[i] is up
+		for {
+			if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[i].port {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if len(cc.conns) != 2 {
+		t.Fatalf("Number of addConns, want %d, got %d", 2, len(cc.conns))
+	}
+	// Delete servers[1] by balancer
+	u := &naming.Update{
+		Op:   naming.Delete,
+		Addr: "localhost:" + servers[1].port,
+	}
+	r.w.inject([]*naming.Update{u})
+	// Wait until the addrConn of services[1] is deleted
+	for len(cc.conns) != 1 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Call resetAddrConn (ex: goaway)
+	err = cc.resetAddrConn(Address{Addr: u.Addr}, false, errConnDrain)
+	if err != nil {
+		t.Fatalf("Failed to reset addrConn: %v", err)
+	}
+
+	if len(cc.conns) != 1 {
+		t.Fatalf("Number of addConns, want %d, got %d", 1, len(cc.conns))
 	}
 }
