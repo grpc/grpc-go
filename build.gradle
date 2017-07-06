@@ -8,7 +8,7 @@ buildscript {
   }
   dependencies {
     classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
-    classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.2.0'
+    classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.3.0'
     classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.10'
   }
 }
