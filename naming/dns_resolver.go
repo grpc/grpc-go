@@ -1,9 +1,9 @@
 package naming
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/net/context"
 	"net"
 	"strconv"
 	"time"
