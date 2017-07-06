@@ -22,98 +22,65 @@ package benchmark
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
-	"google.golang.org/grpc/metadata"
 )
 
 func BenchmarkClient(b *testing.B) {
 	enableTrace := []bool{true, false}
-	md := []metadata.MD{{}, metadata.New(map[string]string{"key1": "val1"})}
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
 	kbps := []int{0, 10240}                              // if non-positive, infinite
 	mtu := []int{0, 512}                                 // if non-positive, infinite
 	maxConcurrentCalls := []int{1, 8, 64, 512}
-	maxConnCount := []int{1, 4}
 	reqSizeBytes := []int{1, 1024, 1024 * 1024}
 	reqspSizeBytes := []int{1, 1024, 1024 * 1024}
 
-	featuresPos := make([]int, 9)
+	featuresPos := make([]int, 7)
 	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
-	featuresNum := []int{len(enableTrace), len(md), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(maxConnCount), len(reqSizeBytes), len(reqspSizeBytes)}
+	featuresNum := []int{len(enableTrace), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(reqSizeBytes), len(reqspSizeBytes)}
 
 	// slice range preprocess
 	initalPos := make([]int, len(featuresPos))
 	// run benchmarks
 	start := true
-	s := stats.NewStats(38)
-	isMatched := false
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
 		if !enableTrace[featuresPos[0]] {
 			tracing = "noTrace"
 		}
-		hasMeta := "hasMetadata"
-		if featuresPos[1] == 0 {
-			hasMeta = "noMetadata"
-		}
 
 		benchFeature := Features{
 			EnableTrace:        enableTrace[featuresPos[0]],
-			Md:                 md[featuresPos[1]],
-			Latency:            latency[featuresPos[2]],
-			Kbps:               kbps[featuresPos[3]],
-			Mtu:                mtu[featuresPos[4]],
-			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[5]],
-			MaxConnCount:       maxConnCount[featuresPos[6]],
-			ReqSizeBytes:       reqSizeBytes[featuresPos[7]],
-			RespSizeBytes:      reqspSizeBytes[featuresPos[8]],
+			Latency:            latency[featuresPos[1]],
+			Kbps:               kbps[featuresPos[2]],
+			Mtu:                mtu[featuresPos[3]],
+			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[4]],
+			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
+			RespSizeBytes:      reqspSizeBytes[featuresPos[6]],
 		}
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
-		b.Run(fmt.Sprintf("Unary-%s-%s-%s",
-			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
-			RunUnary(func() {
-				b.StartTimer()
-			}, func() {
-				b.StopTimer()
-			}, func(ch chan int) {
-				for i := 0; i < b.N; i++ {
-					ch <- 1
-				}
-			}, s, benchFeature)
-			isMatched = true
+		b.Run(fmt.Sprintf("Unary-%s-%s",
+			tracing, benchFeature.String()), func(b *testing.B) {
+			runUnary(b, benchFeature)
 		})
-		if isMatched {
-			fmt.Print(s.String())
-			isMatched = false
-		}
 
-		b.Run(fmt.Sprintf("Stream-%s-%s-%s",
-			tracing, hasMeta, benchFeature.String()), func(b *testing.B) {
-			RunStream(func() {
-				b.StartTimer()
-			}, func() {
-				b.StopTimer()
-			}, func(ch chan int) {
-				for i := 0; i < b.N; i++ {
-					ch <- 1
-				}
-			}, s, benchFeature)
-			isMatched = true
+		b.Run(fmt.Sprintf("Stream-%s-%s",
+			tracing, benchFeature.String()), func(b *testing.B) {
+			runStream(b, benchFeature)
 		})
-		if isMatched {
-			fmt.Print(s.String())
-			isMatched = false
-		}
 		AddOne(featuresPos, featuresNum)
 	}
+}
 
+func TestMain(m *testing.M) {
+	os.Exit(stats.RunTestMain(m))
 }
