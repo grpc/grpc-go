@@ -1324,6 +1324,8 @@ public abstract class AbstractInteropTest {
     // TODO(madongfly): The Auth library may have something like AccessTokenCredentials in the
     // future, change to the official implementation then.
     OAuth2Credentials credentials = new OAuth2Credentials(accessToken) {
+      private static final long serialVersionUID = 0;
+
       @Override
       public AccessToken refreshAccessToken() throws IOException {
         throw new IOException("This credential is based on a certain AccessToken, "
