@@ -32,7 +32,7 @@ import (
 )
 
 func BenchmarkClient(b *testing.B) {
-	enableTrace := []bool{true, false}
+	enableTrace := []bool{true, false} // run both enable and disable by default
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
@@ -40,35 +40,34 @@ func BenchmarkClient(b *testing.B) {
 	mtu := []int{0, 512}                                 // if non-positive, infinite
 	maxConcurrentCalls := []int{1, 8, 64, 512}
 	reqSizeBytes := []int{1, 1024, 1024 * 1024}
-	reqspSizeBytes := []int{1, 1024, 1024 * 1024}
+	respSizeBytes := []int{1, 1024, 1024 * 1024}
+	featuresCurPos := make([]int, 7)
 
-	featuresPos := make([]int, 7)
 	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
-	featuresNum := []int{len(enableTrace), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(reqSizeBytes), len(reqspSizeBytes)}
+	featuresMax := []int{len(enableTrace), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes)}
+	initalPos := make([]int, len(featuresCurPos))
 
-	// slice range preprocess
-	initalPos := make([]int, len(featuresPos))
 	// run benchmarks
 	start := true
-	for !reflect.DeepEqual(featuresPos, initalPos) || start {
+	for !reflect.DeepEqual(featuresCurPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
-		if !enableTrace[featuresPos[0]] {
+		if !enableTrace[featuresCurPos[0]] {
 			tracing = "noTrace"
 		}
 
 		benchFeature := Features{
-			EnableTrace:        enableTrace[featuresPos[0]],
-			Latency:            latency[featuresPos[1]],
-			Kbps:               kbps[featuresPos[2]],
-			Mtu:                mtu[featuresPos[3]],
-			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[4]],
-			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
-			RespSizeBytes:      reqspSizeBytes[featuresPos[6]],
+			EnableTrace:        enableTrace[featuresCurPos[0]],
+			Latency:            latency[featuresCurPos[1]],
+			Kbps:               kbps[featuresCurPos[2]],
+			Mtu:                mtu[featuresCurPos[3]],
+			MaxConcurrentCalls: maxConcurrentCalls[featuresCurPos[4]],
+			ReqSizeBytes:       reqSizeBytes[featuresCurPos[5]],
+			RespSizeBytes:      respSizeBytes[featuresCurPos[6]],
 		}
 
-		grpc.EnableTracing = enableTrace[featuresPos[0]]
-		b.Run(fmt.Sprintf("Unary-%s-%s",
+		grpc.EnableTracing = enableTrace[featuresCurPos[0]]
+		b.Run(fmt.Sprintf("Benchmark-Unary-%s-%s",
 			tracing, benchFeature.String()), func(b *testing.B) {
 			runUnary(b, benchFeature)
 		})
@@ -77,7 +76,7 @@ func BenchmarkClient(b *testing.B) {
 			tracing, benchFeature.String()), func(b *testing.B) {
 			runStream(b, benchFeature)
 		})
-		AddOne(featuresPos, featuresNum)
+		AddOne(featuresCurPos, featuresMax)
 	}
 }
 
