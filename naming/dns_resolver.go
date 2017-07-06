@@ -3,10 +3,11 @@ package naming
 import (
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"net"
 	"strconv"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"google.golang.org/grpc/grpclog"
 )
