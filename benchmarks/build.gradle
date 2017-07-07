@@ -45,6 +45,11 @@ dependencies {
             libraries.math
 }
 
+compileJava {
+  // The Control.Void protobuf clashes
+  options.compilerArgs += ["-Xep:JavaLangClash:OFF"]
+}
+
 compileJmhJava {
   options.compilerArgs = compileJava.options.compilerArgs
 }

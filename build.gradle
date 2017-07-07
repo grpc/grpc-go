@@ -30,7 +30,7 @@ subprojects {
       dependencies {
         // The ErrorProne plugin defaults to the latest, which would break our
         // build if error prone releases a new version with a new check
-        errorprone 'com.google.errorprone:error_prone_core:2.0.19'
+        errorprone 'com.google.errorprone:error_prone_core:2.0.21'
       }
     } else {
       // Remove per-project error-prone checker config

@@ -620,7 +620,7 @@ public final class Http2 implements Variant {
 
       long read = source.read(sink, Math.min(byteCount, left));
       if (read == -1) return -1;
-      left -= read;
+      left -= (int) read;
       return read;
     }
 
