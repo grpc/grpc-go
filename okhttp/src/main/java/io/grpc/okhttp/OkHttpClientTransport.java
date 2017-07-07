@@ -73,6 +73,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLSocketFactory;
 import okio.Buffer;
 import okio.BufferedSink;
@@ -156,6 +157,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   @GuardedBy("lock")
   private boolean inUse;
   private SSLSocketFactory sslSocketFactory;
+  private HostnameVerifier hostnameVerifier;
   private Socket socket;
   @GuardedBy("lock")
   private int maxConcurrentStreams = 0;
@@ -182,7 +184,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   SettableFuture<Void> connectedFuture;
 
   OkHttpClientTransport(InetSocketAddress address, String authority, @Nullable String userAgent,
-      Executor executor, @Nullable SSLSocketFactory sslSocketFactory, ConnectionSpec connectionSpec,
+      Executor executor, @Nullable SSLSocketFactory sslSocketFactory,
+      @Nullable HostnameVerifier hostnameVerifier, ConnectionSpec connectionSpec,
       int maxMessageSize, @Nullable InetSocketAddress proxyAddress, @Nullable String proxyUsername,
       @Nullable String proxyPassword, Runnable tooManyPingsRunnable) {
     this.address = Preconditions.checkNotNull(address, "address");
@@ -194,6 +197,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     // use it. We start clients at 3 to avoid conflicting with HTTP negotiation.
     nextStreamId = 3;
     this.sslSocketFactory = sslSocketFactory;
+    this.hostnameVerifier = hostnameVerifier;
     this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
     this.ticker = Ticker.systemTicker();
     this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
@@ -416,7 +420,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
           if (sslSocketFactory != null) {
             sock = OkHttpTlsUpgrader.upgrade(
-                sslSocketFactory, sock, getOverridenHost(), getOverridenPort(), connectionSpec);
+                sslSocketFactory, hostnameVerifier, sock, getOverridenHost(), getOverridenPort(),
+                connectionSpec);
           }
           sock.setTcpNoDelay(true);
           source = Okio.buffer(Okio.source(sock));

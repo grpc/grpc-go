@@ -183,7 +183,8 @@ public class OkHttpClientTransportTest {
   public void testToString() throws Exception {
     InetSocketAddress address = InetSocketAddress.createUnresolved("hostname", 31415);
     clientTransport = new OkHttpClientTransport(
-        address, "hostname", null /* agent */, executor, null,
+        address, "hostname", null /* agent */, executor, /* sslSocketFactory */ null,
+        /* hostnameVerifier */null,
         Utils.convertSpec(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC), DEFAULT_MAX_MESSAGE_SIZE,
         null, null, null, tooManyPingsRunnable);
     String s = clientTransport.toString();
@@ -1328,6 +1329,7 @@ public class OkHttpClientTransportTest {
         "userAgent",
         executor,
         null,
+        null,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         null,
@@ -1349,6 +1351,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        null,
         null,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
@@ -1379,6 +1382,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        null,
         null,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
@@ -1429,6 +1433,7 @@ public class OkHttpClientTransportTest {
         "userAgent",
         executor,
         null,
+        null,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
         (InetSocketAddress) serverSocket.getLocalSocketAddress(),
@@ -1476,6 +1481,7 @@ public class OkHttpClientTransportTest {
         "authority",
         "userAgent",
         executor,
+        null,
         null,
         ConnectionSpec.CLEARTEXT,
         DEFAULT_MAX_MESSAGE_SIZE,
