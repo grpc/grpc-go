@@ -21,7 +21,7 @@
     <property name="severity" value="error"/>
 
     <module name="Header">
-      <property name="headerFile" value="${rootDir}/checkstyle.license"/>
+      <property name="headerFile" value="${rootDir}/buildscripts/checkstyle.license"/>
       <property name="ignoreLines" value="2"/>
       <property name="fileExtensions" value="java"/>
     </module>

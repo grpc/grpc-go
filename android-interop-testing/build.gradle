@@ -24,7 +24,7 @@ subprojects {
     apply plugin: "checkstyle"
 
     checkstyle {
-        configFile = file("$rootDir/../checkstyle.xml")
+        configFile = file("$rootDir/../buildscripts/checkstyle.xml")
         toolVersion = "6.17"
         ignoreFailures = false
         if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
