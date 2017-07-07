@@ -28,25 +28,6 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 )
 
-func startTimer(b *testing.B) func() {
-	return func() {
-		b.StartTimer()
-	}
-}
-func stopTimer(b *testing.B) func() {
-	return func() {
-		b.StopTimer()
-	}
-}
-
-func stopBench(b *testing.B) func(chan int) {
-	return func(ch chan int) {
-		for i := 0; i < b.N; i++ {
-			ch <- 1
-		}
-	}
-}
-
 func BenchmarkClientStreamc1(b *testing.B) {
 	grpc.EnableTracing = true
 	runStream(b, Features{true, 0, 0, 0, 1, 1, 1})
