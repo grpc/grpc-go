@@ -12,7 +12,7 @@ buildscript {
 }
 
 plugins {
-  id "me.champeau.gradle.jmh" version "0.3.0"
+  id "me.champeau.gradle.jmh" version "0.4.4"
 }
 
 apply plugin: 'application'
@@ -23,7 +23,7 @@ startScripts.enabled = false
 run.enabled = false
 
 jmh {
-    jmhVersion = '1.18'
+    jmhVersion = '1.19'
     warmupIterations = 10
     iterations = 10
     fork = 1
