@@ -152,6 +152,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * @param skipNegotiation @{code true} if there is a priori knowledge that the endpoint supports
    *                        plaintext, {@code false} if plaintext use must be negotiated.
+   *
+   * @throws UnsupportedOperationException if plaintext mode is not supported.
    * @return this
    * @since 1.0.0
    */
