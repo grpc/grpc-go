@@ -83,6 +83,7 @@ type dialOptions struct {
 	insecure    bool
 	timeout     time.Duration
 	scChan      <-chan ServiceConfig
+	notifyChan  chan struct{}
 	copts       transport.ConnectOptions
 	callOptions []CallOption
 }
@@ -195,6 +196,14 @@ func WithBlock() DialOption {
 	return func(o *dialOptions) {
 		o.block = true
 	}
+}
+
+// WithNotifyConnectionEstablished returns a DialOption which closes the provided
+// channel when a connection is established.
+func WithNotifyConnectionEstablished(notifyChan chan struct{}) DialOption {
+       return func(o *dialOptions) {
+               o.notifyChan = notifyChan
+       }
 }
 
 // WithInsecure returns a DialOption which disables transport security for this ClientConn.
@@ -405,8 +414,11 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 					doneChan := make(chan struct{})
 					go cc.lbWatcher(doneChan)
 					<-doneChan
+					if cc.dopts.notifyChan != nil {
+						close(cc.dopts.notifyChan)
+					}
 				} else {
-					go cc.lbWatcher(nil)
+					go cc.lbWatcher(cc.dopts.notifyChan)
 				}
 				return
 			}
@@ -494,7 +506,7 @@ type ClientConn struct {
 
 // lbWatcher watches the Notify channel of the balancer in cc and manages
 // connections accordingly.  If doneChan is not nil, it is closed after the
-// first successfull connection is made.
+// first successful connection is made.
 func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 	for addrs := range cc.dopts.balancer.Notify() {
 		var (
