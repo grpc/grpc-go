@@ -778,13 +778,6 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 	if writeHeaderFrame {
 		t.WriteHeader(s, nil)
 	}
-	defer func() {
-		if err == nil {
-			// Reset ping strikes when sending data since this might cause
-			// the peer to send ping.
-			atomic.StoreUint32(&t.resetPingStrikes, 1)
-		}
-	}()
 	r := bytes.NewBuffer(data)
 	for {
 		if r.Len() == 0 {
@@ -848,6 +841,9 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last {
 			forceFlush = true
 		}
+		// Reset ping strikes when sending data since this might cause
+		// the peer to send ping.
+		atomic.StoreUint32(&t.resetPingStrikes, 1)
 		if err := t.framer.writeData(forceFlush, s.id, false, p); err != nil {
 			t.Close()
 			return connectionErrorf(true, err, "transport: %v", err)
