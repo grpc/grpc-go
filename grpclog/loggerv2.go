@@ -189,14 +189,20 @@ func (g *loggerT) Errorf(format string, args ...interface{}) {
 
 func (g *loggerT) Fatal(args ...interface{}) {
 	g.m[fatalLog].Fatal(args...)
+	// Implementation should call os.Exit() in Fatal.
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) Fatalln(args ...interface{}) {
 	g.m[fatalLog].Fatalln(args...)
+	// Implementation should call os.Exit() in Fatal.
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) Fatalf(format string, args ...interface{}) {
 	g.m[fatalLog].Fatalf(format, args...)
+	// Implementation should call os.Exit() in Fatal.
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) V(l int) bool {
