@@ -7,7 +7,7 @@ PREREQUISITES
 
 - [Android Tutorial](https://developer.android.com/training/basics/firstapp/index.html) if you're new to Android development
 
-- [gRPC Java Android Quick Start Guide](http://www.grpc.io/docs/quickstart/android.html)
+- [gRPC Java Android Quick Start Guide](https://grpc.io/docs/quickstart/android.html)
 
 - We only have Android gRPC client in this example. Please follow examples in other languages to build and run a gRPC server.
 
@@ -28,5 +28,5 @@ $ ./gradlew installDebug
 ```
 
 Please refer to the
-[tutorial](http://www.grpc.io/docs/tutorials/basic/android.html) on
+[tutorial](https://grpc.io/docs/tutorials/basic/android.html) on
 how to use gRPC in Android programs.

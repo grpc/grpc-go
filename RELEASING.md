@@ -392,4 +392,4 @@ git commit -m "Javadoc for $MAJOR.$MINOR.$PATCH"
 ```
 
 Push gh-pages to the main repository and verify the current version is [live
-on grpc.io](http://www.grpc.io/grpc-java/javadoc/).
+on grpc.io](https://grpc.io/grpc-java/javadoc/).

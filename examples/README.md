@@ -6,7 +6,7 @@ to check out a git release tag, since there will already be a build of grpc
 available. Otherwise you must follow [COMPILING](../COMPILING.md).
 
 You may want to read through the
-[Quick Start Guide](http://www.grpc.io/docs/quickstart/java.html)
+[Quick Start Guide](https://grpc.io/docs/quickstart/java.html)
 before trying out the examples.
 
 To build the examples, run in this directory:
@@ -35,7 +35,7 @@ $ ./build/install/examples/bin/hello-world-client
 That's it!
 
 Please refer to gRPC Java's [README](../README.md) and
-[tutorial](http://www.grpc.io/docs/tutorials/basic/java.html) for more
+[tutorial](https://grpc.io/docs/tutorials/basic/java.html) for more
 information.
 
 ## Maven

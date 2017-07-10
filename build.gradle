@@ -316,7 +316,7 @@ subprojects {
                     id "grpc.io"
                     name "gRPC Contributors"
                     email "grpc-io@googlegroups.com"
-                    url "http://grpc.io/"
+                    url "https://grpc.io/"
                     // https://issues.gradle.org/browse/GRADLE-2719
                     organization = "gRPC Authors"
                     organizationUrl "https://www.google.com"

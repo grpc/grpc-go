@@ -8,7 +8,7 @@ Readme](SECURITY.md).
 <table>
   <tr>
     <td><b>Homepage:</b></td>
-    <td><a href="http://www.grpc.io/">www.grpc.io</a></td>
+    <td><a href="https://grpc.io/">grpc.io</a></td>
   </tr>
   <tr>
     <td><b>Mailing List:</b></td>
