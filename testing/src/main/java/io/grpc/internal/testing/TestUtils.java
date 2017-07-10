@@ -14,13 +14,8 @@
  * limitations under the License.
  */
 
-package io.grpc.testing;
+package io.grpc.internal.testing;
 
-import io.grpc.ExperimentalApi;
-import io.grpc.Metadata;
-import io.grpc.ServerCall;
-import io.grpc.ServerCallHandler;
-import io.grpc.ServerInterceptor;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -42,61 +37,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 import javax.security.auth.x500.X500Principal;
 
 /**
- * Common utility functions useful for writing tests.
+ * Internal utility functions useful for writing tests.
  */
-@ExperimentalApi("https://github.com/grpc/grpc-java/issues/1791")
 public class TestUtils {
-  @Deprecated
   public static final String TEST_SERVER_HOST = "foo.test.google.fr";
 
   /**
-   * Capture the request headers from a client. Useful for testing metadata propagation.
-   */
-  public static ServerInterceptor recordRequestHeadersInterceptor(
-      final AtomicReference<Metadata> headersCapture) {
-    return new ServerInterceptor() {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
-          Metadata requestHeaders,
-          ServerCallHandler<ReqT, RespT> next) {
-        headersCapture.set(requestHeaders);
-        return next.startCall(call, requestHeaders);
-      }
-    };
-  }
-
-  /**
-   * Capture the request attributes. Useful for testing ServerCalls.
-   * {@link ServerCall#getAttributes()}
-   */
-  public static ServerInterceptor recordServerCallInterceptor(
-      final AtomicReference<ServerCall<?, ?>> serverCallCapture) {
-    return new ServerInterceptor() {
-      @Override
-      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-          ServerCall<ReqT, RespT> call,
-          Metadata requestHeaders,
-          ServerCallHandler<ReqT, RespT> next) {
-        serverCallCapture.set(call);
-        return next.startCall(call, requestHeaders);
-      }
-    };
-  }
-
-  /**
    * Creates a new {@link InetSocketAddress} that overrides the host with {@link #TEST_SERVER_HOST}.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static InetSocketAddress testServerAddress(String host, int port) {
     try {
       InetAddress inetAddress = InetAddress.getByName(host);
@@ -110,10 +64,7 @@ public class TestUtils {
   /**
    * Creates a new {@link InetSocketAddress} on localhost that overrides the host with
    * {@link #TEST_SERVER_HOST}.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static InetSocketAddress testServerAddress(int port) {
     try {
       InetAddress inetAddress = InetAddress.getByName("::1");
@@ -128,10 +79,7 @@ public class TestUtils {
    * Returns the ciphers preferred to use during tests. They may be chosen because they are widely
    * available or because they are fast. There is no requirement that they provide confidentiality
    * or integrity.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static List<String> preferredTestCiphers() {
     String[] ciphers;
     try {
@@ -155,12 +103,10 @@ public class TestUtils {
    * filesystem.
    *
    * @param name  name of a file in src/main/resources/certs.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static File loadCert(String name) throws IOException {
-    InputStream in = new BufferedInputStream(TestUtils.class.getResourceAsStream("/certs/" + name));
+    InputStream
+        in = new BufferedInputStream(TestUtils.class.getResourceAsStream("/certs/" + name));
     File tmpFile = File.createTempFile(name, "");
     tmpFile.deleteOnExit();
 
@@ -183,10 +129,7 @@ public class TestUtils {
    * Loads an X.509 certificate from the classpath resources in src/main/resources/certs.
    *
    * @param fileName  name of a file in src/main/resources/certs.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static X509Certificate loadX509Cert(String fileName)
       throws CertificateException, IOException {
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -201,12 +144,9 @@ public class TestUtils {
 
   /**
    * Creates an SSLSocketFactory which contains {@code certChainFile} as its only root certificate.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static SSLSocketFactory newSslSocketFactoryForCa(Provider provider,
-      File certChainFile) throws Exception {
+                                                          File certChainFile) throws Exception {
     KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
     ks.load(null, null);
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -227,10 +167,7 @@ public class TestUtils {
   /**
    * Sleeps for at least the specified time. When in need of a guaranteed sleep time, use this in
    * preference to {@code Thread.sleep} which might not sleep for the required time.
-   *
-   * @deprecated Not for public use
    */
-  @Deprecated
   public static void sleepAtLeast(long millis) throws InterruptedException {
     long delay = TimeUnit.MILLISECONDS.toNanos(millis);
     long end = System.nanoTime() + delay;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.grpc.testing;
+package io.grpc.internal.testing;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -24,7 +24,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * Unit tests for {@link TestUtils}.
+ * Unit tests for {@link io.grpc.internal.testing.TestUtils}.
  */
 @RunWith(JUnit4.class)
 public class TestUtilsTest {

@@ -26,7 +26,7 @@ import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.Control.RpcType;
 import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Messages.PayloadType;
-import io.grpc.testing.TestUtils;
+import io.grpc.internal.testing.TestUtils;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
