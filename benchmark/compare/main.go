@@ -12,18 +12,6 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 )
 
-/*
-*line1: Benchmark name + result of -benchmem
-*line2: title + number
-*  ----------------------------
-*|    50%   |      4.7438 ms   |
-*|    90%   |      5.8868 ms   |
-*|    99%   |      6.8209 ms   |
-*|   100%   |      7.2116 ms   |
-*| Average  |      4.8235 ms   |
-*  ----------------------------
- */
-
 var unit2num map[string]float64
 
 func readStatsResults(fileName string, m map[string]stats.BenchResults) {
@@ -57,6 +45,22 @@ func readStatsResults(fileName string, m map[string]stats.BenchResults) {
 			if strings.Contains(line, "%") {
 				dur, _ := strconv.ParseFloat(parserLine[3], 64)
 				temp.Latency = append(temp.Latency, stats.PercentLatency{Percent: parserLine[1], Value: time.Duration(float64(dur) * unit2num[parserLine[4]])})
+			} else {
+				title := parserLine[1]
+				switch title {
+				case "Operations":
+					temp.Operations, _ = strconv.Atoi(parserLine[3])
+				case "ms/op":
+					temp.NsPerOp, _ = strconv.Atoi(parserLine[3])
+				case "B/op":
+					temp.AllocedBytesPerOp, _ = strconv.Atoi(parserLine[3])
+				case "allocs/op":
+					temp.AllocedBytesPerOp, _ = strconv.Atoi(parserLine[3])
+				case "Average":
+					dur, _ := strconv.ParseFloat(parserLine[3], 64)
+					temp.Latency = append(temp.Latency, stats.PercentLatency{Percent: parserLine[1], Value: time.Duration(float64(dur) * unit2num[parserLine[4]])})
+				default:
+				}
 			}
 			m[currentBenchName] = temp
 		}
@@ -74,7 +78,7 @@ func benchPercentChange(title string, num1, num2 int) string {
 	if num1 == 0 && num2 == 0 {
 		return ""
 	}
-	changes := strconv.FormatFloat(float64(num2-num1)*100.0/float64(num1), 'f', 2, 64) + "%%"
+	changes := strconv.FormatFloat(float64(num2-num1)*100.0/float64(num1), 'f', 2, 64) + "%"
 	return formatOutput(title, strconv.Itoa(num1), strconv.Itoa(num2), changes)
 }
 
@@ -82,9 +86,8 @@ func latencyPercentChange(num1, num2 stats.PercentLatency) string {
 	if num1.Value == time.Duration(0) && num2.Value == time.Duration(0) {
 		return ""
 	}
-	changes := strconv.FormatFloat(float64(num2.Value-num1.Value)*100.0/float64(num1.Value), 'f', 2, 64) + "%%"
-	//fmt.Printf("===>%20s  %12s  %12s   %8s \n", num1.Percent, num1.Value.String(), num2.Value.String(), changes)
-	return formatOutput(num1.Percent+"%", num1.Value.String(), num2.Value.String(), changes)
+	changes := strconv.FormatFloat(float64(num2.Value-num1.Value)*100.0/float64(num1.Value), 'f', 2, 64) + "%"
+	return formatOutput(num1.Percent, num1.Value.String(), num2.Value.String(), changes)
 }
 
 func compareTwoMap(m1, m2 map[string]stats.BenchResults, compareLatency bool) {
@@ -96,8 +99,10 @@ func compareTwoMap(m1, m2 map[string]stats.BenchResults, compareLatency bool) {
 			changes += benchPercentChange("ns/op", v1.NsPerOp, v2.NsPerOp)
 			changes += benchPercentChange("B/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp)
 			changes += benchPercentChange("allocs/op", v1.AllocsPerOp, v2.AllocsPerOp)
-			for i := range v1.Latency {
-				changes += latencyPercentChange(v1.Latency[i], v2.Latency[i])
+			if compareLatency {
+				for i := range v1.Latency {
+					changes += latencyPercentChange(v1.Latency[i], v2.Latency[i])
+				}
 			}
 			fmt.Printf("%s\n", changes)
 		}
@@ -109,15 +114,13 @@ var compareLatency bool
 func init() {
 	flag.BoolVar(&compareLatency, "showLatency", true, "show the result of comparing the latency")
 	flag.Parse()
-}
-
-func main() {
-
 	unit2num = make(map[string]float64)
 	unit2num["s"] = 1000000000
 	unit2num["ms"] = 1000000
 	unit2num["µs"] = 1000
+}
 
+func main() {
 	var file1, file2 string
 	if len(os.Args) == 3 {
 		file1 = os.Args[1]
