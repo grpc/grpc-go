@@ -31,10 +31,7 @@
  *
  */
 
-/*
-Package grpclog defines logging for grpc.
-*/
-package grpclog // import "google.golang.org/grpc/grpclog"
+package grpclog
 
 import (
 	"io"
