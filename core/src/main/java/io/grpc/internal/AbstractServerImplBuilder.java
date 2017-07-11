@@ -22,7 +22,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.instrumentation.stats.Stats;
 import com.google.instrumentation.stats.StatsContextFactory;
-import com.google.instrumentation.trace.Tracing;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -37,6 +36,7 @@ import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServerStreamTracer;
 import io.grpc.ServerTransportFilter;
+import io.opencensus.trace.Tracing;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -206,7 +206,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
       tracerFactories.add(censusStats.getServerTracerFactory());
     }
     CensusTracingModule censusTracing =
-        new CensusTracingModule(Tracing.getTracer(), Tracing.getBinaryPropagationHandler());
+        new CensusTracingModule(Tracing.getTracer(),
+            Tracing.getPropagationComponent().getBinaryFormat());
     tracerFactories.add(censusTracing.getServerTracerFactory());
     tracerFactories.addAll(streamTracerFactories);
     return tracerFactories;

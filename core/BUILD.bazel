@@ -43,6 +43,7 @@ java_library(
         "@com_google_errorprone_error_prone_annotations//jar",
         "@com_google_guava//jar",
         "@com_google_instrumentation_api//jar",
+        "@io_opencensus_api//jar",
     ],
 )
 

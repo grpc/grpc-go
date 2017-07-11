@@ -28,7 +28,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.same;
@@ -42,21 +41,6 @@ import static org.mockito.Mockito.when;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContext;
 import com.google.instrumentation.stats.TagValue;
-import com.google.instrumentation.trace.Annotation;
-import com.google.instrumentation.trace.AttributeValue;
-import com.google.instrumentation.trace.BinaryPropagationHandler;
-import com.google.instrumentation.trace.ContextUtils;
-import com.google.instrumentation.trace.EndSpanOptions;
-import com.google.instrumentation.trace.Link;
-import com.google.instrumentation.trace.NetworkEvent;
-import com.google.instrumentation.trace.Span;
-import com.google.instrumentation.trace.SpanContext;
-import com.google.instrumentation.trace.SpanFactory;
-import com.google.instrumentation.trace.SpanId;
-import com.google.instrumentation.trace.StartSpanOptions;
-import com.google.instrumentation.trace.TraceId;
-import com.google.instrumentation.trace.TraceOptions;
-import com.google.instrumentation.trace.Tracer;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -74,9 +58,26 @@ import io.grpc.Status;
 import io.grpc.internal.testing.StatsTestUtils;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.testing.GrpcServerRule;
+import io.opencensus.trace.Annotation;
+import io.opencensus.trace.AttributeValue;
+import io.opencensus.trace.EndSpanOptions;
+import io.opencensus.trace.Link;
+import io.opencensus.trace.NetworkEvent;
+import io.opencensus.trace.Sampler;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.SpanBuilder;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.SpanId;
+import io.opencensus.trace.TraceId;
+import io.opencensus.trace.TraceOptions;
+import io.opencensus.trace.Tracer;
+import io.opencensus.trace.propagation.BinaryFormat;
+import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.text.ParseException;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
@@ -88,7 +89,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -140,45 +140,22 @@ public class CensusModulesTest {
           .build();
   private final FakeClock fakeClock = new FakeClock();
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
-  private final Random random = new Random(0);
-  private final SpanContext fakeClientSpanContext =
-      SpanContext.create(
-          TraceId.generateRandomId(random), SpanId.generateRandomId(random),
-          TraceOptions.builder().build());
-  private final SpanContext fakeClientParentSpanContext =
-      SpanContext.create(
-          TraceId.generateRandomId(random), SpanId.generateRandomId(random),
-          TraceOptions.builder().build());
-  private final SpanContext fakeServerSpanContext =
-      SpanContext.create(
-          TraceId.generateRandomId(random), SpanId.generateRandomId(random),
-          TraceOptions.builder().build());
-  private final SpanContext fakeServerParentSpanContext =
-      SpanContext.create(
-          TraceId.generateRandomId(random), SpanId.generateRandomId(random),
-          TraceOptions.builder().build());
-  private final Span fakeClientSpan = new FakeSpan(fakeClientSpanContext);
-  private final Span fakeServerSpan = new FakeSpan(fakeServerSpanContext);
-  private final Span fakeClientParentSpan = new FakeSpan(fakeClientParentSpanContext);
-  private final Span fakeServerParentSpan = new FakeSpan(fakeServerParentSpanContext);
-  private final Span spyClientSpan = spy(fakeClientSpan);
-  private final Span spyServerSpan = spy(fakeServerSpan);
+  private final Random random = new Random(1234);
+  private final Span fakeClientParentSpan = MockableSpan.generateRandomSpan(random);
+  private final Span spyClientSpan = spy(MockableSpan.generateRandomSpan(random));
+  private final SpanContext fakeClientSpanContext = spyClientSpan.getContext();
+  private final Span spyServerSpan = spy(MockableSpan.generateRandomSpan(random));
   private final byte[] binarySpanContext = new byte[]{3, 1, 5};
-  private final ArgumentMatcher<StartSpanOptions> startSpanOptionsMatcher =
-      new ArgumentMatcher<StartSpanOptions>() {
-        @Override
-        public boolean matches(Object argument) {
-          return Boolean.TRUE.equals(((StartSpanOptions) argument).getRecordEvents());
-        }
-      };
+  private final SpanBuilder spyClientSpanBuilder = spy(new MockableSpan.Builder());
+  private final SpanBuilder spyServerSpanBuilder = spy(new MockableSpan.Builder());
 
   @Rule
   public final GrpcServerRule grpcServerRule = new GrpcServerRule().directExecutor();
 
   @Mock
-  private AccessibleSpanFactory mockSpanFactory;
+  private Tracer tracer;
   @Mock
-  private BinaryPropagationHandler mockTracingPropagationHandler;
+  private BinaryFormat mockTracingPropagationHandler;
   @Mock
   private ClientCall.Listener<String> mockClientCallListener;
   @Mock
@@ -190,7 +167,6 @@ public class CensusModulesTest {
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
 
-  private Tracer tracer;
   private CensusStatsModule censusStats;
   private CensusTracingModule censusTracing;
 
@@ -198,17 +174,16 @@ public class CensusModulesTest {
   @SuppressWarnings("unchecked")
   public void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    when(mockSpanFactory.startSpan(any(Span.class), anyString(), any(StartSpanOptions.class)))
-        .thenReturn(spyClientSpan);
-    when(
-        mockSpanFactory.startSpanWithRemoteParent(
-            any(SpanContext.class), anyString(), any(StartSpanOptions.class)))
-        .thenReturn(spyServerSpan);
+    when(spyClientSpanBuilder.startSpan()).thenReturn(spyClientSpan);
+    when(tracer.spanBuilderWithExplicitParent(anyString(), any(Span.class)))
+        .thenReturn(spyClientSpanBuilder);
+    when(spyServerSpanBuilder.startSpan()).thenReturn(spyServerSpan);
+    when(tracer.spanBuilderWithRemoteParent(anyString(), any(SpanContext.class)))
+        .thenReturn(spyServerSpanBuilder);
     when(mockTracingPropagationHandler.toBinaryValue(any(SpanContext.class)))
         .thenReturn(binarySpanContext);
     when(mockTracingPropagationHandler.fromBinaryValue(any(byte[].class)))
-        .thenReturn(fakeServerParentSpanContext);
-    tracer = new Tracer(mockSpanFactory) {};
+        .thenReturn(fakeClientSpanContext);
     censusStats = new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), true);
     censusTracing = new CensusTracingModule(tracer, mockTracingPropagationHandler);
   }
@@ -295,13 +270,13 @@ public class CensusModulesTest {
     call.start(mockClientCallListener, headers);
     assertNull(statsCtxFactory.pollRecord());
     if (nonDefaultContext) {
-      verify(mockSpanFactory).startSpan(
-          same(fakeClientParentSpan), eq("Sent.package1.service2.method3"),
-          argThat(startSpanOptionsMatcher));
+      verify(tracer).spanBuilderWithExplicitParent(
+          eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+      verify(spyClientSpanBuilder).setRecordEvents(eq(true));
     } else {
-      verify(mockSpanFactory).startSpan(
-          isNull(Span.class), eq("Sent.package1.service2.method3"),
-          argThat(startSpanOptionsMatcher));
+      verify(tracer).spanBuilderWithExplicitParent(
+          eq("Sent.package1.service2.method3"), isNull(Span.class));
+      verify(spyClientSpanBuilder).setRecordEvents(eq(true));
     }
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
 
@@ -330,7 +305,7 @@ public class CensusModulesTest {
     verify(spyClientSpan).end(
         EndSpanOptions.builder()
             .setStatus(
-                com.google.instrumentation.trace.Status.PERMISSION_DENIED
+                io.opencensus.trace.Status.PERMISSION_DENIED
                     .withDescription("No you don't"))
             .build());
     verify(spyClientSpan, never()).end();
@@ -385,17 +360,17 @@ public class CensusModulesTest {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(null, method.getFullMethodName());
     Metadata headers = new Metadata();
-    ClientStreamTracer tracer = callTracer.newClientStreamTracer(headers);
-    verify(mockSpanFactory).startSpan(
-        isNull(Span.class), eq("Sent.package1.service2.method3"), argThat(startSpanOptionsMatcher));
+    ClientStreamTracer clientStreamTracer = callTracer.newClientStreamTracer(headers);
+    verify(tracer).spanBuilderWithExplicitParent(
+        eq("Sent.package1.service2.method3"), isNull(Span.class));
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
 
-    tracer.streamClosed(Status.OK);
+    clientStreamTracer.streamClosed(Status.OK);
     callTracer.callEnded(Status.OK);
 
     verify(spyClientSpan).end(
-        EndSpanOptions.builder().setStatus(com.google.instrumentation.trace.Status.OK).build());
-    verifyNoMoreInteractions(mockSpanFactory);
+        EndSpanOptions.builder().setStatus(io.opencensus.trace.Status.OK).build());
+    verifyNoMoreInteractions(tracer);
   }
 
   @Test
@@ -429,15 +404,15 @@ public class CensusModulesTest {
   public void clientStreamNeverCreatedStillRecordTracing() {
     CensusTracingModule.ClientCallTracer callTracer =
         censusTracing.newClientCallTracer(fakeClientParentSpan, method.getFullMethodName());
-    verify(mockSpanFactory).startSpan(
-        same(fakeClientParentSpan), eq("Sent.package1.service2.method3"),
-        argThat(startSpanOptionsMatcher));
+    verify(tracer).spanBuilderWithExplicitParent(
+        eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+    verify(spyClientSpanBuilder).setRecordEvents(eq(true));
 
     callTracer.callEnded(Status.DEADLINE_EXCEEDED.withDescription("3 seconds"));
     verify(spyClientSpan).end(
         EndSpanOptions.builder()
             .setStatus(
-                com.google.instrumentation.trace.Status.DEADLINE_EXCEEDED
+                io.opencensus.trace.Status.DEADLINE_EXCEEDED
                     .withDescription("3 seconds"))
             .build());
     verify(spyClientSpan, never()).end();
@@ -550,19 +525,19 @@ public class CensusModulesTest {
 
     verify(mockTracingPropagationHandler).toBinaryValue(same(fakeClientSpanContext));
     verifyNoMoreInteractions(mockTracingPropagationHandler);
-    verify(mockSpanFactory).startSpan(
-        same(fakeClientParentSpan), eq("Sent.package1.service2.method3"),
-        argThat(startSpanOptionsMatcher));
-    verifyNoMoreInteractions(mockSpanFactory);
+    verify(tracer).spanBuilderWithExplicitParent(
+        eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
+    verify(spyClientSpanBuilder).setRecordEvents(eq(true));
+    verifyNoMoreInteractions(tracer);
     assertTrue(headers.containsKey(censusTracing.tracingHeader));
 
     ServerStreamTracer serverTracer =
         censusTracing.getServerTracerFactory().newServerStreamTracer(
             method.getFullMethodName(), headers);
     verify(mockTracingPropagationHandler).fromBinaryValue(same(binarySpanContext));
-    verify(mockSpanFactory).startSpanWithRemoteParent(
-        same(fakeServerParentSpanContext), eq("Recv.package1.service2.method3"),
-        argThat(startSpanOptionsMatcher));
+    verify(tracer).spanBuilderWithRemoteParent(
+        eq("Recv.package1.service2.method3"), same(spyClientSpan.getContext()));
+    verify(spyServerSpanBuilder).setRecordEvents(eq(true));
 
     Context filteredContext = serverTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
@@ -574,7 +549,7 @@ public class CensusModulesTest {
     Metadata headers = new Metadata();
     headers.put(censusTracing.tracingHeader, fakeClientSpanContext);
     // mockTracingPropagationHandler was stubbed to always return fakeServerParentSpanContext
-    assertSame(fakeServerParentSpanContext, headers.get(censusTracing.tracingHeader));
+    assertSame(spyClientSpan.getContext(), headers.get(censusTracing.tracingHeader));
 
     // Make BinaryPropagationHandler always throw when parsing the header
     when(mockTracingPropagationHandler.fromBinaryValue(any(byte[].class)))
@@ -584,14 +559,14 @@ public class CensusModulesTest {
     assertNull(headers.get(censusTracing.tracingHeader));
     headers.put(censusTracing.tracingHeader, fakeClientSpanContext);
     assertSame(SpanContext.INVALID, headers.get(censusTracing.tracingHeader));
-    assertNotSame(fakeServerParentSpanContext, SpanContext.INVALID);
+    assertNotSame(spyClientSpan.getContext(), SpanContext.INVALID);
 
     // A null Span is used as the parent in this case
     censusTracing.getServerTracerFactory().newServerStreamTracer(
         method.getFullMethodName(), headers);
-    verify(mockSpanFactory).startSpanWithRemoteParent(
-        isNull(SpanContext.class), eq("Recv.package1.service2.method3"),
-        argThat(startSpanOptionsMatcher));
+    verify(tracer).spanBuilderWithRemoteParent(
+        eq("Recv.package1.service2.method3"), isNull(SpanContext.class));
+    verify(spyServerSpanBuilder).setRecordEvents(eq(true));
   }
 
   @Test
@@ -641,22 +616,22 @@ public class CensusModulesTest {
   @Test
   public void serverBasicTracingNoHeaders() {
     ServerStreamTracer.Factory tracerFactory = censusTracing.getServerTracerFactory();
-    ServerStreamTracer tracer =
+    ServerStreamTracer serverStreamTracer =
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
     verifyZeroInteractions(mockTracingPropagationHandler);
-    verify(mockSpanFactory).startSpanWithRemoteParent(
-        isNull(SpanContext.class), eq("Recv.package1.service2.method3"),
-        argThat(startSpanOptionsMatcher));
+    verify(tracer).spanBuilderWithRemoteParent(
+        eq("Recv.package1.service2.method3"), isNull(SpanContext.class));
+    verify(spyServerSpanBuilder).setRecordEvents(eq(true));
 
-    Context filteredContext = tracer.filterContext(Context.ROOT);
+    Context filteredContext = serverStreamTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
 
     verify(spyServerSpan, never()).end(any(EndSpanOptions.class));
-    tracer.streamClosed(Status.CANCELLED);
+    serverStreamTracer.streamClosed(Status.CANCELLED);
 
     verify(spyServerSpan).end(
         EndSpanOptions.builder()
-            .setStatus(com.google.instrumentation.trace.Status.CANCELLED).build());
+            .setStatus(io.opencensus.trace.Status.CANCELLED).build());
     verify(spyServerSpan, never()).end();
   }
 
@@ -665,7 +640,7 @@ public class CensusModulesTest {
     // Without description
     for (Status.Code grpcCode : Status.Code.values()) {
       Status grpcStatus = Status.fromCode(grpcCode);
-      com.google.instrumentation.trace.Status tracingStatus =
+      io.opencensus.trace.Status tracingStatus =
           CensusTracingModule.convertStatus(grpcStatus);
       assertEquals(grpcCode.toString(), tracingStatus.getCanonicalCode().toString());
       assertNull(tracingStatus.getDescription());
@@ -674,7 +649,7 @@ public class CensusModulesTest {
     // With description
     for (Status.Code grpcCode : Status.Code.values()) {
       Status grpcStatus = Status.fromCode(grpcCode).withDescription("This is my description");
-      com.google.instrumentation.trace.Status tracingStatus =
+      io.opencensus.trace.Status tracingStatus =
           CensusTracingModule.convertStatus(grpcStatus);
       assertEquals(grpcCode.toString(), tracingStatus.getCanonicalCode().toString());
       assertEquals(grpcStatus.getDescription(), tracingStatus.getDescription());
@@ -701,43 +676,66 @@ public class CensusModulesTest {
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
   }
 
-  // Promote the visibility of SpanFactory's methods to allow mocking
-  private abstract static class AccessibleSpanFactory extends SpanFactory {
-    @Override
-    public abstract Span startSpan(@Nullable Span parent, String name, StartSpanOptions options);
-
-    @Override
-    public abstract Span startSpanWithRemoteParent(
-        @Nullable SpanContext remoteParent, String name, StartSpanOptions options);
-  }
-
-  private static class FakeSpan extends Span {
-    FakeSpan(SpanContext ctx) {
-      super(ctx, null);
+  // TODO(bdrutu): Remove this class after OpenCensus releases support for this class.
+  private static class MockableSpan extends Span {
+    private static MockableSpan generateRandomSpan(Random random) {
+      return new MockableSpan(
+          SpanContext.create(
+              TraceId.generateRandomId(random),
+              SpanId.generateRandomId(random),
+              TraceOptions.DEFAULT),
+          null);
     }
 
     @Override
-    public void addAttributes(Map<String, AttributeValue> attributes) {
-    }
+    public void addAttributes(Map<String, AttributeValue> attributes) {}
 
     @Override
-    public void addAnnotation(String description, Map<String, AttributeValue> attributes) {
-    }
+    public void addAnnotation(String description, Map<String, AttributeValue> attributes) {}
 
     @Override
-    public void addAnnotation(Annotation annotation) {
-    }
+    public void addAnnotation(Annotation annotation) {}
 
     @Override
-    public void addNetworkEvent(NetworkEvent networkEvent) {
-    }
+    public void addNetworkEvent(NetworkEvent networkEvent) {}
 
     @Override
-    public void addLink(Link link) {
-    }
+    public void addLink(Link link) {}
 
     @Override
-    public void end(EndSpanOptions options) {
+    public void end(EndSpanOptions options) {}
+
+    private MockableSpan(SpanContext context, @Nullable EnumSet<Options> options) {
+      super(context, options);
+    }
+
+    /**
+     * Mockable implementation for the {@link SpanBuilder} class.
+     *
+     * <p>Not {@code final} to allow easy mocking.
+     *
+     */
+    public static class Builder extends SpanBuilder {
+
+      @Override
+      public SpanBuilder setSampler(Sampler sampler) {
+        return this;
+      }
+
+      @Override
+      public SpanBuilder setParentLinks(List<Span> parentLinks) {
+        return this;
+      }
+
+      @Override
+      public SpanBuilder setRecordEvents(boolean recordEvents) {
+        return this;
+      }
+
+      @Override
+      public Span startSpan() {
+        return null;
+      }
     }
   }
 }

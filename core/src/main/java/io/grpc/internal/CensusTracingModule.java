@@ -17,15 +17,9 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.instrumentation.trace.ContextUtils.CONTEXT_SPAN_KEY;
+import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.instrumentation.trace.BinaryPropagationHandler;
-import com.google.instrumentation.trace.EndSpanOptions;
-import com.google.instrumentation.trace.Span;
-import com.google.instrumentation.trace.SpanContext;
-import com.google.instrumentation.trace.Status;
-import com.google.instrumentation.trace.Tracer;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -38,6 +32,12 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
 import io.grpc.StreamTracer;
+import io.opencensus.trace.EndSpanOptions;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.Status;
+import io.opencensus.trace.Tracer;
+import io.opencensus.trace.propagation.BinaryFormat;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -60,28 +60,28 @@ final class CensusTracingModule {
   private static final ClientStreamTracer noopClientTracer = new ClientStreamTracer() {};
 
   private final Tracer censusTracer;
-  private final BinaryPropagationHandler censusTracingPropagationHandler;
+  private final BinaryFormat censusPropagationBinaryFormat;
   @VisibleForTesting
   final Metadata.Key<SpanContext> tracingHeader;
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
 
   CensusTracingModule(
-      Tracer censusTracer, final BinaryPropagationHandler censusTracingPropagationHandler) {
+      Tracer censusTracer, final BinaryFormat censusPropagationBinaryFormat) {
     this.censusTracer = checkNotNull(censusTracer, "censusTracer");
-    this.censusTracingPropagationHandler =
-        checkNotNull(censusTracingPropagationHandler, "censusTracingPropagationHandler");
+    this.censusPropagationBinaryFormat =
+        checkNotNull(censusPropagationBinaryFormat, "censusPropagationBinaryFormat");
     this.tracingHeader =
         Metadata.Key.of("grpc-trace-bin", new Metadata.BinaryMarshaller<SpanContext>() {
             @Override
             public byte[] toBytes(SpanContext context) {
-              return censusTracingPropagationHandler.toBinaryValue(context);
+              return censusPropagationBinaryFormat.toBinaryValue(context);
             }
 
             @Override
             public SpanContext parseBytes(byte[] serialized) {
               try {
-                return censusTracingPropagationHandler.fromBinaryValue(serialized);
+                return censusPropagationBinaryFormat.fromBinaryValue(serialized);
               } catch (Exception e) {
                 logger.log(Level.FINE, "Failed to parse tracing header", e);
                 return SpanContext.INVALID;
@@ -195,7 +195,7 @@ final class CensusTracingModule {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.span =
           censusTracer
-              .spanBuilder(parentSpan, makeSpanName("Sent", fullMethodName))
+              .spanBuilderWithExplicitParent(makeSpanName("Sent", fullMethodName), parentSpan)
               .setRecordEvents(true)
               .startSpan();
     }
@@ -230,7 +230,7 @@ final class CensusTracingModule {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.span =
           censusTracer
-              .spanBuilderWithRemoteParent(remoteSpan, makeSpanName("Recv", fullMethodName))
+              .spanBuilderWithRemoteParent(makeSpanName("Recv", fullMethodName), remoteSpan)
               .setRecordEvents(true)
               .startSpan();
     }
@@ -251,6 +251,9 @@ final class CensusTracingModule {
 
     @Override
     public <ReqT, RespT> Context filterContext(Context context) {
+      // Access directly the unsafe trace API to create the new Context. This is a safe usage
+      // because gRPC always creates a new Context for each of the server calls and does not
+      // inherit from the parent Context.
       return context.withValue(CONTEXT_SPAN_KEY, span);
     }
   }
@@ -272,9 +275,11 @@ final class CensusTracingModule {
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
       // New RPCs on client-side inherit the tracing context from the current Context.
-      Span parentSpan = CONTEXT_SPAN_KEY.get();
+      // Safe usage of the unsafe trace API because CONTEXT_SPAN_KEY.get() returns the same value
+      // as Tracer.getCurrentSpan() except when no value available when the return value is null
+      // for the direct access and BlankSpan when Tracer API is used.
       final ClientCallTracer tracerFactory =
-          newClientCallTracer(parentSpan, method.getFullMethodName());
+          newClientCallTracer(CONTEXT_SPAN_KEY.get(), method.getFullMethodName());
       ClientCall<ReqT, RespT> call =
           next.newCall(method, callOptions.withStreamTracerFactory(tracerFactory));
       return new SimpleForwardingClientCall<ReqT, RespT>(call) {

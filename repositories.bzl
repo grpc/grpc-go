@@ -22,7 +22,8 @@ def grpc_java_repositories(
     omit_io_netty_handler=False,
     omit_io_netty_handler_proxy=False,
     omit_io_netty_resolver=False,
-    omit_io_netty_tcnative_boringssl_static=False):
+    omit_io_netty_tcnative_boringssl_static=False,
+    omit_io_opencensus_api=False):
   """Imports dependencies for grpc-java."""
   if not omit_com_google_api_grpc_google_common_protos:
     com_google_api_grpc_google_common_protos()
@@ -68,6 +69,8 @@ def grpc_java_repositories(
     io_netty_resolver()
   if not omit_io_netty_tcnative_boringssl_static:
     io_netty_tcnative_boringssl_static()
+  if not omit_io_opencensus_api:
+    io_opencensus_api()
   native.bind(
     name = "guava",
     actual = "@com_google_guava//jar",
@@ -236,4 +239,11 @@ def io_netty_tcnative_boringssl_static():
       name = "io_netty_tcnative_boringssl_static",
       artifact = "io.netty:netty-tcnative-boringssl-static:2.0.5.Final",
       sha1 = "321c1239ceb3faec04531ffcdeb1bc8e85408b12",
+  )
+
+def io_opencensus_api():
+  native.maven_jar(
+      name = "io_opencensus_api",
+      artifact = "io.opencensus:opencensus-api:0.5.1",
+      sha1 = "cbd0a716a7d85ac34b83d86b13f0a6655e45c2ba",
   )

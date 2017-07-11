@@ -1,12 +1,15 @@
 description = 'gRPC: Core'
 
 dependencies {
-    compile libraries.guava,
+    compile project(':grpc-context'),
+            libraries.guava,
             libraries.errorprone,
             libraries.jsr305,
-            project(':grpc-context'),
-            libraries.instrumentation_api
+            libraries.instrumentation_api,
+            libraries.opencensus_api
+
     testCompile project(':grpc-testing')
+
     signature "org.codehaus.mojo.signature:java16:1.1@signature"
 }
 

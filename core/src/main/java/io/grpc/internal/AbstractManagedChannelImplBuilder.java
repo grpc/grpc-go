@@ -23,7 +23,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.instrumentation.stats.Stats;
 import com.google.instrumentation.stats.StatsContextFactory;
-import com.google.instrumentation.trace.Tracing;
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientStreamTracer;
@@ -36,6 +35,7 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.NameResolver;
 import io.grpc.NameResolverProvider;
 import io.grpc.PickFirstBalancerFactory;
+import io.opencensus.trace.Tracing;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -348,7 +348,8 @@ public abstract class AbstractManagedChannelImplBuilder
     }
     if (enableTracing) {
       CensusTracingModule censusTracing =
-          new CensusTracingModule(Tracing.getTracer(), Tracing.getBinaryPropagationHandler());
+          new CensusTracingModule(Tracing.getTracer(),
+              Tracing.getPropagationComponent().getBinaryFormat());
       effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
     }
     return effectiveInterceptors;
