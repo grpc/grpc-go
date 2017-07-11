@@ -65,9 +65,6 @@ func readStatsResults(fileName string, m map[string]stats.BenchResults) {
 			m[currentBenchName] = temp
 		}
 	}
-	for key, value := range m {
-		fmt.Println("Key:", key, "Value:", value)
-	}
 }
 
 func formatOutput(title, val1, val2, percentChange string) string {
@@ -141,6 +138,4 @@ func main() {
 	readStatsResults(file2, BenchValueFile2)
 
 	compareTwoMap(BenchValueFile1, BenchValueFile2, compareLatency)
-
-	fmt.Println(compareLatency)
 }
