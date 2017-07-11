@@ -32,6 +32,7 @@ echo vcProtobufLibs=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-%PROTOBUF_VER%\\c
 echo vcProtobufInclude=%ESCWORKSPACE%\\grpc-java-helper\\protobuf-%PROTOBUF_VER%\\cmake\\build\\include>> gradle.properties
 
 cmd.exe /C "%WORKSPACE%\gradlew.bat build"
+set GRADLEEXIT=%ERRORLEVEL%
 
 @rem Rename test results .xml files to format parsable by Kokoro
 @echo off
@@ -41,4 +42,4 @@ for /r %%F in (TEST-*.xml) do (
 )
 @echo on
 
-exit %%ERRORLEVEL%%
+exit %GRADLEEXIT%
