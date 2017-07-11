@@ -7,12 +7,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc/benchmark/stats"
 )
 
 /*
 *line1: Benchmark name + result of -benchmem
-*line2: Latency - unit: ms count: 300
-*line3: title + number
+*line2: title + number
 *  ----------------------------
 *|    50%   |      4.7438 ms   |
 *|    90%   |      5.8868 ms   |
@@ -22,24 +24,15 @@ import (
 *  ----------------------------
  */
 
-type tv struct {
-	title string
-	value string
-	unit  string
-}
+var unit2num map[string]float64
 
-func (t *tv) String() {
-	fmt.Printf("title: %s, value: %s, unit: %s \n", t.title, t.value, t.unit)
-}
-
-func createMap(fileName string, m map[string][]tv) {
+func readStatsResults(fileName string, m map[string]stats.BenchResults) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		fmt.Println("read file err")
 	}
 	buf := bufio.NewReader(f)
 	var currentBenchName string
-	var ltcUnit string
 	for {
 		line, err := buf.ReadString('\n')
 		if err != nil {
@@ -50,18 +43,22 @@ func createMap(fileName string, m map[string][]tv) {
 		if strings.HasPrefix(line, "Benchmark") {
 			// First line formats as "Benchmark name + number of running + (value + unit)."
 			if len(parserLine) >= 8 {
-				m[parserLine[0]] = append(m[parserLine[0]], tv{title: "operation numbers", value: parserLine[1], unit: ""})
-				m[parserLine[0]] = append(m[parserLine[0]], tv{title: parserLine[3], value: parserLine[2], unit: ""})
-				m[parserLine[0]] = append(m[parserLine[0]], tv{title: parserLine[5], value: parserLine[4], unit: ""})
-				m[parserLine[0]] = append(m[parserLine[0]], tv{title: parserLine[7], value: parserLine[6], unit: ""})
+				var temp stats.BenchResults
+				temp.Operations, _ = strconv.Atoi(parserLine[1])
+				temp.NsPerOp, _ = strconv.Atoi(parserLine[2])
+				temp.AllocedBytesPerOp, _ = strconv.Atoi(parserLine[4])
+				temp.AllocsPerOp, _ = strconv.Atoi(parserLine[6])
+				m[parserLine[0]] = temp
 			}
 			currentBenchName = parserLine[0]
-		} else if strings.HasPrefix(line, "Latency") {
-			// Second line formats as "Latency + time_unit"
-			ltcUnit = parserLine[3]
 		} else if strings.Contains(line, "|") {
 			// Rest lines are stats formats as "| title | value |"
-			m[currentBenchName] = append(m[currentBenchName], tv{title: parserLine[1], value: parserLine[3], unit: ltcUnit})
+			temp := m[currentBenchName]
+			if strings.Contains(line, "%") {
+				dur, _ := strconv.ParseFloat(parserLine[3], 64)
+				temp.Latency = append(temp.Latency, stats.PercentLatency{Percent: parserLine[1], Value: time.Duration(float64(dur) * unit2num[parserLine[4]])})
+			}
+			m[currentBenchName] = temp
 		}
 	}
 	for key, value := range m {
@@ -69,39 +66,40 @@ func createMap(fileName string, m map[string][]tv) {
 	}
 }
 
-func combineString(title, val1, val2, percentChange string) string {
+func formatOutput(title, val1, val2, percentChange string) string {
 	return fmt.Sprintf("%20s  %12s  %12s   %8s \n", title, val1, val2, percentChange)
 }
 
-func compareTwoMap(m1, m2 map[string][]tv, compareLatency bool) {
-	unit2num := make(map[string]float64)
-	unit2num["s"] = 1000000000
-	unit2num["ms"] = 1000000
-	unit2num["µs"] = 1000
-	for k2, v2 := range m2 {
-		if v1, ok := m1[k2]; ok {
-			changes := combineString("\n\tTitle", "\tBefore", "\tAfter", "Percentage")
-			var factor float64 = 1
-			for i := 0; i < len(v2); i++ {
-				num1, err := strconv.ParseFloat(v1[i].value, 64)
-				if err != nil {
-					continue
-				}
-				num2, err := strconv.ParseFloat(v2[i].value, 64)
-				if err != nil {
-					continue
-				}
-				// First 3 stats from -benchmem and unit remains the same. Unit for latency can be different.
-				if i == 4 {
-					if !compareLatency {
-						break
-					}
-					factor = unit2num[v1[4].unit] / unit2num[v2[4].unit]
-				}
-				percentChange := strconv.FormatFloat((num2-num1*factor)*100.0/(num1*factor), 'f', 2, 64) + "% "
-				changes = changes + combineString(v1[i].title, v1[i].value+v1[i].unit, v2[i].value+v2[i].unit, percentChange)
+func benchPercentChange(title string, num1, num2 int) string {
+	if num1 == 0 && num2 == 0 {
+		return ""
+	}
+	changes := strconv.FormatFloat(float64(num2-num1)*100.0/float64(num1), 'f', 2, 64) + "%%"
+	return formatOutput(title, strconv.Itoa(num1), strconv.Itoa(num2), changes)
+}
+
+func latencyPercentChange(num1, num2 stats.PercentLatency) string {
+	if num1.Value == time.Duration(0) && num2.Value == time.Duration(0) {
+		return ""
+	}
+	changes := strconv.FormatFloat(float64(num2.Value-num1.Value)*100.0/float64(num1.Value), 'f', 2, 64) + "%%"
+	//fmt.Printf("===>%20s  %12s  %12s   %8s \n", num1.Percent, num1.Value.String(), num2.Value.String(), changes)
+	return formatOutput(num1.Percent+"%", num1.Value.String(), num2.Value.String(), changes)
+}
+
+func compareTwoMap(m1, m2 map[string]stats.BenchResults, compareLatency bool) {
+	for benchName, v1 := range m2 {
+		if v2, ok := m1[benchName]; ok {
+			fmt.Println(benchName)
+			changes := formatOutput("\n\tTitle", "\tBefore", "\tAfter", "Percentage")
+			changes += benchPercentChange("Operations", v1.Operations, v2.Operations)
+			changes += benchPercentChange("ns/op", v1.NsPerOp, v2.NsPerOp)
+			changes += benchPercentChange("B/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp)
+			changes += benchPercentChange("allocs/op", v1.AllocsPerOp, v2.AllocsPerOp)
+			for i := range v1.Latency {
+				changes += latencyPercentChange(v1.Latency[i], v2.Latency[i])
 			}
-			fmt.Printf("%s, %s\n", k2, changes)
+			fmt.Printf("%s\n", changes)
 		}
 	}
 }
@@ -115,6 +113,11 @@ func init() {
 
 func main() {
 
+	unit2num = make(map[string]float64)
+	unit2num["s"] = 1000000000
+	unit2num["ms"] = 1000000
+	unit2num["µs"] = 1000
+
 	var file1, file2 string
 	if len(os.Args) == 3 {
 		file1 = os.Args[1]
@@ -126,13 +129,13 @@ func main() {
 		file2 = os.Args[3]
 	}
 
-	var BenchValueFile1 map[string][]tv
-	var BenchValueFile2 map[string][]tv
-	BenchValueFile1 = make(map[string][]tv)
-	BenchValueFile2 = make(map[string][]tv)
+	var BenchValueFile1 map[string]stats.BenchResults
+	var BenchValueFile2 map[string]stats.BenchResults
+	BenchValueFile1 = make(map[string]stats.BenchResults)
+	BenchValueFile2 = make(map[string]stats.BenchResults)
 
-	createMap(file1, BenchValueFile1)
-	createMap(file2, BenchValueFile2)
+	readStatsResults(file1, BenchValueFile1)
+	readStatsResults(file2, BenchValueFile2)
 
 	compareTwoMap(BenchValueFile1, BenchValueFile2, compareLatency)
 

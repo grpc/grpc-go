@@ -62,6 +62,7 @@ func BenchmarkClient(b *testing.B) {
 								if isMatched {
 									fmt.Print(s.String())
 									isMatched = false
+									s.Clear()
 								}
 								b.Run(fmt.Sprintf("Stream-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
 									"%#v-latency_%s-reqSize_%#vB-respSize_%#vB",
@@ -72,6 +73,7 @@ func BenchmarkClient(b *testing.B) {
 								if isMatched {
 									fmt.Print(s.String())
 									isMatched = false
+									s.Clear()
 								}
 							}
 						}

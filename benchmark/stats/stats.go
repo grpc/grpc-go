@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +42,39 @@ type Stats struct {
 
 	durations durationSlice
 	dirty     bool
+
+	result BenchResults
+}
+
+// BenchResults record the result for a benchmark
+type BenchResults struct {
+	Latency           []PercentLatency
+	Operations        int
+	AllocedBytesPerOp int // B/op
+	AllocsPerOp       int // allocs/op
+	NsPerOp           int // ns/op
+}
+
+// PercentLatency is a tuple recording the latency of certain position in the data
+type PercentLatency struct {
+	Percent string
+	Value   time.Duration
+}
+
+func (s *BenchResults) String() string {
+	var res string
+	res += fmt.Sprintf("%s\n", strings.Repeat("-", 35))
+	if len(s.Latency) != 0 {
+		var statsUnit = s.Latency[0].Value
+		var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
+		res += fmt.Sprintf("| %*s |  %*s %*s  |\n", 12, s.Latency[0].Percent, 12, "", 2, "")
+		for i := 1; i < len(s.Latency); i++ {
+			res += fmt.Sprintf("| %*s |  %*s %*s  |\n", 12, s.Latency[i].Percent, 12,
+				strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), 2, timeUnit)
+		}
+	}
+	res += fmt.Sprintf("%s\n", strings.Repeat("-", 35))
+	return res
 }
 
 type durationSlice []time.Duration
@@ -68,6 +103,7 @@ func (stats *Stats) Clear() {
 	stats.durations = stats.durations[:0]
 	stats.histogram = nil
 	stats.dirty = false
+	stats.result = BenchResults{}
 }
 
 //Sort method for durations
@@ -125,18 +161,13 @@ func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
 	if stats.durations.Len() != 0 {
 		avg := float64(stats.histogram.Sum) / float64(stats.histogram.Count)
-		var percentToObserve = []int64{50, 90, 99, 100}
-		var timeUnit = fmt.Sprintf("%v", stats.unit)[1:]
+		var percentToObserve = []int{50, 90, 99, 100}
+		stats.result.Latency = append(stats.result.Latency, PercentLatency{Percent: "Latency / " + fmt.Sprintf("%v", stats.unit)[1:], Value: stats.unit})
 
-		fmt.Fprintf(w, "Latency - unit: %s count: %d\n", timeUnit, stats.histogram.Count)
-		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 28))
-		//fmt.Fprintf(w, "stats.durations.Len(): %d, stats.hisgoram.count: %d \n", stats.durations.Len(), stats.histogram.Count)
 		for _, position := range percentToObserve {
-			fmt.Fprintf(w, "|   %*d%%   |   %9.4f %s   |\n", 3, position,
-				float64(stats.durations[max(stats.histogram.Count*position/100-1, 0)])/float64(stats.unit), timeUnit)
+			stats.result.Latency = append(stats.result.Latency, PercentLatency{Percent: strconv.Itoa(position) + "%", Value: stats.durations[max(stats.histogram.Count*int64(position)/100-1, 0)]})
 		}
-		fmt.Fprintf(w, "| Average  |   %9.4f %s   |\n", avg/float64(stats.unit), fmt.Sprintf("%v", stats.unit)[1:])
-		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 28))
+		stats.result.Latency = append(stats.result.Latency, PercentLatency{Percent: "Average", Value: time.Duration(avg)})
 	} else {
 		fmt.Fprint(w, "No stats data\n")
 	}
@@ -155,5 +186,8 @@ func (stats *Stats) Print(w io.Writer) {
 func (stats *Stats) String() string {
 	var b bytes.Buffer
 	stats.Print(&b)
+	if !reflect.DeepEqual(stats.result, BenchResults{}) {
+		fmt.Fprintf(&b, "%s", stats.result.String())
+	}
 	return b.String()
 }
