@@ -777,6 +777,7 @@ loop:
 			// acquired send quota but before we got the writable channel.
 			// We must forsake this write.
 			t.sendQuotaPool.add(len(p))
+			s.sendQuotaPool.add(len(p))
 			if t.framer.adjustNumWriters(-1) == 0 {
 				t.controlBuf.put(&flushIO{})
 			}
