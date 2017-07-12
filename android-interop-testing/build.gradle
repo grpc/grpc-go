@@ -26,13 +26,12 @@ subprojects {
     apply plugin: "checkstyle"
 
     checkstyle {
-        configFile = file("$rootDir/../buildscripts/checkstyle.xml")
+        configDir = file("$rootDir/../buildscripts")
         toolVersion = "6.17"
         ignoreFailures = false
         if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
             ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
         }
-        configProperties["rootDir"] = "$rootDir/../"
     }
 
     // Checkstyle doesn't run automatically with android
