@@ -22,7 +22,7 @@
  *
  * <p>In the most common case of gRPC over Protocol Buffers, stub classes are automatically
  * generated from service definition .proto files by the Protobuf compiler. See <a
- * href="https://grpc.io/docs/generatedcode/java.html">gRPC java Generated Code Guide</a>.
+ * href="https://grpc.io/docs/generatedcode/java.html">gRPC Java Generated Code Guide</a>.
  *
  * <p>The server side stub classes are abstract classes with RPC methods for the server application
  * to implement/override. These classes internally use {@link io.grpc.stub.ServerCalls} to interact
