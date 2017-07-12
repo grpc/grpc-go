@@ -201,6 +201,10 @@ func (rr *roundRobin) watchAddrUpdates() error {
 	if rr.done {
 		return ErrClientConnClosing
 	}
+	select {
+	case <-rr.addrCh:
+	default:
+	}
 	rr.addrCh <- open
 	return nil
 }
@@ -223,7 +227,7 @@ func (rr *roundRobin) Start(target string, config BalancerConfig) error {
 		return err
 	}
 	rr.w = w
-	rr.addrCh = make(chan []Address)
+	rr.addrCh = make(chan []Address, 1)
 	go func() {
 		for {
 			if err := rr.watchAddrUpdates(); err != nil {
