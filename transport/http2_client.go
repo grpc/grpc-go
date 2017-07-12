@@ -1230,7 +1230,6 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			t.mu.Unlock()
 			t.streamsQuota.add(int(s.Val) - ms)
 		case http2.SettingInitialWindowSize:
-			atomic.AddUint64(&t.outQuotaVersion, 1)
 			t.mu.Lock()
 			for _, stream := range t.activeStreams {
 				// Adjust the sending quota for each stream.
@@ -1238,6 +1237,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			}
 			t.streamSendQuota = s.Val
 			t.mu.Unlock()
+			atomic.AddUint64(&t.outQuotaVersion, 1)
 		}
 	}
 }

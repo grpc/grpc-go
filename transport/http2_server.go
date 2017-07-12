@@ -929,13 +929,13 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 func (t *http2Server) applySettings(ss []http2.Setting) {
 	for _, s := range ss {
 		if s.ID == http2.SettingInitialWindowSize {
-			atomic.AddUint64(&t.outQuotaVersion, 1)
 			t.mu.Lock()
 			defer t.mu.Unlock()
 			for _, stream := range t.activeStreams {
 				stream.sendQuotaPool.add(int(s.Val) - int(t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
+			atomic.AddUint64(&t.outQuotaVersion, 1)
 		}
 
 	}
