@@ -83,7 +83,7 @@ type service struct {
 type Server struct {
 	opts options
 
-	mu     sync.Mutex // guards following
+	mu     sync.RWMutex // guards following
 	lis    map[net.Listener]bool
 	conns  map[io.Closer]bool
 	serve  bool
@@ -374,6 +374,8 @@ type ServiceInfo struct {
 // Service names include the package names, in the form of <package>.<service>.
 func (s *Server) GetServiceInfo() map[string]ServiceInfo {
 	ret := make(map[string]ServiceInfo)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for n, srv := range s.m {
 		methods := make([]MethodInfo, 0, len(srv.md)+len(srv.sd))
 		for m := range srv.md {
@@ -465,9 +467,9 @@ func (s *Server) Serve(lis net.Listener) error {
 				timer.Stop()
 				continue
 			}
-			s.mu.Lock()
+			s.mu.RLock()
 			s.printf("done serving; Accept = %v", err)
-			s.mu.Unlock()
+			s.mu.RUnlock()
 			return err
 		}
 		tempDelay = 0
@@ -482,9 +484,9 @@ func (s *Server) Serve(lis net.Listener) error {
 func (s *Server) handleRawConn(rawConn net.Conn) {
 	conn, authInfo, err := s.useTransportAuthenticator(rawConn)
 	if err != nil {
-		s.mu.Lock()
+		s.mu.RLock()
 		s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		grpclog.Printf("grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
 		// If serverHandShake returns ErrConnDispatched, keep rawConn open.
 		if err != credentials.ErrConnDispatched {
@@ -493,13 +495,13 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 		return
 	}
 
-	s.mu.Lock()
+	s.mu.RLock()
 	if s.conns == nil {
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		conn.Close()
 		return
 	}
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	if s.opts.useHandlerImpl {
 		s.serveUsingHandler(conn)
@@ -526,9 +528,9 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
-		s.mu.Lock()
+		s.mu.RLock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
-		s.mu.Unlock()
+		s.mu.RUnlock()
 		c.Close()
 		grpclog.Println("grpc: Server.Serve failed to create ServerTransport: ", err)
 		return
