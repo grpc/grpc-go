@@ -104,85 +104,182 @@ public final class ServerCalls {
       extends StreamingRequestMethod<ReqT, RespT> {
   }
 
+  private static final class UnaryServerCallHandler<ReqT, RespT>
+      implements ServerCallHandler<ReqT, RespT> {
+
+    private final UnaryRequestMethod<ReqT, RespT> method;
+
+    // Non private to avoid synthetic class
+    UnaryServerCallHandler(UnaryRequestMethod<ReqT, RespT> method) {
+      this.method = method;
+    }
+
+    @Override
+    public ServerCall.Listener<ReqT> startCall(ServerCall<ReqT, RespT> call, Metadata headers) {
+      Preconditions.checkArgument(
+          call.getMethodDescriptor().getType().clientSendsOneMessage(),
+          "asyncUnaryRequestCall is only for clientSendsOneMessage methods");
+      ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
+          new ServerCallStreamObserverImpl<ReqT, RespT>(call);
+      // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
+      // sends more than 1 requests, ServerCall will catch it. Note that disabling auto
+      // inbound flow control has no effect on unary calls.
+      call.request(2);
+      return new UnaryServerCallListener(responseObserver, call);
+    }
+
+    private final class UnaryServerCallListener extends ServerCall.Listener<ReqT> {
+      private final ServerCall<ReqT, RespT> call;
+      private final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver;
+      private boolean canInvoke = true;
+      private ReqT request;
+
+      // Non private to avoid synthetic class
+      UnaryServerCallListener(
+          ServerCallStreamObserverImpl<ReqT, RespT> responseObserver,
+          ServerCall<ReqT, RespT> call) {
+        this.call = call;
+        this.responseObserver = responseObserver;
+      }
+
+      @Override
+      public void onMessage(ReqT request) {
+        if (this.request != null) {
+          // Safe to close the call, because the application has not yet been invoked
+          call.close(
+              Status.INTERNAL.withDescription(TOO_MANY_REQUESTS),
+              new Metadata());
+          canInvoke = false;
+          return;
+        }
+
+        // We delay calling method.invoke() until onHalfClose() to make sure the client
+        // half-closes.
+        this.request = request;
+      }
+
+      @Override
+      public void onHalfClose() {
+        if (!canInvoke) {
+          return;
+        }
+        if (request == null) {
+          // Safe to close the call, because the application has not yet been invoked
+          call.close(
+              Status.INTERNAL.withDescription(MISSING_REQUEST),
+              new Metadata());
+          return;
+        }
+
+        method.invoke(request, responseObserver);
+        responseObserver.freeze();
+        if (call.isReady()) {
+          // Since we are calling invoke in halfClose we have missed the onReady
+          // event from the transport so recover it here.
+          onReady();
+        }
+      }
+
+      @Override
+      public void onCancel() {
+        responseObserver.cancelled = true;
+        if (responseObserver.onCancelHandler != null) {
+          responseObserver.onCancelHandler.run();
+        }
+      }
+
+      @Override
+      public void onReady() {
+        if (responseObserver.onReadyHandler != null) {
+          responseObserver.onReadyHandler.run();
+        }
+      }
+    }
+  }
+
   /**
    * Creates a {@code ServerCallHandler} for a unary request call method of the service.
    *
    * @param method an adaptor to the actual method on the service implementation.
    */
   private static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncUnaryRequestCall(
-      final UnaryRequestMethod<ReqT, RespT> method) {
-    return new ServerCallHandler<ReqT, RespT>() {
-      @Override
-      public ServerCall.Listener<ReqT> startCall(
-          final ServerCall<ReqT, RespT> call,
-          Metadata headers) {
-        Preconditions.checkArgument(
-            call.getMethodDescriptor().getType().clientSendsOneMessage(),
-            "asyncUnaryRequestCall is only for clientSendsOneMessage methods");
-        final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
-            new ServerCallStreamObserverImpl<ReqT, RespT>(call);
-        // We expect only 1 request, but we ask for 2 requests here so that if a misbehaving client
-        // sends more than 1 requests, ServerCall will catch it. Note that disabling auto
-        // inbound flow control has no effect on unary calls.
-        call.request(2);
-        return new EmptyServerCallListener<ReqT>() {
-          boolean canInvoke = true;
-          ReqT request;
-          @Override
-          public void onMessage(ReqT request) {
-            if (this.request != null) {
-              // Safe to close the call, because the application has not yet been invoked
-              call.close(
-                  Status.INTERNAL.withDescription(TOO_MANY_REQUESTS),
-                  new Metadata());
-              canInvoke = false;
-              return;
-            }
+      UnaryRequestMethod<ReqT, RespT> method) {
+    return new UnaryServerCallHandler<ReqT, RespT>(method);
+  }
 
-            // We delay calling method.invoke() until onHalfClose() to make sure the client
-            // half-closes.
-            this.request = request;
-          }
+  private static final class StreamingServerCallHandler<ReqT, RespT>
+      implements ServerCallHandler<ReqT, RespT> {
 
-          @Override
-          public void onHalfClose() {
-            if (!canInvoke) {
-              return;
-            }
-            if (request == null) {
-              // Safe to close the call, because the application has not yet been invoked
-              call.close(
-                  Status.INTERNAL.withDescription(MISSING_REQUEST),
-                  new Metadata());
-              return;
-            }
+    private final StreamingRequestMethod<ReqT, RespT> method;
 
-            method.invoke(request, responseObserver);
-            responseObserver.freeze();
-            if (call.isReady()) {
-              // Since we are calling invoke in halfClose we have missed the onReady
-              // event from the transport so recover it here.
-              onReady();
-            }
-          }
+    // Non private to avoid synthetic class
+    StreamingServerCallHandler(StreamingRequestMethod<ReqT, RespT> method) {
+      this.method = method;
+    }
 
-          @Override
-          public void onCancel() {
-            responseObserver.cancelled = true;
-            if (responseObserver.onCancelHandler != null) {
-              responseObserver.onCancelHandler.run();
-            }
-          }
-
-          @Override
-          public void onReady() {
-            if (responseObserver.onReadyHandler != null) {
-              responseObserver.onReadyHandler.run();
-            }
-          }
-        };
+    @Override
+    public ServerCall.Listener<ReqT> startCall(ServerCall<ReqT, RespT> call, Metadata headers) {
+      ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
+          new ServerCallStreamObserverImpl<ReqT, RespT>(call);
+      StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
+      responseObserver.freeze();
+      if (responseObserver.autoFlowControlEnabled) {
+        call.request(1);
       }
-    };
+      return new StreamingServerCallListener(requestObserver, responseObserver, call);
+    }
+
+    private final class StreamingServerCallListener extends ServerCall.Listener<ReqT> {
+
+      private final StreamObserver<ReqT> requestObserver;
+      private final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver;
+      private final ServerCall<ReqT, RespT> call;
+      private boolean halfClosed = false;
+
+      // Non private to avoid synthetic class
+      StreamingServerCallListener(
+          StreamObserver<ReqT> requestObserver,
+          ServerCallStreamObserverImpl<ReqT, RespT> responseObserver,
+          ServerCall<ReqT, RespT> call) {
+        this.requestObserver = requestObserver;
+        this.responseObserver = responseObserver;
+        this.call = call;
+      }
+
+      @Override
+      public void onMessage(ReqT request) {
+        requestObserver.onNext(request);
+
+        // Request delivery of the next inbound message.
+        if (responseObserver.autoFlowControlEnabled) {
+          call.request(1);
+        }
+      }
+
+      @Override
+      public void onHalfClose() {
+        halfClosed = true;
+        requestObserver.onCompleted();
+      }
+
+      @Override
+      public void onCancel() {
+        responseObserver.cancelled = true;
+        if (responseObserver.onCancelHandler != null) {
+          responseObserver.onCancelHandler.run();
+        }
+        if (!halfClosed) {
+          requestObserver.onError(Status.CANCELLED.asException());
+        }
+      }
+
+      @Override
+      public void onReady() {
+        if (responseObserver.onReadyHandler != null) {
+          responseObserver.onReadyHandler.run();
+        }
+      }
+    }
   }
 
   /**
@@ -191,58 +288,8 @@ public final class ServerCalls {
    * @param method an adaptor to the actual method on the service implementation.
    */
   private static <ReqT, RespT> ServerCallHandler<ReqT, RespT> asyncStreamingRequestCall(
-      final StreamingRequestMethod<ReqT, RespT> method) {
-    return new ServerCallHandler<ReqT, RespT>() {
-      @Override
-      public ServerCall.Listener<ReqT> startCall(
-          final ServerCall<ReqT, RespT> call,
-          Metadata headers) {
-        final ServerCallStreamObserverImpl<ReqT, RespT> responseObserver =
-            new ServerCallStreamObserverImpl<ReqT, RespT>(call);
-        final StreamObserver<ReqT> requestObserver = method.invoke(responseObserver);
-        responseObserver.freeze();
-        if (responseObserver.autoFlowControlEnabled) {
-          call.request(1);
-        }
-        return new EmptyServerCallListener<ReqT>() {
-          boolean halfClosed = false;
-
-          @Override
-          public void onMessage(ReqT request) {
-            requestObserver.onNext(request);
-
-            // Request delivery of the next inbound message.
-            if (responseObserver.autoFlowControlEnabled) {
-              call.request(1);
-            }
-          }
-
-          @Override
-          public void onHalfClose() {
-            halfClosed = true;
-            requestObserver.onCompleted();
-          }
-
-          @Override
-          public void onCancel() {
-            responseObserver.cancelled = true;
-            if (responseObserver.onCancelHandler != null) {
-              responseObserver.onCancelHandler.run();
-            }
-            if (!halfClosed) {
-              requestObserver.onError(Status.CANCELLED.asException());
-            }
-          }
-
-          @Override
-          public void onReady() {
-            if (responseObserver.onReadyHandler != null) {
-              responseObserver.onReadyHandler.run();
-            }
-          }
-        };
-      }
-    };
+      StreamingRequestMethod<ReqT, RespT> method) {
+    return new StreamingServerCallHandler<ReqT, RespT>(method);
   }
 
   private static interface UnaryRequestMethod<ReqT, RespT> {
@@ -263,6 +310,7 @@ public final class ServerCalls {
     private Runnable onReadyHandler;
     private Runnable onCancelHandler;
 
+    // Non private to avoid synthetic class
     ServerCallStreamObserverImpl(ServerCall<ReqT, RespT> call) {
       this.call = call;
     }
@@ -349,24 +397,6 @@ public final class ServerCalls {
     @Override
     public void request(int count) {
       call.request(count);
-    }
-  }
-
-  private static class EmptyServerCallListener<ReqT> extends ServerCall.Listener<ReqT> {
-    @Override
-    public void onMessage(ReqT request) {
-    }
-
-    @Override
-    public void onHalfClose() {
-    }
-
-    @Override
-    public void onCancel() {
-    }
-
-    @Override
-    public void onComplete() {
     }
   }
 
