@@ -29,6 +29,8 @@ import java.net.SocketAddress;
  * its name.
  *
  * <p>The channel is intended to be fully-featured, high performance, and useful in testing.
+ *
+ * <p>For usage examples, see {@link InProcessServerBuilder}.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1783")
 public final class InProcessChannelBuilder extends
