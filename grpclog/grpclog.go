@@ -31,7 +31,15 @@
  *
  */
 
-package grpclog
+// Package grpclog defines logging for grpc.
+//
+// All logs in transport package only go to verbose level 2.
+// All logs in other packages in grpc are logged in spite of the verbosity level.
+//
+// In the default logger,
+// severity level can be set by environment variable GRPC_GO_LOG_SEVERITY_LEVEL,
+// verbosity level can be set by GRPC_GO_LOG_VERBOSITY_LEVEL.
+package grpclog // import "google.golang.org/grpc/grpclog"
 
 import "os"
 

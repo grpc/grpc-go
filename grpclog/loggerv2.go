@@ -31,16 +31,14 @@
  *
  */
 
-/*
-Package grpclog defines logging for grpc.
-*/
-package grpclog // import "google.golang.org/grpc/grpclog"
+package grpclog
 
 import (
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 )
 
 // LoggerV2 does underlying logging work for grpclog.
@@ -104,6 +102,7 @@ var severityName = []string{
 // loggerT is the default logger used by grpclog.
 type loggerT struct {
 	m []*log.Logger
+	v int
 }
 
 // NewLoggerV2 creates a loggerV2 with the provided writers.
@@ -112,19 +111,44 @@ type loggerT struct {
 // Warning logs will be written to warningW and infoW.
 // Info logs will be written to infoW.
 func NewLoggerV2(infoW, warningW, errorW io.Writer) LoggerV2 {
+	return NewLoggerV2WithVerbosity(infoW, warningW, errorW, 0)
+}
+
+// NewLoggerV2WithVerbosity creates a loggerV2 with the provided writers and
+// verbosity level.
+func NewLoggerV2WithVerbosity(infoW, warningW, errorW io.Writer, v int) LoggerV2 {
 	var m []*log.Logger
 	m = append(m, log.New(infoW, severityName[infoLog]+": ", log.LstdFlags))
 	m = append(m, log.New(io.MultiWriter(infoW, warningW), severityName[warningLog]+": ", log.LstdFlags))
 	ew := io.MultiWriter(infoW, warningW, errorW) // ew will be used for error and fatal.
 	m = append(m, log.New(ew, severityName[errorLog]+": ", log.LstdFlags))
 	m = append(m, log.New(ew, severityName[fatalLog]+": ", log.LstdFlags))
-	return &loggerT{m: m}
+	return &loggerT{m: m, v: v}
 }
 
 // newLoggerV2 creates a loggerV2 to be used as default logger.
 // All logs are written to stderr.
 func newLoggerV2() LoggerV2 {
-	return NewLoggerV2(os.Stderr, ioutil.Discard, ioutil.Discard)
+	errorW := ioutil.Discard
+	warningW := ioutil.Discard
+	infoW := ioutil.Discard
+
+	logLevel := os.Getenv("GRPC_GO_LOG_SEVERITY_LEVEL")
+	switch logLevel {
+	case "", "ERROR", "error": // If env is unset, set level to ERROR.
+		errorW = os.Stderr
+	case "WARNING", "warning":
+		warningW = os.Stderr
+	case "INFO", "info":
+		infoW = os.Stderr
+	}
+
+	var v int
+	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	if vl, err := strconv.Atoi(vLevel); err == nil {
+		v = vl
+	}
+	return NewLoggerV2WithVerbosity(infoW, warningW, errorW, v)
 }
 
 func (g *loggerT) Info(args ...interface{}) {
@@ -176,7 +200,5 @@ func (g *loggerT) Fatalf(format string, args ...interface{}) {
 }
 
 func (g *loggerT) V(l int) bool {
-	// Returns true for all verbose level.
-	// TODO support verbose level in the default logger.
-	return true
+	return l <= g.v
 }

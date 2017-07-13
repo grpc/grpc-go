@@ -157,7 +157,7 @@ type roundRobin struct {
 func (rr *roundRobin) watchAddrUpdates() error {
 	updates, err := rr.w.Next()
 	if err != nil {
-		grpclog.Printf("grpc: the naming watcher stops working due to %v.\n", err)
+		grpclog.Warningf("grpc: the naming watcher stops working due to %v.", err)
 		return err
 	}
 	rr.mu.Lock()
@@ -173,7 +173,7 @@ func (rr *roundRobin) watchAddrUpdates() error {
 			for _, v := range rr.addrs {
 				if addr == v.addr {
 					exist = true
-					grpclog.Println("grpc: The name resolver wanted to add an existing address: ", addr)
+					grpclog.Infoln("grpc: The name resolver wanted to add an existing address: ", addr)
 					break
 				}
 			}
@@ -190,7 +190,7 @@ func (rr *roundRobin) watchAddrUpdates() error {
 				}
 			}
 		default:
-			grpclog.Println("Unknown update.Op ", update.Op)
+			grpclog.Errorln("Unknown update.Op ", update.Op)
 		}
 	}
 	// Make a copy of rr.addrs and write it onto rr.addrCh so that gRPC internals gets notified.
