@@ -23,7 +23,7 @@ import javax.annotation.Nullable;
  * The base interface of the Subchannels returned by {@link
  * io.grpc.LoadBalancer.Helper#createSubchannel}.
  */
-abstract class SubchannelImpl extends LoadBalancer.Subchannel {
+abstract class AbstractSubchannel extends LoadBalancer.Subchannel {
   /**
    * Same as {@link InternalSubchannel#obtainActiveTransport}.
    */

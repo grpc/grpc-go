@@ -67,7 +67,7 @@ import org.mockito.stubbing.Answer;
 public class DelayedClientTransportTest {
   @Mock private ManagedClientTransport.Listener transportListener;
   @Mock private SubchannelPicker mockPicker;
-  @Mock private SubchannelImpl mockSubchannel;
+  @Mock private AbstractSubchannel mockSubchannel;
   @Mock private ClientTransport mockRealTransport;
   @Mock private ClientTransport mockRealTransport2;
   @Mock private ClientStream mockRealStream;
@@ -282,9 +282,9 @@ public class DelayedClientTransportTest {
     CallOptions waitForReadyCallOptions = CallOptions.DEFAULT.withOption(SHARD_ID, 2)
         .withWaitForReady();
 
-    SubchannelImpl subchannel1 = mock(SubchannelImpl.class);
-    SubchannelImpl subchannel2 = mock(SubchannelImpl.class);
-    SubchannelImpl subchannel3 = mock(SubchannelImpl.class);
+    AbstractSubchannel subchannel1 = mock(AbstractSubchannel.class);
+    AbstractSubchannel subchannel2 = mock(AbstractSubchannel.class);
+    AbstractSubchannel subchannel3 = mock(AbstractSubchannel.class);
     when(mockRealTransport.newStream(any(MethodDescriptor.class), any(Metadata.class),
         any(CallOptions.class))).thenReturn(mockRealStream);
     when(mockRealTransport2.newStream(any(MethodDescriptor.class), any(Metadata.class),
@@ -445,7 +445,7 @@ public class DelayedClientTransportTest {
   @Test
   public void reprocess_NoPendingStream() {
     SubchannelPicker picker = mock(SubchannelPicker.class);
-    SubchannelImpl subchannel = mock(SubchannelImpl.class);
+    AbstractSubchannel subchannel = mock(AbstractSubchannel.class);
     when(subchannel.obtainActiveTransport()).thenReturn(mockRealTransport);
     when(picker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel));
