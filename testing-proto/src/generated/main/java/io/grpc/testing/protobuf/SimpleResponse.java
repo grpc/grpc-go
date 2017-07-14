@@ -19,6 +19,7 @@ public  final class SimpleResponse extends
     super(builder);
   }
   private SimpleResponse() {
+    responseMessage_ = "";
   }
 
   @java.lang.Override
@@ -31,6 +32,7 @@ public  final class SimpleResponse extends
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
+    int mutable_bitField0_ = 0;
     try {
       boolean done = false;
       while (!done) {
@@ -43,6 +45,12 @@ public  final class SimpleResponse extends
             if (!input.skipField(tag)) {
               done = true;
             }
+            break;
+          }
+          case 10: {
+            java.lang.String s = input.readStringRequireUtf8();
+
+            responseMessage_ = s;
             break;
           }
         }
@@ -68,6 +76,48 @@ public  final class SimpleResponse extends
             io.grpc.testing.protobuf.SimpleResponse.class, io.grpc.testing.protobuf.SimpleResponse.Builder.class);
   }
 
+  public static final int RESPONSEMESSAGE_FIELD_NUMBER = 1;
+  private volatile java.lang.Object responseMessage_;
+  /**
+   * <pre>
+   * An optional string message for test.
+   * </pre>
+   *
+   * <code>string responseMessage = 1;</code>
+   */
+  public java.lang.String getResponseMessage() {
+    java.lang.Object ref = responseMessage_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      responseMessage_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * An optional string message for test.
+   * </pre>
+   *
+   * <code>string responseMessage = 1;</code>
+   */
+  public com.google.protobuf.ByteString
+      getResponseMessageBytes() {
+    java.lang.Object ref = responseMessage_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      responseMessage_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -80,6 +130,9 @@ public  final class SimpleResponse extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    if (!getResponseMessageBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, responseMessage_);
+    }
   }
 
   public int getSerializedSize() {
@@ -87,6 +140,9 @@ public  final class SimpleResponse extends
     if (size != -1) return size;
 
     size = 0;
+    if (!getResponseMessageBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, responseMessage_);
+    }
     memoizedSize = size;
     return size;
   }
@@ -103,6 +159,8 @@ public  final class SimpleResponse extends
     io.grpc.testing.protobuf.SimpleResponse other = (io.grpc.testing.protobuf.SimpleResponse) obj;
 
     boolean result = true;
+    result = result && getResponseMessage()
+        .equals(other.getResponseMessage());
     return result;
   }
 
@@ -113,6 +171,8 @@ public  final class SimpleResponse extends
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
+    hash = (37 * hash) + RESPONSEMESSAGE_FIELD_NUMBER;
+    hash = (53 * hash) + getResponseMessage().hashCode();
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -246,6 +306,8 @@ public  final class SimpleResponse extends
     }
     public Builder clear() {
       super.clear();
+      responseMessage_ = "";
+
       return this;
     }
 
@@ -268,6 +330,7 @@ public  final class SimpleResponse extends
 
     public io.grpc.testing.protobuf.SimpleResponse buildPartial() {
       io.grpc.testing.protobuf.SimpleResponse result = new io.grpc.testing.protobuf.SimpleResponse(this);
+      result.responseMessage_ = responseMessage_;
       onBuilt();
       return result;
     }
@@ -309,6 +372,10 @@ public  final class SimpleResponse extends
 
     public Builder mergeFrom(io.grpc.testing.protobuf.SimpleResponse other) {
       if (other == io.grpc.testing.protobuf.SimpleResponse.getDefaultInstance()) return this;
+      if (!other.getResponseMessage().isEmpty()) {
+        responseMessage_ = other.responseMessage_;
+        onChanged();
+      }
       onChanged();
       return this;
     }
@@ -332,6 +399,95 @@ public  final class SimpleResponse extends
           mergeFrom(parsedMessage);
         }
       }
+      return this;
+    }
+
+    private java.lang.Object responseMessage_ = "";
+    /**
+     * <pre>
+     * An optional string message for test.
+     * </pre>
+     *
+     * <code>string responseMessage = 1;</code>
+     */
+    public java.lang.String getResponseMessage() {
+      java.lang.Object ref = responseMessage_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        responseMessage_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * An optional string message for test.
+     * </pre>
+     *
+     * <code>string responseMessage = 1;</code>
+     */
+    public com.google.protobuf.ByteString
+        getResponseMessageBytes() {
+      java.lang.Object ref = responseMessage_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        responseMessage_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * An optional string message for test.
+     * </pre>
+     *
+     * <code>string responseMessage = 1;</code>
+     */
+    public Builder setResponseMessage(
+        java.lang.String value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  
+      responseMessage_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional string message for test.
+     * </pre>
+     *
+     * <code>string responseMessage = 1;</code>
+     */
+    public Builder clearResponseMessage() {
+      
+      responseMessage_ = getDefaultInstance().getResponseMessage();
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * An optional string message for test.
+     * </pre>
+     *
+     * <code>string responseMessage = 1;</code>
+     */
+    public Builder setResponseMessageBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) {
+    throw new NullPointerException();
+  }
+  checkByteStringIsUtf8(value);
+      
+      responseMessage_ = value;
+      onChanged();
       return this;
     }
     public final Builder setUnknownFields(

@@ -34,18 +34,19 @@ public final class SimpleServiceProto {
   static {
     java.lang.String[] descriptorData = {
       "\n,io/grpc/testing/protobuf/simpleservice" +
-      ".proto\022\014grpc.testing\"\017\n\rSimpleRequest\"\020\n" +
-      "\016SimpleResponse2\327\002\n\rSimpleService\022G\n\010Una" +
-      "ryRpc\022\033.grpc.testing.SimpleRequest\032\034.grp" +
-      "c.testing.SimpleResponse\"\000\022S\n\022ClientStre" +
-      "amingRpc\022\033.grpc.testing.SimpleRequest\032\034." +
-      "grpc.testing.SimpleResponse\"\000(\001\022S\n\022Serve" +
-      "rStreamingRpc\022\033.grpc.testing.SimpleReque" +
-      "st\032\034.grpc.testing.SimpleResponse\"\0000\001\022S\n\020" +
-      "BidiStreamingRpc\022\033.grpc.testing.SimpleRe",
-      "quest\032\034.grpc.testing.SimpleResponse\"\000(\0010" +
-      "\001B0\n\030io.grpc.testing.protobufB\022SimpleSer" +
-      "viceProtoP\001b\006proto3"
+      ".proto\022\014grpc.testing\"\'\n\rSimpleRequest\022\026\n" +
+      "\016requestMessage\030\001 \001(\t\")\n\016SimpleResponse\022" +
+      "\027\n\017responseMessage\030\001 \001(\t2\327\002\n\rSimpleServi" +
+      "ce\022G\n\010UnaryRpc\022\033.grpc.testing.SimpleRequ" +
+      "est\032\034.grpc.testing.SimpleResponse\"\000\022S\n\022C" +
+      "lientStreamingRpc\022\033.grpc.testing.SimpleR" +
+      "equest\032\034.grpc.testing.SimpleResponse\"\000(\001" +
+      "\022S\n\022ServerStreamingRpc\022\033.grpc.testing.Si" +
+      "mpleRequest\032\034.grpc.testing.SimpleRespons",
+      "e\"\0000\001\022S\n\020BidiStreamingRpc\022\033.grpc.testing" +
+      ".SimpleRequest\032\034.grpc.testing.SimpleResp" +
+      "onse\"\000(\0010\001B0\n\030io.grpc.testing.protobufB\022" +
+      "SimpleServiceProtoP\001b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -64,13 +65,13 @@ public final class SimpleServiceProto {
     internal_static_grpc_testing_SimpleRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SimpleRequest_descriptor,
-        new java.lang.String[] { });
+        new java.lang.String[] { "RequestMessage", });
     internal_static_grpc_testing_SimpleResponse_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_grpc_testing_SimpleResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_testing_SimpleResponse_descriptor,
-        new java.lang.String[] { });
+        new java.lang.String[] { "ResponseMessage", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)
