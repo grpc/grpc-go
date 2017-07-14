@@ -96,11 +96,11 @@ public final class HelloJsonClient {
   static final class HelloJsonStub extends AbstractStub<HelloJsonStub> {
 
     static final MethodDescriptor<HelloRequest, HelloReply> METHOD_SAY_HELLO =
-        MethodDescriptor.create(
-            GreeterGrpc.METHOD_SAY_HELLO.getType(),
-            GreeterGrpc.METHOD_SAY_HELLO.getFullMethodName(),
-            ProtoUtils.jsonMarshaller(HelloRequest.getDefaultInstance()),
-            ProtoUtils.jsonMarshaller(HelloReply.getDefaultInstance()));
+        GreeterGrpc.METHOD_SAY_HELLO
+            .toBuilder(
+                ProtoUtils.jsonMarshaller(HelloRequest.getDefaultInstance()),
+                ProtoUtils.jsonMarshaller(HelloReply.getDefaultInstance()))
+            .build();
 
     protected HelloJsonStub(Channel channel) {
       super(channel);
