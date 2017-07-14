@@ -26,6 +26,7 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerInterceptors;
@@ -85,7 +86,8 @@ public class HeaderServerInterceptorTest {
         return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
           @Override
           public void start(Listener<RespT> responseListener, Metadata headers) {
-            spyListener = responseListener = spy(responseListener);
+            spyListener = responseListener =
+                spy(new SimpleForwardingClientCallListener(responseListener) {});
             super.start(responseListener, headers);
           }
         };
