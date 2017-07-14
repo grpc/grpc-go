@@ -41,7 +41,8 @@ public final class StreamObservers {
       final CallStreamObserver<V> target) {
     Preconditions.checkNotNull(source, "source");
     Preconditions.checkNotNull(target, "target");
-    target.setOnReadyHandler(new Runnable() {
+
+    final class FlowControllingOnReadyHandler implements Runnable {
       @Override
       public void run() {
         while (target.isReady() && source.hasNext()) {
@@ -51,7 +52,9 @@ public final class StreamObservers {
           target.onCompleted();
         }
       }
-    });
+    }
+
+    target.setOnReadyHandler(new FlowControllingOnReadyHandler());
   }
 
   /**

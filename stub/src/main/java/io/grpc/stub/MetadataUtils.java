@@ -16,6 +16,8 @@
 
 package io.grpc.stub;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -43,9 +45,7 @@ public final class MetadataUtils {
    * @return an implementation of the stub with {@code extraHeaders} bound to each call.
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1789")
-  public static <T extends AbstractStub<T>> T attachHeaders(
-      T stub,
-      final Metadata extraHeaders) {
+  public static <T extends AbstractStub<T>> T attachHeaders(T stub, Metadata extraHeaders) {
     return stub.withInterceptors(newAttachHeadersInterceptor(extraHeaders));
   }
 
@@ -55,22 +55,39 @@ public final class MetadataUtils {
    * @param extraHeaders the headers to be passed by each call that is processed by the returned
    *                     interceptor
    */
-  public static ClientInterceptor newAttachHeadersInterceptor(final Metadata extraHeaders) {
-    return new ClientInterceptor() {
-      @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-          MethodDescriptor<ReqT, RespT> method,
-          CallOptions callOptions,
-          Channel next) {
-        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
-          @Override
-          public void start(Listener<RespT> responseListener, Metadata headers) {
-            headers.merge(extraHeaders);
-            super.start(responseListener, headers);
-          }
-        };
+  public static ClientInterceptor newAttachHeadersInterceptor(Metadata extraHeaders) {
+    return new HeaderAttachingClientInterceptor(extraHeaders);
+  }
+
+  private static final class HeaderAttachingClientInterceptor implements ClientInterceptor {
+
+    private final Metadata extraHeaders;
+
+    // Non private to avoid synthetic class
+    HeaderAttachingClientInterceptor(Metadata extraHeaders) {
+      this.extraHeaders = checkNotNull(extraHeaders, extraHeaders);
+    }
+
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      return new HeaderAttachingClientCall<ReqT, RespT>(next.newCall(method, callOptions));
+    }
+
+    private final class HeaderAttachingClientCall<ReqT, RespT>
+        extends SimpleForwardingClientCall<ReqT, RespT> {
+
+      // Non private to avoid synthetic class
+      HeaderAttachingClientCall(ClientCall<ReqT, RespT> call) {
+        super(call);
       }
-    };
+
+      @Override
+      public void start(Listener<RespT> responseListener, Metadata headers) {
+        headers.merge(extraHeaders);
+        super.start(responseListener, headers);
+      }
+    }
   }
 
   /**
@@ -99,35 +116,62 @@ public final class MetadataUtils {
    * @return an implementation of the channel with captures installed.
    */
   public static ClientInterceptor newCaptureMetadataInterceptor(
-      final AtomicReference<Metadata> headersCapture,
-      final AtomicReference<Metadata> trailersCapture) {
-    return new ClientInterceptor() {
-      @Override
-      public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-          MethodDescriptor<ReqT, RespT> method,
-          CallOptions callOptions,
-          Channel next) {
-        return new SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
-          @Override
-          public void start(Listener<RespT> responseListener, Metadata headers) {
-            headersCapture.set(null);
-            trailersCapture.set(null);
-            super.start(new SimpleForwardingClientCallListener<RespT>(responseListener) {
-              @Override
-              public void onHeaders(Metadata headers) {
-                headersCapture.set(headers);
-                super.onHeaders(headers);
-              }
+      AtomicReference<Metadata> headersCapture, AtomicReference<Metadata> trailersCapture) {
+    return new MetadataCapturingClientInterceptor(headersCapture, trailersCapture);
+  }
 
-              @Override
-              public void onClose(Status status, Metadata trailers) {
-                trailersCapture.set(trailers);
-                super.onClose(status, trailers);
-              }
-            }, headers);
-          }
-        };
+  private static final class MetadataCapturingClientInterceptor implements ClientInterceptor {
+
+    final AtomicReference<Metadata> headersCapture;
+    final AtomicReference<Metadata> trailersCapture;
+
+    // Non private to avoid synthetic class
+    MetadataCapturingClientInterceptor(
+        AtomicReference<Metadata> headersCapture, AtomicReference<Metadata> trailersCapture) {
+      this.headersCapture = checkNotNull(headersCapture, "headersCapture");
+      this.trailersCapture = checkNotNull(trailersCapture, "trailersCapture");
+    }
+
+    @Override
+    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+        MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+      return new MetadataCapturingClientCall<ReqT, RespT>(next.newCall(method, callOptions));
+    }
+
+    private final class MetadataCapturingClientCall<ReqT, RespT>
+        extends SimpleForwardingClientCall<ReqT, RespT> {
+
+      // Non private to avoid synthetic class
+      MetadataCapturingClientCall(ClientCall<ReqT, RespT> call) {
+        super(call);
       }
-    };
+
+      @Override
+      public void start(ClientCall.Listener<RespT> responseListener, Metadata headers) {
+        headersCapture.set(null);
+        trailersCapture.set(null);
+        super.start(new MetadataCapturingClientCallListener(responseListener), headers);
+      }
+
+      private final class MetadataCapturingClientCallListener
+          extends SimpleForwardingClientCallListener<RespT> {
+
+        MetadataCapturingClientCallListener(ClientCall.Listener<RespT> responseListener) {
+          super(responseListener);
+        }
+
+        @Override
+        public void onHeaders(Metadata headers) {
+          headersCapture.set(headers);
+          super.onHeaders(headers);
+        }
+
+        @Override
+        public void onClose(Status status, Metadata trailers) {
+          trailersCapture.set(trailers);
+          super.onClose(status, trailers);
+        }
+      }
+    }
   }
 }
