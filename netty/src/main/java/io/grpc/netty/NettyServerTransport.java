@@ -16,7 +16,9 @@
 
 package io.grpc.netty;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.LogId;
@@ -26,6 +28,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
+import java.io.IOException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,6 +38,10 @@ import java.util.logging.Logger;
  */
 class NettyServerTransport implements ServerTransport {
   private static final Logger log = Logger.getLogger(NettyServerTransport.class.getName());
+  // Some exceptions are not very useful and add too much noise to the log
+  private static final ImmutableList<String> QUIET_ERRORS = ImmutableList.of(
+      "Connection reset by peer",
+      "An existing connection was forcibly closed by the remote host");
 
   private final LogId logId = LogId.allocate(getClass().getName());
   private final Channel channel;
@@ -125,9 +132,25 @@ class NettyServerTransport implements ServerTransport {
     return channel;
   }
 
+  /**
+   * Accepts a throwable and returns the appropriate logging level. Uninteresting exceptions
+   * should not clutter the log.
+   */
+  @VisibleForTesting
+  static Level getLogLevel(Throwable t) {
+    if (t instanceof IOException && t.getMessage() != null) {
+      for (String msg : QUIET_ERRORS) {
+        if (t.getMessage().equals(msg)) {
+          return Level.FINE;
+        }
+      }
+    }
+    return Level.INFO;
+  }
+
   private void notifyTerminated(Throwable t) {
     if (t != null) {
-      log.log(Level.SEVERE, "Transport failed", t);
+      log.log(getLogLevel(t), "Transport failed", t);
     }
     if (!terminated) {
       terminated = true;
