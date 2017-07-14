@@ -647,7 +647,7 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 }
 
-func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) error {
+func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream, flush bool) error {
 	first := true
 	endHeaders := false
 	var err error
@@ -673,10 +673,10 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
 			}
-			err = t.framer.writeHeaders(endHeaders, p)
+			err = t.framer.writeHeaders(endHeaders && flush, p)
 			first = false
 		} else {
-			err = t.framer.writeContinuation(endHeaders, s.id, endHeaders, b.Next(size))
+			err = t.framer.writeContinuation(endHeaders && flush, s.id, endHeaders, b.Next(size))
 		}
 		if err != nil {
 			t.Close()
@@ -688,6 +688,10 @@ func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) e
 
 // WriteHeader sends the header metedata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
+	return t.writeHeader(s, md, true /* flush */)
+}
+
+func (t *http2Server) writeHeader(s *Stream, md metadata.MD, flush bool) error {
 	s.mu.Lock()
 	if s.headerOk || s.state == streamDone {
 		s.mu.Unlock()
@@ -722,7 +726,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 		}
 	}
 	bufLen := t.hBuf.Len()
-	if err := t.writeHeaders(s, t.hBuf, false); err != nil {
+	if err := t.writeHeaders(s, t.hBuf, false, flush); err != nil {
 		return err
 	}
 	if t.stats != nil {
@@ -755,7 +759,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	s.mu.Unlock()
 
 	if !headersSent && hasHeader {
-		t.WriteHeader(s, nil)
+		t.writeHeader(s, nil, false)
 		headersSent = true
 	}
 
@@ -795,7 +799,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		}
 	}
 	bufLen := t.hBuf.Len()
-	if err := t.writeHeaders(s, t.hBuf, true); err != nil {
+	if err := t.writeHeaders(s, t.hBuf, true, true); err != nil {
 		t.Close()
 		return err
 	}
@@ -825,7 +829,8 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 	}
 	s.mu.Unlock()
 	if writeHeaderFrame {
-		t.WriteHeader(s, nil)
+		flush := !opts.Delay && len(data) == 0
+		t.writeHeader(s, nil, flush)
 	}
 	r := bytes.NewBuffer(data)
 	for {
@@ -893,11 +898,11 @@ func (t *http2Server) Write(s *Stream, data []byte, opts *Options) (err error) {
 		// Reset ping strikes when sending data since this might cause
 		// the peer to send ping.
 		atomic.StoreUint32(&t.resetPingStrikes, 1)
-		if err := t.framer.writeData(forceFlush, s.id, false, p); err != nil {
+		if err := t.framer.writeData(forceFlush && !opts.Delay, s.id, false, p); err != nil {
 			t.Close()
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
-		if t.framer.adjustNumWriters(-1) == 0 {
+		if t.framer.adjustNumWriters(-1) == 0 && !opts.Delay {
 			t.framer.flushWrite()
 		}
 		t.writableChan <- 0

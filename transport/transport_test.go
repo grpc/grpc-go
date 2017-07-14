@@ -162,7 +162,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stre
 	<-h.t.writableChan
 	h.t.hBuf.Reset()
 	h.t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	if err := h.t.writeHeaders(s, h.t.hBuf, false); err != nil {
+	if err := h.t.writeHeaders(s, h.t.hBuf, false, true); err != nil {
 		t.Fatalf("Failed to write headers: %v", err)
 	}
 	h.t.writableChan <- 0
