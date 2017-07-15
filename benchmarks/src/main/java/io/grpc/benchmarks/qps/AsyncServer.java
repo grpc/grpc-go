@@ -33,12 +33,13 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
 import java.util.concurrent.ForkJoinWorkerThread;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -76,12 +77,12 @@ public class AsyncServer {
         try {
           System.out.println("QPS Server shutting down");
           server.shutdown();
-          server.awaitTermination(5, TimeUnit.SECONDS);
         } catch (Exception e) {
           e.printStackTrace();
         }
       }
     });
+    server.awaitTermination();
   }
 
   @SuppressWarnings("LiteralClassName") // Epoll is not available on windows
@@ -109,10 +110,11 @@ public class AsyncServer {
     final EventLoopGroup boss;
     final EventLoopGroup worker;
     final Class<? extends ServerChannel> channelType;
+    ThreadFactory tf = new DefaultThreadFactory("server-elg-", true /*daemon */);
     switch (config.transport) {
       case NETTY_NIO: {
-        boss = new NioEventLoopGroup();
-        worker = new NioEventLoopGroup();
+        boss = new NioEventLoopGroup(1, tf);
+        worker = new NioEventLoopGroup(0, tf);
         channelType = NioServerSocketChannel.class;
         break;
       }
@@ -123,8 +125,16 @@ public class AsyncServer {
           @SuppressWarnings("unchecked")
           Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
               Class.forName("io.netty.channel.epoll.EpollServerSocketChannel");
-          boss = (EventLoopGroup) groupClass.getConstructor().newInstance();
-          worker = (EventLoopGroup) groupClass.getConstructor().newInstance();
+          boss =
+              (EventLoopGroup)
+                  (groupClass
+                      .getConstructor(int.class, ThreadFactory.class)
+                      .newInstance(1, tf));
+          worker =
+              (EventLoopGroup)
+                  (groupClass
+                      .getConstructor(int.class, ThreadFactory.class)
+                      .newInstance(0, tf));
           channelType = channelClass;
           break;
         } catch (Exception e) {
@@ -138,8 +148,16 @@ public class AsyncServer {
           @SuppressWarnings("unchecked")
           Class<? extends ServerChannel> channelClass = (Class<? extends ServerChannel>)
               Class.forName("io.netty.channel.epoll.EpollServerDomainSocketChannel");
-          boss = (EventLoopGroup) groupClass.getConstructor().newInstance();
-          worker = (EventLoopGroup) groupClass.getConstructor().newInstance();
+          boss =
+              (EventLoopGroup)
+                  (groupClass
+                      .getConstructor(int.class, ThreadFactory.class)
+                      .newInstance(1, tf));
+          worker =
+              (EventLoopGroup)
+                  (groupClass
+                      .getConstructor(int.class, ThreadFactory.class)
+                      .newInstance(0, tf));
           channelType = channelClass;
           break;
         } catch (Exception e) {
