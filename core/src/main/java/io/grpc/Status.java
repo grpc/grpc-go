@@ -346,7 +346,7 @@ public final class Status {
    * Key to bind status code to trailing metadata.
    */
   static final Metadata.Key<Status> CODE_KEY
-      = Metadata.Key.of("grpc-status", new StatusCodeMarshaller());
+      = Metadata.Key.of("grpc-status", false /* not pseudo */, new StatusCodeMarshaller());
 
   /**
    * Marshals status messages for ({@link #MESSAGE_KEY}.  gRPC does not use binary coding of
@@ -377,7 +377,7 @@ public final class Status {
    * Key to bind status message to trailing metadata.
    */
   static final Metadata.Key<String> MESSAGE_KEY =
-      Metadata.Key.of("grpc-message", STATUS_MESSAGE_MARSHALLER);
+      Metadata.Key.of("grpc-message", false /* not pseudo */, STATUS_MESSAGE_MARSHALLER);
 
   /**
    * Extract an error {@link Status} from the causal chain of a {@link Throwable}.

@@ -599,11 +599,15 @@ public final class Metadata {
      *     <b>not</b> end with {@link #BINARY_HEADER_SUFFIX}
      */
     public static <T> Key<T> of(String name, AsciiMarshaller<T> marshaller) {
-      return new AsciiKey<T>(name, marshaller);
+      return of(name, false, marshaller);
     }
 
-    static <T> Key<T> of(String name, TrustedAsciiMarshaller<T> marshaller) {
-      return new TrustedAsciiKey<T>(name, marshaller);
+    static <T> Key<T> of(String name, boolean pseudo, AsciiMarshaller<T> marshaller) {
+      return new AsciiKey<T>(name, pseudo, marshaller);
+    }
+
+    static <T> Key<T> of(String name, boolean pseudo, TrustedAsciiMarshaller<T> marshaller) {
+      return new TrustedAsciiKey<T>(name, pseudo, marshaller);
     }
 
     private final String originalName;
@@ -626,13 +630,12 @@ public final class Metadata {
       return valid;
     }
 
-    private static String validateName(String n) {
+    private static String validateName(String n, boolean pseudo) {
       checkNotNull(n, "name");
-      checkArgument(n.length() != 0, "token must have at least 1 tchar");
+      checkArgument(!n.isEmpty(), "token must have at least 1 tchar");
       for (int i = 0; i < n.length(); i++) {
         char tChar = n.charAt(i);
-        // TODO(notcarl): remove this hack once pseudo headers are properly handled
-        if (tChar == ':' && i == 0) {
+        if (pseudo && tChar == ':' && i == 0) {
           continue;
         }
 
@@ -642,9 +645,9 @@ public final class Metadata {
       return n;
     }
 
-    private Key(String name) {
+    private Key(String name, boolean pseudo) {
       this.originalName = checkNotNull(name, "name");
-      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT));
+      this.name = validateName(this.originalName.toLowerCase(Locale.ROOT), pseudo);
       this.nameBytes = this.name.getBytes(US_ASCII);
     }
 
@@ -722,7 +725,7 @@ public final class Metadata {
 
     /** Keys have a name and a binary marshaller used for serialization. */
     private BinaryKey(String name, BinaryMarshaller<T> marshaller) {
-      super(name);
+      super(name, false /* not pseudo */);
       checkArgument(
           name.endsWith(BINARY_HEADER_SUFFIX),
           "Binary header is named %s. It must end with %s",
@@ -747,8 +750,8 @@ public final class Metadata {
     private final AsciiMarshaller<T> marshaller;
 
     /** Keys have a name and an ASCII marshaller used for serialization. */
-    private AsciiKey(String name, AsciiMarshaller<T> marshaller) {
-      super(name);
+    private AsciiKey(String name, boolean pseudo, AsciiMarshaller<T> marshaller) {
+      super(name, pseudo);
       Preconditions.checkArgument(
           !name.endsWith(BINARY_HEADER_SUFFIX),
           "ASCII header is named %s.  Only binary headers may end with %s",
@@ -772,8 +775,8 @@ public final class Metadata {
     private final TrustedAsciiMarshaller<T> marshaller;
 
     /** Keys have a name and an ASCII marshaller used for serialization. */
-    private TrustedAsciiKey(String name, TrustedAsciiMarshaller<T> marshaller) {
-      super(name);
+    private TrustedAsciiKey(String name, boolean pseudo, TrustedAsciiMarshaller<T> marshaller) {
+      super(name, pseudo);
       Preconditions.checkArgument(
           !name.endsWith(BINARY_HEADER_SUFFIX),
           "ASCII header is named %s.  Only binary headers may end with %s",

@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import io.grpc.Metadata.AsciiMarshaller;
 import io.grpc.Metadata.Key;
 import java.nio.charset.Charset;
 
@@ -44,7 +45,14 @@ public final class InternalMetadata {
 
   @Internal
   public static <T> Key<T> keyOf(String name, TrustedAsciiMarshaller<T> marshaller) {
-    return Metadata.Key.of(name, marshaller);
+    boolean isPseudo = name != null && !name.isEmpty() && name.charAt(0) == ':';
+    return Metadata.Key.of(name, isPseudo, marshaller);
+  }
+
+  @Internal
+  public static <T> Key<T> keyOf(String name, AsciiMarshaller<T> marshaller) {
+    boolean isPseudo = name != null && !name.isEmpty() && name.charAt(0) == ':';
+    return Metadata.Key.of(name, isPseudo, marshaller);
   }
 
   @Internal

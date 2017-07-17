@@ -64,6 +64,14 @@ public class MetadataTest {
   private static final Metadata.Key<Fish> KEY = Metadata.Key.of("test-bin", FISH_MARSHALLER);
 
   @Test
+  public void noPseudoHeaders() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid character");
+
+    Metadata.Key.of(":test-bin", FISH_MARSHALLER);
+  }
+
+  @Test
   public void testMutations() {
     Fish lance = new Fish(LANCE);
     Fish cat = new Fish("cat");
