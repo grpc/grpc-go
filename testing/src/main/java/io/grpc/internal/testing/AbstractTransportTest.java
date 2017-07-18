@@ -646,7 +646,7 @@ public abstract class AbstractTransportTest {
     StreamCreation serverStreamCreation
         = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     if (metricsExpected()) {
-      clientInOrder.verify(clientStreamTracer).outboundHeaders();
+      verify(clientStreamTracer, timeout(TIMEOUT_MS)).outboundHeaders();
     }
     assertEquals(methodDescriptor.getFullMethodName(), serverStreamCreation.method);
     assertEquals(Lists.newArrayList(clientHeadersCopy.getAll(asciiKey)),
@@ -1033,7 +1033,7 @@ public abstract class AbstractTransportTest {
       verify(serverStreamTracer, atLeast(1)).outboundUncompressedSize(anyLong());
       // There is a race between client cancelling and server closing.  The final status seen by the
       // server is non-deterministic.
-      verify(serverStreamTracer).streamClosed(any(Status.class));
+      verify(serverStreamTracer, timeout(TIMEOUT_MS)).streamClosed(any(Status.class));
       verifyNoMoreInteractions(clientStreamTracer);
       verifyNoMoreInteractions(serverStreamTracer);
     }
