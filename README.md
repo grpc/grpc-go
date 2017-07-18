@@ -76,7 +76,7 @@ For protobuf-based codegen integrated with the Maven build system, you can use
     <extension>
       <groupId>kr.motd.maven</groupId>
       <artifactId>os-maven-plugin</artifactId>
-      <version>1.4.1.Final</version>
+      <version>1.5.0.Final</version>
     </extension>
   </extensions>
   <plugins>

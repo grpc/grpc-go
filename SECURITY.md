@@ -126,7 +126,7 @@ In Maven, you can use the [os-maven-plugin](https://github.com/trustin/os-maven-
       <extension>
         <groupId>kr.motd.maven</groupId>
         <artifactId>os-maven-plugin</artifactId>
-        <version>1.4.0.Final</version>
+        <version>1.5.0.Final</version>
       </extension>
     </extensions>
     <plugins>
