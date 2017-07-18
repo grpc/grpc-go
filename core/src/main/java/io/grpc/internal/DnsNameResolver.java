@@ -57,7 +57,7 @@ final class DnsNameResolver extends NameResolver {
 
   private static final Logger logger = Logger.getLogger(DnsNameResolver.class.getName());
 
-  private static final boolean isJndiAvailable = jndiAvailable();
+  private static final boolean JNDI_AVAILABLE = jndiAvailable();
 
   @VisibleForTesting
   static boolean enableJndi = false;
@@ -224,7 +224,7 @@ final class DnsNameResolver extends NameResolver {
 
   private DelegateResolver pickDelegateResolver() {
     JdkResolver jdkResolver = new JdkResolver();
-    if (isJndiAvailable && enableJndi) {
+    if (JNDI_AVAILABLE && enableJndi) {
       return new CompositeResolver(jdkResolver, new JndiResolver());
     }
     return jdkResolver;

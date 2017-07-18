@@ -20,7 +20,7 @@ import java.io.InputStream;
 
 /** Marshalls decimal-encoded integers. */
 public class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {
-  public static IntegerMarshaller INSTANCE = new IntegerMarshaller();
+  public static final IntegerMarshaller INSTANCE = new IntegerMarshaller();
 
   @Override
   public InputStream stream(Integer value) {

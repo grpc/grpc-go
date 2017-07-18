@@ -34,15 +34,15 @@ public class CustomHeaderServer {
   private static final Logger logger = Logger.getLogger(CustomHeaderServer.class.getName());
 
   /* The port on which the server should run */
-  private static final int port = 50051;
+  private static final int PORT = 50051;
   private Server server;
 
   private void start() throws IOException {
-    server = ServerBuilder.forPort(port)
+    server = ServerBuilder.forPort(PORT)
         .addService(ServerInterceptors.intercept(new GreeterImpl(), new HeaderServerInterceptor()))
         .build()
         .start();
-    logger.info("Server started, listening on " + port);
+    logger.info("Server started, listening on " + PORT);
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
