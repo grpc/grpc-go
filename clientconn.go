@@ -632,7 +632,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := ac.resetTransport(false); err != nil {
-				grpclog.Warningln("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
+				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
 				if err != errConnClosing {
 					// Keep this ac in cc.conns, to get the reason it's torn down.
 					ac.tearDown(err)
