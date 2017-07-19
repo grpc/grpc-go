@@ -16,66 +16,97 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
 import io.grpc.ConnectivityState;
+import io.grpc.ManagedChannel;
 import java.util.ArrayList;
 import java.util.concurrent.Executor;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * Book-keeps the connectivity state and callbacks.
+ * Manages connectivity states of the channel. Used for {@link ManagedChannel#getState} to read the
+ * current state of the channel, for {@link ManagedChannel#notifyWhenStateChanged} to add
+ * listeners to state change events, and for {@link io.grpc.LoadBalancer.Helper#updateBalancingState
+ * LoadBalancer.Helper#updateBalancingState} to update the state and run the {@link #gotoState}s.
  */
 @NotThreadSafe
-class ConnectivityStateManager {
-  private ArrayList<StateCallbackEntry> callbacks;
+final class ConnectivityStateManager {
+  private ArrayList<Listener> listeners = new ArrayList<Listener>();
 
-  private ConnectivityState state;
+  private volatile ConnectivityState state = ConnectivityState.IDLE;
 
-  ConnectivityStateManager(ConnectivityState initialState) {
-    state = initialState;
-  }
-
+  /**
+   * Adds a listener for state change event.
+   *
+   * <p>The {@code executor} must be one that can run RPC call listeners.
+   */
   void notifyWhenStateChanged(Runnable callback, Executor executor, ConnectivityState source) {
-    StateCallbackEntry callbackEntry = new StateCallbackEntry(callback, executor);
+    checkNotNull(callback, "callback");
+    checkNotNull(executor, "executor");
+    checkNotNull(source, "source");
+
+    Listener stateChangeListener = new Listener(callback, executor);
     if (state != source) {
-      callbackEntry.runInExecutor();
+      stateChangeListener.runInExecutor();
     } else {
-      if (callbacks == null) {
-        callbacks = new ArrayList<StateCallbackEntry>();
-      }
-      callbacks.add(callbackEntry);
+      listeners.add(stateChangeListener);
     }
   }
 
-  // TODO(zhangkun83): return a runnable in order to escape transport set lock, in case direct
-  // executor is used?
-  void gotoState(ConnectivityState newState) {
-    if (state != newState) {
-      if (state == ConnectivityState.SHUTDOWN) {
-        throw new IllegalStateException("Cannot transition out of SHUTDOWN to " + newState);
-      }
+  /**
+   * Connectivity state is changed to the specified value. Will trigger some notifications that have
+   * been registered earlier by {@link ManagedChannel#notifyWhenStateChanged}.
+   */
+  void gotoState(@Nonnull ConnectivityState newState) {
+    checkNotNull(newState, "newState");
+    checkState(state != null, "ConnectivityStateManager is already disabled");
+    gotoNullableState(newState);
+  }
+
+  private void gotoNullableState(@Nullable ConnectivityState newState) {
+    if (state != newState && state != ConnectivityState.SHUTDOWN) {
       state = newState;
-      if (callbacks == null) {
+      if (listeners.isEmpty()) {
         return;
       }
       // Swap out callback list before calling them, because a callback may register new callbacks,
       // if run in direct executor, can cause ConcurrentModificationException.
-      ArrayList<StateCallbackEntry> savedCallbacks = callbacks;
-      callbacks = null;
-      for (StateCallbackEntry callback : savedCallbacks) {
-        callback.runInExecutor();
+      ArrayList<Listener> savedListeners = listeners;
+      listeners = new ArrayList<Listener>();
+      for (Listener listener : savedListeners) {
+        listener.runInExecutor();
       }
     }
   }
 
+  /**
+   * Gets the current connectivity state of the channel. This method is threadsafe.
+   */
   ConnectivityState getState() {
-    return state;
+    ConnectivityState stateCopy = state;
+    if (stateCopy == null) {
+      throw new UnsupportedOperationException("Channel state API is not implemented");
+    }
+    return stateCopy;
   }
 
-  private static class StateCallbackEntry {
+  /**
+   * Call this method when the channel learns from the load balancer that channel state API is not
+   * supported.
+   */
+  void disable() {
+    gotoNullableState(null);
+  }
+
+  private static final class Listener {
     final Runnable callback;
     final Executor executor;
 
-    StateCallbackEntry(Runnable callback, Executor executor) {
+    Listener(Runnable callback, Executor executor) {
       this.callback = callback;
       this.executor = executor;
     }

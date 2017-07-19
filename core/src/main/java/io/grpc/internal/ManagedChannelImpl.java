@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static io.grpc.ConnectivityState.IDLE;
+import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -32,6 +33,7 @@ import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 import io.grpc.CompressorRegistry;
+import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
@@ -108,6 +110,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
    */
   // Must be assigned from channelExecutor
   private volatile ScheduledExecutorService scheduledExecutor;
+
+  private final ConnectivityStateManager channelStateManager = new ConnectivityStateManager();
 
   private final BackoffPolicy.Provider backoffPolicyProvider;
 
@@ -461,6 +465,18 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     if (!shutdown.compareAndSet(false, true)) {
       return this;
     }
+
+    // Put gotoState(SHUTDOWN) as early into the channelExecutor's queue as possible.
+    // delayedTransport.shutdown() may also add some tasks into the queue. But some things inside
+    // delayedTransport.shutdown() like setting delayedTransport.shutdown = true are not run in the
+    // channelExecutor's queue and should not be blocked, so we do not drain() immediately here.
+    channelExecutor.executeLater(new Runnable() {
+      @Override
+      public void run() {
+        channelStateManager.gotoState(SHUTDOWN);
+      }
+    });
+
     delayedTransport.shutdown();
     channelExecutor.executeLater(new Runnable() {
         @Override
@@ -568,6 +584,32 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     }
   }
 
+  @Override
+  public ConnectivityState getState(boolean requestConnection) {
+    ConnectivityState savedChannelState = channelStateManager.getState();
+    if (requestConnection && savedChannelState == IDLE) {
+      channelExecutor.executeLater(
+          new Runnable() {
+            @Override
+            public void run() {
+              exitIdleMode();
+            }
+          }).drain();
+    }
+    return savedChannelState;
+  }
+
+  @Override
+  public void notifyWhenStateChanged(final ConnectivityState source, final Runnable callback) {
+    channelExecutor.executeLater(
+        new Runnable() {
+          @Override
+          public void run() {
+            channelStateManager.notifyWhenStateChanged(callback, executor, source);
+          }
+        }).drain();
+  }
+
   private class LbHelperImpl extends LoadBalancer.Helper {
     LoadBalancer lb;
     final NameResolver nr;
@@ -637,6 +679,27 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           }
         });
       return subchannel;
+    }
+
+    @Override
+    public void updateBalancingState(
+        final ConnectivityState newState, final SubchannelPicker newPicker) {
+      checkNotNull(newState, "newState");
+      checkNotNull(newPicker, "newPicker");
+
+      runSerialized(
+          new Runnable() {
+            @Override
+            public void run() {
+              subchannelPicker = newPicker;
+              delayedTransport.reprocess(newPicker);
+              // It's not appropriate to report SHUTDOWN state from lb.
+              // Ignore the case of newState == SHUTDOWN for now.
+              if (newState != SHUTDOWN) {
+                channelStateManager.gotoState(newState);
+              }
+            }
+          });
     }
 
     @Override
@@ -711,6 +774,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       channelExecutor.executeLater(task).drain();
     }
 
+    @Deprecated
     @Override
     public void updatePicker(final SubchannelPicker picker) {
       runSerialized(new Runnable() {
@@ -718,6 +782,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           public void run() {
             subchannelPicker = picker;
             delayedTransport.reprocess(picker);
+            channelStateManager.disable();
           }
         });
     }

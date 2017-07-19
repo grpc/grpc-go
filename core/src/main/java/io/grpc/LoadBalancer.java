@@ -22,6 +22,7 @@ import com.google.common.base.Preconditions;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -461,8 +462,33 @@ public abstract class LoadBalancer {
      * <p>The channel will hold the picker and use it for all RPCs, until {@code updatePicker()} is
      * called again and a new picker replaces the old one.  If {@code updatePicker()} has never been
      * called, the channel will buffer all RPCs until a picker is provided.
+     *
+     * <p>Using this method implies that this load balancer doesn't support channel state, and the
+     * application will get exception when trying to get the channel state.
      */
+    // TODO(zdapeng): add '@deprecated Please migrate ALL usages to {@link #updateBalancingState}'
+    // TODO(zdapeng): and add '@Deprecated'
     public abstract void updatePicker(SubchannelPicker picker);
+
+    /**
+     * Set a new state with a new picker to the channel.
+     *
+     * <p>When a new picker is provided via {@code updateBalancingState()}, the channel will apply
+     * the picker on all buffered RPCs, by calling {@link SubchannelPicker#pickSubchannel(
+     * LoadBalancer.PickSubchannelArgs)}.
+     *
+     * <p>The channel will hold the picker and use it for all RPCs, until {@code
+     * updateBalancingState()} is called again and a new picker replaces the old one.  If {@code
+     * updateBalancingState()} has never been called, the channel will buffer all RPCs until a
+     * picker is provided.
+     *
+     * <p>The passed state will be the channel's new state. The SHUTDOWN state should not be passed
+     * and its behavior is undefined.
+     */
+    public void updateBalancingState(
+        @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker) {
+      updatePicker(newPicker);
+    }
 
     /**
      * Schedule a task to be run in the Channel Executor, which serializes the task with the

@@ -32,8 +32,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ConnectivityStateManagerTest {
   private final FakeClock executor = new FakeClock();
-  private final ConnectivityStateManager state =
-      new ConnectivityStateManager(ConnectivityState.IDLE);
+  private final ConnectivityStateManager state = new ConnectivityStateManager();
   private final LinkedList<ConnectivityState> sink = new LinkedList<ConnectivityState>();
 
   @Test
