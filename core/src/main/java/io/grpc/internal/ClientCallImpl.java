@@ -36,6 +36,7 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
+import io.grpc.Context.CancellationListener;
 import io.grpc.Deadline;
 import io.grpc.DecompressorRegistry;
 import io.grpc.InternalDecompressorRegistry;
@@ -57,8 +58,7 @@ import javax.annotation.Nullable;
 /**
  * Implementation of {@link ClientCall}.
  */
-final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
-    implements Context.CancellationListener {
+final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   private static final Logger log = Logger.getLogger(ClientCallImpl.class.getName());
 
@@ -73,6 +73,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   private boolean cancelCalled;
   private boolean halfCloseCalled;
   private final ClientTransportProvider clientTransportProvider;
+  private final CancellationListener cancellationListener = new ContextCancellationListener();
   private ScheduledExecutorService deadlineCancellationExecutor;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
   private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
@@ -97,9 +98,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     this.deadlineCancellationExecutor = deadlineCancellationExecutor;
   }
 
-  @Override
-  public void cancelled(Context context) {
-    stream.cancel(statusFromCancelled(context));
+  private final class ContextCancellationListener implements CancellationListener {
+    @Override
+    public void cancelled(Context context) {
+      stream.cancel(statusFromCancelled(context));
+    }
   }
 
   /**
@@ -228,7 +231,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
     // they receive cancel before start. Issue #1343 has more details
 
     // Propagate later Context cancellation to the remote side.
-    context.addListener(this, directExecutor());
+    context.addListener(cancellationListener, directExecutor());
     if (effectiveDeadline != null
         // If the context has the effective deadline, we don't need to schedule an extra task.
         && context.getDeadline() != effectiveDeadline
@@ -284,7 +287,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT>
   }
 
   private void removeContextListenerAndCancelDeadlineFuture() {
-    context.removeListener(this);
+    context.removeListener(cancellationListener);
     ScheduledFuture<?> f = deadlineCancellationFuture;
     if (f != null) {
       f.cancel(false);
