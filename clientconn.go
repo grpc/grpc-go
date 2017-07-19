@@ -832,6 +832,10 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 // - otherwise, it will be closed.
 func (ac *addrConn) resetTransport(drain bool) error {
 	ac.mu.Lock()
+	if ac.state == Shutdown {
+		ac.mu.Unlock()
+		return errConnClosing
+	}
 	ac.printf("connecting")
 	if ac.down != nil {
 		ac.down(downErrorf(false, true, "%v", errNetworkIO))
