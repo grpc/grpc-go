@@ -11,7 +11,6 @@ import (
 func replaceNetFunc() func() {
 	oldLookupHost := lookupHost
 	oldLookupSRV := lookupSRV
-	targetTc = fakeTargetTc
 	lookupHost = func(ctx context.Context, host string) ([]string, error) {
 		if addrs, ok := hostLookupTbl[host]; ok {
 			return addrs, nil
@@ -28,6 +27,5 @@ func replaceNetFunc() func() {
 	return func() {
 		lookupHost = oldLookupHost
 		lookupSRV = oldLookupSRV
-		targetTc = realTargetTc
 	}
 }

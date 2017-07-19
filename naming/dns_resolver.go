@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -23,15 +22,13 @@ var (
 )
 
 // NewDNSResolverWithFreq creates a DNS Resolver that can resolve DNS names, and
-// the watchers created by which will poll the DNS server using the frequency
-// set by freq.
+// create watchers that poll the DNS server using the frequency set by freq.
 func NewDNSResolverWithFreq(freq time.Duration) (Resolver, error) {
 	return &dnsResolver{freq: freq}, nil
 }
 
-// NewDNSResolver creates a DNS Resolver that can resolve DNS names, and the
-// watchers created by which will poll the DNS server using the default frequency
-// defined by defaultFreq.
+// NewDNSResolver creates a DNS Resolver that can resolve DNS names, and create
+// watchers that poll the DNS server using the default frequency defined by defaultFreq.
 func NewDNSResolver() (Resolver, error) {
 	return &dnsResolver{freq: defaultFreq}, nil
 }
@@ -56,7 +53,7 @@ func formatIP(addr string) (addrIP string, ok bool) {
 	return "[" + addr + "]", true
 }
 
-// setHostPort takes the user input target string, returns formatted host and port info.
+// parseTarget takes the user input target string, returns formatted host and port info.
 // If target doesn't specify a port, set the port to be the defaultPort.
 // If target is in IPv6 format and host-name is enclosed in sqarue brackets, brackets
 // are strippd when setting the host.
@@ -66,7 +63,7 @@ func formatIP(addr string) (addrIP string, ok bool) {
 // target: "[ipv6-host]" returns host: "ipv6-host", port: "443"
 // target: ":80" returns host: "localhost", port: "80"
 // target: ":" returns host: "localhost", port: "443"
-func setHostPort(target string) (host, port string, err error) {
+func parseTarget(target string) (host, port string, err error) {
 	if target == "" {
 		return "", "", errMissingAddr
 	}
@@ -96,7 +93,7 @@ func setHostPort(target string) (host, port string, err error) {
 
 // Resolve creates a watcher that watches the name resolution of the target.
 func (r *dnsResolver) Resolve(target string) (Watcher, error) {
-	host, port, err := setHostPort(target)
+	host, port, err := parseTarget(target)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +114,7 @@ func (r *dnsResolver) Resolve(target string) (Watcher, error) {
 		port:   port,
 		ctx:    ctx,
 		cancel: cancel,
+		t:      time.NewTimer(0),
 	}, nil
 }
 
@@ -129,6 +127,7 @@ type dnsWatcher struct {
 	curAddrs []*Update
 	ctx      context.Context
 	cancel   context.CancelFunc
+	t        *time.Timer
 }
 
 // ipWatcher watches for the name resolution update for an IP address.
@@ -195,15 +194,15 @@ func (w *dnsWatcher) compileUpdate(newAddrs []*Update) []*Update {
 	return res
 }
 
-func (w *dnsWatcher) lkpSRV() []*Update {
+func (w *dnsWatcher) lookupSRV() []*Update {
 	var newAddrs []*Update
 	_, srvs, err := lookupSRV(w.ctx, "grpclb", "tcp", w.host)
 	if err != nil {
 		grpclog.Infof("grpc: failed dns SRV record lookup due to %v.\n", err)
 		return nil
 	}
-	for _, r := range srvs {
-		lbAddrs, err := lookupHost(w.ctx, r.Target)
+	for _, s := range srvs {
+		lbAddrs, err := lookupHost(w.ctx, s.Target)
 		if err != nil {
 			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
 			continue
@@ -214,14 +213,14 @@ func (w *dnsWatcher) lkpSRV() []*Update {
 				grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
 				continue
 			}
-			newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(r.Port)),
-				Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: r.Target}})
+			newAddrs = append(newAddrs, &Update{Addr: a + ":" + strconv.Itoa(int(s.Port)),
+				Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: s.Target}})
 		}
 	}
 	return newAddrs
 }
 
-func (w *dnsWatcher) lkpHost() []*Update {
+func (w *dnsWatcher) lookupHost() []*Update {
 	var newAddrs []*Update
 	addrs, err := lookupHost(w.ctx, w.host)
 	if err != nil {
@@ -240,15 +239,17 @@ func (w *dnsWatcher) lkpHost() []*Update {
 }
 
 func (w *dnsWatcher) lookup() []*Update {
-	newAddrs := w.lkpSRV()
+	newAddrs := w.lookupSRV()
 	if newAddrs == nil {
 		// If failed to get any balancer address (either no corresponding SRV for the
 		// target, or caused by failure during resolution/parsing of the balancer target),
 		// return any A record info available.
-		newAddrs = w.lkpHost()
+		newAddrs = w.lookupHost()
 	}
 	result := w.compileUpdate(newAddrs)
 	w.curAddrs = newAddrs
+	// Next lookup should happen after an interval defined by w.r.freq.
+	w.t.Reset(w.r.freq)
 	return result
 }
 
@@ -258,18 +259,18 @@ func (w *dnsWatcher) Next() ([]*Update, error) {
 	select {
 	case <-w.ctx.Done():
 		return nil, errWatcherClose
-	default:
+	case <-w.t.C:
 	}
 	result := w.lookup()
 	if len(result) > 0 {
 		return result, nil
 	}
-	ticker := time.NewTicker(w.r.freq)
+
 	for {
 		select {
 		case <-w.ctx.Done():
 			return nil, errWatcherClose
-		case <-ticker.C:
+		case <-w.t.C:
 			result = w.lookup()
 			if len(result) > 0 {
 				return result, nil
