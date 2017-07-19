@@ -30,6 +30,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -104,6 +105,11 @@ class NettyServerTransport implements ServerTransport {
 
     ChannelHandler negotiationHandler = protocolNegotiator.newHandler(grpcHandler);
     channel.pipeline().addLast(negotiationHandler);
+  }
+
+  @Override
+  public ScheduledExecutorService getScheduledExecutorService() {
+    return channel.eventLoop();
   }
 
   @Override

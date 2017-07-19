@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import io.grpc.ExperimentalApi;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
+import io.grpc.internal.GrpcUtil;
 import java.io.File;
 import java.util.List;
 
@@ -79,7 +80,7 @@ public final class InProcessServerBuilder
     // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
     // not counted.  Therefore, we disable stats for now.
     // (https://github.com/grpc/grpc-java/issues/2284)
-    return new InProcessServer(name);
+    return new InProcessServer(name, GrpcUtil.TIMER_SERVICE);
   }
 
   @Override

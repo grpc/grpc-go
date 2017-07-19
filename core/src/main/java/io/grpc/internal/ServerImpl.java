@@ -49,7 +49,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -95,8 +94,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   @GuardedBy("lock") private final Collection<ServerTransport> transports =
       new HashSet<ServerTransport>();
 
-  private final ObjectPool<ScheduledExecutorService> timeoutServicePool;
-  private ScheduledExecutorService timeoutService;
   private final Context rootContext;
 
   private final DecompressorRegistry decompressorRegistry;
@@ -105,18 +102,15 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
   /**
    * Construct a server.
    *
-   * @param executorPool provides an executor to call methods on behalf of remote clients
-   * @param registry the primary method registry
-   * @param fallbackRegistry the secondary method registry, used only if the primary registry
-   *        doesn't have the method
+   * @param builder builder with configuration for server
+   * @param transportServer transport server that will create new incoming transports
+   * @param rootContext context that callbacks for new RPCs should be derived from
    */
   ServerImpl(
       AbstractServerImplBuilder<?> builder,
-      ObjectPool<ScheduledExecutorService> timeoutServicePool,
       InternalServer transportServer,
       Context rootContext) {
     this.executorPool = Preconditions.checkNotNull(builder.executorPool, "executorPool");
-    this.timeoutServicePool = Preconditions.checkNotNull(timeoutServicePool, "timeoutServicePool");
     this.registry = Preconditions.checkNotNull(builder.registryBuilder.build(), "registryBuilder");
     this.fallbackRegistry =
         Preconditions.checkNotNull(builder.fallbackRegistry, "fallbackRegistry");
@@ -146,7 +140,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
       checkState(!shutdown, "Shutting down");
       // Start and wait for any port to actually be bound.
       transportServer.start(new ServerListenerImpl());
-      timeoutService = Preconditions.checkNotNull(timeoutServicePool.getObject(), "timeoutService");
       executor = Preconditions.checkNotNull(executorPool.getObject(), "executor");
       started = true;
       return this;
@@ -297,9 +290,6 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
           throw new AssertionError("Server already terminated");
         }
         terminated = true;
-        if (timeoutService != null) {
-          timeoutService = timeoutServicePool.returnObject(timeoutService);
-        }
         if (executor != null) {
           executor = executorPool.returnObject(executor);
         }
@@ -452,8 +442,8 @@ public final class ServerImpl extends io.grpc.Server implements WithLogId {
         return baseContext.withCancellation();
       }
 
-      Context.CancellableContext context =
-          baseContext.withDeadlineAfter(timeoutNanos, NANOSECONDS, timeoutService);
+      Context.CancellableContext context = baseContext.withDeadlineAfter(
+          timeoutNanos, NANOSECONDS, transport.getScheduledExecutorService());
       context.addListener(new Context.CancellationListener() {
         @Override
         public void cancelled(Context context) {

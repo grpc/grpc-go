@@ -185,7 +185,6 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   public Server build() {
     ServerImpl server = new ServerImpl(
         this,
-        SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE),
         buildTransportServer(Collections.unmodifiableList(getTracerFactories())),
         Context.ROOT);
     for (InternalNotifyOnServerBuild notifyTarget : notifyOnBuildList) {

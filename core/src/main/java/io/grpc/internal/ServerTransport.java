@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import io.grpc.Status;
+import java.util.concurrent.ScheduledExecutorService;
 
 /** An inbound connection. */
 public interface ServerTransport extends WithLogId {
@@ -32,4 +33,13 @@ public interface ServerTransport extends WithLogId {
    * should be closed with the provided {@code reason}.
    */
   void shutdownNow(Status reason);
+
+  /**
+   * Returns an executor for scheduling provided by the transport. The service should be configured
+   * to allow cancelled scheduled runnables to be GCed.
+   *
+   * <p>The executor may not be used after the transport terminates. The caller should ensure any
+   * outstanding tasks are cancelled when the transport terminates.
+   */
+  ScheduledExecutorService getScheduledExecutorService();
 }

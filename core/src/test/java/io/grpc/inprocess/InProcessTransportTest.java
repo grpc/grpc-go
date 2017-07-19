@@ -17,6 +17,7 @@
 package io.grpc.inprocess;
 
 import io.grpc.ServerStreamTracer;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.testing.AbstractTransportTest;
@@ -32,7 +33,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(TRANSPORT_NAME);
+    return new InProcessServer(TRANSPORT_NAME, GrpcUtil.TIMER_SERVICE);
   }
 
   @Override
