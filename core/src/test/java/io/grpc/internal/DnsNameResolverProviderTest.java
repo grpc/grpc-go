@@ -46,8 +46,7 @@ public class DnsNameResolverProviderTest {
 
   @Test
   public void providedHardCoded() {
-    for (NameResolverProvider current
-        : NameResolverProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
+    for (NameResolverProvider current : NameResolverProvider.getCandidatesViaHardCoded()) {
       if (current instanceof DnsNameResolverProvider) {
         return;
       }

@@ -15,5 +15,3 @@
 -dontwarn javax.naming.**
 -dontwarn okio.**
 -dontwarn sun.misc.Unsafe
--keep class io.grpc.internal.DnsNameResolverProvider
--keep class io.grpc.okhttp.OkHttpChannelProvider

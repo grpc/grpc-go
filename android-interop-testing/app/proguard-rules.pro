@@ -18,5 +18,3 @@
 -dontwarn sun.reflect.**
 # Ignores: can't find referenced class javax.lang.model.element.Modifier
 -dontwarn com.google.errorprone.annotations.**
--keep class io.grpc.internal.DnsNameResolverProvider
--keep class io.grpc.okhttp.OkHttpChannelProvider

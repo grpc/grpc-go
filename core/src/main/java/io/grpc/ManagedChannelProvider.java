@@ -40,7 +40,7 @@ public abstract class ManagedChannelProvider {
   static ManagedChannelProvider load(ClassLoader classLoader) {
     Iterable<ManagedChannelProvider> candidates;
     if (isAndroid()) {
-      candidates = getCandidatesViaHardCoded(classLoader);
+      candidates = getCandidatesViaHardCoded();
     } else {
       candidates = getCandidatesViaServiceLoader(classLoader);
     }
@@ -79,16 +79,18 @@ public abstract class ManagedChannelProvider {
    * be used on Android is free to be added here.
    */
   @VisibleForTesting
-  public static Iterable<ManagedChannelProvider> getCandidatesViaHardCoded(
-      ClassLoader classLoader) {
+  public static Iterable<ManagedChannelProvider> getCandidatesViaHardCoded() {
+    // Class.forName(String) is used to remove the need for ProGuard configuration. Note that
+    // ProGuard does not detect usages of Class.forName(String, boolean, ClassLoader):
+    // https://sourceforge.net/p/proguard/bugs/418/
     List<ManagedChannelProvider> list = new ArrayList<ManagedChannelProvider>();
     try {
-      list.add(create(Class.forName("io.grpc.okhttp.OkHttpChannelProvider", true, classLoader)));
+      list.add(create(Class.forName("io.grpc.okhttp.OkHttpChannelProvider")));
     } catch (ClassNotFoundException ex) {
       // ignore
     }
     try {
-      list.add(create(Class.forName("io.grpc.netty.NettyChannelProvider", true, classLoader)));
+      list.add(create(Class.forName("io.grpc.netty.NettyChannelProvider")));
     } catch (ClassNotFoundException ex) {
       // ignore
     }

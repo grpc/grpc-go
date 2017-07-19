@@ -43,8 +43,7 @@ public class OkHttpChannelProviderTest {
 
   @Test
   public void providedHardCoded() {
-    for (ManagedChannelProvider current
-        : ManagedChannelProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
+    for (ManagedChannelProvider current : ManagedChannelProvider.getCandidatesViaHardCoded()) {
       if (current instanceof OkHttpChannelProvider) {
         return;
       }

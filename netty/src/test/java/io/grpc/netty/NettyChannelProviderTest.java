@@ -44,8 +44,7 @@ public class NettyChannelProviderTest {
 
   @Test
   public void providedHardCoded() {
-    for (ManagedChannelProvider current
-        : ManagedChannelProvider.getCandidatesViaHardCoded(getClass().getClassLoader())) {
+    for (ManagedChannelProvider current : ManagedChannelProvider.getCandidatesViaHardCoded()) {
       if (current instanceof NettyChannelProvider) {
         return;
       }

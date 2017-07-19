@@ -22,7 +22,10 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ServiceConfigurationError;
+import java.util.regex.Pattern;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -52,15 +55,22 @@ public class ManagedChannelProviderTest {
   }
 
   @Test
-  public void getCandidatesViaHardCoded_usesProvidedClassLoader() {
+  public void getCandidatesViaHardCoded_triesToLoadClasses() throws Exception {
+    ClassLoader cl = getClass().getClassLoader();
     final RuntimeException toThrow = new RuntimeException();
-    try {
-      ManagedChannelProvider.getCandidatesViaHardCoded(new ClassLoader() {
-        @Override
-        public Class<?> loadClass(String name) {
+    cl = new ClassLoader(cl) {
+      @Override
+      public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (name.startsWith("io.grpc.netty.") || name.startsWith("io.grpc.okhttp.")) {
           throw toThrow;
+        } else {
+          return super.loadClass(name, resolve);
         }
-      });
+      }
+    };
+    cl = new StaticTestingClassLoader(cl, Pattern.compile("io\\.grpc\\.[^.]*"));
+    try {
+      invokeGetCandidatesViaHardCoded(cl);
       fail("Expected exception");
     } catch (RuntimeException ex) {
       assertSame(toThrow, ex);
@@ -68,14 +78,20 @@ public class ManagedChannelProviderTest {
   }
 
   @Test
-  public void getCandidatesViaHardCoded_ignoresMissingClasses() {
-    Iterable<ManagedChannelProvider> i =
-        ManagedChannelProvider.getCandidatesViaHardCoded(new ClassLoader() {
-          @Override
-          public Class<?> loadClass(String name) throws ClassNotFoundException {
-            throw new ClassNotFoundException();
-          }
-        });
+  public void getCandidatesViaHardCoded_ignoresMissingClasses() throws Exception {
+    ClassLoader cl = getClass().getClassLoader();
+    cl = new ClassLoader(cl) {
+      @Override
+      public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (name.startsWith("io.grpc.netty.") || name.startsWith("io.grpc.okhttp.")) {
+          throw new ClassNotFoundException();
+        } else {
+          return super.loadClass(name, resolve);
+        }
+      }
+    };
+    cl = new StaticTestingClassLoader(cl, Pattern.compile("io\\.grpc\\.[^.]*"));
+    Iterable<?> i = invokeGetCandidatesViaHardCoded(cl);
     assertFalse("Iterator should be empty", i.iterator().hasNext());
   }
 
@@ -89,6 +105,20 @@ public class ManagedChannelProviderTest {
     } catch (ServiceConfigurationError e) {
       assertTrue("Expected ClassCastException cause: " + e.getCause(),
           e.getCause() instanceof ClassCastException);
+    }
+  }
+
+  private static Iterable<?> invokeGetCandidatesViaHardCoded(ClassLoader cl) throws Exception {
+    // An error before the invoke likely means there is a bug in the test
+    Class<?> klass = Class.forName(ManagedChannelProvider.class.getName(), true, cl);
+    Method getCandidatesViaHardCoded = klass.getMethod("getCandidatesViaHardCoded");
+    try {
+      return (Iterable<?>) getCandidatesViaHardCoded.invoke(null);
+    } catch (InvocationTargetException ex) {
+      if (ex.getCause() instanceof Exception) {
+        throw (Exception) ex.getCause();
+      }
+      throw ex;
     }
   }
 

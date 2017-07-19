@@ -50,7 +50,7 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
   static List<NameResolverProvider> load(ClassLoader classLoader) {
     Iterable<NameResolverProvider> candidates;
     if (isAndroid()) {
-      candidates = getCandidatesViaHardCoded(classLoader);
+      candidates = getCandidatesViaHardCoded();
     } else {
       candidates = getCandidatesViaServiceLoader(classLoader);
     }
@@ -83,11 +83,13 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
    * be used on Android is free to be added here.
    */
   @VisibleForTesting
-  public static Iterable<NameResolverProvider> getCandidatesViaHardCoded(ClassLoader classLoader) {
+  public static Iterable<NameResolverProvider> getCandidatesViaHardCoded() {
+    // Class.forName(String) is used to remove the need for ProGuard configuration. Note that
+    // ProGuard does not detect usages of Class.forName(String, boolean, ClassLoader):
+    // https://sourceforge.net/p/proguard/bugs/418/
     List<NameResolverProvider> list = new ArrayList<NameResolverProvider>();
     try {
-      list.add(create(
-          Class.forName("io.grpc.internal.DnsNameResolverProvider", true, classLoader)));
+      list.add(create(Class.forName("io.grpc.internal.DnsNameResolverProvider")));
     } catch (ClassNotFoundException ex) {
       // ignore
     }
