@@ -34,7 +34,7 @@ func TestCompileUpdate(t *testing.T) {
 		{
 			[]string{},
 			[]string{"1.0.0.1"},
-			[]*Update{&Update{Op: Add, Addr: "1.0.0.1"}},
+			[]*Update{{Op: Add, Addr: "1.0.0.1"}},
 		},
 		{
 			[]string{"1.0.0.1"},
@@ -44,27 +44,27 @@ func TestCompileUpdate(t *testing.T) {
 		{
 			[]string{"1.0.0.0"},
 			[]string{"1.0.0.1"},
-			[]*Update{&Update{Op: Delete, Addr: "1.0.0.0"}, &Update{Op: Add, Addr: "1.0.0.1"}},
+			[]*Update{{Op: Delete, Addr: "1.0.0.0"}, {Op: Add, Addr: "1.0.0.1"}},
 		},
 		{
 			[]string{"1.0.0.1"},
 			[]string{"1.0.0.0"},
-			[]*Update{&Update{Op: Add, Addr: "1.0.0.0"}, &Update{Op: Delete, Addr: "1.0.0.1"}},
+			[]*Update{{Op: Add, Addr: "1.0.0.0"}, {Op: Delete, Addr: "1.0.0.1"}},
 		},
 		{
 			[]string{"1.0.0.1"},
 			[]string{"1.0.0.1", "1.0.0.2", "1.0.0.3"},
-			[]*Update{&Update{Op: Add, Addr: "1.0.0.2"}, &Update{Op: Add, Addr: "1.0.0.3"}},
+			[]*Update{{Op: Add, Addr: "1.0.0.2"}, {Op: Add, Addr: "1.0.0.3"}},
 		},
 		{
 			[]string{"1.0.0.1", "1.0.0.2", "1.0.0.3"},
 			[]string{"1.0.0.0"},
-			[]*Update{&Update{Op: Add, Addr: "1.0.0.0"}, &Update{Op: Delete, Addr: "1.0.0.1"}, &Update{Op: Delete, Addr: "1.0.0.2"}, &Update{Op: Delete, Addr: "1.0.0.3"}},
+			[]*Update{{Op: Add, Addr: "1.0.0.0"}, {Op: Delete, Addr: "1.0.0.1"}, {Op: Delete, Addr: "1.0.0.2"}, {Op: Delete, Addr: "1.0.0.3"}},
 		},
 		{
 			[]string{"1.0.0.1", "1.0.0.3", "1.0.0.5"},
 			[]string{"1.0.0.2", "1.0.0.3", "1.0.0.6"},
-			[]*Update{&Update{Op: Delete, Addr: "1.0.0.1"}, &Update{Op: Add, Addr: "1.0.0.2"}, &Update{Op: Delete, Addr: "1.0.0.5"}, &Update{Op: Add, Addr: "1.0.0.6"}},
+			[]*Update{{Op: Delete, Addr: "1.0.0.1"}, {Op: Add, Addr: "1.0.0.2"}, {Op: Delete, Addr: "1.0.0.5"}, {Op: Add, Addr: "1.0.0.6"}},
 		},
 	}
 
@@ -149,11 +149,11 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 	}{
 		{
 			"foo.bar.com",
-			[]*Update{&Update{Op: Add, Addr: "1.2.3.4" + colonDefaultPort}, &Update{Op: Add, Addr: "5.6.7.8" + colonDefaultPort}},
+			[]*Update{{Op: Add, Addr: "1.2.3.4" + colonDefaultPort}, {Op: Add, Addr: "5.6.7.8" + colonDefaultPort}},
 		},
 		{
 			"foo.bar.com:1234",
-			[]*Update{&Update{Op: Add, Addr: "1.2.3.4:1234"}, &Update{Op: Add, Addr: "5.6.7.8:1234"}},
+			[]*Update{{Op: Add, Addr: "1.2.3.4:1234"}, {Op: Add, Addr: "5.6.7.8:1234"}},
 		},
 		{
 			"srv.ipv4.single.fake",
@@ -224,15 +224,15 @@ func TestIPWatcher(t *testing.T) {
 		target string
 		want   []*Update
 	}{
-		{"127.0.0.1", []*Update{&Update{Op: Add, Addr: "127.0.0.1" + colonDefaultPort}}},
-		{"127.0.0.1:12345", []*Update{&Update{Op: Add, Addr: "127.0.0.1:12345"}}},
-		{"::1", []*Update{&Update{Op: Add, Addr: "[::1]" + colonDefaultPort}}},
-		{"[::1]:12345", []*Update{&Update{Op: Add, Addr: "[::1]:12345"}}},
-		{"[::1]:", []*Update{&Update{Op: Add, Addr: "[::1]:443"}}},
-		{"2001:db8:85a3::8a2e:370:7334", []*Update{&Update{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
-		{"[2001:db8:85a3::8a2e:370:7334]", []*Update{&Update{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
-		{"[2001:db8:85a3::8a2e:370:7334]:12345", []*Update{&Update{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]:12345"}}},
-		{"[2001:db8::1]:http", []*Update{&Update{Op: Add, Addr: "[2001:db8::1]:http"}}},
+		{"127.0.0.1", []*Update{{Op: Add, Addr: "127.0.0.1" + colonDefaultPort}}},
+		{"127.0.0.1:12345", []*Update{{Op: Add, Addr: "127.0.0.1:12345"}}},
+		{"::1", []*Update{{Op: Add, Addr: "[::1]" + colonDefaultPort}}},
+		{"[::1]:12345", []*Update{{Op: Add, Addr: "[::1]:12345"}}},
+		{"[::1]:", []*Update{{Op: Add, Addr: "[::1]:443"}}},
+		{"2001:db8:85a3::8a2e:370:7334", []*Update{{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
+		{"[2001:db8:85a3::8a2e:370:7334]", []*Update{{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]" + colonDefaultPort}}},
+		{"[2001:db8:85a3::8a2e:370:7334]:12345", []*Update{{Op: Add, Addr: "[2001:db8:85a3::8a2e:370:7334]:12345"}}},
+		{"[2001:db8::1]:http", []*Update{{Op: Add, Addr: "[2001:db8::1]:http"}}},
 		// TODO(yuxuanli): zone support?
 	}
 
