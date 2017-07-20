@@ -99,8 +99,7 @@ func Errorln(args ...interface{}) {
 // It calls os.Exit() with exit code 1.
 func Fatal(args ...interface{}) {
 	logger.Fatal(args...)
-	// logger.Fatal should call os.Exit().
-	// Still call os.Exit() here in case the implementation doesn't.
+	// Make sure fatal logs will exit.
 	os.Exit(1)
 }
 
@@ -108,8 +107,7 @@ func Fatal(args ...interface{}) {
 // It calles os.Exit() with exit code 1.
 func Fatalf(format string, args ...interface{}) {
 	logger.Fatalf(format, args...)
-	// logger.Fatal should call os.Exit().
-	// Still call os.Exit() here in case the implementation doesn't.
+	// Make sure fatal logs will exit.
 	os.Exit(1)
 }
 
@@ -117,8 +115,7 @@ func Fatalf(format string, args ...interface{}) {
 // It calle os.Exit()) with exit code 1.
 func Fatalln(args ...interface{}) {
 	logger.Fatalln(args...)
-	// logger.Fatal should call os.Exit().
-	// Still call os.Exit() here in case the implementation doesn't.
+	// Make sure fatal logs will exit.
 	os.Exit(1)
 }
 
