@@ -127,11 +127,26 @@ var hostLookupTbl = map[string][]string{
 	"ipv6.multi.fake":  {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
 }
 
+func hostLookup(host string) ([]string, error) {
+	if addrs, ok := hostLookupTbl[host]; ok {
+		return addrs, nil
+	}
+	return nil, fmt.Errorf("failed to lookup host:%s resolution in hostLookupTbl", host)
+}
+
 var srvLookupTbl = map[string][]*net.SRV{
 	"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
 	"_grpclb._tcp.srv.ipv4.multi.fake":  {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
 	"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
 	"_grpclb._tcp.srv.ipv6.multi.fake":  {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
+}
+
+func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
+	cname := "_" + service + "._" + proto + "." + name
+	if srvs, ok := srvLookupTbl[cname]; ok {
+		return cname, srvs, nil
+	}
+	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
 }
 
 func updatesToSlice(updates []*Update) []Update {
@@ -189,26 +204,29 @@ func testResolver(t *testing.T, freq time.Duration, slp time.Duration) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		var updates []*Update
+		updates, err := w.Next()
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		if !reflect.DeepEqual(toMap(a.want), toMap(updates)) {
+			t.Errorf("Resolve(%q) = %+v, want %+v\n", a.target, updatesToSlice(updates), updatesToSlice(a.want))
+		}
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for {
-				u, err := w.Next()
+				_, err := w.Next()
 				if err != nil {
 					return
 				}
-				updates = u
+				t.Error("Execution shouldn't reach here, since w.Next() should be blocked until close happen.")
 			}
 		}()
 		// Sleep for sometime to let watcher do more than one lookup
 		time.Sleep(slp)
 		w.Close()
 		wg.Wait()
-		if !reflect.DeepEqual(toMap(a.want), toMap(updates)) {
-			t.Errorf("Resolve(%q) = %+v, want %+v\n", a.target, updatesToSlice(updates), updatesToSlice(a.want))
-		}
 	}
 }
 
