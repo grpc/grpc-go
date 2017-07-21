@@ -45,6 +45,7 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -744,5 +745,53 @@ public class ContextTest {
     context = parent.withDeadline(deadline, scheduler);
     assertTrue(context.isCancelled());
     assertThat(context.cancellationCause(), instanceOf(TimeoutException.class));
+  }
+
+  /**
+   * Tests initializing the {@link Context} class with a custom logger which uses Context's storage
+   * when logging.
+   */
+  @Test
+  public void initContextWithCustomClassLoaderWithCustomLogger() throws Exception {
+    StaticTestingClassLoader classLoader =
+        new StaticTestingClassLoader(
+            getClass().getClassLoader(),
+            Pattern.compile("(io\\.grpc\\.Context.*)|(io\\.grpc\\.ThreadLocalContextStorage.*)"));
+    Class<?> runnable =
+        classLoader.loadClass(LoadMeWithStaticTestingClassLoader.class.getName());
+
+    ((Runnable) runnable.getDeclaredConstructor().newInstance()).run();
+  }
+
+  // UsedReflectively
+  public static final class LoadMeWithStaticTestingClassLoader implements Runnable {
+    @Override
+    public void run() {
+      Logger logger = Logger.getLogger(Context.class.getName());
+      logger.setLevel(Level.ALL);
+      Handler handler = new Handler() {
+        @Override
+        public void publish(LogRecord record) {
+          Context ctx = Context.current();
+          Context previous = ctx.attach();
+          ctx.detach(previous);
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() throws SecurityException {
+        }
+      };
+      logger.addHandler(handler);
+
+      try {
+        assertNotNull(Context.ROOT);
+      } finally {
+        logger.removeHandler(handler);
+      }
+    }
   }
 }
