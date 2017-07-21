@@ -499,13 +499,7 @@ type ClientConn struct {
 // connections accordingly.  If doneChan is not nil, it is closed after the
 // first successfull connection is made.
 func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
-	var (
-		firstFindConn *addrConn // tear down when the cc.conns is empty
-		isPickFirst   bool      // true: roundrobin, false: pickfirst
-	)
-	if reflect.TypeOf(cc.dopts.balancer) == reflect.TypeOf(&pickFirst{}) {
-		isPickFirst = true
-	}
+	isPickFirst := reflect.TypeOf(cc.dopts.balancer) == reflect.TypeOf(&pickFirst{})
 	for addrs := range cc.dopts.balancer.Notify() {
 		var (
 			add []Address   // Addresses need to setup connections.
@@ -515,12 +509,9 @@ func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 		for _, addr := range addrs {
 			if _, ok := cc.conns[addr]; !ok {
 				add = append(add, addr)
-			} else {
-				firstFindConn = cc.conns[addr]
 			}
 		}
 		for k, c := range cc.conns {
-			firstFindConn = c
 			var keep bool
 			for _, a := range addrs {
 				if k == a {
@@ -554,20 +545,11 @@ func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 				}
 			}
 		}
-
-		if isPickFirst {
-			// Notify may delete all address. time to tear down, or leave it?
-			if len(cc.conns) == 0 {
-				if firstFindConn != nil {
-					firstFindConn.tearDown(errConnDrain)
-				}
-			}
-		} else {
+		if !isPickFirst {
 			for _, c := range del {
 				c.tearDown(errConnDrain)
 			}
 		}
-
 	}
 }
 
@@ -599,6 +581,7 @@ func (cc *ClientConn) scWatcher() {
 func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr error) error {
 	// if current transport in addrs, just change lists to update order and new addresses
 	// not work for roundrobin
+	cc.mu.Lock()
 	if len(cc.conns) != 0 && (reflect.TypeOf(cc.dopts.balancer) == reflect.TypeOf(&pickFirst{})) {
 		var currentAc *addrConn
 		for _, v := range cc.conns {
@@ -607,7 +590,7 @@ func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr err
 		}
 		var addrInUse bool
 		for _, addr := range addrs {
-			if addr == currentAc.curAddr {
+			if strings.Compare(addr.Addr, currentAc.curAddr.Addr) == 0 {
 				addrInUse = true
 				break
 			}
@@ -618,9 +601,11 @@ func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr err
 				cc.conns[addr] = currentAc
 			}
 			currentAc.addrs = addrs
+			cc.mu.Unlock()
 			return nil
 		}
 	}
+	cc.mu.Unlock()
 
 	ac := &addrConn{
 		cc:    cc,
@@ -887,7 +872,7 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 	return ac.state, nil
 }
 
-// resetTransport recreates a transport to the address for ac.
+/// resetTransport recreates a transport to the address for ac.
 // For the old transport:
 // - if drain is true, it will be gracefully closed.
 // - otherwise, it will be closed.
@@ -947,14 +932,12 @@ func (ac *addrConn) resetTransport(drain bool) error {
 				cancel()
 
 				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-					ac.curAddr.Addr = ""
 					return err
 				}
 				grpclog.Warningf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %v", err, addr)
 				ac.mu.Lock()
 				if ac.state == Shutdown {
 					// ac.tearDown(...) has been invoked.
-					ac.curAddr.Addr = ""
 					ac.mu.Unlock()
 					return errConnClosing
 				}
@@ -977,7 +960,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			ac.printf("ready")
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
-				ac.curAddr.Addr = ""
+				//ac.curAddr.Addr = ""
 				ac.mu.Unlock()
 				newTransport.Close()
 				return errConnClosing

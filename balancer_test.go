@@ -568,9 +568,9 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 	r.w.inject([]*naming.Update{u})
 
 	// Loop until all 3 servers are up
-	cc0, err := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc1, err := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc2, err := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc0, _ := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc1, _ := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc2, _ := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	checkServerUp(servers[0].port, cc0)
 	checkServerUp(servers[1].port, cc1)
 	checkServerUp(servers[2].port, cc2)
@@ -672,9 +672,9 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	r.w.inject([]*naming.Update{u})
 
 	// Loop until all 3 servers are up
-	cc0, err := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc1, err := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc2, err := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc0, _ := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc1, _ := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc2, _ := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	checkServerUp(servers[0].port, cc0)
 	checkServerUp(servers[1].port, cc1)
 	checkServerUp(servers[2].port, cc2)
@@ -708,8 +708,11 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 
 	// up the server[0] back, the incoming RPCs served in server[1]
 	p, _ := strconv.Atoi(servers[0].port)
+	servers[0] = newTestServer()
 	go servers[0].start(t, p, math.MaxUint32)
+	servers[0].wait(t, 2*time.Second)
 	checkServerUp(servers[0].port, cc0)
+
 	for i := 0; i < 20; i++ {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[1].port {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 1, err, servers[1].port)
