@@ -423,40 +423,36 @@ func TestOneAddressRemoval(t *testing.T) {
 	}
 }
 
-type firstFind struct {
-	rr *roundRobin
-}
-
 // PickFirst Balancer is a simple balancer for testing multi-addresses in one addrConn.
 // By using this balancer, all address shares the same addrConn.
 // Although it wrapped by RoundRobin balancer, the logic of all methods work fine because
 // balancer.Get() returns the address Up by resetTransport()
 func PickFirst(r naming.Resolver) Balancer {
-	return &firstFind{rr: &roundRobin{r: r}}
+	return &pickFirst{rr: &roundRobin{r: r}}
 }
 
 // The only difference is using ff.watchAddrUpdates() to use findFirstMD
-func (ff *firstFind) Start(target string, config BalancerConfig) error {
+func (ff *pickFirst) Start(target string, config BalancerConfig) error {
 	return ff.rr.Start(target, config)
 }
 
 // Up sets the connected state of addr and sends notification if there are pending
 // Get() calls.
-func (ff *firstFind) Up(addr Address) func(error) {
+func (ff *pickFirst) Up(addr Address) func(error) {
 	return ff.rr.Up(addr)
 }
 
 // Get returns the next addr in the rotation.
-func (ff *firstFind) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
+func (ff *pickFirst) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	addr, put, err = ff.rr.Get(ctx, opts)
 	return
 }
 
-func (ff *firstFind) Notify() <-chan []Address {
+func (ff *pickFirst) Notify() <-chan []Address {
 	return ff.rr.addrCh
 }
 
-func (ff *firstFind) Close() error {
+func (ff *pickFirst) Close() error {
 	return ff.rr.Close()
 }
 

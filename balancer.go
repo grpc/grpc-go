@@ -395,3 +395,7 @@ func (rr *roundRobin) Close() error {
 	}
 	return nil
 }
+
+type pickFirst struct {
+	rr *roundRobin
+}

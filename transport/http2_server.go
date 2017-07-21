@@ -923,7 +923,7 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 // 1. Gracefully closes an idle connection after a duration of keepalive.MaxConnectionIdle.
 // 2. Gracefully closes any connection after a duration of keepalive.MaxConnectionAge.
 // 3. Forcibly closes a connection after an additive period of keepalive.MaxConnectionAgeGrace over keepalive.MaxConnectionAge.
-// 4. Makes sure a connection is alive by sending pings with a frequency of keepalive.Time and closes a non-resposive connection
+// 4. Makes sure a connection is alive by sending pings with a frequency of keepalive.Time and closes a non-responsive connection
 // after an additional duration of keepalive.Timeout.
 func (t *http2Server) keepalive() {
 	p := &ping{}

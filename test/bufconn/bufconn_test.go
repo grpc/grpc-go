@@ -115,3 +115,35 @@ func TestListener(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 }
+
+func TestCloseWhileDialing(t *testing.T) {
+	l := Listen(7)
+	var c net.Conn
+	var err error
+	done := make(chan struct{})
+	go func() {
+		c, err = l.Dial()
+		close(done)
+	}()
+	l.Close()
+	<-done
+	if c != nil || err != errClosed {
+		t.Fatalf("c, err = %v, %v; want nil, %v", c, err, errClosed)
+	}
+}
+
+func TestCloseWhileAccepting(t *testing.T) {
+	l := Listen(7)
+	var c net.Conn
+	var err error
+	done := make(chan struct{})
+	go func() {
+		c, err = l.Accept()
+		close(done)
+	}()
+	l.Close()
+	<-done
+	if c != nil || err != errClosed {
+		t.Fatalf("c, err = %v, %v; want nil, %v", c, err, errClosed)
+	}
+}
