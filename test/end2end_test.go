@@ -4778,6 +4778,37 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	}
 }
 
+func TestWaitForReadyConnection(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testWaitForReadyConnection(t, e)
+	}
+
+}
+
+func testWaitForReadyConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn() // Non-blocking dial.
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	state := cc.GetState()
+	// Wait for connection to be Ready.
+	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state != grpc.Ready {
+		t.Fatalf("Want connection state to be Ready, got %v", state)
+	}
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	// Make a fail-fast RPC.
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
+	}
+}
+
 type errCodec struct {
 	noError bool
 }
