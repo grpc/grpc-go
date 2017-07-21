@@ -62,13 +62,16 @@ type LoggerV2 interface {
 	// Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 	Errorf(format string, args ...interface{})
 	// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Print.
-	// This function should call os.Exit() with a non-zero exit code.
+	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatal(args ...interface{})
 	// Fatalln logs to ERROR log. Arguments are handled in the manner of fmt.Println.
-	// This function should call os.Exit() with a non-zero exit code.
+	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatalln(args ...interface{})
 	// Fatalf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
-	// This function should call os.Exit() with a non-zero exit code.
+	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatalf(format string, args ...interface{})
 	// V reports whether verbosity level l is at least the requested verbose level.
 	V(l int) bool
@@ -189,14 +192,17 @@ func (g *loggerT) Errorf(format string, args ...interface{}) {
 
 func (g *loggerT) Fatal(args ...interface{}) {
 	g.m[fatalLog].Fatal(args...)
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) Fatalln(args ...interface{}) {
 	g.m[fatalLog].Fatalln(args...)
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) Fatalf(format string, args ...interface{}) {
 	g.m[fatalLog].Fatalf(format, args...)
+	// No need to call os.Exit() again because log.Logger.Fatal() calls os.Exit().
 }
 
 func (g *loggerT) V(l int) bool {
