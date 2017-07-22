@@ -940,5 +940,10 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     public Attributes getAttributes() {
       return attrs;
     }
+
+    @Override
+    public String toString() {
+      return subchannel.getLogId().toString();
+    }
   }
 }
