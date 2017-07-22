@@ -872,7 +872,7 @@ func (ac *addrConn) waitForStateChange(ctx context.Context, sourceState Connecti
 	return ac.state, nil
 }
 
-/// resetTransport recreates a transport to the address for ac.
+// resetTransport recreates a transport to the address for ac.
 // For the old transport:
 // - if drain is true, it will be gracefully closed.
 // - otherwise, it will be closed.
@@ -903,9 +903,14 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 	ac.cc.mu.RUnlock()
 	for retries := 0; ; retries++ {
+		ac.mu.Lock()
 		sleepTime := ac.dopts.bs.backoff(retries)
 		connectTime := time.Now()
-		for _, addr := range ac.addrs {
+		// copy ac.addrs in case of race
+		addrsIter := make([]Address, len(ac.addrs))
+		copy(addrsIter, ac.addrs)
+		ac.mu.Unlock()
+		for _, addr := range addrsIter {
 			ac.mu.Lock()
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
@@ -914,11 +919,8 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			}
 			ac.mu.Unlock()
 			timeout := minConnectTimeout
-			if timeout < sleepTime {
+			if timeout < time.Duration(int(sleepTime)/len(ac.addrs)) {
 				timeout = time.Duration(int(sleepTime) / len(ac.addrs))
-				if timeout == 0 {
-					timeout = 1 * time.Nanosecond
-				}
 			}
 			ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 			sinfo := transport.TargetInfo{

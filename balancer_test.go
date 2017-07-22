@@ -423,41 +423,13 @@ func TestOneAddressRemoval(t *testing.T) {
 	}
 }
 
-// PickFirst Balancer is a simple balancer for testing multi-addresses in one addrConn.
-// By using this balancer, all address shares the same addrConn.
-// Although it wrapped by RoundRobin balancer, the logic of all methods work fine because
-// balancer.Get() returns the address Up by resetTransport()
-func PickFirst(r naming.Resolver) Balancer {
-	return &pickFirst{rr: &roundRobin{r: r}}
-}
-
-// The only difference is using ff.watchAddrUpdates() to use findFirstMD
-func (ff *pickFirst) Start(target string, config BalancerConfig) error {
-	return ff.rr.Start(target, config)
-}
-
-// Up sets the connected state of addr and sends notification if there are pending
-// Get() calls.
-func (ff *pickFirst) Up(addr Address) func(error) {
-	return ff.rr.Up(addr)
-}
-
-// Get returns the next addr in the rotation.
-func (ff *pickFirst) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
-	addr, put, err = ff.rr.Get(ctx, opts)
-	return
-}
-
-func (ff *pickFirst) Notify() <-chan []Address {
-	return ff.rr.addrCh
-}
-
-func (ff *pickFirst) Close() error {
-	return ff.rr.Close()
-}
-
-func checkServerUp(port string, cc *ClientConn) {
+func checkServerUp(t *testing.T, currentServer *server) {
 	req := "port"
+	port := currentServer.port
+	cc, err := Dial("localhost:"+port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
 	var reply string
 	for {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == port {
@@ -465,7 +437,7 @@ func checkServerUp(port string, cc *ClientConn) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return
+	cc.Close()
 }
 
 func TestPickFirstEmptyAddrs(t *testing.T) {
@@ -568,12 +540,9 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 	r.w.inject([]*naming.Update{u})
 
 	// Loop until all 3 servers are up
-	cc0, _ := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc1, _ := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc2, _ := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	checkServerUp(servers[0].port, cc0)
-	checkServerUp(servers[1].port, cc1)
-	checkServerUp(servers[2].port, cc2)
+	checkServerUp(t, servers[0])
+	checkServerUp(t, servers[1])
+	checkServerUp(t, servers[2])
 
 	// Check the incoming RPCs served in server[0]
 	req := "port"
@@ -641,9 +610,6 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 
 	// After remove server[3], incoming RPCs still served in server[0]
 	cc.Close()
-	cc0.Close()
-	cc1.Close()
-	cc2.Close()
 	for i := 0; i < numServers; i++ {
 		servers[i].stop()
 	}
@@ -672,12 +638,9 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	r.w.inject([]*naming.Update{u})
 
 	// Loop until all 3 servers are up
-	cc0, _ := Dial("localhost:"+servers[0].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc1, _ := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	cc2, _ := Dial("localhost:"+servers[2].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	checkServerUp(servers[0].port, cc0)
-	checkServerUp(servers[1].port, cc1)
-	checkServerUp(servers[2].port, cc2)
+	checkServerUp(t, servers[0])
+	checkServerUp(t, servers[1])
+	checkServerUp(t, servers[2])
 
 	// Check the incoming RPCs served in server[0]
 	req := "port"
@@ -711,7 +674,7 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	servers[0] = newTestServer()
 	go servers[0].start(t, p, math.MaxUint32)
 	servers[0].wait(t, 2*time.Second)
-	checkServerUp(servers[0].port, cc0)
+	checkServerUp(t, servers[0])
 
 	for i := 0; i < 20; i++ {
 		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[1].port {
@@ -741,9 +704,6 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 
 	// After remove server[3], incoming RPCs still served in server[0]
 	cc.Close()
-	cc0.Close()
-	cc1.Close()
-	cc2.Close()
 	for i := 0; i < numServers; i++ {
 		servers[i].stop()
 	}
@@ -766,11 +726,8 @@ func TestPickFirstOneAddressRemoval(t *testing.T) {
 	r.w.inject(updates)
 
 	// Create a new cc to Loop until servers[1] is up
-	cc1, err := Dial("localhost:"+servers[1].port, WithBlock(), WithInsecure(), WithCodec(testCodec{}))
-	if err != nil {
-		t.Fatalf("Failed to create ClientConnCheck: %v", err)
-	}
-	checkServerUp(servers[1].port, cc1)
+	checkServerUp(t, servers[0])
+	checkServerUp(t, servers[1])
 
 	var wg sync.WaitGroup
 	numRPC := 100
