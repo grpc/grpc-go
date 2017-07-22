@@ -479,9 +479,9 @@ func (s ConnectivityState) String() string {
 }
 
 // connectivityStateEvaluator gets updated by addrConns when their
-// stats transition, based on which it evaluates the state of
+// states transition, based on which it evaluates the state of
 // ClientConn.
-// Note: This code will eventully sit in the blanacer in the new design.
+// Note: This code will eventually sit in the blanacer in the new design.
 type connectivityStateEvaluator struct {
 	csMgr               *connectivityStateManager
 	mu                  sync.Mutex
@@ -497,33 +497,33 @@ type connectivityStateEvaluator struct {
 // before any addrConn is created ClientConn is in idle state. In the end when ClientConn
 // closes it is in Shutdown state.
 // TODO Note that in later releases, a ClientConn with no activity will be put into an Idle state.
-func (csEvltr *connectivityStateEvaluator) recordTransition(oldState, newState ConnectivityState) {
-	csEvltr.mu.Lock()
-	defer csEvltr.mu.Unlock()
+func (cse *connectivityStateEvaluator) recordTransition(oldState, newState ConnectivityState) {
+	cse.mu.Lock()
+	defer cse.mu.Unlock()
 
 	// Update counters.
 	for idx, state := range []ConnectivityState{oldState, newState} {
 		updateVal := 2*uint64(idx) - 1 // -1 for oldState and +1 for new.
 		switch state {
 		case Ready:
-			csEvltr.numReady += updateVal
+			cse.numReady += updateVal
 		case Connecting:
-			csEvltr.numConnecting += updateVal
+			cse.numConnecting += updateVal
 		case TransientFailure:
-			csEvltr.numTransientFailure += updateVal
+			cse.numTransientFailure += updateVal
 		}
 	}
 
 	// Evaluate.
-	if csEvltr.numReady > 0 {
-		csEvltr.csMgr.updateState(Ready)
+	if cse.numReady > 0 {
+		cse.csMgr.updateState(Ready)
 		return
 	}
-	if csEvltr.numConnecting > 0 {
-		csEvltr.csMgr.updateState(Connecting)
+	if cse.numConnecting > 0 {
+		cse.csMgr.updateState(Connecting)
 		return
 	}
-	csEvltr.csMgr.updateState(TransientFailure)
+	cse.csMgr.updateState(TransientFailure)
 }
 
 // connectivityStateManager keeps the ConnectivityState of ClientConn.
@@ -537,36 +537,36 @@ type connectivityStateManager struct {
 // updateState updates the ConnectivityState of ClientConn.
 // If there's a change it notifies goroutines waiting on state change to
 // happen.
-func (csMgr *connectivityStateManager) updateState(state ConnectivityState) {
-	csMgr.mu.Lock()
-	defer csMgr.mu.Unlock()
-	if csMgr.state == Shutdown {
+func (csm *connectivityStateManager) updateState(state ConnectivityState) {
+	csm.mu.Lock()
+	defer csm.mu.Unlock()
+	if csm.state == Shutdown {
 		return
 	}
-	if csMgr.state == state {
+	if csm.state == state {
 		return
 	}
-	csMgr.state = state
-	if csMgr.notifyChan != nil {
+	csm.state = state
+	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
-		close(csMgr.notifyChan)
-		csMgr.notifyChan = nil
+		close(csm.notifyChan)
+		csm.notifyChan = nil
 	}
 }
 
-func (csMgr *connectivityStateManager) getState() ConnectivityState {
-	csMgr.mu.Lock()
-	defer csMgr.mu.Unlock()
-	return csMgr.state
+func (csm *connectivityStateManager) getState() ConnectivityState {
+	csm.mu.Lock()
+	defer csm.mu.Unlock()
+	return csm.state
 }
 
-func (csMgr *connectivityStateManager) getNotifyChan() <-chan struct{} {
-	csMgr.mu.Lock()
-	defer csMgr.mu.Unlock()
-	if csMgr.notifyChan == nil {
-		csMgr.notifyChan = make(chan struct{})
+func (csm *connectivityStateManager) getNotifyChan() <-chan struct{} {
+	csm.mu.Lock()
+	defer csm.mu.Unlock()
+	if csm.notifyChan == nil {
+		csm.notifyChan = make(chan struct{})
 	}
-	return csMgr.notifyChan
+	return csm.notifyChan
 }
 
 // ClientConn represents a client connection to an RPC server.
@@ -923,8 +923,9 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		ac.down(downErrorf(false, true, "%v", errNetworkIO))
 		ac.down = nil
 	}
+	oldState := ac.state
 	ac.state = Connecting
-	ac.stateCV.Broadcast()
+	ac.csEvltr.recordTransition(oldState, ac.state)
 	t := ac.transport
 	ac.transport = nil
 	ac.mu.Unlock()
