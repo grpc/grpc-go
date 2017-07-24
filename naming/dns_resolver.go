@@ -30,7 +30,7 @@ func NewDNSResolverWithFreq(freq time.Duration) (Resolver, error) {
 // NewDNSResolver creates a DNS Resolver that can resolve DNS names, and create
 // watchers that poll the DNS server using the default frequency defined by defaultFreq.
 func NewDNSResolver() (Resolver, error) {
-	return &dnsResolver{freq: defaultFreq}, nil
+	return NewDNSResolverWithFreq(defaultFreq)
 }
 
 // dnsResolver handles name resolution for names following the DNS scheme
@@ -248,33 +248,23 @@ func (w *dnsWatcher) lookup() []*Update {
 	}
 	result := w.compileUpdate(newAddrs)
 	w.curAddrs = newAddrs
-	// Next lookup should happen after an interval defined by w.r.freq.
-	w.t.Reset(w.r.freq)
 	return result
 }
 
 // Next returns the resolved address update(delta) for the target. If there's no
 // change, it will sleep for 30 mins and try to resolve again after that.
 func (w *dnsWatcher) Next() ([]*Update, error) {
-	select {
-	case <-w.ctx.Done():
-		return nil, errWatcherClose
-	case <-w.t.C:
-	}
-	result := w.lookup()
-	if len(result) > 0 {
-		return result, nil
-	}
-
 	for {
 		select {
 		case <-w.ctx.Done():
 			return nil, errWatcherClose
 		case <-w.t.C:
-			result = w.lookup()
-			if len(result) > 0 {
-				return result, nil
-			}
+		}
+		result := w.lookup()
+		// Next lookup should happen after an interval defined by w.r.freq.
+		w.t.Reset(w.r.freq)
+		if len(result) > 0 {
+			return result, nil
 		}
 	}
 }
