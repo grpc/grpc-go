@@ -481,7 +481,7 @@ func (s ConnectivityState) String() string {
 // connectivityStateEvaluator gets updated by addrConns when their
 // states transition, based on which it evaluates the state of
 // ClientConn.
-// Note: This code will eventually sit in the blanacer in the new design.
+// Note: This code will eventually sit in the balancer in the new design.
 type connectivityStateEvaluator struct {
 	csMgr               *connectivityStateManager
 	mu                  sync.Mutex
@@ -493,7 +493,7 @@ type connectivityStateEvaluator struct {
 // recordTransition records state change happening in every addrConn and based on
 // that it evaluates what state the ClientConn is in.
 // It can only transition between Ready, Connecting and TransientFailure. Other states,
-// Idle and Shutdown are transitioned into by ClientConn; in the begining of the conneciton
+// Idle and Shutdown are transitioned into by ClientConn; in the begining of the connection
 // before any addrConn is created ClientConn is in idle state. In the end when ClientConn
 // closes it is in Shutdown state.
 // TODO Note that in later releases, a ClientConn with no activity will be put into an Idle state.
@@ -587,6 +587,8 @@ type ClientConn struct {
 	mkp keepalive.ClientParameters
 }
 
+// WaitForStateChange waits until the ConnectivityState of ClientConn changes from sourceState or
+// ctx expires. A true value is returned in former case and false in latter.
 func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState ConnectivityState) bool {
 	ch := cc.csMgr.getNotifyChan()
 	if cc.csMgr.getState() != sourceState {
@@ -600,6 +602,7 @@ func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState Connec
 	}
 }
 
+// GetState returns the ConnectivityState of ClientConn.
 func (cc *ClientConn) GetState() ConnectivityState {
 	return cc.csMgr.getState()
 }
@@ -645,7 +648,7 @@ func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 				err = cc.resetAddrConn(a, false, nil)
 			}
 			if err != nil {
-				grpclog.Warningf("Error creating conneciton to %v. Err: %v", a, err)
+				grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
 			}
 		}
 		for _, c := range del {
