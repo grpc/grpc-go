@@ -700,7 +700,6 @@ public class Context {
         ScheduledExecutorService scheduler) {
       super(parent, deriveDeadline(parent, deadline), true);
       if (DEADLINE_KEY.get(this) == deadline) {
-        final TimeoutException cause = new TimeoutException("context timed out");
         if (!deadline.isExpired()) {
           // The parent deadline was after the new deadline so we need to install a listener
           // on the new earlier deadline to trigger expiration for this context.
@@ -708,7 +707,7 @@ public class Context {
             @Override
             public void run() {
               try {
-                cancel(cause);
+                cancel(new TimeoutException("context timed out"));
               } catch (Throwable t) {
                 log.log(Level.SEVERE, "Cancel threw an exception, which should not happen", t);
               }
@@ -716,7 +715,7 @@ public class Context {
           }, scheduler);
         } else {
           // Cancel immediately if the deadline is already expired.
-          cancel(cause);
+          cancel(new TimeoutException("context timed out"));
         }
       }
       uncancellableSurrogate = new Context(this, EMPTY_ENTRIES);
