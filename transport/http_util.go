@@ -129,6 +129,7 @@ func isReservedHeader(hdr string) bool {
 		"grpc-status",
 		"grpc-timeout",
 		"grpc-status-details-bin",
+		"grpc-server-stats-bin",
 		"te":
 		return true
 	default:
