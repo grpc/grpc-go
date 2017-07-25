@@ -29,9 +29,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/naming"
+	"google.golang.org/grpc/testdata"
 )
-
-const tlsDir = "testdata/"
 
 func assertState(wantState ConnectivityState, cc *ClientConn) (ConnectivityState, bool) {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
@@ -93,7 +92,7 @@ func TestDialTimeout(t *testing.T) {
 }
 
 func TestTLSDialTimeout(t *testing.T) {
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -120,7 +119,7 @@ func TestDefaultAuthority(t *testing.T) {
 
 func TestTLSServerNameOverwrite(t *testing.T) {
 	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", overwriteServerName)
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -148,7 +147,7 @@ func TestWithAuthority(t *testing.T) {
 
 func TestWithAuthorityAndTLS(t *testing.T) {
 	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", overwriteServerName)
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
@@ -219,7 +218,7 @@ func (c securePerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func TestCredentialsMisuse(t *testing.T) {
-	tlsCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	tlsCreds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
 	}

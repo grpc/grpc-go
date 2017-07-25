@@ -18,26 +18,7 @@
 
 package main
 
-import (
-	"log"
-	"os"
-	"path/filepath"
-	"syscall"
-)
-
-// abs returns the absolute path the given relative file or directory path,
-// relative to the google.golang.org/grpc directory in the user's GOPATH.
-// If rel is already absolute, it is returned unmodified.
-func abs(rel string) string {
-	if filepath.IsAbs(rel) {
-		return rel
-	}
-	v, err := goPackagePath("google.golang.org/grpc")
-	if err != nil {
-		log.Fatalf("Error finding google.golang.org/grpc/testdata directory: %v", err)
-	}
-	return filepath.Join(v, rel)
-}
+import "syscall"
 
 func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float64) {
 	var (
@@ -51,26 +32,4 @@ func cpuTimeDiff(first *syscall.Rusage, latest *syscall.Rusage) (float64, float6
 	sTimeElapsed := float64(stimeDiffs) + float64(stimeDiffus)*1.0e-6
 
 	return uTimeElapsed, sTimeElapsed
-}
-
-func goPackagePath(pkg string) (path string, err error) {
-	gp := os.Getenv("GOPATH")
-	if gp == "" {
-		return path, os.ErrNotExist
-	}
-	for _, p := range filepath.SplitList(gp) {
-		dir := filepath.Join(p, "src", filepath.FromSlash(pkg))
-		fi, err := os.Stat(dir)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return "", err
-		}
-		if !fi.IsDir() {
-			continue
-		}
-		return dir, nil
-	}
-	return path, os.ErrNotExist
 }
