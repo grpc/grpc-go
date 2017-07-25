@@ -71,26 +71,6 @@ func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
 	return m, nil
 }
 
-// AddressType indicates the address type returned by name resolution.
-type AddressType uint8
-
-const (
-	// Backend indicates the server is a backend server.
-	Backend AddressType = iota
-	// GRPCLB indicates the server is a grpclb load balancer.
-	GRPCLB
-)
-
-// AddrMetadataGRPCLB contains the information the name resolver for grpclb should provide. The
-// name resolver used by the grpclb balancer is required to provide this type of metadata in
-// its address updates.
-type AddrMetadataGRPCLB struct {
-	// AddrType is the type of server (grpc load balancer or backend).
-	AddrType AddressType
-	// ServerName is the name of the grpc load balancer. Used for authentication.
-	ServerName string
-}
-
 // NewGRPCLBBalancer creates a grpclb load balancer.
 func NewGRPCLBBalancer(r naming.Resolver) Balancer {
 	return &balancer{
@@ -159,18 +139,18 @@ func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerIn
 			if exist {
 				continue
 			}
-			md, ok := update.Metadata.(*AddrMetadataGRPCLB)
+			md, ok := update.Metadata.(*naming.AddrMetadataGRPCLB)
 			if !ok {
 				// TODO: Revisit the handling here and may introduce some fallback mechanism.
 				grpclog.Errorf("The name resolution contains unexpected metadata %v", update.Metadata)
 				continue
 			}
 			switch md.AddrType {
-			case Backend:
+			case naming.Backend:
 				// TODO: Revisit the handling here and may introduce some fallback mechanism.
 				grpclog.Errorf("The name resolution does not give grpclb addresses")
 				continue
-			case GRPCLB:
+			case naming.GRPCLB:
 				b.rbs = append(b.rbs, remoteBalancerInfo{
 					addr: update.Addr,
 					name: md.ServerName,
