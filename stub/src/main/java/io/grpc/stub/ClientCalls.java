@@ -326,6 +326,11 @@ public final class ClientCalls {
     public void setMessageCompression(boolean enable) {
       call.setMessageCompression(enable);
     }
+
+    @Override
+    public void cancel(@Nullable String message, @Nullable Throwable cause) {
+      call.cancel(message, cause);
+    }
   }
 
   private static final class StreamObserverToCallListenerAdapter<ReqT, RespT>
