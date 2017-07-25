@@ -714,7 +714,10 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 		return ErrClientConnClosing
 	}
 	stale := cc.conns[ac.addr]
-	cc.conns[ac.addr] = ac
+	keep := tearDownErr == nil || stale != nil
+	if keep {
+		cc.conns[ac.addr] = ac
+	}
 	cc.mu.Unlock()
 	if stale != nil {
 		// There is an addrConn alive on ac.addr already. This could be due to
@@ -728,6 +731,10 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 		} else {
 			stale.tearDown(tearDownErr)
 		}
+	}
+	if !keep {
+		ac.tearDown(tearDownErr)
+		return nil
 	}
 	if block {
 		if err := ac.resetTransport(false); err != nil {

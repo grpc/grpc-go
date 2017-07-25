@@ -374,3 +374,71 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
 	}
 }
+
+func TestPreventReaddAddrConnAfterDeletedByBalancer(t *testing.T) {
+	numServers := 2
+	servers, r := startServers(t, numServers, math.MaxUint32)
+	defer func() {
+		for i := 0; i < numServers; i++ {
+			servers[i].stop()
+		}
+	}()
+	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	if err != nil {
+		t.Fatalf("Failed to create ClientConn: %v", err)
+	}
+	defer cc.Close()
+
+	req := "port"
+	var reply string
+	for i := 0; i < numServers; i++ {
+		if i != 0 {
+			// Add servers[i] to the service discovery
+			u := &naming.Update{
+				Op:   naming.Add,
+				Addr: "localhost:" + servers[i].port,
+			}
+			r.w.inject([]*naming.Update{u})
+		}
+		// Loop until servers[i] is up
+		for {
+			if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[i].port {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	getConnCount := func() int {
+		cc.mu.RLock()
+		defer cc.mu.RUnlock()
+		return len(cc.conns)
+	}
+
+	connCount := getConnCount()
+	if connCount != 2 {
+		t.Fatalf("Number of addConns, want %d, got %d", 2, connCount)
+	}
+
+	// Delete servers[1] by balancer
+	u := &naming.Update{
+		Op:   naming.Delete,
+		Addr: "localhost:" + servers[1].port,
+	}
+	r.w.inject([]*naming.Update{u})
+	// Wait until the addrConn of services[1] is deleted
+	for getConnCount() != 1 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Call resetAddrConn (ex: goaway)
+	err = cc.resetAddrConn(Address{Addr: u.Addr}, false, errConnDrain)
+	if err != nil {
+		t.Fatalf("Failed to reset addrConn: %v", err)
+	}
+
+	connCount = getConnCount()
+	if connCount != 1 {
+		t.Fatalf("Number of addConns, want %d, got %d", 1, connCount)
+	}
+}
