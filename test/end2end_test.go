@@ -4236,9 +4236,11 @@ func interestingGoroutines() (gs []string) {
 		if stack == "" ||
 			strings.Contains(stack, "testing.Main(") ||
 			strings.Contains(stack, "testing.tRunner(") ||
+			strings.Contains(stack, "testing.(*M).") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "created by runtime/trace.Start") ||
+			strings.Contains(stack, "created by google3/base/go/log.init") ||
 			strings.Contains(stack, "interestingGoroutines") ||
 			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
 			strings.Contains(stack, "signal.signal_recv") ||
@@ -4773,6 +4775,37 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func TestWaitForReadyConnection(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testWaitForReadyConnection(t, e)
+	}
+
+}
+
+func testWaitForReadyConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn() // Non-blocking dial.
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	state := cc.GetState()
+	// Wait for connection to be Ready.
+	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state != grpc.Ready {
+		t.Fatalf("Want connection state to be Ready, got %v", state)
+	}
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	// Make a fail-fast RPC.
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
 	}
 }
 

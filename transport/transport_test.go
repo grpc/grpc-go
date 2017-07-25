@@ -1033,7 +1033,8 @@ func TestLargeMessageSuspension(t *testing.T) {
 		t.Fatalf("failed to open stream: %v", err)
 	}
 	// Write should not be done successfully due to flow control.
-	err = ct.Write(s, expectedRequestLarge, &Options{Last: true, Delay: false})
+	msg := make([]byte, initialWindowSize*8)
+	err = ct.Write(s, msg, &Options{Last: true, Delay: false})
 	expectedErr := streamErrorf(codes.DeadlineExceeded, "%v", context.DeadlineExceeded)
 	if err != expectedErr {
 		t.Fatalf("Write got %v, want %v", err, expectedErr)
@@ -1426,8 +1427,8 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		}
 		ss.fc.mu.Unlock()
 	}
-	if ss.fc.pendingData != http2MaxFrameLen || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != 0 || sc.fc.pendingUpdate != http2MaxFrameLen {
-		t.Fatalf("Server mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate, http2MaxFrameLen, 0, http2MaxFrameLen, 0)
+	if ss.fc.pendingData != http2MaxFrameLen || ss.fc.pendingUpdate != 0 || sc.fc.pendingData != 0 || sc.fc.pendingUpdate != 0 {
+		t.Fatalf("Server mistakenly updates inbound flow control params: got %d, %d, %d, %d; want %d, %d, %d, %d", ss.fc.pendingData, ss.fc.pendingUpdate, sc.fc.pendingData, sc.fc.pendingUpdate, http2MaxFrameLen, 0, 0, 0)
 	}
 	// Keep sending until the server inbound window is drained for that stream.
 	for sent <= initialWindowSize {
@@ -1447,16 +1448,18 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 		t.Fatalf("%v got status %v; want Code=%v", s, s.status, code)
 	}
 
-	if sc.fc.pendingData != 0 || sc.fc.pendingUpdate <= initialWindowSize {
-		t.Fatalf("Server mistakenly resets inbound flow control params: got %d, %d; want 0, >%d", sc.fc.pendingData, sc.fc.pendingUpdate, initialWindowSize)
-	}
 	ct.CloseStream(s, nil)
 	ct.Close()
 	server.stop()
 }
 
 func TestClientWithMisbehavedServer(t *testing.T) {
-	server, ct := setUp(t, 0, math.MaxUint32, misbehaved)
+	// Turn off BDP estimation so that the server can
+	// violate stream window.
+	connectOptions := ConnectOptions{
+		InitialWindowSize: initialWindowSize,
+	}
+	server, ct := setUpWithOptions(t, 0, &ServerConfig{}, misbehaved, connectOptions)
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Stream",
@@ -1481,8 +1484,8 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 			break
 		}
 	}
-	if s.fc.pendingData <= initialWindowSize || s.fc.pendingUpdate != 0 || conn.fc.pendingData != 0 || conn.fc.pendingUpdate <= initialWindowSize {
-		t.Fatalf("Client mistakenly updates inbound flow control params: got %d, %d, %d, %d; want >%d, %d, >%d, %d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize, 0, initialWindowSize, 0)
+	if s.fc.pendingData <= initialWindowSize || s.fc.pendingUpdate != 0 || conn.fc.pendingData != 0 || conn.fc.pendingUpdate != 0 {
+		t.Fatalf("Client mistakenly updates inbound flow control params: got %d, %d, %d, %d; want >%d, %d, %d, >%d", s.fc.pendingData, s.fc.pendingUpdate, conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize, 0, 0, 0)
 	}
 
 	if err != io.EOF {
@@ -1493,9 +1496,6 @@ func TestClientWithMisbehavedServer(t *testing.T) {
 	}
 
 	conn.CloseStream(s, err)
-	if conn.fc.pendingData != 0 || conn.fc.pendingUpdate <= initialWindowSize {
-		t.Fatalf("Client mistakenly resets inbound flow control params: got %d, %d; want 0, >%d", conn.fc.pendingData, conn.fc.pendingUpdate, initialWindowSize)
-	}
 	ct.Close()
 	server.stop()
 }
@@ -1686,7 +1686,10 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	time.Sleep(time.Second)
 
 	waitWhileTrue(t, func() (bool, error) {
-		if lim := st.fc.limit; lim != uint32(serverConfig.InitialConnWindowSize) {
+		st.fc.mu.Lock()
+		lim := st.fc.limit
+		st.fc.mu.Unlock()
+		if lim != uint32(serverConfig.InitialConnWindowSize) {
 			return true, fmt.Errorf("Server transport flow control window size: got %v, want %v", lim, serverConfig.InitialConnWindowSize)
 		}
 		return false, nil
@@ -1703,12 +1706,16 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Server send quota(%v) not equal to client's window size(%v) on conn.", serverSendQuota, connectOptions.InitialConnWindowSize)
 	}
 	st.mu.Lock()
-	if st.streamSendQuota != uint32(connectOptions.InitialWindowSize) {
-		t.Fatalf("Server stream send quota(%v) not equal to client's window size(%v) on stream.", ct.streamSendQuota, connectOptions.InitialWindowSize)
-	}
+	ssq := st.streamSendQuota
 	st.mu.Unlock()
-	if ct.fc.limit != uint32(connectOptions.InitialConnWindowSize) {
-		t.Fatalf("Client transport flow control window size is %v, want %v", ct.fc.limit, connectOptions.InitialConnWindowSize)
+	if ssq != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Server stream send quota(%v) not equal to client's window size(%v) on stream.", ssq, connectOptions.InitialWindowSize)
+	}
+	ct.fc.mu.Lock()
+	limit := ct.fc.limit
+	ct.fc.mu.Unlock()
+	if limit != uint32(connectOptions.InitialConnWindowSize) {
+		t.Fatalf("Client transport flow control window size is %v, want %v", limit, connectOptions.InitialConnWindowSize)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	clientSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
@@ -1721,12 +1728,16 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Client send quota(%v) not equal to server's window size(%v) on conn.", clientSendQuota, serverConfig.InitialConnWindowSize)
 	}
 	ct.mu.Lock()
-	if ct.streamSendQuota != uint32(serverConfig.InitialWindowSize) {
-		t.Fatalf("Client stream send quota(%v) not equal to server's window size(%v) on stream.", ct.streamSendQuota, serverConfig.InitialWindowSize)
-	}
+	ssq = ct.streamSendQuota
 	ct.mu.Unlock()
-	if cstream.fc.limit != uint32(connectOptions.InitialWindowSize) {
-		t.Fatalf("Client stream flow control window size is %v, want %v", cstream.fc.limit, connectOptions.InitialWindowSize)
+	if ssq != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Client stream send quota(%v) not equal to server's window size(%v) on stream.", ssq, serverConfig.InitialWindowSize)
+	}
+	cstream.fc.mu.Lock()
+	limit = cstream.fc.limit
+	cstream.fc.mu.Unlock()
+	if limit != uint32(connectOptions.InitialWindowSize) {
+		t.Fatalf("Client stream flow control window size is %v, want %v", limit, connectOptions.InitialWindowSize)
 	}
 	var sstream *Stream
 	st.mu.Lock()
@@ -1734,8 +1745,11 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		sstream = v
 	}
 	st.mu.Unlock()
-	if sstream.fc.limit != uint32(serverConfig.InitialWindowSize) {
-		t.Fatalf("Server stream flow control window size is %v, want %v", sstream.fc.limit, serverConfig.InitialWindowSize)
+	sstream.fc.mu.Lock()
+	limit = sstream.fc.limit
+	sstream.fc.mu.Unlock()
+	if limit != uint32(serverConfig.InitialWindowSize) {
+		t.Fatalf("Server stream flow control window size is %v, want %v", limit, serverConfig.InitialWindowSize)
 	}
 }
 
@@ -1846,11 +1860,11 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 		sstream.sendQuotaPool.add(serverStreamSendQuota)
 		cstream.fc.mu.Lock()
-		if uint32(serverStreamSendQuota) != cstream.fc.limit-cstream.fc.pendingUpdate {
-			cstream.fc.mu.Unlock()
-			return true, fmt.Errorf("server stream outflow: %v, estimated by client: %v", serverStreamSendQuota, cstream.fc.limit-cstream.fc.pendingUpdate)
-		}
+		clientEst := cstream.fc.limit - cstream.fc.pendingUpdate
 		cstream.fc.mu.Unlock()
+		if uint32(serverStreamSendQuota) != clientEst {
+			return true, fmt.Errorf("server stream outflow: %v, estimated by client: %v", serverStreamSendQuota, clientEst)
+		}
 
 		// Check flow control window on server stream is equal to out flow on client stream.
 		ctx, _ = context.WithTimeout(context.Background(), time.Second)
@@ -1860,11 +1874,11 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 		cstream.sendQuotaPool.add(clientStreamSendQuota)
 		sstream.fc.mu.Lock()
-		if uint32(clientStreamSendQuota) != sstream.fc.limit-sstream.fc.pendingUpdate {
-			sstream.fc.mu.Unlock()
-			return true, fmt.Errorf("client stream outflow: %v. estimated by server: %v", clientStreamSendQuota, sstream.fc.limit-sstream.fc.pendingUpdate)
-		}
+		serverEst := sstream.fc.limit - sstream.fc.pendingUpdate
 		sstream.fc.mu.Unlock()
+		if uint32(clientStreamSendQuota) != serverEst {
+			return true, fmt.Errorf("client stream outflow: %v. estimated by server: %v", clientStreamSendQuota, serverEst)
+		}
 
 		// Check flow control window on client transport is equal to out flow of server transport.
 		ctx, _ = context.WithTimeout(context.Background(), time.Second)
@@ -1874,11 +1888,11 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 		st.sendQuotaPool.add(serverTrSendQuota)
 		ct.fc.mu.Lock()
-		if uint32(serverTrSendQuota) != ct.fc.limit-ct.fc.pendingUpdate {
-			ct.fc.mu.Unlock()
-			return true, fmt.Errorf("server transport outflow: %v, estimated by client: %v", serverTrSendQuota, ct.fc.limit-ct.fc.pendingUpdate)
-		}
+		clientEst = ct.fc.limit - ct.fc.pendingUpdate
 		ct.fc.mu.Unlock()
+		if uint32(serverTrSendQuota) != clientEst {
+			return true, fmt.Errorf("server transport outflow: %v, estimated by client: %v", serverTrSendQuota, clientEst)
+		}
 
 		// Check flow control window on server transport is equal to out flow of client transport.
 		ctx, _ = context.WithTimeout(context.Background(), time.Second)
@@ -1888,11 +1902,11 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 		ct.sendQuotaPool.add(clientTrSendQuota)
 		st.fc.mu.Lock()
-		if uint32(clientTrSendQuota) != st.fc.limit-st.fc.pendingUpdate {
-			st.fc.mu.Unlock()
-			return true, fmt.Errorf("client transport outflow: %v, estimated by client: %v", clientTrSendQuota, st.fc.limit-st.fc.pendingUpdate)
-		}
+		serverEst = st.fc.limit - st.fc.pendingUpdate
 		st.fc.mu.Unlock()
+		if uint32(clientTrSendQuota) != serverEst {
+			return true, fmt.Errorf("client transport outflow: %v, estimated by client: %v", clientTrSendQuota, serverEst)
+		}
 
 		return false, nil
 	})

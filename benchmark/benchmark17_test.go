@@ -22,6 +22,8 @@ package benchmark
 
 import (
 	"fmt"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -30,57 +32,67 @@ import (
 )
 
 func BenchmarkClient(b *testing.B) {
-	maxConcurrentCalls := []int{1, 8, 64, 512}
-	reqSizeBytes := []int{1, 1024 * 1024}
-	reqspSizeBytes := []int{1, 1024 * 1024}
-	kbps := []int{0, 10240} // if non-positive, infinite
-	MTU := []int{0, 10}     // if non-positive, infinite
+	enableTrace := []bool{true, false} // run both enable and disable by default
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	latency := []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
+	kbps := []int{0, 10240}                              // if non-positive, infinite
+	mtu := []int{0}                                      // if non-positive, infinite
+	maxConcurrentCalls := []int{1, 8, 64, 512}
+	reqSizeBytes := []int{1, 1024 * 1024}
+	respSizeBytes := []int{1, 1024 * 1024}
+	featuresCurPos := make([]int, 7)
+
+	// 0:enableTracing 1:md 2:ltc 3:kbps 4:mtu 5:maxC 6:connCount 7:reqSize 8:respSize
+	featuresMaxPosition := []int{len(enableTrace), len(latency), len(kbps), len(mtu), len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes)}
+	initalPos := make([]int, len(featuresCurPos))
+
+	// run benchmarks
+	start := true
 	s := stats.NewStats(38)
 	isMatched := false
-
-	for _, enableTracing := range []bool{true, false} {
-		grpc.EnableTracing = enableTracing
-		tracing := "Tracing"
-		if !enableTracing {
+	for !reflect.DeepEqual(featuresCurPos, initalPos) || start {
+		start = false
+		tracing := "Trace"
+		if !enableTrace[featuresCurPos[0]] {
 			tracing = "noTrace"
 		}
-		for _, ltc := range latency {
-			for _, k := range kbps {
-				for _, mtu := range MTU {
-					for _, maxC := range maxConcurrentCalls {
-						for _, reqS := range reqSizeBytes {
-							for _, respS := range reqspSizeBytes {
-								b.Run(fmt.Sprintf("Unary-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-									"%#v-latency_%s-reqSize_%#vB-respSize_%#vB",
-									tracing, k, mtu, maxC, ltc.String(), reqS, respS), func(b *testing.B) {
-									runUnary(b, s, maxC, reqS, respS, k, mtu, ltc)
-									isMatched = true
-								})
-								if isMatched {
-									fmt.Print(s.String())
-									isMatched = false
-									s.Clear()
-								}
-								b.Run(fmt.Sprintf("Stream-%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-									"%#v-latency_%s-reqSize_%#vB-respSize_%#vB",
-									tracing, k, mtu, maxC, ltc.String(), reqS, respS), func(b *testing.B) {
-									runStream(b, s, maxC, reqS, respS, k, mtu, ltc)
-									isMatched = true
-								})
-								if isMatched {
-									fmt.Print(s.String())
-									isMatched = false
-									s.Clear()
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 
+		benchFeature := Features{
+			EnableTrace:        enableTrace[featuresCurPos[0]],
+			Latency:            latency[featuresCurPos[1]],
+			Kbps:               kbps[featuresCurPos[2]],
+			Mtu:                mtu[featuresCurPos[3]],
+			MaxConcurrentCalls: maxConcurrentCalls[featuresCurPos[4]],
+			ReqSizeBytes:       reqSizeBytes[featuresCurPos[5]],
+			RespSizeBytes:      respSizeBytes[featuresCurPos[6]],
+		}
+
+		grpc.EnableTracing = enableTrace[featuresCurPos[0]]
+		b.Run(fmt.Sprintf("Unary-%s-%s",
+			tracing, benchFeature.String()), func(b *testing.B) {
+			runUnary(b, s, benchFeature)
+			isMatched = true
+		})
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+			s.Clear()
+		}
+		b.Run(fmt.Sprintf("Stream-%s-%s",
+			tracing, benchFeature.String()), func(b *testing.B) {
+			runStream(b, s, benchFeature)
+			isMatched = true
+		})
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+			s.Clear()
+		}
+		AddOne(featuresCurPos, featuresMaxPosition)
+	}
+}
+
+func TestMain(m *testing.M) {
+	os.Exit(stats.RunTestMain(m))
 }

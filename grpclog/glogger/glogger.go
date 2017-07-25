@@ -21,6 +21,8 @@
 package glogger
 
 import (
+	"fmt"
+
 	"github.com/golang/glog"
 	"google.golang.org/grpc/grpclog"
 )
@@ -32,51 +34,51 @@ func init() {
 type glogger struct{}
 
 func (g *glogger) Info(args ...interface{}) {
-	glog.Info(args...)
+	glog.InfoDepth(2, args...)
 }
 
 func (g *glogger) Infoln(args ...interface{}) {
-	glog.Infoln(args...)
+	glog.InfoDepth(2, fmt.Sprintln(args...))
 }
 
 func (g *glogger) Infof(format string, args ...interface{}) {
-	glog.Infof(format, args...)
+	glog.InfoDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) Warning(args ...interface{}) {
-	glog.Warning(args...)
+	glog.WarningDepth(2, args...)
 }
 
 func (g *glogger) Warningln(args ...interface{}) {
-	glog.Warningln(args...)
+	glog.WarningDepth(2, fmt.Sprintln(args...))
 }
 
 func (g *glogger) Warningf(format string, args ...interface{}) {
-	glog.Warningf(format, args...)
+	glog.WarningDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) Error(args ...interface{}) {
-	glog.Error(args...)
+	glog.ErrorDepth(2, args...)
 }
 
 func (g *glogger) Errorln(args ...interface{}) {
-	glog.Errorln(args...)
+	glog.ErrorDepth(2, fmt.Sprintln(args...))
 }
 
 func (g *glogger) Errorf(format string, args ...interface{}) {
-	glog.Errorf(format, args...)
+	glog.ErrorDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) Fatal(args ...interface{}) {
-	glog.Fatal(args...)
+	glog.FatalDepth(2, args...)
 }
 
 func (g *glogger) Fatalln(args ...interface{}) {
-	glog.Fatalln(args...)
+	glog.FatalDepth(2, fmt.Sprintln(args...))
 }
 
 func (g *glogger) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(format, args...)
+	glog.FatalDepth(2, fmt.Sprintf(format, args...))
 }
 
 func (g *glogger) V(l int) bool {
