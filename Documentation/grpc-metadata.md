@@ -7,12 +7,12 @@ This doc shows how to send and receive metadata in gRPC-go.
 
 Four kinds of service method:
 
-- [Unary RPC](http://www.grpc.io/docs/guides/concepts.html#unary-rpc)
-- [Server streaming RPC](http://www.grpc.io/docs/guides/concepts.html#server-streaming-rpc)
-- [Client streaming RPC](http://www.grpc.io/docs/guides/concepts.html#client-streaming-rpc)
-- [Bidirectional streaming RPC](http://www.grpc.io/docs/guides/concepts.html#bidirectional-streaming-rpc)
+- [Unary RPC](https://grpc.io/docs/guides/concepts.html#unary-rpc)
+- [Server streaming RPC](https://grpc.io/docs/guides/concepts.html#server-streaming-rpc)
+- [Client streaming RPC](https://grpc.io/docs/guides/concepts.html#client-streaming-rpc)
+- [Bidirectional streaming RPC](https://grpc.io/docs/guides/concepts.html#bidirectional-streaming-rpc)
 
-And concept of [metadata](http://www.grpc.io/docs/guides/concepts.html#metadata).
+And concept of [metadata](https://grpc.io/docs/guides/concepts.html#metadata).
 
 ## Constructing metadata
 

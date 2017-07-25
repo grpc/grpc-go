@@ -17,7 +17,7 @@
  */
 
 // Package metadata define the structure of the metadata supported by gRPC library.
-// Please refer to http://www.grpc.io/docs/guides/wire.html for more information about custom-metadata.
+// Please refer to https://grpc.io/docs/guides/wire.html for more information about custom-metadata.
 package metadata // import "google.golang.org/grpc/metadata"
 
 import (
@@ -37,7 +37,13 @@ func DecodeKeyValue(k, v string) (string, string, error) {
 type MD map[string][]string
 
 // New creates an MD from a given key-value map.
-// Keys are automatically converted to lowercase.
+//
+// Only the following ASCII characters are allowed in keys:
+//  - digits: 0-9
+//  - uppercase letters: A-Z (normalized to lower)
+//  - lowercase letters: a-z
+//  - special characters: -_.
+// Uppercase letters are automatically converted to lowercase.
 func New(m map[string]string) MD {
 	md := MD{}
 	for k, val := range m {
@@ -49,7 +55,13 @@ func New(m map[string]string) MD {
 
 // Pairs returns an MD formed by the mapping of key, value ...
 // Pairs panics if len(kv) is odd.
-// Keys are automatically converted to lowercase.
+//
+// Only the following ASCII characters are allowed in keys:
+//  - digits: 0-9
+//  - uppercase letters: A-Z (normalized to lower)
+//  - lowercase letters: a-z
+//  - special characters: -_.
+// Uppercase letters are automatically converted to lowercase.
 func Pairs(kv ...string) MD {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: Pairs got the odd number of input pairs for metadata: %d", len(kv)))

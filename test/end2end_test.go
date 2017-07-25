@@ -25,7 +25,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"net"
 	"os"
@@ -46,7 +45,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
@@ -745,7 +744,7 @@ func testServerGoAway(t *testing.T, e env) {
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) == codes.DeadlineExceeded {
 			continue
 		}
 		break
@@ -4236,6 +4235,7 @@ func interestingGoroutines() (gs []string) {
 		if stack == "" ||
 			strings.Contains(stack, "testing.Main(") ||
 			strings.Contains(stack, "testing.tRunner(") ||
+			strings.Contains(stack, "testing.(*M).") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
 			strings.Contains(stack, "created by runtime/trace.Start") ||
@@ -4245,6 +4245,7 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "signal.signal_recv") ||
 			strings.Contains(stack, "sigterm.handler") ||
 			strings.Contains(stack, "runtime_mcall") ||
+			strings.Contains(stack, "(*loggingT).flushDaemon") ||
 			strings.Contains(stack, "goroutine in C code") {
 			continue
 		}
@@ -4349,10 +4350,6 @@ func logOutputHasContents(v []byte, wakeup chan<- bool) bool {
 	}
 	fw.wakeup = wakeup
 	return false
-}
-
-func init() {
-	grpclog.SetLogger(log.New(testLogOutput, "", log.LstdFlags))
 }
 
 var verboseLogs = flag.Bool("verbose_logs", false, "show all grpclog output, without filtering")
@@ -4777,6 +4774,37 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func TestWaitForReadyConnection(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testWaitForReadyConnection(t, e)
+	}
+
+}
+
+func testWaitForReadyConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn() // Non-blocking dial.
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	state := cc.GetState()
+	// Wait for connection to be Ready.
+	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state != grpc.Ready {
+		t.Fatalf("Want connection state to be Ready, got %v", state)
+	}
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	// Make a fail-fast RPC.
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
 	}
 }
 

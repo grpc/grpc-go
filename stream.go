@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
@@ -58,11 +59,17 @@ type Stream interface {
 	// side. On server side, it simply returns the error to the caller.
 	// SendMsg is called by generated code. Also Users can call SendMsg
 	// directly when it is really needed in their use cases.
+	// It's safe to have a goroutine calling SendMsg and another goroutine calling
+	// recvMsg on the same stream at the same time.
+	// But it is not safe to call SendMsg on the same stream in different goroutines.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message or the stream is
 	// done. On client side, it returns io.EOF when the stream is done. On
 	// any other error, it aborts the stream and returns an RPC status. On
 	// server side, it simply returns the error to the caller.
+	// It's safe to have a goroutine calling SendMsg and another goroutine calling
+	// recvMsg on the same stream at the same time.
+	// But it is not safe to call RecvMsg on the same stream in different goroutines.
 	RecvMsg(m interface{}) error
 }
 
@@ -78,6 +85,11 @@ type ClientStream interface {
 	// CloseSend closes the send direction of the stream. It closes the stream
 	// when non-nil error is met.
 	CloseSend() error
+	// Stream.SendMsg() may return a non-nil error when something wrong happens sending
+	// the request. The returned error indicates the status of this sending, not the final
+	// status of the RPC.
+	// Always call Stream.RecvMsg() to get the final status if you care about the status of
+	// the RPC.
 	Stream
 }
 
@@ -119,7 +131,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,
 		Method: method,
-		Flush:  desc.ServerStreams && desc.ClientStreams,
+		// If it's not client streaming, we should already have the request to be sent,
+		// so we don't flush the header.
+		// If it's client streaming, the user may never send a request or send it any
+		// time soon, so we ask the transport to flush the header.
+		Flush: desc.ClientStreams,
 	}
 	if cc.dopts.cp != nil {
 		callHdr.SendCompress = cc.dopts.cp.Type()
@@ -205,6 +221,10 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			return nil, toRPCErr(err)
 		}
 		break
+	}
+	// Set callInfo.peer object from stream's context.
+	if peer, ok := peer.FromContext(s.Context()); ok {
+		c.peer = peer
 	}
 	cs := &clientStream{
 		opts:   opts,

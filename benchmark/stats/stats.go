@@ -1,3 +1,21 @@
+/*
+ *
+ * Copyright 2017 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package stats
 
 import (
@@ -75,9 +93,6 @@ func (stats *Stats) maybeUpdate() {
 		stats.unit = u
 	}
 
-	// Adjust the min/max according to the new unit.
-	stats.min /= int64(stats.unit)
-	stats.max /= int64(stats.unit)
 	numBuckets := stats.numBuckets
 	if n := int(stats.max - stats.min + 1); n < numBuckets {
 		numBuckets = n
@@ -90,7 +105,7 @@ func (stats *Stats) maybeUpdate() {
 		MinValue:       stats.min})
 
 	for _, d := range stats.durations {
-		stats.histogram.Add(int64(d / stats.unit))
+		stats.histogram.Add(int64(d))
 	}
 
 	stats.dirty = false
@@ -104,7 +119,7 @@ func (stats *Stats) Print(w io.Writer) {
 		fmt.Fprint(w, "Histogram (empty)\n")
 	} else {
 		fmt.Fprintf(w, "Histogram (unit: %s)\n", fmt.Sprintf("%v", stats.unit)[1:])
-		stats.histogram.Print(w)
+		stats.histogram.PrintWithUnit(w, float64(stats.unit))
 	}
 }
 
