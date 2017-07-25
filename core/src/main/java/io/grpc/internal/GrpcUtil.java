@@ -593,11 +593,6 @@ public final class GrpcUtil {
         }
 
         @Override
-        public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-          return newStream(method, headers, CallOptions.DEFAULT);
-        }
-
-        @Override
         public void ping(PingCallback callback, Executor executor) {
           transport.ping(callback, executor);
         }

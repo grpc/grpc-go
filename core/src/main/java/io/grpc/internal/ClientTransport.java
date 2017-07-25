@@ -49,9 +49,6 @@ public interface ClientTransport {
   // TODO(nmittler): Consider also throwing for stopping.
   ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions);
 
-  // TODO(zdapeng): Remove two-argument version in favor of four-argument overload.
-  ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers);
-
   /**
    * Pings a remote endpoint. When an acknowledgement is received, the given callback will be
    * invoked using the given executor.

@@ -134,12 +134,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   }
 
   @Override
-  public synchronized ClientStream newStream(
-      final MethodDescriptor<?, ?> method, final Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
-  @Override
   public synchronized void ping(final PingCallback callback, Executor executor) {
     if (terminated) {
       final Status shutdownStatus = this.shutdownStatus;

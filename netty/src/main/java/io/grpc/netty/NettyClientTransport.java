@@ -154,11 +154,6 @@ class NettyClientTransport implements ConnectionClientTransport {
         statsTraceCtx);
   }
 
-  @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
   @SuppressWarnings("unchecked")
   @Override
   public Runnable start(Listener transportListener) {

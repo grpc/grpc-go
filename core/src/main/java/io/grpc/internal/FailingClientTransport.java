@@ -44,11 +44,6 @@ class FailingClientTransport implements ClientTransport {
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
-  @Override
   public void ping(final PingCallback callback, Executor executor) {
     executor.execute(new Runnable() {
         @Override public void run() {

@@ -563,7 +563,8 @@ public class ClientCallImplTest {
         deadlineCancellationExecutor)
             .setDecompressorRegistry(decompressorRegistry);
     call.start(callListener, new Metadata());
-    verify(transport, times(0)).newStream(any(MethodDescriptor.class), any(Metadata.class));
+    verify(transport, times(0))
+        .newStream(any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
     verify(callListener, timeout(1000)).onClose(statusCaptor.capture(), any(Metadata.class));
     assertEquals(Status.Code.DEADLINE_EXCEEDED, statusCaptor.getValue().getCode());
     verifyZeroInteractions(provider);

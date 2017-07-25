@@ -293,12 +293,6 @@ class OkHttpClientTransport implements ConnectionClientTransport {
         outboundFlow, lock, maxMessageSize, defaultAuthority, userAgent, statsTraceCtx);
   }
 
-  @Override
-  public OkHttpClientStream newStream(final MethodDescriptor<?, ?> method, final Metadata
-      headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
   @GuardedBy("lock")
   void streamReadyToStart(OkHttpClientStream clientStream) {
     synchronized (lock) {

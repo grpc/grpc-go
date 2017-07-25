@@ -171,11 +171,6 @@ final class DelayedClientTransport implements ManagedClientTransport {
     }
   }
 
-  @Override
-  public final ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return newStream(method, headers, CallOptions.DEFAULT);
-  }
-
   /**
    * Caller must call {@code channelExecutor.drain()} outside of lock because this method may
    * schedule tasks on channelExecutor.

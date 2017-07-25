@@ -46,11 +46,6 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   }
 
   @Override
-  public ClientStream newStream(MethodDescriptor<?, ?> method, Metadata headers) {
-    return delegate().newStream(method, headers);
-  }
-
-  @Override
   public void ping(PingCallback callback, Executor executor) {
     delegate().ping(callback, executor);
   }

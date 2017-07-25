@@ -704,9 +704,9 @@ public class ManagedChannelImplTest {
     verifyNoMoreInteractions(mockCallListener);
     // No real stream was ever created
     verify(transportInfo1.transport, times(0))
-        .newStream(any(MethodDescriptor.class), any(Metadata.class));
+        .newStream(any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
     verify(transportInfo2.transport, times(0))
-        .newStream(any(MethodDescriptor.class), any(Metadata.class));
+        .newStream(any(MethodDescriptor.class), any(Metadata.class), any(CallOptions.class));
   }
 
   @Test
