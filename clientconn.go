@@ -933,9 +933,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	ac.transport = nil
 	ac.mu.Unlock()
 	if t != nil {
-		if drain {
-			t.GracefulClose()
-		} else {
+		if !drain {
 			t.Close()
 		}
 	}

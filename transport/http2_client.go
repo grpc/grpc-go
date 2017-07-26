@@ -665,6 +665,16 @@ func (t *http2Client) GracefulClose() error {
 	// Notify the streams which were initiated after the server sent GOAWAY.
 	select {
 	case <-t.goAway:
+		// A client can recieve multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
+		// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
+		// with the an ID of the last stream the server will process.
+		// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
+		// close all streams created after the second GoAwayId. This way streams that were in-flight while the GoAway from server
+		// was being sent don't get killed.
+		//
+		// Note: to be backward compatible with servers that will still send only 1 GoAway we'll still try and close streams with ID
+		// greater that GoAwayId sent by the first GoAway.
+
 		n := t.prevGoAwayID
 		if n == 0 && t.nextID > 1 {
 			n = t.nextID - 2
@@ -675,7 +685,11 @@ func (t *http2Client) GracefulClose() error {
 		}
 		for i := m; i <= n; i += 2 {
 			if s, ok := t.activeStreams[i]; ok {
-				close(s.goAway)
+				select {
+				case <-s.goAway:
+				default:
+					close(s.goAway)
+				}
 			}
 		}
 	default:
@@ -1009,12 +1023,16 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			t.prevGoAwayID = id
 			t.goAwayID = f.LastStreamID
 			t.mu.Unlock()
+			t.GracefulClose()
 			return
 		default:
 			t.setGoAwayReason(f)
 		}
 		t.goAwayID = f.LastStreamID
 		close(t.goAway)
+		t.mu.Unlock()
+		t.GracefulClose()
+		return
 	}
 	t.mu.Unlock()
 }
