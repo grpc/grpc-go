@@ -55,6 +55,7 @@ public abstract class AbstractConfigurationBuilder<T extends Configuration>
       return false;
     }
 
+    @Override
     public String getDefaultValue() {
       return null;
     }
