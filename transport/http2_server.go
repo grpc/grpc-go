@@ -65,9 +65,16 @@ type http2Server struct {
 	// Blocking operations should select on shutdownChan to avoid
 	// blocking forever after Close.
 	shutdownChan chan struct{}
-	framer       *framer
-	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
-	hEnc         *hpack.Encoder // HPACK encoder
+	// drainingBegun is set to true when the server writes out the first GoAway(with ID 2^31-1) frame out.
+	// After the first GoAway is sent an independent goroutine will be launched to
+	// later send the second GoAway.
+	// During this time we don't want to write another first GoAway(with ID 2^31 -1) to be written
+	// out. Thus call to Drain() will be a no-op if drainChan is already closed since draining is
+	// already underway.
+	drainingBegun bool
+	framer        *framer
+	hBuf          *bytes.Buffer  // the buffer for HPACK encoding
+	hEnc          *hpack.Encoder // HPACK encoder
 
 	// The max number of concurrent streams.
 	maxStreams uint32
@@ -632,7 +639,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings")})
+		t.drain(http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings"))
 	}
 }
 
@@ -978,23 +985,18 @@ func (t *http2Server) keepalive() {
 				continue
 			}
 			val := t.kp.MaxConnectionIdle - time.Since(idle)
+			t.mu.Unlock()
 			if val <= 0 {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
-				t.state = draining
-				t.mu.Unlock()
-				t.Drain()
+				t.drain(http2.ErrCodeNo, []byte{})
 				// Reseting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
 				return
 			}
-			t.mu.Unlock()
 			maxIdle.Reset(val)
 		case <-maxAge.C:
-			t.mu.Lock()
-			t.state = draining
-			t.mu.Unlock()
-			t.Drain()
+			t.drain(http2.ErrCodeNo, []byte{})
 			maxAge.Reset(t.kp.MaxConnectionAgeGrace)
 			select {
 			case <-maxAge.C:
@@ -1138,7 +1140,16 @@ func (t *http2Server) RemoteAddr() net.Addr {
 }
 
 func (t *http2Server) Drain() {
-	t.controlBuf.put(&goAway{code: http2.ErrCodeNo})
+	t.drain(http2.ErrCodeNo, []byte{})
+}
+
+func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.drainingBegun {
+		return
+	}
+	t.controlBuf.put(&goAway{code: code, debugData: debugData})
 }
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
