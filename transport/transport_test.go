@@ -1578,6 +1578,8 @@ func TestIsReservedHeader(t *testing.T) {
 		{"grpc-message", true},
 		{"grpc-status", true},
 		{"grpc-timeout", true},
+		{"grpc-status-details-bin", true},
+		{"grpc-server-stats-bin", true},
 		{"te", true},
 	}
 	for _, tt := range tests {
