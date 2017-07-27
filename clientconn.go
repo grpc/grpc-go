@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -413,9 +412,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 		}
 		// No balancer, or no resolver within the balancer.  Connect directly.
-		var inputaddr []Address
-		inputaddr = append(inputaddr, Address{Addr: target})
-		if err := cc.resetAddrConn(inputaddr, cc.dopts.block, nil); err != nil {
+		if err := cc.resetAddrConn([]Address{Address{Addr: target}}, cc.dopts.block, nil); err != nil {
 			waitC <- err
 			return
 		}
@@ -499,53 +496,64 @@ type ClientConn struct {
 // connections accordingly.  If doneChan is not nil, it is closed after the
 // first successfull connection is made.
 func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
-	isPickFirst := reflect.TypeOf(cc.dopts.balancer) == reflect.TypeOf(&pickFirst{})
+	_, isPickFirst := cc.dopts.balancer.(*pickFirst)
 	for addrs := range cc.dopts.balancer.Notify() {
-		var (
-			add []Address   // Addresses need to setup connections.
-			del []*addrConn // Connections need to tear down.
-		)
-		cc.mu.Lock()
-		for _, addr := range addrs {
-			if _, ok := cc.conns[addr]; !ok {
-				add = append(add, addr)
-			}
-		}
-		for k, c := range cc.conns {
-			var keep bool
-			for _, a := range addrs {
-				if k == a {
-					keep = true
-					break
+		if isPickFirst {
+			if len(addrs) == 0 {
+				// No address can be connected, should teardown current addrconn if exists
+				cc.mu.Lock()
+				if len(cc.conns) != 0 {
+					cc.pickFirstAddrConnTearDown()
+				}
+				cc.mu.Unlock()
+			} else {
+				cc.resetAddrConn(addrs, true, nil)
+				if doneChan != nil {
+					close(doneChan)
+					doneChan = nil
 				}
 			}
-			if !keep {
-				del = append(del, c)
-				delete(cc.conns, k)
+		} else {
+			// Not pickFirst. All remains the same but changing addr to []Address{addr}
+			var (
+				add []Address   // Addresses need to setup connections.
+				del []*addrConn // Connections need to tear down.
+			)
+			cc.mu.Lock()
+			for _, a := range addrs {
+				if _, ok := cc.conns[a]; !ok {
+					add = append(add, a)
+				}
 			}
-		}
-		cc.mu.Unlock()
-
-		if len(addrs) > 0 && isPickFirst {
-			cc.resetAddrConn(addrs, true, nil)
-			if doneChan != nil {
-				close(doneChan)
-				doneChan = nil
+			for k, c := range cc.conns {
+				var keep bool
+				for _, a := range addrs {
+					if k == a {
+						keep = true
+						break
+					}
+				}
+				if !keep {
+					del = append(del, c)
+					delete(cc.conns, k)
+				}
 			}
-		} else { // isroundRobin, remain the same but change a to []Address{a}
+			cc.mu.Unlock()
 			for _, a := range add {
+				var err error
 				if doneChan != nil {
-					err := cc.resetAddrConn([]Address{a}, true, nil)
+					err = cc.resetAddrConn([]Address{a}, true, nil)
 					if err == nil {
 						close(doneChan)
 						doneChan = nil
 					}
 				} else {
-					cc.resetAddrConn([]Address{a}, false, nil)
+					err = cc.resetAddrConn([]Address{a}, false, nil)
+				}
+				if err != nil {
+					grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
 				}
 			}
-		}
-		if !isPickFirst {
 			for _, c := range del {
 				c.tearDown(errConnDrain)
 			}
@@ -571,6 +579,49 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
+// UpdateAddresses checks whether current address in the updating list, Update the list if true.
+func (cc *ClientConn) UpdateAddresses(addrs []Address) bool {
+	if len(cc.conns) == 0 {
+		// No addrconn. Should go resetting addrconn.
+		return false
+	}
+	var currentAc *addrConn
+	for _, currentAc = range cc.conns {
+		break
+	}
+	var addrInNewSlice bool
+	for _, addr := range addrs {
+		if strings.Compare(addr.Addr, currentAc.curAddr.Addr) == 0 {
+			addrInNewSlice = true
+			break
+		}
+	}
+	if addrInNewSlice {
+		cc.conns = make(map[Address]*addrConn)
+		for _, addr := range addrs {
+			cc.conns[addr] = currentAc
+		}
+		currentAc.addrs = addrs
+		//cc.mu.Unlock()
+		return true
+	}
+	return false
+}
+
+func (cc *ClientConn) pickFirstAddrConnTearDown() {
+	if len(cc.conns) == 0 {
+		return
+	}
+	var currentAc *addrConn
+	for _, currentAc = range cc.conns {
+		break
+	}
+	for k := range cc.conns {
+		delete(cc.conns, k)
+	}
+	currentAc.tearDown(errConnDrain)
+}
+
 // resetAddrConn creates an addrConn for addr and adds it to cc.conns.
 // If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
 // If tearDownErr is nil, errConnDrain will be used instead.
@@ -582,28 +633,15 @@ func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr err
 	// if current transport in addrs, just change lists to update order and new addresses
 	// not work for roundrobin
 	cc.mu.Lock()
-	if len(cc.conns) != 0 && (reflect.TypeOf(cc.dopts.balancer) == reflect.TypeOf(&pickFirst{})) {
-		var currentAc *addrConn
-		for _, v := range cc.conns {
-			currentAc = v
-			break
-		}
-		var addrInUse bool
-		for _, addr := range addrs {
-			if strings.Compare(addr.Addr, currentAc.curAddr.Addr) == 0 {
-				addrInUse = true
-				break
-			}
-		}
-		if addrInUse {
-			cc.conns = make(map[Address]*addrConn)
-			for _, addr := range addrs {
-				cc.conns[addr] = currentAc
-			}
-			currentAc.addrs = addrs
+	_, isPickFirst := cc.dopts.balancer.(*pickFirst)
+	if isPickFirst {
+		// If Current address in use in the updating list, just update the list.
+		// Otherwise, teardown current addrconn and create a new one.
+		if cc.UpdateAddresses(addrs) {
 			cc.mu.Unlock()
 			return nil
 		}
+		cc.pickFirstAddrConnTearDown()
 	}
 	cc.mu.Unlock()
 
@@ -883,6 +921,8 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		return errConnClosing
 	}
 	ac.printf("connecting")
+	// Initiate current address as invalid
+	ac.curAddr = Address{Addr: "0"}
 	if ac.down != nil {
 		ac.down(downErrorf(false, true, "%v", errNetworkIO))
 		ac.down = nil
@@ -1121,6 +1161,7 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 
 	ac.mu.Lock()
+	ac.curAddr = Address{Addr: "0"}
 	defer ac.mu.Unlock()
 	if ac.down != nil {
 		ac.down(downErrorf(false, false, "%v", err))

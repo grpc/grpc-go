@@ -442,7 +442,7 @@ func checkServerUp(t *testing.T, currentServer *server) {
 
 func TestPickFirstEmptyAddrs(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithBalancer(PickFirst(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -471,7 +471,7 @@ func TestPickFirstEmptyAddrs(t *testing.T) {
 
 func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithBalancer(PickFirst(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -521,7 +521,7 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r := startServers(t, numServers, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithBalancer(PickFirst(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r := startServers(t, numServers, math.MaxUint32)
-	cc, err := Dial("foo.bar.com", WithBalancer(PickFirst(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
@@ -713,7 +713,7 @@ func TestPickFirstOneAddressRemoval(t *testing.T) {
 	// Start 2 servers.
 	numServers := 2
 	servers, r := startServers(t, numServers, math.MaxUint32)
-	cc, err := Dial("localhost:"+servers[0].port, WithBalancer(PickFirst(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
+	cc, err := Dial("localhost:"+servers[0].port, WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
