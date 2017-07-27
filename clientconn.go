@@ -932,10 +932,8 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	t := ac.transport
 	ac.transport = nil
 	ac.mu.Unlock()
-	if t != nil {
-		if !drain {
-			t.Close()
-		}
+	if t != nil && !drain {
+		t.Close()
 	}
 	ac.cc.mu.RLock()
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
