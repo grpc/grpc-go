@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Codec;
 import io.grpc.Metadata;
@@ -216,7 +217,8 @@ public class AbstractClientStreamTest {
     ClientStreamTracer.Factory tracerFactory =
         new ClientStreamTracer.Factory() {
           @Override
-          public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+          public ClientStreamTracer newClientStreamTracer(
+              CallOptions callOptions, Metadata headers) {
             return tracer;
           }
         };

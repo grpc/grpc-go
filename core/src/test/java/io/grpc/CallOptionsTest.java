@@ -257,7 +257,7 @@ public class CallOptionsTest {
     }
 
     @Override
-    public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+    public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
       return new ClientStreamTracer() {};
     }
 

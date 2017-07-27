@@ -46,6 +46,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
@@ -366,7 +367,7 @@ public class GrpclbLoadBalancerTest {
         ClientStats.newBuilder().build());
 
     ClientStreamTracer tracer1 =
-        pick1.getStreamTracerFactory().newClientStreamTracer(new Metadata());
+        pick1.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
 
     PickResult pick2 = picker.pickSubchannel(args);
     assertNull(pick2.getSubchannel());
@@ -385,7 +386,7 @@ public class GrpclbLoadBalancerTest {
     assertSame(subchannel2, pick3.getSubchannel());
     assertSame(balancer.getLoadRecorder(), pick3.getStreamTracerFactory());
     ClientStreamTracer tracer3 =
-        pick3.getStreamTracerFactory().newClientStreamTracer(new Metadata());
+        pick3.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
 
     // pick3 has sent out headers
     tracer3.outboundHeaders();
@@ -418,7 +419,7 @@ public class GrpclbLoadBalancerTest {
     assertSame(subchannel1, pick1.getSubchannel());
     assertSame(balancer.getLoadRecorder(), pick5.getStreamTracerFactory());
     ClientStreamTracer tracer5 =
-        pick5.getStreamTracerFactory().newClientStreamTracer(new Metadata());
+        pick5.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
 
     // pick3 ended without receiving response headers
     tracer3.streamClosed(Status.DEADLINE_EXCEEDED);
@@ -492,7 +493,7 @@ public class GrpclbLoadBalancerTest {
     PickResult pick1p = picker.pickSubchannel(args);
     assertSame(subchannel1, pick1p.getSubchannel());
     assertSame(balancer.getLoadRecorder(), pick1p.getStreamTracerFactory());
-    pick1p.getStreamTracerFactory().newClientStreamTracer(new Metadata());
+    pick1p.getStreamTracerFactory().newClientStreamTracer(CallOptions.DEFAULT, new Metadata());
 
     // The pick from the new stream will be included in the report
     assertNextReport(

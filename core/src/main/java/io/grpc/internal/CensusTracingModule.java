@@ -201,7 +201,7 @@ final class CensusTracingModule {
     }
 
     @Override
-    public ClientStreamTracer newClientStreamTracer(Metadata headers) {
+    public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
       headers.discardAll(tracingHeader);
       headers.put(tracingHeader, span.getContext());
       return noopClientTracer;

@@ -55,7 +55,7 @@ public final class StatsTraceContext {
     // so that for-each doesn't create an Iterator every time.
     StreamTracer[] tracers = new StreamTracer[factories.size()];
     for (int i = 0; i < tracers.length; i++) {
-      tracers[i] = factories.get(i).newClientStreamTracer(headers);
+      tracers[i] = factories.get(i).newClientStreamTracer(callOptions, headers);
     }
     return new StatsTraceContext(tracers);
   }
