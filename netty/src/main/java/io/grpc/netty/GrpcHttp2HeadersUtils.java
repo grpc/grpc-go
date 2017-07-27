@@ -125,6 +125,11 @@ class GrpcHttp2HeadersUtils {
     }
 
     @Override
+    public CharSequence status() {
+      return get(Http2Headers.PseudoHeaderName.STATUS.value());
+    }
+
+    @Override
     public List<CharSequence> getAll(CharSequence csName) {
       AsciiString name = requireAsciiString(csName);
       List<CharSequence> returnValues = new ArrayList<CharSequence>(4);
