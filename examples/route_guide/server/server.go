@@ -214,10 +214,10 @@ func main() {
 	var opts []grpc.ServerOption
 	if *tls {
 		if *certFile == "" {
-			testdata.Path("server1.pem")
+			*certFile = testdata.Path("server1.pem")
 		}
 		if *keyFile == "" {
-			testdata.Path("server1.key")
+			*keyFile = testdata.Path("server1.key")
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
