@@ -107,8 +107,6 @@ type http2Client struct {
 	maxStreams int
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	// goAwayID records the Last-Stream-ID in the GoAway frame from the server.
-	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
 	// goAwayReason records the http2.ErrCode and debug data received with the
@@ -649,63 +647,29 @@ func (t *http2Client) Close() (err error) {
 	return
 }
 
-// goAwayActiveStreams is called when a GoAway frame is received. It assumes a transport lock is held.
-func (t *http2Client) goAwayActiveStreams() {
-	// A client can recieve multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
-	// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
-	// with the ID of the last stream the server will process.
-	// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
-	// close all streams created after the second GoAwayId. This way streams that were in-flight while the GoAway from server
-	// was being sent don't get killed.
-	//
-	// Note: to be backward compatible with servers that will still send only 1 GoAway we'll still try and close streams with ID
-	// greater that GoAwayId sent by the first GoAway.
-
-	n := t.prevGoAwayID
-	if n == 0 && t.nextID > 1 {
-		n = t.nextID - 2
-	}
-	m := t.goAwayID + 2
-	if m == 2 {
-		m = 1
-	}
-	for i := m; i <= n; i += 2 {
-		if s, ok := t.activeStreams[i]; ok {
-			close(s.goAway)
-		}
-	}
-}
-
-// gracefulCloseLocked assumes that transport lock is held.
-// It will return true if there are no active streams left or
-// the tranport is in unreachable state, in such a case the transport should be closed
-func (t *http2Client) gracefulCloseLocked() bool {
+func (t *http2Client) GracefulClose() error {
+	t.mu.Lock()
 	switch t.state {
 	case unreachable:
 		// The server may close the connection concurrently. t is not available for
 		// any streams. Close it now.
-		return true
+		t.mu.Unlock()
+		t.Close()
+		return nil
 	case closing:
-		return false
+		t.mu.Unlock()
+		return nil
 	}
 	if t.state == draining {
-		return false
+		t.mu.Unlock()
+		return nil
 	}
 	t.state = draining
 	active := len(t.activeStreams)
+	t.mu.Unlock()
 	if active == 0 {
-		return true
-	}
-	return false
-}
-
-func (t *http2Client) GracefulClose() error {
-	t.mu.Lock()
-	if t.gracefulCloseLocked() {
-		t.mu.Unlock()
 		return t.Close()
 	}
-	t.mu.Unlock()
 	return nil
 }
 
@@ -1003,48 +967,56 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
+	t.mu.Lock()
+	if t.state != reachable && t.state != draining {
+		t.mu.Unlock()
+		return
+	}
 	if f.ErrCode == http2.ErrCodeEnhanceYourCalm {
 		infof("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
 	}
-	t.mu.Lock()
-	if t.state == reachable || t.state == draining {
-		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
-			t.mu.Unlock()
-			t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
-			return
-		}
-		select {
-		case <-t.goAway:
-			id := t.goAwayID
-			// t.goAway has been closed (i.e.,multiple GoAways).
-			if id < f.LastStreamID {
-				t.mu.Unlock()
-				t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
-				return
-			}
-			t.prevGoAwayID = id
-			t.goAwayID = f.LastStreamID
-			t.goAwayActiveStreams()
-			shouldCloseT := t.gracefulCloseLocked()
-			t.mu.Unlock()
-			if shouldCloseT {
-				t.Close()
-			}
-			return
-		default:
-			t.setGoAwayReason(f)
-		}
-		t.goAwayID = f.LastStreamID
-		close(t.goAway)
-		t.goAwayActiveStreams()
-		shouldCloseT := t.gracefulCloseLocked()
+	id := f.LastStreamID
+	if id > 0 && id%2 != 1 {
 		t.mu.Unlock()
-		if shouldCloseT {
-			t.Close()
-		}
+		t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
 		return
 	}
+	// A client can recieve multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
+	// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
+	// with the ID of the last stream the server will process.
+	// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
+	// close all streams created after the second GoAwayId. This way streams that were in-flight while the GoAway from server
+	// was being sent don't get killed.
+	select {
+	case <-t.goAway: // t.goAway has been closed (i.e.,multiple GoAways).
+		// If there are multiple GoAways the first one should always have an ID greater than the following ones.
+		if id > t.prevGoAwayID {
+			t.mu.Unlock()
+			t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
+			return
+		}
+	default:
+		t.setGoAwayReason(f)
+		close(t.goAway)
+		t.state = draining
+	}
+	// All streams with IDs greater than the GoAwayId
+	// and smaller than the previous GoAway ID should be killed.
+	upperLimit := t.prevGoAwayID
+	if upperLimit == 0 { // This is the first GoAway Frame.
+		upperLimit = math.MaxUint32 // Kill all streams after the GoAway ID.
+	}
+	for k, v := range t.activeStreams {
+		if k > id && k <= upperLimit {
+			close(v.goAway)
+		}
+	}
+	t.prevGoAwayID = id
+	active := len(t.activeStreams)
 	t.mu.Unlock()
+	if active == 0 {
+		t.Close()
+	}
 }
 
 // setGoAwayReason sets the value of t.goAwayReason based
