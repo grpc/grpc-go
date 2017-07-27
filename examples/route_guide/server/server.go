@@ -46,8 +46,8 @@ import (
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile   = flag.String("cert_file", testdata.Path("server1.pem"), "The TLS cert file")
-	keyFile    = flag.String("key_file", testdata.Path("server1.key"), "The TLS key file")
+	certFile   = flag.String("cert_file", "", "The TLS cert file")
+	keyFile    = flag.String("key_file", "", "The TLS key file")
 	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )
@@ -213,6 +213,12 @@ func main() {
 	}
 	var opts []grpc.ServerOption
 	if *tls {
+		if *certFile == "" {
+			testdata.Path("server1.pem")
+		}
+		if *keyFile == "" {
+			testdata.Path("server1.key")
+		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)
