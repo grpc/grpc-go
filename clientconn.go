@@ -414,7 +414,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 		}
 		// No balancer, or no resolver within the balancer.  Connect directly.
-		if err := cc.resetAddrConn([]Address{Address{Addr: target}}, cc.dopts.block, nil); err != nil {
+		if err := cc.resetAddrConn([]Address{{Addr: target}}, cc.dopts.block, nil); err != nil {
 			waitC <- err
 			return
 		}
@@ -1085,7 +1085,6 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			ac.printf("ready")
 			if ac.state == Shutdown {
 				// ac.tearDown(...) has been invoked.
-				//ac.curAddr.Addr = ""
 				ac.mu.Unlock()
 				newTransport.Close()
 				return errConnClosing
