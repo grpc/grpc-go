@@ -37,6 +37,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/testdata"
 
 	"github.com/golang/protobuf/proto"
 
@@ -45,8 +46,8 @@ import (
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile   = flag.String("cert_file", "testdata/server1.pem", "The TLS cert file")
-	keyFile    = flag.String("key_file", "testdata/server1.key", "The TLS key file")
+	certFile   = flag.String("cert_file", testdata.Path("server1.pem"), "The TLS cert file")
+	keyFile    = flag.String("key_file", testdata.Path("server1.key"), "The TLS key file")
 	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )

@@ -121,19 +121,14 @@ func isReservedHeader(hdr string) bool {
 	if hdr != "" && hdr[0] == ':' {
 		return true
 	}
-	switch hdr {
-	case "content-type",
-		"grpc-message-type",
-		"grpc-encoding",
-		"grpc-message",
-		"grpc-status",
-		"grpc-timeout",
-		"grpc-status-details-bin",
-		"te":
+	if strings.HasPrefix(hdr, "grpc-") {
 		return true
-	default:
-		return false
 	}
+	switch hdr {
+	case "content-type", "te":
+		return true
+	}
+	return false
 }
 
 // isWhitelistedPseudoHeader checks whether hdr belongs to HTTP2 pseudoheaders

@@ -54,6 +54,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
@@ -350,8 +351,6 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 	return nil
 }
 
-const tlsDir = "testdata/"
-
 type env struct {
 	name        string
 	network     string // The type of network such as tcp, unix, etc.
@@ -529,7 +528,7 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	switch te.e.security {
 	case "tls":
-		creds, err := credentials.NewServerTLSFromFile(tlsDir+"server1.pem", tlsDir+"server1.key")
+		creds, err := credentials.NewServerTLSFromFile(testdata.Path("server1.pem"), testdata.Path("server1.key"))
 		if err != nil {
 			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
@@ -604,7 +603,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	switch te.e.security {
 	case "tls":
-		creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+		creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 		if err != nil {
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}
@@ -4775,6 +4774,37 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
+	}
+}
+
+func TestWaitForReadyConnection(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testWaitForReadyConnection(t, e)
+	}
+
+}
+
+func testWaitForReadyConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn() // Non-blocking dial.
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	state := cc.GetState()
+	// Wait for connection to be Ready.
+	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state != grpc.Ready {
+		t.Fatalf("Want connection state to be Ready, got %v", state)
+	}
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	// Make a fail-fast RPC.
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
 	}
 }
 
