@@ -69,6 +69,9 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   }
 
   @Override
+  public void thisUsesUnstableApi() {}
+
+  @Override
   public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs,
       Executor appExecutor, final MetadataApplier applier) {
     String authority = checkNotNull(attrs.get(ATTR_AUTHORITY), "authority");

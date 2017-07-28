@@ -91,7 +91,6 @@ public final class CallOptions {
   /**
    * Returns a new {@code CallOptions} with the given call credentials.
    */
-  @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
   public CallOptions withCallCredentials(@Nullable CallCredentials credentials) {
     CallOptions newOptions = new CallOptions(this);
     newOptions.credentials = credentials;
@@ -187,7 +186,6 @@ public final class CallOptions {
   /**
    * Returns the call credentials.
    */
-  @ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
   @Nullable
   public CallCredentials getCredentials() {
     return credentials;

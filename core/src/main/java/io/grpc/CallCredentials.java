@@ -28,14 +28,20 @@ import java.util.concurrent.Executor;
  * FooGrpc.FooStub stub = FooGrpc.newStub(channel);
  * response = stub.withCallCredentials(creds).bar(request);
  * </pre>
+ *
+ * <p>The contents and nature of this interface (and whether it remains an interface) is
+ * experimental, in that it can change. However, we are guaranteeing stability for the
+ * <em>name</em>. That is, we are guaranteeing stability for code to be returned a reference and
+ * pass that reference to gRPC for usage. However, code may not call or implement the {@code
+ * CallCredentials} itself if it wishes to only use stable APIs.
  */
-@ExperimentalApi("https//github.com/grpc/grpc-java/issues/1914")
 public interface CallCredentials {
   /**
    * The security level of the transport. It is guaranteed to be present in the {@code attrs} passed
    * to {@link #applyRequestMetadata}. It is by default {@link SecurityLevel#NONE} but can be
    * overridden by the transport.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
   public static final Key<SecurityLevel> ATTR_SECURITY_LEVEL =
       Key.of("io.grpc.CallCredentials.securityLevel");
 
@@ -45,6 +51,7 @@ public interface CallCredentials {
    * by default from the channel, but can be overridden by the transport and {@link
    * io.grpc.CallOptions} with increasing precedence.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
   public static final Key<String> ATTR_AUTHORITY = Key.of("io.grpc.CallCredentials.authority");
 
   /**
@@ -65,15 +72,24 @@ public interface CallCredentials {
    * @param applier The outlet of the produced headers. It can be called either before or after this
    *        method returns.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
   void applyRequestMetadata(
       MethodDescriptor<?, ?> method, Attributes attrs,
       Executor appExecutor, MetadataApplier applier);
+
+  /**
+   * Should be a noop but never called; tries to make it clearer to implementors that they may break
+   * in the future.
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
+  void thisUsesUnstableApi();
 
   /**
    * The outlet of the produced headers. Not thread-safe.
    *
    * <p>Exactly one of its methods must be called to make the RPC proceed.
    */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1914")
   public interface MetadataApplier {
     /**
      * Called when headers are successfully generated. They will be merged into the original
