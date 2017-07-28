@@ -1006,9 +1006,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	if upperLimit == 0 { // This is the first GoAway Frame.
 		upperLimit = math.MaxUint32 // Kill all streams after the GoAway ID.
 	}
-	for k, v := range t.activeStreams {
-		if k > id && k <= upperLimit {
-			close(v.goAway)
+	for streamID, stream := range t.activeStreams {
+		if streamID > id && streamID <= upperLimit {
+			close(stream.goAway)
 		}
 	}
 	t.prevGoAwayID = id
