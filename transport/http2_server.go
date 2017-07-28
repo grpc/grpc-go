@@ -65,17 +65,9 @@ type http2Server struct {
 	// Blocking operations should select on shutdownChan to avoid
 	// blocking forever after Close.
 	shutdownChan chan struct{}
-	// drainingBegun is set to true when the server writes out the first GoAway(with ID 2^31-1) frame out.
-	// After the first GoAway is sent an independent goroutine will be launched to
-	// later send the second GoAway.
-	// During this time we don't want to write another first GoAway(with ID 2^31 -1) to be written
-	// out. Thus call to Drain() will be a no-op if drainChan is already closed since draining is
-	// already underway.
-	drainingBegun bool
-	framer        *framer
-	hBuf          *bytes.Buffer  // the buffer for HPACK encoding
-	hEnc          *hpack.Encoder // HPACK encoder
-
+	framer       *framer
+	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
+	hEnc         *hpack.Encoder // HPACK encoder
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -84,9 +76,7 @@ type http2Server struct {
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
-
-	stats stats.Handler
-
+	stats         stats.Handler
 	// Flag to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
 	activity uint32 // Accessed atomically.
@@ -102,14 +92,22 @@ type http2Server struct {
 	// Flag to signify that number of ping strikes should be reset to 0.
 	// This is set whenever data or header frames are sent.
 	// 1 means yes.
-	resetPingStrikes uint32 // Accessed atomically.
-
+	resetPingStrikes  uint32 // Accessed atomically.
 	initialWindowSize int32
+	bdpEst            *bdpEstimator
 
 	bdpEst          *bdpEstimator
 	outQuotaVersion uint32
 
-	mu            sync.Mutex // guard the following
+	mu sync.Mutex // guard the following
+
+	// drainChan is initialized when drain(...) is called the first time.
+	// After which the server writes out the first GoAway(with ID 2^31-1) frame.
+	// Then an independent goroutine will be launched to later send the second GoAway.
+	// During this time we don't want to write another first GoAway(with ID 2^31 -1) frame.
+	// Thus call to drain(...) will be a no-op if drainChan is already initialized since draining is
+	// already underway.
+	drainChan     chan struct{}
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// the per-stream outbound flow control window size set by the peer.
@@ -643,7 +641,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.drain(http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings"))
+		t.drain(http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings"), true)
 	}
 }
 
@@ -993,14 +991,14 @@ func (t *http2Server) keepalive() {
 			if val <= 0 {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
-				t.drain(http2.ErrCodeNo, []byte{})
+				t.drain(http2.ErrCodeNo, []byte{}, false)
 				// Reseting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
 				return
 			}
 			maxIdle.Reset(val)
 		case <-maxAge.C:
-			t.drain(http2.ErrCodeNo, []byte{})
+			t.drain(http2.ErrCodeNo, []byte{}, false)
 			maxAge.Reset(t.kp.MaxConnectionAgeGrace)
 			select {
 			case <-maxAge.C:
@@ -1065,16 +1063,19 @@ func (t *http2Server) controller() {
 					ch := t.drainChan
 					sid := t.maxStreamID
 					if i.isSecond {
+						// Stop accepting more stream now.
+						t.state = draining
 						t.mu.Unlock()
 						t.framer.writeGoAway(true, sid, i.code, i.debugData)
+						t.writableChan <- 0
 						continue
 					}
-					t.state = draining
 					t.mu.Unlock()
-					if i.code == http2.ErrCodeEnhanceYourCalm && i.debuData == []byte("too_many_pings") {
+					if i.closeConn {
 						// Abruptly close the connection following the first GoAway.
-						t.framer.writeGoAway(true, sid, i.code, i.debugData)
+						t.framer.writeGoAway(true, 0, i.code, i.debugData)
 						t.Close()
+						t.writableChan <- 0
 						continue
 					}
 					// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
@@ -1083,8 +1084,8 @@ func (t *http2Server) controller() {
 					// originated before the GoAway reaches the client.
 					// After getting the ack or timer expiration send out another GoAway this
 					// time with an ID of the max stream server intends to process.
-					t.framer.writeGoAway(true, math.MaxUint32, i.code, i.debug)
-					t.framer.writePing(true, false, goAwayPing)
+					t.framer.writeGoAway(true, math.MaxUint32, i.code, i.debugData)
+					t.framer.writePing(true, false, goAwayPing.data)
 					go func() {
 						timer := time.NewTimer(time.Minute)
 						defer func() {
@@ -1094,9 +1095,9 @@ func (t *http2Server) controller() {
 						}()
 						select {
 						case <-ch:
-						case <-timer:
+						case <-timer.C:
 							timer.Reset(infinity)
-						case <-shutdownChan:
+						case <-t.shutdownChan:
 							return
 						}
 						t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData, isSecond: true})
@@ -1178,17 +1179,17 @@ func (t *http2Server) RemoteAddr() net.Addr {
 }
 
 func (t *http2Server) Drain() {
-	t.drain(http2.ErrCodeNo, []byte{})
+	t.drain(http2.ErrCodeNo, []byte{}, false)
 }
 
-func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
+func (t *http2Server) drain(code http2.ErrCode, debugData []byte, closeConn bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.drainChan != nil {
 		return
 	}
 	t.drainChan = make(chan struct{})
-	t.controlBuf.put(&goAway{code: code, debugData: debugData})
+	t.controlBuf.put(&goAway{code: code, debugData: debugData, closeConn: closeConn})
 }
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))

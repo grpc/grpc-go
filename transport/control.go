@@ -75,6 +75,7 @@ type goAway struct {
 	code      http2.ErrCode
 	debugData []byte
 	isSecond  bool
+	closeConn bool
 }
 
 func (*goAway) item() {}
