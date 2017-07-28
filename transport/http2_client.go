@@ -704,7 +704,6 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		p   []byte
 		oqv uint64
 	)
-loop:
 	for {
 		oqv = atomic.LoadUint64(&t.outQuotaVersion)
 		if r.Len() > 0 || p != nil {
@@ -782,7 +781,7 @@ loop:
 				t.controlBuf.put(&flushIO{})
 			}
 			t.writableChan <- 0
-			continue loop
+			continue
 		}
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 {
 			// Do a force flush iff this is last frame for the entire gRPC message
