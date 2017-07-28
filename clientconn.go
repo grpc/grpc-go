@@ -629,7 +629,7 @@ func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 				}
 			}
 		} else {
-			// Not pickFirst. All remains the same but changing addr to []Address{addr}
+			// Not pickFirst, create a new addrConn for each address.
 			var (
 				add []Address   // Addresses need to setup connections.
 				del []*addrConn // Connections need to tear down.
@@ -694,8 +694,8 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
-// UpdateAddresses checks whether current address in the updating list, Update the list if true.
-func (cc *ClientConn) UpdateAddresses(addrs []Address) bool {
+// addressesUpdated checks whether current address in the updating list, Update the list if true.
+func (cc *ClientConn) addressesUpdated(addrs []Address) bool {
 	if len(cc.conns) == 0 {
 		// No addrconn. Should go resetting addrconn.
 		return false
@@ -723,6 +723,7 @@ func (cc *ClientConn) UpdateAddresses(addrs []Address) bool {
 	return false
 }
 
+// pickFirstAddrConnTearDown() should be called after lock.
 func (cc *ClientConn) pickFirstAddrConnTearDown() {
 	if len(cc.conns) == 0 {
 		return
@@ -748,11 +749,10 @@ func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr err
 	// if current transport in addrs, just change lists to update order and new addresses
 	// not work for roundrobin
 	cc.mu.Lock()
-	_, isPickFirst := cc.dopts.balancer.(*pickFirst)
-	if isPickFirst {
+	if _, isPickFirst := cc.dopts.balancer.(*pickFirst); isPickFirst {
 		// If Current address in use in the updating list, just update the list.
 		// Otherwise, teardown current addrconn and create a new one.
-		if cc.UpdateAddresses(addrs) {
+		if cc.addressesUpdated(addrs) {
 			cc.mu.Unlock()
 			return nil
 		}

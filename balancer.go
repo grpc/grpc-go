@@ -400,10 +400,10 @@ type pickFirst struct {
 	*roundRobin
 }
 
-// PickFirstBalancer is a simple balancer for testing multi-addresses in one addrConn.
+// pickFirstBalancer is a simple balancer for testing multi-addresses in one addrConn.
 // By using this balancer, all address shares the same addrConn.
 // Although it wrapped by RoundRobin balancer, the logic of all methods work fine because
-// balancer.Get() returns the address Up by resetTransport()
+// balancer. Get() returns the address Up by resetTransport().
 func pickFirstBalancer(r naming.Resolver) Balancer {
 	return &pickFirst{&roundRobin{r: r}}
 }

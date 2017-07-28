@@ -442,10 +442,12 @@ func checkServerUp(t *testing.T, currentServer *server) {
 
 func TestPickFirstEmptyAddrs(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
+	defer servers[0].stop()
 	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
+	defer cc.Close()
 	var reply string
 	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, reply = %q, want %q, <nil>", err, reply, expectedResponse)
@@ -465,12 +467,11 @@ func TestPickFirstEmptyAddrs(t *testing.T) {
 			break
 		}
 	}
-	cc.Close()
-	servers[0].stop()
 }
 
 func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	servers, r := startServers(t, 1, math.MaxUint32)
+	defer servers[0].stop()
 	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
@@ -514,18 +515,20 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	cc.Close()
 	wg.Wait()
-	servers[0].stop()
 }
 
 func TestPickFirstOrderAllServerUp(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r := startServers(t, numServers, math.MaxUint32)
+	for i := 0; i < numServers; i++ {
+		defer servers[i].stop()
+	}
 	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-
+	defer cc.Close()
 	// Add servers[1] and [2] to the service discovery.
 	u := &naming.Update{
 		Op:   naming.Add,
@@ -576,7 +579,7 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 	}
 
 	// Add server[0] back to the balancer, the incoming RPCs served in server[1]
-	// Add is append operation, the order of Notify now is {server[2].port server[0].port}
+	// Add is append operation, the order of Notify now is {server[1].port server[2].port server[0].port}
 	u = &naming.Update{
 		Op:   naming.Add,
 		Addr: "localhost:" + servers[0].port,
@@ -608,10 +611,23 @@ func TestPickFirstOrderAllServerUp(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// After remove server[3], incoming RPCs still served in server[0]
-	cc.Close()
-	for i := 0; i < numServers; i++ {
-		servers[i].stop()
+	// Delete server[2] in the balancer, the incoming RPCs served in server[0]
+	u = &naming.Update{
+		Op:   naming.Delete,
+		Addr: "localhost:" + servers[2].port,
+	}
+	r.w.inject([]*naming.Update{u})
+	for {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	for i := 0; i < 20; i++ {
+		if err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err == nil || ErrorDesc(err) != servers[0].port {
+			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 2, err, servers[2].port)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -619,11 +635,14 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 	// Start 3 servers on 3 ports.
 	numServers := 3
 	servers, r := startServers(t, numServers, math.MaxUint32)
+	for i := 0; i < numServers; i++ {
+		defer servers[i].stop()
+	}
 	cc, err := Dial("foo.bar.com", WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-
+	defer cc.Close()
 	// Add servers[1] and [2] to the service discovery.
 	u := &naming.Update{
 		Op:   naming.Add,
@@ -701,22 +720,20 @@ func TestPickFirstOrderOneServerDown(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-
-	// After remove server[3], incoming RPCs still served in server[0]
-	cc.Close()
-	for i := 0; i < numServers; i++ {
-		servers[i].stop()
-	}
 }
 
 func TestPickFirstOneAddressRemoval(t *testing.T) {
 	// Start 2 servers.
 	numServers := 2
 	servers, r := startServers(t, numServers, math.MaxUint32)
+	for i := 0; i < numServers; i++ {
+		defer servers[i].stop()
+	}
 	cc, err := Dial("localhost:"+servers[0].port, WithBalancer(pickFirstBalancer(r)), WithBlock(), WithInsecure(), WithCodec(testCodec{}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
+	defer cc.Close()
 	// Add servers[1] to the service discovery.
 	var updates []*naming.Update
 	updates = append(updates, &naming.Update{
@@ -760,8 +777,4 @@ func TestPickFirstOneAddressRemoval(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	cc.Close()
-	for i := 0; i < numServers; i++ {
-		servers[i].stop()
-	}
 }
