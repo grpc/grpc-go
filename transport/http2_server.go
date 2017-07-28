@@ -1073,7 +1073,7 @@ func (t *http2Server) controller() {
 					t.mu.Unlock()
 					if i.closeConn {
 						// Abruptly close the connection following the first GoAway.
-						t.framer.writeGoAway(true, 0, i.code, i.debugData)
+						t.framer.writeGoAway(true, sid, i.code, i.debugData)
 						t.Close()
 						t.writableChan <- 0
 						continue
@@ -1084,7 +1084,7 @@ func (t *http2Server) controller() {
 					// originated before the GoAway reaches the client.
 					// After getting the ack or timer expiration send out another GoAway this
 					// time with an ID of the max stream server intends to process.
-					t.framer.writeGoAway(true, math.MaxUint32, i.code, i.debugData)
+					t.framer.writeGoAway(true, math.MaxUint32, http2.ErrCodeNo, []byte{})
 					t.framer.writePing(true, false, goAwayPing.data)
 					go func() {
 						timer := time.NewTimer(time.Minute)
