@@ -600,6 +600,10 @@ const (
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() {
+		if f.Data == goAwayPing.data {
+			close(t.drainChan)
+			return
+		}
 		// Maybe it's a BDP ping.
 		if t.bdpEst != nil {
 			t.bdpEst.calculate(f.Data)
@@ -1028,6 +1032,8 @@ func (t *http2Server) keepalive() {
 	}
 }
 
+var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
+
 // controller running in a separate goroutine takes charge of sending control
 // frames (e.g., window update, reset stream, setting, etc.) to the server.
 func (t *http2Server) controller() {
@@ -1056,13 +1062,45 @@ func (t *http2Server) controller() {
 						// The transport is closing.
 						return
 					}
+					ch := t.drainChan
 					sid := t.maxStreamID
+					if i.isSecond {
+						t.mu.Unlock()
+						t.framer.writeGoAway(true, sid, i.code, i.debugData)
+						continue
+					}
 					t.state = draining
 					t.mu.Unlock()
-					t.framer.writeGoAway(true, sid, i.code, i.debugData)
-					if i.code == http2.ErrCodeEnhanceYourCalm {
+					if i.code == http2.ErrCodeEnhanceYourCalm && i.debuData == []byte("too_many_pings") {
+						// Abruptly close the connection following the first GoAway.
+						t.framer.writeGoAway(true, sid, i.code, i.debugData)
 						t.Close()
+						continue
 					}
+					// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
+					// Follow that with a ping and wait for the ack to come back or a timer
+					// to expire. During this time accept new streams since they might have
+					// originated before the GoAway reaches the client.
+					// After getting the ack or timer expiration send out another GoAway this
+					// time with an ID of the max stream server intends to process.
+					t.framer.writeGoAway(true, math.MaxUint32, i.code, i.debug)
+					t.framer.writePing(true, false, goAwayPing)
+					go func() {
+						timer := time.NewTimer(time.Minute)
+						defer func() {
+							if !timer.Stop() {
+								<-timer.C
+							}
+						}()
+						select {
+						case <-ch:
+						case <-timer:
+							timer.Reset(infinity)
+						case <-shutdownChan:
+							return
+						}
+						t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData, isSecond: true})
+					}()
 				case *flushIO:
 					t.framer.flushWrite()
 				case *ping:
@@ -1146,9 +1184,10 @@ func (t *http2Server) Drain() {
 func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.drainingBegun {
+	if t.drainChan != nil {
 		return
 	}
+	t.drainChan = make(chan struct{})
 	t.controlBuf.put(&goAway{code: code, debugData: debugData})
 }
 
