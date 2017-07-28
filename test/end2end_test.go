@@ -55,6 +55,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -4613,6 +4614,54 @@ func TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 
 	if err := doFDC(ctx, proxy.client); err != nil {
 		t.Fatalf("doFDC(_, proxy.client) = %v; want nil", err)
+	}
+}
+
+func TestStatsTagsAndTrace(t *testing.T) {
+	// Data added to context by client (typically in a stats handler).
+	tags := []byte{1, 5, 2, 4, 3}
+	trace := []byte{5, 2, 1, 3, 4}
+
+	// endpoint ensures Tags() and Trace() in context match those that were added
+	// by the client and returns an error if not.
+	endpoint := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, tags) {
+				return nil, status.Errorf(codes.Internal, "stats.Tags(%v)=%v; want %v", ctx, tg, tags)
+			}
+			if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, trace) {
+				return nil, status.Errorf(codes.Internal, "stats.Trace(%v)=%v; want %v", ctx, tr, trace)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := endpoint.Start(); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer endpoint.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	testCases := []struct {
+		ctx  context.Context
+		want codes.Code
+	}{
+		{ctx: ctx, want: codes.Internal},
+		{ctx: stats.SetTags(ctx, tags), want: codes.Internal},
+		{ctx: stats.SetTrace(ctx, trace), want: codes.Internal},
+		{ctx: stats.SetTags(stats.SetTrace(ctx, tags), tags), want: codes.Internal},
+		{ctx: stats.SetTags(stats.SetTrace(ctx, trace), tags), want: codes.OK},
+	}
+
+	for _, tc := range testCases {
+		_, err := endpoint.client.EmptyCall(tc.ctx, &testpb.Empty{})
+		if tc.want == codes.OK && err != nil {
+			t.Fatalf("endpoint.client.EmptyCall(%v, _) = _, %v; want _, nil", tc.ctx, err)
+		}
+		if s, ok := status.FromError(err); !ok || s.Code() != tc.want {
+			t.Fatalf("endpoint.client.EmptyCall(%v, _) = _, %v; want _, <status with Code()=%v>", tc.ctx, err, tc.want)
+		}
 	}
 }
 

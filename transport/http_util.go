@@ -111,7 +111,9 @@ type decodeState struct {
 	timeout    time.Duration
 	method     string
 	// key-value metadata map from the peer.
-	mdata map[string][]string
+	mdata      map[string][]string
+	statsTags  []byte
+	statsTrace []byte
 }
 
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
@@ -275,18 +277,31 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			return streamErrorf(codes.Internal, "transport: malformed http-status: %v", err)
 		}
 		d.httpStatus = &code
-	default:
-		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
-			if d.mdata == nil {
-				d.mdata = make(map[string][]string)
-			}
-			v, err := decodeMetadataHeader(f.Name, f.Value)
-			if err != nil {
-				errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
-				return nil
-			}
-			d.mdata[f.Name] = append(d.mdata[f.Name], v)
+	case "grpc-tags-bin":
+		v, err := decodeBinHeader(f.Value)
+		if err != nil {
+			return streamErrorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
 		}
+		d.statsTags = v
+	case "grpc-trace-bin":
+		v, err := decodeBinHeader(f.Value)
+		if err != nil {
+			return streamErrorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
+		}
+		d.statsTrace = v
+	default:
+		if isReservedHeader(f.Name) && !isWhitelistedPseudoHeader(f.Name) {
+			break
+		}
+		if d.mdata == nil {
+			d.mdata = make(map[string][]string)
+		}
+		v, err := decodeMetadataHeader(f.Name, f.Value)
+		if err != nil {
+			errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
+			return nil
+		}
+		d.mdata[f.Name] = append(d.mdata[f.Name], v)
 	}
 	return nil
 }

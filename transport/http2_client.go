@@ -471,6 +471,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	var (
 		endHeaders bool
 	)
+	if b := stats.OutgoingTags(ctx); b != nil {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-tags-bin", Value: encodeBinHeader(b)})
+	}
+	if b := stats.OutgoingTrace(ctx); b != nil {
+		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
+	}
 	if md, ok := metadata.FromOutgoingContext(ctx); ok {
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.

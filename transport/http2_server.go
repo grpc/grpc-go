@@ -274,6 +274,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if len(state.mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, state.mdata)
 	}
+	if state.statsTags != nil {
+		s.ctx = stats.SetIncomingTags(s.ctx, state.statsTags)
+	}
+	if state.statsTrace != nil {
+		s.ctx = stats.SetIncomingTrace(s.ctx, state.statsTrace)
+	}
 	s.trReader = &transportReader{
 		reader: &recvBufferReader{
 			ctx:  s.ctx,
