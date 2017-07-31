@@ -598,7 +598,7 @@ const (
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() {
-		if f.Data == goAwayPing.data {
+		if f.Data == goAwayPing.data && t.drainChan != nil {
 			close(t.drainChan)
 			return
 		}
@@ -641,7 +641,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.drain(http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings"), true)
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
 	}
 }
 
@@ -991,14 +991,14 @@ func (t *http2Server) keepalive() {
 			if val <= 0 {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
-				t.drain(http2.ErrCodeNo, []byte{}, false)
+				t.drain(http2.ErrCodeNo, []byte{})
 				// Reseting the timer so that the clean-up doesn't deadlock.
 				maxIdle.Reset(infinity)
 				return
 			}
 			maxIdle.Reset(val)
 		case <-maxAge.C:
-			t.drain(http2.ErrCodeNo, []byte{}, false)
+			t.drain(http2.ErrCodeNo, []byte{})
 			maxAge.Reset(t.kp.MaxConnectionAgeGrace)
 			select {
 			case <-maxAge.C:
@@ -1060,24 +1060,20 @@ func (t *http2Server) controller() {
 						// The transport is closing.
 						return
 					}
-					ch := t.drainChan
 					sid := t.maxStreamID
-					if i.isSecond {
+					if !i.headsUp {
 						// Stop accepting more stream now.
 						t.state = draining
 						t.mu.Unlock()
 						t.framer.writeGoAway(true, sid, i.code, i.debugData)
+						if i.closeConn {
+							// Abruptly close the connection following the GoAway.
+							t.Close()
+						}
 						t.writableChan <- 0
 						continue
 					}
 					t.mu.Unlock()
-					if i.closeConn {
-						// Abruptly close the connection following the first GoAway.
-						t.framer.writeGoAway(true, sid, i.code, i.debugData)
-						t.Close()
-						t.writableChan <- 0
-						continue
-					}
 					// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
 					// Follow that with a ping and wait for the ack to come back or a timer
 					// to expire. During this time accept new streams since they might have
@@ -1088,19 +1084,14 @@ func (t *http2Server) controller() {
 					t.framer.writePing(true, false, goAwayPing.data)
 					go func() {
 						timer := time.NewTimer(time.Minute)
-						defer func() {
-							if !timer.Stop() {
-								<-timer.C
-							}
-						}()
+						defer timer.Stop()
 						select {
-						case <-ch:
+						case <-t.drainChan:
 						case <-timer.C:
-							timer.Reset(infinity)
 						case <-t.shutdownChan:
 							return
 						}
-						t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData, isSecond: true})
+						t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData})
 					}()
 				case *flushIO:
 					t.framer.flushWrite()
@@ -1179,17 +1170,17 @@ func (t *http2Server) RemoteAddr() net.Addr {
 }
 
 func (t *http2Server) Drain() {
-	t.drain(http2.ErrCodeNo, []byte{}, false)
+	t.drain(http2.ErrCodeNo, []byte{})
 }
 
-func (t *http2Server) drain(code http2.ErrCode, debugData []byte, closeConn bool) {
+func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.drainChan != nil {
 		return
 	}
 	t.drainChan = make(chan struct{})
-	t.controlBuf.put(&goAway{code: code, debugData: debugData, closeConn: closeConn})
+	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true})
 }
 
 var rgen = rand.New(rand.NewSource(time.Now().UnixNano()))
