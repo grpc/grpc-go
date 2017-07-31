@@ -1003,7 +1003,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	}
 	ac.printf("connecting")
 	// Initiate current address as invalid
-	ac.curAddr = Address{Addr: "0"}
+	ac.curAddr = Address{}
 	if ac.down != nil {
 		ac.down(downErrorf(false, true, "%v", errNetworkIO))
 		ac.down = nil
@@ -1027,6 +1027,10 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
 		sleepTime := ac.dopts.bs.backoff(retries)
+		timeout := minConnectTimeout
+		if timeout < time.Duration(int(sleepTime)/len(ac.addrs)) {
+			timeout = time.Duration(int(sleepTime) / len(ac.addrs))
+		}
 		connectTime := time.Now()
 		// copy ac.addrs in case of race
 		addrsIter := make([]Address, len(ac.addrs))
@@ -1040,10 +1044,6 @@ func (ac *addrConn) resetTransport(drain bool) error {
 				return errConnClosing
 			}
 			ac.mu.Unlock()
-			timeout := minConnectTimeout
-			if timeout < time.Duration(int(sleepTime)/len(ac.addrs)) {
-				timeout = time.Duration(int(sleepTime) / len(ac.addrs))
-			}
 			ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 			sinfo := transport.TargetInfo{
 				Addr:     addr.Addr,
@@ -1074,11 +1074,6 @@ func (ac *addrConn) resetTransport(drain bool) error {
 					ac.ready = nil
 				}
 				ac.mu.Unlock()
-				select {
-				case <-ac.ctx.Done():
-					return ac.ctx.Err()
-				default:
-				}
 				continue
 			}
 			ac.mu.Lock()
@@ -1245,7 +1240,7 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 
 	ac.mu.Lock()
-	ac.curAddr = Address{Addr: "0"}
+	ac.curAddr = Address{}
 	defer ac.mu.Unlock()
 	if ac.down != nil {
 		ac.down(downErrorf(false, false, "%v", err))

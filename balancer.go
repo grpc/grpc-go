@@ -396,14 +396,13 @@ func (rr *roundRobin) Close() error {
 	return nil
 }
 
+// pickFirst is used to test multi-addresses in one addrConn which all address shares the same addrConn.
+// It wrappers around roundRobin balancer. The logic of all methods works fine because balancer.Get()
+// returns the only address Up by resetTransport().
 type pickFirst struct {
 	*roundRobin
 }
 
-// pickFirstBalancer is a simple balancer for testing multi-addresses in one addrConn.
-// By using this balancer, all address shares the same addrConn.
-// Although it wrapped by RoundRobin balancer, the logic of all methods work fine because
-// balancer. Get() returns the address Up by resetTransport().
 func pickFirstBalancer(r naming.Resolver) Balancer {
 	return &pickFirst{&roundRobin{r: r}}
 }
