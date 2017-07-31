@@ -99,7 +99,7 @@ type http2Client struct {
 	initialWindowSize int32
 
 	bdpEst          *bdpEstimator
-	outQuotaVersion uint64
+	outQuotaVersion uint32
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -231,7 +231,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		kp:                kp,
 		statsHandler:      opts.StatsHandler,
 		initialWindowSize: initialWindowSize,
-		outQuotaVersion:   0,
 	}
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
@@ -683,10 +682,10 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	r := bytes.NewBuffer(data)
 	var (
 		p   []byte
-		oqv uint64
+		oqv uint32
 	)
 	for {
-		oqv = atomic.LoadUint64(&t.outQuotaVersion)
+		oqv = atomic.LoadUint32(&t.outQuotaVersion)
 		if r.Len() > 0 || p != nil {
 			size := http2MaxFrameLen
 			// Wait until the stream has some quota to send the data.
@@ -752,7 +751,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			return ContextErr(s.ctx.Err())
 		default:
 		}
-		if oqv != atomic.LoadUint64(&t.outQuotaVersion) {
+		if oqv != atomic.LoadUint32(&t.outQuotaVersion) {
 			// InitialWindowSize settings frame must have been received after we
 			// acquired send quota but before we got the writable channel.
 			// We must forsake this write.
@@ -1237,7 +1236,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			}
 			t.streamSendQuota = s.Val
 			t.mu.Unlock()
-			atomic.AddUint64(&t.outQuotaVersion, 1)
+			atomic.AddUint32(&t.outQuotaVersion, 1)
 		}
 	}
 }
