@@ -95,23 +95,27 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
         return;
       }
 
-      PickResult pickResult;
+      SubchannelPicker picker;
       switch (currentState) {
+        case IDLE:
+          picker = new RequestConnectionPicker(subchannel);
+          break;
         case CONNECTING:
-          pickResult = PickResult.withNoResult();
+          // It's safe to use RequestConnectionPicker here, so when coming from IDLE we could leave
+          // the current picker in-place. But ignoring the potential optimization is simpler.
+          picker = new Picker(PickResult.withNoResult());
           break;
         case READY:
-        case IDLE:
-          pickResult = PickResult.withSubchannel(subchannel);
+          picker = new Picker(PickResult.withSubchannel(subchannel));
           break;
         case TRANSIENT_FAILURE:
-          pickResult = PickResult.withError(stateInfo.getStatus());
+          picker = new Picker(PickResult.withError(stateInfo.getStatus()));
           break;
         default:
           throw new IllegalArgumentException("Unsupported state:" + currentState);
       }
 
-      helper.updateBalancingState(currentState, new Picker(pickResult));
+      helper.updateBalancingState(currentState, picker);
     }
 
     @Override
@@ -126,8 +130,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
    * No-op picker which doesn't add any custom picking logic. It just passes already known result
    * received in constructor.
    */
-  @VisibleForTesting
-  static final class Picker extends SubchannelPicker {
+  private static final class Picker extends SubchannelPicker {
     private final PickResult result;
 
     Picker(PickResult result) {
@@ -138,13 +141,25 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
     public PickResult pickSubchannel(PickSubchannelArgs args) {
       return result;
     }
+  }
+
+  /** Picker that requests connection during pick, and returns noResult. */
+  private static final class RequestConnectionPicker extends SubchannelPicker {
+    private final Subchannel subchannel;
+
+    RequestConnectionPicker(Subchannel subchannel) {
+      this.subchannel = checkNotNull(subchannel, "subchannel");
+    }
+
+    @Override
+    public PickResult pickSubchannel(PickSubchannelArgs args) {
+      subchannel.requestConnection();
+      return PickResult.withNoResult();
+    }
 
     @Override
     public void requestConnection() {
-      Subchannel subchannel = result.getSubchannel();
-      if (subchannel != null) {
-        subchannel.requestConnection();
-      }
+      subchannel.requestConnection();
     }
   }
 }
