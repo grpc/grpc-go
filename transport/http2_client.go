@@ -42,6 +42,8 @@ import (
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
+	outQuotaVersion uint64
+
 	ctx        context.Context
 	target     string // server name/addr
 	userAgent  string
@@ -98,8 +100,7 @@ type http2Client struct {
 
 	initialWindowSize int32
 
-	bdpEst          *bdpEstimator
-	outQuotaVersion uint64
+	bdpEst *bdpEstimator
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection

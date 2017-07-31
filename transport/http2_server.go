@@ -50,6 +50,8 @@ var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHe
 
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
+	outQuotaVersion uint64
+
 	ctx         context.Context
 	conn        net.Conn
 	remoteAddr  net.Addr
@@ -99,8 +101,7 @@ type http2Server struct {
 
 	initialWindowSize int32
 
-	bdpEst          *bdpEstimator
-	outQuotaVersion uint64
+	bdpEst *bdpEstimator
 
 	mu            sync.Mutex // guard the following
 	state         transportState
