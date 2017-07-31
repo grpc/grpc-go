@@ -89,22 +89,10 @@ public class TestServiceImpl extends TestServiceGrpc.TestServiceImplBase {
         (ServerCallStreamObserver<SimpleResponse>) responseObserver;
     SimpleResponse.Builder responseBuilder = SimpleResponse.newBuilder();
     try {
-      switch (req.getResponseCompression()) {
-        case DEFLATE:
-          // fallthrough, just use gzip
-        case GZIP:
-          obs.setCompression("gzip");
-          break;
-        case NONE:
-          obs.setCompression("identity");
-          break;
-        case UNRECOGNIZED:
-          // fallthrough
-        default:
-          obs.onError(Status.INVALID_ARGUMENT
-              .withDescription("Unknown: " + req.getResponseCompression())
-              .asRuntimeException());
-          return;
+      if (req.hasResponseCompressed() && req.getResponseCompressed().getValue()) {
+        obs.setCompression("gzip");
+      } else {
+        obs.setCompression("identity");
       }
     } catch (IllegalArgumentException e) {
       obs.onError(Status.UNIMPLEMENTED

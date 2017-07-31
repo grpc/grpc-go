@@ -19,6 +19,7 @@ package io.grpc.testing.integration;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -39,7 +40,6 @@ import io.grpc.ServerInterceptor;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.NettyServerBuilder;
-import io.grpc.testing.integration.Messages.CompressionType;
 import io.grpc.testing.integration.Messages.Payload;
 import io.grpc.testing.integration.Messages.PayloadType;
 import io.grpc.testing.integration.Messages.SimpleRequest;
@@ -110,7 +110,7 @@ public class TransportCompressionTest extends AbstractInteropTest {
     expectFzip = true;
     final SimpleRequest request = SimpleRequest.newBuilder()
         .setResponseSize(314159)
-        .setResponseCompression(CompressionType.GZIP)
+        .setResponseCompressed(BoolValue.newBuilder().setValue(true))
         .setResponseType(PayloadType.COMPRESSABLE)
         .setPayload(Payload.newBuilder()
             .setBody(ByteString.copyFrom(new byte[271828])))

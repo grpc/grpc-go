@@ -202,12 +202,28 @@ public class TestServiceClient {
         tester.largeUnary();
         break;
 
+      case CLIENT_COMPRESSED_UNARY:
+        tester.clientCompressedUnary();
+        break;
+
+      case SERVER_COMPRESSED_UNARY:
+        tester.serverCompressedUnary();
+        break;
+
       case CLIENT_STREAMING:
         tester.clientStreaming();
         break;
 
+      case CLIENT_COMPRESSED_STREAMING:
+        tester.clientCompressedStreaming();
+        break;
+
       case SERVER_STREAMING:
         tester.serverStreaming();
+        break;
+
+      case SERVER_COMPRESSED_STREAMING:
+        tester.serverCompressedStreaming();
         break;
 
       case PING_PONG:

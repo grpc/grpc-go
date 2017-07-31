@@ -44,6 +44,7 @@ import com.google.common.collect.Lists;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagValue;
+import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.EmptyProtos.Empty;
 import com.google.protobuf.MessageLite;
@@ -72,6 +73,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
 import io.grpc.protobuf.ProtoUtils;
+import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientCalls;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -319,6 +321,106 @@ public abstract class AbstractInteropTest {
     }
   }
 
+  /**
+   * Tests client per-message compression for unary calls. The Java API does not support inspecting
+   * a message's compression level, so this is primarily intended to run against a gRPC C++ server.
+   */
+  public void clientCompressedUnary() throws Exception {
+    assumeEnoughMemory();
+    final SimpleRequest expectCompressedRequest =
+        SimpleRequest.newBuilder()
+            .setExpectCompressed(BoolValue.newBuilder().setValue(true))
+            .setResponseSize(314159)
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[271828])))
+            .build();
+    final SimpleRequest expectUncompressedRequest =
+        SimpleRequest.newBuilder()
+            .setExpectCompressed(BoolValue.newBuilder().setValue(false))
+            .setResponseSize(314159)
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[271828])))
+            .build();
+    final SimpleResponse goldenResponse =
+        SimpleResponse.newBuilder()
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[314159])))
+            .build();
+
+    // Send a non-compressed message with expectCompress=true. Servers supporting this test case
+    // should return INVALID_ARGUMENT.
+    try {
+      blockingStub.unaryCall(expectCompressedRequest);
+      fail("expected INVALID_ARGUMENT");
+    } catch (StatusRuntimeException e) {
+      assertEquals(Status.INVALID_ARGUMENT.getCode(), e.getStatus().getCode());
+    }
+    if (metricsExpected()) {
+      assertMetrics("grpc.testing.TestService/UnaryCall", Status.Code.INVALID_ARGUMENT);
+    }
+
+    assertEquals(
+        goldenResponse, blockingStub.withCompression("gzip").unaryCall(expectCompressedRequest));
+    if (metricsExpected()) {
+      assertMetrics(
+          "grpc.testing.TestService/UnaryCall",
+          Status.Code.OK,
+          Collections.singleton(expectCompressedRequest),
+          Collections.singleton(goldenResponse));
+    }
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(expectUncompressedRequest));
+    if (metricsExpected()) {
+      assertMetrics(
+          "grpc.testing.TestService/UnaryCall",
+          Status.Code.OK,
+          Collections.singleton(expectUncompressedRequest),
+          Collections.singleton(goldenResponse));
+    }
+  }
+
+  /**
+   * Tests if the server can send a compressed unary response. Ideally we would assert that the
+   * responses have the requested compression, but this is not supported by the API. Given a
+   * compliant server, this test will exercise the code path for receiving a compressed response but
+   * cannot itself verify that the response was compressed.
+   */
+  @Test(timeout = 10000)
+  public void serverCompressedUnary() throws Exception {
+    assumeEnoughMemory();
+    final SimpleRequest responseShouldBeCompressed =
+        SimpleRequest.newBuilder()
+            .setResponseCompressed(BoolValue.newBuilder().setValue(true))
+            .setResponseSize(314159)
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[271828])))
+            .build();
+    final SimpleRequest responseShouldBeUncompressed =
+        SimpleRequest.newBuilder()
+            .setResponseCompressed(BoolValue.newBuilder().setValue(false))
+            .setResponseSize(314159)
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[271828])))
+            .build();
+    final SimpleResponse goldenResponse =
+        SimpleResponse.newBuilder()
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[314159])))
+            .build();
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(responseShouldBeCompressed));
+    if (metricsExpected()) {
+      assertMetrics(
+          "grpc.testing.TestService/UnaryCall",
+          Status.Code.OK,
+          Collections.singleton(responseShouldBeCompressed),
+          Collections.singleton(goldenResponse));
+    }
+
+    assertEquals(goldenResponse, blockingStub.unaryCall(responseShouldBeUncompressed));
+    if (metricsExpected()) {
+      assertMetrics(
+          "grpc.testing.TestService/UnaryCall",
+          Status.Code.OK,
+          Collections.singleton(responseShouldBeUncompressed),
+          Collections.singleton(goldenResponse));
+    }
+  }
+
   @Test(timeout = 10000)
   public void serverStreaming() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
@@ -393,6 +495,87 @@ public abstract class AbstractInteropTest {
     requestObserver.onCompleted();
     assertEquals(goldenResponse, responseObserver.firstValue().get());
     responseObserver.awaitCompletion();
+  }
+
+  /**
+   * Tests client per-message compression for streaming calls. The Java API does not support
+   * inspecting a message's compression level, so this is primarily intended to run against a gRPC
+   * C++ server.
+   */
+  public void clientCompressedStreaming() throws Exception {
+    final StreamingInputCallRequest expectCompressedRequest =
+        StreamingInputCallRequest.newBuilder()
+            .setExpectCompressed(BoolValue.newBuilder().setValue(true))
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[27182])))
+            .build();
+    final StreamingInputCallRequest expectUncompressedRequest =
+        StreamingInputCallRequest.newBuilder()
+            .setExpectCompressed(BoolValue.newBuilder().setValue(false))
+            .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[45904])))
+            .build();
+    final StreamingInputCallResponse goldenResponse =
+        StreamingInputCallResponse.newBuilder().setAggregatedPayloadSize(73086).build();
+
+    StreamRecorder<StreamingInputCallResponse> responseObserver = StreamRecorder.create();
+    StreamObserver<StreamingInputCallRequest> requestObserver =
+        asyncStub.streamingInputCall(responseObserver);
+
+    // Send a non-compressed message with expectCompress=true. Servers supporting this test case
+    // should return INVALID_ARGUMENT.
+    requestObserver.onNext(expectCompressedRequest);
+    responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+    Throwable e = responseObserver.getError();
+    assertNotNull("expected INVALID_ARGUMENT", e);
+    assertEquals(Status.INVALID_ARGUMENT.getCode(), Status.fromThrowable(e).getCode());
+
+    // Start a new stream
+    responseObserver = StreamRecorder.create();
+    @SuppressWarnings("unchecked")
+    ClientCallStreamObserver<StreamingInputCallRequest> clientCallStreamObserver =
+        (ClientCallStreamObserver)
+            asyncStub.withCompression("gzip").streamingInputCall(responseObserver);
+    clientCallStreamObserver.setMessageCompression(true);
+    clientCallStreamObserver.onNext(expectCompressedRequest);
+    clientCallStreamObserver.setMessageCompression(false);
+    clientCallStreamObserver.onNext(expectUncompressedRequest);
+    clientCallStreamObserver.onCompleted();
+    responseObserver.awaitCompletion();
+    assertSuccess(responseObserver);
+    assertEquals(goldenResponse, responseObserver.firstValue().get());
+  }
+
+  /**
+   * Tests server per-message compression in a streaming response. Ideally we would assert that the
+   * responses have the requested compression, but this is not supported by the API. Given a
+   * compliant server, this test will exercise the code path for receiving a compressed response but
+   * cannot itself verify that the response was compressed.
+   */
+  public void serverCompressedStreaming() throws Exception {
+    final StreamingOutputCallRequest request =
+        StreamingOutputCallRequest.newBuilder()
+            .addResponseParameters(
+                ResponseParameters.newBuilder()
+                    .setCompressed(BoolValue.newBuilder().setValue(true))
+                    .setSize(31415))
+            .addResponseParameters(
+                ResponseParameters.newBuilder()
+                    .setCompressed(BoolValue.newBuilder().setValue(false))
+                    .setSize(92653))
+            .build();
+    final List<StreamingOutputCallResponse> goldenResponses =
+        Arrays.asList(
+            StreamingOutputCallResponse.newBuilder()
+                .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[31415])))
+                .build(),
+            StreamingOutputCallResponse.newBuilder()
+                .setPayload(Payload.newBuilder().setBody(ByteString.copyFrom(new byte[92653])))
+                .build());
+
+    StreamRecorder<StreamingOutputCallResponse> recorder = StreamRecorder.create();
+    asyncStub.streamingOutputCall(request, recorder);
+    recorder.awaitCompletion();
+    assertSuccess(recorder);
+    assertEquals(goldenResponses, recorder.getValues());
   }
 
   @Test(timeout = 10000)
