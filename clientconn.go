@@ -20,6 +20,11 @@ package grpc
 
 import (
 	"errors"
+<<<<<<< HEAD
+=======
+	"fmt"
+	"math"
+>>>>>>> change defaultClientMaxSendMessageSize on client side
 	"net"
 	"strings"
 	"sync"
@@ -89,7 +94,7 @@ type dialOptions struct {
 
 const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
-	defaultClientMaxSendMessageSize    = 1024 * 1024 * 4
+	defaultClientMaxSendMessageSize    = math.MaxInt32
 )
 
 // DialOption configures how we set up the connection.
