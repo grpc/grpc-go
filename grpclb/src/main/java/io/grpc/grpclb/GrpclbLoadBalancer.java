@@ -184,14 +184,11 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       }
     }
 
-    if (newBackendServers.isEmpty()) {
-      // handleResolvedAddressGroups()'s javadoc has guaranteed updatedServers is never empty.
-      checkState(!newLbAddressGroups.isEmpty(),
-          "No backend address nor LB address.  updatedServers=%s", updatedServers);
+    if (!newLbAddressGroups.isEmpty()) {
       if (newLbPolicy != LbPolicy.GRPCLB) {
         newLbPolicy = LbPolicy.GRPCLB;
-        logger.log(Level.FINE, "[{0}] Switching to GRPCLB because all addresses are balancers",
-            logId);
+        logger.log(
+            Level.FINE, "[{0}] Switching to GRPCLB because there is at least one balancer", logId);
       }
     }
     if (newLbPolicy == null) {
