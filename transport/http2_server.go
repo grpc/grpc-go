@@ -203,6 +203,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		idle:              time.Now(),
 		kep:               kep,
 		initialWindowSize: iwz,
+		outQuotaVersion:   0,
 	}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{

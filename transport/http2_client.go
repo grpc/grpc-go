@@ -231,6 +231,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		kp:                kp,
 		statsHandler:      opts.StatsHandler,
 		initialWindowSize: initialWindowSize,
+		outQuotaVersion:   0,
 	}
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
