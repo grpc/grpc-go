@@ -1560,11 +1560,6 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
-	if err != nil {
-		t.Fatal(err)
-	}
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(largeSize)),
