@@ -17,12 +17,15 @@
 package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.ConnectivityState;
 import java.util.LinkedList;
 import java.util.concurrent.Executor;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -31,6 +34,9 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ConnectivityStateManagerTest {
+  @Rule
+  public final ExpectedException thrown = ExpectedException.none();
+
   private final FakeClock executor = new FakeClock();
   private final ConnectivityStateManager state = new ConnectivityStateManager();
   private final LinkedList<ConnectivityState> sink = new LinkedList<ConnectivityState>();
@@ -222,5 +228,44 @@ public class ConnectivityStateManagerTest {
     state.gotoState(ConnectivityState.READY);
     assertEquals(1, sink.size());
     assertEquals(ConnectivityState.READY, sink.poll());
+  }
+
+  @Test
+  public void disable() {
+    state.disable();
+    assertTrue(state.isDisabled());
+
+    thrown.expect(UnsupportedOperationException.class);
+    thrown.expectMessage("Channel state API is not implemented");
+    state.getState();
+  }
+
+  @Test
+  public void disableThenDisable() {
+    state.disable();
+    state.disable();
+    assertTrue(state.isDisabled());
+
+    thrown.expect(UnsupportedOperationException.class);
+    thrown.expectMessage("Channel state API is not implemented");
+    state.getState();
+  }
+
+  @Test
+  public void disableThenGotoReady() {
+    state.disable();
+
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("ConnectivityStateManager is already disabled");
+    state.gotoState(ConnectivityState.READY);
+  }
+
+  @Test
+  public void shutdownThenReady() {
+    state.gotoState(ConnectivityState.SHUTDOWN);
+    assertEquals(ConnectivityState.SHUTDOWN, state.getState());
+
+    state.gotoState(ConnectivityState.READY);
+    assertEquals(ConnectivityState.SHUTDOWN, state.getState());
   }
 }

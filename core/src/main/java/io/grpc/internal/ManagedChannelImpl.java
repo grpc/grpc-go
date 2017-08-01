@@ -462,7 +462,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     channelExecutor.executeLater(new Runnable() {
       @Override
       public void run() {
-        channelStateManager.gotoState(SHUTDOWN);
+        if (!channelStateManager.isDisabled()) {
+          channelStateManager.gotoState(SHUTDOWN);
+        }
       }
     });
 

@@ -63,7 +63,7 @@ final class ConnectivityStateManager {
    */
   void gotoState(@Nonnull ConnectivityState newState) {
     checkNotNull(newState, "newState");
-    checkState(state != null, "ConnectivityStateManager is already disabled");
+    checkState(!isDisabled(), "ConnectivityStateManager is already disabled");
     gotoNullableState(newState);
   }
 
@@ -100,6 +100,13 @@ final class ConnectivityStateManager {
    */
   void disable() {
     gotoNullableState(null);
+  }
+
+  /**
+   * This method is threadsafe.
+   */
+  boolean isDisabled() {
+    return state == null;
   }
 
   private static final class Listener {
