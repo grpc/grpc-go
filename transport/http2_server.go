@@ -96,7 +96,6 @@ type http2Server struct {
 	initialWindowSize int32
 	bdpEst            *bdpEstimator
 
-	bdpEst          *bdpEstimator
 	outQuotaVersion uint32
 
 	mu sync.Mutex // guard the following
