@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -61,6 +62,7 @@ public class KeepAliveManager {
   private final Runnable sendPing = new LogExceptionRunnable(new Runnable() {
     @Override
     public void run() {
+      pingFuture = null;
       boolean shouldSendPing = false;
       synchronized (KeepAliveManager.this) {
         if (state == State.PING_SCHEDULED) {
@@ -170,8 +172,8 @@ public class KeepAliveManager {
       }
       // schedule a new ping
       state = State.PING_SCHEDULED;
-      pingFuture =
-          scheduler.schedule(sendPing, keepAliveTimeInNanos, TimeUnit.NANOSECONDS);
+      checkState(pingFuture == null, "There should be no outstanding pingFuture");
+      pingFuture = scheduler.schedule(sendPing, keepAliveTimeInNanos, TimeUnit.NANOSECONDS);
     }
   }
 
@@ -183,10 +185,12 @@ public class KeepAliveManager {
       // When the transport goes active, we do not reset the nextKeepaliveTime. This allows us to
       // quickly check whether the connection is still working.
       state = State.PING_SCHEDULED;
-      pingFuture = scheduler.schedule(
-          sendPing,
-          nextKeepaliveTime - ticker.read(),
-          TimeUnit.NANOSECONDS);
+      if (pingFuture == null) {
+        pingFuture = scheduler.schedule(
+            sendPing,
+            nextKeepaliveTime - ticker.read(),
+            TimeUnit.NANOSECONDS);
+      }
     } else if (state == State.IDLE_AND_PING_SENT) {
       state = State.PING_SENT;
     } // Other states are possible when keepAliveDuringTransportIdle == true
@@ -218,6 +222,7 @@ public class KeepAliveManager {
       }
       if (pingFuture != null) {
         pingFuture.cancel(false);
+        pingFuture = null;
       }
     }
   }

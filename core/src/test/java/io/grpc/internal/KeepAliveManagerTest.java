@@ -105,6 +105,10 @@ public final class KeepAliveManagerTest {
 
   @Test
   public void keepAlivePingDelayedByIncomingData() {
+    ScheduledFuture<?> future = mock(ScheduledFuture.class);
+    doReturn(future)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+
     // Transport becomes active. We should schedule keepalive pings.
     keepAliveManager.onTransportActive();
     ArgumentCaptor<Runnable> sendPingCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -218,6 +222,10 @@ public final class KeepAliveManagerTest {
 
   @Test
   public void transportGoesIdle() {
+    ScheduledFuture<?> pingFuture = mock(ScheduledFuture.class);
+    doReturn(pingFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+
     // Transport becomes active. We should schedule keepalive pings.
     keepAliveManager.onTransportActive();
     ArgumentCaptor<Runnable> sendPingCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -229,10 +237,14 @@ public final class KeepAliveManagerTest {
     keepAliveManager.onTransportIdle();
     sendPing.run();
     // Ping was not sent.
-    verify(transport, times(0)).ping(isA(ClientTransport.PingCallback.class),
-        isA(Executor.class));
+    verify(transport, times(0)).ping(isA(ClientTransport.PingCallback.class), isA(Executor.class));
     // No new ping got scheduled.
     verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+
+    // But when transport goes back to active
+    keepAliveManager.onTransportActive();
+    // Then we do schedule another ping
+    verify(scheduler, times(2)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
   }
 
   @Test
@@ -292,6 +304,26 @@ public final class KeepAliveManagerTest {
     // Transport becomes active again. Another ping is scheduled.
     keepAliveManager.onTransportActive();
     verify(scheduler, times(3)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+  }
+
+  @Test
+  public void transportGoesIdleBeforePingSent() {
+    // Transport becomes active. We should schedule keepalive pings.
+    ScheduledFuture<?> pingFuture = mock(ScheduledFuture.class);
+    doReturn(pingFuture)
+        .when(scheduler).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+    keepAliveManager.onTransportActive();
+    verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
+
+    // Data is received, and we go to ping delayed
+    keepAliveManager.onDataReceived();
+
+    // Transport becomes idle while the 1st ping is still scheduled
+    keepAliveManager.onTransportIdle();
+
+    // Transport becomes active again, we don't need to reschedule another ping
+    keepAliveManager.onTransportActive();
+    verify(scheduler, times(1)).schedule(isA(Runnable.class), isA(Long.class), isA(TimeUnit.class));
   }
 
   @Test
