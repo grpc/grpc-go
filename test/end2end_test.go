@@ -4793,7 +4793,8 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 
 	cc := te.clientConn() // Non-blocking dial.
 	tc := testpb.NewTestServiceClient(cc)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	state := cc.GetState()
 	// Wait for connection to be Ready.
 	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
@@ -4801,7 +4802,8 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 	if state != grpc.Ready {
 		t.Fatalf("Want connection state to be Ready, got %v", state)
 	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	// Make a fail-fast RPC.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)
