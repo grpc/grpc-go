@@ -1376,6 +1376,7 @@ public abstract class AbstractInteropTest {
   }
 
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
+  @SuppressWarnings("MissingFail")
   @Test(timeout = 10000)
   public void timeoutOnSleepingServer() throws Exception {
     TestServiceGrpc.TestServiceStub stub =

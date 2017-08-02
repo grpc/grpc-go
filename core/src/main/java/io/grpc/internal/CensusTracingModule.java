@@ -60,7 +60,6 @@ final class CensusTracingModule {
   private static final ClientStreamTracer noopClientTracer = new ClientStreamTracer() {};
 
   private final Tracer censusTracer;
-  private final BinaryFormat censusPropagationBinaryFormat;
   @VisibleForTesting
   final Metadata.Key<SpanContext> tracingHeader;
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
@@ -69,8 +68,7 @@ final class CensusTracingModule {
   CensusTracingModule(
       Tracer censusTracer, final BinaryFormat censusPropagationBinaryFormat) {
     this.censusTracer = checkNotNull(censusTracer, "censusTracer");
-    this.censusPropagationBinaryFormat =
-        checkNotNull(censusPropagationBinaryFormat, "censusPropagationBinaryFormat");
+    checkNotNull(censusPropagationBinaryFormat, "censusPropagationBinaryFormat");
     this.tracingHeader =
         Metadata.Key.of("grpc-trace-bin", new Metadata.BinaryMarshaller<SpanContext>() {
             @Override
@@ -187,12 +185,11 @@ final class CensusTracingModule {
   @VisibleForTesting
   final class ClientCallTracer extends ClientStreamTracer.Factory {
 
-    private final String fullMethodName;
     private final AtomicBoolean callEnded = new AtomicBoolean(false);
     private final Span span;
 
     ClientCallTracer(@Nullable Span parentSpan, String fullMethodName) {
-      this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
+      checkNotNull(fullMethodName, "fullMethodName");
       this.span =
           censusTracer
               .spanBuilderWithExplicitParent(makeSpanName("Sent", fullMethodName), parentSpan)
@@ -222,12 +219,11 @@ final class CensusTracingModule {
   }
 
   private final class ServerTracer extends ServerStreamTracer {
-    private final String fullMethodName;
     private final Span span;
     private final AtomicBoolean streamClosed = new AtomicBoolean(false);
 
     ServerTracer(String fullMethodName, @Nullable SpanContext remoteSpan) {
-      this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
+      checkNotNull(fullMethodName, "fullMethodName");
       this.span =
           censusTracer
               .spanBuilderWithRemoteParent(makeSpanName("Recv", fullMethodName), remoteSpan)
