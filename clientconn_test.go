@@ -33,7 +33,8 @@ import (
 )
 
 func assertState(wantState ConnectivityState, cc *ClientConn) (ConnectivityState, bool) {
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	var state ConnectivityState
 	for state = cc.GetState(); state != wantState && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
