@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"compress/gzip"
+	"io"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/credentials"
@@ -72,11 +75,13 @@ var (
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
-	unaryInt    UnaryClientInterceptor
-	streamInt   StreamClientInterceptor
-	codec       Codec
-	cp          Compressor
-	dc          Decompressor
+	unaryInt  UnaryClientInterceptor
+	streamInt StreamClientInterceptor
+	codec     Codec
+	cp        Compressor
+	dc        Decompressor
+	//cpFunc			func(io.Writer)(io.WriteCloser)
+	//dcFunc			map[string]func(io.Reader)(io.ReadCloser, error)
 	bs          backoffStrategy
 	balancer    Balancer
 	block       bool
@@ -133,8 +138,18 @@ func WithCodec(c Codec) DialOption {
 // WithCompressor returns a DialOption which sets a CompressorGenerator for generating message
 // compressor.
 func WithCompressor(cp Compressor) DialOption {
+	return WithNewCompressor("gzip", func(w io.Writer) io.WriteCloser {
+		return gzip.NewWriter(w)
+	})
+}
+
+// WithNewCompressor returns a DialOption which sets a function for generating message
+// compressor.
+func WithNewCompressor(name string, f func(io.Writer) io.WriteCloser) DialOption {
 	return func(o *dialOptions) {
-		o.cp = cp
+		// check name in decompressor
+		// o.cp = NewGZIPCompressor()
+		o.cp = NewUNIVERSALCompressor(name, f)
 	}
 }
 
@@ -145,6 +160,12 @@ func WithDecompressor(dc Decompressor) DialOption {
 		o.dc = dc
 	}
 }
+
+//func RegisterDecompressor(name string, f func(io.Reader) (io.ReadCloser, error)) DialOption {
+//	return func(o *dialOptions) {
+//		o.dcFunc[name] = f
+//	}
+//}
 
 // WithBalancer returns a DialOption which sets a load balancer.
 func WithBalancer(b Balancer) DialOption {
