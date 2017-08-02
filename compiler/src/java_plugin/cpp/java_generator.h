@@ -10,15 +10,12 @@
 
 class LogHelper {
   std::ostream* os;
-  bool abort;
 
  public:
-  LogHelper(std::ostream* os, bool abort) : os(os), abort(abort) {}
+  LogHelper(std::ostream* os) : os(os) {}
   ~LogHelper() {
     *os << std::endl;
-    if (abort) {
-      ::abort();
-    }
+    ::abort();
   }
   std::ostream& get_os() {
     return *os;
@@ -27,7 +24,7 @@ class LogHelper {
 
 // Abort the program after logging the mesage if the given condition is not
 // true. Otherwise, do nothing.
-#define GRPC_CODEGEN_CHECK(x) !(x) && LogHelper(&std::cerr, true).get_os() \
+#define GRPC_CODEGEN_CHECK(x) !(x) && LogHelper(&std::cerr).get_os() \
                              << "CHECK FAILED: " << __FILE__ << ":" \
                              << __LINE__ << ": "
 

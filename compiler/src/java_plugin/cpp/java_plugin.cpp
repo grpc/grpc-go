@@ -38,7 +38,7 @@ class JavaGrpcGenerator : public google::protobuf::compiler::CodeGenerator {
         java_grpc_generator::ProtoFlavor::NORMAL;
 
     bool enable_deprecated = false;
-    for (int i = 0; i < options.size(); i++) {
+    for (size_t i = 0; i < options.size(); i++) {
       if (options[i].first == "nano") {
         flavor = java_grpc_generator::ProtoFlavor::NANO;
       } else if (options[i].first == "lite") {
