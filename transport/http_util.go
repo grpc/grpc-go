@@ -242,6 +242,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}
 	case "grpc-encoding":
+		fmt.Println(f.Value)
 		d.encoding = f.Value
 	case "grpc-status":
 		code, err := strconv.Atoi(f.Value)

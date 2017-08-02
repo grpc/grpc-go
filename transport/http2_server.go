@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
+	"fmt"
 )
 
 // ErrIllegalHeaderWrite indicates that setting header is illegal because of
@@ -240,6 +241,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if se, ok := err.(StreamError); ok {
 				t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
 			}
+			fmt.Println("return")
 			return
 		}
 	}
@@ -249,6 +251,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.state = streamReadDone
 	}
 	s.recvCompress = state.encoding
+	fmt.Println("s.recvCompress", "1:", s.recvCompress, "2:",state.encoding, "3:", s.sendCompress)
 	if state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(t.ctx, state.timeout)
 	} else {
