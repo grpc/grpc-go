@@ -2263,6 +2263,55 @@ func testPeerNegative(t *testing.T, e env) {
 	tc.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
 }
 
+func TestPeerFailedRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerFailedRPC(t, e)
+	}
+}
+
+func testPeerFailedRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+
+	// Loop until we encounter a DeadlineExceeded error
+	for {
+		peer := new(peer.Peer)
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Microsecond)
+		defer cancel()
+		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer), grpc.FailFast(true))
+		// the first server DeadlineExceeded error should still return back peer information
+		if grpc.Code(err) == codes.DeadlineExceeded {
+			pa := peer.Addr.String()
+			if e.network == "unix" {
+				if pa != te.srvAddr {
+					t.Fatalf("peer.Addr = %v, want %v", pa, te.srvAddr)
+				}
+				return
+			}
+			_, pp, err := net.SplitHostPort(pa)
+			if err != nil {
+				t.Fatalf("Failed to parse address from peer.")
+			}
+			_, sp, err := net.SplitHostPort(te.srvAddr)
+			if err != nil {
+				t.Fatalf("Failed to parse address of test server.")
+			}
+			if pp != sp {
+				t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestMetadataUnaryRPC(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
