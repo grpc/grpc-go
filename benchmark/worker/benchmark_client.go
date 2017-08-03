@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	caFile = flag.String("ca_file", "", "The file containning the CA root cert file")
+	caFile = flag.String("ca_file", "", "The file containing the CA root cert file")
 )
 
 type lockingHistogram struct {
