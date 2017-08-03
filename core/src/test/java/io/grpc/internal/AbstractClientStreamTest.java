@@ -17,14 +17,13 @@
 package io.grpc.internal;
 
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
@@ -36,6 +35,7 @@ import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.AbstractClientStream.TransportState;
 import io.grpc.internal.MessageFramerTest.ByteWritableBuffer;
+import io.grpc.internal.testing.TestClientStreamTracer;
 import java.io.ByteArrayInputStream;
 import org.junit.Before;
 import org.junit.Rule;
@@ -213,7 +213,7 @@ public class AbstractClientStreamTest {
   @Test
   public void getRequest() {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
-    final ClientStreamTracer tracer = spy(new ClientStreamTracer() {});
+    final TestClientStreamTracer tracer = new TestClientStreamTracer();
     ClientStreamTracer.Factory tracerFactory =
         new ClientStreamTracer.Factory() {
           @Override
@@ -237,10 +237,9 @@ public class AbstractClientStreamTest {
     // GET requests don't have BODY.
     verify(sink, never())
         .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Boolean.class));
-    verify(tracer).outboundMessage();
-    verify(tracer).outboundWireSize(1);
-    verify(tracer).outboundUncompressedSize(1);
-    verifyNoMoreInteractions(tracer);
+    assertEquals(1, tracer.getOutboundMessageCount());
+    assertEquals(1, tracer.getOutboundWireSize());
+    assertEquals(1, tracer.getOutboundUncompressedSize());
   }
 
   /**

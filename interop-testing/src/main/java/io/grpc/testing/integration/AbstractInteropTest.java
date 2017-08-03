@@ -25,10 +25,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 
@@ -66,12 +63,14 @@ import io.grpc.ServerInterceptors;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.StreamTracer;
 import io.grpc.auth.MoreCallCredentials;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
 import io.grpc.internal.testing.StatsTestUtils.MetricsRecord;
+import io.grpc.internal.testing.TestClientStreamTracer;
+import io.grpc.internal.testing.TestServerStreamTracer;
+import io.grpc.internal.testing.TestStreamTracer;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientCalls;
@@ -139,13 +138,23 @@ public abstract class AbstractInteropTest {
   private static final LinkedBlockingQueue<ServerStreamTracerInfo> serverStreamTracers =
       new LinkedBlockingQueue<ServerStreamTracerInfo>();
 
-  private static class ServerStreamTracerInfo {
+  private static final class ServerStreamTracerInfo {
     final String fullMethodName;
-    final ServerStreamTracer tracer;
+    final InteropServerStreamTracer tracer;
 
-    ServerStreamTracerInfo(String fullMethodName, ServerStreamTracer tracer) {
+    ServerStreamTracerInfo(String fullMethodName, InteropServerStreamTracer tracer) {
       this.fullMethodName = fullMethodName;
       this.tracer = tracer;
+    }
+
+    private static final class InteropServerStreamTracer extends TestServerStreamTracer {
+      private volatile Context contextCapture;
+
+      @Override
+      public <ReqT, RespT> Context filterContext(Context context) {
+        contextCapture = context;
+        return super.filterContext(context);
+      }
     }
   }
 
@@ -153,7 +162,8 @@ public abstract class AbstractInteropTest {
       new ServerStreamTracer.Factory() {
         @Override
         public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
-          ServerStreamTracer tracer = spy(new ServerStreamTracer() {});
+          ServerStreamTracerInfo.InteropServerStreamTracer tracer
+              = new ServerStreamTracerInfo.InteropServerStreamTracer();
           serverStreamTracers.add(new ServerStreamTracerInfo(fullMethodName, tracer));
           return tracer;
         }
@@ -200,14 +210,14 @@ public abstract class AbstractInteropTest {
   protected TestServiceGrpc.TestServiceBlockingStub blockingStub;
   protected TestServiceGrpc.TestServiceStub asyncStub;
 
-  private final LinkedBlockingQueue<ClientStreamTracer> clientStreamTracers =
-      new LinkedBlockingQueue<ClientStreamTracer>();
+  private final LinkedBlockingQueue<TestClientStreamTracer> clientStreamTracers =
+      new LinkedBlockingQueue<TestClientStreamTracer>();
 
   private final ClientStreamTracer.Factory clientStreamTracerFactory =
       new ClientStreamTracer.Factory() {
         @Override
         public ClientStreamTracer newClientStreamTracer(CallOptions callOptions, Metadata headers) {
-          ClientStreamTracer tracer = spy(new ClientStreamTracer() {});
+          TestClientStreamTracer tracer = new TestClientStreamTracer();
           clientStreamTracers.add(tracer);
           return tracer;
         }
@@ -1655,22 +1665,26 @@ public abstract class AbstractInteropTest {
     assertMetrics(method, status, null, null);
   }
 
-  private void assertClientMetrics(String method, Status.Code status,
+  private void assertClientMetrics(String method, Status.Code code,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     // Tracer-based stats
-    ClientStreamTracer tracer = clientStreamTracers.poll();
+    TestClientStreamTracer tracer = clientStreamTracers.poll();
     assertNotNull(tracer);
-    verify(tracer).outboundHeaders();
+    assertTrue(tracer.getOutboundHeaders());
     ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     // assertClientMetrics() is called right after application receives status,
     // but streamClosed() may be called slightly later than that.  So we need a timeout.
-    verify(tracer, timeout(5000)).streamClosed(statusCaptor.capture());
-    assertEquals(status, statusCaptor.getValue().getCode());
+    try {
+      assertTrue(tracer.await(5, TimeUnit.SECONDS));
+    } catch (InterruptedException e) {
+      throw new AssertionError(e);
+    }
+    assertEquals(code, tracer.getStatus().getCode());
 
     // CensusStreamTracerModule records final status in interceptor, which is guaranteed to be done
     // before application receives status.
     MetricsRecord clientRecord = clientStatsCtxFactory.pollRecord();
-    checkTags(clientRecord, false, method, status);
+    checkTags(clientRecord, false, method, code);
 
     if (requests != null && responses != null) {
       checkTracerMetrics(tracer, requests, responses);
@@ -1682,7 +1696,7 @@ public abstract class AbstractInteropTest {
     assertClientMetrics(method, status, null, null);
   }
 
-  private void assertServerMetrics(String method, Status.Code status,
+  private void assertServerMetrics(String method, Status.Code code,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     AssertionError checkFailure = null;
     boolean passed = false;
@@ -1703,7 +1717,7 @@ public abstract class AbstractInteropTest {
         break;
       }
       try {
-        checkTags(serverRecord, true, method, status);
+        checkTags(serverRecord, true, method, code);
         if (requests != null && responses != null) {
           checkCensusMetrics(serverRecord, true, requests, responses);
         }
@@ -1731,12 +1745,16 @@ public abstract class AbstractInteropTest {
       }
       try {
         assertEquals(method, tracerInfo.fullMethodName);
-        verify(tracerInfo.tracer).filterContext(any(Context.class));
+        assertNotNull(tracerInfo.tracer.contextCapture);
         ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
         // On the server, streamClosed() may be called after the client receives the final status.
         // So we use a timeout.
-        verify(tracerInfo.tracer, timeout(1000)).streamClosed(statusCaptor.capture());
-        assertEquals(status, statusCaptor.getValue().getCode());
+        try {
+          assertTrue(tracerInfo.tracer.await(1, TimeUnit.SECONDS));
+        } catch (InterruptedException e) {
+          throw new AssertionError(e);
+        }
+        assertEquals(code, tracerInfo.tracer.getStatus().getCode());
         if (requests != null && responses != null) {
           checkTracerMetrics(tracerInfo.tracer, responses, requests);
         }
@@ -1768,11 +1786,11 @@ public abstract class AbstractInteropTest {
   }
 
   private static void checkTracerMetrics(
-      StreamTracer tracer,
+      TestStreamTracer tracer,
       Collection<? extends MessageLite> sentMessages,
       Collection<? extends MessageLite> receivedMessages) {
-    verify(tracer, times(sentMessages.size())).outboundMessage();
-    verify(tracer, times(receivedMessages.size())).inboundMessage();
+    assertEquals(sentMessages.size(), tracer.getOutboundMessageCount());
+    assertEquals(receivedMessages.size(), tracer.getInboundMessageCount());
 
     long uncompressedSentSize = 0;
     for (MessageLite msg : sentMessages) {
@@ -1782,20 +1800,9 @@ public abstract class AbstractInteropTest {
     for (MessageLite msg : receivedMessages) {
       uncompressedReceivedSize += msg.getSerializedSize();
     }
-    ArgumentCaptor<Long> outboundSizeCaptor = ArgumentCaptor.forClass(Long.class);
-    ArgumentCaptor<Long> inboundSizeCaptor = ArgumentCaptor.forClass(Long.class);
-    verify(tracer, atLeast(0)).outboundUncompressedSize(outboundSizeCaptor.capture());
-    verify(tracer, atLeast(0)).inboundUncompressedSize(inboundSizeCaptor.capture());
-    long recordedUncompressedOutboundSize = 0;
-    for (Long size : outboundSizeCaptor.getAllValues()) {
-      recordedUncompressedOutboundSize += size;
-    }
-    long recordedUncompressedInboundSize = 0;
-    for (Long size : inboundSizeCaptor.getAllValues()) {
-      recordedUncompressedInboundSize += size;
-    }
-    assertEquals(uncompressedSentSize, recordedUncompressedOutboundSize);
-    assertEquals(uncompressedReceivedSize, recordedUncompressedInboundSize);
+
+    assertEquals(uncompressedSentSize, tracer.getOutboundUncompressedSize());
+    assertEquals(uncompressedReceivedSize, tracer.getInboundUncompressedSize());
   }
 
   private static void checkCensusMetrics(MetricsRecord record, boolean server,

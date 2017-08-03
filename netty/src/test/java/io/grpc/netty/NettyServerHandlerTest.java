@@ -64,6 +64,7 @@ import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.testing.TestServerStreamTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -106,7 +107,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private ServerStreamTracer.Factory streamTracerFactory;
 
   private final ServerTransportListener transportListener = spy(new ServerTransportListenerImpl());
-  private final ServerStreamTracer streamTracer = spy(new ServerStreamTracer() {});
+  private final TestServerStreamTracer streamTracer = new TestServerStreamTracer();
 
   private NettyServerStream stream;
   private KeepAliveManager spyKeepAliveManager;

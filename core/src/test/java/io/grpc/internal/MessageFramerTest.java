@@ -20,7 +20,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -28,6 +27,7 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 
 import io.grpc.Codec;
 import io.grpc.StreamTracer;
+import io.grpc.internal.testing.TestStreamTracer.TestBaseStreamTracer;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -49,8 +49,8 @@ import org.mockito.MockitoAnnotations;
 public class MessageFramerTest {
   @Mock
   private MessageFramer.Sink sink;
-  @Mock
-  private StreamTracer tracer;
+
+  private final TestBaseStreamTracer tracer = new TestBaseStreamTracer();
   private MessageFramer framer;
 
   @Captor
@@ -371,20 +371,9 @@ public class MessageFramerTest {
     long actualWireSize = 0;
     long actualUncompressedSize = 0;
 
-    verify(tracer, times(messagesSent)).outboundMessage();
-    verify(tracer, atLeast(0)).outboundWireSize(wireSizeCaptor.capture());
-    for (Long portion : wireSizeCaptor.getAllValues()) {
-      actualWireSize += portion;
-    }
-
-    verify(tracer, atLeast(0)).outboundUncompressedSize(uncompressedSizeCaptor.capture());
-    for (Long portion : uncompressedSizeCaptor.getAllValues()) {
-      actualUncompressedSize += portion;
-    }
-
-    verifyNoMoreInteractions(tracer);
-    assertEquals(wireBytesSent, actualWireSize);
-    assertEquals(uncompressedBytesSent, actualUncompressedSize);
+    assertEquals(messagesSent, tracer.getOutboundMessageCount());
+    assertEquals(uncompressedBytesSent, tracer.getOutboundUncompressedSize());
+    assertEquals(wireBytesSent, tracer.getOutboundWireSize());
   }
 
   static class ByteWritableBuffer implements WritableBuffer {

@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import com.google.errorprone.annotations.DoNotMock;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -23,6 +24,7 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2861")
 @ThreadSafe
+@DoNotMock
 public abstract class StreamTracer {
   /**
    * Stream is closed.  This will be called exactly once.

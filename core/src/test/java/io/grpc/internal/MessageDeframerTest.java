@@ -20,7 +20,6 @@ import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -36,6 +35,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.StreamTracer;
 import io.grpc.internal.MessageDeframer.Listener;
 import io.grpc.internal.MessageDeframer.SizeEnforcingInputStream;
+import io.grpc.internal.testing.TestStreamTracer.TestBaseStreamTracer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -60,7 +60,7 @@ public class MessageDeframerTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
 
   private Listener listener = mock(Listener.class);
-  private StreamTracer tracer = mock(StreamTracer.class);
+  private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
   private StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
   private ArgumentCaptor<Long> wireSizeCaptor = ArgumentCaptor.forClass(Long.class);
   private ArgumentCaptor<Long> uncompressedSizeCaptor = ArgumentCaptor.forClass(Long.class);
@@ -374,23 +374,9 @@ public class MessageDeframerTest {
 
   private void checkStats(
       int messagesReceived, long wireBytesReceived, long uncompressedBytesReceived) {
-    long actualWireSize = 0;
-    long actualUncompressedSize = 0;
-
-    verify(tracer, times(messagesReceived)).inboundMessage();
-    verify(tracer, atLeast(0)).inboundWireSize(wireSizeCaptor.capture());
-    for (Long portion : wireSizeCaptor.getAllValues()) {
-      actualWireSize += portion;
-    }
-
-    verify(tracer, atLeast(0)).inboundUncompressedSize(uncompressedSizeCaptor.capture());
-    for (Long portion : uncompressedSizeCaptor.getAllValues()) {
-      actualUncompressedSize += portion;
-    }
-
-    verifyNoMoreInteractions(tracer);
-    assertEquals(wireBytesReceived, actualWireSize);
-    assertEquals(uncompressedBytesReceived, actualUncompressedSize);
+    assertEquals(messagesReceived, tracer.getInboundMessageCount());
+    assertEquals(wireBytesReceived, tracer.getInboundWireSize());
+    assertEquals(uncompressedBytesReceived, tracer.getInboundUncompressedSize());
   }
 
   private static List<Byte> bytes(ArgumentCaptor<InputStream> captor) {
