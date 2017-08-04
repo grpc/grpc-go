@@ -1,44 +1,35 @@
 /*
  *
- * Copyright 2017, Google Inc.
- * All rights reserved.
+ * Copyright 2017 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
 package status
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
+	dpb "github.com/golang/protobuf/ptypes/duration"
+	cpb "google.golang.org/genproto/googleapis/rpc/code"
+	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 )
@@ -126,4 +117,145 @@ func TestFromErrorOK(t *testing.T) {
 	if !ok || s.Code() != code || s.Message() != message || s.Err() != nil {
 		t.Fatalf("FromError(nil) = %v, %v; want <Code()=%s, Message()=%q, Err=nil>, true", s, ok, code, message)
 	}
+}
+
+func TestStatus_ErrorDetails(t *testing.T) {
+	tests := []struct {
+		code    codes.Code
+		details []proto.Message
+	}{
+		{
+			code:    codes.NotFound,
+			details: nil,
+		},
+		{
+			code: codes.NotFound,
+			details: []proto.Message{
+				&epb.ResourceInfo{
+					ResourceType: "book",
+					ResourceName: "projects/1234/books/5678",
+					Owner:        "User",
+				},
+			},
+		},
+		{
+			code: codes.Internal,
+			details: []proto.Message{
+				&epb.DebugInfo{
+					StackEntries: []string{
+						"first stack",
+						"second stack",
+					},
+				},
+			},
+		},
+		{
+			code: codes.Unavailable,
+			details: []proto.Message{
+				&epb.RetryInfo{
+					RetryDelay: &dpb.Duration{Seconds: 60},
+				},
+				&epb.ResourceInfo{
+					ResourceType: "book",
+					ResourceName: "projects/1234/books/5678",
+					Owner:        "User",
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		s, err := New(tc.code, "").WithDetails(tc.details...)
+		if err != nil {
+			t.Fatalf("(%v).WithDetails(%+v) failed: %v", str(s), tc.details, err)
+		}
+		details := s.Details()
+		for i := range details {
+			if !proto.Equal(details[i].(proto.Message), tc.details[i]) {
+				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
+			}
+		}
+	}
+}
+
+func TestStatus_WithDetails_Fail(t *testing.T) {
+	tests := []*Status{
+		nil,
+		FromProto(nil),
+		New(codes.OK, ""),
+	}
+	for _, s := range tests {
+		if s, err := s.WithDetails(); err == nil || s != nil {
+			t.Fatalf("(%v).WithDetails(%+v) = %v, %v; want nil, non-nil", str(s), []proto.Message{}, s, err)
+		}
+	}
+}
+
+func TestStatus_ErrorDetails_Fail(t *testing.T) {
+	tests := []struct {
+		s *Status
+		i []interface{}
+	}{
+		{
+			nil,
+			nil,
+		},
+		{
+			FromProto(nil),
+			nil,
+		},
+		{
+			New(codes.OK, ""),
+			[]interface{}{},
+		},
+		{
+			FromProto(&spb.Status{
+				Code: int32(cpb.Code_CANCELLED),
+				Details: []*apb.Any{
+					{
+						TypeUrl: "",
+						Value:   []byte{},
+					},
+					mustMarshalAny(&epb.ResourceInfo{
+						ResourceType: "book",
+						ResourceName: "projects/1234/books/5678",
+						Owner:        "User",
+					}),
+				},
+			}),
+			[]interface{}{
+				errors.New(`message type url "" is invalid`),
+				&epb.ResourceInfo{
+					ResourceType: "book",
+					ResourceName: "projects/1234/books/5678",
+					Owner:        "User",
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		got := tc.s.Details()
+		if !reflect.DeepEqual(got, tc.i) {
+			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
+		}
+	}
+}
+
+func str(s *Status) string {
+	if s == nil {
+		return "nil"
+	}
+	if s.s == nil {
+		return "<Code=OK>"
+	}
+	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", codes.Code(s.s.GetCode()), s.s.GetMessage(), s.s.GetDetails())
+}
+
+// mustMarshalAny converts a protobuf message to an any.
+func mustMarshalAny(msg proto.Message) *apb.Any {
+	any, err := ptypes.MarshalAny(msg)
+	if err != nil {
+		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
+	}
+	return any
 }

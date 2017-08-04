@@ -1,33 +1,18 @@
 /*
  *
- * Copyright 2015, Google Inc.
- * All rights reserved.
+ * Copyright 2015 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
@@ -40,6 +25,7 @@ package main
 import (
 	"flag"
 	"io"
+	"log"
 	"math/rand"
 	"time"
 
@@ -47,32 +33,32 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
 	tls                = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile             = flag.String("ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
+	caFile             = flag.String("ca_file", "", "The file containning the CA root cert file")
 	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 )
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
-	grpclog.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
+	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
 	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
-		grpclog.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
-	grpclog.Println(feature)
+	log.Println(feature)
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
-	grpclog.Printf("Looking for features within %v", rect)
+	log.Printf("Looking for features within %v", rect)
 	stream, err := client.ListFeatures(context.Background(), rect)
 	if err != nil {
-		grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 	}
 	for {
 		feature, err := stream.Recv()
@@ -80,9 +66,9 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-		grpclog.Println(feature)
+		log.Println(feature)
 	}
 }
 
@@ -95,21 +81,21 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
 	}
-	grpclog.Printf("Traversing %d points.", len(points))
+	log.Printf("Traversing %d points.", len(points))
 	stream, err := client.RecordRoute(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			log.Fatalf("%v.Send(%v) = %v", stream, point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		grpclog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
-	grpclog.Printf("Route summary: %v", reply)
+	log.Printf("Route summary: %v", reply)
 }
 
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
@@ -124,7 +110,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
 	waitc := make(chan struct{})
 	go func() {
@@ -136,14 +122,14 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				grpclog.Fatalf("Failed to receive a note : %v", err)
+				log.Fatalf("Failed to receive a note : %v", err)
 			}
-			grpclog.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			grpclog.Fatalf("Failed to send a note: %v", err)
+			log.Fatalf("Failed to send a note: %v", err)
 		}
 	}
 	stream.CloseSend()
@@ -160,19 +146,12 @@ func main() {
 	flag.Parse()
 	var opts []grpc.DialOption
 	if *tls {
-		var sn string
-		if *serverHostOverride != "" {
-			sn = *serverHostOverride
+		if *caFile == "" {
+			*caFile = testdata.Path("ca.pem")
 		}
-		var creds credentials.TransportCredentials
-		if *caFile != "" {
-			var err error
-			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
-			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
-			}
-		} else {
-			creds = credentials.NewClientTLSFromCert(nil, sn)
+		creds, err := credentials.NewClientTLSFromFile(*caFile, *serverHostOverride)
+		if err != nil {
+			log.Fatalf("Failed to create TLS credentials %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
@@ -180,7 +159,7 @@ func main() {
 	}
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("fail to dial: %v", err)
+		log.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)

@@ -1,33 +1,18 @@
 /*
  *
- * Copyright 2016, Google Inc.
- * All rights reserved.
+ * Copyright 2016 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
@@ -46,17 +31,20 @@ import (
 	"google.golang.org/grpc"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
+	pbv3 "google.golang.org/grpc/reflection/grpc_testingv3"
 )
 
 var (
 	s = &serverReflectionServer{}
 	// fileDescriptor of each test proto file.
 	fdTest       *dpb.FileDescriptorProto
+	fdTestv3     *dpb.FileDescriptorProto
 	fdProto2     *dpb.FileDescriptorProto
 	fdProto2Ext  *dpb.FileDescriptorProto
 	fdProto2Ext2 *dpb.FileDescriptorProto
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
+	fdTestv3Byte     []byte
 	fdProto2Byte     []byte
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
@@ -80,6 +68,7 @@ func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 
 func init() {
 	fdTest, fdTestByte = loadFileDesc("test.proto")
+	fdTestv3, fdTestv3Byte = loadFileDesc("testv3.proto")
 	fdProto2, fdProto2Byte = loadFileDesc("proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("proto2_ext2.proto")
@@ -178,6 +167,16 @@ func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) 
 	return nil
 }
 
+type serverV3 struct{}
+
+func (s *serverV3) Search(ctx context.Context, in *pbv3.SearchRequestV3) (*pbv3.SearchResponseV3, error) {
+	return &pbv3.SearchResponseV3{}, nil
+}
+
+func (s *serverV3) StreamingSearch(stream pbv3.SearchServiceV3_StreamingSearchServer) error {
+	return nil
+}
+
 func TestReflectionEnd2end(t *testing.T) {
 	// Start server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -186,6 +185,7 @@ func TestReflectionEnd2end(t *testing.T) {
 	}
 	s := grpc.NewServer()
 	pb.RegisterSearchServiceServer(s, &server{})
+	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 	// Register reflection service on s.
 	Register(s)
 	go s.Serve(lis)
@@ -286,6 +286,11 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testing.SearchService.StreamingSearch", fdTestByte},
 		{"grpc.testing.SearchResponse", fdTestByte},
 		{"grpc.testing.ToBeExtended", fdProto2Byte},
+		// Test support package v3.
+		{"grpc.testingv3.SearchServiceV3", fdTestv3Byte},
+		{"grpc.testingv3.SearchServiceV3.Search", fdTestv3Byte},
+		{"grpc.testingv3.SearchServiceV3.StreamingSearch", fdTestv3Byte},
+		{"grpc.testingv3.SearchResponseV3", fdTestv3Byte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
@@ -484,7 +489,11 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	switch r.MessageResponse.(type) {
 	case *rpb.ServerReflectionResponse_ListServicesResponse:
 		services := r.GetListServicesResponse().Service
-		want := []string{"grpc.testing.SearchService", "grpc.reflection.v1alpha.ServerReflection"}
+		want := []string{
+			"grpc.testingv3.SearchServiceV3",
+			"grpc.testing.SearchService",
+			"grpc.reflection.v1alpha.ServerReflection",
+		}
 		// Compare service names in response with want.
 		if len(services) != len(want) {
 			t.Errorf("= %v, want service names: %v", services, want)
