@@ -611,6 +611,15 @@ func (cc *ClientConn) GetState() ConnectivityState {
 // connections accordingly.  If doneChan is not nil, it is closed after the
 // first successfull connection is made.
 func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
+	defer func() {
+		// In case channel from cc.dopts.balancer.Notify() gets closed before a
+		// successful connection gets established, don't forget to notify the
+		// caller.
+		if doneChan != nil {
+			close(doneChan)
+		}
+	}()
+
 	for addrs := range cc.dopts.balancer.Notify() {
 		var (
 			add []Address   // Addresses need to setup connections.
