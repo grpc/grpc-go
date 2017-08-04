@@ -2308,7 +2308,6 @@ func testPeerFailedRPC(t *testing.T, e env) {
 			}
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
