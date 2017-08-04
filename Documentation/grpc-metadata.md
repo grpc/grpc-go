@@ -82,7 +82,7 @@ func (s *server) SomeRPC(ctx context.Context, in *pb.SomeRequest) (*pb.SomeRespo
 
 ### Sending metadata
 
-To send metadata to server, the client can wrap the metadata into a context using `NewContext`, and make the RPC with this context:
+To send metadata to server, the client can wrap the metadata into a context using `NewOutgoingContext`, and make the RPC with this context:
 
 ```go
 md := metadata.Pairs("key", "val")
