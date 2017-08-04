@@ -1816,6 +1816,10 @@ public abstract class AbstractInteropTest {
       uncompressedResponsesSize += response.getSerializedSize();
     }
     if (server) {
+      assertEquals(
+          requests.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_REQUEST_COUNT));
+      assertEquals(
+          responses.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_RESPONSE_COUNT));
       assertEquals(uncompressedRequestsSize,
           record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES));
       assertEquals(uncompressedResponsesSize,
@@ -1826,6 +1830,10 @@ public abstract class AbstractInteropTest {
       assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_BYTES));
       assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
     } else {
+      assertEquals(
+          requests.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_COUNT));
+      assertEquals(
+          responses.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_COUNT));
       assertEquals(uncompressedRequestsSize,
           record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
       assertEquals(uncompressedResponsesSize,

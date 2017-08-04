@@ -322,16 +322,20 @@ public class CensusModulesTest {
     tracer.outboundHeaders();
 
     fakeClock.forwardTime(100, MILLISECONDS);
+    tracer.outboundMessage();
     tracer.outboundWireSize(1028);
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
+    tracer.inboundMessage();
     tracer.inboundWireSize(33);
     tracer.inboundUncompressedSize(67);
+    tracer.outboundMessage();
     tracer.outboundWireSize(99);
     tracer.outboundUncompressedSize(865);
 
     fakeClock.forwardTime(24, MILLISECONDS);
+    tracer.inboundMessage();
     tracer.inboundWireSize(154);
     tracer.inboundUncompressedSize(552);
     tracer.streamClosed(Status.OK);
@@ -345,9 +349,11 @@ public class CensusModulesTest {
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.OK.toString(), statusTag.toString());
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
+    assertEquals(2, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_COUNT));
     assertEquals(1028 + 99, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertEquals(1128 + 865,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
+    assertEquals(2, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_COUNT));
     assertEquals(33 + 154, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
     assertEquals(67 + 552,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
@@ -391,9 +397,11 @@ public class CensusModulesTest {
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.DEADLINE_EXCEEDED.toString(), statusTag.toString());
     assertEquals(1, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_ERROR_COUNT));
+    assertEquals(0, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_COUNT));
     assertEquals(0, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertEquals(0,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
+    assertEquals(0, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_COUNT));
     assertEquals(0, record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
     assertEquals(0,
         record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
@@ -579,16 +587,20 @@ public class CensusModulesTest {
     Context filteredContext = tracer.filterContext(Context.ROOT);
     assertNull(STATS_CONTEXT_KEY.get(filteredContext));
 
+    tracer.inboundMessage();
     tracer.inboundWireSize(34);
     tracer.inboundUncompressedSize(67);
 
     fakeClock.forwardTime(100, MILLISECONDS);
+    tracer.outboundMessage();
     tracer.outboundWireSize(1028);
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
+    tracer.inboundMessage();
     tracer.inboundWireSize(154);
     tracer.inboundUncompressedSize(552);
+    tracer.outboundMessage();
     tracer.outboundWireSize(99);
     tracer.outboundUncompressedSize(865);
 
@@ -604,9 +616,11 @@ public class CensusModulesTest {
     TagValue statusTag = record.tags.get(RpcConstants.RPC_STATUS);
     assertEquals(Status.Code.CANCELLED.toString(), statusTag.toString());
     assertEquals(1, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_ERROR_COUNT));
+    assertEquals(2, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_RESPONSE_COUNT));
     assertEquals(1028 + 99, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
     assertEquals(1128 + 865,
         record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES));
+    assertEquals(2, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_REQUEST_COUNT));
     assertEquals(34 + 154, record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_REQUEST_BYTES));
     assertEquals(67 + 552,
         record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES));
@@ -659,6 +673,8 @@ public class CensusModulesTest {
 
   private static void assertNoServerContent(StatsTestUtils.MetricsRecord record) {
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
+    assertNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_COUNT));
+    assertNull(record.getMetric(RpcConstants.RPC_SERVER_RESPONSE_COUNT));
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_SERVER_ELAPSED_TIME));
@@ -669,6 +685,8 @@ public class CensusModulesTest {
 
   private static void assertNoClientContent(StatsTestUtils.MetricsRecord record) {
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_REQUEST_COUNT));
+    assertNull(record.getMetric(RpcConstants.RPC_CLIENT_RESPONSE_COUNT));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY));
