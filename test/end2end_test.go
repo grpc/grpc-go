@@ -21,6 +21,7 @@ package test
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -437,6 +439,7 @@ type test struct {
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
+	customCodecs                []grpc.Codec
 
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
@@ -515,6 +518,9 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 	}
 	if te.serverInitialConnWindowSize > 0 {
 		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
+	}
+	if len(te.customCodecs) > 0 {
+		sopts = append(sopts, grpc.CustomCodecs(te.customCodecs...))
 	}
 	la := "localhost:0"
 	switch te.e.network {
@@ -2203,6 +2209,79 @@ func testExceedMsgLimit(t *testing.T, e env) {
 
 }
 
+func TestCustomCodecs(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testCustomCodecs(t, e)
+	}
+}
+
+func testCustomCodecs(t *testing.T, e env) {
+	const numDefaultRPC = 3
+	jsonCodec := &testJSONCodec{name: "json", numRPC: 4}
+	fooCodec := &testJSONCodec{name: "foo", numRPC: 5}
+	barCodec := &testJSONCodec{name: "bar", numRPC: 6}
+	codecs := []grpc.Codec{jsonCodec, fooCodec, barCodec}
+	testJSONCodecs := []*testJSONCodec{jsonCodec, fooCodec, barCodec}
+
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.customCodecs = codecs
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	var wg sync.WaitGroup
+	for i := 0; i < numDefaultRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, &wg)
+	}
+	for _, testJSONCodec := range testJSONCodecs {
+		testJSONCodec.performRPCS(t, tc, &wg)
+	}
+	wg.Wait()
+	for _, testJSONCodec := range testJSONCodecs {
+		testJSONCodec.check(t)
+	}
+}
+
+type testJSONCodec struct {
+	name           string
+	numRPC         int
+	marshalCount   int64
+	unmarshalCount int64
+}
+
+func (j *testJSONCodec) Marshal(v interface{}) ([]byte, error) {
+	atomic.AddInt64(&j.marshalCount, 1)
+	return json.Marshal(v)
+}
+
+func (j *testJSONCodec) Unmarshal(data []byte, v interface{}) error {
+	atomic.AddInt64(&j.unmarshalCount, 1)
+	return json.Unmarshal(data, v)
+}
+
+func (j *testJSONCodec) String() string {
+	return j.name
+}
+
+func (j *testJSONCodec) performRPCS(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
+	for i := 0; i < j.numRPC; i++ {
+		wg.Add(1)
+		go performOneRPC(t, tc, wg, grpc.CallCodec(j))
+	}
+}
+
+func (j *testJSONCodec) check(t *testing.T) {
+	if int(j.marshalCount) != j.numRPC*2 {
+		t.Errorf("Got %d %s marshals, want %d", j.marshalCount, j.name, j.numRPC*2)
+	}
+	if int(j.unmarshalCount) != j.numRPC*2 {
+		t.Errorf("Got %d %s unmarshals, want %d", j.unmarshalCount, j.name, j.numRPC*2)
+	}
+}
+
 func TestPeerClientSide(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -2299,6 +2378,7 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 		delete(header, "trailer") // RFC 2616 says server SHOULD (but optional) declare trailers
 		delete(header, "date")    // the Date header is also optional
 		delete(header, "user-agent")
+		delete(header, "content-type")
 	}
 	if !reflect.DeepEqual(header, testMetadata) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
@@ -2415,6 +2495,7 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2459,6 +2540,7 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2502,6 +2584,7 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <non-nil>", ctx, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2546,6 +2629,7 @@ func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2609,6 +2693,7 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2667,6 +2752,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
 	delete(header, "user-agent")
+	delete(header, "content-type")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -2713,7 +2799,7 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 }
 
-func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
+func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup, opts ...grpc.CallOption) {
 	defer wg.Done()
 	const argSize = 2718
 	const respSize = 314
@@ -2729,7 +2815,7 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
+	reply, err := tc.UnaryCall(context.Background(), req, opts...)
 	if err != nil {
 		t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 		return
@@ -2793,7 +2879,7 @@ func testRetry(t *testing.T, e env) {
 	for i := 0; i < numRPC; i++ {
 		time.Sleep(rpcSpacing)
 		wg.Add(1)
-		go performOneRPC(t, tc, &wg)
+		go performOneRPC(t, tc, &wg, grpc.FailFast(false))
 	}
 	wg.Wait()
 }
@@ -3053,6 +3139,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		}
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
+		delete(headerMD, "content-type")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -3060,6 +3147,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		headerMD, err = stream.Header()
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
+		delete(headerMD, "content-type")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}

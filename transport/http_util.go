@@ -46,6 +46,8 @@ const (
 	http2InitHeaderTableSize = 4096
 	// http2IOBufSize specifies the buffer size for sending frames.
 	http2IOBufSize = 32 * 1024
+	// baseContentType is the base content-type.
+	baseContentType = "application/grpc"
 )
 
 var (
@@ -96,7 +98,8 @@ var (
 // Records the states during HPACK decoding. Must be reset once the
 // decoding of the entire headers are finished.
 type decodeState struct {
-	encoding string
+	contentType string
+	encoding    string
 	// statusGen caches the stream status received from the trailer the server
 	// sent.  Client side only.  Do not access directly.  After all trailers are
 	// parsed, use the status method to retrieve the status.
@@ -148,16 +151,35 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 }
 
 func validContentType(t string) bool {
-	e := "application/grpc"
-	if !strings.HasPrefix(t, e) {
+	if !strings.HasPrefix(t, baseContentType) {
 		return false
 	}
 	// Support variations on the content-type
 	// (e.g. "application/grpc+blah", "application/grpc;blah").
-	if len(t) > len(e) && t[len(e)] != '+' && t[len(e)] != ';' {
+	if len(t) > len(baseContentType) && t[len(baseContentType)] != '+' && t[len(baseContentType)] != ';' {
 		return false
 	}
 	return true
+}
+
+func getContentSubtype(t string) string {
+	if !strings.HasPrefix(t, baseContentType) || len(t) == len(baseContentType) {
+		return ""
+	}
+	switch t[len(baseContentType)] {
+	case '+', ';':
+		return t[len(baseContentType)+1:]
+	default:
+		// really an error case
+		return ""
+	}
+}
+
+func getContentTypeForSubtype(s string) string {
+	if s == "" {
+		return baseContentType
+	}
+	return baseContentType + "+" + s
 }
 
 func (d *decodeState) status() *status.Status {
@@ -241,6 +263,8 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		if !validContentType(f.Value) {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}
+		d.contentType = f.Value
+		d.addMetadata(f)
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":
@@ -277,18 +301,22 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 		d.httpStatus = &code
 	default:
 		if !isReservedHeader(f.Name) || isWhitelistedPseudoHeader(f.Name) {
-			if d.mdata == nil {
-				d.mdata = make(map[string][]string)
-			}
-			v, err := decodeMetadataHeader(f.Name, f.Value)
-			if err != nil {
-				errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
-				return nil
-			}
-			d.mdata[f.Name] = append(d.mdata[f.Name], v)
+			d.addMetadata(f)
 		}
 	}
 	return nil
+}
+
+func (d *decodeState) addMetadata(f hpack.HeaderField) {
+	if d.mdata == nil {
+		d.mdata = make(map[string][]string)
+	}
+	v, err := decodeMetadataHeader(f.Name, f.Value)
+	if err != nil {
+		errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
+		return
+	}
+	d.mdata[f.Name] = append(d.mdata[f.Name], v)
 }
 
 type timeoutUnit uint8

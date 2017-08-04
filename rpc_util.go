@@ -129,6 +129,8 @@ type callInfo struct {
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
 	creds                 credentials.PerRPCCredentials
+	codec                 Codec
+	contentSubtype        string
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -203,6 +205,15 @@ func FailFast(failFast bool) CallOption {
 	})
 }
 
+// CallCodec returns a CallOption that uses the given Codec for the RPC call.
+// This will override the Codec assocated with the ClientConn.
+func CallCodec(codec Codec) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.codec = codec
+		return nil
+	})
+}
+
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
 func MaxCallRecvMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
@@ -215,6 +226,15 @@ func MaxCallRecvMsgSize(s int) CallOption {
 func MaxCallSendMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxSendMessageSize = &s
+		return nil
+	})
+}
+
+// CallContentSubtype returns a CallOption that will set the content subtype
+// to the given string. Normally, the value returned from Codec.String() is used.
+func CallContentSubtype(contentSubtype string) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.contentSubtype = contentSubtype
 		return nil
 	})
 }

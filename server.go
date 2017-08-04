@@ -100,6 +100,7 @@ type Server struct {
 type options struct {
 	creds                 credentials.TransportCredentials
 	codec                 Codec
+	codecs                map[string]Codec
 	cp                    Compressor
 	dc                    Decompressor
 	unaryInt              UnaryServerInterceptor
@@ -159,6 +160,30 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
+	}
+}
+
+// CustomCodecs returns a ServerOption that sets the codecs that can be used based on the
+// content-type subtype, ie if a codec returns "proto" from calling String(), this will
+// be used if the content-type is "application/grpc+proto". If there is no subtype
+// on the content-type, the codec set by CustomCodec will be used, or if CustomCodec
+// is not set, then the default codec will be used.
+func CustomCodecs(codecs ...Codec) ServerOption {
+	m := make(map[string]Codec, len(codecs))
+	for _, codec := range codecs {
+		// this is a one-time server setup operation
+		// note that http/2 transmits headers as lowercase
+		name := strings.TrimSpace(strings.ToLower(codec.String()))
+		if name != "" {
+			m[name] = codec
+		}
+	}
+	return func(o *options) {
+		for name, codec := range o.codecs {
+			// override codecs registered earlier
+			m[name] = codec
+		}
+		o.codecs = m
 	}
 }
 
@@ -641,6 +666,17 @@ func (s *Server) removeConn(c io.Closer) {
 	}
 }
 
+func (s *Server) getCodec(contentSubtype string) Codec {
+	if contentSubtype == "" {
+		return s.opts.codec
+	}
+	codec, ok := s.opts.codecs[contentSubtype]
+	if !ok {
+		return s.opts.codec
+	}
+	return codec
+}
+
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
 		cbuf       *bytes.Buffer
@@ -652,7 +688,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	p, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, cbuf, outPayload)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
@@ -764,7 +800,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			// java implementation.
 			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 		}
-		if err := s.opts.codec.Unmarshal(req, v); err != nil {
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 		if inPayload != nil {
@@ -858,7 +894,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		t:     t,
 		s:     stream,
 		p:     &parser{r: stream},
-		codec: s.opts.codec,
+		codec: s.getCodec(stream.ContentSubtype()),
 		cp:    s.opts.cp,
 		dc:    s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
