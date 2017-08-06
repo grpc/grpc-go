@@ -34,10 +34,9 @@ import io.grpc.benchmarks.ByteBufOutputMarshaller;
 import io.grpc.benchmarks.Utils;
 import io.grpc.benchmarks.proto.BenchmarkServiceGrpc;
 import io.grpc.benchmarks.proto.Control;
-import io.grpc.benchmarks.proto.Messages;
 import io.grpc.benchmarks.proto.Stats;
+import io.grpc.benchmarks.qps.AsyncServer;
 import io.grpc.internal.testing.TestUtils;
-import io.grpc.stub.StreamObserver;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import java.io.File;
@@ -74,9 +73,8 @@ final class LoadServer {
   private static final Logger log = Logger.getLogger(LoadServer.class.getName());
 
   private final Server server;
-  private final BenchmarkServiceImpl benchmarkService;
+  private final AsyncServer.BenchmarkServiceImpl benchmarkService;
   private final OperatingSystemMXBean osBean;
-  private volatile boolean shutdown;
   private final int port;
   private ByteBuf genericResponse;
   private long lastStatTime;
@@ -121,7 +119,7 @@ final class LoadServer {
       File key = TestUtils.loadCert("server1.key");
       serverBuilder.useTransportSecurity(cert, key);
     }
-    benchmarkService = new BenchmarkServiceImpl();
+    benchmarkService = new AsyncServer.BenchmarkServiceImpl();
     if (config.getServerType() == Control.ServerType.ASYNC_GENERIC_SERVER) {
       serverBuilder.addService(
           ServerServiceDefinition
@@ -192,43 +190,8 @@ final class LoadServer {
   }
 
   void shutdownNow() {
-    shutdown = true;
+    benchmarkService.shutdown();
     server.shutdownNow();
-  }
-
-  private class BenchmarkServiceImpl extends BenchmarkServiceGrpc.BenchmarkServiceImplBase {
-
-    @Override
-    public void unaryCall(Messages.SimpleRequest request,
-                          StreamObserver<Messages.SimpleResponse> responseObserver) {
-      responseObserver.onNext(Utils.makeResponse(request));
-      responseObserver.onCompleted();
-    }
-
-    @Override
-    public StreamObserver<Messages.SimpleRequest> streamingCall(
-        final StreamObserver<Messages.SimpleResponse> responseObserver) {
-      return new StreamObserver<Messages.SimpleRequest>() {
-        @Override
-        public void onNext(Messages.SimpleRequest value) {
-          if (!shutdown) {
-            responseObserver.onNext(Utils.makeResponse(value));
-          } else {
-            responseObserver.onCompleted();
-          }
-        }
-
-        @Override
-        public void onError(Throwable t) {
-          responseObserver.onError(t);
-        }
-
-        @Override
-        public void onCompleted() {
-          responseObserver.onCompleted();
-        }
-      };
-    }
   }
 
   private class GenericServiceCallHandler implements ServerCallHandler<ByteBuf, ByteBuf> {
