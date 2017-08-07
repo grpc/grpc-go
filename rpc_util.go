@@ -297,30 +297,31 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		payloadLen = 1
 		sizeLen    = 4
 	)
-
-	var err error
-	// TODO(zhaoq): optimize to reduce memory alloc and copying.
-	b, err = c.Marshal(msg)
-	if err != nil {
-		return nil, Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
-	}
-	if outPayload != nil {
-		outPayload.Payload = msg
-		// TODO truncate large payload.
-		outPayload.Data = b
-		outPayload.Length = len(b)
-	}
-
-	if cp != nil {
-		// pre-alloc place
-		cbuf.Write(make([]byte, 5))
-		if err := cp.Do(cbuf, b); err != nil {
-			return nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
+	if msg != nil {
+		var err error
+		// TODO(zhaoq): optimize to reduce memory alloc and copying.
+		b, err = c.Marshal(msg)
+		if err != nil {
+			return nil, Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 		}
-		b = cbuf.Bytes()
-		length = uint(len(b) - 5)
-	} else {
-		length = uint(len(b))
+		if outPayload != nil {
+			outPayload.Payload = msg
+			// TODO truncate large payload.
+			outPayload.Data = b
+			outPayload.Length = len(b)
+		}
+
+		if cp != nil {
+			// pre-alloc place
+			cbuf.Write(make([]byte, 5))
+			if err := cp.Do(cbuf, b); err != nil {
+				return nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
+			}
+			b = cbuf.Bytes()
+			length = uint(len(b) - 5)
+		} else {
+			length = uint(len(b))
+		}
 	}
 
 	if length > math.MaxUint32 {
