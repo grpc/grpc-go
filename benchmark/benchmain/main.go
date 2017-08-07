@@ -60,6 +60,7 @@ var (
 	timeout                = []time.Duration{1 * time.Second}
 	memProfile, cpuProfile string
 	memProfileRate         int
+	enableCompressor       = []bool{true, false}
 )
 
 func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, timeout time.Duration, s *stats.Stats) {
@@ -76,13 +77,26 @@ func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.
 
 func makeFuncUnary(benchFeatures bm.Features) (func(int), func()) {
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
-	conn := bm.NewClientConn(
-		target, grpc.WithInsecure(),
-		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-		}),
-	)
+	opts := []grpc.DialOption{}
+	sopts := []grpc.ServerOption{}
+	if benchFeatures.EnableCompressor {
+		sopts = append(sopts,
+			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
+			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
+		)
+		opts = append(opts,
+			grpc.WithCompressor(grpc.NewGZIPCompressor()),
+			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
+		)
+	}
+	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
+	opts = append(opts, grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+		return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+	}))
+	opts = append(opts, grpc.WithInsecure())
+
+	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, sopts...)
+	conn := bm.NewClientConn(target, opts...)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 	return func(pos int) {
 			unaryCaller(tc, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
@@ -95,13 +109,26 @@ func makeFuncUnary(benchFeatures bm.Features) (func(int), func()) {
 func makeFuncStream(benchFeatures bm.Features) (func(int), func()) {
 	fmt.Println(benchFeatures)
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
-	conn := bm.NewClientConn(
-		target, grpc.WithInsecure(),
-		grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
-			return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
-		}),
-	)
+	opts := []grpc.DialOption{}
+	sopts := []grpc.ServerOption{}
+	if benchFeatures.EnableCompressor {
+		sopts = append(sopts,
+			grpc.RPCCompressor(grpc.NewGZIPCompressor()),
+			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
+		)
+		opts = append(opts,
+			grpc.WithCompressor(grpc.NewGZIPCompressor()),
+			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
+		)
+	}
+	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
+	opts = append(opts, grpc.WithDialer(func(address string, timeout time.Duration) (net.Conn, error) {
+		return nw.TimeoutDialer(net.DialTimeout)("tcp", address, timeout)
+	}))
+	opts = append(opts, grpc.WithInsecure())
+
+	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, sopts...)
+	conn := bm.NewClientConn(target, opts...)
 	tc := testpb.NewBenchmarkServiceClient(conn)
 	streams := make([]testpb.BenchmarkService_StreamingCallClient, benchFeatures.MaxConcurrentCalls)
 	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
@@ -173,6 +200,7 @@ func init() {
 	var traceMode, noTraceMode bool
 	var readLatency, readTimeout string
 	var readKbps, readMtu, readMaxConcurrentCalls, readReqSizeBytes, readReqspSizeBytes intSliceType
+	var compressorMode bool
 	flag.BoolVar(&runUnary, "runUnary", false, "runUnary")
 	flag.BoolVar(&runStream, "runStream", false, "runStream")
 	flag.BoolVar(&traceMode, "traceMode", false, "traceMode")
@@ -187,6 +215,7 @@ func init() {
 	flag.StringVar(&memProfile, "memProfile", "", "memProfile")
 	flag.IntVar(&memProfileRate, "memProfileRate", 0, "memProfileRate")
 	flag.StringVar(&cpuProfile, "cpuProfile", "", "cpuProfile")
+	flag.BoolVar(&compressorMode, "compressorMode", false, "compressorMode")
 	flag.Parse()
 	// If no flags related to mode are set, it runs both by default.
 	if runUnary || runStream {
@@ -199,6 +228,11 @@ func init() {
 	}
 	if !traceMode && noTraceMode {
 		enableTrace = []bool{false}
+	}
+	if compressorMode {
+		enableCompressor = []bool{true}
+	} else {
+		enableCompressor = []bool{false}
 	}
 	// Time input formats as (time + unit).
 	readTimeFromIntSlice(&ltc, readLatency)
@@ -254,10 +288,10 @@ func readTimeFromIntSlice(values *[]time.Duration, replace string) {
 
 func main() {
 	before()
-	featuresPos := make([]int, 7)
+	featuresPos := make([]int, 8)
 	// 0:enableTracing 1:ltc 2:kbps 3:mtu 4:maxC 5:reqSize 6:respSize
 	featuresNum := []int{len(enableTrace), len(ltc), len(kbps), len(mtu),
-		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes)}
+		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor)}
 	initalPos := make([]int, len(featuresPos))
 	s := stats.NewStats(38)
 	var memStats runtime.MemStats
@@ -291,6 +325,7 @@ func main() {
 			MaxConcurrentCalls: maxConcurrentCalls[featuresPos[4]],
 			ReqSizeBytes:       reqSizeBytes[featuresPos[5]],
 			RespSizeBytes:      respSizeBytes[featuresPos[6]],
+			EnableCompressor:   enableCompressor[featuresPos[7]],
 		}
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
