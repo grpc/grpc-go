@@ -137,7 +137,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   }
 
   protected final void channelRead(Object obj) throws Exception {
-    handler().channelRead(ctx, obj);
+    channel.writeInbound(obj);
   }
 
   protected ByteBuf grpcDataFrame(int streamId, boolean endStream, byte[] content) {

@@ -549,7 +549,8 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   public void dataPingAckIsRecognized() throws Exception {
     super.dataPingAckIsRecognized();
     verify(mockKeepAliveManager, times(1)).onTransportActive(); // onStreamActive
-    verify(mockKeepAliveManager, times(2)).onDataReceived(); // onDataRead, onPingAckRead
+    // onHeadersRead, onDataRead, onPingAckRead
+    verify(mockKeepAliveManager, times(3)).onDataReceived();
     verifyNoMoreInteractions(mockKeepAliveManager);
   }
 
@@ -567,6 +568,12 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   @Override
   protected void makeStream() throws Exception {
     createStream();
+    // The tests in NettyServerHandlerTest expect the header to already be read, since they work on
+    // both client- and server-side.
+    Http2Headers headers = new DefaultHttp2Headers().status(STATUS_OK)
+        .set(CONTENT_TYPE_HEADER, CONTENT_TYPE_GRPC);
+    ByteBuf headersFrame = headersFrame(3, headers);
+    channelRead(headersFrame);
   }
 
   @CanIgnoreReturnValue

@@ -498,12 +498,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
       channelRead(pingFrame(false /* isAck */, payload.slice()));
     }
     payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(0), eq(Http2Error.ENHANCE_YOUR_CALM.code()),
         any(ByteBuf.class), any(ChannelPromise.class));
+    assertFalse(channel().isActive());
   }
 
   @Test(timeout = 1000)
@@ -539,12 +540,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
       channelRead(pingFrame(false /* isAck */, payload.slice()));
     }
     payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(0),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
+    assertFalse(channel().isActive());
   }
 
   @Test
@@ -574,12 +576,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < KeepAliveEnforcer.MAX_PING_STRIKES + 1; i++) {
       channelRead(pingFrame(false /* isAck */, payload.slice()));
     }
     payload.release();
     verifyWrite().writeGoAway(eq(ctx()), eq(STREAM_ID),
         eq(Http2Error.ENHANCE_YOUR_CALM.code()), any(ByteBuf.class), any(ChannelPromise.class));
+    assertFalse(channel().isActive());
   }
 
   @Test
