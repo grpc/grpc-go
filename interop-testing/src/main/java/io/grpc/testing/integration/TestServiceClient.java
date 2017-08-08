@@ -16,6 +16,7 @@
 
 package io.grpc.testing.integration;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
 import io.grpc.ManagedChannel;
 import io.grpc.internal.GrpcUtil;
@@ -82,7 +83,8 @@ public class TestServiceClient {
 
   private Tester tester = new Tester();
 
-  private void parseArgs(String[] args) {
+  @VisibleForTesting
+  void parseArgs(String[] args) {
     boolean usage = false;
     for (String arg : args) {
       if (!arg.startsWith("--")) {
@@ -161,7 +163,8 @@ public class TestServiceClient {
     }
   }
 
-  private void setUp() {
+  @VisibleForTesting
+  void setUp() {
     tester.setUp();
   }
 
@@ -318,12 +321,15 @@ public class TestServiceClient {
             throw new RuntimeException(ex);
           }
         }
-        return NettyChannelBuilder.forAddress(serverHost, serverPort)
-            .overrideAuthority(serverHostOverride)
-            .flowControlWindow(65 * 1024)
-            .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
-            .sslContext(sslContext)
-            .build();
+        NettyChannelBuilder builder =
+            NettyChannelBuilder.forAddress(serverHost, serverPort)
+                .flowControlWindow(65 * 1024)
+                .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
+                .sslContext(sslContext);
+        if (serverHostOverride != null) {
+          builder.overrideAuthority(serverHostOverride);
+        }
+        return builder.build();
       } else {
         OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);
         if (serverHostOverride != null) {
