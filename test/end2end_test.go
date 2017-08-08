@@ -44,6 +44,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
@@ -4853,9 +4854,9 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 	defer cancel()
 	state := cc.GetState()
 	// Wait for connection to be Ready.
-	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	for ; state != connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
-	if state != grpc.Ready {
+	if state != connectivity.Ready {
 		t.Fatalf("Want connection state to be Ready, got %v", state)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
