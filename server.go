@@ -805,12 +805,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	reply, appErr := md.Handler(srv.server, stream.Context(), df, s.opts.unaryInt)
 	if appErr != nil {
-		appStatus, ok := status.FromError(appErr)
-		if !ok {
-			// Convert appErr if it is not a grpc status error.
-			appErr = status.Error(convertCode(appErr), appErr.Error())
-			appStatus, _ = status.FromError(appErr)
-		}
+		appStatus, _ := status.FromError(toRPCErr(appErr))
 		if trInfo != nil {
 			trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
 			trInfo.tr.SetError()
@@ -923,16 +918,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		appErr = s.opts.streamInt(server, ss, info, sd.Handler)
 	}
 	if appErr != nil {
-		appStatus, ok := status.FromError(appErr)
-		if !ok {
-			switch err := appErr.(type) {
-			case transport.StreamError:
-				appStatus = status.New(err.Code, err.Desc)
-			default:
-				appStatus = status.New(convertCode(appErr), appErr.Error())
-			}
-			appErr = appStatus.Err()
-		}
+		appStatus, _ := status.FromError(toRPCErr(appErr))
 		if trInfo != nil {
 			ss.mu.Lock()
 			ss.trInfo.tr.LazyLog(stringer(appStatus.Message()), true)

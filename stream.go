@@ -600,16 +600,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 		if err != nil && err != io.EOF {
-			st, ok := status.FromError(err)
-			if !ok {
-				switch err := err.(type) {
-				case transport.StreamError:
-					st = status.New(err.Code, err.Desc)
-				default:
-					st = status.New(convertCode(err), err.Error())
-				}
-				err = st.Err()
-			}
+			st, _ := status.FromError(toRPCErr(err))
 			ss.t.WriteStatus(ss.s, st)
 		}
 	}()
@@ -654,16 +645,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.mu.Unlock()
 		}
 		if err != nil && err != io.EOF {
-			st, ok := status.FromError(err)
-			if !ok {
-				switch err := err.(type) {
-				case transport.StreamError:
-					st = status.New(err.Code, err.Desc)
-				default:
-					st = status.New(convertCode(err), err.Error())
-				}
-				err = st.Err()
-			}
+			st, _ := status.FromError(toRPCErr(err))
 			ss.t.WriteStatus(ss.s, st)
 		}
 	}()
