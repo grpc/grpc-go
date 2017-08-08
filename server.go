@@ -607,10 +607,11 @@ func (s *Server) serveUsingHandler(conn net.Conn) {
 //   	yourMux.ServeHTTP(w, r)
 //   }
 //
-// Note that ServeHTTP uses Go's HTTP/2 server implementation which is
-// totally separate from grpc-go's HTTP/2 server. Performance and
-// features may vary between the two paths. ServeHTTP may not respect
-// all provided grpc.ServerOption values.
+// Note that ServeHTTP uses Go's HTTP/2 server implementation which is totally
+// separate from grpc-go's HTTP/2 server. Performance and features may vary
+// between the two paths. ServeHTTP does not support some gRPC features
+// available through grpc-go's HTTP/2 server, and it is currently EXPERIMENTAL
+// and subject to change.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st, err := transport.NewServerHandlerTransport(w, r)
 	if err != nil {
