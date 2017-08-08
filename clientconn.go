@@ -556,6 +556,7 @@ type ClientConn struct {
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
 // ctx expires. A true value is returned in former case and false in latter.
+// This is an EXPERIMENTAL API.
 func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connectivity.State) bool {
 	ch := cc.csMgr.getNotifyChan()
 	if cc.csMgr.getState() != sourceState {
@@ -570,6 +571,7 @@ func (cc *ClientConn) WaitForStateChange(ctx context.Context, sourceState connec
 }
 
 // GetState returns the connectivity.State of ClientConn.
+// This is an EXPERIMENTAL API.
 func (cc *ClientConn) GetState() connectivity.State {
 	return cc.csMgr.getState()
 }
