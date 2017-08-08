@@ -642,9 +642,9 @@ func (cc *ClientConn) newAddrConn(addr resolver.Address) (*addrConn, error) {
 	return ac, nil
 }
 
-// removeSubConnection removes the addrConn in the subConn from clientConn.
+// removeSubConn removes the addrConn in the subConn from clientConn.
 // It also tears down the ac with the given error.
-func (cc *ClientConn) removeSubConnection(ac *addrConn, err error) {
+func (cc *ClientConn) removeSubConn(ac *addrConn, err error) {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -758,7 +758,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 
 		var (
 			err error
-			sc  balancer.SubConnection
+			sc  balancer.SubConn
 		)
 		sc, put, err = p.Pick(ctx, balancer.PickOptions{})
 		if err != nil {
@@ -766,13 +766,12 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 		}
 		if acbw, ok := sc.(*acBalancerWrapper); ok {
 			ac = acbw.ac
+		} else if put != nil {
+			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
+			put(balancer.PutInfo{Err: errors.New("SubConn returned by pick cannot be recognized")})
 		}
 	}
 	if ac == nil {
-		if put != nil {
-			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
-			put(balancer.PutInfo{Err: errors.New("TODO what error? this should never happen?")})
-		}
 		return nil, nil, errConnClosing
 	}
 	t, err := ac.wait(ctx, cc.balancer != nil, !opts.BlockingWait)
@@ -877,7 +876,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	ac.state = connectivity.Connecting
 	ac.csEvltr.recordTransition(oldState, ac.state)
 	if ac.cc.balancer != nil {
-		ac.cc.balancer.HandleSubConnectionStateChange(ac.acbw, ac.state)
+		ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 	}
 	if ac.ready != nil {
 		close(ac.ready)
@@ -915,8 +914,9 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		oldState := ac.state
 		ac.state = connectivity.Connecting
 		ac.csEvltr.recordTransition(oldState, ac.state)
+		// TODO(bar) remove condition once we always have a balancer.
 		if ac.cc.balancer != nil {
-			ac.cc.balancer.HandleSubConnectionStateChange(ac.acbw, ac.state)
+			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 		}
 		ac.mu.Unlock()
 		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
@@ -940,7 +940,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			ac.state = connectivity.TransientFailure
 			ac.csEvltr.recordTransition(oldState, ac.state)
 			if ac.cc.balancer != nil {
-				ac.cc.balancer.HandleSubConnectionStateChange(ac.acbw, ac.state)
+				ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 			}
 			if ac.ready != nil {
 				close(ac.ready)
@@ -969,7 +969,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		ac.state = connectivity.Ready
 		ac.csEvltr.recordTransition(oldState, ac.state)
 		if ac.cc.balancer != nil {
-			ac.cc.balancer.HandleSubConnectionStateChange(ac.acbw, ac.state)
+			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 		}
 		ac.transport = newTransport
 		if ac.ready != nil {
@@ -1109,7 +1109,7 @@ func (ac *addrConn) tearDown(err error) {
 	ac.tearDownErr = err
 	ac.csEvltr.recordTransition(oldState, ac.state)
 	if ac.cc.balancer != nil {
-		ac.cc.balancer.HandleSubConnectionStateChange(ac.acbw, ac.state)
+		ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 	}
 	if ac.events != nil {
 		ac.events.Finish()

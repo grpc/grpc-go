@@ -36,12 +36,12 @@ func (cc *ClientConn) updatePicker(p balancer.Picker) {
 }
 
 // ccBalancerWrapper is a wrapper on top of cc for balancers.
-// It implements balancer.ClientConnection interface.
+// It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
 	cc *ClientConn
 }
 
-func (ccb *ccBalancerWrapper) NewSubConnection(addrs []resolver.Address, opts balancer.NewSubConnectionOptions) (balancer.SubConnection, error) {
+func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	grpclog.Infof("ccBalancerWrapper: new subconn: %v", addrs)
 	ac, err := ccb.cc.newAddrConn(addrs[0])
 	if err != nil {
@@ -52,13 +52,13 @@ func (ccb *ccBalancerWrapper) NewSubConnection(addrs []resolver.Address, opts ba
 	return acbw, nil
 }
 
-func (ccb *ccBalancerWrapper) RemoveSubConnection(sc balancer.SubConnection) {
+func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	grpclog.Infof("ccBalancerWrapper: removing subconn")
 	acbw, ok := sc.(*acBalancerWrapper)
 	if !ok {
 		return
 	}
-	ccb.cc.removeSubConnection(acbw.ac, errConnClosing)
+	ccb.cc.removeSubConn(acbw.ac, errConnClosing)
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
@@ -71,7 +71,7 @@ func (ccb *ccBalancerWrapper) Target() string {
 }
 
 // acBalancerWrapper is a wrapper on top of ac for balancers.
-// It implements balancer.SubConnection interface.
+// It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
 	ac *addrConn
 }

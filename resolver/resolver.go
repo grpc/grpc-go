@@ -22,15 +22,12 @@ package resolver
 
 var (
 	// m is a map from scheme to resolver builder.
-	m map[string]Builder
+	m = make(map[string]Builder)
 	// defaultScheme is the default scheme to use.
 	defaultScheme string
 )
 
-func init() {
-	// TODO(bar) install dns resolver.
-	m = make(map[string]Builder)
-}
+// TODO(bar) install dns resolver in init(){}.
 
 // Register registers the resolver builder to the resolver map.
 // b.Scheme will be used as the scheme registered with this builder.
@@ -46,14 +43,15 @@ func Register(b Builder) {
 // If the default scheme is modified, and a resolver is registered with
 // the scheme, that resolver will be returned.
 // If the default scheme is modified, and no resolver is registered with
-// the scheme, (nil, false) will be returned.
-func Get(scheme string) (b Builder, ok bool) {
-	b, ok = m[scheme]
-	if ok {
-		return
+// the scheme, nil will be returned.
+func Get(scheme string) Builder {
+	if b, ok := m[scheme]; ok {
+		return b
 	}
-	b, ok = m[defaultScheme]
-	return
+	if b, ok := m[defaultScheme]; ok {
+		return b
+	}
+	return nil
 }
 
 // SetDefaultScheme sets the default scheme that will be used.
@@ -92,16 +90,14 @@ type Address struct {
 type BuildOption struct {
 }
 
-// ClientConnection contains the callbacks for resolver to notify any updates
+// ClientConn contains the callbacks for resolver to notify any updates
 // to the gRPC ClientConn.
-type ClientConnection interface {
-	// NewAddress is called by resolver to notify ClientConnection a new list
+type ClientConn interface {
+	// NewAddress is called by resolver to notify ClientConn a new list
 	// of resolved addresses.
-	// The address list should be the complete list of new addresses.
-	// Two consecutive call with the same addresses will be noop. It's preferred
-	// that resolver doesn't call this consecutively with non-updated addresses.
+	// The address list should be the complete list of resolved addresses.
 	NewAddress(addresses []Address)
-	// NewServiceConfig is called by resolver to notify ClientConnection a new
+	// NewServiceConfig is called by resolver to notify ClientConn a new
 	// service config. The service config should be provided as a json string.
 	NewServiceConfig(serviceConfig string)
 }
@@ -109,7 +105,7 @@ type ClientConnection interface {
 // Builder creates a resolver that will be used to watch name resolution updates.
 type Builder interface {
 	// Build creates a new resolver for the given target.
-	Build(target string, cc ClientConnection, opts BuildOption) Resolver
+	Build(target string, cc ClientConn, opts BuildOption) Resolver
 	// Scheme returns the scheme supported by this resolver.
 	// Scheme is defined at https://github.com/grpc/grpc/blob/master/doc/naming.md.
 	Scheme() string

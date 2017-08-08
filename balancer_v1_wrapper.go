@@ -32,7 +32,7 @@ type balancerWrapperBuilder struct {
 	b Balancer // The v1 balancer.
 }
 
-func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConnection, opts balancer.BuildOptions) balancer.Balancer {
+func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	bwb.b.Start(cc.Target(), BalancerConfig{
 		DialCreds: opts.DialCreds,
 		Dialer:    opts.Dialer,
@@ -41,8 +41,8 @@ func (bwb *balancerWrapperBuilder) Build(cc balancer.ClientConnection, opts bala
 		balancer: bwb.b,
 		cc:       cc,
 		startCh:  make(chan struct{}),
-		conns:    make(map[resolver.Address]balancer.SubConnection),
-		connSt:   make(map[balancer.SubConnection]*scState),
+		conns:    make(map[resolver.Address]balancer.SubConn),
+		connSt:   make(map[balancer.SubConn]*scState),
 	}
 	cc.UpdateBalancerState(connectivity.Idle, bw)
 	go bw.lbWatcher()
@@ -62,14 +62,14 @@ type scState struct {
 type balancerWrapper struct {
 	balancer Balancer // The v1 balancer.
 
-	cc balancer.ClientConnection
+	cc balancer.ClientConn
 
 	mu     sync.Mutex
-	conns  map[resolver.Address]balancer.SubConnection
-	connSt map[balancer.SubConnection]*scState
+	conns  map[resolver.Address]balancer.SubConn
+	connSt map[balancer.SubConn]*scState
 	// This channel is closed when handling the first resolver result.
 	// lbWatcher blocks until this is closed, to avoid race between
-	// - NewSubConnection is created, cc wants to notify balancer of state changes;
+	// - NewSubConn is created, cc wants to notify balancer of state changes;
 	// - Build hasn't return, cc doesn't have access to balancer.
 	startCh chan struct{}
 }
@@ -85,7 +85,7 @@ func (bw *balancerWrapper) lbWatcher() {
 			Addr: bw.cc.Target(),
 			Type: resolver.Backend,
 		}
-		sc, err := bw.cc.NewSubConnection([]resolver.Address{a}, balancer.NewSubConnectionOptions{})
+		sc, err := bw.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{})
 		if err != nil {
 			grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
 		} else {
@@ -104,8 +104,8 @@ func (bw *balancerWrapper) lbWatcher() {
 	for addrs := range notifyCh {
 		grpclog.Infof("balancerWrapper: got update addr from Notify: %v\n", addrs)
 		var (
-			add []resolver.Address       // Addresses need to setup connections.
-			del []balancer.SubConnection // Connections need to tear down.
+			add []resolver.Address // Addresses need to setup connections.
+			del []balancer.SubConn // Connections need to tear down.
 		)
 		resAddrs := make(map[resolver.Address]Address)
 		for _, a := range addrs {
@@ -131,7 +131,7 @@ func (bw *balancerWrapper) lbWatcher() {
 		}
 		bw.mu.Unlock()
 		for _, a := range add {
-			sc, err := bw.cc.NewSubConnection([]resolver.Address{a}, balancer.NewSubConnectionOptions{})
+			sc, err := bw.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{})
 			if err != nil {
 				grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
 			} else {
@@ -146,12 +146,12 @@ func (bw *balancerWrapper) lbWatcher() {
 			}
 		}
 		for _, c := range del {
-			bw.cc.RemoveSubConnection(c)
+			bw.cc.RemoveSubConn(c)
 		}
 	}
 }
 
-func (bw *balancerWrapper) HandleSubConnectionStateChange(sc balancer.SubConnection, s connectivity.State) {
+func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
 	scSt, ok := bw.connSt[sc]
@@ -205,7 +205,7 @@ func (bw *balancerWrapper) Close() {
 // The picker is the balancerWrapper itself.
 // Pick should never return ErrNoSubConnAvailable.
 // It either blocks or returns error, consistent with v1 balancer Get().
-func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConnection, func(balancer.PutInfo), error) {
+func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.PutInfo), error) {
 	failfast := true // Default failfast is true.
 	if ss, ok := rpcInfoFromContext(ctx); ok {
 		failfast = ss.failfast
