@@ -292,11 +292,12 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, error) {
 	var (
-		b          []byte
-		length     uint
-		payloadLen = 1
-		sizeLen    = 4
+		b      []byte
+		length int
 	)
+	const payloadLen = 1
+	const sizeLen = 4
+
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
@@ -313,14 +314,14 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 
 		if cp != nil {
 			// pre-alloc place
-			cbuf.Write(make([]byte, 5))
+			cbuf.Write(make([]byte, payloadLen+sizeLen))
 			if err := cp.Do(cbuf, b); err != nil {
 				return nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
 			}
 			b = cbuf.Bytes()
-			length = uint(len(b) - 5)
+			length = len(b) - (payloadLen + sizeLen)
 		} else {
-			length = uint(len(b))
+			length = len(b)
 		}
 	}
 
@@ -328,24 +329,17 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		return nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", length)
 	}
 
-	if cp != nil {
-		// Write payload format
-		b[0] = byte(compressionMade)
-		// Write length of b into buf
-		binary.BigEndian.PutUint32(b[1:], uint32(length))
-		if outPayload != nil {
-			outPayload.WireLength = len(b)
-		}
-		return b, nil
-	}
-
 	var buf []byte
-	buf = make([]byte, payloadLen+sizeLen+len(b))
-	// Write payload format
-	buf[0] = byte(compressionNone)
+	if cp != nil {
+		buf = b
+		buf[0] = byte(compressionMade)
+	} else {
+		buf = make([]byte, payloadLen+sizeLen+len(b))
+		buf[0] = byte(compressionNone)
+		copy(buf[payloadLen+sizeLen:], b)
+	}
 	// Write length of b into buf
-	binary.BigEndian.PutUint32(buf[1:], uint32(length))
-	copy(buf[5:], b)
+	binary.BigEndian.PutUint32(buf[payloadLen:], uint32(length))
 	if outPayload != nil {
 		outPayload.WireLength = len(buf)
 	}
