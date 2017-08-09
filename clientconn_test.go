@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/naming"
@@ -33,9 +34,10 @@ import (
 
 const tlsDir = "testdata/"
 
-func assertState(wantState ConnectivityState, cc *ClientConn) (ConnectivityState, bool) {
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	var state ConnectivityState
+func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.State, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var state connectivity.State
 	for state = cc.GetState(); state != wantState && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
 	return state, state == wantState
@@ -54,7 +56,7 @@ func TestConnectivityStates(t *testing.T) {
 		t.Fatalf("Dial(\"foo.bar.com\", WithBalancer(_)) = _, %v, want _ <nil>", err)
 	}
 	defer cc.Close()
-	wantState := Ready
+	wantState := connectivity.Ready
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
@@ -66,7 +68,7 @@ func TestConnectivityStates(t *testing.T) {
 		},
 	}
 	resolver.w.inject(update)
-	wantState = TransientFailure
+	wantState = connectivity.TransientFailure
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
@@ -75,7 +77,7 @@ func TestConnectivityStates(t *testing.T) {
 		Addr: "localhost:" + servers[1].port,
 	}
 	resolver.w.inject(update)
-	wantState = Ready
+	wantState = connectivity.Ready
 	if state, ok := assertState(wantState, cc); !ok {
 		t.Fatalf("asserState(%s) = %s, false, want %s, true", wantState, state, wantState)
 	}
