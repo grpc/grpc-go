@@ -32,7 +32,7 @@ import okio.ByteString;
 /**
  * Constants for request/response headers.
  */
-public class Headers {
+class Headers {
 
   public static final Header SCHEME_HEADER = new Header(Header.TARGET_SCHEME, "https");
   public static final Header METHOD_HEADER = new Header(Header.TARGET_METHOD, GrpcUtil.HTTP_METHOD);
