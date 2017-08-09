@@ -1061,7 +1061,7 @@ func (t *http2Server) controller() {
 					}
 					sid := t.maxStreamID
 					if !i.headsUp {
-						// Stop accepting more stream now.
+						// Stop accepting more streams now.
 						t.state = draining
 						t.mu.Unlock()
 						t.framer.writeGoAway(true, sid, i.code, i.debugData)
