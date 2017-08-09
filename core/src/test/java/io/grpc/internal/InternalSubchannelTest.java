@@ -51,8 +51,6 @@ import org.mockito.MockitoAnnotations;
 
 /**
  * Unit tests for {@link InternalSubchannel}.
- *
- * <p>It only tests the logic that is not covered by {@link ManagedChannelImplTransportManagerTest}.
  */
 @RunWith(JUnit4.class)
 public class InternalSubchannelTest {

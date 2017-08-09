@@ -24,8 +24,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.UnknownHostException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -60,8 +58,7 @@ public class ProxyTest {
   }
 
   @Test
-  public void smallLatency()
-      throws UnknownHostException, IOException, InterruptedException, ExecutionException {
+  public void smallLatency() throws Exception {
     server = new Server();
     int serverPort = server.init();
     executor.execute(server);
@@ -92,8 +89,7 @@ public class ProxyTest {
   }
 
   @Test
-  public void bigLatency()
-      throws UnknownHostException, IOException, InterruptedException, ExecutionException {
+  public void bigLatency() throws Exception {
     server = new Server();
     int serverPort = server.init();
     executor.execute(server);
@@ -123,8 +119,7 @@ public class ProxyTest {
   }
 
   @Test
-  public void smallBandwidth()
-      throws UnknownHostException, IOException, InterruptedException, ExecutionException {
+  public void smallBandwidth() throws Exception {
     server = new Server();
     int serverPort = server.init();
     server.setMode("stream");
@@ -149,8 +144,7 @@ public class ProxyTest {
   }
 
   @Test
-  public void largeBandwidth()
-      throws UnknownHostException, IOException, InterruptedException, ExecutionException {
+  public void largeBandwidth() throws Exception {
     server = new Server();
     int serverPort = server.init();
     server.setMode("stream");
