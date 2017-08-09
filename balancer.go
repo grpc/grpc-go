@@ -135,7 +135,12 @@ func downErrorf(timeout, temporary bool, format string, a ...interface{}) downEr
 // RoundRobin returns a Balancer that selects addresses round-robin. It uses r to watch
 // the name resolution updates and updates the addresses available correspondingly.
 func RoundRobin(r naming.Resolver) Balancer {
-	return &roundRobin{r: r}
+	// create addrCh only if r is not nil
+	// otherwise it's unused and clientconn depends on nilness of this channel
+	if r == nil {
+		return &roundRobin{}
+	}
+	return &roundRobin{r: r, addrCh: make(chan []Address, 1)}
 }
 
 type addrInfo struct {
@@ -227,7 +232,6 @@ func (rr *roundRobin) Start(target string, config BalancerConfig) error {
 		return err
 	}
 	rr.w = w
-	rr.addrCh = make(chan []Address, 1)
 	go func() {
 		for {
 			if err := rr.watchAddrUpdates(); err != nil {
