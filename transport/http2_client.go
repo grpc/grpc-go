@@ -94,7 +94,7 @@ type http2Client struct {
 	activity uint32 // Accessed atomically.
 	kp       keepalive.ClientParameters
 
-	statsHandler stats.Handler
+	statsHandlers []stats.Handler
 
 	initialWindowSize int32
 
@@ -229,7 +229,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		streamsQuota:      newQuotaPool(defaultMaxStreamsClient),
 		streamSendQuota:   defaultWindowSize,
 		kp:                kp,
-		statsHandler:      opts.StatsHandler,
+		statsHandlers:     opts.StatsHandlers,
 		initialWindowSize: initialWindowSize,
 	}
 	if opts.InitialWindowSize >= defaultWindowSize {
@@ -245,15 +245,15 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	// Make sure awakenKeepalive can't be written upon.
 	// keepalive routine will make it writable, if need be.
 	t.awakenKeepalive <- struct{}{}
-	if t.statsHandler != nil {
-		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
+	for _, h := range t.statsHandlers {
+		t.ctx = h.TagConn(t.ctx, &stats.ConnTagInfo{
 			RemoteAddr: t.remoteAddr,
 			LocalAddr:  t.localAddr,
 		})
 		connBegin := &stats.ConnBegin{
 			Client: true,
 		}
-		t.statsHandler.HandleConn(t.ctx, connBegin)
+		h.HandleConn(t.ctx, connBegin)
 	}
 	// Start the reader goroutine for incoming message. Each transport has
 	// a dedicated goroutine which reads HTTP2 frame from network. Then it
@@ -537,7 +537,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	s.bytesSent = true
 	s.mu.Unlock()
 
-	if t.statsHandler != nil {
+	if len(t.statsHandlers) != 0 {
 		outHeader := &stats.OutHeader{
 			Client:      true,
 			WireLength:  bufLen,
@@ -546,7 +546,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			LocalAddr:   t.localAddr,
 			Compression: callHdr.SendCompress,
 		}
-		t.statsHandler.HandleRPC(s.ctx, outHeader)
+		for _, h := range t.statsHandlers {
+			h.HandleRPC(s.ctx, outHeader)
+		}
 	}
 	t.writableChan <- 0
 	return s, nil
@@ -1096,19 +1098,23 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	endStream := frame.StreamEnded()
 	var isHeader bool
 	defer func() {
-		if t.statsHandler != nil {
+		if len(t.statsHandlers) != 0 {
 			if isHeader {
 				inHeader := &stats.InHeader{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				t.statsHandler.HandleRPC(s.ctx, inHeader)
+				for _, h := range t.statsHandlers {
+					h.HandleRPC(s.ctx, inHeader)
+				{
 			} else {
 				inTrailer := &stats.InTrailer{
 					Client:     true,
 					WireLength: int(frame.Header().Length),
 				}
-				t.statsHandler.HandleRPC(s.ctx, inTrailer)
+				for _, h := range t.statsHandlers {
+					h.HandleRPC(s.ctx, inTrailer)
+				}
 			}
 		}
 	}()

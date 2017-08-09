@@ -163,15 +163,14 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		}()
 	}
 	ctx = newContextWithRPCInfo(ctx)
-	sh := cc.dopts.copts.StatsHandler
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
+	for _, h := range c.rpcStatsHandlers {
+		ctx = h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
-		sh.HandleRPC(ctx, begin)
+		h.HandleRPC(ctx, begin)
 		defer func() {
 			if err != nil {
 				// Only handle end stats if err != nil.
@@ -179,7 +178,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 					Client: true,
 					Error:  err,
 				}
-				sh.HandleRPC(ctx, end)
+				h.HandleRPC(ctx, end)
 			}
 		}()
 	}
@@ -244,7 +243,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		trInfo:  trInfo,
 
 		statsCtx:     ctx,
-		statsHandler: cc.dopts.copts.StatsHandler,
+		rpcStatsHandlers: c.rpcStatsHandlers,
 	}
 	if cc.dopts.cp != nil {
 		cs.cbuf = new(bytes.Buffer)
@@ -303,7 +302,7 @@ type clientStream struct {
 	// All stats collection should use the statsCtx (instead of the stream context)
 	// so that all the generated stats for a particular RPC can be associated in the processing phase.
 	statsCtx     context.Context
-	statsHandler stats.Handler
+	rpcStatsHandlers []stats.RPCHandler
 }
 
 func (cs *clientStream) Context() context.Context {
@@ -357,7 +356,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 		err = toRPCErr(err)
 	}()
 	var outPayload *stats.OutPayload
-	if cs.statsHandler != nil {
+	if len(cs.rpcStatsHandlers) != 0 {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
@@ -380,14 +379,16 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
+		for _, h := range cs.rpcStatsHandlers {
+			h.HandleRPC(cs.statsCtx, outPayload)
+		}
 	}
 	return err
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 	var inPayload *stats.InPayload
-	if cs.statsHandler != nil {
+	if len(cs.rpcStatsHandlers) != 0 {
 		inPayload = &stats.InPayload{
 			Client: true,
 		}
@@ -411,7 +412,9 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 			cs.mu.Unlock()
 		}
 		if inPayload != nil {
-			cs.statsHandler.HandleRPC(cs.statsCtx, inPayload)
+			for _, h := range cs.rpcStatsHandlers {
+				h.HandleRPC(cs.statsCtx, inPayload)
+			}
 		}
 		if !cs.desc.ClientStreams || cs.desc.ServerStreams {
 			return
@@ -499,7 +502,7 @@ func (cs *clientStream) finish(err error) {
 		cs.put()
 		cs.put = nil
 	}
-	if cs.statsHandler != nil {
+	if len(cs.rpcStatsHandlers) != 0 {
 		end := &stats.End{
 			Client:  true,
 			EndTime: time.Now(),
@@ -508,7 +511,9 @@ func (cs *clientStream) finish(err error) {
 			// end.Error is nil if the RPC finished successfully.
 			end.Error = toRPCErr(err)
 		}
-		cs.statsHandler.HandleRPC(cs.statsCtx, end)
+		for _, h := range cs.rpcStatsHandlers {
+			h.HandleRPC(cs.statsCtx, end)
+		}
 	}
 	if !cs.tracing {
 		return

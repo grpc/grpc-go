@@ -249,6 +249,7 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 func WithStatsHandler(h stats.Handler) DialOption {
 	return func(o *dialOptions) {
 		o.copts.StatsHandler = h
+		o.callOptions = append(o.callOptions, PerRPCStatsHandler(h))
 	}
 }
 
