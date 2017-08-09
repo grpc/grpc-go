@@ -22,3 +22,9 @@ Package grpc implements an RPC system called gRPC.
 See grpc.io for more information about gRPC.
 */
 package grpc // import "google.golang.org/grpc"
+
+import (
+	_ "google.golang.org/grpc/balancer"     // test build TODO(bar) remove this.
+	_ "google.golang.org/grpc/connectivity" // test build
+	_ "google.golang.org/grpc/resolver"     // test build
+)

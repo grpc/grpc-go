@@ -38,6 +38,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	_ "google.golang.org/grpc/grpclog/glogger"
 )
 
 var (
@@ -400,7 +402,7 @@ func TestGRPCLB(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	testC := testpb.NewTestServiceClient(cc)
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 	cc.Close()
@@ -438,6 +440,15 @@ func TestDropRequest(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	testC := testpb.NewTestServiceClient(cc)
+	// Wait until the first connection is up.
+	// The first one has Drop set to true, error should contain "drop requests".
+	for {
+		if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+			if strings.Contains(err.Error(), "drops requests") {
+				break
+			}
+		}
+	}
 	// The 1st, non-fail-fast RPC should succeed.  This ensures both server
 	// connections are made, because the first one has DropForLoadBalancing set to true.
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
@@ -541,7 +552,7 @@ func TestServerExpiration(t *testing.T) {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	testC := testpb.NewTestServiceClient(cc)
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 	// Sleep and wake up when the first server list gets expired.

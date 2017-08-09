@@ -131,7 +131,9 @@ type callInfo struct {
 	creds                 credentials.PerRPCCredentials
 }
 
-var defaultCallInfo = callInfo{failFast: true}
+func defaultCallInfo() *callInfo {
+	return &callInfo{failFast: true}
+}
 
 // CallOption configures a Call before it starts or extracts information from
 // a Call after it completes.
@@ -393,14 +395,15 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 }
 
 type rpcInfo struct {
+	failfast      bool
 	bytesSent     bool
 	bytesReceived bool
 }
 
 type rpcInfoContextKey struct{}
 
-func newContextWithRPCInfo(ctx context.Context) context.Context {
-	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{})
+func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
+	return context.WithValue(ctx, rpcInfoContextKey{}, &rpcInfo{failfast: failfast})
 }
 
 func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
@@ -410,7 +413,8 @@ func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
 
 func updateRPCInfoInContext(ctx context.Context, s rpcInfo) {
 	if ss, ok := rpcInfoFromContext(ctx); ok {
-		*ss = s
+		ss.bytesReceived = s.bytesReceived
+		ss.bytesSent = s.bytesSent
 	}
 	return
 }

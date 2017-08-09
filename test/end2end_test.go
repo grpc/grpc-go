@@ -439,6 +439,10 @@ type test struct {
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 
+	// All test dialing is blocking by default. Set this to true if dial
+	// should be non-blocking.
+	nonBlockingDial bool
+
 	// srv and srvAddr are set once startServer is called.
 	srv     *grpc.Server
 	srvAddr string
@@ -630,6 +634,10 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	if te.customCodec != nil {
 		opts = append(opts, grpc.WithCodec(te.customCodec))
+	}
+	if !te.nonBlockingDial && te.srvAddr != "" {
+		// Only do a blocking dial if server is up.
+		opts = append(opts, grpc.WithBlock())
 	}
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)
@@ -4040,11 +4048,20 @@ func TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
+	te.nonBlockingDial = true // Connection will never be successful because server is not set up correctly.
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
-		te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
+	var err error
+	for i := 0; i < 1000; i++ {
+		// This loop runs for at most 1 second.
+		// The first several RPCs will fail with Unavailable because the connection hasn't started.
+		// When the first connection failed with creds error, the next RPC should also fail with the expected error.
+		if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+			return
+		}
+		time.Sleep(time.Millisecond)
 	}
+	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 }
 
 func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
@@ -4052,11 +4069,20 @@ func TestFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
+	te.nonBlockingDial = true
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
-		te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
+	var err error
+	for i := 0; i < 1000; i++ {
+		// This loop runs for at most 1 second.
+		// The first several RPCs will fail with Unavailable because the connection hasn't started.
+		// When the first connection failed with creds error, the next RPC should also fail with the expected error.
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+			return
+		}
+		time.Sleep(time.Millisecond)
 	}
+	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 }
 
 func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
@@ -4064,6 +4090,7 @@ func TestNonFailFastRPCWithNoBalancerErrorOnBadCertificates(t *testing.T) {
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 
+	te.nonBlockingDial = true
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
