@@ -20,11 +20,7 @@ package grpc
 
 import (
 	"errors"
-<<<<<<< HEAD
-=======
-	"fmt"
 	"math"
->>>>>>> change defaultClientMaxSendMessageSize on client side
 	"net"
 	"strings"
 	"sync"
