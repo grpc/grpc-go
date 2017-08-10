@@ -104,12 +104,13 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	reply, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
+	reply, replyData, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
 	if err != nil {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
 	}
 	h.t.Write(s, reply, &transport.Options{})
+	h.t.Write(s, replyData, &transport.Options{})
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 

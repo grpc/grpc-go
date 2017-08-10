@@ -677,15 +677,16 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	p, pData, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
 	}
-	if len(p) > s.opts.maxSendMessageSize {
+	if len(p)+len(pData) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, p, opts)
+	err = t.Write(stream, pData, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload)

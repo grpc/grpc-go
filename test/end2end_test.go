@@ -2410,7 +2410,6 @@ func testMultipleSetTrailerStreamingRPC(t *testing.T, e env) {
 	if _, err := stream.Recv(); err != io.EOF {
 		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
 	}
-
 	trailer := stream.Trailer()
 	expectedTrailer := metadata.Join(testTrailerMetadata, testTrailerMetadata2)
 	if !reflect.DeepEqual(trailer, expectedTrailer) {
