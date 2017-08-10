@@ -21,6 +21,7 @@ import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -48,6 +49,7 @@ import com.google.protobuf.util.Timestamps;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
+import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -344,7 +346,8 @@ public class GrpclbLoadBalancerTest {
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(READY));
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
 
-    helperInOrder.verify(helper, atLeast(1)).updatePicker(pickerCaptor.capture());
+    helperInOrder.verify(helper, atLeast(1))
+        .updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker.list).containsExactly(
         new RoundRobinEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
@@ -468,7 +471,8 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildInitialResponse(loadReportIntervalMillis));
 
     // No picker created because balancer is still using the results from the last stream
-    helperInOrder.verify(helper, never()).updatePicker(any(SubchannelPicker.class));
+    helperInOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
 
     // Make a new pick on that picker.  It will not show up on the report of the new stream, because
     // that picker is associated with the previous stream.
@@ -487,7 +491,7 @@ public class GrpclbLoadBalancerTest {
         any(EquivalentAddressGroup.class), any(Attributes.class));
     // But the new RoundRobinEntries have a new loadRecorder, thus considered different from
     // the previous list, thus a new picker is created
-    helperInOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    helperInOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     picker = (RoundRobinPicker) pickerCaptor.getValue();
 
     PickResult pick1p = picker.pickSubchannel(args);
@@ -611,7 +615,7 @@ public class GrpclbLoadBalancerTest {
   public void nameResolutionFailsThenRecoverToDelegate() {
     Status error = Status.NOT_FOUND.withDescription("www.google.com not found");
     deliverNameResolutionError(error);
-    verify(helper).updatePicker(pickerCaptor.capture());
+    verify(helper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
     ErrorPicker errorPicker = (ErrorPicker) pickerCaptor.getValue();
     assertSame(error, errorPicker.result.getStatus());
 
@@ -631,7 +635,7 @@ public class GrpclbLoadBalancerTest {
   public void nameResolutionFailsThenRecoverToGrpclb() {
     Status error = Status.NOT_FOUND.withDescription("www.google.com not found");
     deliverNameResolutionError(error);
-    verify(helper).updatePicker(pickerCaptor.capture());
+    verify(helper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
     ErrorPicker errorPicker = (ErrorPicker) pickerCaptor.getValue();
     assertSame(error, errorPicker.result.getStatus());
 
@@ -668,7 +672,8 @@ public class GrpclbLoadBalancerTest {
     Status error = Status.NOT_FOUND.withDescription("www.google.com not found");
     deliverNameResolutionError(error);
     verify(pickFirstBalancer).handleNameResolutionError(error);
-    verify(helper, never()).updatePicker(any(SubchannelPicker.class));
+    verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
     verifyNoMoreInteractions(roundRobinBalancerFactory);
     verifyNoMoreInteractions(roundRobinBalancer);
   }
@@ -716,7 +721,7 @@ public class GrpclbLoadBalancerTest {
     Status error = Status.NOT_FOUND.withDescription("www.google.com not found");
     deliverNameResolutionError(error);
 
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
     ErrorPicker errorPicker = (ErrorPicker) pickerCaptor.getValue();
     assertSame(error, errorPicker.result.getStatus());
     assertFalse(oobChannel.isShutdown());
@@ -898,7 +903,8 @@ public class GrpclbLoadBalancerTest {
     List<ServerEntry> backends1 = Arrays.asList(
         new ServerEntry("127.0.0.1", 2000, "token0001"),
         new ServerEntry("127.0.0.1", 2010, "token0002"));
-    inOrder.verify(helper, never()).updatePicker(any(SubchannelPicker.class));
+    inOrder.verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
     lbResponseObserver.onNext(buildInitialResponse());
     lbResponseObserver.onNext(buildLbResponse(backends1));
 
@@ -920,14 +926,14 @@ public class GrpclbLoadBalancerTest {
 
     // Let subchannels be connected
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker1 = (RoundRobinPicker) pickerCaptor.getValue();
 
     assertThat(picker1.list).containsExactly(
         new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
 
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(READY));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker2 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker2.list).containsExactly(
         new RoundRobinEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
@@ -938,7 +944,7 @@ public class GrpclbLoadBalancerTest {
     verify(subchannel1).requestConnection();
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(IDLE));
     verify(subchannel1, times(2)).requestConnection();
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker3 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker3.list).containsExactly(
         new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
@@ -951,15 +957,11 @@ public class GrpclbLoadBalancerTest {
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forTransientFailure(error1));
     inOrder.verifyNoMoreInteractions();
 
-    // If no subchannel is READY, will propagate an error from an arbitrary subchannel (but here
-    // only subchannel1 has error).
+    // If no subchannel is READY, some with error and the others are IDLE, will report CONNECTING
     verify(subchannel2).requestConnection();
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(IDLE));
     verify(subchannel2, times(2)).requestConnection();
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
-    ErrorPicker picker6 = (ErrorPicker) pickerCaptor.getValue();
-    assertNull(picker6.result.getSubchannel());
-    assertSame(error1, picker6.result.getStatus());
+    inOrder.verify(helper).updateBalancingState(CONNECTING, GrpclbLoadBalancer.BUFFER_PICKER);
 
     // Update backends, with a drop entry
     List<ServerEntry> backends2 =
@@ -983,7 +985,7 @@ public class GrpclbLoadBalancerTest {
     Subchannel subchannel3 = mockSubchannels.poll();
     verify(subchannel3).requestConnection();
     assertEquals(new EquivalentAddressGroup(backends2.get(0).addr), subchannel3.getAddresses());
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker7 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker7.list).containsExactly(
         new RoundRobinEntry(DropType.RATE_LIMITING, balancer.getLoadRecorder()),
@@ -997,7 +999,7 @@ public class GrpclbLoadBalancerTest {
     inOrder.verifyNoMoreInteractions();
 
     deliverSubchannelState(subchannel3, ConnectivityStateInfo.forNonError(READY));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker8 = (RoundRobinPicker) pickerCaptor.getValue();
     // subchannel2 is still IDLE, thus not in the active list
     assertThat(picker8.list).containsExactly(
@@ -1007,7 +1009,7 @@ public class GrpclbLoadBalancerTest {
         new RoundRobinEntry(DropType.LOAD_BALANCING, balancer.getLoadRecorder())).inOrder();
     // subchannel2 becomes READY and makes it into the list
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
-    inOrder.verify(helper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker9 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker9.list).containsExactly(
         new RoundRobinEntry(subchannel3, balancer.getLoadRecorder(), "token0003"),
@@ -1021,7 +1023,7 @@ public class GrpclbLoadBalancerTest {
     lbResponseObserver.onNext(buildLbResponse(Collections.<ServerEntry>emptyList()));
     verify(subchannel2).shutdown();
     verify(subchannel3).shutdown();
-    inOrder.verify(helper).updatePicker((GrpclbLoadBalancer.BUFFER_PICKER));
+    inOrder.verify(helper).updateBalancingState(CONNECTING, GrpclbLoadBalancer.BUFFER_PICKER);
 
     assertFalse(oobChannel.isShutdown());
     assertEquals(0, lbRequestObservers.size());

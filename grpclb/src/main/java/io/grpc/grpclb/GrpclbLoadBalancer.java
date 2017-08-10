@@ -19,6 +19,7 @@ package io.grpc.grpclb;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
@@ -29,6 +30,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.protobuf.util.Durations;
 import io.grpc.Attributes;
+import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
@@ -312,7 +314,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     logger.log(Level.FINE, "[{0}] Had an error: {1}; roundRobinList={2}",
         new Object[] {logId, status, roundRobinList});
     if (roundRobinList.isEmpty()) {
-      maybeUpdatePicker(new ErrorPicker(status));
+      maybeUpdatePicker(TRANSIENT_FAILURE, new ErrorPicker(status));
     }
   }
 
@@ -545,6 +547,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private void maybeUpdatePicker() {
     List<RoundRobinEntry> resultList = new ArrayList<RoundRobinEntry>();
     Status error = null;
+    boolean hasIdle = false;
     // TODO(zhangkun83): if roundRobinList contains at least one address, but none of them are
     // ready, maybe we should always return BUFFER_PICKER, no matter if there are drop entries or
     // not.
@@ -557,6 +560,8 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
           resultList.add(entry);
         } else if (stateInfo.getState() == TRANSIENT_FAILURE) {
           error = stateInfo.getStatus();
+        } else if (stateInfo.getState() == IDLE) {
+          hasIdle = true;
         }
       } else {
         // This is a drop entry.
@@ -564,24 +569,24 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       }
     }
     if (resultList.isEmpty()) {
-      if (error != null) {
+      if (error != null && !hasIdle) {
         logger.log(Level.FINE, "[{0}] No ready Subchannel. Using error: {1}",
             new Object[] {logId, error});
-        maybeUpdatePicker(new ErrorPicker(error));
+        maybeUpdatePicker(TRANSIENT_FAILURE, new ErrorPicker(error));
       } else {
-        logger.log(Level.FINE, "[{0}] No ready Subchannel and no error", logId);
-        maybeUpdatePicker(BUFFER_PICKER);
+        logger.log(Level.FINE, "[{0}] No ready Subchannel and still connecting", logId);
+        maybeUpdatePicker(CONNECTING, BUFFER_PICKER);
       }
     } else {
       logger.log(Level.FINE, "[{0}] Using list {1}", new Object[] {logId, resultList});
-      maybeUpdatePicker(new RoundRobinPicker(resultList));
+      maybeUpdatePicker(READY, new RoundRobinPicker(resultList));
     }
   }
 
   /**
    * Update the given picker to the helper if it's different from the current one.
    */
-  private void maybeUpdatePicker(SubchannelPicker picker) {
+  private void maybeUpdatePicker(ConnectivityState state, SubchannelPicker picker) {
     // Discard the new picker if we are sure it won't make any difference, in order to save
     // re-processing pending streams, and avoid unnecessary resetting of the pointer in
     // RoundRobinPicker.
@@ -596,7 +601,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
     // No need to skip ErrorPicker. If the current picker is ErrorPicker, there won't be any pending
     // stream thus no time is wasted in re-process.
     currentPicker = picker;
-    helper.updatePicker(picker);
+    helper.updateBalancingState(state, picker);
   }
 
   @VisibleForTesting
