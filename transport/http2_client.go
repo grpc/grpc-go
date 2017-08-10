@@ -355,7 +355,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		if pos == -1 {
 			pos = len(callHdr.Method)
 		}
-		audience = "https://" + host + callHdr.Method[:pos]	
+		audience = "https://" + host + callHdr.Method[:pos]
 	}
 	for _, c := range t.creds {
 		data, err := c.GetRequestMetadata(ctx, audience)
