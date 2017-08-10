@@ -17,12 +17,14 @@
 package io.grpc.util;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
+import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.ExperimentalApi;
@@ -36,6 +38,7 @@ import io.grpc.Status;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -119,12 +122,12 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
         subchannel.shutdown();
       }
 
-      updatePicker(getAggregatedError());
+      updateBalancingState(getAggregatedState(), getAggregatedError());
     }
 
     @Override
     public void handleNameResolutionError(Status error) {
-      updatePicker(error);
+      updateBalancingState(TRANSIENT_FAILURE, error);
     }
 
     @Override
@@ -136,7 +139,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
         subchannel.requestConnection();
       }
       getSubchannelStateInfoRef(subchannel).set(stateInfo);
-      updatePicker(getAggregatedError());
+      updateBalancingState(getAggregatedState(), getAggregatedError());
     }
 
     @Override
@@ -149,9 +152,9 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     /**
      * Updates picker with the list of active subchannels (state == READY).
      */
-    private void updatePicker(@Nullable Status error) {
+    private void updateBalancingState(ConnectivityState state, Status error) {
       List<Subchannel> activeList = filterNonFailingSubchannels(getSubchannels());
-      helper.updatePicker(new Picker(activeList, error));
+      helper.updateBalancingState(state, new Picker(activeList, error));
     }
 
     /**
@@ -195,6 +198,26 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
         status = stateInfo.getStatus();
       }
       return status;
+    }
+
+    private ConnectivityState getAggregatedState() {
+      Set<ConnectivityState> states = EnumSet.noneOf(ConnectivityState.class);
+      for (Subchannel subchannel : getSubchannels()) {
+        states.add(getSubchannelStateInfoRef(subchannel).get().getState());
+      }
+      if (states.contains(READY)) {
+        return READY;
+      }
+      if (states.contains(CONNECTING)) {
+        return CONNECTING;
+      }
+      if (states.contains(IDLE)) {
+        // This subchannel IDLE is not because of channel IDLE_TIMEOUT, in which case LB is already
+        // shutdown.
+        // RRLB will request connection immediately on subchannel IDLE.
+        return CONNECTING;
+      }
+      return TRANSIENT_FAILURE;
     }
 
     @VisibleForTesting
