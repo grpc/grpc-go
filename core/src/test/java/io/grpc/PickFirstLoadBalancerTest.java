@@ -16,6 +16,10 @@
 
 package io.grpc;
 
+import static io.grpc.ConnectivityState.CONNECTING;
+import static io.grpc.ConnectivityState.IDLE;
+import static io.grpc.ConnectivityState.READY;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -98,7 +102,8 @@ public class PickFirstLoadBalancerTest {
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
 
     verify(mockHelper).createSubchannel(eagCaptor.capture(), attrsCaptor.capture());
-    verify(mockHelper).updatePicker(pickerCaptor.capture());
+    verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
+    verify(mockSubchannel).requestConnection();
 
     assertEquals(new EquivalentAddressGroup(socketAddresses), eagCaptor.getValue());
     assertEquals(pickerCaptor.getValue().pickSubchannel(mockArgs),
@@ -110,11 +115,13 @@ public class PickFirstLoadBalancerTest {
   @Test
   public void pickAfterResolvedAndUnchanged() throws Exception {
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
+    verify(mockSubchannel).requestConnection();
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
+    verifyNoMoreInteractions(mockSubchannel);
 
     verify(mockHelper).createSubchannel(any(EquivalentAddressGroup.class),
         any(Attributes.class));
-    verify(mockHelper).updatePicker(isA(Picker.class));
+    verify(mockHelper).updateBalancingState(isA(ConnectivityState.class), isA(Picker.class));
     // Updating the subchannel addresses is unnecessary, but doesn't hurt anything
     verify(mockHelper).updateSubchannelAddresses(
         eq(mockSubchannel), any(EquivalentAddressGroup.class));
@@ -133,7 +140,8 @@ public class PickFirstLoadBalancerTest {
 
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
     inOrder.verify(mockHelper).createSubchannel(eagCaptor.capture(), any(Attributes.class));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
+    verify(mockSubchannel).requestConnection();
     assertEquals(socketAddresses, eagCaptor.getValue().getAddresses());
     assertEquals(mockSubchannel, pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
 
@@ -141,15 +149,13 @@ public class PickFirstLoadBalancerTest {
     inOrder.verify(mockHelper).updateSubchannelAddresses(eq(mockSubchannel), eagCaptor.capture());
     assertEquals(newSocketAddresses, eagCaptor.getValue().getAddresses());
 
-    verify(mockSubchannel, never()).shutdown();
-
+    verifyNoMoreInteractions(mockSubchannel);
     verifyNoMoreInteractions(mockHelper);
   }
 
   @Test
   public void stateChangeBeforeResolution() throws Exception {
-    loadBalancer.handleSubchannelState(mockSubchannel,
-        ConnectivityStateInfo.forNonError(ConnectivityState.READY));
+    loadBalancer.handleSubchannelState(mockSubchannel, ConnectivityStateInfo.forNonError(READY));
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -157,7 +163,7 @@ public class PickFirstLoadBalancerTest {
   @Test
   public void pickAfterStateChangeAfterResolution() throws Exception {
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
-    verify(mockHelper).updatePicker(pickerCaptor.capture());
+    verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
     Subchannel subchannel = pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel();
     reset(mockHelper);
 
@@ -166,19 +172,16 @@ public class PickFirstLoadBalancerTest {
     Status error = Status.UNAVAILABLE.withDescription("boom!");
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forTransientFailure(error));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
     assertEquals(error, pickerCaptor.getValue().pickSubchannel(mockArgs).getStatus());
 
-    loadBalancer.handleSubchannelState(subchannel,
-        ConnectivityStateInfo.forNonError(ConnectivityState.IDLE));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    loadBalancer.handleSubchannelState(subchannel, ConnectivityStateInfo.forNonError(IDLE));
+    inOrder.verify(mockHelper).updateBalancingState(eq(IDLE), pickerCaptor.capture());
     assertEquals(Status.OK, pickerCaptor.getValue().pickSubchannel(mockArgs).getStatus());
 
-    loadBalancer.handleSubchannelState(subchannel,
-        ConnectivityStateInfo.forNonError(ConnectivityState.READY));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
-    assertEquals(subchannel,
-        pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
+    loadBalancer.handleSubchannelState(subchannel, ConnectivityStateInfo.forNonError(READY));
+    inOrder.verify(mockHelper).updateBalancingState(eq(READY), pickerCaptor.capture());
+    assertEquals(subchannel, pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
 
     verifyNoMoreInteractions(mockHelper);
   }
@@ -187,10 +190,11 @@ public class PickFirstLoadBalancerTest {
   public void nameResolutionError() throws Exception {
     Status error = Status.NOT_FOUND.withDescription("nameResolutionError");
     loadBalancer.handleNameResolutionError(error);
-    verify(mockHelper).updatePicker(pickerCaptor.capture());
+    verify(mockHelper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
     PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
+    verify(mockSubchannel, never()).requestConnection();
     verifyNoMoreInteractions(mockHelper);
   }
 
@@ -199,12 +203,15 @@ public class PickFirstLoadBalancerTest {
     InOrder inOrder = inOrder(mockHelper);
 
     loadBalancer.handleNameResolutionError(Status.NOT_FOUND.withDescription("nameResolutionError"));
-    inOrder.verify(mockHelper).updatePicker(any(Picker.class));
+    inOrder.verify(mockHelper)
+        .updateBalancingState(any(ConnectivityState.class), any(Picker.class));
+    verify(mockSubchannel, never()).requestConnection();
 
     loadBalancer.handleResolvedAddressGroups(servers, affinity);
     inOrder.verify(mockHelper).createSubchannel(eq(new EquivalentAddressGroup(socketAddresses)),
         eq(Attributes.EMPTY));
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
+    verify(mockSubchannel).requestConnection();
 
     assertEquals(mockSubchannel, pickerCaptor.getValue().pickSubchannel(mockArgs)
         .getSubchannel());
@@ -223,17 +230,16 @@ public class PickFirstLoadBalancerTest {
         ConnectivityStateInfo.forTransientFailure(Status.UNAVAILABLE));
     Status error = Status.NOT_FOUND.withDescription("nameResolutionError");
     loadBalancer.handleNameResolutionError(error);
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
 
     PickResult pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());
     assertEquals(error, pickResult.getStatus());
 
-    loadBalancer.handleSubchannelState(mockSubchannel,
-        ConnectivityStateInfo.forNonError(ConnectivityState.READY));
+    loadBalancer.handleSubchannelState(mockSubchannel, ConnectivityStateInfo.forNonError(READY));
     Status error2 = Status.NOT_FOUND.withDescription("nameResolutionError2");
     loadBalancer.handleNameResolutionError(error2);
-    inOrder.verify(mockHelper).updatePicker(pickerCaptor.capture());
+    inOrder.verify(mockHelper).updateBalancingState(eq(TRANSIENT_FAILURE), pickerCaptor.capture());
 
     pickResult = pickerCaptor.getValue().pickSubchannel(mockArgs);
     assertEquals(null, pickResult.getSubchannel());

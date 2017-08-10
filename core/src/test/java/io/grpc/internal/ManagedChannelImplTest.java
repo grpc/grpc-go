@@ -168,12 +168,14 @@ public class ManagedChannelImplTest {
 
   private void createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors) {
-    createChannel(nameResolverFactory, interceptors, true /* requestConnection */);
+    createChannel(
+        nameResolverFactory, interceptors, true /* requestConnection */,
+        ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
   }
 
   private void createChannel(
       NameResolver.Factory nameResolverFactory, List<ClientInterceptor> interceptors,
-      boolean requestConnection) {
+      boolean requestConnection, long idleTimeoutMillis) {
     class Builder extends AbstractManagedChannelImplBuilder<Builder> {
       Builder(String target) {
         super(target);
@@ -197,7 +199,7 @@ public class ManagedChannelImplTest {
         .loadBalancerFactory(mockLoadBalancerFactory)
         .userAgent(userAgent);
     builder.executorPool = executorPool;
-    builder.idleTimeoutMillis = ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE;
+    builder.idleTimeoutMillis = idleTimeoutMillis;
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
         oobExecutorPool, timer.getStopwatchSupplier(), interceptors);
@@ -205,7 +207,9 @@ public class ManagedChannelImplTest {
     if (requestConnection) {
       // Force-exit the initial idle-mode
       channel.exitIdleMode();
-      assertEquals(0, timer.numPendingTasks());
+      assertEquals(
+          idleTimeoutMillis == ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE ? 0 : 1,
+          timer.numPendingTasks());
 
       ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(null);
       verify(mockLoadBalancerFactory).newLoadBalancer(helperCaptor.capture());
@@ -1165,7 +1169,8 @@ public class ManagedChannelImplTest {
   @Test
   public void getState_withRequestConnect() {
     createChannel(
-        new FakeNameResolverFactory(false), NO_INTERCEPTOR, false /* requestConnection */);
+        new FakeNameResolverFactory(false), NO_INTERCEPTOR, false /* requestConnection */,
+        ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
 
     assertEquals(ConnectivityState.IDLE, channel.getState(false));
     verify(mockLoadBalancerFactory, never()).newLoadBalancer(any(Helper.class));
@@ -1269,6 +1274,45 @@ public class ManagedChannelImplTest {
     assertEquals(ConnectivityState.SHUTDOWN, channel.getState(false));
     executor.runDueTasks();
     assertFalse(stateChanged.get());
+  }
+
+  @Test
+  public void stateIsIdleOnIdleTimeout() {
+    long idleTimeoutMillis = 2000L;
+    createChannel(
+        new FakeNameResolverFactory(true), NO_INTERCEPTOR, true /* request connection*/,
+        idleTimeoutMillis);
+    assertEquals(ConnectivityState.IDLE, channel.getState(false));
+
+    helper.updateBalancingState(CONNECTING, mockPicker);
+    assertEquals(CONNECTING, channel.getState(false));
+
+    timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
+    assertEquals(ConnectivityState.IDLE, channel.getState(false));
+  }
+
+  @Test
+  public void idleTimeoutAndReconnect() {
+    long idleTimeoutMillis = 2000L;
+    createChannel(
+        new FakeNameResolverFactory(true), NO_INTERCEPTOR, true /* request connection*/,
+        idleTimeoutMillis);
+
+    timer.forwardNanos(TimeUnit.MILLISECONDS.toNanos(idleTimeoutMillis));
+    assertEquals(ConnectivityState.IDLE, channel.getState(true /* request connection */));
+
+    ArgumentCaptor<Helper> helperCaptor = ArgumentCaptor.forClass(Helper.class);
+    // Two times of requesting connection will create loadBalancer twice.
+    verify(mockLoadBalancerFactory, times(2)).newLoadBalancer(helperCaptor.capture());
+    Helper helper2 = helperCaptor.getValue();
+
+    // Updating on the old helper (whose balancer has been shutdown) does not change the channel
+    // state.
+    helper.updateBalancingState(CONNECTING, mockPicker);
+    assertEquals(ConnectivityState.IDLE, channel.getState(false));
+
+    helper2.updateBalancingState(CONNECTING, mockPicker);
+    assertEquals(ConnectivityState.CONNECTING, channel.getState(false));
   }
 
   // TODO(zdapeng): replace usages of updatePicker() in some other tests once it's deprecated

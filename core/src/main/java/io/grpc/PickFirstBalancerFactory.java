@@ -17,7 +17,9 @@
 package io.grpc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.SHUTDOWN;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.grpc.LoadBalancer.PickResult;
@@ -70,7 +72,11 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
       EquivalentAddressGroup newEag = flattenEquivalentAddressGroup(servers);
       if (subchannel == null) {
         subchannel = helper.createSubchannel(newEag, Attributes.EMPTY);
-        helper.updatePicker(new Picker(PickResult.withSubchannel(subchannel)));
+
+        // The channel state does not get updated when doing name resolving today, so for the moment
+        // let LB report CONNECTION and call subchannel.requestConnection() immediately.
+        helper.updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
+        subchannel.requestConnection();
       } else {
         helper.updateSubchannelAddresses(subchannel, newEag);
       }
@@ -84,7 +90,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
       }
       // NB(lukaszx0) Whether we should propagate the error unconditionally is arguable. It's fine
       // for time being.
-      helper.updatePicker(new Picker(PickResult.withError(error)));
+      helper.updateBalancingState(TRANSIENT_FAILURE, new Picker(PickResult.withError(error)));
     }
 
     @Override
@@ -110,7 +116,7 @@ public final class PickFirstBalancerFactory extends LoadBalancer.Factory {
           throw new IllegalArgumentException("Unsupported state:" + currentState);
       }
 
-      helper.updatePicker(new Picker(pickResult));
+      helper.updateBalancingState(currentState, new Picker(pickResult));
     }
 
     @Override
