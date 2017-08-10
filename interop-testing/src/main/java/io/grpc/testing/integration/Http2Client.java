@@ -138,8 +138,8 @@ public final class Http2Client {
 
   private void setUp() {
     channel = createChannel();
-    blockingStub = TestServiceGrpc.newBlockingStub(channel).withWaitForReady();
-    asyncStub = TestServiceGrpc.newStub(channel).withWaitForReady();
+    blockingStub = TestServiceGrpc.newBlockingStub(channel);
+    asyncStub = TestServiceGrpc.newStub(channel);
   }
 
   private void shutdown() {
@@ -199,7 +199,7 @@ public final class Http2Client {
   }
 
   private class Tester {
-    private final int timeoutSeconds = 5;
+    private final int timeoutSeconds = 180;
 
     private final int responseSize = 314159;
     private final int payloadSize = 271828;
@@ -230,13 +230,13 @@ public final class Http2Client {
       if (!responseObserver.awaitCompletion(timeoutSeconds, TimeUnit.SECONDS)) {
         throw new AssertionError("Operation timed out");
       }
-      if (responseObserver.getResponses().size() != 1) {
-        throw new AssertionError("Expected one response");
-      }
       if (responseObserver.getError() == null) {
         throw new AssertionError("Expected call to fail");
       }
       assertRstStreamReceived(Status.fromThrowable(responseObserver.getError()));
+      if (responseObserver.getResponses().size() != 1) {
+        throw new AssertionError("Expected one response");
+      }
     }
 
     private void rstDuringData() throws Exception {
@@ -246,13 +246,13 @@ public final class Http2Client {
       if (!responseObserver.awaitCompletion(timeoutSeconds, TimeUnit.SECONDS)) {
         throw new AssertionError("Operation timed out");
       }
-      if (responseObserver.getResponses().size() != 0) {
-        throw new AssertionError("Expected zero responses");
-      }
       if (responseObserver.getError() == null) {
         throw new AssertionError("Expected call to fail");
       }
       assertRstStreamReceived(Status.fromThrowable(responseObserver.getError()));
+      if (responseObserver.getResponses().size() != 0) {
+        throw new AssertionError("Expected zero responses");
+      }
     }
 
     private void goAway() throws Exception {
