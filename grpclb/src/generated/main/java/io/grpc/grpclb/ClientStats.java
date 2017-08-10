@@ -22,10 +22,9 @@ public  final class ClientStats extends
   private ClientStats() {
     numCallsStarted_ = 0L;
     numCallsFinished_ = 0L;
-    numCallsFinishedWithDropForRateLimiting_ = 0L;
-    numCallsFinishedWithDropForLoadBalancing_ = 0L;
     numCallsFinishedWithClientFailedToSend_ = 0L;
     numCallsFinishedKnownReceived_ = 0L;
+    callsFinishedWithDrop_ = java.util.Collections.emptyList();
   }
 
   @java.lang.Override
@@ -76,16 +75,6 @@ public  final class ClientStats extends
             numCallsFinished_ = input.readInt64();
             break;
           }
-          case 32: {
-
-            numCallsFinishedWithDropForRateLimiting_ = input.readInt64();
-            break;
-          }
-          case 40: {
-
-            numCallsFinishedWithDropForLoadBalancing_ = input.readInt64();
-            break;
-          }
           case 48: {
 
             numCallsFinishedWithClientFailedToSend_ = input.readInt64();
@@ -96,6 +85,15 @@ public  final class ClientStats extends
             numCallsFinishedKnownReceived_ = input.readInt64();
             break;
           }
+          case 66: {
+            if (!((mutable_bitField0_ & 0x00000020) == 0x00000020)) {
+              callsFinishedWithDrop_ = new java.util.ArrayList<io.grpc.grpclb.ClientStatsPerToken>();
+              mutable_bitField0_ |= 0x00000020;
+            }
+            callsFinishedWithDrop_.add(
+                input.readMessage(io.grpc.grpclb.ClientStatsPerToken.parser(), extensionRegistry));
+            break;
+          }
         }
       }
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -104,6 +102,9 @@ public  final class ClientStats extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      if (((mutable_bitField0_ & 0x00000020) == 0x00000020)) {
+        callsFinishedWithDrop_ = java.util.Collections.unmodifiableList(callsFinishedWithDrop_);
+      }
       makeExtensionsImmutable();
     }
   }
@@ -119,6 +120,7 @@ public  final class ClientStats extends
             io.grpc.grpclb.ClientStats.class, io.grpc.grpclb.ClientStats.Builder.class);
   }
 
+  private int bitField0_;
   public static final int TIMESTAMP_FIELD_NUMBER = 1;
   private com.google.protobuf.Timestamp timestamp_;
   /**
@@ -178,34 +180,6 @@ public  final class ClientStats extends
     return numCallsFinished_;
   }
 
-  public static final int NUM_CALLS_FINISHED_WITH_DROP_FOR_RATE_LIMITING_FIELD_NUMBER = 4;
-  private long numCallsFinishedWithDropForRateLimiting_;
-  /**
-   * <pre>
-   * The total number of RPCs that were dropped by the client because of rate
-   * limiting.
-   * </pre>
-   *
-   * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
-   */
-  public long getNumCallsFinishedWithDropForRateLimiting() {
-    return numCallsFinishedWithDropForRateLimiting_;
-  }
-
-  public static final int NUM_CALLS_FINISHED_WITH_DROP_FOR_LOAD_BALANCING_FIELD_NUMBER = 5;
-  private long numCallsFinishedWithDropForLoadBalancing_;
-  /**
-   * <pre>
-   * The total number of RPCs that were dropped by the client because of load
-   * balancing.
-   * </pre>
-   *
-   * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
-   */
-  public long getNumCallsFinishedWithDropForLoadBalancing() {
-    return numCallsFinishedWithDropForLoadBalancing_;
-  }
-
   public static final int NUM_CALLS_FINISHED_WITH_CLIENT_FAILED_TO_SEND_FIELD_NUMBER = 6;
   private long numCallsFinishedWithClientFailedToSend_;
   /**
@@ -233,6 +207,61 @@ public  final class ClientStats extends
     return numCallsFinishedKnownReceived_;
   }
 
+  public static final int CALLS_FINISHED_WITH_DROP_FIELD_NUMBER = 8;
+  private java.util.List<io.grpc.grpclb.ClientStatsPerToken> callsFinishedWithDrop_;
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  public java.util.List<io.grpc.grpclb.ClientStatsPerToken> getCallsFinishedWithDropList() {
+    return callsFinishedWithDrop_;
+  }
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  public java.util.List<? extends io.grpc.grpclb.ClientStatsPerTokenOrBuilder> 
+      getCallsFinishedWithDropOrBuilderList() {
+    return callsFinishedWithDrop_;
+  }
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  public int getCallsFinishedWithDropCount() {
+    return callsFinishedWithDrop_.size();
+  }
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  public io.grpc.grpclb.ClientStatsPerToken getCallsFinishedWithDrop(int index) {
+    return callsFinishedWithDrop_.get(index);
+  }
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  public io.grpc.grpclb.ClientStatsPerTokenOrBuilder getCallsFinishedWithDropOrBuilder(
+      int index) {
+    return callsFinishedWithDrop_.get(index);
+  }
+
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
@@ -254,17 +283,14 @@ public  final class ClientStats extends
     if (numCallsFinished_ != 0L) {
       output.writeInt64(3, numCallsFinished_);
     }
-    if (numCallsFinishedWithDropForRateLimiting_ != 0L) {
-      output.writeInt64(4, numCallsFinishedWithDropForRateLimiting_);
-    }
-    if (numCallsFinishedWithDropForLoadBalancing_ != 0L) {
-      output.writeInt64(5, numCallsFinishedWithDropForLoadBalancing_);
-    }
     if (numCallsFinishedWithClientFailedToSend_ != 0L) {
       output.writeInt64(6, numCallsFinishedWithClientFailedToSend_);
     }
     if (numCallsFinishedKnownReceived_ != 0L) {
       output.writeInt64(7, numCallsFinishedKnownReceived_);
+    }
+    for (int i = 0; i < callsFinishedWithDrop_.size(); i++) {
+      output.writeMessage(8, callsFinishedWithDrop_.get(i));
     }
   }
 
@@ -285,14 +311,6 @@ public  final class ClientStats extends
       size += com.google.protobuf.CodedOutputStream
         .computeInt64Size(3, numCallsFinished_);
     }
-    if (numCallsFinishedWithDropForRateLimiting_ != 0L) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(4, numCallsFinishedWithDropForRateLimiting_);
-    }
-    if (numCallsFinishedWithDropForLoadBalancing_ != 0L) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeInt64Size(5, numCallsFinishedWithDropForLoadBalancing_);
-    }
     if (numCallsFinishedWithClientFailedToSend_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt64Size(6, numCallsFinishedWithClientFailedToSend_);
@@ -300,6 +318,10 @@ public  final class ClientStats extends
     if (numCallsFinishedKnownReceived_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
         .computeInt64Size(7, numCallsFinishedKnownReceived_);
+    }
+    for (int i = 0; i < callsFinishedWithDrop_.size(); i++) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(8, callsFinishedWithDrop_.get(i));
     }
     memoizedSize = size;
     return size;
@@ -326,14 +348,12 @@ public  final class ClientStats extends
         == other.getNumCallsStarted());
     result = result && (getNumCallsFinished()
         == other.getNumCallsFinished());
-    result = result && (getNumCallsFinishedWithDropForRateLimiting()
-        == other.getNumCallsFinishedWithDropForRateLimiting());
-    result = result && (getNumCallsFinishedWithDropForLoadBalancing()
-        == other.getNumCallsFinishedWithDropForLoadBalancing());
     result = result && (getNumCallsFinishedWithClientFailedToSend()
         == other.getNumCallsFinishedWithClientFailedToSend());
     result = result && (getNumCallsFinishedKnownReceived()
         == other.getNumCallsFinishedKnownReceived());
+    result = result && getCallsFinishedWithDropList()
+        .equals(other.getCallsFinishedWithDropList());
     return result;
   }
 
@@ -354,18 +374,16 @@ public  final class ClientStats extends
     hash = (37 * hash) + NUM_CALLS_FINISHED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getNumCallsFinished());
-    hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_DROP_FOR_RATE_LIMITING_FIELD_NUMBER;
-    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getNumCallsFinishedWithDropForRateLimiting());
-    hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_DROP_FOR_LOAD_BALANCING_FIELD_NUMBER;
-    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
-        getNumCallsFinishedWithDropForLoadBalancing());
     hash = (37 * hash) + NUM_CALLS_FINISHED_WITH_CLIENT_FAILED_TO_SEND_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getNumCallsFinishedWithClientFailedToSend());
     hash = (37 * hash) + NUM_CALLS_FINISHED_KNOWN_RECEIVED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getNumCallsFinishedKnownReceived());
+    if (getCallsFinishedWithDropCount() > 0) {
+      hash = (37 * hash) + CALLS_FINISHED_WITH_DROP_FIELD_NUMBER;
+      hash = (53 * hash) + getCallsFinishedWithDropList().hashCode();
+    }
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -496,6 +514,7 @@ public  final class ClientStats extends
     private void maybeForceBuilderInitialization() {
       if (com.google.protobuf.GeneratedMessageV3
               .alwaysUseFieldBuilders) {
+        getCallsFinishedWithDropFieldBuilder();
       }
     }
     public Builder clear() {
@@ -510,14 +529,16 @@ public  final class ClientStats extends
 
       numCallsFinished_ = 0L;
 
-      numCallsFinishedWithDropForRateLimiting_ = 0L;
-
-      numCallsFinishedWithDropForLoadBalancing_ = 0L;
-
       numCallsFinishedWithClientFailedToSend_ = 0L;
 
       numCallsFinishedKnownReceived_ = 0L;
 
+      if (callsFinishedWithDropBuilder_ == null) {
+        callsFinishedWithDrop_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000020);
+      } else {
+        callsFinishedWithDropBuilder_.clear();
+      }
       return this;
     }
 
@@ -540,6 +561,8 @@ public  final class ClientStats extends
 
     public io.grpc.grpclb.ClientStats buildPartial() {
       io.grpc.grpclb.ClientStats result = new io.grpc.grpclb.ClientStats(this);
+      int from_bitField0_ = bitField0_;
+      int to_bitField0_ = 0;
       if (timestampBuilder_ == null) {
         result.timestamp_ = timestamp_;
       } else {
@@ -547,10 +570,18 @@ public  final class ClientStats extends
       }
       result.numCallsStarted_ = numCallsStarted_;
       result.numCallsFinished_ = numCallsFinished_;
-      result.numCallsFinishedWithDropForRateLimiting_ = numCallsFinishedWithDropForRateLimiting_;
-      result.numCallsFinishedWithDropForLoadBalancing_ = numCallsFinishedWithDropForLoadBalancing_;
       result.numCallsFinishedWithClientFailedToSend_ = numCallsFinishedWithClientFailedToSend_;
       result.numCallsFinishedKnownReceived_ = numCallsFinishedKnownReceived_;
+      if (callsFinishedWithDropBuilder_ == null) {
+        if (((bitField0_ & 0x00000020) == 0x00000020)) {
+          callsFinishedWithDrop_ = java.util.Collections.unmodifiableList(callsFinishedWithDrop_);
+          bitField0_ = (bitField0_ & ~0x00000020);
+        }
+        result.callsFinishedWithDrop_ = callsFinishedWithDrop_;
+      } else {
+        result.callsFinishedWithDrop_ = callsFinishedWithDropBuilder_.build();
+      }
+      result.bitField0_ = to_bitField0_;
       onBuilt();
       return result;
     }
@@ -601,17 +632,37 @@ public  final class ClientStats extends
       if (other.getNumCallsFinished() != 0L) {
         setNumCallsFinished(other.getNumCallsFinished());
       }
-      if (other.getNumCallsFinishedWithDropForRateLimiting() != 0L) {
-        setNumCallsFinishedWithDropForRateLimiting(other.getNumCallsFinishedWithDropForRateLimiting());
-      }
-      if (other.getNumCallsFinishedWithDropForLoadBalancing() != 0L) {
-        setNumCallsFinishedWithDropForLoadBalancing(other.getNumCallsFinishedWithDropForLoadBalancing());
-      }
       if (other.getNumCallsFinishedWithClientFailedToSend() != 0L) {
         setNumCallsFinishedWithClientFailedToSend(other.getNumCallsFinishedWithClientFailedToSend());
       }
       if (other.getNumCallsFinishedKnownReceived() != 0L) {
         setNumCallsFinishedKnownReceived(other.getNumCallsFinishedKnownReceived());
+      }
+      if (callsFinishedWithDropBuilder_ == null) {
+        if (!other.callsFinishedWithDrop_.isEmpty()) {
+          if (callsFinishedWithDrop_.isEmpty()) {
+            callsFinishedWithDrop_ = other.callsFinishedWithDrop_;
+            bitField0_ = (bitField0_ & ~0x00000020);
+          } else {
+            ensureCallsFinishedWithDropIsMutable();
+            callsFinishedWithDrop_.addAll(other.callsFinishedWithDrop_);
+          }
+          onChanged();
+        }
+      } else {
+        if (!other.callsFinishedWithDrop_.isEmpty()) {
+          if (callsFinishedWithDropBuilder_.isEmpty()) {
+            callsFinishedWithDropBuilder_.dispose();
+            callsFinishedWithDropBuilder_ = null;
+            callsFinishedWithDrop_ = other.callsFinishedWithDrop_;
+            bitField0_ = (bitField0_ & ~0x00000020);
+            callsFinishedWithDropBuilder_ = 
+              com.google.protobuf.GeneratedMessageV3.alwaysUseFieldBuilders ?
+                 getCallsFinishedWithDropFieldBuilder() : null;
+          } else {
+            callsFinishedWithDropBuilder_.addAllMessages(other.callsFinishedWithDrop_);
+          }
+        }
       }
       onChanged();
       return this;
@@ -638,6 +689,7 @@ public  final class ClientStats extends
       }
       return this;
     }
+    private int bitField0_;
 
     private com.google.protobuf.Timestamp timestamp_ = null;
     private com.google.protobuf.SingleFieldBuilderV3<
@@ -868,88 +920,6 @@ public  final class ClientStats extends
       return this;
     }
 
-    private long numCallsFinishedWithDropForRateLimiting_ ;
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of rate
-     * limiting.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
-     */
-    public long getNumCallsFinishedWithDropForRateLimiting() {
-      return numCallsFinishedWithDropForRateLimiting_;
-    }
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of rate
-     * limiting.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
-     */
-    public Builder setNumCallsFinishedWithDropForRateLimiting(long value) {
-      
-      numCallsFinishedWithDropForRateLimiting_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of rate
-     * limiting.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
-     */
-    public Builder clearNumCallsFinishedWithDropForRateLimiting() {
-      
-      numCallsFinishedWithDropForRateLimiting_ = 0L;
-      onChanged();
-      return this;
-    }
-
-    private long numCallsFinishedWithDropForLoadBalancing_ ;
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of load
-     * balancing.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
-     */
-    public long getNumCallsFinishedWithDropForLoadBalancing() {
-      return numCallsFinishedWithDropForLoadBalancing_;
-    }
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of load
-     * balancing.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
-     */
-    public Builder setNumCallsFinishedWithDropForLoadBalancing(long value) {
-      
-      numCallsFinishedWithDropForLoadBalancing_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * The total number of RPCs that were dropped by the client because of load
-     * balancing.
-     * </pre>
-     *
-     * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
-     */
-    public Builder clearNumCallsFinishedWithDropForLoadBalancing() {
-      
-      numCallsFinishedWithDropForLoadBalancing_ = 0L;
-      onChanged();
-      return this;
-    }
-
     private long numCallsFinishedWithClientFailedToSend_ ;
     /**
      * <pre>
@@ -1027,6 +997,318 @@ public  final class ClientStats extends
       numCallsFinishedKnownReceived_ = 0L;
       onChanged();
       return this;
+    }
+
+    private java.util.List<io.grpc.grpclb.ClientStatsPerToken> callsFinishedWithDrop_ =
+      java.util.Collections.emptyList();
+    private void ensureCallsFinishedWithDropIsMutable() {
+      if (!((bitField0_ & 0x00000020) == 0x00000020)) {
+        callsFinishedWithDrop_ = new java.util.ArrayList<io.grpc.grpclb.ClientStatsPerToken>(callsFinishedWithDrop_);
+        bitField0_ |= 0x00000020;
+       }
+    }
+
+    private com.google.protobuf.RepeatedFieldBuilderV3<
+        io.grpc.grpclb.ClientStatsPerToken, io.grpc.grpclb.ClientStatsPerToken.Builder, io.grpc.grpclb.ClientStatsPerTokenOrBuilder> callsFinishedWithDropBuilder_;
+
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public java.util.List<io.grpc.grpclb.ClientStatsPerToken> getCallsFinishedWithDropList() {
+      if (callsFinishedWithDropBuilder_ == null) {
+        return java.util.Collections.unmodifiableList(callsFinishedWithDrop_);
+      } else {
+        return callsFinishedWithDropBuilder_.getMessageList();
+      }
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public int getCallsFinishedWithDropCount() {
+      if (callsFinishedWithDropBuilder_ == null) {
+        return callsFinishedWithDrop_.size();
+      } else {
+        return callsFinishedWithDropBuilder_.getCount();
+      }
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public io.grpc.grpclb.ClientStatsPerToken getCallsFinishedWithDrop(int index) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        return callsFinishedWithDrop_.get(index);
+      } else {
+        return callsFinishedWithDropBuilder_.getMessage(index);
+      }
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder setCallsFinishedWithDrop(
+        int index, io.grpc.grpclb.ClientStatsPerToken value) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.set(index, value);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.setMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder setCallsFinishedWithDrop(
+        int index, io.grpc.grpclb.ClientStatsPerToken.Builder builderForValue) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.set(index, builderForValue.build());
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.setMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder addCallsFinishedWithDrop(io.grpc.grpclb.ClientStatsPerToken value) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.add(value);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.addMessage(value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder addCallsFinishedWithDrop(
+        int index, io.grpc.grpclb.ClientStatsPerToken value) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.add(index, value);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.addMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder addCallsFinishedWithDrop(
+        io.grpc.grpclb.ClientStatsPerToken.Builder builderForValue) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.add(builderForValue.build());
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.addMessage(builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder addCallsFinishedWithDrop(
+        int index, io.grpc.grpclb.ClientStatsPerToken.Builder builderForValue) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.add(index, builderForValue.build());
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.addMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder addAllCallsFinishedWithDrop(
+        java.lang.Iterable<? extends io.grpc.grpclb.ClientStatsPerToken> values) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        ensureCallsFinishedWithDropIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, callsFinishedWithDrop_);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.addAllMessages(values);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder clearCallsFinishedWithDrop() {
+      if (callsFinishedWithDropBuilder_ == null) {
+        callsFinishedWithDrop_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000020);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public Builder removeCallsFinishedWithDrop(int index) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        ensureCallsFinishedWithDropIsMutable();
+        callsFinishedWithDrop_.remove(index);
+        onChanged();
+      } else {
+        callsFinishedWithDropBuilder_.remove(index);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public io.grpc.grpclb.ClientStatsPerToken.Builder getCallsFinishedWithDropBuilder(
+        int index) {
+      return getCallsFinishedWithDropFieldBuilder().getBuilder(index);
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public io.grpc.grpclb.ClientStatsPerTokenOrBuilder getCallsFinishedWithDropOrBuilder(
+        int index) {
+      if (callsFinishedWithDropBuilder_ == null) {
+        return callsFinishedWithDrop_.get(index);  } else {
+        return callsFinishedWithDropBuilder_.getMessageOrBuilder(index);
+      }
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public java.util.List<? extends io.grpc.grpclb.ClientStatsPerTokenOrBuilder> 
+         getCallsFinishedWithDropOrBuilderList() {
+      if (callsFinishedWithDropBuilder_ != null) {
+        return callsFinishedWithDropBuilder_.getMessageOrBuilderList();
+      } else {
+        return java.util.Collections.unmodifiableList(callsFinishedWithDrop_);
+      }
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public io.grpc.grpclb.ClientStatsPerToken.Builder addCallsFinishedWithDropBuilder() {
+      return getCallsFinishedWithDropFieldBuilder().addBuilder(
+          io.grpc.grpclb.ClientStatsPerToken.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public io.grpc.grpclb.ClientStatsPerToken.Builder addCallsFinishedWithDropBuilder(
+        int index) {
+      return getCallsFinishedWithDropFieldBuilder().addBuilder(
+          index, io.grpc.grpclb.ClientStatsPerToken.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * The list of dropped calls.
+     * </pre>
+     *
+     * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+     */
+    public java.util.List<io.grpc.grpclb.ClientStatsPerToken.Builder> 
+         getCallsFinishedWithDropBuilderList() {
+      return getCallsFinishedWithDropFieldBuilder().getBuilderList();
+    }
+    private com.google.protobuf.RepeatedFieldBuilderV3<
+        io.grpc.grpclb.ClientStatsPerToken, io.grpc.grpclb.ClientStatsPerToken.Builder, io.grpc.grpclb.ClientStatsPerTokenOrBuilder> 
+        getCallsFinishedWithDropFieldBuilder() {
+      if (callsFinishedWithDropBuilder_ == null) {
+        callsFinishedWithDropBuilder_ = new com.google.protobuf.RepeatedFieldBuilderV3<
+            io.grpc.grpclb.ClientStatsPerToken, io.grpc.grpclb.ClientStatsPerToken.Builder, io.grpc.grpclb.ClientStatsPerTokenOrBuilder>(
+                callsFinishedWithDrop_,
+                ((bitField0_ & 0x00000020) == 0x00000020),
+                getParentForChildren(),
+                isClean());
+        callsFinishedWithDrop_ = null;
+      }
+      return callsFinishedWithDropBuilder_;
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {

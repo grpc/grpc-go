@@ -23,8 +23,11 @@ import io.grpc.CallOptions;
 import io.grpc.ClientStreamTracer;
 import io.grpc.Metadata;
 import io.grpc.Status;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -38,8 +41,10 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
   private final AtomicLong callsFinished = new AtomicLong();
 
   // Specific finish types
-  private final AtomicLong callsDroppedForRateLimiting = new AtomicLong();
-  private final AtomicLong callsDroppedForLoadBalancing = new AtomicLong();
+  // Access to it should be protected by lock.  Contention is not an issue for these counts, because
+  // normally only a small portion of all RPCs are dropped.
+  @GuardedBy("this")
+  private HashMap<String, AtomicLong> callsDroppedPerToken = new HashMap<String, AtomicLong>();
   private final AtomicLong callsFailedToSend = new AtomicLong();
   private final AtomicLong callsFinishedKnownReceived = new AtomicLong();
 
@@ -56,18 +61,18 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
   /**
    * Records that a request has been dropped as instructed by the remote balancer.
    */
-  void recordDroppedRequest(DropType type) {
+  void recordDroppedRequest(String token) {
     callsStarted.incrementAndGet();
     callsFinished.incrementAndGet();
-    switch (type) {
-      case RATE_LIMITING:
-        callsDroppedForRateLimiting.incrementAndGet();
-        break;
-      case LOAD_BALANCING:
-        callsDroppedForLoadBalancing.incrementAndGet();
-        break;
-      default:
-        throw new AssertionError("Unsupported DropType: " + type);
+
+    synchronized (this) {
+      AtomicLong count = callsDroppedPerToken.get(token);
+      if (count == null) {
+        count = new AtomicLong(1);
+        callsDroppedPerToken.put(token, count);
+      } else {
+        count.incrementAndGet();
+      }
     }
   }
 
@@ -75,15 +80,26 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
    * Generate the report with the data recorded this LB stream since the last report.
    */
   ClientStats generateLoadReport() {
-    return ClientStats.newBuilder()
+    ClientStats.Builder statsBuilder =
+        ClientStats.newBuilder()
         .setTimestamp(Timestamps.fromMillis(time.currentTimeMillis()))
         .setNumCallsStarted(callsStarted.getAndSet(0))
         .setNumCallsFinished(callsFinished.getAndSet(0))
-        .setNumCallsFinishedWithDropForRateLimiting(callsDroppedForRateLimiting.getAndSet(0))
-        .setNumCallsFinishedWithDropForLoadBalancing(callsDroppedForLoadBalancing.getAndSet(0))
         .setNumCallsFinishedWithClientFailedToSend(callsFailedToSend.getAndSet(0))
-        .setNumCallsFinishedKnownReceived(callsFinishedKnownReceived.getAndSet(0))
-        .build();
+        .setNumCallsFinishedKnownReceived(callsFinishedKnownReceived.getAndSet(0));
+    HashMap<String, AtomicLong> savedCallsDroppedPerToken;
+    synchronized (this) {
+      savedCallsDroppedPerToken = callsDroppedPerToken;
+      callsDroppedPerToken = new HashMap<String, AtomicLong>();
+    }
+    for (Map.Entry<String, AtomicLong> dropCount : savedCallsDroppedPerToken.entrySet()) {
+      statsBuilder.addCallsFinishedWithDrop(
+          ClientStatsPerToken.newBuilder()
+              .setLoadBalanceToken(dropCount.getKey())
+              .setNumCalls(dropCount.getValue().get())
+              .build());
+    }
+    return statsBuilder.build();
   }
 
   private class StreamTracer extends ClientStreamTracer {

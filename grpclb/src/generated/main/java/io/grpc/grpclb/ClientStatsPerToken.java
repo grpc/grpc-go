@@ -5,25 +5,22 @@ package io.grpc.grpclb;
 
 /**
  * <pre>
- * Contains server information. When the drop field is not true, use the other
- * fields.
+ * Contains the number of calls finished for a particular load balance token.
  * </pre>
  *
- * Protobuf type {@code grpc.lb.v1.Server}
+ * Protobuf type {@code grpc.lb.v1.ClientStatsPerToken}
  */
-public  final class Server extends
+public  final class ClientStatsPerToken extends
     com.google.protobuf.GeneratedMessageV3 implements
-    // @@protoc_insertion_point(message_implements:grpc.lb.v1.Server)
-    ServerOrBuilder {
-  // Use Server.newBuilder() to construct.
-  private Server(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
+    // @@protoc_insertion_point(message_implements:grpc.lb.v1.ClientStatsPerToken)
+    ClientStatsPerTokenOrBuilder {
+  // Use ClientStatsPerToken.newBuilder() to construct.
+  private ClientStatsPerToken(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
   }
-  private Server() {
-    ipAddress_ = com.google.protobuf.ByteString.EMPTY;
-    port_ = 0;
+  private ClientStatsPerToken() {
     loadBalanceToken_ = "";
-    drop_ = false;
+    numCalls_ = 0L;
   }
 
   @java.lang.Override
@@ -31,7 +28,7 @@ public  final class Server extends
   getUnknownFields() {
     return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
   }
-  private Server(
+  private ClientStatsPerToken(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -52,24 +49,14 @@ public  final class Server extends
             break;
           }
           case 10: {
-
-            ipAddress_ = input.readBytes();
-            break;
-          }
-          case 16: {
-
-            port_ = input.readInt32();
-            break;
-          }
-          case 26: {
             java.lang.String s = input.readStringRequireUtf8();
 
             loadBalanceToken_ = s;
             break;
           }
-          case 32: {
+          case 16: {
 
-            drop_ = input.readBool();
+            numCalls_ = input.readInt64();
             break;
           }
         }
@@ -85,55 +72,24 @@ public  final class Server extends
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStatsPerToken_descriptor;
   }
 
   protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_fieldAccessorTable
+    return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStatsPerToken_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
-            io.grpc.grpclb.Server.class, io.grpc.grpclb.Server.Builder.class);
+            io.grpc.grpclb.ClientStatsPerToken.class, io.grpc.grpclb.ClientStatsPerToken.Builder.class);
   }
 
-  public static final int IP_ADDRESS_FIELD_NUMBER = 1;
-  private com.google.protobuf.ByteString ipAddress_;
-  /**
-   * <pre>
-   * A resolved address for the server, serialized in network-byte-order. It may
-   * either be an IPv4 or IPv6 address.
-   * </pre>
-   *
-   * <code>bytes ip_address = 1;</code>
-   */
-  public com.google.protobuf.ByteString getIpAddress() {
-    return ipAddress_;
-  }
-
-  public static final int PORT_FIELD_NUMBER = 2;
-  private int port_;
-  /**
-   * <pre>
-   * A resolved port number for the server.
-   * </pre>
-   *
-   * <code>int32 port = 2;</code>
-   */
-  public int getPort() {
-    return port_;
-  }
-
-  public static final int LOAD_BALANCE_TOKEN_FIELD_NUMBER = 3;
+  public static final int LOAD_BALANCE_TOKEN_FIELD_NUMBER = 1;
   private volatile java.lang.Object loadBalanceToken_;
   /**
    * <pre>
-   * An opaque but printable token given to the frontend for each pick. All
-   * frontend requests for that pick must include the token in its initial
-   * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system. The token is also
-   * used in client stats for reporting dropped calls.
+   * See Server.load_balance_token.
    * </pre>
    *
-   * <code>string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 1;</code>
    */
   public java.lang.String getLoadBalanceToken() {
     java.lang.Object ref = loadBalanceToken_;
@@ -149,14 +105,10 @@ public  final class Server extends
   }
   /**
    * <pre>
-   * An opaque but printable token given to the frontend for each pick. All
-   * frontend requests for that pick must include the token in its initial
-   * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system. The token is also
-   * used in client stats for reporting dropped calls.
+   * See Server.load_balance_token.
    * </pre>
    *
-   * <code>string load_balance_token = 3;</code>
+   * <code>string load_balance_token = 1;</code>
    */
   public com.google.protobuf.ByteString
       getLoadBalanceTokenBytes() {
@@ -172,19 +124,17 @@ public  final class Server extends
     }
   }
 
-  public static final int DROP_FIELD_NUMBER = 4;
-  private boolean drop_;
+  public static final int NUM_CALLS_FIELD_NUMBER = 2;
+  private long numCalls_;
   /**
    * <pre>
-   * Indicates whether this particular request should be dropped by the client.
-   * If the request is dropped, there will be a corresponding entry in
-   * ClientStats.calls_finished_with_drop.
+   * The total number of RPCs that finished associated with the token.
    * </pre>
    *
-   * <code>bool drop = 4;</code>
+   * <code>int64 num_calls = 2;</code>
    */
-  public boolean getDrop() {
-    return drop_;
+  public long getNumCalls() {
+    return numCalls_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -199,17 +149,11 @@ public  final class Server extends
 
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (!ipAddress_.isEmpty()) {
-      output.writeBytes(1, ipAddress_);
-    }
-    if (port_ != 0) {
-      output.writeInt32(2, port_);
-    }
     if (!getLoadBalanceTokenBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 3, loadBalanceToken_);
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, loadBalanceToken_);
     }
-    if (drop_ != false) {
-      output.writeBool(4, drop_);
+    if (numCalls_ != 0L) {
+      output.writeInt64(2, numCalls_);
     }
   }
 
@@ -218,20 +162,12 @@ public  final class Server extends
     if (size != -1) return size;
 
     size = 0;
-    if (!ipAddress_.isEmpty()) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeBytesSize(1, ipAddress_);
-    }
-    if (port_ != 0) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeInt32Size(2, port_);
-    }
     if (!getLoadBalanceTokenBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, loadBalanceToken_);
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, loadBalanceToken_);
     }
-    if (drop_ != false) {
+    if (numCalls_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
-        .computeBoolSize(4, drop_);
+        .computeInt64Size(2, numCalls_);
     }
     memoizedSize = size;
     return size;
@@ -243,20 +179,16 @@ public  final class Server extends
     if (obj == this) {
      return true;
     }
-    if (!(obj instanceof io.grpc.grpclb.Server)) {
+    if (!(obj instanceof io.grpc.grpclb.ClientStatsPerToken)) {
       return super.equals(obj);
     }
-    io.grpc.grpclb.Server other = (io.grpc.grpclb.Server) obj;
+    io.grpc.grpclb.ClientStatsPerToken other = (io.grpc.grpclb.ClientStatsPerToken) obj;
 
     boolean result = true;
-    result = result && getIpAddress()
-        .equals(other.getIpAddress());
-    result = result && (getPort()
-        == other.getPort());
     result = result && getLoadBalanceToken()
         .equals(other.getLoadBalanceToken());
-    result = result && (getDrop()
-        == other.getDrop());
+    result = result && (getNumCalls()
+        == other.getNumCalls());
     return result;
   }
 
@@ -267,83 +199,79 @@ public  final class Server extends
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + IP_ADDRESS_FIELD_NUMBER;
-    hash = (53 * hash) + getIpAddress().hashCode();
-    hash = (37 * hash) + PORT_FIELD_NUMBER;
-    hash = (53 * hash) + getPort();
     hash = (37 * hash) + LOAD_BALANCE_TOKEN_FIELD_NUMBER;
     hash = (53 * hash) + getLoadBalanceToken().hashCode();
-    hash = (37 * hash) + DROP_FIELD_NUMBER;
-    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-        getDrop());
+    hash = (37 * hash) + NUM_CALLS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getNumCalls());
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
   }
 
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       java.nio.ByteBuffer data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       com.google.protobuf.ByteString data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.grpclb.Server parseFrom(byte[] data)
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(byte[] data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       byte[] data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static io.grpc.grpclb.Server parseFrom(java.io.InputStream input)
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
-  public static io.grpc.grpclb.Server parseDelimitedFrom(java.io.InputStream input)
+  public static io.grpc.grpclb.ClientStatsPerToken parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
-  public static io.grpc.grpclb.Server parseDelimitedFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static io.grpc.grpclb.Server parseFrom(
+  public static io.grpc.grpclb.ClientStatsPerToken parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -355,7 +283,7 @@ public  final class Server extends
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
   }
-  public static Builder newBuilder(io.grpc.grpclb.Server prototype) {
+  public static Builder newBuilder(io.grpc.grpclb.ClientStatsPerToken prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
   public Builder toBuilder() {
@@ -371,29 +299,28 @@ public  final class Server extends
   }
   /**
    * <pre>
-   * Contains server information. When the drop field is not true, use the other
-   * fields.
+   * Contains the number of calls finished for a particular load balance token.
    * </pre>
    *
-   * Protobuf type {@code grpc.lb.v1.Server}
+   * Protobuf type {@code grpc.lb.v1.ClientStatsPerToken}
    */
   public static final class Builder extends
       com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
-      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.Server)
-      io.grpc.grpclb.ServerOrBuilder {
+      // @@protoc_insertion_point(builder_implements:grpc.lb.v1.ClientStatsPerToken)
+      io.grpc.grpclb.ClientStatsPerTokenOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStatsPerToken_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_fieldAccessorTable
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStatsPerToken_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              io.grpc.grpclb.Server.class, io.grpc.grpclb.Server.Builder.class);
+              io.grpc.grpclb.ClientStatsPerToken.class, io.grpc.grpclb.ClientStatsPerToken.Builder.class);
     }
 
-    // Construct using io.grpc.grpclb.Server.newBuilder()
+    // Construct using io.grpc.grpclb.ClientStatsPerToken.newBuilder()
     private Builder() {
       maybeForceBuilderInitialization();
     }
@@ -410,40 +337,34 @@ public  final class Server extends
     }
     public Builder clear() {
       super.clear();
-      ipAddress_ = com.google.protobuf.ByteString.EMPTY;
-
-      port_ = 0;
-
       loadBalanceToken_ = "";
 
-      drop_ = false;
+      numCalls_ = 0L;
 
       return this;
     }
 
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_Server_descriptor;
+      return io.grpc.grpclb.LoadBalancerProto.internal_static_grpc_lb_v1_ClientStatsPerToken_descriptor;
     }
 
-    public io.grpc.grpclb.Server getDefaultInstanceForType() {
-      return io.grpc.grpclb.Server.getDefaultInstance();
+    public io.grpc.grpclb.ClientStatsPerToken getDefaultInstanceForType() {
+      return io.grpc.grpclb.ClientStatsPerToken.getDefaultInstance();
     }
 
-    public io.grpc.grpclb.Server build() {
-      io.grpc.grpclb.Server result = buildPartial();
+    public io.grpc.grpclb.ClientStatsPerToken build() {
+      io.grpc.grpclb.ClientStatsPerToken result = buildPartial();
       if (!result.isInitialized()) {
         throw newUninitializedMessageException(result);
       }
       return result;
     }
 
-    public io.grpc.grpclb.Server buildPartial() {
-      io.grpc.grpclb.Server result = new io.grpc.grpclb.Server(this);
-      result.ipAddress_ = ipAddress_;
-      result.port_ = port_;
+    public io.grpc.grpclb.ClientStatsPerToken buildPartial() {
+      io.grpc.grpclb.ClientStatsPerToken result = new io.grpc.grpclb.ClientStatsPerToken(this);
       result.loadBalanceToken_ = loadBalanceToken_;
-      result.drop_ = drop_;
+      result.numCalls_ = numCalls_;
       onBuilt();
       return result;
     }
@@ -475,28 +396,22 @@ public  final class Server extends
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
-      if (other instanceof io.grpc.grpclb.Server) {
-        return mergeFrom((io.grpc.grpclb.Server)other);
+      if (other instanceof io.grpc.grpclb.ClientStatsPerToken) {
+        return mergeFrom((io.grpc.grpclb.ClientStatsPerToken)other);
       } else {
         super.mergeFrom(other);
         return this;
       }
     }
 
-    public Builder mergeFrom(io.grpc.grpclb.Server other) {
-      if (other == io.grpc.grpclb.Server.getDefaultInstance()) return this;
-      if (other.getIpAddress() != com.google.protobuf.ByteString.EMPTY) {
-        setIpAddress(other.getIpAddress());
-      }
-      if (other.getPort() != 0) {
-        setPort(other.getPort());
-      }
+    public Builder mergeFrom(io.grpc.grpclb.ClientStatsPerToken other) {
+      if (other == io.grpc.grpclb.ClientStatsPerToken.getDefaultInstance()) return this;
       if (!other.getLoadBalanceToken().isEmpty()) {
         loadBalanceToken_ = other.loadBalanceToken_;
         onChanged();
       }
-      if (other.getDrop() != false) {
-        setDrop(other.getDrop());
+      if (other.getNumCalls() != 0L) {
+        setNumCalls(other.getNumCalls());
       }
       onChanged();
       return this;
@@ -510,11 +425,11 @@ public  final class Server extends
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      io.grpc.grpclb.Server parsedMessage = null;
+      io.grpc.grpclb.ClientStatsPerToken parsedMessage = null;
       try {
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        parsedMessage = (io.grpc.grpclb.Server) e.getUnfinishedMessage();
+        parsedMessage = (io.grpc.grpclb.ClientStatsPerToken) e.getUnfinishedMessage();
         throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
@@ -524,99 +439,13 @@ public  final class Server extends
       return this;
     }
 
-    private com.google.protobuf.ByteString ipAddress_ = com.google.protobuf.ByteString.EMPTY;
-    /**
-     * <pre>
-     * A resolved address for the server, serialized in network-byte-order. It may
-     * either be an IPv4 or IPv6 address.
-     * </pre>
-     *
-     * <code>bytes ip_address = 1;</code>
-     */
-    public com.google.protobuf.ByteString getIpAddress() {
-      return ipAddress_;
-    }
-    /**
-     * <pre>
-     * A resolved address for the server, serialized in network-byte-order. It may
-     * either be an IPv4 or IPv6 address.
-     * </pre>
-     *
-     * <code>bytes ip_address = 1;</code>
-     */
-    public Builder setIpAddress(com.google.protobuf.ByteString value) {
-      if (value == null) {
-    throw new NullPointerException();
-  }
-  
-      ipAddress_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * A resolved address for the server, serialized in network-byte-order. It may
-     * either be an IPv4 or IPv6 address.
-     * </pre>
-     *
-     * <code>bytes ip_address = 1;</code>
-     */
-    public Builder clearIpAddress() {
-      
-      ipAddress_ = getDefaultInstance().getIpAddress();
-      onChanged();
-      return this;
-    }
-
-    private int port_ ;
-    /**
-     * <pre>
-     * A resolved port number for the server.
-     * </pre>
-     *
-     * <code>int32 port = 2;</code>
-     */
-    public int getPort() {
-      return port_;
-    }
-    /**
-     * <pre>
-     * A resolved port number for the server.
-     * </pre>
-     *
-     * <code>int32 port = 2;</code>
-     */
-    public Builder setPort(int value) {
-      
-      port_ = value;
-      onChanged();
-      return this;
-    }
-    /**
-     * <pre>
-     * A resolved port number for the server.
-     * </pre>
-     *
-     * <code>int32 port = 2;</code>
-     */
-    public Builder clearPort() {
-      
-      port_ = 0;
-      onChanged();
-      return this;
-    }
-
     private java.lang.Object loadBalanceToken_ = "";
     /**
      * <pre>
-     * An opaque but printable token given to the frontend for each pick. All
-     * frontend requests for that pick must include the token in its initial
-     * metadata. The token is used by the backend to verify the request and to
-     * allow the backend to report load to the gRPC LB system. The token is also
-     * used in client stats for reporting dropped calls.
+     * See Server.load_balance_token.
      * </pre>
      *
-     * <code>string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 1;</code>
      */
     public java.lang.String getLoadBalanceToken() {
       java.lang.Object ref = loadBalanceToken_;
@@ -632,14 +461,10 @@ public  final class Server extends
     }
     /**
      * <pre>
-     * An opaque but printable token given to the frontend for each pick. All
-     * frontend requests for that pick must include the token in its initial
-     * metadata. The token is used by the backend to verify the request and to
-     * allow the backend to report load to the gRPC LB system. The token is also
-     * used in client stats for reporting dropped calls.
+     * See Server.load_balance_token.
      * </pre>
      *
-     * <code>string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 1;</code>
      */
     public com.google.protobuf.ByteString
         getLoadBalanceTokenBytes() {
@@ -656,14 +481,10 @@ public  final class Server extends
     }
     /**
      * <pre>
-     * An opaque but printable token given to the frontend for each pick. All
-     * frontend requests for that pick must include the token in its initial
-     * metadata. The token is used by the backend to verify the request and to
-     * allow the backend to report load to the gRPC LB system. The token is also
-     * used in client stats for reporting dropped calls.
+     * See Server.load_balance_token.
      * </pre>
      *
-     * <code>string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 1;</code>
      */
     public Builder setLoadBalanceToken(
         java.lang.String value) {
@@ -677,14 +498,10 @@ public  final class Server extends
     }
     /**
      * <pre>
-     * An opaque but printable token given to the frontend for each pick. All
-     * frontend requests for that pick must include the token in its initial
-     * metadata. The token is used by the backend to verify the request and to
-     * allow the backend to report load to the gRPC LB system. The token is also
-     * used in client stats for reporting dropped calls.
+     * See Server.load_balance_token.
      * </pre>
      *
-     * <code>string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 1;</code>
      */
     public Builder clearLoadBalanceToken() {
       
@@ -694,14 +511,10 @@ public  final class Server extends
     }
     /**
      * <pre>
-     * An opaque but printable token given to the frontend for each pick. All
-     * frontend requests for that pick must include the token in its initial
-     * metadata. The token is used by the backend to verify the request and to
-     * allow the backend to report load to the gRPC LB system. The token is also
-     * used in client stats for reporting dropped calls.
+     * See Server.load_balance_token.
      * </pre>
      *
-     * <code>string load_balance_token = 3;</code>
+     * <code>string load_balance_token = 1;</code>
      */
     public Builder setLoadBalanceTokenBytes(
         com.google.protobuf.ByteString value) {
@@ -715,46 +528,40 @@ public  final class Server extends
       return this;
     }
 
-    private boolean drop_ ;
+    private long numCalls_ ;
     /**
      * <pre>
-     * Indicates whether this particular request should be dropped by the client.
-     * If the request is dropped, there will be a corresponding entry in
-     * ClientStats.calls_finished_with_drop.
+     * The total number of RPCs that finished associated with the token.
      * </pre>
      *
-     * <code>bool drop = 4;</code>
+     * <code>int64 num_calls = 2;</code>
      */
-    public boolean getDrop() {
-      return drop_;
+    public long getNumCalls() {
+      return numCalls_;
     }
     /**
      * <pre>
-     * Indicates whether this particular request should be dropped by the client.
-     * If the request is dropped, there will be a corresponding entry in
-     * ClientStats.calls_finished_with_drop.
+     * The total number of RPCs that finished associated with the token.
      * </pre>
      *
-     * <code>bool drop = 4;</code>
+     * <code>int64 num_calls = 2;</code>
      */
-    public Builder setDrop(boolean value) {
+    public Builder setNumCalls(long value) {
       
-      drop_ = value;
+      numCalls_ = value;
       onChanged();
       return this;
     }
     /**
      * <pre>
-     * Indicates whether this particular request should be dropped by the client.
-     * If the request is dropped, there will be a corresponding entry in
-     * ClientStats.calls_finished_with_drop.
+     * The total number of RPCs that finished associated with the token.
      * </pre>
      *
-     * <code>bool drop = 4;</code>
+     * <code>int64 num_calls = 2;</code>
      */
-    public Builder clearDrop() {
+    public Builder clearNumCalls() {
       
-      drop_ = false;
+      numCalls_ = 0L;
       onChanged();
       return this;
     }
@@ -769,39 +576,39 @@ public  final class Server extends
     }
 
 
-    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.Server)
+    // @@protoc_insertion_point(builder_scope:grpc.lb.v1.ClientStatsPerToken)
   }
 
-  // @@protoc_insertion_point(class_scope:grpc.lb.v1.Server)
-  private static final io.grpc.grpclb.Server DEFAULT_INSTANCE;
+  // @@protoc_insertion_point(class_scope:grpc.lb.v1.ClientStatsPerToken)
+  private static final io.grpc.grpclb.ClientStatsPerToken DEFAULT_INSTANCE;
   static {
-    DEFAULT_INSTANCE = new io.grpc.grpclb.Server();
+    DEFAULT_INSTANCE = new io.grpc.grpclb.ClientStatsPerToken();
   }
 
-  public static io.grpc.grpclb.Server getDefaultInstance() {
+  public static io.grpc.grpclb.ClientStatsPerToken getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
-  private static final com.google.protobuf.Parser<Server>
-      PARSER = new com.google.protobuf.AbstractParser<Server>() {
-    public Server parsePartialFrom(
+  private static final com.google.protobuf.Parser<ClientStatsPerToken>
+      PARSER = new com.google.protobuf.AbstractParser<ClientStatsPerToken>() {
+    public ClientStatsPerToken parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Server(input, extensionRegistry);
+        return new ClientStatsPerToken(input, extensionRegistry);
     }
   };
 
-  public static com.google.protobuf.Parser<Server> parser() {
+  public static com.google.protobuf.Parser<ClientStatsPerToken> parser() {
     return PARSER;
   }
 
   @java.lang.Override
-  public com.google.protobuf.Parser<Server> getParserForType() {
+  public com.google.protobuf.Parser<ClientStatsPerToken> getParserForType() {
     return PARSER;
   }
 
-  public io.grpc.grpclb.Server getDefaultInstanceForType() {
+  public io.grpc.grpclb.ClientStatsPerToken getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
 

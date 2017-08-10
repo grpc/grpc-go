@@ -52,26 +52,6 @@ public interface ClientStatsOrBuilder extends
 
   /**
    * <pre>
-   * The total number of RPCs that were dropped by the client because of rate
-   * limiting.
-   * </pre>
-   *
-   * <code>int64 num_calls_finished_with_drop_for_rate_limiting = 4;</code>
-   */
-  long getNumCallsFinishedWithDropForRateLimiting();
-
-  /**
-   * <pre>
-   * The total number of RPCs that were dropped by the client because of load
-   * balancing.
-   * </pre>
-   *
-   * <code>int64 num_calls_finished_with_drop_for_load_balancing = 5;</code>
-   */
-  long getNumCallsFinishedWithDropForLoadBalancing();
-
-  /**
-   * <pre>
    * The total number of RPCs that failed to reach a server except dropped RPCs.
    * </pre>
    *
@@ -88,4 +68,48 @@ public interface ClientStatsOrBuilder extends
    * <code>int64 num_calls_finished_known_received = 7;</code>
    */
   long getNumCallsFinishedKnownReceived();
+
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  java.util.List<io.grpc.grpclb.ClientStatsPerToken> 
+      getCallsFinishedWithDropList();
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  io.grpc.grpclb.ClientStatsPerToken getCallsFinishedWithDrop(int index);
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  int getCallsFinishedWithDropCount();
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  java.util.List<? extends io.grpc.grpclb.ClientStatsPerTokenOrBuilder> 
+      getCallsFinishedWithDropOrBuilderList();
+  /**
+   * <pre>
+   * The list of dropped calls.
+   * </pre>
+   *
+   * <code>repeated .grpc.lb.v1.ClientStatsPerToken calls_finished_with_drop = 8;</code>
+   */
+  io.grpc.grpclb.ClientStatsPerTokenOrBuilder getCallsFinishedWithDropOrBuilder(
+      int index);
 }

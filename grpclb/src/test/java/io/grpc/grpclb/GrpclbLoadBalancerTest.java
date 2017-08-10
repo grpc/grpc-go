@@ -27,7 +27,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -250,9 +249,9 @@ public class GrpclbLoadBalancerTest {
   public void roundRobinPicker() {
     GrpclbClientLoadRecorder loadRecorder = new GrpclbClientLoadRecorder(timeProvider);
     Subchannel subchannel = mock(Subchannel.class);
-    RoundRobinEntry r1 = new RoundRobinEntry(DropType.RATE_LIMITING, loadRecorder);
-    RoundRobinEntry r2 = new RoundRobinEntry(subchannel, loadRecorder, "LBTOKEN0001");
-    RoundRobinEntry r3 = new RoundRobinEntry(subchannel, loadRecorder, "LBTOKEN0002");
+    RoundRobinEntry r1 = RoundRobinEntry.newDropEntry(loadRecorder, "LBTOKEN0001");
+    RoundRobinEntry r2 = RoundRobinEntry.newEntry(subchannel, loadRecorder, "LBTOKEN0001");
+    RoundRobinEntry r3 = RoundRobinEntry.newEntry(subchannel, loadRecorder, "LBTOKEN0002");
 
     List<RoundRobinEntry> list = Arrays.asList(r1, r2, r3);
     RoundRobinPicker picker = new RoundRobinPicker(list);
@@ -332,9 +331,9 @@ public class GrpclbLoadBalancerTest {
 
     List<ServerEntry> backends = Arrays.asList(
         new ServerEntry("127.0.0.1", 2000, "token0001"),
-        new ServerEntry(DropType.RATE_LIMITING),
+        new ServerEntry("token0001"),
         new ServerEntry("127.0.0.1", 2010, "token0002"),
-        new ServerEntry(DropType.LOAD_BALANCING));
+        new ServerEntry("token0003"));
 
     lbResponseObserver.onNext(buildLbResponse(backends));
 
@@ -350,10 +349,10 @@ public class GrpclbLoadBalancerTest {
         .updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker.list).containsExactly(
-        new RoundRobinEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
-        new RoundRobinEntry(DropType.RATE_LIMITING, balancer.getLoadRecorder()),
-        new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"),
-        new RoundRobinEntry(DropType.LOAD_BALANCING, balancer.getLoadRecorder())).inOrder();
+        RoundRobinEntry.newEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0001"),
+        RoundRobinEntry.newEntry(subchannel2, balancer.getLoadRecorder(), "token0002"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0003")).inOrder();
 
     // Report, no data
     assertNextReport(
@@ -374,7 +373,7 @@ public class GrpclbLoadBalancerTest {
 
     PickResult pick2 = picker.pickSubchannel(args);
     assertNull(pick2.getSubchannel());
-    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULTS.get(DropType.RATE_LIMITING), pick2);
+    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULT, pick2);
 
     // Report includes upstart of pick1 and the drop of pick2
     assertNextReport(
@@ -382,7 +381,11 @@ public class GrpclbLoadBalancerTest {
         ClientStats.newBuilder()
             .setNumCallsStarted(2)
             .setNumCallsFinished(1)  // pick2
-            .setNumCallsFinishedWithDropForRateLimiting(1)  // pick2
+            .addCallsFinishedWithDrop(
+                ClientStatsPerToken.newBuilder()
+                    .setLoadBalanceToken("token0001")
+                    .setNumCalls(1)          // pick2
+                    .build())
             .build());
 
     PickResult pick3 = picker.pickSubchannel(args);
@@ -403,7 +406,7 @@ public class GrpclbLoadBalancerTest {
 
     PickResult pick4 = picker.pickSubchannel(args);
     assertNull(pick4.getSubchannel());
-    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULTS.get(DropType.LOAD_BALANCING), pick4);
+    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULT, pick4);
 
     // pick1 ended without sending anything
     tracer1.streamClosed(Status.CANCELLED);
@@ -415,8 +418,12 @@ public class GrpclbLoadBalancerTest {
             .setNumCallsStarted(1)  // pick4
             .setNumCallsFinished(2)
             .setNumCallsFinishedWithClientFailedToSend(1)   // pick1
-            .setNumCallsFinishedWithDropForLoadBalancing(1)   // pick4
-            .build());
+            .addCallsFinishedWithDrop(
+                ClientStatsPerToken.newBuilder()
+                    .setLoadBalanceToken("token0003")
+                    .setNumCalls(1)   // pick4
+                    .build())
+        .build());
 
     PickResult pick5 = picker.pickSubchannel(args);
     assertSame(subchannel1, pick1.getSubchannel());
@@ -478,7 +485,7 @@ public class GrpclbLoadBalancerTest {
     // that picker is associated with the previous stream.
     PickResult pick6 = picker.pickSubchannel(args);
     assertNull(pick6.getSubchannel());
-    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULTS.get(DropType.RATE_LIMITING), pick6);
+    assertSame(GrpclbLoadBalancer.DROP_PICK_RESULT, pick6);
     assertNextReport(
         inOrder, lbRequestObserver, loadReportIntervalMillis,
         ClientStats.newBuilder().build());
@@ -930,14 +937,14 @@ public class GrpclbLoadBalancerTest {
     RoundRobinPicker picker1 = (RoundRobinPicker) pickerCaptor.getValue();
 
     assertThat(picker1.list).containsExactly(
-        new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
+        RoundRobinEntry.newEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
 
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(READY));
     inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker2 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker2.list).containsExactly(
-        new RoundRobinEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
-        new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"))
+        RoundRobinEntry.newEntry(subchannel1, balancer.getLoadRecorder(), "token0001"),
+        RoundRobinEntry.newEntry(subchannel2, balancer.getLoadRecorder(), "token0002"))
         .inOrder();
 
     // Disconnected subchannels
@@ -947,7 +954,7 @@ public class GrpclbLoadBalancerTest {
     inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker3 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker3.list).containsExactly(
-        new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
+        RoundRobinEntry.newEntry(subchannel2, balancer.getLoadRecorder(), "token0002"));
 
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(CONNECTING));
     inOrder.verifyNoMoreInteractions();
@@ -967,10 +974,10 @@ public class GrpclbLoadBalancerTest {
     List<ServerEntry> backends2 =
         Arrays.asList(
             new ServerEntry("127.0.0.1", 2030, "token0003"),  // New address
-            new ServerEntry(DropType.RATE_LIMITING),
+            new ServerEntry("token0003"),
             new ServerEntry("127.0.0.1", 2010, "token0004"),  // Existing address with token changed
             new ServerEntry("127.0.0.1", 2030, "token0005"),  // New address appearing second time
-            new ServerEntry(DropType.LOAD_BALANCING));
+            new ServerEntry("token0006"));
     verify(subchannel1, never()).shutdown();
 
     lbResponseObserver.onNext(buildLbResponse(backends2));
@@ -988,8 +995,8 @@ public class GrpclbLoadBalancerTest {
     inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker7 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker7.list).containsExactly(
-        new RoundRobinEntry(DropType.RATE_LIMITING, balancer.getLoadRecorder()),
-        new RoundRobinEntry(DropType.LOAD_BALANCING, balancer.getLoadRecorder())).inOrder();
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0003"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0006")).inOrder();
 
     // State updates on obsolete subchannel1 will have no effect
     deliverSubchannelState(subchannel1, ConnectivityStateInfo.forNonError(READY));
@@ -1003,20 +1010,20 @@ public class GrpclbLoadBalancerTest {
     RoundRobinPicker picker8 = (RoundRobinPicker) pickerCaptor.getValue();
     // subchannel2 is still IDLE, thus not in the active list
     assertThat(picker8.list).containsExactly(
-        new RoundRobinEntry(subchannel3, balancer.getLoadRecorder(), "token0003"),
-        new RoundRobinEntry(DropType.RATE_LIMITING, balancer.getLoadRecorder()),
-        new RoundRobinEntry(subchannel3, balancer.getLoadRecorder(), "token0005"),
-        new RoundRobinEntry(DropType.LOAD_BALANCING, balancer.getLoadRecorder())).inOrder();
+        RoundRobinEntry.newEntry(subchannel3, balancer.getLoadRecorder(), "token0003"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0003"),
+        RoundRobinEntry.newEntry(subchannel3, balancer.getLoadRecorder(), "token0005"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0006")).inOrder();
     // subchannel2 becomes READY and makes it into the list
     deliverSubchannelState(subchannel2, ConnectivityStateInfo.forNonError(READY));
     inOrder.verify(helper).updateBalancingState(eq(READY), pickerCaptor.capture());
     RoundRobinPicker picker9 = (RoundRobinPicker) pickerCaptor.getValue();
     assertThat(picker9.list).containsExactly(
-        new RoundRobinEntry(subchannel3, balancer.getLoadRecorder(), "token0003"),
-        new RoundRobinEntry(DropType.RATE_LIMITING, balancer.getLoadRecorder()),
-        new RoundRobinEntry(subchannel2, balancer.getLoadRecorder(), "token0004"),
-        new RoundRobinEntry(subchannel3, balancer.getLoadRecorder(), "token0005"),
-        new RoundRobinEntry(DropType.LOAD_BALANCING, balancer.getLoadRecorder())).inOrder();
+        RoundRobinEntry.newEntry(subchannel3, balancer.getLoadRecorder(), "token0003"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0003"),
+        RoundRobinEntry.newEntry(subchannel2, balancer.getLoadRecorder(), "token0004"),
+        RoundRobinEntry.newEntry(subchannel3, balancer.getLoadRecorder(), "token0005"),
+        RoundRobinEntry.newDropEntry(balancer.getLoadRecorder(), "token0006")).inOrder();
     verify(subchannel3, never()).shutdown();
 
     // Update backends, with no entry
@@ -1134,23 +1141,17 @@ public class GrpclbLoadBalancerTest {
   private static LoadBalanceResponse buildLbResponse(List<ServerEntry> servers) {
     ServerList.Builder serverListBuilder = ServerList.newBuilder();
     for (ServerEntry server : servers) {
-      if (server.dropType == null) {
+      if (server.addr != null) {
         serverListBuilder.addServers(Server.newBuilder()
             .setIpAddress(ByteString.copyFrom(server.addr.getAddress().getAddress()))
             .setPort(server.addr.getPort())
             .setLoadBalanceToken(server.token)
             .build());
       } else {
-        switch (server.dropType) {
-          case RATE_LIMITING:
-            serverListBuilder.addServers(Server.newBuilder().setDropForRateLimiting(true).build());
-            break;
-          case LOAD_BALANCING:
-            serverListBuilder.addServers(Server.newBuilder().setDropForLoadBalancing(true).build());
-            break;
-          default:
-            fail("Unhandled " + server.dropType);
-        }
+        serverListBuilder.addServers(Server.newBuilder()
+            .setDrop(true)
+            .setLoadBalanceToken(server.token)
+            .build());
       }
     }
     return LoadBalanceResponse.newBuilder()
@@ -1161,18 +1162,16 @@ public class GrpclbLoadBalancerTest {
   private static class ServerEntry {
     final InetSocketAddress addr;
     final String token;
-    final DropType dropType;
 
     ServerEntry(String host, int port, String token) {
       this.addr = new InetSocketAddress(host, port);
       this.token = token;
-      this.dropType = null;
     }
 
-    ServerEntry(DropType dropType) {
-      this.dropType = dropType;
+    // Drop entry
+    ServerEntry(String token) {
       this.addr = null;
-      this.token = null;
+      this.token = token;
     }
   }
 

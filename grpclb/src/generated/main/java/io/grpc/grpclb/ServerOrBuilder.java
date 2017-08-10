@@ -31,7 +31,8 @@ public interface ServerOrBuilder extends
    * An opaque but printable token given to the frontend for each pick. All
    * frontend requests for that pick must include the token in its initial
    * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system.
+   * allow the backend to report load to the gRPC LB system. The token is also
+   * used in client stats for reporting dropped calls.
    * </pre>
    *
    * <code>string load_balance_token = 3;</code>
@@ -42,7 +43,8 @@ public interface ServerOrBuilder extends
    * An opaque but printable token given to the frontend for each pick. All
    * frontend requests for that pick must include the token in its initial
    * metadata. The token is used by the backend to verify the request and to
-   * allow the backend to report load to the gRPC LB system.
+   * allow the backend to report load to the gRPC LB system. The token is also
+   * used in client stats for reporting dropped calls.
    * </pre>
    *
    * <code>string load_balance_token = 3;</code>
@@ -52,21 +54,12 @@ public interface ServerOrBuilder extends
 
   /**
    * <pre>
-   * Indicates whether this particular request should be dropped by the client
-   * for rate limiting.
+   * Indicates whether this particular request should be dropped by the client.
+   * If the request is dropped, there will be a corresponding entry in
+   * ClientStats.calls_finished_with_drop.
    * </pre>
    *
-   * <code>bool drop_for_rate_limiting = 4;</code>
+   * <code>bool drop = 4;</code>
    */
-  boolean getDropForRateLimiting();
-
-  /**
-   * <pre>
-   * Indicates whether this particular request should be dropped by the client
-   * for load balancing.
-   * </pre>
-   *
-   * <code>bool drop_for_load_balancing = 5;</code>
-   */
-  boolean getDropForLoadBalancing();
+  boolean getDrop();
 }
