@@ -31,8 +31,10 @@ final class ThreadLocalContextStorage extends Context.Storage {
   private static final ThreadLocal<Context> localContext = new ThreadLocal<Context>();
 
   @Override
-  public void attach(Context toAttach) {
+  public Context doAttach(Context toAttach) {
+    Context current = current();
     localContext.set(toAttach);
+    return current;
   }
 
   @Override
@@ -44,7 +46,7 @@ final class ThreadLocalContextStorage extends Context.Storage {
       log.log(Level.SEVERE, "Context was not attached when detaching",
           new Throwable().fillInStackTrace());
     }
-    attach(toRestore);
+    doAttach(toRestore);
   }
 
   @Override

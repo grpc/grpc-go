@@ -385,9 +385,11 @@ public class Context {
    * }}</pre>
    */
   public Context attach() {
-    Context previous = current();
-    storage().attach(this);
-    return previous;
+    Context prev = storage().doAttach(this);
+    if (prev == null) {
+      return ROOT;
+    }
+    return prev;
   }
 
   /**
@@ -878,11 +880,33 @@ public class Context {
    */
   public abstract static class Storage {
     /**
+     * @deprecated This is an old API that is no longer used.
+     */
+    @Deprecated
+    public void attach(Context toAttach) {
+      throw new UnsupportedOperationException("Deprecated. Do not call.");
+    }
+
+    /**
      * Implements {@link io.grpc.Context#attach}.
      *
+     * <p>Caution: {@link Context#attach()} interprets a return value of {@code null} to mean
+     * the same thing as {@link Context#ROOT}.
+     *
+     * <p>See also: {@link #current()}.
+
      * @param toAttach the context to be attached
+     * @return A {@link Context} that should be passed back into {@link #detach(Context, Context)}
+     *        as the {@code toRestore} parameter. {@code null} is a valid return value, but see
+     *        caution note.
      */
-    public abstract void attach(Context toAttach);
+    public Context doAttach(Context toAttach) {
+      // This is a default implementation to help migrate existing Storage implementations that
+      // have an attach() method but no doAttach() method.
+      Context current = current();
+      attach(toAttach);
+      return current;
+    }
 
     /**
      * Implements {@link io.grpc.Context#detach}
@@ -895,7 +919,15 @@ public class Context {
     public abstract void detach(Context toDetach, Context toRestore);
 
     /**
-     * Implements {@link io.grpc.Context#current}.  Returns the context of the current scope.
+     * Implements {@link io.grpc.Context#current}.
+     *
+     * <p>Caution: {@link Context} interprets a return value of {@code null} to mean the same
+     * thing as {@code Context{@link #ROOT}}.
+     *
+     * <p>See also {@link #doAttach(Context)}.
+     *
+     * @return The context of the current scope. {@code null} is a valid return value, but see
+     *        caution note.
      */
     public abstract Context current();
   }

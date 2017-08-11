@@ -29,12 +29,15 @@ import static org.junit.Assert.fail;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -761,6 +764,116 @@ public class ContextTest {
         classLoader.loadClass(LoadMeWithStaticTestingClassLoader.class.getName());
 
     ((Runnable) runnable.getDeclaredConstructor().newInstance()).run();
+  }
+
+  /**
+   * Ensure that newly created threads can attach/detach a context.
+   * The current test thread already has a context manually attached in {@link #setUp()}.
+   */
+  @Test
+  public void newThreadAttachContext() throws Exception {
+    Context parent = Context.current().withValue(COLOR, "blue");
+    parent.call(new Callable<Object>() {
+      @Override
+      public Object call() throws Exception {
+        assertEquals("blue", COLOR.get());
+
+        final Context child = Context.current().withValue(COLOR, "red");
+        Future<String> workerThreadVal = scheduler
+            .submit(new Callable<String>() {
+              @Override
+              public String call() {
+                Context initial = Context.current();
+                assertNotNull(initial);
+                Context toRestore = child.attach();
+                try {
+                  assertNotNull(toRestore);
+                  return COLOR.get();
+                } finally {
+                  child.detach(toRestore);
+                  assertEquals(initial, Context.current());
+                }
+              }
+            });
+        assertEquals("red", workerThreadVal.get());
+
+        assertEquals("blue", COLOR.get());
+        return null;
+      }
+    });
+  }
+
+  /**
+   * Similar to {@link #newThreadAttachContext()} but without giving the new thread a specific ctx.
+   */
+  @Test
+  public void newThreadWithoutContext() throws Exception {
+    Context parent = Context.current().withValue(COLOR, "blue");
+    parent.call(new Callable<Object>() {
+      @Override
+      public Object call() throws Exception {
+        assertEquals("blue", COLOR.get());
+
+        Future<String> workerThreadVal = scheduler
+            .submit(new Callable<String>() {
+              @Override
+              public String call() {
+                assertNotNull(Context.current());
+                return COLOR.get();
+              }
+            });
+        assertEquals(null, workerThreadVal.get());
+
+        assertEquals("blue", COLOR.get());
+        return null;
+      }
+    });
+  }
+
+  @Test
+  public void storageReturnsNullTest() throws Exception {
+    Class<?> contextClass = Class.forName("io.grpc.Context");
+    Field storage = contextClass.getDeclaredField("storage");
+    assertTrue(Modifier.isFinal(storage.getModifiers()));
+    // use reflection to forcibly change the storage object to a test object
+    storage.setAccessible(true);
+    Object o = storage.get(null);
+    @SuppressWarnings("unchecked")
+    AtomicReference<Context.Storage> storageRef = (AtomicReference<Context.Storage>) o;
+    Context.Storage originalStorage = storageRef.get();
+    try {
+      storageRef.set(new Context.Storage() {
+        @Override
+        public Context doAttach(Context toAttach) {
+          return null;
+        }
+
+        @Override
+        public void detach(Context toDetach, Context toRestore) {
+          // noop
+        }
+
+        @Override
+        public Context current() {
+          return null;
+        }
+      });
+      // current() returning null gets transformed into ROOT
+      assertEquals(Context.ROOT, Context.current());
+
+      // doAttach() returning null gets transformed into ROOT
+      Context blueContext = Context.current().withValue(COLOR, "blue");
+      Context toRestore = blueContext.attach();
+      assertEquals(Context.ROOT, toRestore);
+
+      // final sanity check
+      blueContext.detach(toRestore);
+      assertEquals(Context.ROOT, Context.current());
+    } finally {
+      // undo the changes
+      storageRef.set(originalStorage);
+      storage.setAccessible(false);
+    }
   }
 
   // UsedReflectively
