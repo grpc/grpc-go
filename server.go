@@ -931,6 +931,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			default:
 				appStatus = status.New(convertCode(appErr), appErr.Error())
 			}
+			appErr = appStatus.Err()
 		}
 		if trInfo != nil {
 			ss.mu.Lock()
