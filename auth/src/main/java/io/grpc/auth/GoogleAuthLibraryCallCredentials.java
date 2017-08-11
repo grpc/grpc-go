@@ -178,7 +178,7 @@ final class GoogleAuthLibraryCallCredentials implements CallCredentials {
   static JwtHelper createJwtHelperOrNull(ClassLoader loader) {
     Class<?> rawServiceAccountClass;
     try {
-      // Specify loader so it can be overriden in tests
+      // Specify loader so it can be overridden in tests
       rawServiceAccountClass
           = Class.forName("com.google.auth.oauth2.ServiceAccountCredentials", false, loader);
     } catch (ClassNotFoundException ex) {

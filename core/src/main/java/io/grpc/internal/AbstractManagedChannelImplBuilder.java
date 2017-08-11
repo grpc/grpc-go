@@ -126,7 +126,7 @@ public abstract class AbstractManagedChannelImplBuilder
    * larger than this limit is received it will not be processed and the RPC will fail with
    * RESOURCE_EXHAUSTED.
    */
-  // Can be overriden by subclasses.
+  // Can be overridden by subclasses.
   @Override
   public T maxInboundMessageSize(int max) {
     checkArgument(max >= 0, "negative max");

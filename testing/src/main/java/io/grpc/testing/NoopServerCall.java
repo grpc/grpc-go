@@ -25,7 +25,7 @@ import io.grpc.Status;
 /**
  * {@link NoopServerCall} is a class that is designed for use in tests.  It is designed to be used
  * in places where a scriptable call is necessary.  By default, all methods are noops, and designed
- * to be overriden.
+ * to be overridden.
  *
  * @deprecated moved to {@link io.grpc.internal.NoopServerCall} and for internal use only. Please
  *             use {@link GrpcServerRule} to test on InProcess channels instead
@@ -37,7 +37,7 @@ public class NoopServerCall<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   /**
    * {@link NoopServerCall.NoopServerCallListener} is a class that is designed for use in tests.
    * It is designed to be used in places where a scriptable call listener is necessary.  By
-   * default, all methods are noops, and designed to be overriden.
+   * default, all methods are noops, and designed to be overridden.
    */
   @Deprecated
   public static class NoopServerCallListener<T> extends ServerCall.Listener<T> {

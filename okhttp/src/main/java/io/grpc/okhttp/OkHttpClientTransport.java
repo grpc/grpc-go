@@ -554,7 +554,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   /**
-   * Gets the overriden authority hostname.  If the authority is overriden to be an invalid
+   * Gets the overridden authority hostname.  If the authority is overridden to be an invalid
    * authority, uri.getHost() will (rightly) return null, since the authority is no longer
    * an actual service.  This method overrides the behavior for practical reasons.  For example,
    * if an authority is in the form "invalid_authority" (note the "_"), rather than return null,

@@ -237,7 +237,7 @@ class NettyClientStream extends AbstractClientStream {
     }
 
     /**
-     * Intended to be overriden by NettyClientTransport, which has more information about failures.
+     * Intended to be overridden by NettyClientTransport, which has more information about failures.
      * May only be called from event loop.
      */
     protected abstract Status statusFromFailedFuture(ChannelFuture f);
