@@ -110,7 +110,7 @@ def java_grpc_library(name, srcs, deps, flavor=None,
       "@grpc_java//core",
       "@grpc_java//stub",
       "@grpc_java//protobuf",
-      "@com_google_guava//jar",
+      "@com_google_guava_guava//jar",
   ]
   if flavor == "normal":
     added_deps += ["@com_google_protobuf_java//:protobuf_java"]
