@@ -16,6 +16,9 @@
 
 package io.grpc;
 
+import static io.grpc.ConnectivityState.CONNECTING;
+import static io.grpc.ConnectivityState.IDLE;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -30,20 +33,20 @@ import org.junit.runners.JUnit4;
 public class ConnectivityStateInfoTest {
   @Test
   public void forNonError() {
-    ConnectivityStateInfo info = ConnectivityStateInfo.forNonError(ConnectivityState.IDLE);
-    assertEquals(ConnectivityState.IDLE, info.getState());
+    ConnectivityStateInfo info = ConnectivityStateInfo.forNonError(IDLE);
+    assertEquals(IDLE, info.getState());
     assertEquals(Status.OK, info.getStatus());
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void forNonErrorInvalid() {
-    ConnectivityStateInfo.forNonError(ConnectivityState.TRANSIENT_FAILURE);
+    ConnectivityStateInfo.forNonError(TRANSIENT_FAILURE);
   }
 
   @Test
   public void forTransientFailure() {
     ConnectivityStateInfo info = ConnectivityStateInfo.forTransientFailure(Status.UNAVAILABLE);
-    assertEquals(ConnectivityState.TRANSIENT_FAILURE, info.getState());
+    assertEquals(TRANSIENT_FAILURE, info.getState());
     assertEquals(Status.UNAVAILABLE, info.getStatus());
   }
 
@@ -54,9 +57,9 @@ public class ConnectivityStateInfoTest {
 
   @Test
   public void equality() {
-    ConnectivityStateInfo info1 = ConnectivityStateInfo.forNonError(ConnectivityState.IDLE);
-    ConnectivityStateInfo info2 = ConnectivityStateInfo.forNonError(ConnectivityState.CONNECTING);
-    ConnectivityStateInfo info3 = ConnectivityStateInfo.forNonError(ConnectivityState.IDLE);
+    ConnectivityStateInfo info1 = ConnectivityStateInfo.forNonError(IDLE);
+    ConnectivityStateInfo info2 = ConnectivityStateInfo.forNonError(CONNECTING);
+    ConnectivityStateInfo info3 = ConnectivityStateInfo.forNonError(IDLE);
     ConnectivityStateInfo info4 = ConnectivityStateInfo.forTransientFailure(Status.UNAVAILABLE);
     ConnectivityStateInfo info5 = ConnectivityStateInfo.forTransientFailure(Status.INTERNAL);
     ConnectivityStateInfo info6 = ConnectivityStateInfo.forTransientFailure(Status.INTERNAL);

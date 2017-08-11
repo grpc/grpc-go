@@ -16,6 +16,8 @@
 
 package io.grpc;
 
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
+
 import com.google.common.base.Preconditions;
 
 /**
@@ -35,7 +37,8 @@ public final class ConnectivityStateInfo {
    * @throws IllegalArgumentException if {@code state} is {@code TRANSIENT_FAILURE}.
    */
   public static ConnectivityStateInfo forNonError(ConnectivityState state) {
-    Preconditions.checkArgument(state != ConnectivityState.TRANSIENT_FAILURE,
+    Preconditions.checkArgument(
+        state != TRANSIENT_FAILURE,
         "state is TRANSIENT_ERROR. Use forError() instead");
     return new ConnectivityStateInfo(state, Status.OK);
   }
@@ -45,7 +48,7 @@ public final class ConnectivityStateInfo {
    */
   public static ConnectivityStateInfo forTransientFailure(Status error) {
     Preconditions.checkArgument(!error.isOk(), "The error status must not be OK");
-    return new ConnectivityStateInfo(ConnectivityState.TRANSIENT_FAILURE, error);
+    return new ConnectivityStateInfo(TRANSIENT_FAILURE, error);
   }
 
   /**
