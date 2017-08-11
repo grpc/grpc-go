@@ -465,9 +465,10 @@ public abstract class LoadBalancer {
      *
      * <p>Using this method implies that this load balancer doesn't support channel state, and the
      * application will get exception when trying to get the channel state.
+     *
+     * @deprecated Please migrate ALL usages to {@link #updateBalancingState}
      */
-    // TODO(zdapeng): add '@deprecated Please migrate ALL usages to {@link #updateBalancingState}'
-    // TODO(zdapeng): and add '@Deprecated'
+    @Deprecated
     public abstract void updatePicker(SubchannelPicker picker);
 
     /**

@@ -321,7 +321,7 @@ public class ManagedChannelImplTest {
     when(mockPicker.pickSubchannel(
         new PickSubchannelArgsImpl(method, headers2, CallOptions.DEFAULT))).thenReturn(
         PickResult.withSubchannel(subchannel));
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
 
     // First RPC, will be pending
     ClientCall<String, Integer> call = channel.newCall(method, CallOptions.DEFAULT);
@@ -379,7 +379,7 @@ public class ManagedChannelImplTest {
       SubchannelPicker picker2 = mock(SubchannelPicker.class);
       when(picker2.pickSubchannel(new PickSubchannelArgsImpl(method, headers, CallOptions.DEFAULT)))
           .thenReturn(PickResult.withSubchannel(subchannel));
-      helper.updatePicker(picker2);
+      helper.updateBalancingState(READY, picker2);
       executor.runDueTasks();
       verify(mockTransport).newStream(same(method), same(headers), same(CallOptions.DEFAULT));
       verify(mockStream).start(any(ClientStreamListener.class));
@@ -466,7 +466,7 @@ public class ManagedChannelImplTest {
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(subchannel));
     assertEquals(0, callExecutor.numPendingTasks());
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
 
     // Real streams are started in the call executor if they were previously buffered.
     assertEquals(1, callExecutor.runDueTasks());
@@ -610,7 +610,7 @@ public class ManagedChannelImplTest {
     assertEquals(READY, stateInfoCaptor.getValue().getState());
 
     // A typical LoadBalancer will call this once the subchannel becomes READY
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
     // Delayed transport uses the app executor to create real streams.
     executor.runDueTasks();
 
@@ -693,7 +693,7 @@ public class ManagedChannelImplTest {
     SubchannelPicker picker2 = mock(SubchannelPicker.class);
     when(picker2.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withError(server2Error));
-    helper.updatePicker(picker2);
+    helper.updateBalancingState(TRANSIENT_FAILURE, picker2);
     executor.runDueTasks();
 
     // ... which fails the fail-fast call
@@ -1044,7 +1044,7 @@ public class ManagedChannelImplTest {
     transportInfo.listener.transportReady();
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(subchannel));
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
     executor.runDueTasks();
     ArgumentCaptor<Attributes> attrsCaptor = ArgumentCaptor.forClass(Attributes.class);
     ArgumentCaptor<MetadataApplier> applierCaptor = ArgumentCaptor.forClass(MetadataApplier.class);
@@ -1106,7 +1106,7 @@ public class ManagedChannelImplTest {
 
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel, factory2));
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
 
     CallOptions callOptions = CallOptions.DEFAULT.withStreamTracerFactory(factory1);
     ClientCall<String, Integer> call = channel.newCall(method, callOptions);
@@ -1144,7 +1144,7 @@ public class ManagedChannelImplTest {
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class))).thenReturn(
         PickResult.withSubchannel(subchannel, factory2));
 
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
     assertEquals(1, executor.runDueTasks());
 
     verify(mockPicker).pickSubchannel(any(PickSubchannelArgs.class));
@@ -1188,6 +1188,7 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  @Deprecated
   public void getState_loadBalancerDoesNotSupportChannelState() {
     createChannel(new FakeNameResolverFactory(false), NO_INTERCEPTOR);
     assertEquals(ConnectivityState.IDLE, channel.getState(false));
@@ -1198,6 +1199,7 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  @Deprecated
   public void notifyWhenStateChanged_loadBalancerDoesNotSupportChannelState() {
     createChannel(new FakeNameResolverFactory(false), NO_INTERCEPTOR);
     assertEquals(ConnectivityState.IDLE, channel.getState(false));
@@ -1315,7 +1317,6 @@ public class ManagedChannelImplTest {
     assertEquals(ConnectivityState.CONNECTING, channel.getState(false));
   }
 
-  // TODO(zdapeng): replace usages of updatePicker() in some other tests once it's deprecated
   @Test
   public void updateBalancingStateDoesUpdatePicker() {
     ClientStream mockStream = mock(ClientStream.class);

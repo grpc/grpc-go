@@ -16,6 +16,8 @@
 
 package io.grpc.internal;
 
+import static io.grpc.ConnectivityState.READY;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -260,7 +262,7 @@ public class ManagedChannelImplIdlenessTest {
     SubchannelPicker mockPicker = mock(SubchannelPicker.class);
     when(mockPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withSubchannel(subchannel));
-    helper.updatePicker(mockPicker);
+    helper.updateBalancingState(READY, mockPicker);
     // Delayed transport creates real streams in the app executor
     executor.runDueTasks();
 
@@ -340,7 +342,7 @@ public class ManagedChannelImplIdlenessTest {
     SubchannelPicker failingPicker = mock(SubchannelPicker.class);
     when(failingPicker.pickSubchannel(any(PickSubchannelArgs.class)))
         .thenReturn(PickResult.withError(Status.UNAVAILABLE));
-    helper.updatePicker(failingPicker);
+    helper.updateBalancingState(TRANSIENT_FAILURE, failingPicker);
     executor.runDueTasks();
     verify(mockCallListener).onClose(same(Status.UNAVAILABLE), any(Metadata.class));
 

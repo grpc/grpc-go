@@ -702,7 +702,8 @@ public class GrpclbLoadBalancerTest {
     Status error = Status.NOT_FOUND.withDescription("www.google.com not found");
     deliverNameResolutionError(error);
     verify(roundRobinBalancer).handleNameResolutionError(error);
-    verify(helper, never()).updatePicker(any(SubchannelPicker.class));
+    verify(helper, never())
+        .updateBalancingState(any(ConnectivityState.class), any(SubchannelPicker.class));
     verifyNoMoreInteractions(pickFirstBalancerFactory);
     verifyNoMoreInteractions(pickFirstBalancer);
   }
