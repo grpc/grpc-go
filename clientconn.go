@@ -642,9 +642,9 @@ func (cc *ClientConn) newAddrConn(addr resolver.Address) (*addrConn, error) {
 	return ac, nil
 }
 
-// removeSubConn removes the addrConn in the subConn from clientConn.
+// removeAddrConn removes the addrConn in the subConn from clientConn.
 // It also tears down the ac with the given error.
-func (cc *ClientConn) removeSubConn(ac *addrConn, err error) {
+func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
