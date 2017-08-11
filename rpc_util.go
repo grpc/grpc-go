@@ -423,9 +423,7 @@ func recv(p *parser, c Codec, s *transport.Stream, dc Decompressor, m interface{
 }
 
 type rpcInfo struct {
-	failfast      bool
-	bytesSent     bool
-	bytesReceived bool
+	failfast bool
 }
 
 type rpcInfoContextKey struct{}
@@ -436,14 +434,6 @@ func newContextWithRPCInfo(ctx context.Context, failfast bool) context.Context {
 
 func rpcInfoFromContext(ctx context.Context) (s *rpcInfo, ok bool) {
 	s, ok = ctx.Value(rpcInfoContextKey{}).(*rpcInfo)
-	return
-}
-
-func updateRPCInfoInContext(ctx context.Context, s rpcInfo) {
-	if ss, ok := rpcInfoFromContext(ctx); ok {
-		ss.bytesReceived = s.bytesReceived
-		ss.bytesSent = s.bytesSent
-	}
 	return
 }
 
