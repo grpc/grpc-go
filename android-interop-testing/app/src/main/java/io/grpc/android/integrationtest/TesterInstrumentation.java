@@ -16,6 +16,7 @@
 
 package io.grpc.android.integrationtest;
 
+import android.app.Activity;
 import android.app.Instrumentation;
 import android.os.Bundle;
 import android.util.Log;
@@ -88,9 +89,9 @@ public class TesterInstrumentation extends Instrumentation {
               Bundle bundle = new Bundle();
               bundle.putString("grpc test result", result);
               if (InteropTester.SUCCESS_MESSAGE.equals(result)) {
-                finish(0, bundle);
+                finish(Activity.RESULT_OK, bundle);
               } else {
-                finish(1, bundle);
+                finish(Activity.RESULT_CANCELED, bundle);
               }
             }
           },
@@ -98,7 +99,7 @@ public class TesterInstrumentation extends Instrumentation {
     } catch (Throwable t) {
       Bundle bundle = new Bundle();
       bundle.putString("Exception encountered", t.toString());
-      finish(1, bundle);
+      finish(Activity.RESULT_CANCELED, bundle);
     }
   }
 }

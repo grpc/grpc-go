@@ -45,11 +45,11 @@ $ adb shell am instrument -w -e server_host <hostname or ip address> -e server_p
 
 If the test passed successfully, it will output:
 ```
-INSTRUMENTATION_RESULT: grpc test result=Succeed!!!
-INSTRUMENTATION_CODE: 0
+INSTRUMENTATION_RESULT: grpc test result=Success!
+INSTRUMENTATION_CODE: -1
 ```
 otherwise, output something like:
 ```
 INSTRUMENTATION_RESULT: grpc test result=Failed... : <exception stacktrace if applicable>
-INSTRUMENTATION_CODE: 1
+INSTRUMENTATION_CODE: 0
 ```

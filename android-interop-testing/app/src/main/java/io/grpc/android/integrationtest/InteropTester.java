@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
  * Implementation of the integration tests, as an AsyncTask.
  */
 final class InteropTester extends AsyncTask<Void, Void, String> {
-  static final String SUCCESS_MESSAGE = "Succeed!!!";
+  static final String SUCCESS_MESSAGE = "Success!";
   static final String LOG_TAG = "GrpcTest";
 
   private ManagedChannel channel;
