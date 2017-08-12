@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
@@ -186,7 +187,15 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 			h.Set("Grpc-Message", encodeGrpcMessage(m))
 		}
 
-		// TODO: Support Grpc-Status-Details-Bin
+		if p := st.Proto(); p != nil && len(p.Details) > 0 {
+			stBytes, err := proto.Marshal(p)
+			if err != nil {
+				// TODO: return error instead, when callers are able to handle it.
+				panic(err)
+			}
+
+			h.Set("Grpc-Status-Details-Bin", encodeBinHeader(stBytes))
+		}
 
 		if md := s.Trailer(); len(md) > 0 {
 			for k, vv := range md {
@@ -225,7 +234,7 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	// and https://golang.org/pkg/net/http/#example_ResponseWriter_trailers
 	h.Add("Trailer", "Grpc-Status")
 	h.Add("Trailer", "Grpc-Message")
-	// TODO: Support Grpc-Status-Details-Bin
+	h.Add("Trailer", "Grpc-Status-Details-Bin")
 
 	if s.sendCompress != "" {
 		h.Set("Grpc-Encoding", s.sendCompress)
