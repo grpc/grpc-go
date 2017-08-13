@@ -33,6 +33,7 @@ import (
 )
 
 var (
+	caFile                = flag.String("ca_file", "", "The file containning the CA root cert file")
 	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
 	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
@@ -75,7 +76,10 @@ func main() {
 		var creds credentials.TransportCredentials
 		if *testCA {
 			var err error
-			creds, err = credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), sn)
+			if *caFile == "" {
+				*caFile = testdata.Path("ca.pem")
+			}
+			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
 				grpclog.Fatalf("Failed to create TLS credentials %v", err)
 			}

@@ -588,6 +588,30 @@ func (s *Server) serveUsingHandler(conn net.Conn) {
 	})
 }
 
+// ServeHTTP implements the Go standard library's http.Handler
+// interface by responding to the gRPC request r, by looking up
+// the requested gRPC method in the gRPC server s.
+//
+// The provided HTTP request must have arrived on an HTTP/2
+// connection. When using the Go standard library's server,
+// practically this means that the Request must also have arrived
+// over TLS.
+//
+// To share one port (such as 443 for https) between gRPC and an
+// existing http.Handler, use a root http.Handler such as:
+//
+//   if r.ProtoMajor == 2 && strings.HasPrefix(
+//   	r.Header.Get("Content-Type"), "application/grpc") {
+//   	grpcServer.ServeHTTP(w, r)
+//   } else {
+//   	yourMux.ServeHTTP(w, r)
+//   }
+//
+// Note that ServeHTTP uses Go's HTTP/2 server implementation which is totally
+// separate from grpc-go's HTTP/2 server. Performance and features may vary
+// between the two paths. ServeHTTP does not support some gRPC features
+// available through grpc-go's HTTP/2 server, and it is currently EXPERIMENTAL
+// and subject to change.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st, err := transport.NewServerHandlerTransport(w, r)
 	if err != nil {

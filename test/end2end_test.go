@@ -44,6 +44,7 @@ import (
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/health"
@@ -2261,6 +2262,62 @@ func testPeerNegative(t *testing.T, e env) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	tc.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer))
+}
+
+func TestPeerFailedRPC(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testPeerFailedRPC(t, e)
+	}
+}
+
+func testPeerFailedRPC(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.maxServerReceiveMsgSize = newInt(1 * 1024)
+	te.startServer(&testServer{security: e.security})
+
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+
+	// first make a successful request to the server
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+
+	// make a second request that will be rejected by the server
+	const largeSize = 5 * 1024
+	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		Payload:      largePayload,
+	}
+
+	peer := new(peer.Peer)
+	if _, err := tc.UnaryCall(context.Background(), req, grpc.Peer(peer)); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	} else {
+		pa := peer.Addr.String()
+		if e.network == "unix" {
+			if pa != te.srvAddr {
+				t.Fatalf("peer.Addr = %v, want %v", pa, te.srvAddr)
+			}
+			return
+		}
+		_, pp, err := net.SplitHostPort(pa)
+		if err != nil {
+			t.Fatalf("Failed to parse address from peer.")
+		}
+		_, sp, err := net.SplitHostPort(te.srvAddr)
+		if err != nil {
+			t.Fatalf("Failed to parse address of test server.")
+		}
+		if pp != sp {
+			t.Fatalf("peer.Addr = localhost:%v, want localhost:%v", pp, sp)
+		}
+	}
 }
 
 func TestMetadataUnaryRPC(t *testing.T) {
@@ -4793,15 +4850,17 @@ func testWaitForReadyConnection(t *testing.T, e env) {
 
 	cc := te.clientConn() // Non-blocking dial.
 	tc := testpb.NewTestServiceClient(cc)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	state := cc.GetState()
 	// Wait for connection to be Ready.
-	for ; state != grpc.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	for ; state != connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
-	if state != grpc.Ready {
+	if state != connectivity.Ready {
 		t.Fatalf("Want connection state to be Ready, got %v", state)
 	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	// Make a fail-fast RPC.
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_,_) = _, %v, want _, nil", err)

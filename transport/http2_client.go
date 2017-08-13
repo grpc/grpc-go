@@ -98,7 +98,8 @@ type http2Client struct {
 
 	initialWindowSize int32
 
-	bdpEst *bdpEstimator
+	bdpEst          *bdpEstimator
+	outQuotaVersion uint32
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -107,8 +108,6 @@ type http2Client struct {
 	maxStreams int
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
-	// goAwayID records the Last-Stream-ID in the GoAway frame from the server.
-	goAwayID uint32
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
 	// goAwayReason records the http2.ErrCode and debug data received with the
@@ -662,24 +661,6 @@ func (t *http2Client) GracefulClose() error {
 		t.mu.Unlock()
 		return nil
 	}
-	// Notify the streams which were initiated after the server sent GOAWAY.
-	select {
-	case <-t.goAway:
-		n := t.prevGoAwayID
-		if n == 0 && t.nextID > 1 {
-			n = t.nextID - 2
-		}
-		m := t.goAwayID + 2
-		if m == 2 {
-			m = 1
-		}
-		for i := m; i <= n; i += 2 {
-			if s, ok := t.activeStreams[i]; ok {
-				close(s.goAway)
-			}
-		}
-	default:
-	}
 	if t.state == draining {
 		t.mu.Unlock()
 		return nil
@@ -699,9 +680,13 @@ func (t *http2Client) GracefulClose() error {
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	r := bytes.NewBuffer(data)
+	var (
+		p   []byte
+		oqv uint32
+	)
 	for {
-		var p []byte
-		if r.Len() > 0 {
+		oqv = atomic.LoadUint32(&t.outQuotaVersion)
+		if r.Len() > 0 || p != nil {
 			size := http2MaxFrameLen
 			// Wait until the stream has some quota to send the data.
 			sq, err := wait(s.ctx, s.done, s.goAway, t.shutdownChan, s.sendQuotaPool.acquire())
@@ -719,7 +704,9 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			if tq < size {
 				size = tq
 			}
-			p = r.Next(size)
+			if p == nil {
+				p = r.Next(size)
+			}
 			ps := len(p)
 			if ps < sq {
 				// Overbooked stream quota. Return it back.
@@ -764,6 +751,18 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			return ContextErr(s.ctx.Err())
 		default:
 		}
+		if oqv != atomic.LoadUint32(&t.outQuotaVersion) {
+			// InitialWindowSize settings frame must have been received after we
+			// acquired send quota but before we got the writable channel.
+			// We must forsake this write.
+			t.sendQuotaPool.add(len(p))
+			s.sendQuotaPool.add(len(p))
+			if t.framer.adjustNumWriters(-1) == 0 {
+				t.controlBuf.put(&flushIO{})
+			}
+			t.writableChan <- 0
+			continue
+		}
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 {
 			// Do a force flush iff this is last frame for the entire gRPC message
 			// and the caller is the only writer at this moment.
@@ -776,6 +775,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			t.notifyError(err)
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
+		p = nil
 		if t.framer.adjustNumWriters(-1) == 0 {
 			t.framer.flushWrite()
 		}
@@ -987,36 +987,56 @@ func (t *http2Client) handlePing(f *http2.PingFrame) {
 }
 
 func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
+	t.mu.Lock()
+	if t.state != reachable && t.state != draining {
+		t.mu.Unlock()
+		return
+	}
 	if f.ErrCode == http2.ErrCodeEnhanceYourCalm {
 		infof("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
 	}
-	t.mu.Lock()
-	if t.state == reachable || t.state == draining {
-		if f.LastStreamID > 0 && f.LastStreamID%2 != 1 {
-			t.mu.Unlock()
-			t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
-			return
-		}
-		select {
-		case <-t.goAway:
-			id := t.goAwayID
-			// t.goAway has been closed (i.e.,multiple GoAways).
-			if id < f.LastStreamID {
-				t.mu.Unlock()
-				t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
-				return
-			}
-			t.prevGoAwayID = id
-			t.goAwayID = f.LastStreamID
-			t.mu.Unlock()
-			return
-		default:
-			t.setGoAwayReason(f)
-		}
-		t.goAwayID = f.LastStreamID
-		close(t.goAway)
+	id := f.LastStreamID
+	if id > 0 && id%2 != 1 {
+		t.mu.Unlock()
+		t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
+		return
 	}
+	// A client can recieve multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
+	// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
+	// with the ID of the last stream the server will process.
+	// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
+	// close all streams created after the second GoAwayId. This way streams that were in-flight while the GoAway from server
+	// was being sent don't get killed.
+	select {
+	case <-t.goAway: // t.goAway has been closed (i.e.,multiple GoAways).
+		// If there are multiple GoAways the first one should always have an ID greater than the following ones.
+		if id > t.prevGoAwayID {
+			t.mu.Unlock()
+			t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: previously recv GOAWAY frame with LastStramID %d, currently recv %d", id, f.LastStreamID))
+			return
+		}
+	default:
+		t.setGoAwayReason(f)
+		close(t.goAway)
+		t.state = draining
+	}
+	// All streams with IDs greater than the GoAwayId
+	// and smaller than the previous GoAway ID should be killed.
+	upperLimit := t.prevGoAwayID
+	if upperLimit == 0 { // This is the first GoAway Frame.
+		upperLimit = math.MaxUint32 // Kill all streams after the GoAway ID.
+	}
+	for streamID, stream := range t.activeStreams {
+		if streamID > id && streamID <= upperLimit {
+			close(stream.goAway)
+		}
+	}
+	t.prevGoAwayID = id
+	active := len(t.activeStreams)
 	t.mu.Unlock()
+	if active == 0 {
+		t.Close()
+	}
 }
 
 // setGoAwayReason sets the value of t.goAwayReason based
@@ -1216,6 +1236,7 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			}
 			t.streamSendQuota = s.Val
 			t.mu.Unlock()
+			atomic.AddUint32(&t.outQuotaVersion, 1)
 		}
 	}
 }
