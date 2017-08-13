@@ -694,8 +694,9 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
-// addressesUpdated checks whether current address in the updating list, Update the list if true.
-func (cc *ClientConn) addressesUpdated(addrs []Address) bool {
+// pickFirstUpdateAddresses checks whether current address in the updating list, Update the list if true.
+// It is only used when the balancer is pick first.
+func (cc *ClientConn) pickFirstUpdateAddresses(addrs []Address) bool {
 	if len(cc.conns) == 0 {
 		// No addrconn. Should go resetting addrconn.
 		return false
@@ -717,7 +718,6 @@ func (cc *ClientConn) addressesUpdated(addrs []Address) bool {
 			cc.conns[addr] = currentAc
 		}
 		currentAc.addrs = addrs
-		//cc.mu.Unlock()
 		return true
 	}
 	return false
