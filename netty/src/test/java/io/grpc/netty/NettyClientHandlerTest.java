@@ -81,7 +81,6 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
@@ -440,7 +439,6 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
   }
 
   @Test
-  @Ignore("Re-enable once https://github.com/grpc/grpc-java/issues/1175 is fixed")
   public void connectionWindowShouldBeOverridden() throws Exception {
     flowControlWindow = 1048576; // 1MiB
     setUp();
