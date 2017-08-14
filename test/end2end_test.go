@@ -295,6 +295,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 			return nil
 		}
 		if err != nil {
+			// to facilitate testSvrWriteStatusEarlyWrite
+			if grpc.Code(err) == codes.ResourceExhausted {
+				return grpc.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
+			}
 			return err
 		}
 		cs := in.GetResponseParameters()
@@ -311,6 +315,10 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{
 				Payload: payload,
 			}); err != nil {
+				// to facilitate testSvrWriteStatusEarlyWrite
+				if grpc.Code(err) == codes.ResourceExhausted {
+					return grpc.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
+				}
 				return err
 			}
 		}
@@ -1543,8 +1551,6 @@ func TestMaxMsgSizeClientDefault(t *testing.T) {
 func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.userAgent = testAppUA
-	// To avoid error on server side.
-	te.maxServerSendMsgSize = newInt(5 * 1024 * 1024)
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
 		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
@@ -1562,24 +1568,12 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
-	if err != nil {
-		t.Fatal(err)
-	}
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(largeSize)),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
-	}
-
-	// Test for unary RPC send.
-	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
@@ -1605,17 +1599,6 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
-	}
-
-	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
-	sreq.Payload = largePayload
-	stream, err = tc.FullDuplexCall(te.ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("%v.Send(%v) = %v, want _, error codes: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
 
@@ -4907,5 +4890,67 @@ func testEncodeDoesntPanic(t *testing.T, e env) {
 	// Passing case.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+}
+
+func TestSvrWriteStatusEarlyWrite(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testSvrWriteStatusEarlyWrite(t, e)
+	}
+}
+
+func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
+	te := newTest(t, e)
+	const smallSize = 1024
+	const largeSize = 2048
+	const extraLargeSize = 4096
+	te.maxServerReceiveMsgSize = newInt(largeSize)
+	te.maxServerSendMsgSize = newInt(largeSize)
+	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extraLargePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, extraLargeSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: proto.Int32(int32(smallSize)),
+		},
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseParameters: respParam,
+		Payload:            extraLargePayload,
+	}
+	// Test recv case: server receives a message larger than maxServerReceiveMsgSize.
+	stream, err := tc.FullDuplexCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err = stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send() = _, %v, want <nil>", stream, err)
+	}
+	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+	// Test send case: server sends a message larger than maxServerSendMsgSize.
+	sreq.Payload = smallPayload
+	respParam[0].Size = proto.Int32(int32(extraLargeSize))
+
+	stream, err = tc.FullDuplexCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err = stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 }

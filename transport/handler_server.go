@@ -121,6 +121,11 @@ type serverHandlerTransport struct {
 	// ServeHTTP (HandleStreams) goroutine. The channel is closed
 	// when WriteStatus is called.
 	writes chan func()
+
+	mu sync.Mutex
+	// streamDone indicates whether WriteStatus has been called and writes channel
+	// has been closed.
+	streamDone bool
 }
 
 func (ht *serverHandlerTransport) Close() error {
@@ -172,6 +177,12 @@ func (ht *serverHandlerTransport) do(fn func()) error {
 }
 
 func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) error {
+	ht.mu.Lock()
+	if ht.streamDone {
+		ht.mu.Unlock()
+		return nil
+	}
+	ht.mu.Unlock()
 	err := ht.do(func() {
 		ht.writeCommonHeaders(s)
 
@@ -203,6 +214,9 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 		}
 	})
 	close(ht.writes)
+	ht.mu.Lock()
+	ht.streamDone = true
+	ht.mu.Unlock()
 	return err
 }
 
