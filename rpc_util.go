@@ -291,11 +291,10 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, []byte, error) {
-	var b []byte
-	var length uint
-	const payloadLen = 1
-	const sizeLen = 4
-
+	var (
+		b      []byte
+		length uint
+	)
 	if msg != nil {
 		var err error
 		// TODO(zhaoq): optimize to reduce memory alloc and copying.
@@ -309,7 +308,6 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 			outPayload.Data = b
 			outPayload.Length = len(b)
 		}
-
 		if cp != nil {
 			if err := cp.Do(cbuf, b); err != nil {
 				return nil, nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
@@ -318,23 +316,31 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 		}
 		length = uint(len(b))
 	}
-
 	if length > math.MaxUint32 {
 		return nil, nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", length)
 	}
 
-	bufHeader := make([]byte, payloadLen+sizeLen)
-	if cp != nil {
-		bufHeader[0] = byte(compressionMade)
+	const (
+		payloadLen = 1
+		sizeLen    = 4
+	)
+
+	var buf = make([]byte, payloadLen+sizeLen)
+
+	// Write payload format
+	if cp == nil {
+		buf[0] = byte(compressionNone)
 	} else {
-		bufHeader[0] = byte(compressionNone)
+		buf[0] = byte(compressionMade)
 	}
 	// Write length of b into buf
-	binary.BigEndian.PutUint32(bufHeader[payloadLen:], uint32(length))
+	binary.BigEndian.PutUint32(buf[1:], uint32(length))
+
 	if outPayload != nil {
-		outPayload.WireLength = payloadLen + sizeLen + len(b)
+		outPayload.WireLength = len(buf) + len(b)
 	}
-	return bufHeader, b, nil
+
+	return buf, b, nil
 }
 
 func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {

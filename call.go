@@ -109,21 +109,21 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	if len(data)+len(hdr) > *c.maxSendMessageSize {
 		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), *c.maxSendMessageSize)
 	}
-	/*
-		prevOpts := opts.Last
-		opts.Last = false
-		errHeader := t.Write(stream, hdr, opts)
-		opts.Last = prevOpts
-	*/
-	data = append(hdr, data...)
+	prevOpts := opts.Last
+	opts.Last = false
+	errHeader := t.Write(stream, hdr, opts)
+	opts.Last = prevOpts
 	err = t.Write(stream, data, opts)
-	if err == nil && outPayload != nil {
+	if err == nil && errHeader == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.
+	if errHeader != nil && errHeader != io.EOF {
+		return errHeader
+	}
 	if err != nil && err != io.EOF {
 		return err
 	}

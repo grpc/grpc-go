@@ -685,15 +685,12 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if len(data)+len(hdr) > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), s.opts.maxSendMessageSize)
 	}
-	/*
-		prevOpts := opts.Last
-		opts.Last = false
-		errHeader := t.Write(stream, hdr, opts)
-		opts.Last = prevOpts
-	*/
-	data = append(hdr, data...)
+	prevOpts := opts.Last
+	opts.Last = false
+	errHeader := t.Write(stream, hdr, opts)
+	opts.Last = prevOpts
 	err = t.Write(stream, data, opts)
-	if err == nil && outPayload != nil {
+	if err == nil && errHeader == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload)
 	}

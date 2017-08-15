@@ -623,13 +623,9 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if len(data)+len(hdr) > ss.maxSendMessageSize {
 		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
 	}
-	data = append(hdr, data...)
-
-	/*
-		if err := ss.t.Write(ss.s, hdr, &transport.Options{Last: false}); err != nil {
-			return toRPCErr(err)
-		}
-	*/
+	if err := ss.t.Write(ss.s, hdr, &transport.Options{Last: false}); err != nil {
+		return toRPCErr(err)
+	}
 	if err := ss.t.Write(ss.s, data, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
