@@ -218,25 +218,31 @@ type outgoingTagsKey struct{}
 
 // SetTags attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-tags-bin.
+//
+// This is EXPERIMENTAL and will likely be removed in an upcoming release.
 func SetTags(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTagsKey{}, b)
 }
 
 // Tags returns the tags from the context for the inbound RPC.
+//
+// This is EXPERIMENTAL and will likely be removed in an upcoming release.
 func Tags(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTagsKey{}).([]byte)
 	return b
 }
 
 // SetIncomingTags attaches stats tagging data to the context, to be read by
-// the application (not sent in outgoing RPCs).  It is intended for
-// gRPC-internal use.
+// the application (not sent in outgoing RPCs).
+//
+// This is intended for gRPC-internal use ONLY.
 func SetIncomingTags(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, incomingTagsKey{}, b)
 }
 
-// OutgoingTags returns the tags from the context for the outbound RPC.  It is
-// intended for gRPC-internal use.
+// OutgoingTags returns the tags from the context for the outbound RPC.
+//
+// This is intended for gRPC-internal use ONLY.
 func OutgoingTags(ctx context.Context) []byte {
 	b, _ := ctx.Value(outgoingTagsKey{}).([]byte)
 	return b
@@ -247,11 +253,15 @@ type outgoingTraceKey struct{}
 
 // SetTrace attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-trace-bin.
+//
+// This is EXPERIMENTAL and will likely be removed in an upcoming release.
 func SetTrace(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTraceKey{}, b)
 }
 
 // Trace returns the trace from the context for the inbound RPC.
+//
+// This is EXPERIMENTAL and will likely be removed in an upcoming release.
 func Trace(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTraceKey{}).([]byte)
 	return b

@@ -4626,11 +4626,18 @@ func TestStatsTagsAndTrace(t *testing.T) {
 	// by the client and returns an error if not.
 	endpoint := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
 			if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, tags) {
 				return nil, status.Errorf(codes.Internal, "stats.Tags(%v)=%v; want %v", ctx, tg, tags)
 			}
+			if !reflect.DeepEqual(md["grpc-tags-bin"], []string{string(tags)}) {
+				return nil, status.Errorf(codes.Internal, "md['grpc-tags-bin']=%v; want %v", md["grpc-tags-bin"], tags)
+			}
 			if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, trace) {
 				return nil, status.Errorf(codes.Internal, "stats.Trace(%v)=%v; want %v", ctx, tr, trace)
+			}
+			if !reflect.DeepEqual(md["grpc-trace-bin"], []string{string(trace)}) {
+				return nil, status.Errorf(codes.Internal, "md['grpc-trace-bin']=%v; want %v", md["grpc-trace-bin"], trace)
 			}
 			return &testpb.Empty{}, nil
 		},

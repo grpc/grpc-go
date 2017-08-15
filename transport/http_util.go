@@ -237,6 +237,18 @@ func (d *decodeState) decodeResponseHeader(frame *http2.MetaHeadersFrame) error 
 
 }
 
+func (d *decodeState) addMetadata(f hpack.HeaderField) {
+	if d.mdata == nil {
+		d.mdata = make(map[string][]string)
+	}
+	v, err := decodeMetadataHeader(f.Name, f.Value)
+	if err != nil {
+		errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
+		return
+	}
+	d.mdata[f.Name] = append(d.mdata[f.Name], v)
+}
+
 func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	switch f.Name {
 	case "content-type":
@@ -283,25 +295,19 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			return streamErrorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
 		}
 		d.statsTags = v
+		d.addMetadata(f)
 	case "grpc-trace-bin":
 		v, err := decodeBinHeader(f.Value)
 		if err != nil {
 			return streamErrorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
 		}
 		d.statsTrace = v
+		d.addMetadata(f)
 	default:
 		if isReservedHeader(f.Name) && !isWhitelistedPseudoHeader(f.Name) {
 			break
 		}
-		if d.mdata == nil {
-			d.mdata = make(map[string][]string)
-		}
-		v, err := decodeMetadataHeader(f.Name, f.Value)
-		if err != nil {
-			errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
-			return nil
-		}
-		d.mdata[f.Name] = append(d.mdata[f.Name], v)
+		d.addMetadata(f)
 	}
 	return nil
 }
