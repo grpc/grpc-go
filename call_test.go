@@ -109,8 +109,9 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
 	}
+	reply = append(reply, replyData...)
 	h.t.Write(s, reply, &transport.Options{})
-	h.t.Write(s, replyData, &transport.Options{})
+	// h.t.Write(s, replyData, &transport.Options{})
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 

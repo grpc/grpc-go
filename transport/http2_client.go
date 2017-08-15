@@ -721,7 +721,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			endStream  bool
 			forceFlush bool
 		)
-		if opts.Last && r.Len() == 0 && s.headerOk {
+		if opts.Last && r.Len() == 0 {
 			endStream = true
 		}
 		// Indicate there is a writer who is about to write a data frame.
@@ -785,14 +785,12 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 		}
 	}
 	if !opts.Last {
-		s.headerOk = true
 		return nil
 	}
 	s.mu.Lock()
-	if s.state != streamDone && s.headerOk {
+	if s.state != streamDone {
 		s.state = streamWriteDone
 	}
-	s.headerOk = true
 	s.mu.Unlock()
 	return nil
 }

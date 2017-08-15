@@ -110,7 +110,7 @@ func TestEncode(t *testing.T) {
 		{nil, nil, []byte{0, 0, 0, 0, 0}, nil},
 	} {
 		b, bData, err := encode(protoCodec{}, test.msg, nil, nil, nil)
-		b = append(b, bData)
+		b = append(b, bData...)
 		if err != test.err || !bytes.Equal(b, test.b) {
 			t.Fatalf("encode(_, _, %v, _) = %v, %v\nwant %v, %v", test.cp, b, err, test.b, test.err)
 		}
@@ -166,7 +166,7 @@ func TestToRPCErr(t *testing.T) {
 func bmEncode(b *testing.B, mSize int) {
 	msg := &perfpb.Buffer{Body: make([]byte, mSize)}
 	encoded, encodeData, _ := encode(protoCodec{}, msg, nil, nil, nil)
-	encoded = append(encode, encodeData)
+	encoded = append(encoded, encodeData...)
 	encodedSz := int64(len(encoded))
 	b.ReportAllocs()
 	b.ResetTimer()

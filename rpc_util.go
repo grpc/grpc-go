@@ -291,10 +291,8 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 // encode serializes msg and prepends the message header. If msg is nil, it
 // generates the message header of 0 message length.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, []byte, error) {
-	var (
-		b      []byte
-		length int
-	)
+	var b []byte
+	var length uint
 	const payloadLen = 1
 	const sizeLen = 4
 
@@ -318,9 +316,9 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 			}
 			b = cbuf.Bytes()
 		}
+		length = uint(len(b))
 	}
 
-	length = len(b)
 	if length > math.MaxUint32 {
 		return nil, nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", length)
 	}
@@ -334,7 +332,7 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	// Write length of b into buf
 	binary.BigEndian.PutUint32(bufHeader[payloadLen:], uint32(length))
 	if outPayload != nil {
-		outPayload.WireLength = payloadLen + sizeLen + length
+		outPayload.WireLength = payloadLen + sizeLen + len(b)
 	}
 	return bufHeader, b, nil
 }
