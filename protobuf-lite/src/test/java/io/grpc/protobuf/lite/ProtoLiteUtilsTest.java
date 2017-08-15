@@ -29,6 +29,7 @@ import com.google.protobuf.Enum;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Type;
 import io.grpc.Drainable;
+import io.grpc.KnownLength;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.MethodDescriptor.PrototypeMarshaller;
@@ -214,5 +215,37 @@ public class ProtoLiteUtilsTest {
     thrown.expectMessage("newRegistry");
 
     ProtoLiteUtils.setExtensionRegistry(null);
+  }
+
+  @Test
+  public void parseFromKnowLengthInputStream() throws Exception {
+    Marshaller<Type> marshaller = ProtoLiteUtils.marshaller(Type.getDefaultInstance());
+    Type expect = Type.newBuilder().setName("expected name").build();
+
+    Type result = marshaller.parse(new CustomKnownLengthInputStream(expect.toByteArray()));
+    assertEquals(expect, result);
+  }
+
+  private static class CustomKnownLengthInputStream extends InputStream implements KnownLength {
+    private int position = 0;
+    private byte[] source;
+
+    private CustomKnownLengthInputStream(byte[] source) {
+      this.source = source;
+    }
+
+    @Override
+    public int available() throws IOException {
+      return source.length - position;
+    }
+
+    @Override
+    public int read() throws IOException {
+      if (position == source.length) {
+        return -1;
+      }
+
+      return source[position++];
+    }
   }
 }

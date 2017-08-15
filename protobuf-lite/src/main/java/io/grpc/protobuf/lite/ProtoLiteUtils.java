@@ -128,12 +128,19 @@ public class ProtoLiteUtils {
                 buf = new byte[size];
                 bufs.set(new WeakReference<byte[]>(buf));
               }
-              int chunkSize;
-              int position = 0;
-              while ((chunkSize = stream.read(buf, position, size - position)) != -1) {
-                position += chunkSize;
+
+              int remaining = size;
+              while (remaining > 0) {
+                int position = size - remaining;
+                int count = stream.read(buf, position, remaining);
+                if (count == -1) {
+                  break;
+                }
+                remaining -= count;
               }
-              if (size != position) {
+
+              if (remaining != 0) {
+                int position = size - remaining;
                 throw new RuntimeException("size inaccurate: " + size + " != " + position);
               }
               cis = CodedInputStream.newInstance(buf, 0, size);
