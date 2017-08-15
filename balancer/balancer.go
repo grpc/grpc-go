@@ -131,9 +131,14 @@ type PutInfo struct {
 	Err error
 }
 
-// ErrNoSubConnAvailable indicates no SubConn is available for pick().
-// gRPC will block the RPC until a new picker is available via UpdateBalancerState().
-var ErrNoSubConnAvailable = errors.New("no sub connection is available")
+var (
+	// ErrNoSubConnAvailable indicates no SubConn is available for pick().
+	// gRPC will block the RPC until a new picker is available via UpdateBalancerState().
+	ErrNoSubConnAvailable = errors.New("no SubConn is available")
+	// ErrTransientFailure indicates all SubConns are in TransientFailure.
+	// WaitForReady RPCs will block, non-WaitForReady RPCs will fail.
+	ErrTransientFailure = errors.New("all SubConns are in TransientFailure")
+)
 
 // Picker is used by gRPC to pick a SubConn to send an RPC.
 // Balancer is expected to generate a new picker from its snapshot everytime its
@@ -158,10 +163,12 @@ type Picker interface {
 	//
 	// If the returned error is not nil:
 	// - If the error is ErrNoSubConnAvailable, gRPC will block until UpdateBalancerState()
-	// - If the error is not ErrNoSubConnAvailable:
+	// - If the error is ErrTransientFailure:
 	//   - If the RPC is wait-for-ready, gRPC will block until UpdateBalancerState()
 	//     is called to pick again;
-	//   - Otherwise, RPC is failed with unavailable error.
+	//   - Otherwise, RPC will fail with unavailable error.
+	// - Else (error is other non-nil error):
+	//   - The RPC will fail with unavailable error.
 	//
 	// The returned put() function will be called once the rpc has finished, with the
 	// final status of that RPC.
