@@ -20,7 +20,6 @@ import static com.google.common.base.Charsets.UTF_8;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
 import static io.grpc.internal.GrpcUtil.DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
-import static io.grpc.internal.testing.TestUtils.sleepAtLeast;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_AGE_NANOS_DISABLED;
 import static io.grpc.netty.NettyServerBuilder.MAX_CONNECTION_IDLE_NANOS_DISABLED;
@@ -488,14 +487,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     keepAliveTimeoutInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(keepAliveTimeInNanos);
 
     verifyWrite().writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
 
     spyKeepAliveManager.onDataReceived();
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardTime(10L, TimeUnit.MILLISECONDS);
 
     verifyWrite(times(2))
         .writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
@@ -504,17 +501,15 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
   @Test
   public void keepAliveManager_pingTimeout() throws Exception {
-    keepAliveTimeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    keepAliveTimeoutInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    keepAliveTimeInNanos = TimeUnit.NANOSECONDS.toNanos(123L);
+    keepAliveTimeoutInNanos = TimeUnit.NANOSECONDS.toNanos(456L);
     manualSetUp();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(keepAliveTimeInNanos);
 
     assertTrue(channel().isOpen());
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(keepAliveTimeoutInNanos);
 
     assertTrue(!channel().isOpen());
   }
@@ -619,8 +614,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     maxConnectionIdleInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardTime(20, TimeUnit.MINUTES);
 
     // GO_AWAY not sent yet
     verifyWrite(never()).writeGoAway(
@@ -635,8 +629,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     manualSetUp();
     assertTrue(channel().isOpen());
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionIdleInNanos);
 
     // GO_AWAY sent
     verifyWrite().writeGoAway(
@@ -653,8 +646,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     manualSetUp();
     createStream();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionIdleInNanos);
 
     // GO_AWAY not sent when active
     verifyWrite(never()).writeGoAway(
@@ -664,8 +656,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionIdleInNanos);
 
     // GO_AWAY sent
     verifyWrite().writeGoAway(
@@ -681,8 +672,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     maxConnectionAgeInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardTime(20, TimeUnit.MINUTES);
 
     // GO_AWAY not sent yet
     verifyWrite(never()).writeGoAway(
@@ -697,8 +687,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     manualSetUp();
     assertTrue(channel().isOpen());
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionAgeInNanos);
 
     // GO_AWAY sent
     verifyWrite().writeGoAway(
@@ -716,15 +705,13 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     manualSetUp();
     createStream();
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionAgeInNanos);
 
     verifyWrite().writeGoAway(
         eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
         any(ChannelPromise.class));
 
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardTime(20, TimeUnit.MINUTES);
 
     // channel not closed yet
     assertTrue(channel().isOpen());
@@ -733,22 +720,18 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   @Test
   public void maxConnectionAgeGrace_channelClosedAfterGracePeriod() throws Exception {
     maxConnectionAgeInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
-    maxConnectionAgeGraceInNanos = TimeUnit.MILLISECONDS.toNanos(10L);
+    maxConnectionAgeGraceInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
     createStream();
 
-    // runPendingTasks so that GO_AWAY is sent and the forceful shutdown is scheduled
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionAgeInNanos);
 
     verifyWrite().writeGoAway(
         eq(ctx()), eq(Integer.MAX_VALUE), eq(Http2Error.NO_ERROR.code()), any(ByteBuf.class),
         any(ChannelPromise.class));
     assertTrue(channel().isOpen());
 
-    // need runPendingTasks again so that the forceful shutdown can be executed
-    sleepAtLeast(10L);
-    channel().runPendingTasks();
+    fakeClock().forwardNanos(maxConnectionAgeGraceInNanos);
 
     // channel closed
     assertTrue(!channel().isOpen());
