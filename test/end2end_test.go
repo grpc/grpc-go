@@ -1771,7 +1771,7 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err != nil {
+	if err := stream.Send(sreq); err != nil && err != io.EOF {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
@@ -2164,7 +2164,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            spayload,
 	}
-	if err := stream.Send(sreq); err != nil {
+	if err := stream.Send(sreq); err != nil && err != io.EOF {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
@@ -2410,6 +2410,7 @@ func testMultipleSetTrailerStreamingRPC(t *testing.T, e env) {
 	if _, err := stream.Recv(); err != io.EOF {
 		t.Fatalf("%v failed to complele the FullDuplexCall: %v", stream, err)
 	}
+
 	trailer := stream.Trailer()
 	expectedTrailer := metadata.Join(testTrailerMetadata, testTrailerMetadata2)
 	if !reflect.DeepEqual(trailer, expectedTrailer) {
@@ -4932,7 +4933,7 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err = stream.Send(sreq); err != nil {
+	if err = stream.Send(sreq); err != nil && err != io.EOF {
 		t.Fatalf("%v.Send() = _, %v, want <nil>", stream, err)
 	}
 	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {

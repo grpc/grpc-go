@@ -374,12 +374,17 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.c.maxSendMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
-	if len(data)+len(hdr) > *cs.c.maxSendMessageSize {
+	if len(hdr)+len(data) > *cs.c.maxSendMessageSize {
 		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
 	}
-	data = append(hdr, data...)
-	// errHeader := cs.t.Write(cs.s, hdr, &transport.Options{Last: false})
-	err = cs.t.Write(cs.s, data, &transport.Options{Last: false})
+	o := &transport.Options{Last: false}
+	err = cs.t.Write(cs.s, hdr, o)
+	if err != nil {
+		return err
+	}
+	if len(data) != 0 {
+		err = cs.t.Write(cs.s, data, o)
+	}
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
@@ -451,7 +456,6 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) CloseSend() (err error) {
-	//	err = cs.t.Write(cs.s, nil, &transport.Options{Last: false})
 	err = cs.t.Write(cs.s, nil, &transport.Options{Last: true})
 	defer func() {
 		if err != nil {
@@ -620,14 +624,17 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return err
 	}
-	if len(data)+len(hdr) > ss.maxSendMessageSize {
+	if len(hdr)+len(data) > ss.maxSendMessageSize {
 		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, &transport.Options{Last: false}); err != nil {
+	o := &transport.Options{Last: false}
+	if err := ss.t.Write(ss.s, hdr, o); err != nil {
 		return toRPCErr(err)
 	}
-	if err := ss.t.Write(ss.s, data, &transport.Options{Last: false}); err != nil {
-		return toRPCErr(err)
+	if len(data) != 0 {
+		if err := ss.t.Write(ss.s, data, o); err != nil {
+			return toRPCErr(err)
+		}
 	}
 	if outPayload != nil {
 		outPayload.SentTime = time.Now()

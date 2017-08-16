@@ -288,16 +288,17 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	return pf, msg, nil
 }
 
-// encode serializes msg and prepends the message header. If msg is nil, it
-// generates the message header of 0 message length.
+// encode serializes msg and returns a buffer of message header and a buffer of msg.
+// If msg is nil, it generates the message header and an empty msg buffer.
 func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, []byte, error) {
-	var (
-		b      []byte
-		length uint
+	var b []byte
+	const (
+		payloadLen = 1
+		sizeLen    = 4
 	)
+
 	if msg != nil {
 		var err error
-		// TODO(zhaoq): optimize to reduce memory alloc and copying.
 		b, err = c.Marshal(msg)
 		if err != nil {
 			return nil, nil, Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
@@ -314,33 +315,30 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 			}
 			b = cbuf.Bytes()
 		}
-		length = uint(len(b))
-	}
-	if length > math.MaxUint32 {
-		return nil, nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", length)
 	}
 
-	const (
-		payloadLen = 1
-		sizeLen    = 4
-	)
+	if len(b) > math.MaxUint32 {
+		return nil, nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
+	}
 
-	var buf = make([]byte, payloadLen+sizeLen)
-
-	// Write payload format
+	bufHeader := make([]byte, payloadLen+sizeLen)
 	if cp == nil {
-		buf[0] = byte(compressionNone)
+		bufHeader[0] = byte(compressionNone)
 	} else {
-		buf[0] = byte(compressionMade)
+		bufHeader[0] = byte(compressionMade)
 	}
 	// Write length of b into buf
-	binary.BigEndian.PutUint32(buf[1:], uint32(length))
-
+	binary.BigEndian.PutUint32(bufHeader[payloadLen:], uint32(len(b)))
 	if outPayload != nil {
-		outPayload.WireLength = len(buf) + len(b)
+		outPayload.WireLength = payloadLen + sizeLen + len(b)
 	}
 
-	return buf, b, nil
+	secondStart := 16384 - payloadLen - sizeLen
+	if len(b) < secondStart {
+		secondStart = len(b)
+	}
+	bufHeader = append(bufHeader, b[:secondStart]...)
+	return bufHeader, b[secondStart:], nil
 }
 
 func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {
