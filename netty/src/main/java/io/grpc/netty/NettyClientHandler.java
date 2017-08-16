@@ -540,8 +540,7 @@ class NettyClientHandler extends AbstractNettyHandler {
 
   private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,
       ChannelPromise promise) throws Exception {
-    lifecycleManager.notifyShutdown(
-        Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
+    lifecycleManager.notifyShutdown(msg.getStatus());
     close(ctx, promise);
     connection().forEachActiveStream(new Http2StreamVisitor() {
       @Override

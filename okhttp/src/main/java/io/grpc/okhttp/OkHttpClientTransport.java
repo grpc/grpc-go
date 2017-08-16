@@ -587,13 +587,13 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public void shutdown() {
+  public void shutdown(Status reason) {
     synchronized (lock) {
       if (goAwayStatus != null) {
         return;
       }
 
-      goAwayStatus = Status.UNAVAILABLE.withDescription("Transport stopped");
+      goAwayStatus = reason;
       listener.transportShutdown(goAwayStatus);
       stopIfNecessary();
     }
@@ -601,7 +601,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
 
   @Override
   public void shutdownNow(Status reason) {
-    shutdown();
+    shutdown(reason);
     synchronized (lock) {
       Iterator<Map.Entry<Integer, OkHttpClientStream>> it = streams.entrySet().iterator();
       while (it.hasNext()) {

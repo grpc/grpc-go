@@ -109,7 +109,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
     subchannelImpl = new AbstractSubchannel() {
         @Override
         public void shutdown() {
-          subchannel.shutdown();
+          subchannel.shutdown(Status.UNAVAILABLE.withDescription("OobChannel is shutdown"));
         }
 
         @Override
@@ -179,7 +179,7 @@ final class OobChannel extends ManagedChannel implements WithLogId {
   @Override
   public ManagedChannel shutdown() {
     shutdown = true;
-    delayedTransport.shutdown();
+    delayedTransport.shutdown(Status.UNAVAILABLE.withDescription("OobChannel.shutdown() called"));
     return this;
   }
 

@@ -399,7 +399,11 @@ public class ManagedChannelImplTest {
     }
     // LoadBalancer should shutdown the subchannel
     subchannel.shutdown();
-    verify(mockTransport).shutdown();
+    if (shutdownNow) {
+      verify(mockTransport).shutdown(same(ManagedChannelImpl.SHUTDOWN_NOW_STATUS));
+    } else {
+      verify(mockTransport).shutdown(same(ManagedChannelImpl.SHUTDOWN_STATUS));
+    }
 
     // Killing the remaining real transport will terminate the channel
     transportListener.transportShutdown(Status.UNAVAILABLE);
@@ -415,10 +419,6 @@ public class ManagedChannelImplTest {
     verify(mockTransportFactory).close();
     verify(mockTransport, atLeast(0)).getLogId();
     verifyNoMoreInteractions(mockTransport);
-  }
-
-  @Test
-  public void shutdownNowWithMultipleOobChannels() {
   }
 
   @Test
@@ -745,18 +745,18 @@ public class ManagedChannelImplTest {
     sub1.shutdown();
     timer.forwardTime(ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS - 1, TimeUnit.SECONDS);
     sub1.shutdown();
-    verify(transportInfo1.transport, never()).shutdown();
+    verify(transportInfo1.transport, never()).shutdown(any(Status.class));
     timer.forwardTime(1, TimeUnit.SECONDS);
-    verify(transportInfo1.transport).shutdown();
+    verify(transportInfo1.transport).shutdown(same(ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_STATUS));
 
     // ... but not after Channel is terminating
     verify(mockLoadBalancer, never()).shutdown();
     channel.shutdown();
     verify(mockLoadBalancer).shutdown();
-    verify(transportInfo2.transport, never()).shutdown();
+    verify(transportInfo2.transport, never()).shutdown(any(Status.class));
 
     sub2.shutdown();
-    verify(transportInfo2.transport).shutdown();
+    verify(transportInfo2.transport).shutdown(same(ManagedChannelImpl.SHUTDOWN_STATUS));
   }
 
   @Test

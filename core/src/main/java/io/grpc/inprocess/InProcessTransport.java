@@ -156,16 +156,21 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
   }
 
   @Override
-  public synchronized void shutdown() {
+  public synchronized void shutdown(Status reason) {
     // Can be called multiple times: once for ManagedClientTransport, once for ServerTransport.
     if (shutdown) {
       return;
     }
-    shutdownStatus = Status.UNAVAILABLE.withDescription("transport was requested to shut down");
-    notifyShutdown(shutdownStatus);
+    shutdownStatus = reason;
+    notifyShutdown(reason);
     if (streams.isEmpty()) {
       notifyTerminated();
     }
+  }
+
+  @Override
+  public synchronized void shutdown() {
+    shutdown(Status.UNAVAILABLE.withDescription("InProcessTransport shutdown by the server-side"));
   }
 
   @Override
@@ -173,7 +178,7 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
     checkNotNull(reason, "reason");
     List<InProcessStream> streamsCopy;
     synchronized (this) {
-      shutdown();
+      shutdown(reason);
       if (terminated) {
         return;
       }

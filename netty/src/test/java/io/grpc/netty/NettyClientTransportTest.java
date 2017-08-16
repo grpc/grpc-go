@@ -118,7 +118,7 @@ public class NettyClientTransportTest {
   public void teardown() throws Exception {
     Context.ROOT.attach();
     for (NettyClientTransport transport : transports) {
-      transport.shutdown();
+      transport.shutdown(Status.UNAVAILABLE);
     }
 
     if (server != null) {

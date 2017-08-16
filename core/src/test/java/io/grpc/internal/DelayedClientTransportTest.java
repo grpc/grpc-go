@@ -78,6 +78,8 @@ public class DelayedClientTransportTest {
   @Captor private ArgumentCaptor<ClientStreamListener> listenerCaptor;
 
   private static final CallOptions.Key<Integer> SHARD_ID = CallOptions.Key.of("shard-id", -1);
+  private static final Status SHUTDOWN_STATUS =
+      Status.UNAVAILABLE.withDescription("shutdown called");
 
   private final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
@@ -141,8 +143,8 @@ public class DelayedClientTransportTest {
     assertTrue(stream instanceof DelayedStream);
     delayedTransport.reprocess(mockPicker);
     assertEquals(0, delayedTransport.getPendingStreamsCount());
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener).transportTerminated();
     assertEquals(1, fakeExecutor.runDueTasks());
     verify(mockRealTransport).newStream(same(method), same(headers), same(callOptions));
@@ -151,8 +153,8 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void transportTerminatedThenAssignTransport() {
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener).transportTerminated();
     delayedTransport.reprocess(mockPicker);
     verifyNoMoreInteractions(transportListener);
@@ -160,8 +162,8 @@ public class DelayedClientTransportTest {
 
   @Test public void assignTransportThenShutdownThenNewStream() {
     delayedTransport.reprocess(mockPicker);
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener).transportTerminated();
     ClientStream stream = delayedTransport.newStream(method, headers, callOptions);
     assertEquals(0, delayedTransport.getPendingStreamsCount());
@@ -205,10 +207,10 @@ public class DelayedClientTransportTest {
   @Test public void newStreamThenShutdownTransportThenAssignTransport() {
     ClientStream stream = delayedTransport.newStream(method, headers, callOptions);
     stream.start(streamListener);
-    delayedTransport.shutdown();
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
 
     // Stream is still buffered
-    verify(transportListener).transportShutdown(any(Status.class));
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener, times(0)).transportTerminated();
     assertEquals(1, delayedTransport.getPendingStreamsCount());
 
@@ -236,8 +238,8 @@ public class DelayedClientTransportTest {
 
   @Test public void newStreamThenShutdownTransportThenCancelStream() {
     ClientStream stream = delayedTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener, times(0)).transportTerminated();
     assertEquals(1, delayedTransport.getPendingStreamsCount());
     stream.cancel(Status.CANCELLED);
@@ -248,8 +250,8 @@ public class DelayedClientTransportTest {
   }
 
   @Test public void shutdownThenNewStream() {
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener).transportTerminated();
     ClientStream stream = delayedTransport.newStream(method, new Metadata(), CallOptions.DEFAULT);
     stream.start(streamListener);
@@ -426,8 +428,8 @@ public class DelayedClientTransportTest {
     assertEquals(1, delayedTransport.getPendingStreamsCount());
 
     // wfr5 will stop delayed transport from terminating
-    delayedTransport.shutdown();
-    verify(transportListener).transportShutdown(any(Status.class));
+    delayedTransport.shutdown(SHUTDOWN_STATUS);
+    verify(transportListener).transportShutdown(same(SHUTDOWN_STATUS));
     verify(transportListener, never()).transportTerminated();
     // ... until it's gone
     picker = mock(SubchannelPicker.class);

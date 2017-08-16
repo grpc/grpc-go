@@ -30,8 +30,8 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   }
 
   @Override
-  public void shutdown() {
-    delegate().shutdown();
+  public void shutdown(Status status) {
+    delegate().shutdown(status);
   }
 
   @Override

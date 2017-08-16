@@ -65,6 +65,7 @@ public class InternalSubchannelTest {
       ConnectivityStateInfo.forTransientFailure(Status.UNAVAILABLE);
   private static final ConnectivityStateInfo RESOURCE_EXHAUSTED_STATE =
       ConnectivityStateInfo.forTransientFailure(Status.RESOURCE_EXHAUSTED);
+  private static final Status SHUTDOWN_REASON = Status.UNAVAILABLE.withDescription("for test");
 
   // For scheduled executor
   private final FakeClock fakeClock = new FakeClock();
@@ -392,7 +393,7 @@ public class InternalSubchannelTest {
     internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr2, addr3)));
     assertNoCallbackInvoke();
     assertEquals(READY, internalSubchannel.getState());
-    verify(transports.peek().transport, never()).shutdown();
+    verify(transports.peek().transport, never()).shutdown(any(Status.class));
     verify(transports.peek().transport, never()).shutdownNow(any(Status.class));
 
     // And new addresses chosen when re-connecting
@@ -433,7 +434,7 @@ public class InternalSubchannelTest {
     internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr2, addr3)));
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
-    verify(transports.peek().transport, never()).shutdown();
+    verify(transports.peek().transport, never()).shutdown(any(Status.class));
     verify(transports.peek().transport, never()).shutdownNow(any(Status.class));
 
     // And new addresses chosen when re-connecting
@@ -507,7 +508,7 @@ public class InternalSubchannelTest {
     internalSubchannel.updateAddresses(new EquivalentAddressGroup(Arrays.asList(addr3, addr4)));
     assertExactCallbackInvokes("onStateChange:IDLE");
     assertEquals(IDLE, internalSubchannel.getState());
-    verify(transports.peek().transport).shutdown();
+    verify(transports.peek().transport).shutdown(any(Status.class));
 
     // And new addresses chosen when re-connecting
     transports.poll().listener.transportShutdown(Status.UNAVAILABLE);
@@ -551,7 +552,7 @@ public class InternalSubchannelTest {
     assertEquals(CONNECTING, internalSubchannel.getState());
 
     // And new addresses chosen immediately
-    verify(transports.poll().transport).shutdown();
+    verify(transports.poll().transport).shutdown(any(Status.class));
     assertNoCallbackInvoke();
     assertEquals(CONNECTING, internalSubchannel.getState());
 
@@ -622,8 +623,8 @@ public class InternalSubchannelTest {
     transportInfo.listener.transportReady();
     assertExactCallbackInvokes("onStateChange:CONNECTING", "onStateChange:READY");
 
-    internalSubchannel.shutdown();
-    verify(transportInfo.transport).shutdown();
+    internalSubchannel.shutdown(SHUTDOWN_REASON);
+    verify(transportInfo.transport).shutdown(same(SHUTDOWN_REASON));
     assertExactCallbackInvokes("onStateChange:SHUTDOWN");
 
     transportInfo.listener.transportTerminated();
@@ -661,7 +662,7 @@ public class InternalSubchannelTest {
     assertNotNull("There should be at least one reconnectTask", reconnectTask);
 
     // Shut down InternalSubchannel before the transport is created.
-    internalSubchannel.shutdown();
+    internalSubchannel.shutdown(SHUTDOWN_REASON);
     assertTrue(reconnectTask.isCancelled());
     // InternalSubchannel terminated promptly.
     assertExactCallbackInvokes("onStateChange:SHUTDOWN", "onTerminated");
@@ -694,11 +695,11 @@ public class InternalSubchannelTest {
 
     // Shutdown the InternalSubchannel before the pending transport is ready
     assertNull(internalSubchannel.obtainActiveTransport());
-    internalSubchannel.shutdown();
+    internalSubchannel.shutdown(SHUTDOWN_REASON);
     assertExactCallbackInvokes("onStateChange:SHUTDOWN");
 
     // The transport should've been shut down even though it's not the active transport yet.
-    verify(transportInfo.transport).shutdown();
+    verify(transportInfo.transport).shutdown(same(SHUTDOWN_REASON));
     transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
     assertNoCallbackInvoke();
     transportInfo.listener.transportTerminated();
@@ -735,7 +736,7 @@ public class InternalSubchannelTest {
     SocketAddress addr = mock(SocketAddress.class);
     createInternalSubchannel(addr);
 
-    internalSubchannel.shutdown();
+    internalSubchannel.shutdown(SHUTDOWN_REASON);
     assertExactCallbackInvokes("onStateChange:SHUTDOWN", "onTerminated");
     assertEquals(SHUTDOWN, internalSubchannel.getState());
     assertNull(internalSubchannel.obtainActiveTransport());

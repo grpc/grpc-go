@@ -248,16 +248,14 @@ class NettyClientTransport implements ConnectionClientTransport {
   }
 
   @Override
-  public void shutdown() {
+  public void shutdown(Status reason) {
     // start() could have failed
     if (channel == null) {
       return;
     }
     // Notifying of termination is automatically done when the channel closes.
     if (channel.isOpen()) {
-      Status status
-          = Status.UNAVAILABLE.withDescription("Channel requested transport to shut down");
-      handler.getWriteQueue().enqueue(new GracefulCloseCommand(status), true);
+      handler.getWriteQueue().enqueue(new GracefulCloseCommand(reason), true);
     }
   }
 

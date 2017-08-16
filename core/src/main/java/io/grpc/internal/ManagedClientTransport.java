@@ -56,7 +56,7 @@ public interface ManagedClientTransport extends ClientTransport, WithLogId {
    * {@link Listener#transportShutdown} callback called), or be transferred off this transport (in
    * which case they may succeed).  This method may only be called once.
    */
-  void shutdown();
+  void shutdown(Status reason);
 
   /**
    * Initiates a forceful shutdown in which preexisting and new calls are closed. Existing calls

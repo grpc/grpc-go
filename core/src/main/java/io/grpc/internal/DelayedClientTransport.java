@@ -51,17 +51,18 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   private Runnable reportTransportInUse;
   private Runnable reportTransportNotInUse;
-  private Runnable reportTransportShutdown;
   private Runnable reportTransportTerminated;
+  private Listener listener;
 
   @GuardedBy("lock")
   private Collection<PendingStream> pendingStreams = new LinkedHashSet<PendingStream>();
 
   /**
-   * When shutdown == true and pendingStreams == null, then the transport is considered terminated.
+   * When shutdownStatus != null and pendingStreams == null, then the transport is considered
+   * terminated.
    */
   @GuardedBy("lock")
-  private boolean shutdown;
+  private Status shutdownStatus;
 
   /**
    * The last picker that {@link #reprocess} has used.
@@ -89,6 +90,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
 
   @Override
   public final Runnable start(final Listener listener) {
+    this.listener = listener;
     reportTransportInUse = new Runnable() {
         @Override
         public void run() {
@@ -99,13 +101,6 @@ final class DelayedClientTransport implements ManagedClientTransport {
         @Override
         public void run() {
           listener.transportInUse(false);
-        }
-      };
-    reportTransportShutdown = new Runnable() {
-        @Override
-        public void run() {
-          listener.transportShutdown(
-              Status.UNAVAILABLE.withDescription("Channel requested transport to shut down"));
         }
       };
     reportTransportTerminated = new Runnable() {
@@ -128,44 +123,41 @@ final class DelayedClientTransport implements ManagedClientTransport {
   public final ClientStream newStream(
       MethodDescriptor<?, ?> method, Metadata headers, CallOptions callOptions) {
     try {
-      SubchannelPicker picker = null;
+      SubchannelPicker picker;
       PickSubchannelArgs args = new PickSubchannelArgsImpl(method, headers, callOptions);
       long pickerVersion = -1;
       synchronized (lock) {
-        if (!shutdown) {
+        if (shutdownStatus == null) {
           if (lastPicker == null) {
+            return createPendingStream(args);
+          }
+          picker = lastPicker;
+          pickerVersion = lastPickerVersion;
+        } else {
+          return new FailingClientStream(shutdownStatus);
+        }
+      }
+      while (true) {
+        PickResult pickResult = picker.pickSubchannel(args);
+        ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult,
+            callOptions.isWaitForReady());
+        if (transport != null) {
+          return transport.newStream(
+              args.getMethodDescriptor(), args.getHeaders(), args.getCallOptions());
+        }
+        // This picker's conclusion is "buffer".  If there hasn't been a newer picker set (possible
+        // race with reprocess()), we will buffer it.  Otherwise, will try with the new picker.
+        synchronized (lock) {
+          if (shutdownStatus != null) {
+            return new FailingClientStream(shutdownStatus);
+          }
+          if (pickerVersion == lastPickerVersion) {
             return createPendingStream(args);
           }
           picker = lastPicker;
           pickerVersion = lastPickerVersion;
         }
       }
-      if (picker != null) {
-        while (true) {
-          PickResult pickResult = picker.pickSubchannel(args);
-          ClientTransport transport = GrpcUtil.getTransportFromPickResult(pickResult,
-              callOptions.isWaitForReady());
-          if (transport != null) {
-            return transport.newStream(
-                args.getMethodDescriptor(), args.getHeaders(), args.getCallOptions());
-          }
-          // This picker's conclusion is "buffer".  If there hasn't been a newer picker set
-          // (possible race with reprocess()), we will buffer it.  Otherwise, will try with the new
-          // picker.
-          synchronized (lock) {
-            if (shutdown) {
-              break;
-            }
-            if (pickerVersion == lastPickerVersion) {
-              return createPendingStream(args);
-            }
-            picker = lastPicker;
-            pickerVersion = lastPickerVersion;
-          }
-        }
-      }
-      return new FailingClientStream(Status.UNAVAILABLE.withDescription(
-              "Channel has shutdown (reported by delayed transport)"));
     } finally {
       channelExecutor.drain();
     }
@@ -196,13 +188,18 @@ final class DelayedClientTransport implements ManagedClientTransport {
    * more buffered streams.
    */
   @Override
-  public final void shutdown() {
+  public final void shutdown(final Status status) {
     synchronized (lock) {
-      if (shutdown) {
+      if (shutdownStatus != null) {
         return;
       }
-      shutdown = true;
-      channelExecutor.executeLater(reportTransportShutdown);
+      shutdownStatus = status;
+      channelExecutor.executeLater(new Runnable() {
+          @Override
+          public void run() {
+            listener.transportShutdown(status);
+          }
+        });
       if (pendingStreams == null || pendingStreams.isEmpty()) {
         pendingStreams = null;
         channelExecutor.executeLater(reportTransportTerminated);
@@ -217,7 +214,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
    */
   @Override
   public final void shutdownNow(Status status) {
-    shutdown();
+    shutdown(status);
     Collection<PendingStream> savedPendingStreams = null;
     synchronized (lock) {
       if (pendingStreams != null) {
@@ -307,7 +304,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
         // (which would shutdown the transports and LoadBalancer) because the gap should be shorter
         // than IDLE_MODE_DEFAULT_TIMEOUT_MILLIS (1 second).
         channelExecutor.executeLater(reportTransportNotInUse);
-        if (shutdown) {
+        if (shutdownStatus != null) {
           pendingStreams = null;
           channelExecutor.executeLater(reportTransportTerminated);
         } else {
@@ -354,7 +351,7 @@ final class DelayedClientTransport implements ManagedClientTransport {
           boolean justRemovedAnElement = pendingStreams.remove(this);
           if (pendingStreams.isEmpty() && justRemovedAnElement) {
             channelExecutor.executeLater(reportTransportNotInUse);
-            if (shutdown) {
+            if (shutdownStatus != null) {
               pendingStreams = null;
               channelExecutor.executeLater(reportTransportTerminated);
             }

@@ -302,10 +302,10 @@ public abstract class AbstractTransportTest {
     client = newClientTransport(server);
     InOrder inOrder = inOrder(mockClientTransportListener);
     runIfNotNull(client.start(mockClientTransportListener));
-    client.shutdown();
+    Status shutdownReason = Status.UNAVAILABLE.withDescription("shutdown called");
+    client.shutdown(shutdownReason);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
-    inOrder.verify(mockClientTransportListener).transportShutdown(statusCaptor.capture());
-    assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
+    inOrder.verify(mockClientTransportListener).transportShutdown(same(shutdownReason));
     inOrder.verify(mockClientTransportListener).transportTerminated();
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
   }
@@ -319,7 +319,7 @@ public abstract class AbstractTransportTest {
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
     MockServerTransportListener serverTransportListener
         = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    client.shutdown();
+    client.shutdown(Status.UNAVAILABLE);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     inOrder.verify(mockClientTransportListener).transportShutdown(any(Status.class));
     inOrder.verify(mockClientTransportListener).transportTerminated();
@@ -356,7 +356,7 @@ public abstract class AbstractTransportTest {
     ServerStream serverStream = serverStreamCreation.stream;
     ServerStreamListener mockServerStreamListener = serverStreamCreation.listener;
 
-    client.shutdown();
+    client.shutdown(Status.UNAVAILABLE);
     client = null;
     server.shutdown();
     serverTransport.shutdown();
@@ -494,7 +494,7 @@ public abstract class AbstractTransportTest {
     // Stream prevents termination
     ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
-    client.shutdown();
+    client.shutdown(Status.UNAVAILABLE);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
     ClientTransport.PingCallback mockPingCallback = mock(ClientTransport.PingCallback.class);
     try {
@@ -513,7 +513,8 @@ public abstract class AbstractTransportTest {
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
-    client.shutdown();
+    Status shutdownReason = Status.UNAVAILABLE.withDescription("shutdown called");
+    client.shutdown(shutdownReason);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     ClientTransport.PingCallback mockPingCallback = mock(ClientTransport.PingCallback.class);
     try {
@@ -524,7 +525,7 @@ public abstract class AbstractTransportTest {
     }
     verify(mockPingCallback, timeout(TIMEOUT_MS)).onFailure(throwableCaptor.capture());
     Status status = Status.fromThrowable(throwableCaptor.getValue());
-    assertCodeEquals(Status.UNAVAILABLE, status);
+    assertSame(shutdownReason, status);
   }
 
   @Test
@@ -540,7 +541,7 @@ public abstract class AbstractTransportTest {
           any(CallOptions.class), any(Metadata.class));
     }
     stream.start(mockClientStreamListener);
-    client.shutdown();
+    client.shutdown(Status.UNAVAILABLE);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportShutdown(any(Status.class));
 
     ClientStream stream2 = client.newStream(methodDescriptor, new Metadata(), callOptions);
@@ -594,19 +595,19 @@ public abstract class AbstractTransportTest {
     client = newClientTransport(server);
     runIfNotNull(client.start(mockClientTransportListener));
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
-    client.shutdown();
+    Status shutdownReason = Status.UNAVAILABLE.withDescription("shutdown called");
+    client.shutdown(shutdownReason);
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportTerminated();
     Thread.sleep(100);
     ClientStream stream = client.newStream(methodDescriptor, new Metadata(), callOptions);
     stream.start(mockClientStreamListener);
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
-        .closed(statusCaptor.capture(), any(Metadata.class));
+        .closed(same(shutdownReason), any(Metadata.class));
     verify(mockClientTransportListener, never()).transportInUse(anyBoolean());
-    assertCodeEquals(Status.UNAVAILABLE, statusCaptor.getValue());
     if (metricsExpected()) {
       verify(clientStreamTracerFactory).newClientStreamTracer(
           any(CallOptions.class), any(Metadata.class));
-      assertSame(statusCaptor.getValue(), clientStreamTracer1.getStatus());
+      assertSame(shutdownReason, clientStreamTracer1.getStatus());
       // Assert no interactions
       assertNull(serverStreamTracer1.getServerCall());
     }
@@ -1477,7 +1478,7 @@ public abstract class AbstractTransportTest {
     verify(mockClientStreamListener, timeout(TIMEOUT_MS))
         .closed(any(Status.class), any(Metadata.class));
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(any(Status.class));
-    client.shutdown();
+    client.shutdown(Status.UNAVAILABLE);
   }
 
   /**
