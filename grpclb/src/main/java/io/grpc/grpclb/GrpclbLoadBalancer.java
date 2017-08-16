@@ -48,6 +48,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -75,9 +76,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       PickResult.withError(Status.UNAVAILABLE.withDescription("Dropped as requested by balancer"));
 
   @VisibleForTesting
-  static final SubchannelPicker BUFFER_PICKER = new SubchannelPicker() {
+  static final RoundRobinEntry BUFFER_ENTRY = new RoundRobinEntry() {
       @Override
-      public PickResult pickSubchannel(PickSubchannelArgs args) {
+      public PickResult picked(Metadata headers) {
         return PickResult.withNoResult();
       }
     };
@@ -120,8 +121,14 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   private LbStream lbStream;
   private Map<EquivalentAddressGroup, Subchannel> subchannels = Collections.emptyMap();
 
-  private List<RoundRobinEntry> roundRobinList = Collections.emptyList();
-  private SubchannelPicker currentPicker = BUFFER_PICKER;
+  // Has the same size as the round-robin list from the balancer.
+  // A drop entry from the round-robin list becomes a DropEntry here.
+  // A backend entry from the robin-robin list becomes a null here.
+  private List<DropEntry> dropList = Collections.emptyList();
+  // Contains only non-drop, i.e., backends from the round-robin list from the balancer.
+  private List<BackendEntry> backendList = Collections.emptyList();
+  private RoundRobinPicker currentPicker =
+      new RoundRobinPicker(Collections.<DropEntry>emptyList(), Arrays.asList(BUFFER_ENTRY));
 
   GrpclbLoadBalancer(Helper helper, Factory pickFirstBalancerFactory,
       Factory roundRobinBalancerFactory, ObjectPool<ScheduledExecutorService> timerServicePool,
@@ -299,10 +306,11 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   }
 
   private void handleGrpclbError(Status status) {
-    logger.log(Level.FINE, "[{0}] Had an error: {1}; roundRobinList={2}",
-        new Object[] {logId, status, roundRobinList});
-    if (roundRobinList.isEmpty()) {
-      maybeUpdatePicker(TRANSIENT_FAILURE, new ErrorPicker(status));
+    logger.log(Level.FINE, "[{0}] Had an error: {1}; dropList={2}; backendList={3}",
+        new Object[] {logId, status, dropList, backendList});
+    if (backendList.isEmpty()) {
+      maybeUpdatePicker(
+          TRANSIENT_FAILURE, new RoundRobinPicker(dropList, Arrays.asList(new ErrorEntry(status))));
     }
   }
 
@@ -441,14 +449,16 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       ServerList serverList = response.getServerList();
       HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
           new HashMap<EquivalentAddressGroup, Subchannel>();
-      List<RoundRobinEntry> newRoundRobinList = new ArrayList<RoundRobinEntry>();
+      List<DropEntry> newDropList = new ArrayList<DropEntry>();
+      List<BackendEntry> newBackendList = new ArrayList<BackendEntry>();
       // TODO(zhangkun83): honor expiration_interval
       // Construct the new collections. Create new Subchannels when necessary.
       for (Server server : serverList.getServersList()) {
         String token = server.getLoadBalanceToken();
         if (server.getDrop()) {
-          newRoundRobinList.add(RoundRobinEntry.newDropEntry(loadRecorder, token));
+          newDropList.add(new DropEntry(loadRecorder, token));
         } else {
+          newDropList.add(null);
           InetSocketAddress address;
           try {
             address = new InetSocketAddress(
@@ -472,7 +482,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
             }
             newSubchannelMap.put(eag, subchannel);
           }
-          newRoundRobinList.add(RoundRobinEntry.newEntry(subchannel, loadRecorder, token));
+          newBackendList.add(new BackendEntry(subchannel, loadRecorder, token));
         }
       }
       // Close Subchannels whose addresses have been delisted
@@ -483,8 +493,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
         }
       }
 
-      subchannels = newSubchannelMap;
-      roundRobinList = newRoundRobinList;
+      subchannels = Collections.unmodifiableMap(newSubchannelMap);
+      dropList = Collections.unmodifiableList(newDropList);
+      backendList = Collections.unmodifiableList(newBackendList);
       maybeUpdatePicker();
     }
 
@@ -527,62 +538,56 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   }
 
   /**
-   * Make and use a picker out of the current roundRobinList and the states of subchannels if they
-   * have changed since the last picker created.
+   * Make and use a picker out of the current lists and the states of subchannels if they have
+   * changed since the last picker created.
    */
   private void maybeUpdatePicker() {
-    List<RoundRobinEntry> resultList = new ArrayList<RoundRobinEntry>();
+    List<RoundRobinEntry> pickList = new ArrayList<RoundRobinEntry>(backendList.size());
     Status error = null;
     boolean hasIdle = false;
-    // TODO(zhangkun83): if roundRobinList contains at least one address, but none of them are
-    // ready, maybe we should always return BUFFER_PICKER, no matter if there are drop entries or
-    // not.
-    for (RoundRobinEntry entry : roundRobinList) {
+    for (BackendEntry entry : backendList) {
       Subchannel subchannel = entry.result.getSubchannel();
-      if (subchannel != null) {
-        Attributes attrs = subchannel.getAttributes();
-        ConnectivityStateInfo stateInfo = attrs.get(STATE_INFO).get();
-        if (stateInfo.getState() == READY) {
-          resultList.add(entry);
-        } else if (stateInfo.getState() == TRANSIENT_FAILURE) {
-          error = stateInfo.getStatus();
-        } else if (stateInfo.getState() == IDLE) {
-          hasIdle = true;
-        }
-      } else {
-        // This is a drop entry.
-        resultList.add(entry);
+      Attributes attrs = subchannel.getAttributes();
+      ConnectivityStateInfo stateInfo = attrs.get(STATE_INFO).get();
+      if (stateInfo.getState() == READY) {
+        pickList.add(entry);
+      } else if (stateInfo.getState() == TRANSIENT_FAILURE) {
+        error = stateInfo.getStatus();
+      } else if (stateInfo.getState() == IDLE) {
+        hasIdle = true;
       }
     }
-    if (resultList.isEmpty()) {
+    ConnectivityState state;
+    if (pickList.isEmpty()) {
       if (error != null && !hasIdle) {
         logger.log(Level.FINE, "[{0}] No ready Subchannel. Using error: {1}",
             new Object[] {logId, error});
-        maybeUpdatePicker(TRANSIENT_FAILURE, new ErrorPicker(error));
+        pickList.add(new ErrorEntry(error));
+        state = TRANSIENT_FAILURE;
       } else {
         logger.log(Level.FINE, "[{0}] No ready Subchannel and still connecting", logId);
-        maybeUpdatePicker(CONNECTING, BUFFER_PICKER);
+        pickList.add(BUFFER_ENTRY);
+        state = CONNECTING;
       }
     } else {
-      logger.log(Level.FINE, "[{0}] Using list {1}", new Object[] {logId, resultList});
-      maybeUpdatePicker(READY, new RoundRobinPicker(resultList));
+      logger.log(
+          Level.FINE, "[{0}] Using drop list {1} and pick list {2}",
+          new Object[] {logId, dropList, pickList});
+      state = READY;
     }
+    maybeUpdatePicker(state, new RoundRobinPicker(dropList, pickList));
   }
 
   /**
    * Update the given picker to the helper if it's different from the current one.
    */
-  private void maybeUpdatePicker(ConnectivityState state, SubchannelPicker picker) {
+  private void maybeUpdatePicker(ConnectivityState state, RoundRobinPicker picker) {
     // Discard the new picker if we are sure it won't make any difference, in order to save
     // re-processing pending streams, and avoid unnecessary resetting of the pointer in
     // RoundRobinPicker.
-    if (picker == BUFFER_PICKER && currentPicker == BUFFER_PICKER) {
+    if (picker.dropList.equals(currentPicker.dropList)
+        && picker.pickList.equals(currentPicker.pickList)) {
       return;
-    }
-    if (picker instanceof RoundRobinPicker && currentPicker instanceof RoundRobinPicker) {
-      if (((RoundRobinPicker) picker).list.equals(((RoundRobinPicker) currentPicker).list)) {
-        return;
-      }
     }
     // No need to skip ErrorPicker. If the current picker is ErrorPicker, there won't be any pending
     // stream thus no time is wasted in re-process.
@@ -632,105 +637,163 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   }
 
   @VisibleForTesting
-  static final class ErrorPicker extends SubchannelPicker {
-    final PickResult result;
+  static final class DropEntry {
+    private final GrpclbClientLoadRecorder loadRecorder;
+    private final String token;
 
-    ErrorPicker(Status status) {
-      result = PickResult.withError(status);
-    }
-
-    @Override
-    public PickResult pickSubchannel(PickSubchannelArgs args) {
-      return result;
-    }
-  }
-
-  @VisibleForTesting
-  static final class RoundRobinEntry {
-    final PickResult result;
-    final GrpclbClientLoadRecorder loadRecorder;
-    final String token;
-
-    private RoundRobinEntry(
-        PickResult result, GrpclbClientLoadRecorder loadRecorder, String token) {
-      this.result = checkNotNull(result);
+    DropEntry(GrpclbClientLoadRecorder loadRecorder, String token) {
       this.loadRecorder = checkNotNull(loadRecorder, "loadRecorder");
       this.token = checkNotNull(token, "token");
     }
 
-    /**
-     * Create a non-drop result.
-     */
-    static RoundRobinEntry newEntry(
-        Subchannel subchannel, GrpclbClientLoadRecorder loadRecorder, String token) {
-      return new RoundRobinEntry(
-          PickResult.withSubchannel(subchannel, loadRecorder), loadRecorder, token);
-    }
-
-    /**
-     * Create a drop result.
-     */
-    static RoundRobinEntry newDropEntry(GrpclbClientLoadRecorder loadRecorder, String token) {
-      return new RoundRobinEntry(DROP_PICK_RESULT, loadRecorder, token);
-    }
-
-    void updateHeaders(Metadata headers) {
-      if (!isDrop()) {
-        headers.discardAll(GrpclbConstants.TOKEN_METADATA_KEY);
-        headers.put(GrpclbConstants.TOKEN_METADATA_KEY, token);
-      }
+    PickResult picked() {
+      loadRecorder.recordDroppedRequest(token);
+      return DROP_PICK_RESULT;
     }
 
     @Override
     public String toString() {
       return MoreObjects.toStringHelper(this)
-          .add("result", result)
+          .add("loadRecorder", loadRecorder)
           .add("token", token)
           .toString();
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(result, token);
+      return Objects.hashCode(loadRecorder, token);
     }
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof RoundRobinEntry)) {
+      if (!(other instanceof DropEntry)) {
         return false;
       }
-      RoundRobinEntry that = (RoundRobinEntry) other;
-      return Objects.equal(result, that.result) && Objects.equal(token, that.token);
+      DropEntry that = (DropEntry) other;
+      return Objects.equal(loadRecorder, that.loadRecorder) && Objects.equal(token, that.token);
+    }
+  }
+
+  private interface RoundRobinEntry {
+    PickResult picked(Metadata headers);
+  }
+
+  @VisibleForTesting
+  static final class BackendEntry implements RoundRobinEntry {
+    @VisibleForTesting
+    final PickResult result;
+    private final GrpclbClientLoadRecorder loadRecorder;
+    private final String token;
+
+    BackendEntry(Subchannel subchannel, GrpclbClientLoadRecorder loadRecorder, String token) {
+      this.result = PickResult.withSubchannel(subchannel, loadRecorder);
+      this.loadRecorder = checkNotNull(loadRecorder, "loadRecorder");
+      this.token = checkNotNull(token, "token");
     }
 
-    boolean isDrop() {
-      return result == DROP_PICK_RESULT;
+    @Override
+    public PickResult picked(Metadata headers) {
+      headers.discardAll(GrpclbConstants.TOKEN_METADATA_KEY);
+      headers.put(GrpclbConstants.TOKEN_METADATA_KEY, token);
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("result", result)
+          .add("loadRecorder", loadRecorder)
+          .add("token", token)
+          .toString();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(loadRecorder, result, token);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof BackendEntry)) {
+        return false;
+      }
+      BackendEntry that = (BackendEntry) other;
+      return Objects.equal(result, that.result) && Objects.equal(token, that.token)
+          && Objects.equal(loadRecorder, that.loadRecorder);
+    }
+  }
+
+  @VisibleForTesting
+  static final class ErrorEntry implements RoundRobinEntry {
+    private final PickResult result;
+
+    ErrorEntry(Status status) {
+      result = PickResult.withError(status);
+    }
+
+    @Override
+    public PickResult picked(Metadata headers) {
+      return result;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(result);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof ErrorEntry)) {
+        return false;
+      }
+      return Objects.equal(result, ((ErrorEntry) other).result);
     }
   }
 
   @VisibleForTesting
   static final class RoundRobinPicker extends SubchannelPicker {
-    final List<RoundRobinEntry> list;
-    private int index;
+    @VisibleForTesting
+    final List<DropEntry> dropList;
+    private int dropIndex;
 
-    RoundRobinPicker(List<RoundRobinEntry> resultList) {
-      checkArgument(!resultList.isEmpty(), "resultList is empty");
-      this.list = checkNotNull(resultList, "resultList");
+    @VisibleForTesting
+    final List<? extends RoundRobinEntry> pickList;
+    private int pickIndex;
+
+    // dropList can be empty, which means no drop.
+    // pickList must not be empty.
+    RoundRobinPicker(List<DropEntry> dropList, List<? extends RoundRobinEntry> pickList) {
+      this.dropList = checkNotNull(dropList, "dropList");
+      this.pickList = checkNotNull(pickList, "pickList");
+      checkArgument(!pickList.isEmpty(), "pickList is empty");
     }
 
     @Override
     public PickResult pickSubchannel(PickSubchannelArgs args) {
-      synchronized (list) {
-        RoundRobinEntry result = list.get(index);
-        index++;
-        if (index == list.size()) {
-          index = 0;
+      synchronized (pickList) {
+        // Two-level round-robin.
+        // First round-robin on dropList. If a drop entry is selected, request will be dropped.  If
+        // a non-drop entry is selected, then round-robin on pickList.  This makes sure requests are
+        // dropped at the same proportion as the drop entries appear on the round-robin list from
+        // the balancer, while only READY backends (that make up pickList) are selected for the
+        // non-drop cases.
+        if (!dropList.isEmpty()) {
+          DropEntry drop = dropList.get(dropIndex);
+          dropIndex++;
+          if (dropIndex == dropList.size()) {
+            dropIndex = 0;
+          }
+          if (drop != null) {
+            return drop.picked();
+          }
         }
-        result.updateHeaders(args.getHeaders());
-        if (result.isDrop()) {
-          result.loadRecorder.recordDroppedRequest(result.token);
+
+        RoundRobinEntry pick = pickList.get(pickIndex);
+        pickIndex++;
+        if (pickIndex == pickList.size()) {
+          pickIndex = 0;
         }
-        return result.result;
+        return pick.picked(args.getHeaders());
       }
     }
   }
