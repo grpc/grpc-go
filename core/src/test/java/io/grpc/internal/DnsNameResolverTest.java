@@ -79,7 +79,6 @@ public class DnsNameResolverTest {
 
         @Override
         public void close(ScheduledExecutorService instance) {
-          assertSame(fakeClock, instance);
         }
       };
 
@@ -92,7 +91,6 @@ public class DnsNameResolverTest {
 
         @Override
         public void close(ExecutorService instance) {
-          assertSame(fakeExecutor, instance);
         }
       };
 
