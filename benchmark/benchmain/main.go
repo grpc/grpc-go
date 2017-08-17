@@ -48,7 +48,7 @@ import (
 var (
 	// runMode{runUnary, runStream}
 	runMode     = []bool{true, true}
-	enableTrace = []bool{true, false}
+	enableTrace = []bool{false}
 	// When set the latency to 0 (no delay), the result is slower than the real result with no delay
 	// because latency simulation section has extra operations
 	ltc                    = []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
@@ -60,7 +60,7 @@ var (
 	timeout                = []time.Duration{1 * time.Second}
 	memProfile, cpuProfile string
 	memProfileRate         int
-	enableCompressor       = []bool{true, false}
+	enableCompressor       = []bool{false}
 )
 
 func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, timeout time.Duration, s *stats.Stats) {
@@ -197,14 +197,12 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 // Initiate main function to get settings of features.
 func init() {
 	var runUnary, runStream bool
-	var traceMode, noTraceMode bool
+	var traceMode, compressorMode bool
 	var readLatency, readTimeout string
 	var readKbps, readMtu, readMaxConcurrentCalls, readReqSizeBytes, readReqspSizeBytes intSliceType
-	var compressorMode bool
 	flag.BoolVar(&runUnary, "runUnary", false, "runUnary")
 	flag.BoolVar(&runStream, "runStream", false, "runStream")
 	flag.BoolVar(&traceMode, "traceMode", false, "traceMode")
-	flag.BoolVar(&noTraceMode, "noTraceMode", false, "noTraceMode")
 	flag.StringVar(&readLatency, "latency", "", "latency")
 	flag.StringVar(&readTimeout, "timeout", "", "timeout")
 	flag.Var(&readKbps, "kbps", "kbps")
@@ -222,21 +220,15 @@ func init() {
 		runMode[0] = runUnary
 		runMode[1] = runStream
 	}
-	// If node flags related to trace are set, it runs both mode by default.
-	if traceMode && !noTraceMode {
+	if traceMode {
 		enableTrace = []bool{true}
-	}
-	if !traceMode && noTraceMode {
-		enableTrace = []bool{false}
 	}
 	if compressorMode {
 		enableCompressor = []bool{true}
-	} else {
-		enableCompressor = []bool{false}
 	}
 	// Time input formats as (time + unit).
-	readTimeFromIntSlice(&ltc, readLatency)
-	readTimeFromIntSlice(&timeout, readTimeout)
+	readTimeFromInput(&ltc, readLatency)
+	readTimeFromInput(&timeout, readTimeout)
 	readIntFromIntSlice(&kbps, readKbps)
 	readIntFromIntSlice(&mtu, readMtu)
 	readIntFromIntSlice(&maxConcurrentCalls, readMaxConcurrentCalls)
@@ -272,7 +264,7 @@ func readIntFromIntSlice(values *[]int, replace intSliceType) {
 	*values = replace
 }
 
-func readTimeFromIntSlice(values *[]time.Duration, replace string) {
+func readTimeFromInput(values *[]time.Duration, replace string) {
 	if strings.Compare(replace, "") != 0 {
 		*values = []time.Duration{}
 		for _, ltc := range strings.Split(replace, ",") {
