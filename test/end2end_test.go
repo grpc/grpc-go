@@ -16,6 +16,9 @@
  *
  */
 
+//go:generate protoc --go_out=plugins=grpc:. codec_perf/perf.proto
+//go:generate protoc --go_out=plugins=grpc:. grpc_testing/test.proto
+
 package test
 
 import (

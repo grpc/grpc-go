@@ -24,11 +24,6 @@ import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
 
-import (
-	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
-)
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 var _ = fmt.Errorf
@@ -578,112 +573,6 @@ func init() {
 	proto.RegisterType((*InitialLoadBalanceResponse)(nil), "grpc.lb.v1.InitialLoadBalanceResponse")
 	proto.RegisterType((*ServerList)(nil), "grpc.lb.v1.ServerList")
 	proto.RegisterType((*Server)(nil), "grpc.lb.v1.Server")
-}
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
-
-// Client API for LoadBalancer service
-
-type LoadBalancerClient interface {
-	// Bidirectional rpc to get a list of servers.
-	BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error)
-}
-
-type loadBalancerClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewLoadBalancerClient(cc *grpc.ClientConn) LoadBalancerClient {
-	return &loadBalancerClient{cc}
-}
-
-func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_LoadBalancer_serviceDesc.Streams[0], c.cc, "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &loadBalancerBalanceLoadClient{stream}
-	return x, nil
-}
-
-type LoadBalancer_BalanceLoadClient interface {
-	Send(*LoadBalanceRequest) error
-	Recv() (*LoadBalanceResponse, error)
-	grpc.ClientStream
-}
-
-type loadBalancerBalanceLoadClient struct {
-	grpc.ClientStream
-}
-
-func (x *loadBalancerBalanceLoadClient) Send(m *LoadBalanceRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *loadBalancerBalanceLoadClient) Recv() (*LoadBalanceResponse, error) {
-	m := new(LoadBalanceResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// Server API for LoadBalancer service
-
-type LoadBalancerServer interface {
-	// Bidirectional rpc to get a list of servers.
-	BalanceLoad(LoadBalancer_BalanceLoadServer) error
-}
-
-func RegisterLoadBalancerServer(s *grpc.Server, srv LoadBalancerServer) {
-	s.RegisterService(&_LoadBalancer_serviceDesc, srv)
-}
-
-func _LoadBalancer_BalanceLoad_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(LoadBalancerServer).BalanceLoad(&loadBalancerBalanceLoadServer{stream})
-}
-
-type LoadBalancer_BalanceLoadServer interface {
-	Send(*LoadBalanceResponse) error
-	Recv() (*LoadBalanceRequest, error)
-	grpc.ServerStream
-}
-
-type loadBalancerBalanceLoadServer struct {
-	grpc.ServerStream
-}
-
-func (x *loadBalancerBalanceLoadServer) Send(m *LoadBalanceResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *loadBalancerBalanceLoadServer) Recv() (*LoadBalanceRequest, error) {
-	m := new(LoadBalanceRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.lb.v1.LoadBalancer",
-	HandlerType: (*LoadBalancerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "BalanceLoad",
-			Handler:       _LoadBalancer_BalanceLoad_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "grpc_lb_v1/grpclb.proto",
 }
 
 func init() { proto.RegisterFile("grpc_lb_v1/grpclb.proto", fileDescriptor0) }
