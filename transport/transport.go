@@ -116,7 +116,11 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 	if r.err != nil {
 		return 0, r.err
 	}
-	defer func() { r.err = err }()
+	n, r.err = r.read(p)
+	return n, r.err
+}
+
+func (r *recvBufferReader) read(p []byte) (n int, err error) {
 	if r.last != nil && len(r.last) > 0 {
 		// Read remaining data left in last call.
 		copied := copy(p, r.last)

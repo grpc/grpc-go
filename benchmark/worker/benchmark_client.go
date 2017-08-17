@@ -19,6 +19,7 @@
 package main
 
 import (
+	"flag"
 	"math"
 	"runtime"
 	"sync"
@@ -33,10 +34,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
-	caFile = "benchmark/server/testdata/ca.pem"
+	caFile = flag.String("ca_file", "", "The file containing the CA root cert file")
 )
 
 type lockingHistogram struct {
@@ -122,7 +124,10 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 
 	// Check and set security options.
 	if config.SecurityParams != nil {
-		creds, err := credentials.NewClientTLSFromFile(abs(caFile), config.SecurityParams.ServerHostOverride)
+		if *caFile == "" {
+			*caFile = testdata.Path("ca.pem")
+		}
+		creds, err := credentials.NewClientTLSFromFile(*caFile, config.SecurityParams.ServerHostOverride)
 		if err != nil {
 			return nil, nil, grpc.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
 		}

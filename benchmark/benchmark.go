@@ -264,8 +264,6 @@ func runUnary(b *testing.B, s *stats.Stats, benchFeatures Features) {
 	}
 	s.Clear()
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	b.ResetTimer()
-	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
@@ -301,13 +299,13 @@ func runUnary(b *testing.B, s *stats.Stats, benchFeatures Features) {
 			wg.Done()
 		}()
 	}
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ch <- i
 	}
-	b.StopTimer()
 	close(ch)
 	wg.Wait()
+	b.StopTimer()
 	conn.Close()
 }
 
@@ -317,8 +315,6 @@ func runStream(b *testing.B, s *stats.Stats, benchFeatures Features) {
 	}
 	s.Clear()
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
-	b.ResetTimer()
-	b.StopTimer()
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
 	conn := NewClientConn(
@@ -363,13 +359,13 @@ func runStream(b *testing.B, s *stats.Stats, benchFeatures Features) {
 			wg.Done()
 		}()
 	}
-	b.StartTimer()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ch <- struct{}{}
 	}
-	b.StopTimer()
 	close(ch)
 	wg.Wait()
+	b.StopTimer()
 	conn.Close()
 }
 func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {

@@ -25,6 +25,7 @@ package main
 import (
 	"flag"
 	"io"
+	"log"
 	"math/rand"
 	"time"
 
@@ -32,32 +33,32 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
 	tls                = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	caFile             = flag.String("ca_file", "testdata/ca.pem", "The file containning the CA root cert file")
+	caFile             = flag.String("ca_file", "", "The file containning the CA root cert file")
 	serverAddr         = flag.String("server_addr", "127.0.0.1:10000", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "x.test.youtube.com", "The server name use to verify the hostname returned by TLS handshake")
 )
 
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
-	grpclog.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
+	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
 	feature, err := client.GetFeature(context.Background(), point)
 	if err != nil {
-		grpclog.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
-	grpclog.Println(feature)
+	log.Println(feature)
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
 func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
-	grpclog.Printf("Looking for features within %v", rect)
+	log.Printf("Looking for features within %v", rect)
 	stream, err := client.ListFeatures(context.Background(), rect)
 	if err != nil {
-		grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 	}
 	for {
 		feature, err := stream.Recv()
@@ -65,9 +66,9 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			grpclog.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
 		}
-		grpclog.Println(feature)
+		log.Println(feature)
 	}
 }
 
@@ -80,21 +81,21 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
 	}
-	grpclog.Printf("Traversing %d points.", len(points))
+	log.Printf("Traversing %d points.", len(points))
 	stream, err := client.RecordRoute(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			log.Fatalf("%v.Send(%v) = %v", stream, point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		grpclog.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 	}
-	grpclog.Printf("Route summary: %v", reply)
+	log.Printf("Route summary: %v", reply)
 }
 
 // runRouteChat receives a sequence of route notes, while sending notes for various locations.
@@ -109,7 +110,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	}
 	stream, err := client.RouteChat(context.Background())
 	if err != nil {
-		grpclog.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
 	}
 	waitc := make(chan struct{})
 	go func() {
@@ -121,14 +122,14 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				grpclog.Fatalf("Failed to receive a note : %v", err)
+				log.Fatalf("Failed to receive a note : %v", err)
 			}
-			grpclog.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			grpclog.Fatalf("Failed to send a note: %v", err)
+			log.Fatalf("Failed to send a note: %v", err)
 		}
 	}
 	stream.CloseSend()
@@ -145,19 +146,12 @@ func main() {
 	flag.Parse()
 	var opts []grpc.DialOption
 	if *tls {
-		var sn string
-		if *serverHostOverride != "" {
-			sn = *serverHostOverride
+		if *caFile == "" {
+			*caFile = testdata.Path("ca.pem")
 		}
-		var creds credentials.TransportCredentials
-		if *caFile != "" {
-			var err error
-			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
-			if err != nil {
-				grpclog.Fatalf("Failed to create TLS credentials %v", err)
-			}
-		} else {
-			creds = credentials.NewClientTLSFromCert(nil, sn)
+		creds, err := credentials.NewClientTLSFromFile(*caFile, *serverHostOverride)
+		if err != nil {
+			log.Fatalf("Failed to create TLS credentials %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
@@ -165,7 +159,7 @@ func main() {
 	}
 	conn, err := grpc.Dial(*serverAddr, opts...)
 	if err != nil {
-		grpclog.Fatalf("fail to dial: %v", err)
+		log.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)

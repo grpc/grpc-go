@@ -169,7 +169,9 @@ type End struct {
 	Client bool
 	// EndTime is the time when the RPC ends.
 	EndTime time.Time
-	// Error is the error just happened.  It implements status.Status if non-nil.
+	// Error is the error the RPC ended with. It is an error generated from
+	// status.Status and can be converted back to status.Status using
+	// status.FromError if non-nil.
 	Error error
 }
 

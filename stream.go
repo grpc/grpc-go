@@ -342,7 +342,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			return
 		}
 		if err == io.EOF {
-			// Specialize the process for server streaming. SendMesg is only called
+			// Specialize the process for server streaming. SendMsg is only called
 			// once when creating the stream object. io.EOF needs to be skipped when
 			// the rpc is early finished (before the stream object is created.).
 			// TODO: It is probably better to move this into the generated code.
@@ -599,6 +599,10 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			}
 			ss.mu.Unlock()
 		}
+		if err != nil && err != io.EOF {
+			st, _ := status.FromError(toRPCErr(err))
+			ss.t.WriteStatus(ss.s, st)
+		}
 	}()
 	var outPayload *stats.OutPayload
 	if ss.statsHandler != nil {
@@ -639,6 +643,10 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 				}
 			}
 			ss.mu.Unlock()
+		}
+		if err != nil && err != io.EOF {
+			st, _ := status.FromError(toRPCErr(err))
+			ss.t.WriteStatus(ss.s, st)
 		}
 	}()
 	var inPayload *stats.InPayload

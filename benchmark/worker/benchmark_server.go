@@ -19,6 +19,7 @@
 package main
 
 import (
+	"flag"
 	"runtime"
 	"strconv"
 	"strings"
@@ -32,12 +33,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
-	// File path related to google.golang.org/grpc.
-	certFile = "benchmark/server/testdata/server1.pem"
-	keyFile  = "benchmark/server/testdata/server1.key"
+	certFile = flag.String("tls_cert_file", "", "The TLS cert file")
+	keyFile  = flag.String("tls_key_file", "", "The TLS key file")
 )
 
 type benchmarkServer struct {
@@ -90,7 +91,13 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 
 	// Set security options.
 	if config.SecurityParams != nil {
-		creds, err := credentials.NewServerTLSFromFile(abs(certFile), abs(keyFile))
+		if *certFile == "" {
+			*certFile = testdata.Path("server1.pem")
+		}
+		if *keyFile == "" {
+			*keyFile = testdata.Path("server1.key")
+		}
+		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			grpclog.Fatalf("failed to generate credentials %v", err)
 		}

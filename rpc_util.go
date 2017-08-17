@@ -63,6 +63,7 @@ func NewGZIPCompressor() Compressor {
 
 func (c *gzipCompressor) Do(w io.Writer, p []byte) error {
 	z := c.pool.Get().(*gzip.Writer)
+	defer c.pool.Put(z)
 	z.Reset(w)
 	if _, err := z.Write(p); err != nil {
 		return err

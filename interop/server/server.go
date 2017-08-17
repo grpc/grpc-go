@@ -28,12 +28,13 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 var (
 	useTLS   = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile = flag.String("tls_cert_file", "testdata/server1.pem", "The TLS cert file")
-	keyFile  = flag.String("tls_key_file", "testdata/server1.key", "The TLS key file")
+	certFile = flag.String("tls_cert_file", "", "The TLS cert file")
+	keyFile  = flag.String("tls_key_file", "", "The TLS key file")
 	port     = flag.Int("port", 10000, "The server port")
 )
 
@@ -46,6 +47,12 @@ func main() {
 	}
 	var opts []grpc.ServerOption
 	if *useTLS {
+		if *certFile == "" {
+			*certFile = testdata.Path("server1.pem")
+		}
+		if *keyFile == "" {
+			*keyFile = testdata.Path("server1.key")
+		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
 			grpclog.Fatalf("Failed to generate credentials %v", err)
