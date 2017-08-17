@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -481,6 +482,8 @@ type ConnectOptions struct {
 	Authority string
 	// Dialer specifies how to dial a network address.
 	Dialer func(context.Context, string) (net.Conn, error)
+	// ProxyURL specifies proxy url to use.
+	ProxyURL *url.URL
 	// FailOnNonTempDialError specifies if gRPC fails on non-temporary dial errors.
 	FailOnNonTempDialError bool
 	// PerRPCCredentials stores the PerRPCCredentials required to issue RPCs.

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -301,6 +302,13 @@ func WithAuthority(a string) DialOption {
 	}
 }
 
+// WithProxyURL returns a DialOption that specifies the url for proxy
+func WithProxyURL(u *url.URL) DialOption {
+	return func(o *dialOptions) {
+		o.copts.ProxyURL = u
+	}
+}
+
 // Dial creates a client connection to the given target.
 func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
@@ -329,6 +337,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			func(ctx context.Context, addr string) (net.Conn, error) {
 				return dialContext(ctx, "tcp", addr)
 			},
+			cc.dopts.copts.ProxyURL,
 		)
 	}
 

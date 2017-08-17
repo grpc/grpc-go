@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"bufio"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ var (
 	httpProxyFromEnvironment = http.ProxyFromEnvironment
 )
 
-func mapAddress(ctx context.Context, address string) (string, error) {
+func getProxyFromEnv(ctx context.Context, address string) (*url.URL, error) {
 	req := &http.Request{
 		URL: &url.URL{
 			Scheme: "https",
@@ -47,12 +48,12 @@ func mapAddress(ctx context.Context, address string) (string, error) {
 	}
 	url, err := httpProxyFromEnvironment(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if url == nil {
-		return "", errDisabled
+		return nil, errDisabled
 	}
-	return url.Host, nil
+	return url, nil
 }
 
 // To read a response from a net.Conn, http.ReadResponse() takes a bufio.Reader.
@@ -69,7 +70,7 @@ func (c *bufConn) Read(b []byte) (int, error) {
 	return c.r.Read(b)
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr, creds string) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
@@ -81,6 +82,10 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 		URL:    &url.URL{Host: addr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	})
+
+	if creds != "" {
+		req.Header.Add("Proxy-Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(creds)))
+	}
 
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
@@ -106,25 +111,33 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr string) (_ 
 // newProxyDialer returns a dialer that connects to proxy first if necessary.
 // The returned dialer checks if a proxy is necessary, dial to the proxy with the
 // provided dialer, does HTTP CONNECT handshake and returns the connection.
-func newProxyDialer(dialer func(context.Context, string) (net.Conn, error)) func(context.Context, string) (net.Conn, error) {
+func newProxyDialer(dialer func(context.Context, string) (net.Conn, error), proxyURL *url.URL) func(context.Context, string) (net.Conn, error) {
 	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
-		var skipHandshake bool
-		newAddr, err := mapAddress(ctx, addr)
-		if err != nil {
-			if err != errDisabled {
+		connectAddr := addr
+		if proxyURL == nil {
+			proxyURL, err = getProxyFromEnv(ctx, addr)
+			if err != nil && err != errDisabled {
 				return nil, err
 			}
-			skipHandshake = true
-			newAddr = addr
 		}
-
-		conn, err = dialer(ctx, newAddr)
+		if proxyURL != nil {
+			connectAddr = proxyURL.Host
+		}
+		conn, err = dialer(ctx, connectAddr)
 		if err != nil {
 			return
 		}
-		if !skipHandshake {
-			conn, err = doHTTPConnectHandshake(ctx, conn, addr)
+		if proxyURL != nil {
+			conn, err = doHTTPConnectHandshake(ctx, conn, addr, credsFromURL(proxyURL))
 		}
 		return
 	}
+}
+
+func credsFromURL(u *url.URL) string {
+	if u.User != nil {
+		return u.User.String()
+	}
+
+	return ""
 }
