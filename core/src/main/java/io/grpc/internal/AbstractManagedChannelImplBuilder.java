@@ -119,8 +119,6 @@ public abstract class AbstractManagedChannelImplBuilder
 
   private int maxInboundMessageSize = GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 
-  private boolean enableTracing;
-
   /**
    * Sets the maximum message size allowed for a single gRPC frame. If an inbound messages
    * larger than this limit is received it will not be processed and the RPC will fail with
@@ -299,15 +297,6 @@ public abstract class AbstractManagedChannelImplBuilder
     return GrpcUtil.checkAuthority(authority);
   }
 
-  /**
-   * Set it to true to record traces and propagate tracing information on the wire.  This will be
-   * deleted assuming always enabled once the instrumentation-java wire format is stabilized.
-   */
-  @Deprecated
-  public void setEnableTracing(boolean enabled) {
-    this.enableTracing = enabled;
-  }
-
   @Override
   public ManagedChannel build() {
     return new ManagedChannelImpl(
@@ -334,12 +323,10 @@ public abstract class AbstractManagedChannelImplBuilder
         effectiveInterceptors.add(0, censusStats.getClientInterceptor());
       }
     }
-    if (enableTracing) {
-      CensusTracingModule censusTracing =
-          new CensusTracingModule(Tracing.getTracer(),
-              Tracing.getPropagationComponent().getBinaryFormat());
-      effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
-    }
+    CensusTracingModule censusTracing =
+        new CensusTracingModule(Tracing.getTracer(),
+            Tracing.getPropagationComponent().getBinaryFormat());
+    effectiveInterceptors.add(0, censusTracing.getClientInterceptor());
     return effectiveInterceptors;
   }
 
