@@ -193,21 +193,24 @@ type AddrMetadataGRPCLB struct {
 // compileUpdate compares the old resolved addresses and newly resolved addresses,
 // and generates an update list
 func (w *dnsWatcher) compileUpdate(newAddrs []*Update) []*Update {
-	update := make(map[Update]bool)
+	update := make(map[*Update]bool)
+	newAddr := make(map[string]*Update)
 	for _, u := range newAddrs {
-		update[*u] = true
+		update[u] = true
+		newAddr[u.Addr] = u
 	}
+
 	for _, u := range w.curAddrs {
-		if _, ok := update[*u]; ok {
-			delete(update, *u)
+		if _, ok := newAddr[u.Addr]; ok {
+			delete(update, newAddr[u.Addr])
 			continue
 		}
-		update[Update{Addr: u.Addr, Op: Delete, Metadata: u.Metadata}] = true
+		update[&Update{Addr: u.Addr, Op: Delete, Metadata: u.Metadata}] = true
 	}
 	res := make([]*Update, 0, len(update))
 	for k := range update {
 		tmp := k
-		res = append(res, &tmp)
+		res = append(res, tmp)
 	}
 	return res
 }
