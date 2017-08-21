@@ -97,7 +97,8 @@ public class Context {
 
   private static final Logger log = Logger.getLogger(Context.class.getName());
 
-  private static final Object[] EMPTY_ENTRIES = new Object[0];
+  private static final PersistentHashArrayMappedTrie<Key<?>, Object> EMPTY_ENTRIES =
+      new PersistentHashArrayMappedTrie<Key<?>, Object>();
 
   private static final Key<Deadline> DEADLINE_KEY = new Key<Deadline>("deadline");
 
@@ -108,7 +109,7 @@ public class Context {
    * <p>Never assume this is the default context for new threads, because {@link Storage} may define
    * a default context that is different from ROOT.
    */
-  public static final Context ROOT = new Context(null);
+  public static final Context ROOT = new Context(null, EMPTY_ENTRIES, false, false);
 
   // Lazy-loaded storage. Delaying storage initialization until after class initialization makes it
   // much easier to avoid circular loading since there can still be references to Context as long as
@@ -180,16 +181,11 @@ public class Context {
   }
 
   private final Context parent;
-  // A 64 bit bloom filter of all the Key.bloomFilterMask values in this Context and all the parents
-  // this will help us detect failed lookups faster.  In fact if there are fewer than 64 key objects
-  // this will be perfect (though we don't currently take advantage of that fact).
-  private final long keyBloomFilter;
-  // Alternating Key, Object entries
-  private final Object[] keyValueEntries;
   private final boolean cascadesCancellation;
   private ArrayList<ExecutableListener> listeners;
   private CancellationListener parentListener = new ParentListener();
   private final boolean canBeCancelled;
+  final PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries;
 
   /**
    * Construct a context that cannot be cancelled and will not cascade cancellation from its parent.
@@ -197,8 +193,7 @@ public class Context {
   private Context(Context parent) {
     this.parent = parent;
     // Not inheriting cancellation implies not inheriting a deadline too.
-    keyValueEntries = new Object[] {DEADLINE_KEY, null};
-    keyBloomFilter = computeFilter(parent, keyValueEntries);
+    keyValueEntries = parent.keyValueEntries.put(DEADLINE_KEY, null);
     cascadesCancellation = false;
     canBeCancelled = false;
   }
@@ -207,10 +202,9 @@ public class Context {
    * Construct a context that cannot be cancelled but will cascade cancellation from its parent if
    * it is cancellable.
    */
-  private Context(Context parent, Object[] keyValueEntries) {
+  private Context(Context parent, PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
     this.parent = parent;
     this.keyValueEntries = keyValueEntries;
-    keyBloomFilter = computeFilter(parent, keyValueEntries);
     cascadesCancellation = true;
     canBeCancelled = this.parent != null && this.parent.canBeCancelled;
   }
@@ -219,20 +213,28 @@ public class Context {
    * Construct a context that can be cancelled and will cascade cancellation from its parent if
    * it is cancellable.
    */
-  private Context(Context parent, Object[] keyValueEntries, boolean isCancellable) {
+  private Context(
+      Context parent,
+      PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries,
+      boolean isCancellable) {
     this.parent = parent;
     this.keyValueEntries = keyValueEntries;
-    keyBloomFilter = computeFilter(parent, keyValueEntries);
     cascadesCancellation = true;
     canBeCancelled = isCancellable;
   }
 
-  private static long computeFilter(Context parent, Object[] keyValueEntries) {
-    long filter = parent != null ? parent.keyBloomFilter : 0;
-    for (int i = 0; i < keyValueEntries.length; i += 2) {
-      filter |= ((Key<?>) keyValueEntries[i]).bloomFilterMask;
-    }
-    return filter;
+  /**
+   * Constructs a context that can be arbitrarily configured.
+   */
+  private Context(
+      Context parent,
+      PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries,
+      boolean cascadesCancellation,
+      boolean isCancellable) {
+    this.parent = parent;
+    this.keyValueEntries = keyValueEntries;
+    this.cascadesCancellation = cascadesCancellation;
+    canBeCancelled = isCancellable;
   }
 
   /**
@@ -340,7 +342,7 @@ public class Context {
    *
    */
   public <V> Context withValue(Key<V> k1, V v1) {
-    return new Context(this, new Object[] {k1, v1});
+    return new Context(this, keyValueEntries.put(k1, v1));
   }
 
   /**
@@ -348,7 +350,7 @@ public class Context {
    * from its parent.
    */
   public <V1, V2> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2) {
-    return new Context(this, new Object[] {k1, v1, k2, v2});
+    return new Context(this, keyValueEntries.put(k1, v1).put(k2, v2));
   }
 
   /**
@@ -356,7 +358,7 @@ public class Context {
    * from its parent.
    */
   public <V1, V2, V3> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2, Key<V3> k3, V3 v3) {
-    return new Context(this, new Object[] {k1, v1, k2, v2, k3, v3});
+    return new Context(this, keyValueEntries.put(k1, v1).put(k2, v2).put(k3, v3));
   }
 
   /**
@@ -365,7 +367,7 @@ public class Context {
    */
   public <V1, V2, V3, V4> Context withValues(Key<V1> k1, V1 v1, Key<V2> k2, V2 v2,
       Key<V3> k3, V3 v3, Key<V4> k4, V4 v4) {
-    return new Context(this, new Object[] {k1, v1, k2, v2, k3, v3, k4, v4});
+    return new Context(this, keyValueEntries.put(k1, v1).put(k2, v2).put(k3, v3).put(k4, v4));
   }
 
   /**
@@ -667,26 +669,7 @@ public class Context {
    * Lookup the value for a key in the context inheritance chain.
    */
   private Object lookup(Key<?> key) {
-    if ((key.bloomFilterMask & keyBloomFilter) == 0) {
-      return null;
-    }
-    Object[] entries = keyValueEntries;
-    Context current = this;
-    while (true) {
-      // entries in the table are alternating key value pairs where the even numbered slots are the
-      // key objects
-      for (int i = 0; i < entries.length; i += 2) {
-        // Key objects have identity semantics, compare using ==
-        if (key == entries[i]) {
-          return entries[i + 1];
-        }
-      }
-      current = current.parent;
-      if (current == null) {
-        return null;
-      }
-      entries = current.keyValueEntries;
-    }
+    return keyValueEntries.get(key);
   }
 
   /**
@@ -706,21 +689,22 @@ public class Context {
      * If the parent deadline is before the given deadline there is no need to install the value
      * or listen for its expiration as the parent context will already be listening for it.
      */
-    private static Object[] deriveDeadline(Context parent, Deadline deadline) {
+    private static PersistentHashArrayMappedTrie<Key<?>, Object> deriveDeadline(
+        Context parent, Deadline deadline) {
       Deadline parentDeadline = DEADLINE_KEY.get(parent);
       return parentDeadline == null || deadline.isBefore(parentDeadline)
-          ? new Object[] {DEADLINE_KEY, deadline}
-          : EMPTY_ENTRIES;
+          ? parent.keyValueEntries.put(DEADLINE_KEY, deadline)
+          : parent.keyValueEntries;
     }
 
     /**
      * Create a cancellable context that does not have a deadline.
      */
     private CancellableContext(Context parent) {
-      super(parent, EMPTY_ENTRIES, true);
+      super(parent, parent.keyValueEntries, true);
       // Create a surrogate that inherits from this to attach so that you cannot retrieve a
       // cancellable context from Context.current()
-      uncancellableSurrogate = new Context(this, EMPTY_ENTRIES);
+      uncancellableSurrogate = new Context(this, keyValueEntries);
     }
 
     /**
@@ -748,7 +732,7 @@ public class Context {
           cancel(new TimeoutException("context timed out"));
         }
       }
-      uncancellableSurrogate = new Context(this, EMPTY_ENTRIES);
+      uncancellableSurrogate = new Context(this, keyValueEntries);
     }
 
 
