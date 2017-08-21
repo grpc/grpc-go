@@ -415,7 +415,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 			}
 		}
 		// No balancer, or no resolver within the balancer.  Connect directly.
-		if err := cc.resetAddrConn(Address{Addr: target}, cc.dopts.block, nil); err != nil {
+		if err := cc.resetAddrConn([]Address{{Addr: target}}, cc.dopts.block, nil); err != nil {
 			waitC <- err
 			return
 		}
@@ -590,48 +590,67 @@ func (cc *ClientConn) lbWatcher(doneChan chan struct{}) {
 		}
 	}()
 
+	_, isPickFirst := cc.dopts.balancer.(*pickFirst)
 	for addrs := range cc.dopts.balancer.Notify() {
-		var (
-			add []Address   // Addresses need to setup connections.
-			del []*addrConn // Connections need to tear down.
-		)
-		cc.mu.Lock()
-		for _, a := range addrs {
-			if _, ok := cc.conns[a]; !ok {
-				add = append(add, a)
-			}
-		}
-		for k, c := range cc.conns {
-			var keep bool
-			for _, a := range addrs {
-				if k == a {
-					keep = true
-					break
+		if isPickFirst {
+			if len(addrs) == 0 {
+				// No address can be connected, should teardown current addrconn if exists
+				cc.mu.Lock()
+				if len(cc.conns) != 0 {
+					cc.pickFirstAddrConnTearDown()
 				}
-			}
-			if !keep {
-				del = append(del, c)
-				delete(cc.conns, c.addr)
-			}
-		}
-		cc.mu.Unlock()
-		for _, a := range add {
-			var err error
-			if doneChan != nil {
-				err = cc.resetAddrConn(a, true, nil)
-				if err == nil {
+				cc.mu.Unlock()
+			} else {
+				cc.resetAddrConn(addrs, true, nil)
+				if doneChan != nil {
 					close(doneChan)
 					doneChan = nil
 				}
-			} else {
-				err = cc.resetAddrConn(a, false, nil)
 			}
-			if err != nil {
-				grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
+		} else {
+			// Not pickFirst, create a new addrConn for each address.
+			var (
+				add []Address   // Addresses need to setup connections.
+				del []*addrConn // Connections need to tear down.
+			)
+			cc.mu.Lock()
+			for _, a := range addrs {
+				if _, ok := cc.conns[a]; !ok {
+					add = append(add, a)
+				}
 			}
-		}
-		for _, c := range del {
-			c.tearDown(errConnDrain)
+			for k, c := range cc.conns {
+				var keep bool
+				for _, a := range addrs {
+					if k == a {
+						keep = true
+						break
+					}
+				}
+				if !keep {
+					del = append(del, c)
+					delete(cc.conns, k)
+				}
+			}
+			cc.mu.Unlock()
+			for _, a := range add {
+				var err error
+				if doneChan != nil {
+					err = cc.resetAddrConn([]Address{a}, true, nil)
+					if err == nil {
+						close(doneChan)
+						doneChan = nil
+					}
+				} else {
+					err = cc.resetAddrConn([]Address{a}, false, nil)
+				}
+				if err != nil {
+					grpclog.Warningf("Error creating connection to %v. Err: %v", a, err)
+				}
+			}
+			for _, c := range del {
+				c.tearDown(errConnDrain)
+			}
 		}
 	}
 }
@@ -654,6 +673,50 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
+// pickFirstUpdateAddresses checks whether current address in the updating list, Update the list if true.
+// It is only used when the balancer is pick first.
+func (cc *ClientConn) pickFirstUpdateAddresses(addrs []Address) bool {
+	if len(cc.conns) == 0 {
+		// No addrconn. Should go resetting addrconn.
+		return false
+	}
+	var currentAc *addrConn
+	for _, currentAc = range cc.conns {
+		break
+	}
+	var addrInNewSlice bool
+	for _, addr := range addrs {
+		if strings.Compare(addr.Addr, currentAc.curAddr.Addr) == 0 {
+			addrInNewSlice = true
+			break
+		}
+	}
+	if addrInNewSlice {
+		cc.conns = make(map[Address]*addrConn)
+		for _, addr := range addrs {
+			cc.conns[addr] = currentAc
+		}
+		currentAc.addrs = addrs
+		return true
+	}
+	return false
+}
+
+// pickFirstAddrConnTearDown() should be called after lock.
+func (cc *ClientConn) pickFirstAddrConnTearDown() {
+	if len(cc.conns) == 0 {
+		return
+	}
+	var currentAc *addrConn
+	for _, currentAc = range cc.conns {
+		break
+	}
+	for k := range cc.conns {
+		delete(cc.conns, k)
+	}
+	currentAc.tearDown(errConnDrain)
+}
+
 // resetAddrConn creates an addrConn for addr and adds it to cc.conns.
 // If there is an old addrConn for addr, it will be torn down, using tearDownErr as the reason.
 // If tearDownErr is nil, errConnDrain will be used instead.
@@ -661,16 +724,30 @@ func (cc *ClientConn) scWatcher() {
 // We should never need to replace an addrConn with a new one. This function is only used
 // as newAddrConn to create new addrConn.
 // TODO rename this function and clean up the code.
-func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error) error {
+func (cc *ClientConn) resetAddrConn(addrs []Address, block bool, tearDownErr error) error {
+	// if current transport in addrs, just change lists to update order and new addresses
+	// not work for roundrobin
+	cc.mu.Lock()
+	if _, isPickFirst := cc.dopts.balancer.(*pickFirst); isPickFirst {
+		// If Current address in use in the updating list, just update the list.
+		// Otherwise, teardown current addrconn and create a new one.
+		if cc.pickFirstUpdateAddresses(addrs) {
+			cc.mu.Unlock()
+			return nil
+		}
+		cc.pickFirstAddrConnTearDown()
+	}
+	cc.mu.Unlock()
+
 	ac := &addrConn{
 		cc:    cc,
-		addr:  addr,
+		addrs: addrs,
 		dopts: cc.dopts,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	ac.csEvltr = cc.csEvltr
 	if EnableTracing {
-		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
+		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addrs[0].Addr)
 	}
 	if !ac.dopts.insecure {
 		if ac.dopts.copts.TransportCredentials == nil {
@@ -692,8 +769,10 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 		cc.mu.Unlock()
 		return ErrClientConnClosing
 	}
-	stale := cc.conns[ac.addr]
-	cc.conns[ac.addr] = ac
+	stale := cc.conns[ac.addrs[0]]
+	for _, a := range ac.addrs {
+		cc.conns[a] = ac
+	}
 	cc.mu.Unlock()
 	if stale != nil {
 		// There is an addrConn alive on ac.addr already. This could be due to
@@ -713,7 +792,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 			if err != errConnClosing {
 				// Tear down ac and delete it from cc.conns.
 				cc.mu.Lock()
-				delete(cc.conns, ac.addr)
+				delete(cc.conns, ac.addrs[0])
 				cc.mu.Unlock()
 				ac.tearDown(err)
 			}
@@ -728,7 +807,7 @@ func (cc *ClientConn) resetAddrConn(addr Address, block bool, tearDownErr error)
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := ac.resetTransport(false); err != nil {
-				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
+				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
 				if err != errConnClosing {
 					// Keep this ac in cc.conns, to get the reason it's torn down.
 					ac.tearDown(err)
@@ -841,10 +920,11 @@ type addrConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cc     *ClientConn
-	addr   Address
-	dopts  dialOptions
-	events trace.EventLog
+	cc      *ClientConn
+	curAddr Address
+	addrs   []Address
+	dopts   dialOptions
+	events  trace.EventLog
 
 	csEvltr *connectivityStateEvaluator
 
@@ -919,79 +999,87 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	ac.cc.mu.RUnlock()
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
-		if ac.state == connectivity.Shutdown {
-			// ac.tearDown(...) has been invoked.
-			ac.mu.Unlock()
-			return errConnClosing
-		}
-		ac.mu.Unlock()
 		sleepTime := ac.dopts.bs.backoff(retries)
 		timeout := minConnectTimeout
-		if timeout < sleepTime {
-			timeout = sleepTime
+		if timeout < time.Duration(int(sleepTime)/len(ac.addrs)) {
+			timeout = time.Duration(int(sleepTime) / len(ac.addrs))
 		}
-		ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 		connectTime := time.Now()
-		sinfo := transport.TargetInfo{
-			Addr:     ac.addr.Addr,
-			Metadata: ac.addr.Metadata,
-		}
-		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
-		// Don't call cancel in success path due to a race in Go 1.6:
-		// https://github.com/golang/go/issues/15078.
-		if err != nil {
-			cancel()
-
-			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-				return err
-			}
-			grpclog.Warningf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %v", err, ac.addr)
+		// copy ac.addrs in case of race
+		addrsIter := make([]Address, len(ac.addrs))
+		copy(addrsIter, ac.addrs)
+		ac.mu.Unlock()
+		for _, addr := range addrsIter {
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				// ac.tearDown(...) has been invoked.
 				ac.mu.Unlock()
 				return errConnClosing
 			}
-			ac.errorf("transient failure: %v", err)
+			ac.mu.Unlock()
+			ctx, cancel := context.WithTimeout(ac.ctx, timeout)
+			sinfo := transport.TargetInfo{
+				Addr:     addr.Addr,
+				Metadata: addr.Metadata,
+			}
+			newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
+			// Don't call cancel in success path due to a race in Go 1.6:
+			// https://github.com/golang/go/issues/15078.
+			if err != nil {
+				cancel()
+
+				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+					return err
+				}
+				grpclog.Warningf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %v", err, addr)
+				ac.mu.Lock()
+				if ac.state == connectivity.Shutdown {
+					// ac.tearDown(...) has been invoked.
+					ac.mu.Unlock()
+					return errConnClosing
+				}
+				ac.errorf("transient failure: %v", err)
+				oldState = ac.state
+				ac.state = connectivity.TransientFailure
+				ac.csEvltr.recordTransition(oldState, ac.state)
+				if ac.ready != nil {
+					close(ac.ready)
+					ac.ready = nil
+				}
+				ac.mu.Unlock()
+				continue
+			}
+			ac.mu.Lock()
+			ac.printf("ready")
+			if ac.state == connectivity.Shutdown {
+				// ac.tearDown(...) has been invoked.
+				ac.mu.Unlock()
+				newTransport.Close()
+				return errConnClosing
+			}
 			oldState = ac.state
-			ac.state = connectivity.TransientFailure
+			ac.state = connectivity.Ready
 			ac.csEvltr.recordTransition(oldState, ac.state)
+			ac.transport = newTransport
 			if ac.ready != nil {
 				close(ac.ready)
 				ac.ready = nil
 			}
-			ac.mu.Unlock()
-			timer := time.NewTimer(sleepTime - time.Since(connectTime))
-			select {
-			case <-timer.C:
-			case <-ac.ctx.Done():
-				timer.Stop()
-				return ac.ctx.Err()
+			if ac.cc.dopts.balancer != nil {
+				ac.down = ac.cc.dopts.balancer.Up(addr)
 			}
-			timer.Stop()
-			continue
-		}
-		ac.mu.Lock()
-		ac.printf("ready")
-		if ac.state == connectivity.Shutdown {
-			// ac.tearDown(...) has been invoked.
+			ac.curAddr = addr
 			ac.mu.Unlock()
-			newTransport.Close()
-			return errConnClosing
+			return nil
 		}
-		oldState = ac.state
-		ac.state = connectivity.Ready
-		ac.csEvltr.recordTransition(oldState, ac.state)
-		ac.transport = newTransport
-		if ac.ready != nil {
-			close(ac.ready)
-			ac.ready = nil
+		timer := time.NewTimer(sleepTime - time.Since(connectTime))
+		select {
+		case <-timer.C:
+		case <-ac.ctx.Done():
+			timer.Stop()
+			return ac.ctx.Err()
 		}
-		if ac.cc.dopts.balancer != nil {
-			ac.down = ac.cc.dopts.balancer.Up(ac.addr)
-		}
-		ac.mu.Unlock()
-		return nil
+		timer.Stop()
 	}
 }
 
@@ -1125,6 +1213,7 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 
 	ac.mu.Lock()
+	ac.curAddr = Address{}
 	defer ac.mu.Unlock()
 	if ac.down != nil {
 		ac.down(downErrorf(false, false, "%v", err))
