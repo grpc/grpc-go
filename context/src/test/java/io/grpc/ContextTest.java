@@ -16,6 +16,7 @@
 
 package io.grpc;
 
+import static io.grpc.Context.cancellableAncestor;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -873,6 +874,52 @@ public class ContextTest {
       storageRef.set(originalStorage);
       storage.setAccessible(false);
     }
+  }
+
+  @Test
+  public void cancellableAncestorTest() {
+    assertEquals(null, cancellableAncestor(null));
+
+    Context c = Context.current();
+    assertFalse(c.canBeCancelled());
+    assertEquals(null, cancellableAncestor(c));
+
+    Context.CancellableContext withCancellation = c.withCancellation();
+    assertEquals(withCancellation, cancellableAncestor(withCancellation));
+
+    Context child = withCancellation.withValue(COLOR, "blue");
+    assertFalse(child instanceof Context.CancellableContext);
+    assertEquals(withCancellation, cancellableAncestor(child));
+
+    Context grandChild = child.withValue(COLOR, "red");
+    assertFalse(grandChild instanceof Context.CancellableContext);
+    assertEquals(withCancellation, cancellableAncestor(grandChild));
+  }
+
+  @Test
+  public void cancellableAncestorIntegrationTest() {
+    Context base = Context.current();
+
+    Context blue = base.withValue(COLOR, "blue");
+    assertNull(blue.cancellableAncestor);
+    Context.CancellableContext cancellable = blue.withCancellation();
+    assertNull(cancellable.cancellableAncestor);
+    Context childOfCancel = cancellable.withValue(PET, "cat");
+    assertSame(cancellable, childOfCancel.cancellableAncestor);
+    Context grandChildOfCancel = childOfCancel.withValue(FOOD, "lasagna");
+    assertSame(cancellable, grandChildOfCancel.cancellableAncestor);
+
+    Context.CancellableContext cancellable2 = childOfCancel.withCancellation();
+    assertSame(cancellable, cancellable2.cancellableAncestor);
+    Context childOfCancellable2 = cancellable2.withValue(PET, "dog");
+    assertSame(cancellable2, childOfCancellable2.cancellableAncestor);
+  }
+
+  @Test
+  public void cancellableAncestorFork() {
+    Context.CancellableContext cancellable = Context.current().withCancellation();
+    Context fork = cancellable.fork();
+    assertNull(fork.cancellableAncestor);
   }
 
   // UsedReflectively
