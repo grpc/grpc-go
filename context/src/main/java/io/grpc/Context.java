@@ -23,7 +23,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -840,8 +839,6 @@ public class Context {
    * Key for indexing values stored in a context.
    */
   public static final class Key<T> {
-    private static final AtomicInteger keyCounter = new AtomicInteger();
-    private final long bloomFilterMask;
     private final String name;
     private final T defaultValue;
 
@@ -852,7 +849,6 @@ public class Context {
     Key(String name, T defaultValue) {
       this.name = checkNotNull(name, "name");
       this.defaultValue = defaultValue;
-      this.bloomFilterMask = 1 << (keyCounter.getAndIncrement() & 63);
     }
 
     /**
