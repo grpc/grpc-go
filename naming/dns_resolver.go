@@ -193,7 +193,7 @@ type AddrMetadataGRPCLB struct {
 // compileUpdate compares the old resolved addresses and newly resolved addresses,
 // and generates an update list
 func (w *dnsWatcher) compileUpdate(newAddrs map[string]*Update) []*Update {
-	res := make([]*Update, 0, len(newAddrs)+len(w.curAddrs))
+	var res []*Update
 	for a, u := range w.curAddrs {
 		if _, ok := newAddrs[a]; !ok {
 			u.Op = Delete
@@ -206,7 +206,6 @@ func (w *dnsWatcher) compileUpdate(newAddrs map[string]*Update) []*Update {
 		}
 	}
 	return res
-
 }
 
 func (w *dnsWatcher) lookupSRV() map[string]*Update {
@@ -228,7 +227,8 @@ func (w *dnsWatcher) lookupSRV() map[string]*Update {
 				grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
 				continue
 			}
-			newAddrs[a+":"+strconv.Itoa(int(s.Port))] = &Update{Addr: a + ":" + strconv.Itoa(int(s.Port)),
+			addr := a + ":" + strconv.Itoa(int(s.Port))
+			newAddrs[addr] = &Update{Addr: addr,
 				Metadata: AddrMetadataGRPCLB{AddrType: GRPCLB, ServerName: s.Target}}
 		}
 	}
@@ -248,7 +248,8 @@ func (w *dnsWatcher) lookupHost() map[string]*Update {
 			grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
 			continue
 		}
-		newAddrs[a+":"+w.port] = &Update{Addr: a + ":" + w.port}
+		addr := a + ":" + w.port
+		newAddrs[addr] = &Update{Addr: addr}
 	}
 	return newAddrs
 }
