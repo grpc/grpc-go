@@ -43,7 +43,7 @@ type ccBalancerWrapper struct {
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	grpclog.Infof("ccBalancerWrapper: new subconn: %v", addrs)
-	ac, err := ccb.cc.newAddrConn(addrs[0])
+	ac, err := ccb.cc.newAddrConn(addrs)
 	if err != nil {
 		return nil, err
 	}

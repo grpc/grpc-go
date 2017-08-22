@@ -104,11 +104,6 @@ func Join(mds ...MD) MD {
 type mdIncomingKey struct{}
 type mdOutgoingKey struct{}
 
-// NewContext is a wrapper for NewOutgoingContext(ctx, md).  Deprecated.
-func NewContext(ctx context.Context, md MD) context.Context {
-	return NewOutgoingContext(ctx, md)
-}
-
 // NewIncomingContext creates a new context with incoming md attached.
 func NewIncomingContext(ctx context.Context, md MD) context.Context {
 	return context.WithValue(ctx, mdIncomingKey{}, md)
@@ -117,11 +112,6 @@ func NewIncomingContext(ctx context.Context, md MD) context.Context {
 // NewOutgoingContext creates a new context with outgoing md attached.
 func NewOutgoingContext(ctx context.Context, md MD) context.Context {
 	return context.WithValue(ctx, mdOutgoingKey{}, md)
-}
-
-// FromContext is a wrapper for FromIncomingContext(ctx).  Deprecated.
-func FromContext(ctx context.Context) (md MD, ok bool) {
-	return FromIncomingContext(ctx)
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.  The

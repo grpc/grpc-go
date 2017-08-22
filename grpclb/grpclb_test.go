@@ -16,6 +16,9 @@
  *
  */
 
+//go:generate protoc --go_out=:messages_only grpc_lb_v1/grpclb.proto
+//go:generate protoc --go_out=plugins=grpc:. grpc_lb_v1/grpclb.proto
+
 // Package grpclb is currently used only for grpclb testing.
 package grpclb
 
@@ -203,7 +206,7 @@ func (b *remoteBalancer) stop() {
 	close(b.done)
 }
 
-func (b *remoteBalancer) BalanceLoad(stream *loadBalancerBalanceLoadServer) error {
+func (b *remoteBalancer) BalanceLoad(stream lbpb.LoadBalancer_BalanceLoadServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -349,7 +352,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 		return
 	}
 	ls = newRemoteBalancer(nil, nil)
-	registerLoadBalancerServer(lb, ls)
+	lbpb.RegisterLoadBalancerServer(lb, ls)
 	go func() {
 		lb.Serve(lbLis)
 	}()

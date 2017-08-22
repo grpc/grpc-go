@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"errors"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -92,7 +93,7 @@ type dialOptions struct {
 
 const (
 	defaultClientMaxReceiveMessageSize = 1024 * 1024 * 4
-	defaultClientMaxSendMessageSize    = 1024 * 1024 * 4
+	defaultClientMaxSendMessageSize    = math.MaxInt32
 )
 
 // DialOption configures how we set up the connection.
@@ -408,7 +409,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go func() {
 			defer close(waitC)
 			// No balancer, or no resolver within the balancer.  Connect directly.
-			ac, err := cc.newAddrConn(resolver.Address{Addr: target})
+			ac, err := cc.newAddrConn([]resolver.Address{{Addr: target}})
 			if err != nil {
 				waitC <- err
 				return
@@ -621,12 +622,11 @@ func (cc *ClientConn) scWatcher() {
 	}
 }
 
-// newAddrConn creates an addrConn for addr and adds it to cc.conns.
-// If there is an old addrConn for addr, it will be torn down with errConnDrain.
-func (cc *ClientConn) newAddrConn(addr resolver.Address) (*addrConn, error) {
+// newAddrConn creates an addrConn for addrs and adds it to cc.conns.
+func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	ac := &addrConn{
 		cc:    cc,
-		addr:  addr,
+		addrs: addrs,
 		dopts: cc.dopts,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
@@ -668,7 +668,7 @@ func (ac *addrConn) connect(block bool) error {
 	ac.mu.Unlock()
 
 	if EnableTracing {
-		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addr.Addr)
+		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addrs[0].Addr)
 	}
 	if !ac.dopts.insecure {
 		if ac.dopts.copts.TransportCredentials == nil {
@@ -701,7 +701,7 @@ func (ac *addrConn) connect(block bool) error {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
 			if err := ac.resetTransport(false); err != nil {
-				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addr.Addr, err)
+				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
 				if err != errConnClosing {
 					// Keep this ac in cc.conns, to get the reason it's torn down.
 					ac.tearDown(err)
@@ -812,11 +812,12 @@ type addrConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cc     *ClientConn
-	addr   resolver.Address
-	dopts  dialOptions
-	events trace.EventLog
-	acbw   *acBalancerWrapper
+	cc      *ClientConn
+	curAddr resolver.Address
+	addrs   []resolver.Address
+	dopts   dialOptions
+	events  trace.EventLog
+	acbw    *acBalancerWrapper
 
 	csEvltr *connectivityStateEvaluator
 
@@ -894,19 +895,12 @@ func (ac *addrConn) resetTransport(drain bool) error {
 	for retries := 0; ; retries++ {
 		sleepTime := ac.dopts.bs.backoff(retries)
 		timeout := minConnectTimeout
-		if timeout < sleepTime {
-			timeout = sleepTime
-		}
-		ctx, cancel := context.WithTimeout(ac.ctx, timeout)
-		connectTime := time.Now()
-		sinfo := transport.TargetInfo{
-			Addr:     ac.addr.Addr,
-			Metadata: ac.addr.Metadata,
-		}
 		ac.mu.Lock()
+		if timeout < time.Duration(int(sleepTime)/len(ac.addrs)) {
+			timeout = time.Duration(int(sleepTime) / len(ac.addrs))
+		}
+		connectTime := time.Now()
 		if ac.state == connectivity.Shutdown {
-			cancel()
-			// ac.tearDown(...) has been invoked.
 			ac.mu.Unlock()
 			return errConnClosing
 		}
@@ -918,66 +912,85 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		if ac.cc.balancer != nil {
 			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 		}
+		// copy ac.addrs in case of race
+		addrsIter := make([]resolver.Address, len(ac.addrs))
+		copy(addrsIter, ac.addrs)
 		ac.mu.Unlock()
-		newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
-		// Don't call cancel in success path due to a race in Go 1.6:
-		// https://github.com/golang/go/issues/15078.
-		if err != nil {
-			cancel()
-
-			if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
-				return err
-			}
-			grpclog.Warningf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %v", err, ac.addr)
+		for _, addr := range addrsIter {
 			ac.mu.Lock()
 			if ac.state == connectivity.Shutdown {
 				// ac.tearDown(...) has been invoked.
 				ac.mu.Unlock()
 				return errConnClosing
 			}
-			ac.errorf("transient failure: %v", err)
+			ac.mu.Unlock()
+			ctx, cancel := context.WithTimeout(ac.ctx, timeout)
+			sinfo := transport.TargetInfo{
+				Addr:     addr.Addr,
+				Metadata: addr.Metadata,
+			}
+			newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
+			// Don't call cancel in success path due to a race in Go 1.6:
+			// https://github.com/golang/go/issues/15078.
+			if err != nil {
+				cancel()
+
+				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
+					return err
+				}
+				grpclog.Warningf("grpc: addrConn.resetTransport failed to create client transport: %v; Reconnecting to %v", err, addr)
+				ac.mu.Lock()
+				if ac.state == connectivity.Shutdown {
+					// ac.tearDown(...) has been invoked.
+					ac.mu.Unlock()
+					return errConnClosing
+				}
+				ac.mu.Unlock()
+				continue
+			}
+			ac.mu.Lock()
+			ac.printf("ready")
+			if ac.state == connectivity.Shutdown {
+				// ac.tearDown(...) has been invoked.
+				ac.mu.Unlock()
+				newTransport.Close()
+				return errConnClosing
+			}
 			oldState = ac.state
-			ac.state = connectivity.TransientFailure
+			ac.state = connectivity.Ready
 			ac.csEvltr.recordTransition(oldState, ac.state)
 			if ac.cc.balancer != nil {
 				ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 			}
+			ac.transport = newTransport
+			ac.curAddr = addr
 			if ac.ready != nil {
 				close(ac.ready)
 				ac.ready = nil
 			}
 			ac.mu.Unlock()
-			timer := time.NewTimer(sleepTime - time.Since(connectTime))
-			select {
-			case <-timer.C:
-			case <-ac.ctx.Done():
-				timer.Stop()
-				return ac.ctx.Err()
-			}
-			timer.Stop()
-			continue
+			return nil
 		}
 		ac.mu.Lock()
-		ac.printf("ready")
-		if ac.state == connectivity.Shutdown {
-			// ac.tearDown(...) has been invoked.
-			ac.mu.Unlock()
-			newTransport.Close()
-			return errConnClosing
-		}
 		oldState = ac.state
-		ac.state = connectivity.Ready
+		ac.state = connectivity.TransientFailure
 		ac.csEvltr.recordTransition(oldState, ac.state)
 		if ac.cc.balancer != nil {
 			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 		}
-		ac.transport = newTransport
 		if ac.ready != nil {
 			close(ac.ready)
 			ac.ready = nil
 		}
 		ac.mu.Unlock()
-		return nil
+		timer := time.NewTimer(sleepTime - time.Since(connectTime))
+		select {
+		case <-timer.C:
+		case <-ac.ctx.Done():
+			timer.Stop()
+			return ac.ctx.Err()
+		}
+		timer.Stop()
 	}
 }
 
@@ -1093,6 +1106,7 @@ func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 
 	ac.mu.Lock()
+	ac.curAddr = resolver.Address{}
 	defer ac.mu.Unlock()
 	if err == errConnDrain && ac.transport != nil {
 		// GracefulClose(...) may be executed multiple times when
