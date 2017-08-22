@@ -84,17 +84,22 @@ func TestCompileUpdate(t *testing.T) {
 			[]string{"1.0.0.2", "1.0.0.3", "1.0.0.6"},
 			[]*Update{{Op: Delete, Addr: "1.0.0.1"}, {Op: Add, Addr: "1.0.0.2"}, {Op: Delete, Addr: "1.0.0.5"}, {Op: Add, Addr: "1.0.0.6"}},
 		},
+		{
+			[]string{"1.0.0.1", "1.0.0.1", "1.0.0.2"},
+			[]string{"1.0.0.1"},
+			[]*Update{{Op: Delete, Addr: "1.0.0.2"}},
+		},
 	}
 
 	var w dnsWatcher
 	for _, c := range tests {
-		w.curAddrs = make([]*Update, len(c.oldAddrs))
-		newUpdates := make([]*Update, len(c.newAddrs))
-		for i, a := range c.oldAddrs {
-			w.curAddrs[i] = &Update{Addr: a}
+		w.curAddrs = make(map[string]*Update)
+		newUpdates := make(map[string]*Update)
+		for _, a := range c.oldAddrs {
+			w.curAddrs[a] = &Update{Addr: a}
 		}
-		for i, a := range c.newAddrs {
-			newUpdates[i] = &Update{Addr: a}
+		for _, a := range c.newAddrs {
+			newUpdates[a] = &Update{Addr: a}
 		}
 		r := w.compileUpdate(newUpdates)
 		if !reflect.DeepEqual(toMap(c.want), toMap(r)) {
