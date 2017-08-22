@@ -98,7 +98,7 @@ func makeFuncUnary(benchFeatures bm.Features) (func(int), func()) {
 	target, stopper := bm.StartServer(bm.ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, sopts...)
 	conn := bm.NewClientConn(target, opts...)
 	tc := testpb.NewBenchmarkServiceClient(conn)
-	return func(pos int) {
+	return func(int) {
 			unaryCaller(tc, benchFeatures.ReqSizeBytes, benchFeatures.RespSizeBytes)
 		}, func() {
 			conn.Close()
