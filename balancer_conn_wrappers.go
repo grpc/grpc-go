@@ -76,8 +76,33 @@ type acBalancerWrapper struct {
 	ac *addrConn
 }
 
-func (acbw *acBalancerWrapper) UpdateAddresses([]resolver.Address) {
+func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
+	grpclog.Infof("acBalancerWrapper: UpdateAddresses called with %v", addrs)
 	// TODO(bar) update the addresses or tearDown and create a new ac.
+	if !acbw.ac.tryUpdateAddrs(addrs) {
+		acbw.ac.mu.Lock()
+		// Set old ac.acbw to nil so the states update will be ignored by balancer.
+		acbw.ac.acbw = nil
+		cc := acbw.ac.cc
+		acState := acbw.ac.state
+		acbw.ac.mu.Unlock()
+		acbw.ac.tearDown(errConnDrain)
+
+		if acState == connectivity.Shutdown {
+			return
+		}
+
+		ac, err := cc.newAddrConn(addrs)
+		if err != nil {
+			grpclog.Warningf("acBalancerWrapper: UpdateAddresses: failed to newAddrConn: %v", err)
+			return
+		}
+		acbw.ac = ac
+		ac.acbw = acbw
+		if acState != connectivity.Idle {
+			ac.connect(false)
+		}
+	}
 }
 
 func (acbw *acBalancerWrapper) Connect() {

@@ -108,31 +108,36 @@ func (bw *balancerWrapper) lbWatcher() {
 	for addrs := range notifyCh {
 		grpclog.Infof("balancerWrapper: got update addr from Notify: %v\n", addrs)
 		if bw.pickfirst {
-			// Teardown old sc.
-			var del balancer.SubConn
+			var (
+				oldA  resolver.Address
+				oldSC balancer.SubConn
+			)
 			bw.mu.Lock()
-			for a, sc := range bw.conns {
-				delete(bw.conns, a)
-				delete(bw.connSt, sc)
-				del = sc
+			for oldA, oldSC = range bw.conns {
+				break
 			}
 			bw.mu.Unlock()
-			if del != nil {
-				bw.cc.RemoveSubConn(del)
-			}
-			if len(addrs) > 0 {
-				var newAddrs []resolver.Address
-				// resAddrs := make(map[resolver.Address]Address)
-				for _, a := range addrs {
-					newAddr := resolver.Address{
-						Addr:       a.Addr,
-						Type:       resolver.Backend, // All addresses from balancer are all backends.
-						ServerName: "",               // TODO(bar) support servername.
-						Metadata:   a.Metadata,
-					}
-					// resAddrs[newAddr] = a
-					newAddrs = append(newAddrs, newAddr)
+			if len(addrs) <= 0 {
+				if oldSC != nil {
+					// Teardown old sc.
+					delete(bw.conns, oldA)
+					delete(bw.connSt, oldSC)
+					bw.cc.RemoveSubConn(oldSC)
 				}
+				continue
+			}
+
+			var newAddrs []resolver.Address
+			for _, a := range addrs {
+				newAddr := resolver.Address{
+					Addr:       a.Addr,
+					Type:       resolver.Backend, // All addresses from balancer are all backends.
+					ServerName: "",               // TODO(bar) support servername.
+					Metadata:   a.Metadata,
+				}
+				newAddrs = append(newAddrs, newAddr)
+			}
+			if oldSC == nil {
 				// Create new sc.
 				sc, err := bw.cc.NewSubConn(newAddrs, balancer.NewSubConnOptions{})
 				if err != nil {
@@ -150,6 +155,9 @@ func (bw *balancerWrapper) lbWatcher() {
 					bw.mu.Unlock()
 					sc.Connect()
 				}
+			} else {
+				oldSC.UpdateAddresses(newAddrs)
+				bw.connSt[oldSC].addr = addrs[0]
 			}
 		} else {
 			var (

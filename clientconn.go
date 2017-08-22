@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math"
 	"net"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -714,6 +715,36 @@ func (ac *addrConn) connect(block bool) error {
 	return nil
 }
 
+// tryUpdateAddrs tries to update ac.addrs with the new addresses list.
+//
+// It checks whether current connected address of ac is in the new addrs list.
+//  - If true, it updates ac.addrs and returns true. The ac will keep using
+//    the existing connection.
+//  - If false, it does nothing and returns false.
+func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	grpclog.Infof("addrConn: tryUpdateAddrs curAddr: %v, addrs: %v", ac.curAddr, addrs)
+	if ac.state == connectivity.Shutdown {
+		ac.addrs = addrs
+		return true
+	}
+
+	var curAddrFound bool
+	for _, a := range addrs {
+		if reflect.DeepEqual(ac.curAddr, a) {
+			curAddrFound = true
+			break
+		}
+	}
+	grpclog.Infof("addrConn: tryUpdateAddrs curAddrFound: %v", curAddrFound)
+	if curAddrFound {
+		ac.addrs = addrs
+	}
+
+	return curAddrFound
+}
+
 // GetMethodConfig gets the method config of the input method.
 // If there's an exact match for input method (i.e. /service/method), we return
 // the corresponding MethodConfig.
@@ -872,13 +903,13 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		ac.mu.Unlock()
 		return errConnClosing
 	}
-	ac.errorf("transient failure")
 	oldState := ac.state
 	ac.state = connectivity.Connecting
 	ac.csEvltr.recordTransition(oldState, ac.state)
 	if ac.cc.balancer != nil {
 		ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
 	}
+	// TODO(bar) don't call balancer functions to handle subconn state change if ac.acbw is nil.
 	if ac.ready != nil {
 		close(ac.ready)
 		ac.ready = nil
