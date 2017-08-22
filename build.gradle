@@ -47,7 +47,7 @@ subprojects {
     idea.module.inheritOutputDirs = true
 
     group = "io.grpc"
-    version = "1.6.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+    version = "1.7.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
     sourceCompatibility = 1.6
     targetCompatibility = 1.6
