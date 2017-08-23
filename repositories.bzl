@@ -187,7 +187,7 @@ def io_netty_common():
 
 def io_netty_transport():
   native.maven_jar(
-      name = "io_netty_netty_netty_transport",
+      name = "io_netty_netty_transport",
       artifact = "io.netty:netty-transport:4.1.14.Final",
       sha1 = "3ed6474f1289635fc0696ec37380e20f258950a2",
   )

@@ -23,6 +23,6 @@ java_library(
         "@io_netty_netty_handler//jar",
         "@io_netty_netty_handler_proxy//jar",
         "@io_netty_netty_resolver//jar",
-        "@io_netty_netty_netty_transport//jar",
+        "@io_netty_netty_transport//jar",
     ],
 )
