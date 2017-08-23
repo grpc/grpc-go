@@ -157,7 +157,9 @@ func (bw *balancerWrapper) lbWatcher() {
 				}
 			} else {
 				oldSC.UpdateAddresses(newAddrs)
+				bw.mu.Lock()
 				bw.connSt[oldSC].addr = addrs[0]
+				bw.mu.Unlock()
 			}
 		} else {
 			var (
@@ -210,7 +212,7 @@ func (bw *balancerWrapper) lbWatcher() {
 }
 
 func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("balancerWrapper: handle subconn state change: %v, %v", sc, s)
+	grpclog.Infof("balancerWrapper: handle subconn state change: %p, %v", sc, s)
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
 	scSt, ok := bw.connSt[sc]
