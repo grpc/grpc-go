@@ -77,7 +77,7 @@ def grpc_java_repositories(
   )
   native.bind(
     name = "gson",
-    actual = "@com_google_code_gson//jar",
+    actual = "@com_google_code_gson_gson//jar",
   )
 
 def com_google_api_grpc_google_common_protos():
@@ -96,7 +96,7 @@ def com_google_code_findbugs_jsr305():
 
 def com_google_code_gson():
   native.maven_jar(
-      name = "com_google_code_gson",
+      name = "com_google_code_gson_gson",
       artifact = "com.google.code.gson:gson:jar:2.7",
       sha1 = "751f548c85fa49f330cecbb1875893f971b33c4e",
   )
@@ -243,7 +243,7 @@ def io_netty_tcnative_boringssl_static():
 
 def io_opencensus_api():
   native.maven_jar(
-      name = "com_google_code_gson_gson",
+      name = "io_opencensus_opencensus_api",
       artifact = "io.opencensus:opencensus-api:0.5.1",
       sha1 = "cbd0a716a7d85ac34b83d86b13f0a6655e45c2ba",
   )
