@@ -60,7 +60,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	if !ok {
 		return
 	}
-	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnClosing)
+	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {

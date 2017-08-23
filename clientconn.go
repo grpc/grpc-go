@@ -448,7 +448,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		// Unblock balancer initialization with a fake resolver update.
 		// The balancer wrapper will not read the addresses, so an empty list works.
 		// TODO(bar) remove this after the real resolver is started.
-		cc.balancer.HandleResolvedResult([]resolver.Address{}, nil)
+		cc.balancer.HandleResolvedAddrs([]resolver.Address{}, nil)
 	}
 
 	// A blocking dial blocks until the clientConn is ready.
@@ -764,10 +764,10 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	return m
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(balancer.PutInfo), error) {
+func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
 	var (
 		ac  *addrConn
-		put func(balancer.PutInfo)
+		put func(balancer.DoneInfo)
 	)
 	if cc.balancer == nil {
 		// If balancer is nil, there should be only one addrConn available.
@@ -799,7 +799,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 			ac = acbw.getAddrConn()
 		} else if put != nil {
 			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
-			put(balancer.PutInfo{Err: errors.New("SubConn returned by pick cannot be recognized")})
+			put(balancer.DoneInfo{Err: errors.New("SubConn returned by pick cannot be recognized")})
 		}
 	}
 	if ac == nil {
@@ -809,7 +809,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 	if err != nil {
 		if put != nil {
 			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
-			put(balancer.PutInfo{Err: err})
+			put(balancer.DoneInfo{Err: err})
 		}
 		return nil, nil, err
 	}
@@ -848,7 +848,7 @@ type addrConn struct {
 	addrs   []resolver.Address
 	dopts   dialOptions
 	events  trace.EventLog
-	acbw    *acBalancerWrapper
+	acbw    balancer.SubConn
 
 	csEvltr *connectivityStateEvaluator
 

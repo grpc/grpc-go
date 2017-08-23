@@ -125,8 +125,8 @@ type Builder interface {
 // PickOptions contains addition information for the Pick operation.
 type PickOptions struct{}
 
-// PutInfo contains additional information for Put.
-type PutInfo struct {
+// DoneInfo contains additional information for done.
+type DoneInfo struct {
 	// Err is the rpc error the RPC finished with. It could be nil.
 	Err error
 }
@@ -170,10 +170,10 @@ type Picker interface {
 	// - Else (error is other non-nil error):
 	//   - The RPC will fail with unavailable error.
 	//
-	// The returned put() function will be called once the rpc has finished, with the
+	// The returned done() function will be called once the rpc has finished, with the
 	// final status of that RPC.
-	// put may be nil if balancer doesn't care about the RPC status.
-	Pick(ctx context.Context, opts PickOptions) (conn SubConn, put func(PutInfo), err error)
+	// done may be nil if balancer doesn't care about the RPC status.
+	Pick(ctx context.Context, opts PickOptions) (conn SubConn, done func(DoneInfo), err error)
 }
 
 // Balancer takes input from gRPC, manages SubConns, and collects and aggregates
@@ -188,12 +188,12 @@ type Balancer interface {
 	// Balancer should also generate and update Pickers when its internal state has
 	// been changed by the new state.
 	HandleSubConnStateChange(sc SubConn, state connectivity.State)
-	// HandleResolvedResult is called by gRPC to send updated resolved addresses to
+	// HandleResolvedAddrs is called by gRPC to send updated resolved addresses to
 	// balancers.
 	// Balancer can create new SubConn or remove SubConn with the addresses.
 	// An empty address slice and a non-nil error will be passed if the resolver returns
 	// non-nil error to gRPC.
-	HandleResolvedResult([]resolver.Address, error)
+	HandleResolvedAddrs([]resolver.Address, error)
 	// Close closes the balancer.
 	Close()
 }

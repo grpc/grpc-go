@@ -238,7 +238,7 @@ func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s conne
 	return
 }
 
-func (bw *balancerWrapper) HandleResolvedResult([]resolver.Address, error) {
+func (bw *balancerWrapper) HandleResolvedAddrs([]resolver.Address, error) {
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
 	select {
@@ -266,7 +266,7 @@ func (bw *balancerWrapper) Close() {
 // The picker is the balancerWrapper itself.
 // Pick should never return ErrNoSubConnAvailable.
 // It either blocks or returns error, consistent with v1 balancer Get().
-func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.PutInfo), error) {
+func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	failfast := true // Default failfast is true.
 	if ss, ok := rpcInfoFromContext(ctx); ok {
 		failfast = ss.failfast
@@ -275,9 +275,9 @@ func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) 
 	if err != nil {
 		return nil, nil, err
 	}
-	var put func(balancer.PutInfo)
+	var put func(balancer.DoneInfo)
 	if p != nil {
-		put = func(i balancer.PutInfo) { p() }
+		put = func(i balancer.DoneInfo) { p() }
 	}
 	var sc balancer.SubConn
 	if bw.pickfirst {
