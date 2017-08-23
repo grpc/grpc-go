@@ -482,12 +482,10 @@ public final class GrpcUtil {
    * @return a {@link ThreadFactory}.
    */
   public static ThreadFactory getThreadFactory(String nameFormat, boolean daemon) {
-    ThreadFactory threadFactory = MoreExecutors.platformThreadFactory();
     if (IS_RESTRICTED_APPENGINE) {
-      return threadFactory;
+      return MoreExecutors.platformThreadFactory();
     } else {
       return new ThreadFactoryBuilder()
-          .setThreadFactory(threadFactory)
           .setDaemon(daemon)
           .setNameFormat(nameFormat)
           .build();
