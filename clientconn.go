@@ -796,7 +796,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions)
 			return nil, nil, toRPCErr(err)
 		}
 		if acbw, ok := sc.(*acBalancerWrapper); ok {
-			ac = acbw.ac
+			ac = acbw.getAddrConn()
 		} else if put != nil {
 			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
 			put(balancer.PutInfo{Err: errors.New("SubConn returned by pick cannot be recognized")})
@@ -1168,4 +1168,10 @@ func (ac *addrConn) tearDown(err error) {
 		ac.transport.Close()
 	}
 	return
+}
+
+func (ac *addrConn) getState() connectivity.State {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.state
 }

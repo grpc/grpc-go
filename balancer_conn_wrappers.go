@@ -19,6 +19,8 @@
 package grpc
 
 import (
+	"sync"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
@@ -58,7 +60,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	if !ok {
 		return
 	}
-	ccb.cc.removeAddrConn(acbw.ac, errConnClosing)
+	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnClosing)
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
@@ -73,19 +75,22 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
+	mu sync.Mutex
 	ac *addrConn
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 	grpclog.Infof("acBalancerWrapper: UpdateAddresses called with %v", addrs)
+	acbw.mu.Lock()
+	defer acbw.mu.Unlock()
 	// TODO(bar) update the addresses or tearDown and create a new ac.
 	if !acbw.ac.tryUpdateAddrs(addrs) {
+		cc := acbw.ac.cc
 		acbw.ac.mu.Lock()
 		// Set old ac.acbw to nil so the states update will be ignored by balancer.
 		acbw.ac.acbw = nil
-		cc := acbw.ac.cc
-		acState := acbw.ac.state
 		acbw.ac.mu.Unlock()
+		acState := acbw.ac.getState()
 		acbw.ac.tearDown(errConnDrain)
 
 		if acState == connectivity.Shutdown {
@@ -106,5 +111,13 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 }
 
 func (acbw *acBalancerWrapper) Connect() {
+	acbw.mu.Lock()
+	defer acbw.mu.Unlock()
 	acbw.ac.connect(false)
+}
+
+func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
+	acbw.mu.Lock()
+	defer acbw.mu.Unlock()
+	return acbw.ac
 }
