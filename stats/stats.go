@@ -219,14 +219,18 @@ type outgoingTagsKey struct{}
 // SetTags attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-tags-bin.
 //
-// This is EXPERIMENTAL and will likely be removed in an upcoming release.
+// NOTE: this is provided only for backward compatibilty with existing clients
+// and will likely be removed in an upcoming release.  New uses should transmit
+// this type of data using metadata.
 func SetTags(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTagsKey{}, b)
 }
 
 // Tags returns the tags from the context for the inbound RPC.
 //
-// This is EXPERIMENTAL and will likely be removed in an upcoming release.
+// NOTE: this is provided only for backward compatibilty with existing clients
+// and will likely be removed in an upcoming release.  New uses should transmit
+// this type of data using metadata.
 func Tags(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTagsKey{}).([]byte)
 	return b
@@ -254,14 +258,18 @@ type outgoingTraceKey struct{}
 // SetTrace attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-trace-bin.
 //
-// This is EXPERIMENTAL and will likely be removed in an upcoming release.
+// NOTE: this is provided only for backward compatibilty with existing clients
+// and will likely be removed in an upcoming release.  New uses should transmit
+// this type of data using metadata.
 func SetTrace(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTraceKey{}, b)
 }
 
 // Trace returns the trace from the context for the inbound RPC.
 //
-// This is EXPERIMENTAL and will likely be removed in an upcoming release.
+// NOTE: this is provided only for backward compatibilty with existing clients
+// and will likely be removed in an upcoming release.  New uses should transmit
+// this type of data using metadata.
 func Trace(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTraceKey{}).([]byte)
 	return b
