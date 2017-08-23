@@ -775,8 +775,13 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
-	if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
-		return err
+	// Always write a status regardless of context cancellation unless the stream
+	// is terminated (e.g. by a RST_STREAM, GOAWAY, or transport error).  The
+	// server's application code is already done so it is fine to ignore s.ctx.
+	select {
+	case <-t.shutdownChan:
+		return ErrConnClosing
+	case <-t.writableChan:
 	}
 	t.hBuf.Reset()
 	if !headersSent {
