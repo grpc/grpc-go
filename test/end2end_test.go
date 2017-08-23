@@ -1771,7 +1771,7 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err != nil && err != io.EOF {
+	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
@@ -2164,7 +2164,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 		ResponseParameters: respParam,
 		Payload:            spayload,
 	}
-	if err := stream.Send(sreq); err != nil && err != io.EOF {
+	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
 	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
@@ -4933,7 +4933,7 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err = stream.Send(sreq); err != nil && err != io.EOF {
+	if err = stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send() = _, %v, want <nil>", stream, err)
 	}
 	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {

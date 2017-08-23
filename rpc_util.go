@@ -332,13 +332,7 @@ func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayl
 	if outPayload != nil {
 		outPayload.WireLength = payloadLen + sizeLen + len(b)
 	}
-
-	secondStart := 16384 - payloadLen - sizeLen
-	if len(b) < secondStart {
-		secondStart = len(b)
-	}
-	bufHeader = append(bufHeader, b[:secondStart]...)
-	return bufHeader, b[secondStart:], nil
+	return bufHeader, b, nil
 }
 
 func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {
