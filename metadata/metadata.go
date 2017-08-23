@@ -44,6 +44,9 @@ type MD map[string][]string
 //  - lowercase letters: a-z
 //  - special characters: -_.
 // Uppercase letters are automatically converted to lowercase.
+//
+// Keys beginning with "grpc-" are reserved for grpc-internal use only and may
+// result in errors if set in metadata.
 func New(m map[string]string) MD {
 	md := MD{}
 	for k, val := range m {
@@ -62,6 +65,9 @@ func New(m map[string]string) MD {
 //  - lowercase letters: a-z
 //  - special characters: -_.
 // Uppercase letters are automatically converted to lowercase.
+//
+// Keys beginning with "grpc-" are reserved for grpc-internal use only and may
+// result in errors if set in metadata.
 func Pairs(kv ...string) MD {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: Pairs got the odd number of input pairs for metadata: %d", len(kv)))

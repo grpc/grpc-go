@@ -217,11 +217,13 @@ type incomingTagsKey struct{}
 type outgoingTagsKey struct{}
 
 // SetTags attaches stats tagging data to the context, which will be sent in
-// the outgoing RPC with the header grpc-tags-bin.
+// the outgoing RPC with the header grpc-tags-bin.  Subsequent calls to
+// SetTags will overwrite the values from earlier calls.
 //
 // NOTE: this is provided only for backward compatibilty with existing clients
 // and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata.
+// this type of data using metadata with a different, non-reserved (i.e. does
+// not begin with "grpc-") header name.
 func SetTags(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTagsKey{}, b)
 }
@@ -230,7 +232,8 @@ func SetTags(ctx context.Context, b []byte) context.Context {
 //
 // NOTE: this is provided only for backward compatibilty with existing clients
 // and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata.
+// this type of data using metadata with a different, non-reserved (i.e. does
+// not begin with "grpc-") header name.
 func Tags(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTagsKey{}).([]byte)
 	return b
@@ -256,11 +259,13 @@ type incomingTraceKey struct{}
 type outgoingTraceKey struct{}
 
 // SetTrace attaches stats tagging data to the context, which will be sent in
-// the outgoing RPC with the header grpc-trace-bin.
+// the outgoing RPC with the header grpc-trace-bin.  Subsequent calls to
+// SetTrace will overwrite the values from earlier calls.
 //
 // NOTE: this is provided only for backward compatibilty with existing clients
 // and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata.
+// this type of data using metadata with a different, non-reserved (i.e. does
+// not begin with "grpc-") header name.
 func SetTrace(ctx context.Context, b []byte) context.Context {
 	return context.WithValue(ctx, outgoingTraceKey{}, b)
 }
@@ -269,7 +274,8 @@ func SetTrace(ctx context.Context, b []byte) context.Context {
 //
 // NOTE: this is provided only for backward compatibilty with existing clients
 // and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata.
+// this type of data using metadata with a different, non-reserved (i.e. does
+// not begin with "grpc-") header name.
 func Trace(ctx context.Context) []byte {
 	b, _ := ctx.Value(incomingTraceKey{}).([]byte)
 	return b
