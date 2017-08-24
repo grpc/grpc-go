@@ -823,7 +823,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (err error) {
 	// TODO(zhaoq): Support multi-writers for a single stream.
-	secondStart := 16379 // 16384 - payloadLen - sizeLen
+	secondStart := http2MaxFrameLen - len(hdr)
 	if len(data) < secondStart {
 		secondStart = len(data)
 	}
@@ -922,14 +922,15 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 			continue
 		}
 		var forceFlush bool
-		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && !opts.Last && isLastSlice {
-			forceFlush = true
-		}
 		if r.Len() == 0 {
-			if !isLastSlice {
+			if isLastSlice {
+				if t.framer.adjustNumWriters(0) == 1 && !opts.Last {
+					forceFlush = true
+				}
+			} else {
 				r = bytes.NewBuffer(data)
+				isLastSlice = true
 			}
-			isLastSlice = true
 		}
 		// Reset ping strikes when sending data since this might cause
 		// the peer to send ping.

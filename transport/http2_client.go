@@ -679,7 +679,7 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	secondStart := 16379 // 16384 - payloadLen - sizeLen
+	secondStart := http2MaxFrameLen - len(hdr)
 	if len(data) < secondStart {
 		secondStart = len(data)
 	}
@@ -767,18 +767,22 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			t.writableChan <- 0
 			continue
 		}
-		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 && isLastSlice {
-			// Do a force flush iff this is last frame for the entire gRPC message
-			// and the caller is the only writer at this moment.
-			forceFlush = true
-		}
 		if r.Len() == 0 {
-			if isLastSlice && opts.Last {
-				endStream = true
-			} else if !isLastSlice && len(data) != 0 {
-				r = bytes.NewBuffer(data)
+			if isLastSlice {
+				if opts.Last {
+					endStream = true
+				}
+				if t.framer.adjustNumWriters(0) == 1 {
+					// Do a force flush iff this is last frame for the entire gRPC message
+					// and the caller is the only writer at this moment.
+					forceFlush = true
+				}
+			} else {
+				isLastSlice = true
+				if len(data) != 0 {
+					r = bytes.NewBuffer(data)
+				}
 			}
-			isLastSlice = true
 		}
 		// If WriteData fails, all the pending streams will be handled
 		// by http2Client.Close(). No explicit CloseStream() needs to be
