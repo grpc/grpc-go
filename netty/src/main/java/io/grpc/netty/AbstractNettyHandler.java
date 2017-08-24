@@ -19,7 +19,6 @@ package io.grpc.netty;
 import static io.netty.buffer.Unpooled.directBuffer;
 import static io.netty.buffer.Unpooled.unreleasableBuffer;
 import static io.netty.handler.codec.http2.Http2CodecUtil.getEmbeddedHttp2Exception;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBuf;
@@ -37,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  * shutdown the connection) as well as sending the initial connection window at startup.
  */
 abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
-  private static long GRACEFUL_SHUTDOWN_TIMEOUT = SECONDS.toMillis(5);
+  private static final long GRACEFUL_SHUTDOWN_NO_TIMEOUT = -1;
   private boolean autoTuneFlowControlOn = false;
   private int initialConnectionWindow;
   private ChannelHandlerContext ctx;
@@ -52,8 +51,8 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
                        Http2Settings initialSettings) {
     super(decoder, encoder, initialSettings);
 
-    // Set the timeout for graceful shutdown.
-    gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_TIMEOUT);
+    // During a graceful shutdown, wait until all streams are closed.
+    gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_NO_TIMEOUT);
 
     // Extract the connection window from the settings if it was set.
     this.initialConnectionWindow = initialSettings.initialWindowSize() == null ? -1 :
