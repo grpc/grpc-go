@@ -25,7 +25,6 @@ import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior;
 import io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior;
-import io.netty.handler.ssl.ApplicationProtocolNegotiator;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslProvider;
@@ -38,6 +37,7 @@ import java.util.List;
 /**
  * Utility for configuring SslContext for gRPC.
  */
+@SuppressWarnings("deprecation")
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1784")
 public class GrpcSslContexts {
   private GrpcSslContexts() {}
@@ -173,7 +173,9 @@ public class GrpcSslContexts {
     }
   }
 
-  static void ensureAlpnAndH2Enabled(ApplicationProtocolNegotiator alpnNegotiator) {
+  @SuppressWarnings("deprecation")
+  static void ensureAlpnAndH2Enabled(
+      io.netty.handler.ssl.ApplicationProtocolNegotiator alpnNegotiator) {
     checkArgument(alpnNegotiator != null, "ALPN must be configured");
     checkArgument(alpnNegotiator.protocols() != null && !alpnNegotiator.protocols().isEmpty(),
         "ALPN must be enabled and list HTTP/2 as a supported protocol.");
