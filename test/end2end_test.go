@@ -4686,7 +4686,7 @@ func TestTapTimeout(t *testing.T) {
 
 	ss := &stubServer{
 		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			time.Sleep(500 * time.Millisecond)
+			<-ctx.Done()
 			return &testpb.Empty{}, nil
 		},
 	}
