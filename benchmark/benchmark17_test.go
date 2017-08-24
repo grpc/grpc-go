@@ -49,6 +49,8 @@ func BenchmarkClient(b *testing.B) {
 
 	// run benchmarks
 	start := true
+	s := stats.NewStats(38)
+	isMatched := false
 	for !reflect.DeepEqual(featuresCurPos, initalPos) || start {
 		start = false
 		tracing := "Trace"
@@ -69,13 +71,24 @@ func BenchmarkClient(b *testing.B) {
 		grpc.EnableTracing = enableTrace[featuresCurPos[0]]
 		b.Run(fmt.Sprintf("Unary-%s-%s",
 			tracing, benchFeature.String()), func(b *testing.B) {
-			runUnary(b, benchFeature)
+			runUnary(b, s, benchFeature)
+			isMatched = true
 		})
-
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+			s.Clear()
+		}
 		b.Run(fmt.Sprintf("Stream-%s-%s",
 			tracing, benchFeature.String()), func(b *testing.B) {
-			runStream(b, benchFeature)
+			runStream(b, s, benchFeature)
+			isMatched = true
 		})
+		if isMatched {
+			fmt.Print(s.String())
+			isMatched = false
+			s.Clear()
+		}
 		AddOne(featuresCurPos, featuresMaxPosition)
 	}
 }

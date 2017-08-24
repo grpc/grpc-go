@@ -260,8 +260,11 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, benchFeatures Features) {
-	s := stats.AddStats(b, 38)
+func runUnary(b *testing.B, s *stats.Stats, benchFeatures Features) {
+	if s == nil {
+		s = stats.AddStats(b, 38)
+	}
+	s.Clear()
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
@@ -308,8 +311,11 @@ func runUnary(b *testing.B, benchFeatures Features) {
 	conn.Close()
 }
 
-func runStream(b *testing.B, benchFeatures Features) {
-	s := stats.AddStats(b, 38)
+func runStream(b *testing.B, s *stats.Stats, benchFeatures Features) {
+	if s == nil {
+		s = stats.AddStats(b, 38)
+	}
+	s.Clear()
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
 	defer stopper()
