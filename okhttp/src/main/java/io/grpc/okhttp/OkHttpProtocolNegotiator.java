@@ -28,6 +28,8 @@ import java.net.Socket;
 import java.security.Provider;
 import java.security.Security;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLSocket;
 
@@ -35,6 +37,7 @@ import javax.net.ssl.SSLSocket;
  * A helper class located in package com.squareup.okhttp.internal for TLS negotiation.
  */
 class OkHttpProtocolNegotiator {
+  private static final Logger logger = Logger.getLogger(OkHttpProtocolNegotiator.class.getName());
   private static final Platform DEFAULT_PLATFORM = Platform.get();
   private static OkHttpProtocolNegotiator NEGOTIATOR =
       createNegotiator(OkHttpProtocolNegotiator.class.getClassLoader());
@@ -59,11 +62,13 @@ class OkHttpProtocolNegotiator {
     try {
       // Attempt to find Android 2.3+ APIs.
       loader.loadClass("com.android.org.conscrypt.OpenSSLSocketImpl");
-    } catch (ClassNotFoundException ignored) {
+    } catch (ClassNotFoundException e1) {
+      logger.log(Level.FINE, "Unable to find Conscrypt. Skipping", e1);
       try {
         // Older platform before being unbundled.
         loader.loadClass("org.apache.harmony.xnet.provider.jsse.OpenSSLSocketImpl");
-      } catch (ClassNotFoundException ignored2) {
+      } catch (ClassNotFoundException e2) {
+        logger.log(Level.FINE, "Unable to find any OpenSSLSocketImpl. Skipping", e2);
         android = false;
       }
     }
@@ -231,16 +236,16 @@ class OkHttpProtocolNegotiator {
       try {
         loader.loadClass("android.net.Network"); // Arbitrary class added in Android 5.0.
         return TlsExtensionType.ALPN_AND_NPN;
-      } catch (ClassNotFoundException ignored) {
-        // making checkstyle happy.
+      } catch (ClassNotFoundException e) {
+        logger.log(Level.FINE, "Can't find class", e);
       }
 
       // Check if on Android 4.1 or later.
       try {
         loader.loadClass("android.app.ActivityOptions"); // Arbitrary class added in Android 4.1.
         return TlsExtensionType.NPN;
-      } catch (ClassNotFoundException ignored) {
-        // making checkstyle happy.
+      } catch (ClassNotFoundException e) {
+        logger.log(Level.FINE, "Can't find class", e);
       }
 
       // This will be caught by the constructor.

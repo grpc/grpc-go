@@ -156,18 +156,17 @@ public class GrpcSslContexts {
         if (JettyTlsUtil.isJettyNpnConfigured()) {
           return NPN;
         }
-        throw new IllegalArgumentException("Jetty ALPN/NPN has not been properly configured.");
+        // Use the ALPN cause since it is prefered.
+        throw new IllegalArgumentException(
+            "Jetty ALPN/NPN has not been properly configured.",
+            JettyTlsUtil.getJettyAlpnUnavailabilityCause());
       }
       case OPENSSL: {
         if (!OpenSsl.isAvailable()) {
-          throw new IllegalArgumentException("OpenSSL is not installed on the system.");
+          throw new IllegalArgumentException(
+              "OpenSSL is not installed on the system.", OpenSsl.unavailabilityCause());
         }
-
-        if (OpenSsl.isAlpnSupported()) {
-          return NPN_AND_ALPN;
-        } else {
-          return NPN;
-        }
+        return OpenSsl.isAlpnSupported() ? NPN_AND_ALPN : NPN;
       }
       default:
         throw new IllegalArgumentException("Unsupported provider: " + provider);
