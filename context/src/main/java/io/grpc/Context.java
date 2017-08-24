@@ -99,8 +99,6 @@ public class Context {
   private static final PersistentHashArrayMappedTrie<Key<?>, Object> EMPTY_ENTRIES =
       new PersistentHashArrayMappedTrie<Key<?>, Object>();
 
-  private static final Key<Deadline> DEADLINE_KEY = new Key<Deadline>("deadline");
-
   /**
    * The logical root context which is the ultimate ancestor of all contexts. This context
    * is not cancellable and so will not cascade cancellation or retain listeners.
@@ -191,8 +189,7 @@ public class Context {
    */
   private Context(PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
     cancellableAncestor = null;
-    // Not inheriting cancellation implies not inheriting a deadline too.
-    this.keyValueEntries = keyValueEntries.put(DEADLINE_KEY, null);
+    this.keyValueEntries = keyValueEntries;
     cascadesCancellation = false;
     canBeCancelled = false;
   }
@@ -466,7 +463,10 @@ public class Context {
    * @return A {@link io.grpc.Deadline} or {@code null} if no deadline is set.
    */
   public Deadline getDeadline() {
-    return DEADLINE_KEY.get(this);
+    if (cancellableAncestor == null) {
+      return null;
+    }
+    return cancellableAncestor.getDeadline();
   }
 
   /**
@@ -685,28 +685,19 @@ public class Context {
    */
   public static final class CancellableContext extends Context {
 
+    private final Deadline deadline;
+    private final Context uncancellableSurrogate;
+
     private boolean cancelled;
     private Throwable cancellationCause;
-    private final Context uncancellableSurrogate;
     private ScheduledFuture<?> pendingDeadline;
-
-    /**
-     * If the parent deadline is before the given deadline there is no need to install the value
-     * or listen for its expiration as the parent context will already be listening for it.
-     */
-    private static PersistentHashArrayMappedTrie<Key<?>, Object> deriveDeadline(
-        Context parent, Deadline deadline) {
-      Deadline parentDeadline = DEADLINE_KEY.get(parent);
-      return parentDeadline == null || deadline.isBefore(parentDeadline)
-          ? parent.keyValueEntries.put(DEADLINE_KEY, deadline)
-          : parent.keyValueEntries;
-    }
 
     /**
      * Create a cancellable context that does not have a deadline.
      */
     private CancellableContext(Context parent) {
       super(parent, parent.keyValueEntries, true);
+      deadline = parent.getDeadline();
       // Create a surrogate that inherits from this to attach so that you cannot retrieve a
       // cancellable context from Context.current()
       uncancellableSurrogate = new Context(this, keyValueEntries);
@@ -717,8 +708,13 @@ public class Context {
      */
     private CancellableContext(Context parent, Deadline deadline,
         ScheduledExecutorService scheduler) {
-      super(parent, deriveDeadline(parent, deadline), true);
-      if (DEADLINE_KEY.get(this) == deadline) {
+      super(parent, parent.keyValueEntries, true);
+      Deadline parentDeadline = parent.getDeadline();
+      if (parentDeadline != null && parentDeadline.compareTo(deadline) <= 0) {
+        // The new deadline won't have an effect, so ignore it
+        deadline = parentDeadline;
+      } else {
+        // The new deadline has an effect
         if (!deadline.isExpired()) {
           // The parent deadline was after the new deadline so we need to install a listener
           // on the new earlier deadline to trigger expiration for this context.
@@ -737,6 +733,7 @@ public class Context {
           cancel(new TimeoutException("context timed out"));
         }
       }
+      this.deadline = deadline;
       uncancellableSurrogate = new Context(this, keyValueEntries);
     }
 
@@ -828,6 +825,11 @@ public class Context {
         return cancellationCause;
       }
       return null;
+    }
+
+    @Override
+    public Deadline getDeadline() {
+      return deadline;
     }
   }
 
