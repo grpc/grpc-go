@@ -823,7 +823,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (err error) {
 	// TODO(zhaoq): Support multi-writers for a single stream.
-	secondStart := http2MaxFrameLen - len(hdr)
+	secondStart := http2MaxFrameLen - len(hdr)%http2MaxFrameLen
 	if len(data) < secondStart {
 		secondStart = len(data)
 	}

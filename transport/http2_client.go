@@ -679,7 +679,7 @@ func (t *http2Client) GracefulClose() error {
 // TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	secondStart := http2MaxFrameLen - len(hdr)
+	secondStart := http2MaxFrameLen - len(hdr)%http2MaxFrameLen
 	if len(data) < secondStart {
 		secondStart = len(data)
 	}
