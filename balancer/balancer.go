@@ -72,6 +72,8 @@ type SubConn interface {
 	// If it's in the list, the connection will be kept.
 	// If it's not in the list, the connection will gracefully closed, and
 	// a new connection will be created.
+	//
+	// This will trigger a state transition for the SubConn.
 	UpdateAddresses([]resolver.Address)
 	// Connect starts the connecting for this SubConn.
 	Connect()

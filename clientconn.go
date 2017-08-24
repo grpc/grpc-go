@@ -897,6 +897,7 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // For the old transport:
 // - if drain is true, it will be gracefully closed.
 // - otherwise, it will be closed.
+// TODO(bar) make sure all state transitions are valid.
 func (ac *addrConn) resetTransport(drain bool) error {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
