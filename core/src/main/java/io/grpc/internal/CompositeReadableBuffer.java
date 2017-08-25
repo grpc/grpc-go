@@ -166,6 +166,10 @@ public class CompositeReadableBuffer extends AbstractReadableBuffer {
   private void execute(ReadOperation op, int length) {
     checkReadable(length);
 
+    if (!buffers.isEmpty()) {
+      advanceBufferIfNecessary();
+    }
+
     for (; length > 0 && !buffers.isEmpty(); advanceBufferIfNecessary()) {
       ReadableBuffer buffer = buffers.peek();
       int lengthToCopy = Math.min(length, buffer.readableBytes());

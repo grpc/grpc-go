@@ -69,6 +69,16 @@ public class CompositeReadableBufferTest {
   }
 
   @Test
+  public void readUnsignedByteShouldSkipZeroLengthBuffer() {
+    composite = new CompositeReadableBuffer();
+    composite.addBuffer(ReadableBuffers.wrap(new byte[0]));
+    byte[] in = {1};
+    composite.addBuffer(ReadableBuffers.wrap(in));
+    assertEquals(1, composite.readUnsignedByte());
+    assertEquals(0, composite.readableBytes());
+  }
+
+  @Test
   public void skipBytesShouldSucceed() {
     int remaining = EXPECTED_VALUE.length();
     composite.skipBytes(1);
