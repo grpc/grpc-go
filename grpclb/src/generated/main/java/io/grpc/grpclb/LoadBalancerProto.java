@@ -87,15 +87,14 @@ public final class LoadBalancerProto {
       "pe\"}\n\032InitialLoadBalanceResponse\022\036\n\026load" +
       "_balancer_delegate\030\001 \001(\t\022?\n\034client_stats" +
       "_report_interval\030\002 \001(\0132\031.google.protobuf" +
-      ".Duration\"i\n\nServerList\022#\n\007servers\030\001 \003(\013" +
-      "2\022.grpc.lb.v1.Server\0226\n\023expiration_inter" +
-      "val\030\003 \001(\0132\031.google.protobuf.Duration\"Z\n\006" +
-      "Server\022\022\n\nip_address\030\001 \001(\014\022\014\n\004port\030\002 \001(\005" +
-      "\022\032\n\022load_balance_token\030\003 \001(\t\022\014\n\004drop\030\004 \001" +
-      "(\010J\004\010\005\020\0062b\n\014LoadBalancer\022R\n\013BalanceLoad\022",
-      "\036.grpc.lb.v1.LoadBalanceRequest\032\037.grpc.l" +
-      "b.v1.LoadBalanceResponse(\0010\001B%\n\016io.grpc." +
-      "grpclbB\021LoadBalancerProtoP\001b\006proto3"
+      ".Duration\"7\n\nServerList\022#\n\007servers\030\001 \003(\013" +
+      "2\022.grpc.lb.v1.ServerJ\004\010\003\020\004\"Z\n\006Server\022\022\n\n" +
+      "ip_address\030\001 \001(\014\022\014\n\004port\030\002 \001(\005\022\032\n\022load_b" +
+      "alance_token\030\003 \001(\t\022\014\n\004drop\030\004 \001(\010J\004\010\005\020\0062b" +
+      "\n\014LoadBalancer\022R\n\013BalanceLoad\022\036.grpc.lb." +
+      "v1.LoadBalanceRequest\032\037.grpc.lb.v1.LoadB",
+      "alanceResponse(\0010\001B%\n\016io.grpc.grpclbB\021Lo" +
+      "adBalancerProtoP\001b\006proto3"
     };
     com.google.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new com.google.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
@@ -152,7 +151,7 @@ public final class LoadBalancerProto {
     internal_static_grpc_lb_v1_ServerList_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_grpc_lb_v1_ServerList_descriptor,
-        new java.lang.String[] { "Servers", "ExpirationInterval", });
+        new java.lang.String[] { "Servers", });
     internal_static_grpc_lb_v1_Server_descriptor =
       getDescriptor().getMessageTypes().get(7);
     internal_static_grpc_lb_v1_Server_fieldAccessorTable = new

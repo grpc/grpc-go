@@ -65,38 +65,4 @@ public interface ServerListOrBuilder extends
    */
   io.grpc.grpclb.ServerOrBuilder getServersOrBuilder(
       int index);
-
-  /**
-   * <pre>
-   * Indicates the amount of time that the client should consider this server
-   * list as valid. It may be considered stale after waiting this interval of
-   * time after receiving the list. If the interval is not positive, the
-   * client can assume the list is valid until the next list is received.
-   * </pre>
-   *
-   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
-   */
-  boolean hasExpirationInterval();
-  /**
-   * <pre>
-   * Indicates the amount of time that the client should consider this server
-   * list as valid. It may be considered stale after waiting this interval of
-   * time after receiving the list. If the interval is not positive, the
-   * client can assume the list is valid until the next list is received.
-   * </pre>
-   *
-   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
-   */
-  com.google.protobuf.Duration getExpirationInterval();
-  /**
-   * <pre>
-   * Indicates the amount of time that the client should consider this server
-   * list as valid. It may be considered stale after waiting this interval of
-   * time after receiving the list. If the interval is not positive, the
-   * client can assume the list is valid until the next list is received.
-   * </pre>
-   *
-   * <code>.google.protobuf.Duration expiration_interval = 3;</code>
-   */
-  com.google.protobuf.DurationOrBuilder getExpirationIntervalOrBuilder();
 }
