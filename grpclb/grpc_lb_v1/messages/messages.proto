@@ -32,7 +32,6 @@ message Duration {
 }
 
 message Timestamp {
-
   // Represents seconds of UTC time since Unix epoch
   // 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to
   // 9999-12-31T23:59:59Z inclusive.
@@ -122,11 +121,8 @@ message ServerList {
   // unless instructed otherwise via the client_config.
   repeated Server servers = 1;
 
-  // Indicates the amount of time that the client should consider this server
-  // list as valid. It may be considered stale after waiting this interval of
-  // time after receiving the list. If the interval is not positive, the
-  // client can assume the list is valid until the next list is received.
-  Duration expiration_interval = 3;
+  // Was google.protobuf.Duration expiration_interval.
+  reserved 3;
 }
 
 // Contains server information. When none of the [drop_for_*] fields are true,
