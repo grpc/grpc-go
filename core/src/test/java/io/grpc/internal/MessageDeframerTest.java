@@ -62,8 +62,6 @@ public class MessageDeframerTest {
   private Listener listener = mock(Listener.class);
   private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
   private StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
-  private ArgumentCaptor<Long> wireSizeCaptor = ArgumentCaptor.forClass(Long.class);
-  private ArgumentCaptor<Long> uncompressedSizeCaptor = ArgumentCaptor.forClass(Long.class);
 
   private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
       DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
@@ -395,10 +393,6 @@ public class MessageDeframerTest {
     assertEquals(messagesReceived, tracer.getInboundMessageCount());
     assertEquals(wireBytesReceived, tracer.getInboundWireSize());
     assertEquals(uncompressedBytesReceived, tracer.getInboundUncompressedSize());
-  }
-
-  private static List<Byte> bytes(ArgumentCaptor<InputStream> captor) {
-    return bytes(captor.getValue());
   }
 
   private static List<Byte> bytes(InputStream in) {

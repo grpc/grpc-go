@@ -45,9 +45,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
   private static final Logger log = Logger.getLogger(ServerCallImpl.class.getName());
 
   @VisibleForTesting
-  static String TOO_MANY_RESPONSES = "Too many responses";
+  static final String TOO_MANY_RESPONSES = "Too many responses";
   @VisibleForTesting
-  static String MISSING_RESPONSE = "Completed without a response";
+  static final String MISSING_RESPONSE = "Completed without a response";
 
   private final ServerStream stream;
   private final MethodDescriptor<ReqT, RespT> method;

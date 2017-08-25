@@ -27,8 +27,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import io.grpc.Attributes;
-import io.grpc.CallOptions;
-import io.grpc.ClientStreamTracer;
 import io.grpc.Codec;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -226,14 +224,6 @@ public class AbstractClientStreamTest {
   public void getRequest() {
     AbstractClientStream.Sink sink = mock(AbstractClientStream.Sink.class);
     final TestClientStreamTracer tracer = new TestClientStreamTracer();
-    ClientStreamTracer.Factory tracerFactory =
-        new ClientStreamTracer.Factory() {
-          @Override
-          public ClientStreamTracer newClientStreamTracer(
-              CallOptions callOptions, Metadata headers) {
-            return tracer;
-          }
-        };
     StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[] {tracer});
     AbstractClientStream stream = new BaseAbstractClientStream(allocator,
         new BaseTransportState(statsTraceCtx), sink, statsTraceCtx, true);

@@ -180,7 +180,6 @@ public class ProtoLiteUtilsTest {
 
   @Test
   public void testDrainTo_none() throws Exception {
-    byte[] golden = ByteStreams.toByteArray(marshaller.stream(proto));
     InputStream is = marshaller.stream(proto);
     byte[] unused = ByteStreams.toByteArray(is);
     Drainable d = (Drainable) is;
