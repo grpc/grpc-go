@@ -2,19 +2,19 @@
 // source: grpc_lb_v1/service/service.proto
 
 /*
-Package grpc_lb_v1 is a generated protocol buffer package.
+Package service is a generated protocol buffer package.
 
 It is generated from these files:
 	grpc_lb_v1/service/service.proto
 
 It has these top-level messages:
 */
-package grpc_lb_v1
+package service
 
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import grpc_lb_v11 "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
+import grpc_lb_v1 "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 
 import (
 	context "golang.org/x/net/context"
@@ -65,8 +65,8 @@ func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallO
 }
 
 type LoadBalancer_BalanceLoadClient interface {
-	Send(*grpc_lb_v11.LoadBalanceRequest) error
-	Recv() (*grpc_lb_v11.LoadBalanceResponse, error)
+	Send(*grpc_lb_v1.LoadBalanceRequest) error
+	Recv() (*grpc_lb_v1.LoadBalanceResponse, error)
 	grpc.ClientStream
 }
 
@@ -74,12 +74,12 @@ type loadBalancerBalanceLoadClient struct {
 	grpc.ClientStream
 }
 
-func (x *loadBalancerBalanceLoadClient) Send(m *grpc_lb_v11.LoadBalanceRequest) error {
+func (x *loadBalancerBalanceLoadClient) Send(m *grpc_lb_v1.LoadBalanceRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *loadBalancerBalanceLoadClient) Recv() (*grpc_lb_v11.LoadBalanceResponse, error) {
-	m := new(grpc_lb_v11.LoadBalanceResponse)
+func (x *loadBalancerBalanceLoadClient) Recv() (*grpc_lb_v1.LoadBalanceResponse, error) {
+	m := new(grpc_lb_v1.LoadBalanceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -102,8 +102,8 @@ func _LoadBalancer_BalanceLoad_Handler(srv interface{}, stream grpc.ServerStream
 }
 
 type LoadBalancer_BalanceLoadServer interface {
-	Send(*grpc_lb_v11.LoadBalanceResponse) error
-	Recv() (*grpc_lb_v11.LoadBalanceRequest, error)
+	Send(*grpc_lb_v1.LoadBalanceResponse) error
+	Recv() (*grpc_lb_v1.LoadBalanceRequest, error)
 	grpc.ServerStream
 }
 
@@ -111,12 +111,12 @@ type loadBalancerBalanceLoadServer struct {
 	grpc.ServerStream
 }
 
-func (x *loadBalancerBalanceLoadServer) Send(m *grpc_lb_v11.LoadBalanceResponse) error {
+func (x *loadBalancerBalanceLoadServer) Send(m *grpc_lb_v1.LoadBalanceResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *loadBalancerBalanceLoadServer) Recv() (*grpc_lb_v11.LoadBalanceRequest, error) {
-	m := new(grpc_lb_v11.LoadBalanceRequest)
+func (x *loadBalancerBalanceLoadServer) Recv() (*grpc_lb_v1.LoadBalanceRequest, error) {
+	m := new(grpc_lb_v1.LoadBalanceRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ var _LoadBalancer_serviceDesc = grpc.ServiceDesc{
 func init() { proto.RegisterFile("grpc_lb_v1/service/service.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 136 bytes of a gzipped FileDescriptorProto
+	// 142 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x52, 0x48, 0x2f, 0x2a, 0x48,
 	0x8e, 0xcf, 0x49, 0x8a, 0x2f, 0x33, 0xd4, 0x2f, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0x85, 0xd1,
 	0x7a, 0x05, 0x45, 0xf9, 0x25, 0xf9, 0x42, 0x5c, 0x20, 0x15, 0x7a, 0x39, 0x49, 0x7a, 0x65, 0x86,
@@ -149,6 +149,6 @@ var fileDescriptor0 = []byte{
 	0xa3, 0x24, 0x2e, 0x1e, 0x9f, 0xfc, 0xc4, 0x14, 0xa7, 0xc4, 0x9c, 0xc4, 0xbc, 0xe4, 0xd4, 0x22,
 	0xa1, 0x20, 0x2e, 0x6e, 0x28, 0x1b, 0x24, 0x2c, 0x24, 0xa7, 0x87, 0x30, 0x4f, 0x0f, 0x49, 0x61,
 	0x50, 0x6a, 0x61, 0x69, 0x6a, 0x71, 0x89, 0x94, 0x3c, 0x4e, 0xf9, 0xe2, 0x82, 0xfc, 0xbc, 0xe2,
-	0x54, 0x0d, 0x46, 0x03, 0xc6, 0x24, 0x36, 0xb0, 0x55, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0x55, 0x79, 0x69, 0x22, 0xbe, 0x00, 0x00, 0x00,
+	0x54, 0x0d, 0x46, 0x03, 0x46, 0x27, 0xce, 0x28, 0x76, 0xa8, 0x23, 0x93, 0xd8, 0xc0, 0xb6, 0x1a,
+	0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x39, 0x4e, 0xb0, 0xf8, 0xc9, 0x00, 0x00, 0x00,
 }
