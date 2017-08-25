@@ -14,6 +14,14 @@ public interface LoadBalanceResponseOrBuilder extends
    *
    * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
+  boolean hasInitialResponse();
+  /**
+   * <pre>
+   * This message should be sent on the first response to the client.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   */
   io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse();
   /**
    * <pre>
@@ -24,6 +32,15 @@ public interface LoadBalanceResponseOrBuilder extends
    */
   io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder getInitialResponseOrBuilder();
 
+  /**
+   * <pre>
+   * Contains the list of servers selected by the load balancer. The client
+   * should send requests to these servers in the specified order.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
+   */
+  boolean hasServerList();
   /**
    * <pre>
    * Contains the list of servers selected by the load balancer. The client

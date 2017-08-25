@@ -35,6 +35,7 @@ public final class Payloads {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ByteBufferParams)
       ByteBufferParamsOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ByteBufferParams.newBuilder() to construct.
     private ByteBufferParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -47,7 +48,7 @@ public final class Payloads {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ByteBufferParams(
         com.google.protobuf.CodedInputStream input,
@@ -55,6 +56,8 @@ public final class Payloads {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -64,7 +67,8 @@ public final class Payloads {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -87,6 +91,7 @@ public final class Payloads {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -138,6 +143,7 @@ public final class Payloads {
       if (respSize_ != 0) {
         output.writeInt32(2, respSize_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -153,11 +159,11 @@ public final class Payloads {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, respSize_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -173,6 +179,7 @@ public final class Payloads {
           == other.getReqSize());
       result = result && (getRespSize()
           == other.getRespSize());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -353,7 +360,7 @@ public final class Payloads {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -366,12 +373,12 @@ public final class Payloads {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -391,6 +398,7 @@ public final class Payloads {
         if (other.getRespSize() != 0) {
           setRespSize(other.getRespSize());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -470,12 +478,12 @@ public final class Payloads {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -538,6 +546,7 @@ public final class Payloads {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleProtoParams)
       SimpleProtoParamsOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use SimpleProtoParams.newBuilder() to construct.
     private SimpleProtoParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -550,7 +559,7 @@ public final class Payloads {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private SimpleProtoParams(
         com.google.protobuf.CodedInputStream input,
@@ -558,6 +567,8 @@ public final class Payloads {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -567,7 +578,8 @@ public final class Payloads {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -590,6 +602,7 @@ public final class Payloads {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -641,6 +654,7 @@ public final class Payloads {
       if (respSize_ != 0) {
         output.writeInt32(2, respSize_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -656,11 +670,11 @@ public final class Payloads {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, respSize_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -676,6 +690,7 @@ public final class Payloads {
           == other.getReqSize());
       result = result && (getRespSize()
           == other.getRespSize());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -856,7 +871,7 @@ public final class Payloads {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -869,12 +884,12 @@ public final class Payloads {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -894,6 +909,7 @@ public final class Payloads {
         if (other.getRespSize() != 0) {
           setRespSize(other.getRespSize());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -973,12 +989,12 @@ public final class Payloads {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -1036,6 +1052,7 @@ public final class Payloads {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ComplexProtoParams)
       ComplexProtoParamsOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ComplexProtoParams.newBuilder() to construct.
     private ComplexProtoParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -1046,13 +1063,15 @@ public final class Payloads {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ComplexProtoParams(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -1062,7 +1081,8 @@ public final class Payloads {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -1075,6 +1095,7 @@ public final class Payloads {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -1102,6 +1123,7 @@ public final class Payloads {
 
     public void writeTo(com.google.protobuf.CodedOutputStream output)
                         throws java.io.IOException {
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -1109,11 +1131,11 @@ public final class Payloads {
       if (size != -1) return size;
 
       size = 0;
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -1125,6 +1147,7 @@ public final class Payloads {
       io.grpc.benchmarks.proto.Payloads.ComplexProtoParams other = (io.grpc.benchmarks.proto.Payloads.ComplexProtoParams) obj;
 
       boolean result = true;
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -1300,7 +1323,7 @@ public final class Payloads {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -1313,12 +1336,12 @@ public final class Payloads {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -1332,6 +1355,7 @@ public final class Payloads {
 
       public Builder mergeFrom(io.grpc.benchmarks.proto.Payloads.ComplexProtoParams other) {
         if (other == io.grpc.benchmarks.proto.Payloads.ComplexProtoParams.getDefaultInstance()) return this;
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -1359,12 +1383,12 @@ public final class Payloads {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -1413,6 +1437,10 @@ public final class Payloads {
     /**
      * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
+    boolean hasBytebufParams();
+    /**
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     */
     io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams();
     /**
      * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
@@ -1422,12 +1450,20 @@ public final class Payloads {
     /**
      * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
+    boolean hasSimpleParams();
+    /**
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams();
     /**
      * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
     io.grpc.benchmarks.proto.Payloads.SimpleProtoParamsOrBuilder getSimpleParamsOrBuilder();
 
+    /**
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     */
+    boolean hasComplexParams();
     /**
      * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
@@ -1446,6 +1482,7 @@ public final class Payloads {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.PayloadConfig)
       PayloadConfigOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use PayloadConfig.newBuilder() to construct.
     private PayloadConfig(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -1456,7 +1493,7 @@ public final class Payloads {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private PayloadConfig(
         com.google.protobuf.CodedInputStream input,
@@ -1464,6 +1501,8 @@ public final class Payloads {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -1473,7 +1512,8 @@ public final class Payloads {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -1528,6 +1568,7 @@ public final class Payloads {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -1587,6 +1628,12 @@ public final class Payloads {
     /**
      * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
      */
+    public boolean hasBytebufParams() {
+      return payloadCase_ == 1;
+    }
+    /**
+     * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+     */
     public io.grpc.benchmarks.proto.Payloads.ByteBufferParams getBytebufParams() {
       if (payloadCase_ == 1) {
          return (io.grpc.benchmarks.proto.Payloads.ByteBufferParams) payload_;
@@ -1607,6 +1654,12 @@ public final class Payloads {
     /**
      * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
      */
+    public boolean hasSimpleParams() {
+      return payloadCase_ == 2;
+    }
+    /**
+     * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
+     */
     public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
       if (payloadCase_ == 2) {
          return (io.grpc.benchmarks.proto.Payloads.SimpleProtoParams) payload_;
@@ -1624,6 +1677,12 @@ public final class Payloads {
     }
 
     public static final int COMPLEX_PARAMS_FIELD_NUMBER = 3;
+    /**
+     * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
+     */
+    public boolean hasComplexParams() {
+      return payloadCase_ == 3;
+    }
     /**
      * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
      */
@@ -1664,6 +1723,7 @@ public final class Payloads {
       if (payloadCase_ == 3) {
         output.writeMessage(3, (io.grpc.benchmarks.proto.Payloads.ComplexProtoParams) payload_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -1683,11 +1743,11 @@ public final class Payloads {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, (io.grpc.benchmarks.proto.Payloads.ComplexProtoParams) payload_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -1718,6 +1778,7 @@ public final class Payloads {
         case 0:
         default:
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -1928,7 +1989,7 @@ public final class Payloads {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -1941,12 +2002,12 @@ public final class Payloads {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -1977,6 +2038,7 @@ public final class Payloads {
             break;
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -2020,6 +2082,12 @@ public final class Payloads {
 
       private com.google.protobuf.SingleFieldBuilderV3<
           io.grpc.benchmarks.proto.Payloads.ByteBufferParams, io.grpc.benchmarks.proto.Payloads.ByteBufferParams.Builder, io.grpc.benchmarks.proto.Payloads.ByteBufferParamsOrBuilder> bytebufParamsBuilder_;
+      /**
+       * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
+       */
+      public boolean hasBytebufParams() {
+        return payloadCase_ == 1;
+      }
       /**
        * <code>.grpc.testing.ByteBufferParams bytebuf_params = 1;</code>
        */
@@ -2153,6 +2221,12 @@ public final class Payloads {
       /**
        * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
        */
+      public boolean hasSimpleParams() {
+        return payloadCase_ == 2;
+      }
+      /**
+       * <code>.grpc.testing.SimpleProtoParams simple_params = 2;</code>
+       */
       public io.grpc.benchmarks.proto.Payloads.SimpleProtoParams getSimpleParams() {
         if (simpleParamsBuilder_ == null) {
           if (payloadCase_ == 2) {
@@ -2283,6 +2357,12 @@ public final class Payloads {
       /**
        * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
        */
+      public boolean hasComplexParams() {
+        return payloadCase_ == 3;
+      }
+      /**
+       * <code>.grpc.testing.ComplexProtoParams complex_params = 3;</code>
+       */
       public io.grpc.benchmarks.proto.Payloads.ComplexProtoParams getComplexParams() {
         if (complexParamsBuilder_ == null) {
           if (payloadCase_ == 3) {
@@ -2409,12 +2489,12 @@ public final class Payloads {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 

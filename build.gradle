@@ -92,8 +92,8 @@ subprojects {
 
         nettyVersion = '4.1.14.Final'
         guavaVersion = '19.0'
-        protobufVersion = '3.3.1'
-        protocVersion = '3.3.0' // TODO(carl-mastrangelo): set this from protobufVersion when versions align again
+        protobufVersion = '3.4.0'
+        protocVersion = protobufVersion
         protobufNanoVersion = '3.0.0-alpha-5'
 
         configureProtoCompilation = {

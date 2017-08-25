@@ -11,6 +11,7 @@ public  final class TypeWithExtensions extends
       TypeWithExtensions> implements
     // @@protoc_insertion_point(message_implements:grpc.reflection.testing.TypeWithExtensions)
     TypeWithExtensionsOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use TypeWithExtensions.newBuilder() to construct.
   private TypeWithExtensions(com.google.protobuf.GeneratedMessageV3.ExtendableBuilder<io.grpc.reflection.testing.TypeWithExtensions, ?> builder) {
     super(builder);
@@ -41,8 +42,8 @@ public  final class TypeWithExtensions extends
             done = true;
             break;
           default: {
-            if (!parseUnknownField(input, unknownFields,
-                                   extensionRegistry, tag)) {
+            if (!parseUnknownField(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -160,7 +161,6 @@ public  final class TypeWithExtensions extends
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -365,7 +365,7 @@ public  final class TypeWithExtensions extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -378,12 +378,12 @@ public  final class TypeWithExtensions extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public <Type> Builder setExtension(

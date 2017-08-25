@@ -25,7 +25,7 @@ android {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.3.0'
+        artifact = 'com.google.protobuf:protoc:3.4.0'
     }
     plugins {
         javalite {

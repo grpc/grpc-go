@@ -128,9 +128,9 @@ def com_google_protobuf():
   # This statement defines the @com_google_protobuf repo.
   native.http_archive(
       name = "com_google_protobuf",
-      sha256 = "df77b0e60afcd3d90b2654cd305e61ae8ae2e2281b4d6540c7093da4c4245d75",
-      strip_prefix = "protobuf-3.3.1",
-      urls = ["https://github.com/google/protobuf/archive/v3.3.1.zip"],
+      sha256 = "542703acadc3f690d998f4641e1b988f15ba57ebca05fdfb1cd9095bec007948",
+      strip_prefix = "protobuf-3.4.0",
+      urls = ["https://github.com/google/protobuf/archive/v3.4.0.zip"],
   )
 
 def com_google_protobuf_java():
@@ -138,9 +138,9 @@ def com_google_protobuf_java():
   # which is the Java proto runtime (base classes and common utilities).
   native.http_archive(
       name = "com_google_protobuf_java",
-      sha256 = "df77b0e60afcd3d90b2654cd305e61ae8ae2e2281b4d6540c7093da4c4245d75",
-      strip_prefix = "protobuf-3.3.1",
-      urls = ["https://github.com/google/protobuf/archive/v3.3.1.zip"],
+      sha256 = "542703acadc3f690d998f4641e1b988f15ba57ebca05fdfb1cd9095bec007948",
+      strip_prefix = "protobuf-3.4.0",
+      urls = ["https://github.com/google/protobuf/archive/v3.4.0.zip"],
   )
 
 def com_google_protobuf_nano_protobuf_javanano():

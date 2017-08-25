@@ -49,6 +49,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.Duration)
       DurationOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use Duration.newBuilder() to construct.
     private Duration(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -61,7 +62,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private Duration(
         com.google.protobuf.CodedInputStream input,
@@ -69,6 +70,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -78,7 +81,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -101,6 +105,7 @@ public final class CensusProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -166,6 +171,7 @@ public final class CensusProto {
       if (nanos_ != 0) {
         output.writeInt32(2, nanos_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -181,11 +187,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, nanos_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -201,6 +207,7 @@ public final class CensusProto {
           == other.getSeconds());
       result = result && (getNanos()
           == other.getNanos());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -382,7 +389,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -395,12 +402,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -420,6 +427,7 @@ public final class CensusProto {
         if (other.getNanos() != 0) {
           setNanos(other.getNanos());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -541,12 +549,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -622,6 +630,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.Timestamp)
       TimestampOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use Timestamp.newBuilder() to construct.
     private Timestamp(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -634,7 +643,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private Timestamp(
         com.google.protobuf.CodedInputStream input,
@@ -642,6 +651,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -651,7 +662,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -674,6 +686,7 @@ public final class CensusProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -738,6 +751,7 @@ public final class CensusProto {
       if (nanos_ != 0) {
         output.writeInt32(2, nanos_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -753,11 +767,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(2, nanos_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -773,6 +787,7 @@ public final class CensusProto {
           == other.getSeconds());
       result = result && (getNanos()
           == other.getNanos());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -954,7 +969,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -967,12 +982,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -992,6 +1007,7 @@ public final class CensusProto {
         if (other.getNanos() != 0) {
           setNanos(other.getNanos());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -1110,12 +1126,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -1233,6 +1249,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.MeasurementDescriptor)
       MeasurementDescriptorOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use MeasurementDescriptor.newBuilder() to construct.
     private MeasurementDescriptor(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -1245,7 +1262,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private MeasurementDescriptor(
         com.google.protobuf.CodedInputStream input,
@@ -1253,6 +1270,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -1262,7 +1281,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -1300,6 +1320,7 @@ public final class CensusProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -1604,6 +1625,7 @@ public final class CensusProto {
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:google.instrumentation.MeasurementDescriptor.MeasurementUnit)
         MeasurementUnitOrBuilder {
+    private static final long serialVersionUID = 0L;
       // Use MeasurementUnit.newBuilder() to construct.
       private MeasurementUnit(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
         super(builder);
@@ -1617,7 +1639,7 @@ public final class CensusProto {
       @java.lang.Override
       public final com.google.protobuf.UnknownFieldSet
       getUnknownFields() {
-        return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+        return this.unknownFields;
       }
       private MeasurementUnit(
           com.google.protobuf.CodedInputStream input,
@@ -1625,6 +1647,8 @@ public final class CensusProto {
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
         int mutable_bitField0_ = 0;
+        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+            com.google.protobuf.UnknownFieldSet.newBuilder();
         try {
           boolean done = false;
           while (!done) {
@@ -1634,7 +1658,8 @@ public final class CensusProto {
                 done = true;
                 break;
               default: {
-                if (!input.skipField(tag)) {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
                   done = true;
                 }
                 break;
@@ -1704,6 +1729,7 @@ public final class CensusProto {
           if (((mutable_bitField0_ & 0x00000004) == 0x00000004)) {
             denominators_ = java.util.Collections.unmodifiableList(denominators_);
           }
+          this.unknownFields = unknownFields.build();
           makeExtensionsImmutable();
         }
       }
@@ -1849,6 +1875,7 @@ public final class CensusProto {
         for (int i = 0; i < denominators_.size(); i++) {
           output.writeEnumNoTag(denominators_.get(i));
         }
+        unknownFields.writeTo(output);
       }
 
       public int getSerializedSize() {
@@ -1884,11 +1911,11 @@ public final class CensusProto {
               .computeUInt32SizeNoTag(dataSize);
           }denominatorsMemoizedSerializedSize = dataSize;
         }
+        size += unknownFields.getSerializedSize();
         memoizedSize = size;
         return size;
       }
 
-      private static final long serialVersionUID = 0L;
       @java.lang.Override
       public boolean equals(final java.lang.Object obj) {
         if (obj == this) {
@@ -1904,6 +1931,7 @@ public final class CensusProto {
             == other.getPower10());
         result = result && numerators_.equals(other.numerators_);
         result = result && denominators_.equals(other.denominators_);
+        result = result && unknownFields.equals(other.unknownFields);
         return result;
       }
 
@@ -2129,7 +2157,7 @@ public final class CensusProto {
         }
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
         public Builder clearField(
@@ -2142,12 +2170,12 @@ public final class CensusProto {
         }
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            int index, Object value) {
+            int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
         public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -2184,6 +2212,7 @@ public final class CensusProto {
             }
             onChanged();
           }
+          this.mergeUnknownFields(other.unknownFields);
           onChanged();
           return this;
         }
@@ -2474,12 +2503,12 @@ public final class CensusProto {
         }
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.setUnknownFieldsProto3(unknownFields);
         }
 
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.mergeUnknownFields(unknownFields);
         }
 
 
@@ -2659,6 +2688,7 @@ public final class CensusProto {
       if (unit_ != null) {
         output.writeMessage(3, getUnit());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -2676,11 +2706,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getUnit());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -2701,6 +2731,7 @@ public final class CensusProto {
         result = result && getUnit()
             .equals(other.getUnit());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -2900,7 +2931,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -2913,12 +2944,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -2943,6 +2974,7 @@ public final class CensusProto {
         if (other.hasUnit()) {
           mergeUnit(other.getUnit());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -3301,12 +3333,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -3532,6 +3564,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.DistributionAggregation)
       DistributionAggregationOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use DistributionAggregation.newBuilder() to construct.
     private DistributionAggregation(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -3547,7 +3580,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private DistributionAggregation(
         com.google.protobuf.CodedInputStream input,
@@ -3555,6 +3588,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -3564,7 +3599,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -3641,6 +3677,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000020) == 0x00000020)) {
           tags_ = java.util.Collections.unmodifiableList(tags_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -3689,6 +3726,7 @@ public final class CensusProto {
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:google.instrumentation.DistributionAggregation.Range)
         RangeOrBuilder {
+    private static final long serialVersionUID = 0L;
       // Use Range.newBuilder() to construct.
       private Range(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
         super(builder);
@@ -3701,7 +3739,7 @@ public final class CensusProto {
       @java.lang.Override
       public final com.google.protobuf.UnknownFieldSet
       getUnknownFields() {
-        return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+        return this.unknownFields;
       }
       private Range(
           com.google.protobuf.CodedInputStream input,
@@ -3709,6 +3747,8 @@ public final class CensusProto {
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
         int mutable_bitField0_ = 0;
+        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+            com.google.protobuf.UnknownFieldSet.newBuilder();
         try {
           boolean done = false;
           while (!done) {
@@ -3718,7 +3758,8 @@ public final class CensusProto {
                 done = true;
                 break;
               default: {
-                if (!input.skipField(tag)) {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
                   done = true;
                 }
                 break;
@@ -3741,6 +3782,7 @@ public final class CensusProto {
           throw new com.google.protobuf.InvalidProtocolBufferException(
               e).setUnfinishedMessage(this);
         } finally {
+          this.unknownFields = unknownFields.build();
           makeExtensionsImmutable();
         }
       }
@@ -3800,6 +3842,7 @@ public final class CensusProto {
         if (max_ != 0D) {
           output.writeDouble(2, max_);
         }
+        unknownFields.writeTo(output);
       }
 
       public int getSerializedSize() {
@@ -3815,11 +3858,11 @@ public final class CensusProto {
           size += com.google.protobuf.CodedOutputStream
             .computeDoubleSize(2, max_);
         }
+        size += unknownFields.getSerializedSize();
         memoizedSize = size;
         return size;
       }
 
-      private static final long serialVersionUID = 0L;
       @java.lang.Override
       public boolean equals(final java.lang.Object obj) {
         if (obj == this) {
@@ -3839,6 +3882,7 @@ public final class CensusProto {
             java.lang.Double.doubleToLongBits(getMax())
             == java.lang.Double.doubleToLongBits(
                 other.getMax()));
+        result = result && unknownFields.equals(other.unknownFields);
         return result;
       }
 
@@ -4025,7 +4069,7 @@ public final class CensusProto {
         }
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
         public Builder clearField(
@@ -4038,12 +4082,12 @@ public final class CensusProto {
         }
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            int index, Object value) {
+            int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
         public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -4063,6 +4107,7 @@ public final class CensusProto {
           if (other.getMax() != 0D) {
             setMax(other.getMax());
           }
+          this.mergeUnknownFields(other.unknownFields);
           onChanged();
           return this;
         }
@@ -4166,12 +4211,12 @@ public final class CensusProto {
         }
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.setUnknownFieldsProto3(unknownFields);
         }
 
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.mergeUnknownFields(unknownFields);
         }
 
 
@@ -4451,6 +4496,7 @@ public final class CensusProto {
       for (int i = 0; i < tags_.size(); i++) {
         output.writeMessage(6, tags_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -4492,11 +4538,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(6, tags_.get(i));
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -4527,6 +4573,7 @@ public final class CensusProto {
           .equals(other.getBucketCountsList());
       result = result && getTagsList()
           .equals(other.getTagsList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -4776,7 +4823,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -4789,12 +4836,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -4856,6 +4903,7 @@ public final class CensusProto {
             }
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -5660,12 +5708,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -5785,6 +5833,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.DistributionAggregationDescriptor)
       DistributionAggregationDescriptorOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use DistributionAggregationDescriptor.newBuilder() to construct.
     private DistributionAggregationDescriptor(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -5796,7 +5845,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private DistributionAggregationDescriptor(
         com.google.protobuf.CodedInputStream input,
@@ -5804,6 +5853,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -5813,7 +5864,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -5850,6 +5902,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           bucketBounds_ = java.util.Collections.unmodifiableList(bucketBounds_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -5962,6 +6015,7 @@ public final class CensusProto {
       for (int i = 0; i < bucketBounds_.size(); i++) {
         output.writeDoubleNoTag(bucketBounds_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -5980,11 +6034,11 @@ public final class CensusProto {
         }
         bucketBoundsMemoizedSerializedSize = dataSize;
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -5998,6 +6052,7 @@ public final class CensusProto {
       boolean result = true;
       result = result && getBucketBoundsList()
           .equals(other.getBucketBoundsList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -6180,7 +6235,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -6193,12 +6248,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -6222,6 +6277,7 @@ public final class CensusProto {
           }
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -6442,12 +6498,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -6600,6 +6656,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.IntervalAggregation)
       IntervalAggregationOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use IntervalAggregation.newBuilder() to construct.
     private IntervalAggregation(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -6612,7 +6669,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private IntervalAggregation(
         com.google.protobuf.CodedInputStream input,
@@ -6620,6 +6677,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -6629,7 +6688,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -6666,6 +6726,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           tags_ = java.util.Collections.unmodifiableList(tags_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -6739,6 +6800,7 @@ public final class CensusProto {
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:google.instrumentation.IntervalAggregation.Interval)
         IntervalOrBuilder {
+    private static final long serialVersionUID = 0L;
       // Use Interval.newBuilder() to construct.
       private Interval(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
         super(builder);
@@ -6751,7 +6813,7 @@ public final class CensusProto {
       @java.lang.Override
       public final com.google.protobuf.UnknownFieldSet
       getUnknownFields() {
-        return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+        return this.unknownFields;
       }
       private Interval(
           com.google.protobuf.CodedInputStream input,
@@ -6759,6 +6821,8 @@ public final class CensusProto {
           throws com.google.protobuf.InvalidProtocolBufferException {
         this();
         int mutable_bitField0_ = 0;
+        com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+            com.google.protobuf.UnknownFieldSet.newBuilder();
         try {
           boolean done = false;
           while (!done) {
@@ -6768,7 +6832,8 @@ public final class CensusProto {
                 done = true;
                 break;
               default: {
-                if (!input.skipField(tag)) {
+                if (!parseUnknownFieldProto3(
+                    input, unknownFields, extensionRegistry, tag)) {
                   done = true;
                 }
                 break;
@@ -6804,6 +6869,7 @@ public final class CensusProto {
           throw new com.google.protobuf.InvalidProtocolBufferException(
               e).setUnfinishedMessage(this);
         } finally {
+          this.unknownFields = unknownFields.build();
           makeExtensionsImmutable();
         }
       }
@@ -6899,6 +6965,7 @@ public final class CensusProto {
         if (sum_ != 0D) {
           output.writeDouble(3, sum_);
         }
+        unknownFields.writeTo(output);
       }
 
       public int getSerializedSize() {
@@ -6918,11 +6985,11 @@ public final class CensusProto {
           size += com.google.protobuf.CodedOutputStream
             .computeDoubleSize(3, sum_);
         }
+        size += unknownFields.getSerializedSize();
         memoizedSize = size;
         return size;
       }
 
-      private static final long serialVersionUID = 0L;
       @java.lang.Override
       public boolean equals(final java.lang.Object obj) {
         if (obj == this) {
@@ -6947,6 +7014,7 @@ public final class CensusProto {
             java.lang.Double.doubleToLongBits(getSum())
             == java.lang.Double.doubleToLongBits(
                 other.getSum()));
+        result = result && unknownFields.equals(other.unknownFields);
         return result;
       }
 
@@ -7148,7 +7216,7 @@ public final class CensusProto {
         }
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
         public Builder clearField(
@@ -7161,12 +7229,12 @@ public final class CensusProto {
         }
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            int index, Object value) {
+            int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
         public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -7189,6 +7257,7 @@ public final class CensusProto {
           if (other.getSum() != 0D) {
             setSum(other.getSum());
           }
+          this.mergeUnknownFields(other.unknownFields);
           onChanged();
           return this;
         }
@@ -7445,12 +7514,12 @@ public final class CensusProto {
         }
         public final Builder setUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.setUnknownFieldsProto3(unknownFields);
         }
 
         public final Builder mergeUnknownFields(
             final com.google.protobuf.UnknownFieldSet unknownFields) {
-          return this;
+          return super.mergeUnknownFields(unknownFields);
         }
 
 
@@ -7625,6 +7694,7 @@ public final class CensusProto {
       for (int i = 0; i < tags_.size(); i++) {
         output.writeMessage(2, tags_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -7640,11 +7710,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, tags_.get(i));
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -7660,6 +7730,7 @@ public final class CensusProto {
           .equals(other.getIntervalsList());
       result = result && getTagsList()
           .equals(other.getTagsList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -7878,7 +7949,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -7891,12 +7962,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -7962,6 +8033,7 @@ public final class CensusProto {
             }
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -8632,12 +8704,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -8759,6 +8831,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.IntervalAggregationDescriptor)
       IntervalAggregationDescriptorOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use IntervalAggregationDescriptor.newBuilder() to construct.
     private IntervalAggregationDescriptor(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -8771,7 +8844,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private IntervalAggregationDescriptor(
         com.google.protobuf.CodedInputStream input,
@@ -8779,6 +8852,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -8788,7 +8863,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -8818,6 +8894,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           intervalSizes_ = java.util.Collections.unmodifiableList(intervalSizes_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -8931,6 +9008,7 @@ public final class CensusProto {
       for (int i = 0; i < intervalSizes_.size(); i++) {
         output.writeMessage(2, intervalSizes_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -8946,11 +9024,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, intervalSizes_.get(i));
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -8966,6 +9044,7 @@ public final class CensusProto {
           == other.getNSubIntervals());
       result = result && getIntervalSizesList()
           .equals(other.getIntervalSizesList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -9169,7 +9248,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -9182,12 +9261,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -9230,6 +9309,7 @@ public final class CensusProto {
             }
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -9644,12 +9724,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -9726,6 +9806,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.Tag)
       TagOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use Tag.newBuilder() to construct.
     private Tag(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -9738,7 +9819,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private Tag(
         com.google.protobuf.CodedInputStream input,
@@ -9746,6 +9827,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -9755,7 +9838,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -9780,6 +9864,7 @@ public final class CensusProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -9881,6 +9966,7 @@ public final class CensusProto {
       if (!getValueBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, value_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -9894,11 +9980,11 @@ public final class CensusProto {
       if (!getValueBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, value_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -9914,6 +10000,7 @@ public final class CensusProto {
           .equals(other.getKey());
       result = result && getValue()
           .equals(other.getValue());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -10098,7 +10185,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -10111,12 +10198,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -10138,6 +10225,7 @@ public final class CensusProto {
           value_ = other.value_;
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -10303,12 +10391,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -10411,12 +10499,20 @@ public final class CensusProto {
     /**
      * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
      */
+    boolean hasIntervalAggregation();
+    /**
+     * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
+     */
     com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor getIntervalAggregation();
     /**
      * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
      */
     com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptorOrBuilder getIntervalAggregationOrBuilder();
 
+    /**
+     * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
+     */
+    boolean hasDistributionAggregation();
     /**
      * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
      */
@@ -10480,6 +10576,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.ViewDescriptor)
       ViewDescriptorOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ViewDescriptor.newBuilder() to construct.
     private ViewDescriptor(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -10494,7 +10591,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ViewDescriptor(
         com.google.protobuf.CodedInputStream input,
@@ -10502,6 +10599,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -10511,7 +10610,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -10582,6 +10682,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000020) == 0x00000020)) {
           tagKeys_ = tagKeys_.getUnmodifiableView();
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -10766,6 +10867,12 @@ public final class CensusProto {
     /**
      * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
      */
+    public boolean hasIntervalAggregation() {
+      return aggregationCase_ == 4;
+    }
+    /**
+     * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
+     */
     public com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor getIntervalAggregation() {
       if (aggregationCase_ == 4) {
          return (com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor) aggregation_;
@@ -10783,6 +10890,12 @@ public final class CensusProto {
     }
 
     public static final int DISTRIBUTION_AGGREGATION_FIELD_NUMBER = 5;
+    /**
+     * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
+     */
+    public boolean hasDistributionAggregation() {
+      return aggregationCase_ == 5;
+    }
     /**
      * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
      */
@@ -10881,6 +10994,7 @@ public final class CensusProto {
       for (int i = 0; i < tagKeys_.size(); i++) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 6, tagKeys_.getRaw(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -10913,11 +11027,11 @@ public final class CensusProto {
         size += dataSize;
         size += 1 * getTagKeysList().size();
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -10952,6 +11066,7 @@ public final class CensusProto {
         case 0:
         default:
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -11186,7 +11301,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -11199,12 +11314,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -11253,6 +11368,7 @@ public final class CensusProto {
             break;
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -11567,6 +11683,12 @@ public final class CensusProto {
       /**
        * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
        */
+      public boolean hasIntervalAggregation() {
+        return aggregationCase_ == 4;
+      }
+      /**
+       * <code>.google.instrumentation.IntervalAggregationDescriptor interval_aggregation = 4;</code>
+       */
       public com.google.instrumentation.stats.proto.CensusProto.IntervalAggregationDescriptor getIntervalAggregation() {
         if (intervalAggregationBuilder_ == null) {
           if (aggregationCase_ == 4) {
@@ -11694,6 +11816,12 @@ public final class CensusProto {
 
       private com.google.protobuf.SingleFieldBuilderV3<
           com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptor, com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptor.Builder, com.google.instrumentation.stats.proto.CensusProto.DistributionAggregationDescriptorOrBuilder> distributionAggregationBuilder_;
+      /**
+       * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
+       */
+      public boolean hasDistributionAggregation() {
+        return aggregationCase_ == 5;
+      }
       /**
        * <code>.google.instrumentation.DistributionAggregationDescriptor distribution_aggregation = 5;</code>
        */
@@ -11962,12 +12090,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -12112,6 +12240,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.DistributionView)
       DistributionViewOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use DistributionView.newBuilder() to construct.
     private DistributionView(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -12123,7 +12252,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private DistributionView(
         com.google.protobuf.CodedInputStream input,
@@ -12131,6 +12260,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -12140,7 +12271,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -12191,6 +12323,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           aggregations_ = java.util.Collections.unmodifiableList(aggregations_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -12342,6 +12475,7 @@ public final class CensusProto {
       if (end_ != null) {
         output.writeMessage(3, getEnd());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -12361,11 +12495,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getEnd());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -12389,6 +12523,7 @@ public final class CensusProto {
         result = result && getEnd()
             .equals(other.getEnd());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -12617,7 +12752,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -12630,12 +12765,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -12681,6 +12816,7 @@ public final class CensusProto {
         if (other.hasEnd()) {
           mergeEnd(other.getEnd());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -13309,12 +13445,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -13421,6 +13557,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.IntervalView)
       IntervalViewOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use IntervalView.newBuilder() to construct.
     private IntervalView(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -13432,7 +13569,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private IntervalView(
         com.google.protobuf.CodedInputStream input,
@@ -13440,6 +13577,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -13449,7 +13588,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -13474,6 +13614,7 @@ public final class CensusProto {
         if (((mutable_bitField0_ & 0x00000001) == 0x00000001)) {
           aggregations_ = java.util.Collections.unmodifiableList(aggregations_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -13564,6 +13705,7 @@ public final class CensusProto {
       for (int i = 0; i < aggregations_.size(); i++) {
         output.writeMessage(1, aggregations_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -13575,11 +13717,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, aggregations_.get(i));
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -13593,6 +13735,7 @@ public final class CensusProto {
       boolean result = true;
       result = result && getAggregationsList()
           .equals(other.getAggregationsList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -13789,7 +13932,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -13802,12 +13945,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -13847,6 +13990,7 @@ public final class CensusProto {
             }
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -14205,12 +14349,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -14277,12 +14421,20 @@ public final class CensusProto {
     /**
      * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
      */
+    boolean hasDistributionView();
+    /**
+     * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
+     */
     com.google.instrumentation.stats.proto.CensusProto.DistributionView getDistributionView();
     /**
      * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
      */
     com.google.instrumentation.stats.proto.CensusProto.DistributionViewOrBuilder getDistributionViewOrBuilder();
 
+    /**
+     * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
+     */
+    boolean hasIntervalView();
     /**
      * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
      */
@@ -14305,6 +14457,7 @@ public final class CensusProto {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:google.instrumentation.View)
       ViewOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use View.newBuilder() to construct.
     private View(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -14316,7 +14469,7 @@ public final class CensusProto {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private View(
         com.google.protobuf.CodedInputStream input,
@@ -14324,6 +14477,8 @@ public final class CensusProto {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -14333,7 +14488,8 @@ public final class CensusProto {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -14380,6 +14536,7 @@ public final class CensusProto {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -14479,6 +14636,12 @@ public final class CensusProto {
     /**
      * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
      */
+    public boolean hasDistributionView() {
+      return viewCase_ == 2;
+    }
+    /**
+     * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
+     */
     public com.google.instrumentation.stats.proto.CensusProto.DistributionView getDistributionView() {
       if (viewCase_ == 2) {
          return (com.google.instrumentation.stats.proto.CensusProto.DistributionView) view_;
@@ -14496,6 +14659,12 @@ public final class CensusProto {
     }
 
     public static final int INTERVAL_VIEW_FIELD_NUMBER = 3;
+    /**
+     * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
+     */
+    public boolean hasIntervalView() {
+      return viewCase_ == 3;
+    }
     /**
      * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
      */
@@ -14536,6 +14705,7 @@ public final class CensusProto {
       if (viewCase_ == 3) {
         output.writeMessage(3, (com.google.instrumentation.stats.proto.CensusProto.IntervalView) view_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -14554,11 +14724,11 @@ public final class CensusProto {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, (com.google.instrumentation.stats.proto.CensusProto.IntervalView) view_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -14587,6 +14757,7 @@ public final class CensusProto {
         case 0:
         default:
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -14795,7 +14966,7 @@ public final class CensusProto {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -14808,12 +14979,12 @@ public final class CensusProto {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -14844,6 +15015,7 @@ public final class CensusProto {
             break;
           }
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -14979,6 +15151,12 @@ public final class CensusProto {
       /**
        * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
        */
+      public boolean hasDistributionView() {
+        return viewCase_ == 2;
+      }
+      /**
+       * <code>.google.instrumentation.DistributionView distribution_view = 2;</code>
+       */
       public com.google.instrumentation.stats.proto.CensusProto.DistributionView getDistributionView() {
         if (distributionViewBuilder_ == null) {
           if (viewCase_ == 2) {
@@ -15109,6 +15287,12 @@ public final class CensusProto {
       /**
        * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
        */
+      public boolean hasIntervalView() {
+        return viewCase_ == 3;
+      }
+      /**
+       * <code>.google.instrumentation.IntervalView interval_view = 3;</code>
+       */
       public com.google.instrumentation.stats.proto.CensusProto.IntervalView getIntervalView() {
         if (intervalViewBuilder_ == null) {
           if (viewCase_ == 3) {
@@ -15235,12 +15419,12 @@ public final class CensusProto {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 

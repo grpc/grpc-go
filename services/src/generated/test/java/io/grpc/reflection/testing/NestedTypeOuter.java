@@ -10,6 +10,7 @@ public  final class NestedTypeOuter extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.reflection.testing.NestedTypeOuter)
     NestedTypeOuterOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use NestedTypeOuter.newBuilder() to construct.
   private NestedTypeOuter(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -38,8 +39,8 @@ public  final class NestedTypeOuter extends
             done = true;
             break;
           default: {
-            if (!parseUnknownField(input, unknownFields,
-                                   extensionRegistry, tag)) {
+            if (!parseUnknownField(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -79,6 +80,7 @@ public  final class NestedTypeOuter extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.reflection.testing.NestedTypeOuter.Middle)
       MiddleOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use Middle.newBuilder() to construct.
     private Middle(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -107,8 +109,8 @@ public  final class NestedTypeOuter extends
               done = true;
               break;
             default: {
-              if (!parseUnknownField(input, unknownFields,
-                                     extensionRegistry, tag)) {
+              if (!parseUnknownField(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -157,6 +159,7 @@ public  final class NestedTypeOuter extends
         com.google.protobuf.GeneratedMessageV3 implements
         // @@protoc_insertion_point(message_implements:grpc.reflection.testing.NestedTypeOuter.Middle.Inner)
         InnerOrBuilder {
+    private static final long serialVersionUID = 0L;
       // Use Inner.newBuilder() to construct.
       private Inner(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
         super(builder);
@@ -187,8 +190,8 @@ public  final class NestedTypeOuter extends
                 done = true;
                 break;
               default: {
-                if (!parseUnknownField(input, unknownFields,
-                                       extensionRegistry, tag)) {
+                if (!parseUnknownField(
+                    input, unknownFields, extensionRegistry, tag)) {
                   done = true;
                 }
                 break;
@@ -270,7 +273,6 @@ public  final class NestedTypeOuter extends
         return size;
       }
 
-      private static final long serialVersionUID = 0L;
       @java.lang.Override
       public boolean equals(final java.lang.Object obj) {
         if (obj == this) {
@@ -471,7 +473,7 @@ public  final class NestedTypeOuter extends
         }
         public Builder setField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.setField(field, value);
         }
         public Builder clearField(
@@ -484,12 +486,12 @@ public  final class NestedTypeOuter extends
         }
         public Builder setRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            int index, Object value) {
+            int index, java.lang.Object value) {
           return (Builder) super.setRepeatedField(field, index, value);
         }
         public Builder addRepeatedField(
             com.google.protobuf.Descriptors.FieldDescriptor field,
-            Object value) {
+            java.lang.Object value) {
           return (Builder) super.addRepeatedField(field, value);
         }
         public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -639,7 +641,6 @@ public  final class NestedTypeOuter extends
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -822,7 +823,7 @@ public  final class NestedTypeOuter extends
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -835,12 +836,12 @@ public  final class NestedTypeOuter extends
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -954,7 +955,6 @@ public  final class NestedTypeOuter extends
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -1137,7 +1137,7 @@ public  final class NestedTypeOuter extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -1150,12 +1150,12 @@ public  final class NestedTypeOuter extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {

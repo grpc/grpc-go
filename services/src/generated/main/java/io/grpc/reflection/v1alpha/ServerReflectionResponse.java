@@ -14,6 +14,7 @@ public  final class ServerReflectionResponse extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.reflection.v1alpha.ServerReflectionResponse)
     ServerReflectionResponseOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use ServerReflectionResponse.newBuilder() to construct.
   private ServerReflectionResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -25,7 +26,7 @@ public  final class ServerReflectionResponse extends
   @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
-    return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    return this.unknownFields;
   }
   private ServerReflectionResponse(
       com.google.protobuf.CodedInputStream input,
@@ -33,6 +34,8 @@ public  final class ServerReflectionResponse extends
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
+    com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+        com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
       boolean done = false;
       while (!done) {
@@ -42,7 +45,8 @@ public  final class ServerReflectionResponse extends
             done = true;
             break;
           default: {
-            if (!input.skipField(tag)) {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -130,6 +134,7 @@ public  final class ServerReflectionResponse extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
   }
@@ -255,6 +260,21 @@ public  final class ServerReflectionResponse extends
    *
    * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
    */
+  public boolean hasFileDescriptorResponse() {
+    return messageResponseCase_ == 4;
+  }
+  /**
+   * <pre>
+   * This message is used to answer file_by_filename, file_containing_symbol,
+   * file_containing_extension requests with transitive dependencies. As
+   * the repeated label is not allowed in oneof fields, we use a
+   * FileDescriptorResponse message to encapsulate the repeated fields.
+   * The reflection service is allowed to avoid sending FileDescriptorProtos
+   * that were previously sent in response to earlier requests in the stream.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+   */
   public io.grpc.reflection.v1alpha.FileDescriptorResponse getFileDescriptorResponse() {
     if (messageResponseCase_ == 4) {
        return (io.grpc.reflection.v1alpha.FileDescriptorResponse) messageResponse_;
@@ -281,6 +301,16 @@ public  final class ServerReflectionResponse extends
   }
 
   public static final int ALL_EXTENSION_NUMBERS_RESPONSE_FIELD_NUMBER = 5;
+  /**
+   * <pre>
+   * This message is used to answer all_extension_numbers_of_type requst.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+   */
+  public boolean hasAllExtensionNumbersResponse() {
+    return messageResponseCase_ == 5;
+  }
   /**
    * <pre>
    * This message is used to answer all_extension_numbers_of_type requst.
@@ -316,6 +346,16 @@ public  final class ServerReflectionResponse extends
    *
    * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
    */
+  public boolean hasListServicesResponse() {
+    return messageResponseCase_ == 6;
+  }
+  /**
+   * <pre>
+   * This message is used to answer list_services request.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+   */
   public io.grpc.reflection.v1alpha.ListServiceResponse getListServicesResponse() {
     if (messageResponseCase_ == 6) {
        return (io.grpc.reflection.v1alpha.ListServiceResponse) messageResponse_;
@@ -337,6 +377,16 @@ public  final class ServerReflectionResponse extends
   }
 
   public static final int ERROR_RESPONSE_FIELD_NUMBER = 7;
+  /**
+   * <pre>
+   * This message is used when an error occurs.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+   */
+  public boolean hasErrorResponse() {
+    return messageResponseCase_ == 7;
+  }
   /**
    * <pre>
    * This message is used when an error occurs.
@@ -394,6 +444,7 @@ public  final class ServerReflectionResponse extends
     if (messageResponseCase_ == 7) {
       output.writeMessage(7, (io.grpc.reflection.v1alpha.ErrorResponse) messageResponse_);
     }
+    unknownFields.writeTo(output);
   }
 
   public int getSerializedSize() {
@@ -424,11 +475,11 @@ public  final class ServerReflectionResponse extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(7, (io.grpc.reflection.v1alpha.ErrorResponse) messageResponse_);
     }
+    size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -470,6 +521,7 @@ public  final class ServerReflectionResponse extends
       case 0:
       default:
     }
+    result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
 
@@ -715,7 +767,7 @@ public  final class ServerReflectionResponse extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -728,12 +780,12 @@ public  final class ServerReflectionResponse extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -775,6 +827,7 @@ public  final class ServerReflectionResponse extends
           break;
         }
       }
+      this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
     }
@@ -1016,6 +1069,21 @@ public  final class ServerReflectionResponse extends
      *
      * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
      */
+    public boolean hasFileDescriptorResponse() {
+      return messageResponseCase_ == 4;
+    }
+    /**
+     * <pre>
+     * This message is used to answer file_by_filename, file_containing_symbol,
+     * file_containing_extension requests with transitive dependencies. As
+     * the repeated label is not allowed in oneof fields, we use a
+     * FileDescriptorResponse message to encapsulate the repeated fields.
+     * The reflection service is allowed to avoid sending FileDescriptorProtos
+     * that were previously sent in response to earlier requests in the stream.
+     * </pre>
+     *
+     * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+     */
     public io.grpc.reflection.v1alpha.FileDescriptorResponse getFileDescriptorResponse() {
       if (fileDescriptorResponseBuilder_ == null) {
         if (messageResponseCase_ == 4) {
@@ -1213,6 +1281,16 @@ public  final class ServerReflectionResponse extends
      *
      * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
      */
+    public boolean hasAllExtensionNumbersResponse() {
+      return messageResponseCase_ == 5;
+    }
+    /**
+     * <pre>
+     * This message is used to answer all_extension_numbers_of_type requst.
+     * </pre>
+     *
+     * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+     */
     public io.grpc.reflection.v1alpha.ExtensionNumberResponse getAllExtensionNumbersResponse() {
       if (allExtensionNumbersResponseBuilder_ == null) {
         if (messageResponseCase_ == 5) {
@@ -1368,6 +1446,16 @@ public  final class ServerReflectionResponse extends
 
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ListServiceResponse, io.grpc.reflection.v1alpha.ListServiceResponse.Builder, io.grpc.reflection.v1alpha.ListServiceResponseOrBuilder> listServicesResponseBuilder_;
+    /**
+     * <pre>
+     * This message is used to answer list_services request.
+     * </pre>
+     *
+     * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+     */
+    public boolean hasListServicesResponse() {
+      return messageResponseCase_ == 6;
+    }
     /**
      * <pre>
      * This message is used to answer list_services request.
@@ -1537,6 +1625,16 @@ public  final class ServerReflectionResponse extends
      *
      * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
      */
+    public boolean hasErrorResponse() {
+      return messageResponseCase_ == 7;
+    }
+    /**
+     * <pre>
+     * This message is used when an error occurs.
+     * </pre>
+     *
+     * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+     */
     public io.grpc.reflection.v1alpha.ErrorResponse getErrorResponse() {
       if (errorResponseBuilder_ == null) {
         if (messageResponseCase_ == 7) {
@@ -1691,12 +1789,12 @@ public  final class ServerReflectionResponse extends
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.setUnknownFieldsProto3(unknownFields);
     }
 
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.mergeUnknownFields(unknownFields);
     }
 
 

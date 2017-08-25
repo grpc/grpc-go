@@ -10,6 +10,7 @@ public  final class InitialLoadBalanceResponse extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.InitialLoadBalanceResponse)
     InitialLoadBalanceResponseOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use InitialLoadBalanceResponse.newBuilder() to construct.
   private InitialLoadBalanceResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -21,7 +22,7 @@ public  final class InitialLoadBalanceResponse extends
   @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
-    return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    return this.unknownFields;
   }
   private InitialLoadBalanceResponse(
       com.google.protobuf.CodedInputStream input,
@@ -29,6 +30,8 @@ public  final class InitialLoadBalanceResponse extends
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
+    com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+        com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
       boolean done = false;
       while (!done) {
@@ -38,7 +41,8 @@ public  final class InitialLoadBalanceResponse extends
             done = true;
             break;
           default: {
-            if (!input.skipField(tag)) {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -70,6 +74,7 @@ public  final class InitialLoadBalanceResponse extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
   }
@@ -192,6 +197,7 @@ public  final class InitialLoadBalanceResponse extends
     if (clientStatsReportInterval_ != null) {
       output.writeMessage(2, getClientStatsReportInterval());
     }
+    unknownFields.writeTo(output);
   }
 
   public int getSerializedSize() {
@@ -206,11 +212,11 @@ public  final class InitialLoadBalanceResponse extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, getClientStatsReportInterval());
     }
+    size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -229,6 +235,7 @@ public  final class InitialLoadBalanceResponse extends
       result = result && getClientStatsReportInterval()
           .equals(other.getClientStatsReportInterval());
     }
+    result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
 
@@ -419,7 +426,7 @@ public  final class InitialLoadBalanceResponse extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -432,12 +439,12 @@ public  final class InitialLoadBalanceResponse extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -458,6 +465,7 @@ public  final class InitialLoadBalanceResponse extends
       if (other.hasClientStatsReportInterval()) {
         mergeClientStatsReportInterval(other.getClientStatsReportInterval());
       }
+      this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
     }
@@ -765,12 +773,12 @@ public  final class InitialLoadBalanceResponse extends
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.setUnknownFieldsProto3(unknownFields);
     }
 
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.mergeUnknownFields(unknownFields);
     }
 
 

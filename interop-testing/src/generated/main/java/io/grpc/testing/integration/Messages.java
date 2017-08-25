@@ -193,6 +193,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.Payload)
       PayloadOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use Payload.newBuilder() to construct.
     private Payload(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -205,7 +206,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private Payload(
         com.google.protobuf.CodedInputStream input,
@@ -213,6 +214,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -222,7 +225,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -246,6 +250,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -318,6 +323,7 @@ public final class Messages {
       if (!body_.isEmpty()) {
         output.writeBytes(2, body_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -333,11 +339,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeBytesSize(2, body_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -352,6 +358,7 @@ public final class Messages {
       result = result && type_ == other.type_;
       result = result && getBody()
           .equals(other.getBody());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -536,7 +543,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -549,12 +556,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -574,6 +581,7 @@ public final class Messages {
         if (other.getBody() != com.google.protobuf.ByteString.EMPTY) {
           setBody(other.getBody());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -711,12 +719,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -789,6 +797,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.EchoStatus)
       EchoStatusOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use EchoStatus.newBuilder() to construct.
     private EchoStatus(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -801,7 +810,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private EchoStatus(
         com.google.protobuf.CodedInputStream input,
@@ -809,6 +818,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -818,7 +829,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -842,6 +854,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -918,6 +931,7 @@ public final class Messages {
       if (!getMessageBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 2, message_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -932,11 +946,11 @@ public final class Messages {
       if (!getMessageBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, message_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -952,6 +966,7 @@ public final class Messages {
           == other.getCode());
       result = result && getMessage()
           .equals(other.getMessage());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -1137,7 +1152,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -1150,12 +1165,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -1176,6 +1191,7 @@ public final class Messages {
           message_ = other.message_;
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -1298,12 +1314,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -1517,6 +1533,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleRequest)
       SimpleRequestOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use SimpleRequest.newBuilder() to construct.
     private SimpleRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -1531,7 +1548,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private SimpleRequest(
         com.google.protobuf.CodedInputStream input,
@@ -1539,6 +1556,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -1548,7 +1567,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -1634,6 +1654,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -1893,6 +1914,7 @@ public final class Messages {
       if (expectCompressed_ != null) {
         output.writeMessage(8, getExpectCompressed());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -1932,11 +1954,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(8, getExpectCompressed());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -1975,6 +1997,7 @@ public final class Messages {
         result = result && getExpectCompressed()
             .equals(other.getExpectCompressed());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -2231,7 +2254,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -2244,12 +2267,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -2287,6 +2310,7 @@ public final class Messages {
         if (other.hasExpectCompressed()) {
           mergeExpectCompressed(other.getExpectCompressed());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -3141,12 +3165,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -3266,6 +3290,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleResponse)
       SimpleResponseOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use SimpleResponse.newBuilder() to construct.
     private SimpleResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -3278,7 +3303,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private SimpleResponse(
         com.google.protobuf.CodedInputStream input,
@@ -3286,6 +3311,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -3295,7 +3322,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -3333,6 +3361,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -3488,6 +3517,7 @@ public final class Messages {
       if (!getOauthScopeBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 3, oauthScope_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -3505,11 +3535,11 @@ public final class Messages {
       if (!getOauthScopeBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(3, oauthScope_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -3530,6 +3560,7 @@ public final class Messages {
           .equals(other.getUsername());
       result = result && getOauthScope()
           .equals(other.getOauthScope());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -3729,7 +3760,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -3742,12 +3773,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -3772,6 +3803,7 @@ public final class Messages {
           oauthScope_ = other.oauthScope_;
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -4135,12 +4167,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -4203,6 +4235,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.SimpleContext)
       SimpleContextOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use SimpleContext.newBuilder() to construct.
     private SimpleContext(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -4214,7 +4247,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private SimpleContext(
         com.google.protobuf.CodedInputStream input,
@@ -4222,6 +4255,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -4231,7 +4266,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -4250,6 +4286,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -4314,6 +4351,7 @@ public final class Messages {
       if (!getValueBytes().isEmpty()) {
         com.google.protobuf.GeneratedMessageV3.writeString(output, 1, value_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -4324,11 +4362,11 @@ public final class Messages {
       if (!getValueBytes().isEmpty()) {
         size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, value_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -4342,6 +4380,7 @@ public final class Messages {
       boolean result = true;
       result = result && getValue()
           .equals(other.getValue());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -4517,7 +4556,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -4530,12 +4569,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -4553,6 +4592,7 @@ public final class Messages {
           value_ = other.value_;
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -4649,12 +4689,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -4770,6 +4810,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallRequest)
       StreamingInputCallRequestOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use StreamingInputCallRequest.newBuilder() to construct.
     private StreamingInputCallRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -4780,7 +4821,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private StreamingInputCallRequest(
         com.google.protobuf.CodedInputStream input,
@@ -4788,6 +4829,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -4797,7 +4840,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -4836,6 +4880,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -4944,6 +4989,7 @@ public final class Messages {
       if (expectCompressed_ != null) {
         output.writeMessage(2, getExpectCompressed());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -4959,11 +5005,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(2, getExpectCompressed());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -4985,6 +5031,7 @@ public final class Messages {
         result = result && getExpectCompressed()
             .equals(other.getExpectCompressed());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -5189,7 +5236,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -5202,12 +5249,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -5227,6 +5274,7 @@ public final class Messages {
         if (other.hasExpectCompressed()) {
           mergeExpectCompressed(other.getExpectCompressed());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -5587,12 +5635,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -5658,6 +5706,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingInputCallResponse)
       StreamingInputCallResponseOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use StreamingInputCallResponse.newBuilder() to construct.
     private StreamingInputCallResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -5669,7 +5718,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private StreamingInputCallResponse(
         com.google.protobuf.CodedInputStream input,
@@ -5677,6 +5726,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -5686,7 +5737,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -5704,6 +5756,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -5747,6 +5800,7 @@ public final class Messages {
       if (aggregatedPayloadSize_ != 0) {
         output.writeInt32(1, aggregatedPayloadSize_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -5758,11 +5812,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, aggregatedPayloadSize_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -5776,6 +5830,7 @@ public final class Messages {
       boolean result = true;
       result = result && (getAggregatedPayloadSize()
           == other.getAggregatedPayloadSize());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -5955,7 +6010,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -5968,12 +6023,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -5990,6 +6045,7 @@ public final class Messages {
         if (other.getAggregatedPayloadSize() != 0) {
           setAggregatedPayloadSize(other.getAggregatedPayloadSize());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -6055,12 +6111,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -6170,6 +6226,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ResponseParameters)
       ResponseParametersOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ResponseParameters.newBuilder() to construct.
     private ResponseParameters(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -6182,7 +6239,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ResponseParameters(
         com.google.protobuf.CodedInputStream input,
@@ -6190,6 +6247,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -6199,7 +6258,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -6235,6 +6295,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -6340,6 +6401,7 @@ public final class Messages {
       if (compressed_ != null) {
         output.writeMessage(3, getCompressed());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -6359,11 +6421,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(3, getCompressed());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -6384,6 +6446,7 @@ public final class Messages {
         result = result && getCompressed()
             .equals(other.getCompressed());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -6583,7 +6646,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -6596,12 +6659,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -6624,6 +6687,7 @@ public final class Messages {
         if (other.hasCompressed()) {
           mergeCompressed(other.getCompressed());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -6910,12 +6974,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -7091,6 +7155,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallRequest)
       StreamingOutputCallRequestOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use StreamingOutputCallRequest.newBuilder() to construct.
     private StreamingOutputCallRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -7103,7 +7168,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private StreamingOutputCallRequest(
         com.google.protobuf.CodedInputStream input,
@@ -7111,6 +7176,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -7120,7 +7187,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -7177,6 +7245,7 @@ public final class Messages {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           responseParameters_ = java.util.Collections.unmodifiableList(responseParameters_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -7370,6 +7439,7 @@ public final class Messages {
       if (responseStatus_ != null) {
         output.writeMessage(7, getResponseStatus());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -7393,11 +7463,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(7, getResponseStatus());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -7422,6 +7492,7 @@ public final class Messages {
         result = result && getResponseStatus()
             .equals(other.getResponseStatus());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -7654,7 +7725,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -7667,12 +7738,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -7721,6 +7792,7 @@ public final class Messages {
         if (other.hasResponseStatus()) {
           mergeResponseStatus(other.getResponseStatus());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -8451,12 +8523,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -8538,6 +8610,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.StreamingOutputCallResponse)
       StreamingOutputCallResponseOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use StreamingOutputCallResponse.newBuilder() to construct.
     private StreamingOutputCallResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -8548,7 +8621,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private StreamingOutputCallResponse(
         com.google.protobuf.CodedInputStream input,
@@ -8556,6 +8629,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -8565,7 +8640,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -8591,6 +8667,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -8654,6 +8731,7 @@ public final class Messages {
       if (payload_ != null) {
         output.writeMessage(1, getPayload());
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -8665,11 +8743,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeMessageSize(1, getPayload());
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -8686,6 +8764,7 @@ public final class Messages {
         result = result && getPayload()
             .equals(other.getPayload());
       }
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -8875,7 +8954,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -8888,12 +8967,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -8910,6 +8989,7 @@ public final class Messages {
         if (other.hasPayload()) {
           mergePayload(other.getPayload());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -9090,12 +9170,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -9158,6 +9238,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectParams)
       ReconnectParamsOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ReconnectParams.newBuilder() to construct.
     private ReconnectParams(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -9169,7 +9250,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ReconnectParams(
         com.google.protobuf.CodedInputStream input,
@@ -9177,6 +9258,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -9186,7 +9269,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -9204,6 +9288,7 @@ public final class Messages {
         throw new com.google.protobuf.InvalidProtocolBufferException(
             e).setUnfinishedMessage(this);
       } finally {
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -9243,6 +9328,7 @@ public final class Messages {
       if (maxReconnectBackoffMs_ != 0) {
         output.writeInt32(1, maxReconnectBackoffMs_);
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -9254,11 +9340,11 @@ public final class Messages {
         size += com.google.protobuf.CodedOutputStream
           .computeInt32Size(1, maxReconnectBackoffMs_);
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -9272,6 +9358,7 @@ public final class Messages {
       boolean result = true;
       result = result && (getMaxReconnectBackoffMs()
           == other.getMaxReconnectBackoffMs());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -9452,7 +9539,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -9465,12 +9552,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -9487,6 +9574,7 @@ public final class Messages {
         if (other.getMaxReconnectBackoffMs() != 0) {
           setMaxReconnectBackoffMs(other.getMaxReconnectBackoffMs());
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -9540,12 +9628,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 
@@ -9622,6 +9710,7 @@ public final class Messages {
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:grpc.testing.ReconnectInfo)
       ReconnectInfoOrBuilder {
+  private static final long serialVersionUID = 0L;
     // Use ReconnectInfo.newBuilder() to construct.
     private ReconnectInfo(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
       super(builder);
@@ -9634,7 +9723,7 @@ public final class Messages {
     @java.lang.Override
     public final com.google.protobuf.UnknownFieldSet
     getUnknownFields() {
-      return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+      return this.unknownFields;
     }
     private ReconnectInfo(
         com.google.protobuf.CodedInputStream input,
@@ -9642,6 +9731,8 @@ public final class Messages {
         throws com.google.protobuf.InvalidProtocolBufferException {
       this();
       int mutable_bitField0_ = 0;
+      com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+          com.google.protobuf.UnknownFieldSet.newBuilder();
       try {
         boolean done = false;
         while (!done) {
@@ -9651,7 +9742,8 @@ public final class Messages {
               done = true;
               break;
             default: {
-              if (!input.skipField(tag)) {
+              if (!parseUnknownFieldProto3(
+                  input, unknownFields, extensionRegistry, tag)) {
                 done = true;
               }
               break;
@@ -9693,6 +9785,7 @@ public final class Messages {
         if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
           backoffMs_ = java.util.Collections.unmodifiableList(backoffMs_);
         }
+        this.unknownFields = unknownFields.build();
         makeExtensionsImmutable();
       }
     }
@@ -9764,6 +9857,7 @@ public final class Messages {
       for (int i = 0; i < backoffMs_.size(); i++) {
         output.writeInt32NoTag(backoffMs_.get(i));
       }
+      unknownFields.writeTo(output);
     }
 
     public int getSerializedSize() {
@@ -9789,11 +9883,11 @@ public final class Messages {
         }
         backoffMsMemoizedSerializedSize = dataSize;
       }
+      size += unknownFields.getSerializedSize();
       memoizedSize = size;
       return size;
     }
 
-    private static final long serialVersionUID = 0L;
     @java.lang.Override
     public boolean equals(final java.lang.Object obj) {
       if (obj == this) {
@@ -9809,6 +9903,7 @@ public final class Messages {
           == other.getPassed());
       result = result && getBackoffMsList()
           .equals(other.getBackoffMsList());
+      result = result && unknownFields.equals(other.unknownFields);
       return result;
     }
 
@@ -10005,7 +10100,7 @@ public final class Messages {
       }
       public Builder setField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.setField(field, value);
       }
       public Builder clearField(
@@ -10018,12 +10113,12 @@ public final class Messages {
       }
       public Builder setRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          int index, Object value) {
+          int index, java.lang.Object value) {
         return (Builder) super.setRepeatedField(field, index, value);
       }
       public Builder addRepeatedField(
           com.google.protobuf.Descriptors.FieldDescriptor field,
-          Object value) {
+          java.lang.Object value) {
         return (Builder) super.addRepeatedField(field, value);
       }
       public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -10050,6 +10145,7 @@ public final class Messages {
           }
           onChanged();
         }
+        this.mergeUnknownFields(other.unknownFields);
         onChanged();
         return this;
       }
@@ -10170,12 +10266,12 @@ public final class Messages {
       }
       public final Builder setUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.setUnknownFieldsProto3(unknownFields);
       }
 
       public final Builder mergeUnknownFields(
           final com.google.protobuf.UnknownFieldSet unknownFields) {
-        return this;
+        return super.mergeUnknownFields(unknownFields);
       }
 
 

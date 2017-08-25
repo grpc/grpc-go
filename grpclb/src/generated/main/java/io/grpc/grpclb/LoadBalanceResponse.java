@@ -10,6 +10,7 @@ public  final class LoadBalanceResponse extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.LoadBalanceResponse)
     LoadBalanceResponseOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use LoadBalanceResponse.newBuilder() to construct.
   private LoadBalanceResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -20,7 +21,7 @@ public  final class LoadBalanceResponse extends
   @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
-    return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    return this.unknownFields;
   }
   private LoadBalanceResponse(
       com.google.protobuf.CodedInputStream input,
@@ -28,6 +29,8 @@ public  final class LoadBalanceResponse extends
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
+    com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+        com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
       boolean done = false;
       while (!done) {
@@ -37,7 +40,8 @@ public  final class LoadBalanceResponse extends
             done = true;
             break;
           default: {
-            if (!input.skipField(tag)) {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -78,6 +82,7 @@ public  final class LoadBalanceResponse extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
   }
@@ -139,6 +144,16 @@ public  final class LoadBalanceResponse extends
    *
    * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
    */
+  public boolean hasInitialResponse() {
+    return loadBalanceResponseTypeCase_ == 1;
+  }
+  /**
+   * <pre>
+   * This message should be sent on the first response to the client.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+   */
   public io.grpc.grpclb.InitialLoadBalanceResponse getInitialResponse() {
     if (loadBalanceResponseTypeCase_ == 1) {
        return (io.grpc.grpclb.InitialLoadBalanceResponse) loadBalanceResponseType_;
@@ -160,6 +175,17 @@ public  final class LoadBalanceResponse extends
   }
 
   public static final int SERVER_LIST_FIELD_NUMBER = 2;
+  /**
+   * <pre>
+   * Contains the list of servers selected by the load balancer. The client
+   * should send requests to these servers in the specified order.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
+   */
+  public boolean hasServerList() {
+    return loadBalanceResponseTypeCase_ == 2;
+  }
   /**
    * <pre>
    * Contains the list of servers selected by the load balancer. The client
@@ -207,6 +233,7 @@ public  final class LoadBalanceResponse extends
     if (loadBalanceResponseTypeCase_ == 2) {
       output.writeMessage(2, (io.grpc.grpclb.ServerList) loadBalanceResponseType_);
     }
+    unknownFields.writeTo(output);
   }
 
   public int getSerializedSize() {
@@ -222,11 +249,11 @@ public  final class LoadBalanceResponse extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, (io.grpc.grpclb.ServerList) loadBalanceResponseType_);
     }
+    size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -253,6 +280,7 @@ public  final class LoadBalanceResponse extends
       case 0:
       default:
     }
+    result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
 
@@ -452,7 +480,7 @@ public  final class LoadBalanceResponse extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -465,12 +493,12 @@ public  final class LoadBalanceResponse extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -497,6 +525,7 @@ public  final class LoadBalanceResponse extends
           break;
         }
       }
+      this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
     }
@@ -540,6 +569,16 @@ public  final class LoadBalanceResponse extends
 
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceResponse, io.grpc.grpclb.InitialLoadBalanceResponse.Builder, io.grpc.grpclb.InitialLoadBalanceResponseOrBuilder> initialResponseBuilder_;
+    /**
+     * <pre>
+     * This message should be sent on the first response to the client.
+     * </pre>
+     *
+     * <code>.grpc.lb.v1.InitialLoadBalanceResponse initial_response = 1;</code>
+     */
+    public boolean hasInitialResponse() {
+      return loadBalanceResponseTypeCase_ == 1;
+    }
     /**
      * <pre>
      * This message should be sent on the first response to the client.
@@ -710,6 +749,17 @@ public  final class LoadBalanceResponse extends
      *
      * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
      */
+    public boolean hasServerList() {
+      return loadBalanceResponseTypeCase_ == 2;
+    }
+    /**
+     * <pre>
+     * Contains the list of servers selected by the load balancer. The client
+     * should send requests to these servers in the specified order.
+     * </pre>
+     *
+     * <code>.grpc.lb.v1.ServerList server_list = 2;</code>
+     */
     public io.grpc.grpclb.ServerList getServerList() {
       if (serverListBuilder_ == null) {
         if (loadBalanceResponseTypeCase_ == 2) {
@@ -871,12 +921,12 @@ public  final class LoadBalanceResponse extends
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.setUnknownFieldsProto3(unknownFields);
     }
 
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.mergeUnknownFields(unknownFields);
     }
 
 

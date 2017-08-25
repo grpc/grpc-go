@@ -14,6 +14,14 @@ public interface LoadBalanceRequestOrBuilder extends
    *
    * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
+  boolean hasInitialRequest();
+  /**
+   * <pre>
+   * This message should be sent on the first request to the load balancer.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   */
   io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest();
   /**
    * <pre>
@@ -24,6 +32,15 @@ public interface LoadBalanceRequestOrBuilder extends
    */
   io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder getInitialRequestOrBuilder();
 
+  /**
+   * <pre>
+   * The client stats should be periodically reported to the load balancer
+   * based on the duration defined in the InitialLoadBalanceResponse.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
+   */
+  boolean hasClientStats();
   /**
    * <pre>
    * The client stats should be periodically reported to the load balancer

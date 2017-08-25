@@ -10,6 +10,7 @@ public  final class LoadBalanceRequest extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.lb.v1.LoadBalanceRequest)
     LoadBalanceRequestOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use LoadBalanceRequest.newBuilder() to construct.
   private LoadBalanceRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -20,7 +21,7 @@ public  final class LoadBalanceRequest extends
   @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
-    return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    return this.unknownFields;
   }
   private LoadBalanceRequest(
       com.google.protobuf.CodedInputStream input,
@@ -28,6 +29,8 @@ public  final class LoadBalanceRequest extends
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
+    com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+        com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
       boolean done = false;
       while (!done) {
@@ -37,7 +40,8 @@ public  final class LoadBalanceRequest extends
             done = true;
             break;
           default: {
-            if (!input.skipField(tag)) {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -78,6 +82,7 @@ public  final class LoadBalanceRequest extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
   }
@@ -139,6 +144,16 @@ public  final class LoadBalanceRequest extends
    *
    * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
    */
+  public boolean hasInitialRequest() {
+    return loadBalanceRequestTypeCase_ == 1;
+  }
+  /**
+   * <pre>
+   * This message should be sent on the first request to the load balancer.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+   */
   public io.grpc.grpclb.InitialLoadBalanceRequest getInitialRequest() {
     if (loadBalanceRequestTypeCase_ == 1) {
        return (io.grpc.grpclb.InitialLoadBalanceRequest) loadBalanceRequestType_;
@@ -160,6 +175,17 @@ public  final class LoadBalanceRequest extends
   }
 
   public static final int CLIENT_STATS_FIELD_NUMBER = 2;
+  /**
+   * <pre>
+   * The client stats should be periodically reported to the load balancer
+   * based on the duration defined in the InitialLoadBalanceResponse.
+   * </pre>
+   *
+   * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
+   */
+  public boolean hasClientStats() {
+    return loadBalanceRequestTypeCase_ == 2;
+  }
   /**
    * <pre>
    * The client stats should be periodically reported to the load balancer
@@ -207,6 +233,7 @@ public  final class LoadBalanceRequest extends
     if (loadBalanceRequestTypeCase_ == 2) {
       output.writeMessage(2, (io.grpc.grpclb.ClientStats) loadBalanceRequestType_);
     }
+    unknownFields.writeTo(output);
   }
 
   public int getSerializedSize() {
@@ -222,11 +249,11 @@ public  final class LoadBalanceRequest extends
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, (io.grpc.grpclb.ClientStats) loadBalanceRequestType_);
     }
+    size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -253,6 +280,7 @@ public  final class LoadBalanceRequest extends
       case 0:
       default:
     }
+    result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
 
@@ -452,7 +480,7 @@ public  final class LoadBalanceRequest extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -465,12 +493,12 @@ public  final class LoadBalanceRequest extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -497,6 +525,7 @@ public  final class LoadBalanceRequest extends
           break;
         }
       }
+      this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
     }
@@ -540,6 +569,16 @@ public  final class LoadBalanceRequest extends
 
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.grpclb.InitialLoadBalanceRequest, io.grpc.grpclb.InitialLoadBalanceRequest.Builder, io.grpc.grpclb.InitialLoadBalanceRequestOrBuilder> initialRequestBuilder_;
+    /**
+     * <pre>
+     * This message should be sent on the first request to the load balancer.
+     * </pre>
+     *
+     * <code>.grpc.lb.v1.InitialLoadBalanceRequest initial_request = 1;</code>
+     */
+    public boolean hasInitialRequest() {
+      return loadBalanceRequestTypeCase_ == 1;
+    }
     /**
      * <pre>
      * This message should be sent on the first request to the load balancer.
@@ -710,6 +749,17 @@ public  final class LoadBalanceRequest extends
      *
      * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
      */
+    public boolean hasClientStats() {
+      return loadBalanceRequestTypeCase_ == 2;
+    }
+    /**
+     * <pre>
+     * The client stats should be periodically reported to the load balancer
+     * based on the duration defined in the InitialLoadBalanceResponse.
+     * </pre>
+     *
+     * <code>.grpc.lb.v1.ClientStats client_stats = 2;</code>
+     */
     public io.grpc.grpclb.ClientStats getClientStats() {
       if (clientStatsBuilder_ == null) {
         if (loadBalanceRequestTypeCase_ == 2) {
@@ -871,12 +921,12 @@ public  final class LoadBalanceRequest extends
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.setUnknownFieldsProto3(unknownFields);
     }
 
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.mergeUnknownFields(unknownFields);
     }
 
 

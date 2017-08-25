@@ -14,6 +14,7 @@ public  final class ServerReflectionRequest extends
     com.google.protobuf.GeneratedMessageV3 implements
     // @@protoc_insertion_point(message_implements:grpc.reflection.v1alpha.ServerReflectionRequest)
     ServerReflectionRequestOrBuilder {
+private static final long serialVersionUID = 0L;
   // Use ServerReflectionRequest.newBuilder() to construct.
   private ServerReflectionRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
     super(builder);
@@ -25,7 +26,7 @@ public  final class ServerReflectionRequest extends
   @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
-    return com.google.protobuf.UnknownFieldSet.getDefaultInstance();
+    return this.unknownFields;
   }
   private ServerReflectionRequest(
       com.google.protobuf.CodedInputStream input,
@@ -33,6 +34,8 @@ public  final class ServerReflectionRequest extends
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     int mutable_bitField0_ = 0;
+    com.google.protobuf.UnknownFieldSet.Builder unknownFields =
+        com.google.protobuf.UnknownFieldSet.newBuilder();
     try {
       boolean done = false;
       while (!done) {
@@ -42,7 +45,8 @@ public  final class ServerReflectionRequest extends
             done = true;
             break;
           default: {
-            if (!input.skipField(tag)) {
+            if (!parseUnknownFieldProto3(
+                input, unknownFields, extensionRegistry, tag)) {
               done = true;
             }
             break;
@@ -99,6 +103,7 @@ public  final class ServerReflectionRequest extends
       throw new com.google.protobuf.InvalidProtocolBufferException(
           e).setUnfinishedMessage(this);
     } finally {
+      this.unknownFields = unknownFields.build();
       makeExtensionsImmutable();
     }
   }
@@ -307,6 +312,17 @@ public  final class ServerReflectionRequest extends
    *
    * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
+  public boolean hasFileContainingExtension() {
+    return messageRequestCase_ == 5;
+  }
+  /**
+   * <pre>
+   * Find the proto file which defines an extension extending the given
+   * message type with the given field number.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   */
   public io.grpc.reflection.v1alpha.ExtensionRequest getFileContainingExtension() {
     if (messageRequestCase_ == 5) {
        return (io.grpc.reflection.v1alpha.ExtensionRequest) messageRequest_;
@@ -476,6 +492,7 @@ public  final class ServerReflectionRequest extends
     if (messageRequestCase_ == 7) {
       com.google.protobuf.GeneratedMessageV3.writeString(output, 7, messageRequest_);
     }
+    unknownFields.writeTo(output);
   }
 
   public int getSerializedSize() {
@@ -502,11 +519,11 @@ public  final class ServerReflectionRequest extends
     if (messageRequestCase_ == 7) {
       size += com.google.protobuf.GeneratedMessageV3.computeStringSize(7, messageRequest_);
     }
+    size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
   }
 
-  private static final long serialVersionUID = 0L;
   @java.lang.Override
   public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
@@ -547,6 +564,7 @@ public  final class ServerReflectionRequest extends
       case 0:
       default:
     }
+    result = result && unknownFields.equals(other.unknownFields);
     return result;
   }
 
@@ -772,7 +790,7 @@ public  final class ServerReflectionRequest extends
     }
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.setField(field, value);
     }
     public Builder clearField(
@@ -785,12 +803,12 @@ public  final class ServerReflectionRequest extends
     }
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return (Builder) super.setRepeatedField(field, index, value);
     }
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return (Builder) super.addRepeatedField(field, value);
     }
     public Builder mergeFrom(com.google.protobuf.Message other) {
@@ -841,6 +859,7 @@ public  final class ServerReflectionRequest extends
           break;
         }
       }
+      this.mergeUnknownFields(other.unknownFields);
       onChanged();
       return this;
     }
@@ -1163,6 +1182,17 @@ public  final class ServerReflectionRequest extends
 
     private com.google.protobuf.SingleFieldBuilderV3<
         io.grpc.reflection.v1alpha.ExtensionRequest, io.grpc.reflection.v1alpha.ExtensionRequest.Builder, io.grpc.reflection.v1alpha.ExtensionRequestOrBuilder> fileContainingExtensionBuilder_;
+    /**
+     * <pre>
+     * Find the proto file which defines an extension extending the given
+     * message type with the given field number.
+     * </pre>
+     *
+     * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+     */
+    public boolean hasFileContainingExtension() {
+      return messageRequestCase_ == 5;
+    }
     /**
      * <pre>
      * Find the proto file which defines an extension extending the given
@@ -1572,12 +1602,12 @@ public  final class ServerReflectionRequest extends
     }
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.setUnknownFieldsProto3(unknownFields);
     }
 
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
-      return this;
+      return super.mergeUnknownFields(unknownFields);
     }
 
 

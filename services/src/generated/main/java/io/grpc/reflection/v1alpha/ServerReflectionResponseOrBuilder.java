@@ -42,6 +42,19 @@ public interface ServerReflectionResponseOrBuilder extends
    *
    * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
    */
+  boolean hasFileDescriptorResponse();
+  /**
+   * <pre>
+   * This message is used to answer file_by_filename, file_containing_symbol,
+   * file_containing_extension requests with transitive dependencies. As
+   * the repeated label is not allowed in oneof fields, we use a
+   * FileDescriptorResponse message to encapsulate the repeated fields.
+   * The reflection service is allowed to avoid sending FileDescriptorProtos
+   * that were previously sent in response to earlier requests in the stream.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.FileDescriptorResponse file_descriptor_response = 4;</code>
+   */
   io.grpc.reflection.v1alpha.FileDescriptorResponse getFileDescriptorResponse();
   /**
    * <pre>
@@ -57,6 +70,14 @@ public interface ServerReflectionResponseOrBuilder extends
    */
   io.grpc.reflection.v1alpha.FileDescriptorResponseOrBuilder getFileDescriptorResponseOrBuilder();
 
+  /**
+   * <pre>
+   * This message is used to answer all_extension_numbers_of_type requst.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ExtensionNumberResponse all_extension_numbers_response = 5;</code>
+   */
+  boolean hasAllExtensionNumbersResponse();
   /**
    * <pre>
    * This message is used to answer all_extension_numbers_of_type requst.
@@ -81,6 +102,14 @@ public interface ServerReflectionResponseOrBuilder extends
    *
    * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
    */
+  boolean hasListServicesResponse();
+  /**
+   * <pre>
+   * This message is used to answer list_services request.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ListServiceResponse list_services_response = 6;</code>
+   */
   io.grpc.reflection.v1alpha.ListServiceResponse getListServicesResponse();
   /**
    * <pre>
@@ -91,6 +120,14 @@ public interface ServerReflectionResponseOrBuilder extends
    */
   io.grpc.reflection.v1alpha.ListServiceResponseOrBuilder getListServicesResponseOrBuilder();
 
+  /**
+   * <pre>
+   * This message is used when an error occurs.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ErrorResponse error_response = 7;</code>
+   */
+  boolean hasErrorResponse();
   /**
    * <pre>
    * This message is used when an error occurs.

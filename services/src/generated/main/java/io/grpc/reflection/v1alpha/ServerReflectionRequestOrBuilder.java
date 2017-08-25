@@ -65,6 +65,15 @@ public interface ServerReflectionRequestOrBuilder extends
    *
    * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
    */
+  boolean hasFileContainingExtension();
+  /**
+   * <pre>
+   * Find the proto file which defines an extension extending the given
+   * message type with the given field number.
+   * </pre>
+   *
+   * <code>.grpc.reflection.v1alpha.ExtensionRequest file_containing_extension = 5;</code>
+   */
   io.grpc.reflection.v1alpha.ExtensionRequest getFileContainingExtension();
   /**
    * <pre>
