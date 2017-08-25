@@ -365,11 +365,12 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 }
 
 type env struct {
-	name        string
-	network     string // The type of network such as tcp, unix, etc.
-	security    string // The security protocol such as TLS, SSH, etc.
-	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
-	balancer    bool   // whether to use balancer
+	name         string
+	network      string // The type of network such as tcp, unix, etc.
+	security     string // The security protocol such as TLS, SSH, etc.
+	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
+	balancer     bool   // whether to use balancer
+	customDialer func(string, string, time.Duration) (net.Conn, error)
 }
 
 func (e env) runnable() bool {
@@ -380,6 +381,9 @@ func (e env) runnable() bool {
 }
 
 func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
+	if e.customDialer != nil {
+		return e.customDialer(e.network, addr, timeout)
+	}
 	return net.DialTimeout(e.network, addr, timeout)
 }
 
@@ -678,6 +682,59 @@ func (te *test) withServerTester(fn func(st *serverTester)) {
 	st := newServerTesterFromConn(te.t, c)
 	st.greet()
 	fn(st)
+}
+
+type lazyConn struct {
+	net.Conn
+	mu     sync.Mutex
+	beLazy bool
+}
+
+func (l *lazyConn) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	bl := l.beLazy
+	l.mu.Unlock()
+	if bl {
+		time.Sleep(time.Second * 30)
+	}
+	return l.Conn.Write(b)
+}
+
+func TestContextDeadlineNotIgnored(t *testing.T) {
+	defer leakCheck(t)()
+	e := noBalancerEnv
+	var lc *lazyConn
+	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, timeout)
+		if err != nil {
+			return nil, err
+		}
+		lc = &lazyConn{Conn: conn}
+		return lc, nil
+	}
+
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	lc.mu.Lock()
+	lc.beLazy = true
+	lc.mu.Unlock()
+	timeout := time.Second * 5
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	t1 := time.Now()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, context.DeadlineExceeded", err)
+	}
+	if time.Now().After(t1.Add(2 * timeout)) {
+		t.Fatalf("TestService/EmptyCall(_, _) ran over the deadline")
+	}
 }
 
 func TestTimeoutOnDeadServer(t *testing.T) {
