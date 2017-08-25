@@ -435,6 +435,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		select {
 		case t.awakenKeepalive <- struct{}{}:
 			t.framer.writePing(false, false, [8]byte{})
+			// Fill the awakenKeepalive channel again as this channel must be
+			// kept non-writable except at the point that the keepalive()
+			// goroutine is waiting either to be awaken or shutdown.
+			t.awakenKeepalive <- struct{}{}
 		default:
 		}
 	}
