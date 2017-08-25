@@ -116,13 +116,6 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 	}
 }
 
-// handleStreamSuspension blocks until s.ctx is canceled.
-func (h *testStreamHandler) handleStreamSuspension(s *Stream) {
-	go func() {
-		<-s.ctx.Done()
-	}()
-}
-
 func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	conn, ok := s.ServerTransport().(*http2Server)
 	if !ok {
@@ -260,7 +253,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		h := &testStreamHandler{transport.(*http2Server)}
 		switch ht {
 		case suspended:
-			go transport.HandleStreams(h.handleStreamSuspension,
+			go transport.HandleStreams(func(*Stream) {}, // Do nothing to handle the stream.
 				func(ctx context.Context, method string) context.Context {
 					return ctx
 				})
