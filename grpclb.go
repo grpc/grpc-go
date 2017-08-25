@@ -28,7 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	lbpb "google.golang.org/grpc/grpclb/messages_only/grpc_lb_v1"
+	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
@@ -59,12 +59,12 @@ type balanceLoadClientStream struct {
 	ClientStream
 }
 
-func (x *balanceLoadClientStream) Send(m *lbpb.LoadBalanceRequest) error {
+func (x *balanceLoadClientStream) Send(m *lbmpb.LoadBalanceRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
-	m := new(lbpb.LoadBalanceResponse)
+func (x *balanceLoadClientStream) Recv() (*lbmpb.LoadBalanceResponse, error) {
+	m := new(lbmpb.LoadBalanceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ type balancer struct {
 	expTimer *time.Timer
 	rand     *rand.Rand
 
-	clientStats lbpb.ClientStats
+	clientStats lbmpb.ClientStats
 }
 
 func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
@@ -196,14 +196,14 @@ func (b *balancer) serverListExpire(seq int) {
 	b.addrCh <- nil
 }
 
-func convertDuration(d *lbpb.Duration) time.Duration {
+func convertDuration(d *lbmpb.Duration) time.Duration {
 	if d == nil {
 		return 0
 	}
 	return time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanos)*time.Nanosecond
 }
 
-func (b *balancer) processServerList(l *lbpb.ServerList, seq int) {
+func (b *balancer) processServerList(l *lbmpb.ServerList, seq int) {
 	if l == nil {
 		return
 	}
@@ -267,15 +267,15 @@ func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Dura
 		}
 		b.mu.Lock()
 		stats := b.clientStats
-		b.clientStats = lbpb.ClientStats{} // Clear the stats.
+		b.clientStats = lbmpb.ClientStats{} // Clear the stats.
 		b.mu.Unlock()
 		t := time.Now()
-		stats.Timestamp = &lbpb.Timestamp{
+		stats.Timestamp = &lbmpb.Timestamp{
 			Seconds: t.Unix(),
 			Nanos:   int32(t.Nanosecond()),
 		}
-		if err := s.Send(&lbpb.LoadBalanceRequest{
-			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+		if err := s.Send(&lbmpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbmpb.LoadBalanceRequest_ClientStats{
 				ClientStats: &stats,
 			},
 		}); err != nil {
@@ -299,9 +299,9 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 		return
 	}
 	b.mu.Unlock()
-	initReq := &lbpb.LoadBalanceRequest{
-		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+	initReq := &lbmpb.LoadBalanceRequest{
+		LoadBalanceRequestType: &lbmpb.LoadBalanceRequest_InitialRequest{
+			InitialRequest: &lbmpb.InitialLoadBalanceRequest{
 				Name: b.target,
 			},
 		},
@@ -331,7 +331,7 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 	streamDone := make(chan struct{})
 	defer close(streamDone)
 	b.mu.Lock()
-	b.clientStats = lbpb.ClientStats{} // Clear client stats.
+	b.clientStats = lbmpb.ClientStats{} // Clear client stats.
 	b.mu.Unlock()
 	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
 		go b.sendLoadReport(stream, d, streamDone)
