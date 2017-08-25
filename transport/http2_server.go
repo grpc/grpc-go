@@ -1083,9 +1083,10 @@ func (t *http2Server) controller() {
 					if !i.headsUp {
 						// Stop accepting more streams now.
 						t.state = draining
+						activeStreams := len(t.activeStreams)
 						t.mu.Unlock()
 						t.framer.writeGoAway(true, sid, i.code, i.debugData)
-						if i.closeConn {
+						if i.closeConn || activeStreams == 0 {
 							// Abruptly close the connection following the GoAway.
 							t.Close()
 						}
