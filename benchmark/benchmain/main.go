@@ -18,6 +18,14 @@
  *
  */
 
+/*
+Package main provides benchmark with setting flags.
+To run a certain benchmark with profile usage, the command is
+go run benchmark/benchmain/main.go -kbps=0 -mtu=0 -maxConcurrentCalls=1 \
+reqSizeBytes=1,1048576 -reqspSizeBytes=1,1048576 -runUnary=true -runStream=true \
+-traceMode=true -compressionMode=true -latency=0s,5ms -timeout=10s \
+-cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000
+*/
 package main
 
 import (
