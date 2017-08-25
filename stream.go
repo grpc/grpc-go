@@ -362,7 +362,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	out, err := encode(cs.codec, m, cs.cp, cs.cbuf, outPayload)
+	hdr, data, err := encode(cs.codec, m, cs.cp, cs.cbuf, outPayload)
 	defer func() {
 		if cs.cbuf != nil {
 			cs.cbuf.Reset()
@@ -374,10 +374,10 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.c.maxSendMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
-	if len(out) > *cs.c.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(out), *cs.c.maxSendMessageSize)
+	if len(data) > *cs.c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
 	}
-	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
+	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
@@ -449,7 +449,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) CloseSend() (err error) {
-	err = cs.t.Write(cs.s, nil, &transport.Options{Last: true})
+	err = cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
 	defer func() {
 		if err != nil {
 			cs.finish(err)
@@ -608,7 +608,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
+	hdr, data, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
 	defer func() {
 		if ss.cbuf != nil {
 			ss.cbuf.Reset()
@@ -617,10 +617,10 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if err != nil {
 		return err
 	}
-	if len(out) > ss.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(out), ss.maxSendMessageSize)
+	if len(data) > ss.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
+	if err := ss.t.Write(ss.s, hdr, data, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 	if outPayload != nil {

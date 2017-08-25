@@ -255,9 +255,10 @@ func (ht *serverHandlerTransport) writeCommonHeaders(s *Stream) {
 	}
 }
 
-func (ht *serverHandlerTransport) Write(s *Stream, data []byte, opts *Options) error {
+func (ht *serverHandlerTransport) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
 	return ht.do(func() {
 		ht.writeCommonHeaders(s)
+		ht.rw.Write(hdr)
 		ht.rw.Write(data)
 		if !opts.Delay {
 			ht.rw.(http.Flusher).Flush()
