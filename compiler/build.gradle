@@ -279,6 +279,7 @@ def configureTestTask(Task task, String dep, String extraPackage) {
   task.dependsOn "generateTest${dep}Proto"
   if (osdetector.os != 'windows') {
     task.executable "diff"
+    task.args "-u"
   } else {
     task.executable "fc"
   }
