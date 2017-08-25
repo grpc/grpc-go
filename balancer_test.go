@@ -161,10 +161,11 @@ func TestEmptyAddrs(t *testing.T) {
 	// Loop until the above updates apply.
 	for {
 		time.Sleep(10 * time.Millisecond)
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err != nil {
 			break
 		}
+		cancel()
 	}
 	cc.Close()
 	servers[0].stop()
@@ -236,11 +237,12 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	r.w.inject(updates)
 	// Loop until the above update applies.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
+		cancel()
 	}
 	// Issue 2 RPCs which should be completed with error status once cc is closed.
 	var wg sync.WaitGroup
@@ -462,10 +464,11 @@ func TestPickFirstEmptyAddrs(t *testing.T) {
 	// Loop until the above updates apply.
 	for {
 		time.Sleep(10 * time.Millisecond)
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err != nil {
 			break
 		}
+		cancel()
 	}
 }
 
@@ -488,11 +491,12 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	r.w.inject(updates)
 	// Loop until the above update applies.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
+		cancel()
 	}
 	// Issue 2 RPCs which should be completed with error status once cc is closed.
 	var wg sync.WaitGroup
