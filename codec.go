@@ -69,6 +69,10 @@ func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error
 }
 
 func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
+	if m, ok := v.(proto.Marshaler); ok {
+		return m.Marshal()
+	}
+
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	out, err := p.marshal(v, cb)
 
@@ -79,10 +83,15 @@ func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
+	pb := v.(proto.Message)
+	pb.Reset()
+	if u, ok := pb.(proto.Unmarshaler); ok {
+		return u.Unmarshal(data)
+	}
+
 	cb := protoBufferPool.Get().(*cachedProtoBuffer)
 	cb.SetBuf(data)
-	v.(proto.Message).Reset()
-	err := cb.Unmarshal(v.(proto.Message))
+	err := cb.Unmarshal(pb)
 	cb.SetBuf(nil)
 	protoBufferPool.Put(cb)
 	return err
