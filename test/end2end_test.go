@@ -4477,14 +4477,14 @@ func (ss *stubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 }
 
 // Start starts the server and creates a client connected to it.
-func (ss *stubServer) Start() error {
+func (ss *stubServer) Start(sopts []grpc.ServerOption) error {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return fmt.Errorf(`net.Listen("tcp", "localhost:0") = %v`, err)
 	}
 	ss.cleanups = append(ss.cleanups, func() { lis.Close() })
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(sopts...)
 	testpb.RegisterTestServiceServer(s, ss)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
@@ -4517,7 +4517,7 @@ func TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := endpoint.Start(); err != nil {
+	if err := endpoint.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer endpoint.Stop()
@@ -4532,7 +4532,7 @@ func TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 			return endpoint.client.EmptyCall(ctx, in)
 		},
 	}
-	if err := proxy.Start(); err != nil {
+	if err := proxy.Start(nil); err != nil {
 		t.Fatalf("Error starting proxy server: %v", err)
 	}
 	defer proxy.Stop()
@@ -4580,7 +4580,7 @@ func TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 			return nil
 		},
 	}
-	if err := endpoint.Start(); err != nil {
+	if err := endpoint.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer endpoint.Stop()
@@ -4596,7 +4596,7 @@ func TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 			return doFDC(ctx, endpoint.client)
 		},
 	}
-	if err := proxy.Start(); err != nil {
+	if err := proxy.Start(nil); err != nil {
 		t.Fatalf("Error starting proxy server: %v", err)
 	}
 	defer proxy.Stop()
@@ -4642,7 +4642,7 @@ func TestStatsTagsAndTrace(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := endpoint.Start(); err != nil {
+	if err := endpoint.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer endpoint.Stop()
@@ -4668,6 +4668,41 @@ func TestStatsTagsAndTrace(t *testing.T) {
 		}
 		if s, ok := status.FromError(err); !ok || s.Code() != tc.want {
 			t.Fatalf("endpoint.client.EmptyCall(%v, _) = _, %v; want _, <status with Code()=%v>", tc.ctx, err, tc.want)
+		}
+	}
+}
+
+func TestTapTimeout(t *testing.T) {
+	sopts := []grpc.ServerOption{
+		grpc.InTapHandle(func(ctx context.Context, _ *tap.Info) (context.Context, error) {
+			c, cancel := context.WithCancel(ctx)
+			// Call cancel instead of setting a deadline so we can detect which error
+			// occurred -- this cancellation (desired) or the client's deadline
+			// expired (indicating this cancellation did not affect the RPC).
+			time.AfterFunc(10*time.Millisecond, cancel)
+			return c, nil
+		}),
+	}
+
+	ss := &stubServer{
+		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			<-ctx.Done()
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(sopts); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	// This was known to be flaky; test several times.
+	for i := 0; i < 10; i++ {
+		// Set our own deadline in case the server hangs.
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		res, err := ss.client.EmptyCall(ctx, &testpb.Empty{})
+		cancel()
+		if s, ok := status.FromError(err); !ok || s.Code() != codes.Canceled {
+			t.Fatalf("ss.client.EmptyCall(context.Background(), _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
 		}
 	}
 }

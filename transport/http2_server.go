@@ -230,29 +230,32 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 
 // operateHeader takes action on the decoded headers.
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (close bool) {
-	buf := newRecvBuffer()
-	s := &Stream{
-		id:  frame.Header().StreamID,
-		st:  t,
-		buf: buf,
-		fc:  &inFlow{limit: uint32(t.initialWindowSize)},
-	}
+	streamID := frame.Header().StreamID
 
 	var state decodeState
 	for _, hf := range frame.Fields {
 		if err := state.processHeaderField(hf); err != nil {
 			if se, ok := err.(StreamError); ok {
-				t.controlBuf.put(&resetStream{s.id, statusCodeConvTab[se.Code]})
+				t.controlBuf.put(&resetStream{streamID, statusCodeConvTab[se.Code]})
 			}
 			return
 		}
+	}
+
+	buf := newRecvBuffer()
+	s := &Stream{
+		id:           streamID,
+		st:           t,
+		buf:          buf,
+		fc:           &inFlow{limit: uint32(t.initialWindowSize)},
+		recvCompress: state.encoding,
+		method:       state.method,
 	}
 
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
 	}
-	s.recvCompress = state.encoding
 	if state.timeoutSet {
 		s.ctx, s.cancel = context.WithTimeout(t.ctx, state.timeout)
 	} else {
@@ -280,17 +283,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if state.statsTrace != nil {
 		s.ctx = stats.SetIncomingTrace(s.ctx, state.statsTrace)
 	}
-	s.trReader = &transportReader{
-		reader: &recvBufferReader{
-			ctx:  s.ctx,
-			recv: s.buf,
-		},
-		windowHandler: func(n int) {
-			t.updateWindow(s, uint32(n))
-		},
-	}
-	s.recvCompress = state.encoding
-	s.method = state.method
 	if t.inTapHandle != nil {
 		var err error
 		info := &tap.Info{
@@ -310,18 +302,18 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
-		t.controlBuf.put(&resetStream{s.id, http2.ErrCodeRefusedStream})
+		t.controlBuf.put(&resetStream{streamID, http2.ErrCodeRefusedStream})
 		return
 	}
-	if s.id%2 != 1 || s.id <= t.maxStreamID {
+	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		t.mu.Unlock()
 		// illegal gRPC stream id.
-		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", s.id)
+		errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
 		return true
 	}
-	t.maxStreamID = s.id
+	t.maxStreamID = streamID
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
-	t.activeStreams[s.id] = s
+	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
 	}
@@ -340,6 +332,15 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			WireLength:  int(frame.Header().Length),
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
+	}
+	s.trReader = &transportReader{
+		reader: &recvBufferReader{
+			ctx:  s.ctx,
+			recv: s.buf,
+		},
+		windowHandler: func(n int) {
+			t.updateWindow(s, uint32(n))
+		},
 	}
 	handle(s)
 	return
@@ -774,8 +775,13 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
-	if _, err := wait(s.ctx, nil, nil, t.shutdownChan, t.writableChan); err != nil {
-		return err
+	// Always write a status regardless of context cancellation unless the stream
+	// is terminated (e.g. by a RST_STREAM, GOAWAY, or transport error).  The
+	// server's application code is already done so it is fine to ignore s.ctx.
+	select {
+	case <-t.shutdownChan:
+		return ErrConnClosing
+	case <-t.writableChan:
 	}
 	t.hBuf.Reset()
 	if !headersSent {
