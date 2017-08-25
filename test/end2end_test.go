@@ -4642,7 +4642,7 @@ func TestStatsTagsAndTrace(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := endpoint.Start(); err != nil {
+	if err := endpoint.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer endpoint.Stop()
