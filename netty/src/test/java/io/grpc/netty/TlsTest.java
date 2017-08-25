@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-package io.grpc.testing.integration;
+package io.grpc.netty;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.protobuf.EmptyProtos.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.internal.testing.TestUtils;
-import io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
-import io.grpc.netty.NettyServerBuilder;
+import io.grpc.stub.StreamObserver;
+import io.grpc.testing.protobuf.SimpleRequest;
+import io.grpc.testing.protobuf.SimpleResponse;
+import io.grpc.testing.protobuf.SimpleServiceGrpc;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContext;
@@ -57,7 +56,7 @@ import org.junit.runners.Parameterized.Parameters;
 
 
 /**
- * Integration tests for GRPC's TLS support.
+ * Integration tests for Netty's TLS support.
  */
 @RunWith(Parameterized.class)
 public class TlsTest {
@@ -124,7 +123,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(new TestServiceImpl(executor))
+        .addService(new SimpleServiceImpl())
         .build()
         .start();
 
@@ -138,12 +137,11 @@ public class TlsTest {
         .keyManager(clientCertChainFile, clientPrivateKeyFile)
         .trustManager(clientTrustedCaCerts)
         .build());
-    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    SimpleServiceGrpc.SimpleServiceBlockingStub client = SimpleServiceGrpc.newBlockingStub(channel);
 
     // Send an actual request, via the full GRPC & network stack, and check that a proper
     // response comes back.
-    Empty request = Empty.getDefaultInstance();
-    client.emptyCall(request);
+    client.unaryRpc(SimpleRequest.getDefaultInstance());
   }
 
 
@@ -160,7 +158,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(new TestServiceImpl(executor))
+        .addService(new SimpleServiceImpl())
         .build()
         .start();
 
@@ -176,12 +174,11 @@ public class TlsTest {
         .keyManager(clientCertChainFile, clientPrivateKeyFile)
         .trustManager(clientTrustedCaCerts)
         .build());
-    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    SimpleServiceGrpc.SimpleServiceBlockingStub client = SimpleServiceGrpc.newBlockingStub(channel);
 
     // Check that the TLS handshake fails.
-    Empty request = Empty.getDefaultInstance();
     try {
-      client.emptyCall(request);
+      client.unaryRpc(SimpleRequest.getDefaultInstance());
       fail("TLS handshake should have failed, but didn't; received RPC response");
     } catch (StatusRuntimeException e) {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
@@ -207,7 +204,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(new TestServiceImpl(executor))
+        .addService(new SimpleServiceImpl())
         .build()
         .start();
 
@@ -218,12 +215,11 @@ public class TlsTest {
     channel = clientChannel(server.getPort(), clientContextBuilder
         .trustManager(clientTrustedCaCerts)
         .build());
-    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    SimpleServiceGrpc.SimpleServiceBlockingStub client = SimpleServiceGrpc.newBlockingStub(channel);
 
     // Check that the TLS handshake fails.
-    Empty request = Empty.getDefaultInstance();
     try {
-      client.emptyCall(request);
+      client.unaryRpc(SimpleRequest.getDefaultInstance());
       fail("TLS handshake should have failed, but didn't; received RPC response");
     } catch (StatusRuntimeException e) {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
@@ -249,7 +245,7 @@ public class TlsTest {
       TestUtils.loadX509Cert("ca.pem")
     };
     server = serverBuilder(0, serverCertFile, serverPrivateKeyFile, serverTrustedCaCerts)
-        .addService(new TestServiceImpl(executor))
+        .addService(new SimpleServiceImpl())
         .build()
         .start();
 
@@ -263,12 +259,11 @@ public class TlsTest {
         .keyManager(clientCertChainFile, clientPrivateKeyFile)
         .trustManager(clientTrustedCaCerts)
         .build());
-    TestServiceGrpc.TestServiceBlockingStub client = TestServiceGrpc.newBlockingStub(channel);
+    SimpleServiceGrpc.SimpleServiceBlockingStub client = SimpleServiceGrpc.newBlockingStub(channel);
 
     // Check that the TLS handshake fails.
-    Empty request = Empty.getDefaultInstance();
     try {
-      client.emptyCall(request);
+      client.unaryRpc(SimpleRequest.getDefaultInstance());
       fail("TLS handshake should have failed, but didn't; received RPC response");
     } catch (StatusRuntimeException e) {
       // GRPC reports this situation by throwing a StatusRuntimeException that wraps either a
@@ -301,5 +296,13 @@ public class TlsTest {
         .negotiationType(NegotiationType.TLS)
         .sslContext(sslContext)
         .build();
+  }
+
+  private static class SimpleServiceImpl extends SimpleServiceGrpc.SimpleServiceImplBase {
+    @Override
+    public void unaryRpc(SimpleRequest req, StreamObserver<SimpleResponse> respOb) {
+      respOb.onNext(SimpleResponse.getDefaultInstance());
+      respOb.onCompleted();
+    }
   }
 }
