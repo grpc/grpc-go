@@ -106,7 +106,7 @@ public class Context {
    * <p>Never assume this is the default context for new threads, because {@link Storage} may define
    * a default context that is different from ROOT.
    */
-  public static final Context ROOT = new Context(null, EMPTY_ENTRIES, false, false);
+  public static final Context ROOT = new Context(null, EMPTY_ENTRIES, false);
 
   // Lazy-loaded storage. Delaying storage initialization until after class initialization makes it
   // much easier to avoid circular loading since there can still be references to Context as long as
@@ -177,7 +177,6 @@ public class Context {
     return current;
   }
 
-  private final boolean cascadesCancellation;
   private ArrayList<ExecutableListener> listeners;
   private CancellationListener parentListener = new ParentListener();
   private final boolean canBeCancelled;
@@ -190,7 +189,6 @@ public class Context {
   private Context(PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
     cancellableAncestor = null;
     this.keyValueEntries = keyValueEntries;
-    cascadesCancellation = false;
     canBeCancelled = false;
   }
 
@@ -201,7 +199,6 @@ public class Context {
   private Context(Context parent, PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
     cancellableAncestor = cancellableAncestor(parent);
     this.keyValueEntries = keyValueEntries;
-    cascadesCancellation = true;
     canBeCancelled = cancellableAncestor != null;
   }
 
@@ -215,21 +212,6 @@ public class Context {
       boolean isCancellable) {
     cancellableAncestor = cancellableAncestor(parent);
     this.keyValueEntries = keyValueEntries;
-    cascadesCancellation = true;
-    canBeCancelled = isCancellable;
-  }
-
-  /**
-   * Constructs a context that can be arbitrarily configured.
-   */
-  private Context(
-      Context parent,
-      PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries,
-      boolean cascadesCancellation,
-      boolean isCancellable) {
-    cancellableAncestor = cancellableAncestor(parent);
-    this.keyValueEntries = keyValueEntries;
-    this.cascadesCancellation = cascadesCancellation;
     canBeCancelled = isCancellable;
   }
 
@@ -435,7 +417,7 @@ public class Context {
    * Is this context cancelled.
    */
   public boolean isCancelled() {
-    if (cancellableAncestor == null || !cascadesCancellation) {
+    if (cancellableAncestor == null) {
       return false;
     } else {
       return cancellableAncestor.isCancelled();
@@ -451,7 +433,7 @@ public class Context {
    * should generally assume that it has already been handled and logged properly.
    */
   public Throwable cancellationCause() {
-    if (cancellableAncestor == null || !cascadesCancellation) {
+    if (cancellableAncestor == null) {
       return null;
     } else {
       return cancellableAncestor.cancellationCause();
