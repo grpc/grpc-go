@@ -92,6 +92,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		outPayload *stats.OutPayload
 	)
 	if compressor != nil {
+		// TODO(irfansharif): Fetch from sync.Pool instead, re-usable across calls.
 		cbuf = new(bytes.Buffer)
 	}
 	if dopts.copts.StatsHandler != nil {
@@ -99,17 +100,18 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	outBuf, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	out, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return err
 	}
 	if c.maxSendMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
-	if len(outBuf) > *c.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(outBuf), *c.maxSendMessageSize)
+	if len(out) > *c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(out), *c.maxSendMessageSize)
 	}
-	err = t.Write(stream, outBuf, opts)
+
+	err = t.Write(stream, out, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)

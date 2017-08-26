@@ -324,11 +324,11 @@ func (cs *clientStream) Trailer() metadata.MD {
 	return cs.s.Trailer()
 }
 
-func (cs *clientStream) SendMsg(m interface{}) (err error) {
+func (cs *clientStream) SendMsg(msg interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.trInfo.tr != nil {
-			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: msg}, true)
 		}
 		cs.mu.Unlock()
 	}
@@ -362,12 +362,11 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	out, err := encode(cs.codec, m, cs.cp, cs.cbuf, outPayload)
-	defer func() {
-		if cs.cbuf != nil {
-			cs.cbuf.Reset()
-		}
-	}()
+
+	if cs.cbuf != nil {
+		cs.cbuf.Reset()
+	}
+	out, err := encode(cs.codec, msg, cs.cp, cs.cbuf, outPayload)
 	if err != nil {
 		return err
 	}
@@ -585,13 +584,13 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendMsg(m interface{}) (err error) {
+func (ss *serverStream) SendMsg(msg interface{}) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
 				if err == nil {
-					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: msg}, true)
 				} else {
 					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 					ss.trInfo.tr.SetError()
@@ -608,12 +607,11 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	out, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
-	defer func() {
-		if ss.cbuf != nil {
-			ss.cbuf.Reset()
-		}
-	}()
+
+	if ss.cbuf != nil {
+		ss.cbuf.Reset()
+	}
+	out, err := encode(ss.codec, msg, ss.cp, ss.cbuf, outPayload)
 	if err != nil {
 		return err
 	}
