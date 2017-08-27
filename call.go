@@ -92,8 +92,9 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		outPayload *stats.OutPayload
 	)
 	if compressor != nil {
-		// TODO(irfansharif): Fetch from sync.Pool instead, re-usable across calls.
-		cbuf = new(bytes.Buffer)
+		cbuf = bytesBufferPool.Get().(*bytes.Buffer)
+		cbuf.Reset()
+		defer bytesBufferPool.Put(cbuf)
 	}
 	if dopts.copts.StatsHandler != nil {
 		outPayload = &stats.OutPayload{
@@ -116,6 +117,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		outPayload.SentTime = time.Now()
 		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)
 	}
+
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.

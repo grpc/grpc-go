@@ -672,8 +672,9 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		outPayload *stats.OutPayload
 	)
 	if cp != nil {
-		// TODO(irfansharif): Fetch from sync.Pool instead, re-usable across calls.
-		cbuf = new(bytes.Buffer)
+		cbuf = bytesBufferPool.Get().(*bytes.Buffer)
+		cbuf.Reset()
+		defer bytesBufferPool.Put(cbuf)
 	}
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
