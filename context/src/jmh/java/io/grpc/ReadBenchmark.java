@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package io.grpc.context;
+package io.grpc;
 
-import io.grpc.Context;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;

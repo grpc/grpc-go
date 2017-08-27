@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package io.grpc.benchmarks;
+package io.grpc;
 
-import io.grpc.CallOptions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

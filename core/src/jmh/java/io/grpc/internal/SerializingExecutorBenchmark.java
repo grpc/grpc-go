@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -39,7 +40,7 @@ import org.openjdk.jmh.annotations.TearDown;
 @State(Scope.Thread)
 public class SerializingExecutorBenchmark {
 
-  private ExecutorService executorService;
+  private ExecutorService executorService = Executors.newSingleThreadExecutor();
   private Executor executor = new SerializingExecutor(executorService);
 
   private static class IncrRunnable implements Runnable {

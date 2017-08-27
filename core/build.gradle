@@ -18,3 +18,8 @@ javadoc {
     exclude 'io/grpc/Internal?*.java'
     exclude 'io/grpc/internal/**'
 }
+
+animalsniffer {
+    // Don't check sourceSets.jmh
+    sourceSets = [sourceSets.main, sourceSets.test]
+}

@@ -10,6 +10,7 @@ buildscript {
     classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
     classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.4.0'
     classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.11'
+    classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.4"
   }
 }
 
@@ -21,6 +22,7 @@ subprojects {
     apply plugin: "signing"
     apply plugin: "jacoco"
 
+    apply plugin: "me.champeau.gradle.jmh"
     apply plugin: "com.google.osdetector"
     // The plugin only has an effect if a signature is specified
     apply plugin: "ru.vyarus.animalsniffer"
@@ -57,7 +59,7 @@ subprojects {
         mavenLocal()
     }
 
-    [compileJava, compileTestJava].each() {
+    [compileJava, compileTestJava, compileJmhJava].each() {
         it.options.compilerArgs += ["-Xlint:all", "-Xlint:-options", "-Xlint:-path"]
         it.options.encoding = "UTF-8"
         if (rootProject.hasProperty('failOnWarnings') && rootProject.failOnWarnings.toBoolean()) {
@@ -165,7 +167,7 @@ subprojects {
             }
           }
 
-          [compileJava, compileTestJava].each() {
+          [compileJava, compileTestJava, compileJmhJava].each() {
             // Protobuf-generated code produces some warnings.
             // https://github.com/google/protobuf/issues/2718
             it.options.compilerArgs += ["-Xlint:-cast", "-Xep:MissingOverride:OFF",
@@ -227,6 +229,9 @@ subprojects {
 
         // Configuration for modules that use Jetty ALPN agent
         alpnagent libraries.jetty_alpn_agent
+
+        jmh 'org.openjdk.jmh:jmh-core:1.19',
+            'org.openjdk.jmh:jmh-generator-bytecode:1.19'
     }
 
     signing {
@@ -259,6 +264,16 @@ subprojects {
 
     checkstyleTest {
         source = fileTree(dir: "src/test", include: "**/*.java")
+    }
+
+    jmh {
+        warmupIterations = 10
+        iterations = 10
+        fork = 1
+        // None of our benchmarks need the tests, and we have pseudo-circular
+        // dependencies that break when including them. (context's testCompile
+        // depends on core; core's testCompile depends on testing)
+        includeTests = false
     }
 
     task javadocJar(type: Jar) {

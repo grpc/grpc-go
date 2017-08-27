@@ -1,18 +1,10 @@
 buildscript {
     repositories {
         mavenCentral()
-        maven {
-            url "https://plugins.gradle.org/m2/"
-        }
     }
     dependencies {
-        classpath libraries.math
         classpath libraries.protobuf_plugin
     }
-}
-
-plugins {
-  id "me.champeau.gradle.jmh" version "0.4.4"
 }
 
 apply plugin: 'application'
@@ -23,11 +15,10 @@ startScripts.enabled = false
 run.enabled = false
 
 jmh {
-    jmhVersion = '1.19'
-    warmupIterations = 10
-    iterations = 10
-    fork = 1
     jvmArgs = "-server -Xms2g -Xmx2g"
+    // Workaround
+    // https://github.com/melix/jmh-gradle-plugin/issues/97#issuecomment-316664026
+    includeTests = true
 }
 
 dependencies {
@@ -48,10 +39,6 @@ dependencies {
 compileJava {
   // The Control.Void protobuf clashes
   options.compilerArgs += ["-Xep:JavaLangClash:OFF"]
-}
-
-compileJmhJava {
-  options.compilerArgs = compileJava.options.compilerArgs
 }
 
 configureProtoCompilation()

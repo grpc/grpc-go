@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package io.grpc.context;
+package io.grpc;
 
-import io.grpc.Context;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
