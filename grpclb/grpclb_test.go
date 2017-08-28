@@ -501,66 +501,6 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	cc.Close()
 }
 
-func TestServerExpiration(t *testing.T) {
-	tss, cleanup, err := newLoadBalancer(1)
-	if err != nil {
-		t.Fatalf("failed to create new load balancer: %v", err)
-	}
-	defer cleanup()
-	be := &lbmpb.Server{
-		IpAddress:        tss.beIPs[0],
-		Port:             int32(tss.bePorts[0]),
-		LoadBalanceToken: lbToken,
-	}
-	var bes []*lbmpb.Server
-	bes = append(bes, be)
-	exp := &lbmpb.Duration{
-		Seconds: 0,
-		Nanos:   100000000, // 100ms
-	}
-	var sls []*lbmpb.ServerList
-	sl := &lbmpb.ServerList{
-		Servers:            bes,
-		ExpirationInterval: exp,
-	}
-	sls = append(sls, sl)
-	sl = &lbmpb.ServerList{
-		Servers: bes,
-	}
-	sls = append(sls, sl)
-	var intervals []time.Duration
-	intervals = append(intervals, 0)
-	intervals = append(intervals, 500*time.Millisecond)
-	tss.ls.sls = sls
-	tss.ls.intervals = intervals
-	creds := serverNameCheckCreds{
-		expected: besn,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, besn,
-		grpc.WithBalancer(grpc.NewGRPCLBBalancer(&testNameResolver{addrs: []string{tss.lbAddr}})),
-		grpc.WithBlock(), grpc.WithTransportCredentials(&creds), grpc.WithDialer(fakeNameDialer))
-	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
-	}
-	testC := testpb.NewTestServiceClient(cc)
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-	}
-	// Sleep and wake up when the first server list gets expired.
-	time.Sleep(150 * time.Millisecond)
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.Unavailable)
-	}
-	// A non-failfast rpc should be succeeded after the second server list is received from
-	// the remote load balancer.
-	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-	}
-	cc.Close()
-}
-
 // When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
 func TestBalancerDisconnects(t *testing.T) {
 	var (
