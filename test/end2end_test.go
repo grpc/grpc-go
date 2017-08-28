@@ -696,8 +696,9 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	te.srv.Stop()
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
+	cancel()
 	if e.balancer && grpc.Code(err) != codes.DeadlineExceeded {
 		// If e.balancer == nil, the ac will stop reconnecting because the dialer returns non-temp error,
 		// the error will be an internal error.
@@ -756,11 +757,12 @@ func testServerGoAway(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) == codes.DeadlineExceeded {
-			continue
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil && grpc.Code(err) != codes.DeadlineExceeded {
+			cancel()
+			break
 		}
-		break
+		cancel()
 	}
 	// A new RPC should fail.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable && grpc.Code(err) != codes.Internal {
@@ -809,11 +811,12 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
-			continue
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			cancel()
+			break
 		}
-		break
+		cancel()
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
@@ -885,11 +888,12 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
-			continue
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			cancel()
+			break
 		}
-		break
+		cancel()
 	}
 	select {
 	case <-ch1:
@@ -1004,11 +1008,12 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil {
-			continue
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+			cancel()
+			break
 		}
-		break
+		cancel()
 	}
 	// Stop the server and close all the connections.
 	te.srv.Stop()
@@ -1285,14 +1290,16 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
-	ctx, _ := context.WithTimeout(context.Background(), time.Nanosecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Nanosecond)
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), time.Nanosecond)
 	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
+	cancel()
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
@@ -1316,15 +1323,17 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 		break
 	}
 
-	ctx, _ = context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
+	cancel()
 
-	ctx, _ = context.WithTimeout(context.Background(), time.Hour)
+	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
 	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
+	cancel()
 }
 
 func TestServiceConfigMaxMsgSize(t *testing.T) {
@@ -1846,7 +1855,8 @@ func testTap(t *testing.T, e env) {
 }
 
 func healthCheck(d time.Duration, cc *grpc.ClientConn, serviceName string) (*healthpb.HealthCheckResponse, error) {
-	ctx, _ := context.WithTimeout(context.Background(), d)
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
 	hc := healthpb.NewHealthClient(cc)
 	req := &healthpb.HealthCheckRequest{
 		Service: serviceName,
@@ -2872,10 +2882,11 @@ func testRPCTimeout(t *testing.T, e env) {
 		Payload:      payload,
 	}
 	for i := -1; i <= 10; i++ {
-		ctx, _ := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
 		if _, err := tc.UnaryCall(ctx, req); grpc.Code(err) != codes.DeadlineExceeded {
 			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
 		}
+		cancel()
 	}
 }
 
@@ -3355,7 +3366,8 @@ func testClientStreaming(t *testing.T, e env, sizes []int) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	ctx, _ := context.WithTimeout(te.ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(te.ctx, time.Second*30)
+	defer cancel()
 	stream, err := tc.StreamingInputCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
@@ -3569,7 +3581,8 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 				Payload:      payload,
 			}
 			// No rpc should go through due to the max streams limit.
-			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			defer cancel()
 			if _, err := tc.UnaryCall(ctx, req, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 				t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 			}

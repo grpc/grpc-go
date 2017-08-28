@@ -284,10 +284,12 @@ func TestGetOnWaitChannel(t *testing.T) {
 	r.w.inject(updates)
 	for {
 		var reply string
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
+			cancel()
 			break
 		}
+		cancel()
 		time.Sleep(10 * time.Millisecond)
 	}
 	var wg sync.WaitGroup

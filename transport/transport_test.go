@@ -1020,7 +1020,8 @@ func TestLargeMessageSuspension(t *testing.T) {
 		Method: "foo.Large",
 	}
 	// Set a long enough timeout for writing a large message out.
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
@@ -1846,8 +1847,9 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		st.fc.mu.Unlock()
 
 		// Check flow conrtrol window on client stream is equal to out flow on server stream.
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		serverStreamSendQuota, err := wait(ctx, nil, nil, nil, sstream.sendQuotaPool.acquire())
+		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring server stream send quota. Err: %v", err)
 		}
@@ -1860,8 +1862,9 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 
 		// Check flow control window on server stream is equal to out flow on client stream.
-		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 		clientStreamSendQuota, err := wait(ctx, nil, nil, nil, cstream.sendQuotaPool.acquire())
+		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client stream send quota. Err: %v", err)
 		}
@@ -1874,8 +1877,9 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 
 		// Check flow control window on client transport is equal to out flow of server transport.
-		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 		serverTrSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquring server transport send quota. Err: %v", err)
 		}
@@ -1888,8 +1892,9 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		}
 
 		// Check flow control window on server transport is equal to out flow of client transport.
-		ctx, _ = context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 		clientTrSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client transport send quota. Err: %v", err)
 		}
