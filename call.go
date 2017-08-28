@@ -92,28 +92,32 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		outPayload *stats.OutPayload
 	)
 	if compressor != nil {
-		cbuf = new(bytes.Buffer)
+		cbuf = bytesBufferPool.Get().(*bytes.Buffer)
+		cbuf.Reset()
+		defer bytesBufferPool.Put(cbuf)
 	}
 	if dopts.copts.StatsHandler != nil {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	out, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return err
 	}
 	if c.maxSendMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
-	if len(data) > *c.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), *c.maxSendMessageSize)
+	if len(out) > *c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(out), *c.maxSendMessageSize)
 	}
-	err = t.Write(stream, hdr, data, opts)
+
+	err = t.Write(stream, out, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)
 	}
+
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
 	// recvResponse to get the final status.

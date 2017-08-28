@@ -237,6 +237,21 @@ const (
 	compressionMade
 )
 
+// gRPC messages start with a five-byte header followed by the message payload.
+// The header itself is comprised of byte indicative of the payload format
+// (uncompressed/compressed?). Following the remaining four bytes in the header
+// store the length of the subsequent payload (Uint32, Big Endian byte
+// ordering).
+const (
+	payloadFormatLen = 1
+	payloadSizeLen   = 4
+	msgHeaderLen     = payloadFormatLen + payloadSizeLen
+)
+
+// emptyMsgHeader is a five byte long empty header that is used as a stand-in
+// when structuring gRPC messages.
+var emptyMsgHeader = []byte{0, 0, 0, 0, 0}
+
 // parser reads complete gRPC messages from the underlying reader.
 type parser struct {
 	// r is the underlying reader.
@@ -288,51 +303,69 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	return pf, msg, nil
 }
 
-// encode serializes msg and returns a buffer of message header and a buffer of msg.
-// If msg is nil, it generates the message header and an empty msg buffer.
-func encode(c Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, []byte, error) {
-	var b []byte
-	const (
-		payloadLen = 1
-		sizeLen    = 4
-	)
+var bytesBufferPool = sync.Pool{
+	New: func() interface{} {
+		// TODO: Evaluate effect of allocating the internal slice upfront.
+		return new(bytes.Buffer)
+	},
+}
 
+// encode serializes msg and prepends the message header. If msg is nil, it
+// generates the message header of 0 message length.
+//
+// The provided cbuf bytes.Buffer, for when compression is enabled, is not to
+// be modified at the caller after as long as the returned slice is to remain
+// unchanged.
+func encode(codec Codec, msg interface{}, cp Compressor, cbuf *bytes.Buffer, outPayload *stats.OutPayload) ([]byte, error) {
+	var enc, out []byte
 	if msg != nil {
+		// TODO(zhaoq): optimize to reduce memory alloc and copying.
 		var err error
-		b, err = c.Marshal(msg)
+		enc, err = codec.Marshal(msg)
 		if err != nil {
-			return nil, nil, Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
+			return nil, Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 		}
-		if outPayload != nil {
-			outPayload.Payload = msg
-			// TODO truncate large payload.
-			outPayload.Data = b
-			outPayload.Length = len(b)
-		}
-		if cp != nil {
-			if err := cp.Do(cbuf, b); err != nil {
-				return nil, nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
-			}
-			b = cbuf.Bytes()
+
+		if uint(len(enc)) > math.MaxUint32 {
+			return nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(enc))
 		}
 	}
 
-	if uint(len(b)) > math.MaxUint32 {
-		return nil, nil, Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
-	}
-
-	bufHeader := make([]byte, payloadLen+sizeLen)
-	if cp == nil {
-		bufHeader[0] = byte(compressionNone)
-	} else {
-		bufHeader[0] = byte(compressionMade)
-	}
-	// Write length of b into buf
-	binary.BigEndian.PutUint32(bufHeader[payloadLen:], uint32(len(b)))
 	if outPayload != nil {
-		outPayload.WireLength = payloadLen + sizeLen + len(b)
+		outPayload.Payload = msg
+		// TODO truncate large payload.
+		outPayload.Data = enc
+		outPayload.Length = len(enc)
+		outPayload.WireLength = len(enc)
 	}
-	return bufHeader, b, nil
+
+	if msg != nil && cp != nil {
+		// We write out the place holder for the header itself. We will
+		// subsequently fill this in after writing out the compressed version
+		// of the serialized message. We do it in this manner so as to avoid
+		// having to separately allocate for the header portion and/or copying
+		// over the remaining payload bytes. Given the we need to encode the
+		// size of the payload into the header, we can only do so
+		// post-compression.
+		cbuf.Write(emptyMsgHeader)
+		if err := cp.Do(cbuf, enc); err != nil {
+			return nil, Errorf(codes.Internal, "grpc: error while compressing: %v", err.Error())
+		}
+		// The buffer will no longer be modified. We grab a reference to the
+		// underlying slice.
+		out = cbuf.Bytes()
+		// Re-write first header byte indicating the payload format (compressed payload).
+		out[0] = byte(compressionMade)
+	} else {
+		// TODO: Reduce allocations here by re-using buffers.
+		out = make([]byte, msgHeaderLen+len(enc))
+		out[0] = byte(compressionNone)
+		copy(out[msgHeaderLen:], enc)
+	}
+
+	// Write length of the payload into the output buffer.
+	binary.BigEndian.PutUint32(out[payloadFormatLen:msgHeaderLen], uint32(len(out[msgHeaderLen:])))
+	return out, nil
 }
 
 func checkRecvPayload(pf payloadFormat, recvCompress string, dc Decompressor) error {

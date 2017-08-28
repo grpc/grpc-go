@@ -324,11 +324,11 @@ func (cs *clientStream) Trailer() metadata.MD {
 	return cs.s.Trailer()
 }
 
-func (cs *clientStream) SendMsg(m interface{}) (err error) {
+func (cs *clientStream) SendMsg(msg interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.trInfo.tr != nil {
-			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: msg}, true)
 		}
 		cs.mu.Unlock()
 	}
@@ -362,22 +362,21 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Client: true,
 		}
 	}
-	hdr, data, err := encode(cs.codec, m, cs.cp, cs.cbuf, outPayload)
-	defer func() {
-		if cs.cbuf != nil {
-			cs.cbuf.Reset()
-		}
-	}()
+
+	if cs.cbuf != nil {
+		cs.cbuf.Reset()
+	}
+	out, err := encode(cs.codec, msg, cs.cp, cs.cbuf, outPayload)
 	if err != nil {
 		return err
 	}
 	if cs.c.maxSendMessageSize == nil {
 		return Errorf(codes.Internal, "callInfo maxSendMessageSize field uninitialized(nil)")
 	}
-	if len(data) > *cs.c.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), *cs.c.maxSendMessageSize)
+	if len(out) > *cs.c.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(out), *cs.c.maxSendMessageSize)
 	}
-	err = cs.t.Write(cs.s, hdr, data, &transport.Options{Last: false})
+	err = cs.t.Write(cs.s, out, &transport.Options{Last: false})
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		cs.statsHandler.HandleRPC(cs.statsCtx, outPayload)
@@ -449,7 +448,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 }
 
 func (cs *clientStream) CloseSend() (err error) {
-	err = cs.t.Write(cs.s, nil, nil, &transport.Options{Last: true})
+	err = cs.t.Write(cs.s, nil, &transport.Options{Last: true})
 	defer func() {
 		if err != nil {
 			cs.finish(err)
@@ -585,13 +584,13 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	return
 }
 
-func (ss *serverStream) SendMsg(m interface{}) (err error) {
+func (ss *serverStream) SendMsg(msg interface{}) (err error) {
 	defer func() {
 		if ss.trInfo != nil {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
 				if err == nil {
-					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: msg}, true)
 				} else {
 					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 					ss.trInfo.tr.SetError()
@@ -608,19 +607,18 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	hdr, data, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
-	defer func() {
-		if ss.cbuf != nil {
-			ss.cbuf.Reset()
-		}
-	}()
+
+	if ss.cbuf != nil {
+		ss.cbuf.Reset()
+	}
+	out, err := encode(ss.codec, msg, ss.cp, ss.cbuf, outPayload)
 	if err != nil {
 		return err
 	}
-	if len(data) > ss.maxSendMessageSize {
-		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(data), ss.maxSendMessageSize)
+	if len(out) > ss.maxSendMessageSize {
+		return Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(out), ss.maxSendMessageSize)
 	}
-	if err := ss.t.Write(ss.s, hdr, data, &transport.Options{Last: false}); err != nil {
+	if err := ss.t.Write(ss.s, out, &transport.Options{Last: false}); err != nil {
 		return toRPCErr(err)
 	}
 	if outPayload != nil {
