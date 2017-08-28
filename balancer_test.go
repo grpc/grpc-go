@@ -163,6 +163,7 @@ func TestEmptyAddrs(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+			cancel()
 			break
 		}
 		cancel()
@@ -239,6 +240,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
+			cancel()
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -466,6 +468,7 @@ func TestPickFirstEmptyAddrs(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc); err != nil {
+			cancel()
 			break
 		}
 		cancel()
@@ -493,6 +496,7 @@ func TestPickFirstCloseWithPendingRPC(t *testing.T) {
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if err := Invoke(ctx, "/foo/bar", &expectedRequest, &reply, cc, FailFast(false)); Code(err) == codes.DeadlineExceeded {
+			cancel()
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
