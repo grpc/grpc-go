@@ -120,8 +120,10 @@ func (bw *balancerWrapper) lbWatcher() {
 			if len(addrs) <= 0 {
 				if oldSC != nil {
 					// Teardown old sc.
+					bw.mu.Lock()
 					delete(bw.conns, oldA)
 					delete(bw.connSt, oldSC)
+					bw.mu.Unlock()
 					bw.cc.RemoveSubConn(oldSC)
 				}
 				continue
