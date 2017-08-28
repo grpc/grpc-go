@@ -20,7 +20,6 @@ proto:
 		echo "error: protoc not installed" >&2; \
 		exit 1; \
 	fi
-	go get -u -v github.com/golang/protobuf/protoc-gen-go golang.org/x/tools/cmd/stringer
 	go generate google.golang.org/grpc/...
 
 test: testdeps
@@ -31,9 +30,6 @@ testrace: testdeps
 
 clean:
 	go clean -i google.golang.org/grpc/...
-
-coverage: testdeps
-	./coverage.sh --coveralls
 
 .PHONY: \
 	all \
