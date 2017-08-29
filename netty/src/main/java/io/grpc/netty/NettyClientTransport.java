@@ -216,10 +216,11 @@ class NettyClientTransport implements ConnectionClientTransport {
     }
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
-    // Start the connection operation to the server.
-    channel.connect(address);
     // This write will have no effect, yet it will only complete once the negotiationHandler
-    // flushes any pending writes.
+    // flushes any pending writes. We need it to be staged *before* the `connect` so that
+    // the channel can't have been closed yet, removing all handlers. This write will sit in the
+    // AbstractBufferingHandler's buffer, and will either be flushed on a successful connection,
+    // or failed if the connection fails.
     channel.writeAndFlush(NettyClientHandler.NOOP_MESSAGE).addListener(new ChannelFutureListener() {
       @Override
       public void operationComplete(ChannelFuture future) throws Exception {
@@ -230,6 +231,8 @@ class NettyClientTransport implements ConnectionClientTransport {
         }
       }
     });
+    // Start the connection operation to the server.
+    channel.connect(address);
 
     if (keepAliveManager != null) {
       keepAliveManager.onTransportStarted();
