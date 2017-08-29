@@ -14,7 +14,7 @@ matrix:
 go_import_path: google.golang.org/grpc
 
 before_install:
-  - ./vet.sh -install
+  - if [[ "$TRAVIS_GO_VERSION" = 1.8* ]]; then ./vet.sh -install || exit 1; fi
 
 script:
   - if [[ "$TRAVIS_GO_VERSION" = 1.9* && "$ARCH" != "386" ]]; then ./vet.sh || exit 1; fi
