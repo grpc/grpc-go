@@ -23,8 +23,37 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
+	"strconv"
 	"time"
 )
+
+var printHistogram bool
+
+type percentLatency struct {
+	percent string
+	value   time.Duration
+}
+
+type latencyResults struct {
+	latency []percentLatency
+}
+
+// LatencyString output latency stats as the format as time + unit.
+func (stats *Stats) LatencyString() string {
+	stats.maybeUpdate()
+	s := stats.result
+	var res string
+	if len(s.latency) != 0 {
+		var statsUnit = s.latency[0].value
+		var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
+		for i := 1; i < len(s.latency); i++ {
+			res += fmt.Sprintf("  %*s %*s  ", 12,
+				strconv.FormatFloat(float64(s.latency[i].value)/float64(statsUnit), 'f', 4, 64), 2, timeUnit)
+		}
+	}
+	return res
+}
 
 // Stats is a simple helper for gathering additional statistics like histogram
 // during benchmarks. This is not thread safe.
@@ -36,6 +65,9 @@ type Stats struct {
 
 	durations durationSlice
 	dirty     bool
+
+	sortLantency bool
+	result       latencyResults
 }
 
 type durationSlice []time.Duration
@@ -64,6 +96,18 @@ func (stats *Stats) Clear() {
 	stats.durations = stats.durations[:0]
 	stats.histogram = nil
 	stats.dirty = false
+	stats.result = latencyResults{}
+}
+
+//Sort method for durations
+func (a durationSlice) Len() int           { return len(a) }
+func (a durationSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a durationSlice) Less(i, j int) bool { return a[i] < a[j] }
+func max(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // maybeUpdate updates internal stat data if there was any newly added
@@ -71,6 +115,12 @@ func (stats *Stats) Clear() {
 func (stats *Stats) maybeUpdate() {
 	if !stats.dirty {
 		return
+	}
+
+	if stats.sortLantency {
+		sort.Sort(stats.durations)
+		stats.min = int64(stats.durations[0])
+		stats.max = int64(stats.durations[len(stats.durations)-1])
 	}
 
 	stats.min = math.MaxInt64
@@ -109,12 +159,25 @@ func (stats *Stats) maybeUpdate() {
 	}
 
 	stats.dirty = false
+
+	if stats.durations.Len() != 0 {
+		var percentToObserve = []int{50, 90}
+		// First line record min unit from the latency result.
+		stats.result.latency = append(stats.result.latency, percentLatency{percent: "Latency / " + fmt.Sprintf("%v", stats.unit)[1:], value: stats.unit})
+		for _, position := range percentToObserve {
+			stats.result.latency = append(stats.result.latency, percentLatency{percent: strconv.Itoa(position) + "%", value: stats.durations[max(stats.histogram.Count*int64(position)/100-1, 0)]})
+		}
+	}
+}
+
+// SortLantency blocks the output
+func (stats *Stats) SortLantency() {
+	stats.sortLantency = true
 }
 
 // Print writes textual output of the Stats.
 func (stats *Stats) Print(w io.Writer) {
 	stats.maybeUpdate()
-
 	if stats.histogram == nil {
 		fmt.Fprint(w, "Histogram (empty)\n")
 	} else {

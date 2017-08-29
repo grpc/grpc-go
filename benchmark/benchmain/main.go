@@ -134,7 +134,6 @@ func makeFuncUnary(benchFeatures bm.Features) (func(int), func()) {
 }
 
 func makeFuncStream(benchFeatures bm.Features) (func(int), func()) {
-	fmt.Println(benchFeatures)
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -259,7 +258,7 @@ func init() {
 		runMode[0] = true
 		runMode[1] = true
 	default:
-		log.Fatalf("Unknown workloads setting: %v (want %v, %v, or %v)",
+		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
 	}
 	switch compressorMode {
@@ -326,6 +325,38 @@ func readTimeFromInput(values *[]time.Duration, replace string) {
 	}
 }
 
+func partialPrintString(noneEmptyPos []bool, f bm.Features, shared bool) string {
+	s := ""
+	var prefix, suffix string
+	if shared {
+		suffix = "\n"
+	} else {
+		prefix = "-"
+	}
+	if noneEmptyPos[1] {
+		s += fmt.Sprintf("%slatency_%s%s", prefix, f.Latency.String(), suffix)
+	}
+	if noneEmptyPos[2] {
+		s += fmt.Sprintf("%skbps_%#v%s", prefix, f.Kbps, suffix)
+	}
+	if noneEmptyPos[3] {
+		s += fmt.Sprintf("%sMTU_%#v%s", prefix, f.Mtu, suffix)
+	}
+	if noneEmptyPos[4] {
+		s += fmt.Sprintf("%smaxConcurrentCalls_%#v%s", prefix, f.MaxConcurrentCalls, suffix)
+	}
+	if noneEmptyPos[5] {
+		s += fmt.Sprintf("%sreqSize_%#vB%s", prefix, f.ReqSizeBytes, suffix)
+	}
+	if noneEmptyPos[6] {
+		s += fmt.Sprintf("%srespSize_%#vB%s", prefix, f.RespSizeBytes, suffix)
+	}
+	if noneEmptyPos[7] {
+		s += fmt.Sprintf("%sCompressor_%t%s", prefix, f.EnableCompressor, suffix)
+	}
+	return s
+}
+
 func main() {
 	before()
 	featuresPos := make([]int, 8)
@@ -334,6 +365,7 @@ func main() {
 		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor)}
 	initalPos := make([]int, len(featuresPos))
 	s := stats.NewStats(10)
+	s.SortLantency()
 	var memStats runtime.MemStats
 	var results testing.BenchmarkResult
 	var startAllocs, startBytes uint64
@@ -350,14 +382,30 @@ func main() {
 		results = testing.BenchmarkResult{N: int(count), T: time.Now().Sub(startTime),
 			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
 	}
+	// If features(except trace mode) are shared by all test cases, print them ahead.
+	printPos := make([]bool, len(featuresPos))
+	for i := 1; i < len(featuresPos); i++ {
+		if featuresNum[i] <= 1 {
+			printPos[i] = true
+		}
+	}
+	benchFeature := bm.Features{
+		Latency: ltc[0], Kbps: kbps[0], Mtu: mtu[0], MaxConcurrentCalls: maxConcurrentCalls[0],
+		ReqSizeBytes: reqSizeBytes[0], RespSizeBytes: respSizeBytes[0], EnableCompressor: enableCompressor[0],
+	}
+	sharedFeature := fmt.Sprintf("enable-tracing_%t\n", enableTrace[0])
+	sharedFeature += partialPrintString(printPos, benchFeature, true)
+	fmt.Println("\n Shared festures: \n" + strings.Repeat("-", 20))
+	fmt.Println(sharedFeature)
+	fmt.Println(strings.Repeat("-", 30))
+	for i := 0; i < len(featuresPos); i++ {
+		printPos[i] = !printPos[i]
+	}
+	fmt.Printf("%-80s \t%s \t%s \t%s \t%s\n", "Benchmark Name", "50% latency", "90% latency", "Bytes per Alloc", "Number of Allocs")
 	// Run benchmarks
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
-		tracing := "Trace"
-		if !enableTrace[featuresPos[0]] {
-			tracing = "noTrace"
-		}
-		benchFeature := bm.Features{
+		benchFeature = bm.Features{
 			EnableTrace:        enableTrace[featuresPos[0]],
 			Latency:            ltc[featuresPos[1]],
 			Kbps:               kbps[featuresPos[2]],
@@ -370,18 +418,13 @@ func main() {
 
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
 		if runMode[0] {
-			fmt.Printf("Unary-%s-%s:\n", tracing, benchFeature.String())
 			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-			fmt.Println(results.String(), results.MemString())
-			fmt.Println(s.String())
+			fmt.Printf("%-80s: %s \n", "Unary"+partialPrintString(printPos, benchFeature, false), s.LatencyString()+"\t"+results.MemString())
 			s.Clear()
 		}
-
 		if runMode[1] {
-			fmt.Printf("Stream-%s-%s\n", tracing, benchFeature.String())
 			streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
-			fmt.Println(results.String(), results.MemString())
-			fmt.Println(s.String())
+			fmt.Printf("%-80s: %s \n", "Stream"+partialPrintString(printPos, benchFeature, false), s.LatencyString()+"\t"+results.MemString())
 			s.Clear()
 		}
 		bm.AddOne(featuresPos, featuresNum)
