@@ -48,12 +48,13 @@ type Features struct {
 	MaxConcurrentCalls int
 	ReqSizeBytes       int
 	RespSizeBytes      int
+	EnableCompressor   bool
 }
 
 func (f Features) String() string {
 	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-		"%#v-reqSize_%#vB-respSize_%#vB",
-		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes)
+		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t",
+		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor)
 }
 
 // AddOne add 1 to the features slice

@@ -28,7 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
-	lbpb "google.golang.org/grpc/grpclb/messages_only/grpc_lb_v1"
+	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
@@ -59,12 +59,12 @@ type balanceLoadClientStream struct {
 	ClientStream
 }
 
-func (x *balanceLoadClientStream) Send(m *lbpb.LoadBalanceRequest) error {
+func (x *balanceLoadClientStream) Send(m *lbmpb.LoadBalanceRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *balanceLoadClientStream) Recv() (*lbpb.LoadBalanceResponse, error) {
-	m := new(lbpb.LoadBalanceResponse)
+func (x *balanceLoadClientStream) Recv() (*lbmpb.LoadBalanceResponse, error) {
+	m := new(lbmpb.LoadBalanceResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -97,21 +97,20 @@ type grpclbAddrInfo struct {
 }
 
 type grpclbBalancer struct {
-	r        naming.Resolver
-	target   string
-	mu       sync.Mutex
-	seq      int // a sequence number to make sure addrCh does not get stale addresses.
-	w        naming.Watcher
-	addrCh   chan []Address
-	rbs      []remoteBalancerInfo
-	addrs    []*grpclbAddrInfo
-	next     int
-	waitCh   chan struct{}
-	done     bool
-	expTimer *time.Timer
-	rand     *rand.Rand
+	r      naming.Resolver
+	target string
+	mu     sync.Mutex
+	seq    int // a sequence number to make sure addrCh does not get stale addresses.
+	w      naming.Watcher
+	addrCh chan []Address
+	rbs    []remoteBalancerInfo
+	addrs  []*grpclbAddrInfo
+	next   int
+	waitCh chan struct{}
+	done   bool
+	rand   *rand.Rand
 
-	clientStats lbpb.ClientStats
+	clientStats lbmpb.ClientStats
 }
 
 func (b *grpclbBalancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
@@ -181,34 +180,18 @@ func (b *grpclbBalancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBala
 	return nil
 }
 
-func (b *grpclbBalancer) serverListExpire(seq int) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	// TODO: gRPC interanls do not clear the connections when the server list is stale.
-	// This means RPCs will keep using the existing server list until b receives new
-	// server list even though the list is expired. Revisit this behavior later.
-	if b.done || seq < b.seq {
-		return
-	}
-	b.next = 0
-	b.addrs = nil
-	// Ask grpc internals to close all the corresponding connections.
-	b.addrCh <- nil
-}
-
-func convertDuration(d *lbpb.Duration) time.Duration {
+func convertDuration(d *lbmpb.Duration) time.Duration {
 	if d == nil {
 		return 0
 	}
 	return time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanos)*time.Nanosecond
 }
 
-func (b *grpclbBalancer) processServerList(l *lbpb.ServerList, seq int) {
+func (b *grpclbBalancer) processServerList(l *lbmpb.ServerList, seq int) {
 	if l == nil {
 		return
 	}
 	servers := l.GetServers()
-	expiration := convertDuration(l.GetExpirationInterval())
 	var (
 		sl    []*grpclbAddrInfo
 		addrs []Address
@@ -243,15 +226,6 @@ func (b *grpclbBalancer) processServerList(l *lbpb.ServerList, seq int) {
 		b.next = 0
 		b.addrs = sl
 		b.addrCh <- addrs
-		if b.expTimer != nil {
-			b.expTimer.Stop()
-			b.expTimer = nil
-		}
-		if expiration > 0 {
-			b.expTimer = time.AfterFunc(expiration, func() {
-				b.serverListExpire(seq)
-			})
-		}
 	}
 	return
 }
@@ -267,15 +241,15 @@ func (b *grpclbBalancer) sendLoadReport(s *balanceLoadClientStream, interval tim
 		}
 		b.mu.Lock()
 		stats := b.clientStats
-		b.clientStats = lbpb.ClientStats{} // Clear the stats.
+		b.clientStats = lbmpb.ClientStats{} // Clear the stats.
 		b.mu.Unlock()
 		t := time.Now()
-		stats.Timestamp = &lbpb.Timestamp{
+		stats.Timestamp = &lbmpb.Timestamp{
 			Seconds: t.Unix(),
 			Nanos:   int32(t.Nanosecond()),
 		}
-		if err := s.Send(&lbpb.LoadBalanceRequest{
-			LoadBalanceRequestType: &lbpb.LoadBalanceRequest_ClientStats{
+		if err := s.Send(&lbmpb.LoadBalanceRequest{
+			LoadBalanceRequestType: &lbmpb.LoadBalanceRequest_ClientStats{
 				ClientStats: &stats,
 			},
 		}); err != nil {
@@ -302,9 +276,9 @@ func (b *grpclbBalancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (r
 		return
 	}
 	b.mu.Unlock()
-	initReq := &lbpb.LoadBalanceRequest{
-		LoadBalanceRequestType: &lbpb.LoadBalanceRequest_InitialRequest{
-			InitialRequest: &lbpb.InitialLoadBalanceRequest{
+	initReq := &lbmpb.LoadBalanceRequest{
+		LoadBalanceRequestType: &lbmpb.LoadBalanceRequest_InitialRequest{
+			InitialRequest: &lbmpb.InitialLoadBalanceRequest{
 				Name: b.target,
 			},
 		},
@@ -334,7 +308,7 @@ func (b *grpclbBalancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (r
 	streamDone := make(chan struct{})
 	defer close(streamDone)
 	b.mu.Lock()
-	b.clientStats = lbpb.ClientStats{} // Clear client stats.
+	b.clientStats = lbmpb.ClientStats{} // Clear client stats.
 	b.mu.Unlock()
 	if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
 		go b.sendLoadReport(stream, d, streamDone)
@@ -717,9 +691,6 @@ func (b *grpclbBalancer) Close() error {
 		return errBalancerClosed
 	}
 	b.done = true
-	if b.expTimer != nil {
-		b.expTimer.Stop()
-	}
 	if b.waitCh != nil {
 		close(b.waitCh)
 	}

@@ -293,7 +293,8 @@ func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, erro
 }
 
 func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock(), FailOnNonTempDialError(true)); err != nonTemporaryError {
 		t.Fatalf("Dial(%q) = %v, want %v", "", err, nonTemporaryError)
 	}

@@ -1238,3 +1238,41 @@ func TestClientStatsFullDuplexRPCNotCallingLastRecv(t *testing.T) {
 		end:        {checkEnd, 1},
 	})
 }
+
+func TestTags(t *testing.T) {
+	b := []byte{5, 2, 4, 3, 1}
+	ctx := stats.SetTags(context.Background(), b)
+	if tg := stats.OutgoingTags(ctx); !reflect.DeepEqual(tg, b) {
+		t.Errorf("OutgoingTags(%v) = %v; want %v", ctx, tg, b)
+	}
+	if tg := stats.Tags(ctx); tg != nil {
+		t.Errorf("Tags(%v) = %v; want nil", ctx, tg)
+	}
+
+	ctx = stats.SetIncomingTags(context.Background(), b)
+	if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, b) {
+		t.Errorf("Tags(%v) = %v; want %v", ctx, tg, b)
+	}
+	if tg := stats.OutgoingTags(ctx); tg != nil {
+		t.Errorf("OutgoingTags(%v) = %v; want nil", ctx, tg)
+	}
+}
+
+func TestTrace(t *testing.T) {
+	b := []byte{5, 2, 4, 3, 1}
+	ctx := stats.SetTrace(context.Background(), b)
+	if tr := stats.OutgoingTrace(ctx); !reflect.DeepEqual(tr, b) {
+		t.Errorf("OutgoingTrace(%v) = %v; want %v", ctx, tr, b)
+	}
+	if tr := stats.Trace(ctx); tr != nil {
+		t.Errorf("Trace(%v) = %v; want nil", ctx, tr)
+	}
+
+	ctx = stats.SetIncomingTrace(context.Background(), b)
+	if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, b) {
+		t.Errorf("Trace(%v) = %v; want %v", ctx, tr, b)
+	}
+	if tr := stats.OutgoingTrace(ctx); tr != nil {
+		t.Errorf("OutgoingTrace(%v) = %v; want nil", ctx, tr)
+	}
+}
