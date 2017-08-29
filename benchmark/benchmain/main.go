@@ -259,7 +259,7 @@ func init() {
 		runMode[0] = true
 		runMode[1] = true
 	default:
-		log.Fatalf("Unknown workloads setting: %v (want %v, %v, or %v)",
+		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
 	}
 	switch compressorMode {
