@@ -19,11 +19,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Only run these tests on Go 1.8 or manually.
-if [[ "$TRAVIS" = "true" && "$TRAVIS_GO_VERSION" != 1.8* ]]; then
-  exit 0
-fi
-
 # Check proto in manual runs or cron runs.
 if [[ "$TRAVIS" != "true" || "$TRAVIS_EVENT_TYPE" = "cron" ]]; then
   check_proto="true"
