@@ -728,3 +728,36 @@ const (
 	// was recieved and that the debug data said "too_many_pings".
 	TooManyPings GoAwayReason = 2
 )
+
+// loopyWriter is run in a separate go routine. It is the single code path that will
+// write data on wire.
+func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) error) {
+	for {
+		select {
+		case i := <-cbuf.get():
+			cbuf.load()
+			if err := handler(i); err != nil {
+				return
+			}
+		case <-done:
+			return
+		}
+	subloop:
+		for {
+			select {
+			case i := <-cbuf.get():
+				cbuf.load()
+				if err := handler(i); err != nil {
+					return
+				}
+			case <-done:
+				return
+			default:
+				if err := handler(&flushIO{}); err != nil {
+					return
+				}
+				break subloop
+			}
+		}
+	}
+}

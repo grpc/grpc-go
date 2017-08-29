@@ -49,6 +49,29 @@ const (
 // The following defines various control items which could flow through
 // the control buffer of transport. They represent different aspects of
 // control tasks, e.g., flow control, settings, streaming resetting, etc.
+
+type headerFrame struct {
+	p http2.HeadersFrameParam
+}
+
+func (*headerFrame) item() {}
+
+type continuationFrame struct {
+	streamID            uint32
+	endHeaders          bool
+	headerBlockFragment []byte
+}
+
+type dataFrame struct {
+	streamID  uint32
+	endStream bool
+	d         []byte
+}
+
+func (*dataFrame) item() {}
+
+func (*continuationFrame) item() {}
+
 type windowUpdate struct {
 	streamID  uint32
 	increment uint32
@@ -97,8 +120,9 @@ func (*ping) item() {}
 type quotaPool struct {
 	c chan int
 
-	mu    sync.Mutex
-	quota int
+	mu      sync.Mutex
+	version uint64
+	quota   int
 }
 
 // newQuotaPool creates a quotaPool which has quota q available to consume.
@@ -119,6 +143,10 @@ func newQuotaPool(q int) *quotaPool {
 func (qb *quotaPool) add(v int) {
 	qb.mu.Lock()
 	defer qb.mu.Unlock()
+	qb.lockedAdd(v)
+}
+
+func (qb *quotaPool) lockedAdd(v int) {
 	select {
 	case n := <-qb.c:
 		qb.quota += n
@@ -137,6 +165,31 @@ func (qb *quotaPool) add(v int) {
 		qb.quota = 0
 	default:
 	}
+}
+
+func (qb *quotaPool) addAndUpdate(v int) {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
+	qb.version++
+	qb.lockedAdd(v)
+}
+
+func (qb *quotaPool) acquireWithVersion() (<-chan int, uint64) {
+	qb.mu.Lock()
+	version := qb.version
+	qb.mu.Unlock()
+	return qb.c, version
+}
+
+func (qb *quotaPool) compareAndExecute(version uint64, success, failure func()) bool {
+	qb.mu.Lock()
+	defer qb.mu.Unlock()
+	if version == qb.version {
+		success()
+		return true
+	}
+	failure()
+	return false
 }
 
 // acquire returns the channel on which available quota amounts are sent.

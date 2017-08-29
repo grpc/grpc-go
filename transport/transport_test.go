@@ -49,6 +49,7 @@ type server struct {
 	startedErr chan error // error (or nil) with server start value
 	mu         sync.Mutex
 	conns      map[ServerTransport]bool
+	h          *testStreamHandler
 }
 
 var (
@@ -60,7 +61,8 @@ var (
 )
 
 type testStreamHandler struct {
-	t *http2Server
+	t      *http2Server
+	notify chan struct{}
 }
 
 type hType int
@@ -68,6 +70,7 @@ type hType int
 const (
 	normal hType = iota
 	suspended
+	notifyCall
 	misbehaved
 	encodingRequiredStatus
 	invalidHeaderField
@@ -75,6 +78,19 @@ const (
 	delayWrite
 	pingpong
 )
+
+func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
+	if h.notify == nil {
+		return
+	}
+	go func() {
+		select {
+		case <-h.notify:
+		default:
+			close(h.notify)
+		}
+	}()
+}
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	req := expectedRequest
@@ -124,7 +140,6 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	var sent int
 	p := make([]byte, http2MaxFrameLen)
 	for sent < initialWindowSize {
-		<-conn.writableChan
 		n := initialWindowSize - sent
 		// The last message may be smaller than http2MaxFrameLen
 		if n <= http2MaxFrameLen {
@@ -137,11 +152,7 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 				p = make([]byte, n+1)
 			}
 		}
-		if err := conn.framer.writeData(true, s.id, false, p); err != nil {
-			conn.writableChan <- 0
-			break
-		}
-		conn.writableChan <- 0
+		conn.controlBuf.put(&dataFrame{s.id, false, p})
 		sent += len(p)
 	}
 }
@@ -152,13 +163,12 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(t *testing.T, s *
 }
 
 func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stream) {
-	<-h.t.writableChan
-	h.t.hBuf.Reset()
-	h.t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	if err := h.t.writeHeaders(s, h.t.hBuf, false); err != nil {
+	hBuf := bytes.NewBuffer([]byte{})
+	hEnc := hpack.NewEncoder(hBuf)
+	hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	if err := h.t.writeHeaders(s, hBuf, false); err != nil {
 		t.Fatalf("Failed to write headers: %v", err)
 	}
-	h.t.writableChan <- 0
 }
 
 func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
@@ -249,9 +259,15 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			return
 		}
 		s.conns[transport] = true
+		h := &testStreamHandler{t: transport.(*http2Server)}
+		s.h = h
 		s.mu.Unlock()
-		h := &testStreamHandler{transport.(*http2Server)}
 		switch ht {
+		case notifyCall:
+			go transport.HandleStreams(h.handleStreamAndNotify,
+				func(ctx context.Context, _ string) context.Context {
+					return ctx
+				})
 		case suspended:
 			go transport.HandleStreams(func(*Stream) {}, // Do nothing to handle the stream.
 				func(ctx context.Context, method string) context.Context {
@@ -1186,7 +1202,7 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
 	}
-	server, client := setUpWithOptions(t, 0, &ServerConfig{}, suspended, connectOptions)
+	server, client := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
 	defer server.stop()
 	defer client.Close()
 
@@ -1205,66 +1221,56 @@ func TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	for k := range server.conns {
 		st = k.(*http2Server)
 	}
+	notifyChan := make(chan struct{})
+	server.h.notify = notifyChan
 	server.mu.Unlock()
 	cstream1, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
 	if err != nil {
 		t.Fatalf("Client failed to create first stream. Err: %v", err)
 	}
 
+	<-notifyChan
 	var sstream1 *Stream
 	// Access stream on the server.
-	waitWhileTrue(t, func() (bool, error) {
-		st.mu.Lock()
-		defer st.mu.Unlock()
-
-		if len(st.activeStreams) != 1 {
-			return true, fmt.Errorf("timed-out while waiting for server to have created a stream")
-		}
-		for _, v := range st.activeStreams {
+	st.mu.Lock()
+	for _, v := range st.activeStreams {
+		if v.id == cstream1.id {
 			sstream1 = v
 		}
-		return false, nil
-	})
-
+	}
+	st.mu.Unlock()
+	if sstream1 == nil {
+		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream1.id)
+	}
 	// Exhaust client's connection window.
-	<-st.writableChan
-	if err := st.framer.writeData(true, sstream1.id, true, make([]byte, defaultWindowSize)); err != nil {
-		st.writableChan <- 0
+	if err := st.Write(sstream1, []byte{}, make([]byte, defaultWindowSize), &Options{}); err != nil {
 		t.Fatalf("Server failed to write data. Err: %v", err)
 	}
-	st.writableChan <- 0
+	notifyChan = make(chan struct{})
+	server.mu.Lock()
+	server.h.notify = notifyChan
+	server.mu.Unlock()
 	// Create another stream on client.
 	cstream2, err := client.NewStream(context.Background(), &CallHdr{Flush: true})
 	if err != nil {
 		t.Fatalf("Client failed to create second stream. Err: %v", err)
 	}
-
+	<-notifyChan
 	var sstream2 *Stream
-	waitWhileTrue(t, func() (bool, error) {
-		st.mu.Lock()
-		defer st.mu.Unlock()
-
-		if len(st.activeStreams) != 2 {
-			return true, fmt.Errorf("timed-out while waiting for server to have created the second stream")
+	st.mu.Lock()
+	for _, v := range st.activeStreams {
+		if v.id == cstream2.id {
+			sstream2 = v
 		}
-		for _, v := range st.activeStreams {
-			if v.id == cstream2.id {
-				sstream2 = v
-			}
-		}
-		if sstream2 == nil {
-			return true, fmt.Errorf("didn't find stream corresponding to client cstream.id: %v on the server", cstream2.id)
-		}
-		return false, nil
-	})
-
+	}
+	st.mu.Unlock()
+	if sstream2 == nil {
+		t.Fatalf("Didn't find stream corresponding to client cstream.id: %v on the server", cstream2.id)
+	}
 	// Server should be able to send data on the new stream, even though the client hasn't read anything on the first stream.
-	<-st.writableChan
-	if err := st.framer.writeData(true, sstream2.id, true, make([]byte, defaultWindowSize)); err != nil {
-		st.writableChan <- 0
+	if err := st.Write(sstream2, []byte{}, make([]byte, defaultWindowSize), &Options{}); err != nil {
 		t.Fatalf("Server failed to write data. Err: %v", err)
 	}
-	st.writableChan <- 0
 
 	// Client should be able to read data on second stream.
 	if _, err := cstream2.Read(make([]byte, defaultWindowSize)); err != nil {

@@ -558,7 +558,6 @@ type serverStream struct {
 	codec                 Codec
 	cp                    Compressor
 	dc                    Decompressor
-	cbuf                  *bytes.Buffer
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -614,12 +613,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 	if ss.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	hdr, data, err := encode(ss.codec, m, ss.cp, ss.cbuf, outPayload)
-	defer func() {
-		if ss.cbuf != nil {
-			ss.cbuf.Reset()
-		}
-	}()
+	hdr, data, err := encode(ss.codec, m, ss.cp, bytes.NewBuffer([]byte{}), outPayload)
 	if err != nil {
 		return err
 	}
