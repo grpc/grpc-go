@@ -22,8 +22,8 @@
 Package main provides benchmark with setting flags.
 To run a certain benchmark with profile usage, the command is
 go run benchmark/benchmain/main.go -kbps=0 -mtu=0 -maxConcurrentCalls=1 \
-reqSizeBytes=1,1048576 -reqspSizeBytes=1,1048576 -runUnary=true -runStream=true \
--traceMode=true -compressionMode=true -latency=0s,5ms -timeout=10s \
+-reqSizeBytes=1,1048576 -reqspSizeBytes=1,1048576 -runUnary=true -runStream=true \
+-traceMode=true -compressorMode=true -latency=0s,5ms -benchtime=10s \
 -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000
 */
 package main
@@ -32,6 +32,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"reflect"
@@ -65,22 +66,22 @@ var (
 	maxConcurrentCalls     = []int{1, 8, 64, 512}
 	reqSizeBytes           = []int{1, 1024, 1024 * 1024}
 	respSizeBytes          = []int{1, 1024, 1024 * 1024}
-	timeout                = []time.Duration{1 * time.Second}
+	benchtime              time.Duration
 	memProfile, cpuProfile string
 	memProfileRate         int
 	enableCompressor       = []bool{false}
 )
 
-func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, timeout time.Duration, s *stats.Stats) {
+func unaryBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, benchtime time.Duration, s *stats.Stats) {
 	caller, close := makeFuncUnary(benchFeatures)
 	defer close()
-	runBenchmark(caller, startTimer, stopTimer, benchFeatures, timeout, s)
+	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
-func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, timeout time.Duration, s *stats.Stats) {
+func streamBenchmark(startTimer func(), stopTimer func(int32), benchFeatures bm.Features, benchtime time.Duration, s *stats.Stats) {
 	caller, close := makeFuncStream(benchFeatures)
 	defer close()
-	runBenchmark(caller, startTimer, stopTimer, benchFeatures, timeout, s)
+	runBenchmark(caller, startTimer, stopTimer, benchFeatures, benchtime, s)
 }
 
 func makeFuncUnary(benchFeatures bm.Features) (func(int), func()) {
@@ -166,7 +167,7 @@ func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, r
 	}
 }
 
-func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), benchFeatures bm.Features, timeout time.Duration, s *stats.Stats) {
+func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), benchFeatures bm.Features, benchtime time.Duration, s *stats.Stats) {
 	// Warm up connection.
 	for i := 0; i < 10; i++ {
 		caller(0)
@@ -178,7 +179,7 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 		wg sync.WaitGroup
 	)
 	wg.Add(benchFeatures.MaxConcurrentCalls)
-	bmEnd := time.Now().Add(timeout)
+	bmEnd := time.Now().Add(benchtime)
 	var count int32
 	for i := 0; i < benchFeatures.MaxConcurrentCalls; i++ {
 		go func(pos int) {
@@ -206,13 +207,13 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 func init() {
 	var runUnary, runStream bool
 	var traceMode, compressorMode bool
-	var readLatency, readTimeout string
+	var readLatency string
 	var readKbps, readMtu, readMaxConcurrentCalls, readReqSizeBytes, readReqspSizeBytes intSliceType
 	flag.BoolVar(&runUnary, "runUnary", false, "runUnary")
 	flag.BoolVar(&runStream, "runStream", false, "runStream")
 	flag.BoolVar(&traceMode, "traceMode", false, "traceMode")
 	flag.StringVar(&readLatency, "latency", "", "latency")
-	flag.StringVar(&readTimeout, "timeout", "", "timeout")
+	flag.DurationVar(&benchtime, "benchtime", time.Second, "benchtime")
 	flag.Var(&readKbps, "kbps", "kbps")
 	flag.Var(&readMtu, "mtu", "mtu")
 	flag.Var(&readMaxConcurrentCalls, "maxConcurrentCalls", "maxConcurrentCalls")
@@ -223,6 +224,9 @@ func init() {
 	flag.StringVar(&cpuProfile, "cpuProfile", "", "cpuProfile")
 	flag.BoolVar(&compressorMode, "compressorMode", false, "compressorMode")
 	flag.Parse()
+	if flag.NArg() != 0 {
+		log.Fatal("Error: unparsed arguments: ", flag.Args())
+	}
 	// If no flags related to mode are set, it runs both by default.
 	if runUnary || runStream {
 		runMode[0] = runUnary
@@ -236,7 +240,6 @@ func init() {
 	}
 	// Time input formats as (time + unit).
 	readTimeFromInput(&ltc, readLatency)
-	readTimeFromInput(&timeout, readTimeout)
 	readIntFromIntSlice(&kbps, readKbps)
 	readIntFromIntSlice(&mtu, readMtu)
 	readIntFromIntSlice(&maxConcurrentCalls, readMaxConcurrentCalls)
@@ -278,8 +281,7 @@ func readTimeFromInput(values *[]time.Duration, replace string) {
 		for _, ltc := range strings.Split(replace, ",") {
 			duration, err := time.ParseDuration(ltc)
 			if err != nil {
-				fmt.Println(err)
-				return
+				log.Fatal(err.Error())
 			}
 			*values = append(*values, duration)
 		}
@@ -293,7 +295,7 @@ func main() {
 	featuresNum := []int{len(enableTrace), len(ltc), len(kbps), len(mtu),
 		len(maxConcurrentCalls), len(reqSizeBytes), len(respSizeBytes), len(enableCompressor)}
 	initalPos := make([]int, len(featuresPos))
-	s := stats.NewStats(38)
+	s := stats.NewStats(10)
 	var memStats runtime.MemStats
 	var results testing.BenchmarkResult
 	var startAllocs, startBytes uint64
@@ -331,7 +333,7 @@ func main() {
 		grpc.EnableTracing = enableTrace[featuresPos[0]]
 		if runMode[0] {
 			fmt.Printf("Unary-%s-%s:\n", tracing, benchFeature.String())
-			unaryBenchmark(startTimer, stopTimer, benchFeature, timeout[0], s)
+			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
 			fmt.Println(results.String(), results.MemString())
 			fmt.Println(s.String())
 			s.Clear()
@@ -339,7 +341,7 @@ func main() {
 
 		if runMode[1] {
 			fmt.Printf("Stream-%s-%s\n", tracing, benchFeature.String())
-			streamBenchmark(startTimer, stopTimer, benchFeature, timeout[0], s)
+			streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
 			fmt.Println(results.String(), results.MemString())
 			fmt.Println(s.String())
 			s.Clear()
