@@ -262,12 +262,12 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		return nil, connectionErrorf(true, err, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
 	}
 	if t.initialWindowSize != defaultWindowSize {
-		err = t.framer.writeSettings(true, http2.Setting{
+		err = t.framer.fr.WriteSettings(http2.Setting{
 			ID:  http2.SettingInitialWindowSize,
 			Val: uint32(t.initialWindowSize),
 		})
 	} else {
-		err = t.framer.writeSettings(true)
+		err = t.framer.fr.WriteSettings()
 	}
 	if err != nil {
 		t.Close()
@@ -275,11 +275,12 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(icwz - defaultWindowSize); delta > 0 {
-		if err := t.framer.writeWindowUpdate(true, 0, delta); err != nil {
+		if err := t.framer.fr.WriteWindowUpdate(0, delta); err != nil {
 			t.Close()
 			return nil, connectionErrorf(true, err, "transport: failed to write window update: %v", err)
 		}
 	}
+	t.framer.writer.Flush()
 	go loopyWriter(t.controlBuf, t.shutdownChan, t.itemHandler)
 	if t.kp.Time != infinity {
 		go t.keepalive()
@@ -472,7 +473,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if len(t.activeStreams) == 1 {
 		select {
 		case t.awakenKeepalive <- struct{}{}:
-			t.framer.writePing(false, false, [8]byte{})
+			t.controlBuf.put(&ping{data: [8]byte{}})
 			// Fill the awakenKeepalive channel again as this channel must be
 			// kept non-writable except at the point that the keepalive()
 			// goroutine is waiting either to be awaken or shutdown.
@@ -652,14 +653,19 @@ func (t *http2Client) GracefulClose() error {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-// TODO(zhaoq): opts.Delay is ignored in this implementation. Support it later
-// if it improves the performance.
 func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
-	if hdr == nil && opts.Last {
+	if hdr == nil && data == nil && opts.Last {
 		// stream.CloseSend uses this to send an empty frame with endStream=True
 		t.controlBuf.put(&dataFrame{streamID: s.id, endStream: true})
 		return nil
 	}
+	// Add data to header frame so that we can equally distribute data across frames.
+	emptyLen := http2MaxFrameLen - len(hdr)
+	if emptyLen > len(data) {
+		emptyLen = len(data)
+	}
+	hdr = append(hdr, data[:emptyLen]...)
+	data = data[emptyLen:]
 	for idx, r := range [][]byte{hdr, data} {
 		for len(r) > 0 {
 			size := http2MaxFrameLen
@@ -1089,7 +1095,7 @@ func handleMalformedHTTP2(s *Stream, err error) {
 // TODO(zhaoq): Check the validity of the incoming frame sequence.
 func (t *http2Client) reader() {
 	// Check the validity of server preface.
-	frame, err := t.framer.readFrame()
+	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
 		t.notifyError(err)
 		return
@@ -1104,7 +1110,7 @@ func (t *http2Client) reader() {
 
 	// loop to keep reading incoming messages on this transport.
 	for {
-		frame, err := t.framer.readFrame()
+		frame, err := t.framer.fr.ReadFrame()
 		atomic.CompareAndSwapUint32(&t.activity, 0, 1)
 		if err != nil {
 			// Abort an active stream if the http2.Framer returns a
@@ -1116,7 +1122,7 @@ func (t *http2Client) reader() {
 				t.mu.Unlock()
 				if s != nil {
 					// use error detail to provide better err message
-					handleMalformedHTTP2(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.errorDetail()))
+					handleMalformedHTTP2(s, streamErrorf(http2ErrConvTab[se.Code], "%v", t.framer.fr.ErrorDetail()))
 				}
 				continue
 			} else {
@@ -1182,19 +1188,19 @@ func (t *http2Client) itemHandler(i item) error {
 	}()
 	switch i := i.(type) {
 	case *dataFrame:
-		err = t.framer.writeData(false, i.streamID, i.endStream, i.d)
+		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
 	case *headerFrame:
-		err = t.framer.writeHeaders(false, i.p)
+		err = t.framer.fr.WriteHeaders(i.p)
 	case *continuationFrame:
-		err = t.framer.writeContinuation(false, i.streamID, i.endHeaders, i.headerBlockFragment)
+		err = t.framer.fr.WriteContinuation(i.streamID, i.endHeaders, i.headerBlockFragment)
 	case *windowUpdate:
-		err = t.framer.writeWindowUpdate(false, i.streamID, i.increment)
+		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
 		if i.ack {
 			t.applySettings(i.ss)
-			err = t.framer.writeSettingsAck(false)
+			err = t.framer.fr.WriteSettingsAck()
 		} else {
-			err = t.framer.writeSettings(false, i.ss...)
+			err = t.framer.fr.WriteSettings(i.ss...)
 		}
 	case *resetStream:
 		// If the server needs to be to intimated about stream closing,
@@ -1202,15 +1208,15 @@ func (t *http2Client) itemHandler(i item) error {
 		// the wire before the headers of the next stream waiting on
 		// streamQuota. We ensure this by adding to the streamsQuota pool
 		// only after having acquired the writableChan to send RST_STREAM.
-		err = t.framer.writeRSTStream(true, i.streamID, i.code)
+		err = t.framer.fr.WriteRSTStream(i.streamID, i.code)
 		t.streamsQuota.add(1)
 	case *flushIO:
-		err = t.framer.flushWrite()
+		err = t.framer.writer.Flush()
 	case *ping:
 		if !i.ack {
 			t.bdpEst.timesnap(i.data)
 		}
-		err = t.framer.writePing(false, i.ack, i.data)
+		err = t.framer.fr.WritePing(i.ack, i.data)
 	default:
 		errorf("transport: http2Client.controller got unexpected item type %v\n", i)
 	}

@@ -144,12 +144,12 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			ID:  http2.SettingInitialWindowSize,
 			Val: uint32(iwz)})
 	}
-	if err := framer.writeSettings(true, isettings...); err != nil {
+	if err := framer.fr.WriteSettings(isettings...); err != nil {
 		return nil, connectionErrorf(true, err, "transport: %v", err)
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(icwz - defaultWindowSize); delta > 0 {
-		if err := framer.writeWindowUpdate(true, 0, delta); err != nil {
+		if err := framer.fr.WriteWindowUpdate(0, delta); err != nil {
 			return nil, connectionErrorf(true, err, "transport: %v", err)
 		}
 	}
@@ -211,6 +211,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		connBegin := &stats.ConnBegin{}
 		t.stats.HandleConn(t.ctx, connBegin)
 	}
+	t.framer.writer.Flush()
 	go loopyWriter(t.controlBuf, t.shutdownChan, t.itemHandler)
 	go t.keepalive()
 	return t, nil
@@ -354,7 +355,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		return
 	}
 
-	frame, err := t.framer.readFrame()
+	frame, err := t.framer.fr.ReadFrame()
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		t.Close()
 		return
@@ -374,7 +375,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 	t.handleSettings(sf)
 
 	for {
-		frame, err := t.framer.readFrame()
+		frame, err := t.framer.fr.ReadFrame()
 		atomic.StoreUint32(&t.activity, 1)
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
@@ -650,6 +651,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
+		errorf("transport: Got to too many pings from the client, closing the connection.")
 		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
 	}
 }
@@ -712,7 +714,6 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	md = s.header
 	s.mu.Unlock()
 
-	// TODO(mmukhi): Find a better way to check for context timeouts.
 	hBuf := bytes.NewBuffer([]byte{}) // TODO(mmukhi): Try and re-use this memory later.
 	hEnc := hpack.NewEncoder(hBuf)
 	hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
@@ -766,7 +767,6 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
-	// TODO(mmukhi): Find a better way to check context timouts.
 	hBuf := bytes.NewBuffer([]byte{}) // TODO(mmukhi): Try and re-use this memory.
 	hEnc := hpack.NewEncoder(hBuf)
 	if !headersSent {
@@ -831,6 +831,13 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 	if writeHeaderFrame {
 		t.WriteHeader(s, nil)
 	}
+	// Add data to header frame so that we can equally distribute data across frames.
+	emptyLen := http2MaxFrameLen - len(hdr)
+	if emptyLen > len(data) {
+		emptyLen = len(data)
+	}
+	hdr = append(hdr, data[:emptyLen]...)
+	data = data[emptyLen:]
 	for _, r := range [][]byte{hdr, data} {
 		for len(r) > 0 {
 			size := http2MaxFrameLen
@@ -974,22 +981,22 @@ func (t *http2Server) itemHandler(i item) error {
 	}()
 	switch i := i.(type) {
 	case *dataFrame:
-		err = t.framer.writeData(false, i.streamID, i.endStream, i.d)
+		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
 	case *headerFrame:
-		err = t.framer.writeHeaders(false, i.p)
+		err = t.framer.fr.WriteHeaders(i.p)
 	case *continuationFrame:
-		err = t.framer.writeContinuation(false, i.streamID, i.endHeaders, i.headerBlockFragment)
+		err = t.framer.fr.WriteContinuation(i.streamID, i.endHeaders, i.headerBlockFragment)
 	case *windowUpdate:
-		err = t.framer.writeWindowUpdate(false, i.streamID, i.increment)
+		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
 		if i.ack {
 			t.applySettings(i.ss)
-			err = t.framer.writeSettingsAck(false)
+			err = t.framer.fr.WriteSettingsAck()
 		} else {
-			err = t.framer.writeSettings(false, i.ss...)
+			err = t.framer.fr.WriteSettings(i.ss...)
 		}
 	case *resetStream:
-		err = t.framer.writeRSTStream(true, i.streamID, i.code)
+		err = t.framer.fr.WriteRSTStream(i.streamID, i.code)
 	case *goAway:
 		t.mu.Lock()
 		if t.state == closing {
@@ -1002,12 +1009,14 @@ func (t *http2Server) itemHandler(i item) error {
 			// Stop accepting more streams now.
 			t.state = draining
 			t.mu.Unlock()
-			err = t.framer.writeGoAway(true, sid, i.code, i.debugData)
+			err = t.framer.fr.WriteGoAway(sid, i.code, i.debugData)
 			if err != nil {
 				return err
 			}
 			if i.closeConn {
 				// Abruptly close the connection following the GoAway.
+				// But flush out what's inside the buffer first.
+				t.framer.writer.Flush()
 				t.Close()
 				return fmt.Errorf("transport: Connection closing")
 			}
@@ -1020,8 +1029,8 @@ func (t *http2Server) itemHandler(i item) error {
 		// originated before the GoAway reaches the client.
 		// After getting the ack or timer expiration send out another GoAway this
 		// time with an ID of the max stream server intends to process.
-		err = t.framer.writeGoAway(true, math.MaxUint32, http2.ErrCodeNo, []byte{})
-		err = t.framer.writePing(true, false, goAwayPing.data)
+		err = t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{})
+		err = t.framer.fr.WritePing(false, goAwayPing.data)
 		go func() {
 			timer := time.NewTimer(time.Minute)
 			defer timer.Stop()
@@ -1034,12 +1043,12 @@ func (t *http2Server) itemHandler(i item) error {
 			t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData})
 		}()
 	case *flushIO:
-		err = t.framer.flushWrite()
+		err = t.framer.writer.Flush()
 	case *ping:
 		if !i.ack {
 			t.bdpEst.timesnap(i.data)
 		}
-		err = t.framer.writePing(false, i.ack, i.data)
+		err = t.framer.fr.WritePing(i.ack, i.data)
 	default:
 		errorf("transport: http2Server.controller got unexpected item type %v\n", i)
 	}

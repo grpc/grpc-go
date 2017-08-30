@@ -695,15 +695,13 @@ func (l *lazyConn) Write(b []byte) (int, error) {
 	bl := l.beLazy
 	l.mu.Unlock()
 	if bl {
-		time.Sleep(time.Second * 30)
+		// The sleep duration here needs to less that the leakCheck deadline.
+		time.Sleep(time.Second * 5)
 	}
 	return l.Conn.Write(b)
 }
 
 func TestContextDeadlineNotIgnored(t *testing.T) {
-	// debug code beg
-	return
-	// debug code end
 	defer leakCheck(t)()
 	e := noBalancerEnv
 	var lc *lazyConn
@@ -728,7 +726,7 @@ func TestContextDeadlineNotIgnored(t *testing.T) {
 	lc.mu.Lock()
 	lc.beLazy = true
 	lc.mu.Unlock()
-	timeout := time.Second * 5
+	timeout := time.Second * 1
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	t1 := time.Now()

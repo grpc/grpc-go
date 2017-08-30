@@ -696,16 +696,18 @@ func (e StreamError) Error() string {
 // If it receives from closing, it returns 0, ErrConnClosing.
 // If it receives from proceed, it returns the received integer, nil.
 func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-chan int) (int, error) {
+	// Checking for context expiration is inherently racy.
+	// However, if this function is called with a cancelled context,
+	// that will take precedence.
+	select {
+	case <-ctx.Done():
+		return 0, ContextErr(ctx.Err())
+	default:
+	}
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
 	case <-done:
-		// User cancellation has precedence.
-		select {
-		case <-ctx.Done():
-			return 0, ContextErr(ctx.Err())
-		default:
-		}
 		return 0, io.EOF
 	case <-goAway:
 		return 0, ErrStreamDrain
