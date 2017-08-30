@@ -22,7 +22,7 @@ import com.google.common.base.Preconditions;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -37,13 +37,18 @@ public final class SerializingExecutor implements Executor, Runnable {
   private static final Logger log =
       Logger.getLogger(SerializingExecutor.class.getName());
 
+  private static final AtomicIntegerFieldUpdater<SerializingExecutor> runStateUpdater =
+      AtomicIntegerFieldUpdater.newUpdater(SerializingExecutor.class, "runState");
+  private static final int STOPPED = 0;
+  private static final int RUNNING = -1;
+
   /** Underlying executor that all submitted Runnable objects are run on. */
   private final Executor executor;
 
   /** A list of Runnables to be run in order. */
   private final Queue<Runnable> runQueue = new ConcurrentLinkedQueue<Runnable>();
 
-  private final AtomicBoolean running = new AtomicBoolean();
+  private volatile int runState = STOPPED;
 
   /**
    * Creates a SerializingExecutor, running tasks using {@code executor}.
@@ -66,7 +71,7 @@ public final class SerializingExecutor implements Executor, Runnable {
   }
 
   private void schedule(@Nullable Runnable removable) {
-    if (running.compareAndSet(false, true)) {
+    if (runStateUpdater.compareAndSet(this, STOPPED, RUNNING)) {
       boolean success = false;
       try {
         executor.execute(this);
@@ -87,7 +92,7 @@ public final class SerializingExecutor implements Executor, Runnable {
             // to execute don't succeed and accidentally run a previous runnable.
             runQueue.remove(removable);
           }
-          running.set(false);
+          runStateUpdater.set(this, STOPPED);
         }
       }
     }
@@ -106,7 +111,7 @@ public final class SerializingExecutor implements Executor, Runnable {
         }
       }
     } finally {
-      running.set(false);
+      runStateUpdater.set(this, STOPPED);
     }
     if (!runQueue.isEmpty()) {
       // we didn't enqueue anything but someone else did.
