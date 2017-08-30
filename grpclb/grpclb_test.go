@@ -39,11 +39,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	lbmpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
 	lbspb "google.golang.org/grpc/grpclb/grpc_lb_v1/service"
+	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-
-	_ "google.golang.org/grpc/grpclog/glogger"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 var (
@@ -88,6 +88,7 @@ func (w *testWatcher) Next() (updates []*naming.Update, err error) {
 }
 
 func (w *testWatcher) Close() {
+	close(w.side)
 }
 
 // Inject naming resolution updates to the testWatcher.
@@ -376,6 +377,7 @@ func newLoadBalancer(numberOfBackends int) (tss *testServers, cleanup func(), er
 }
 
 func TestGRPCLB(t *testing.T) {
+	defer leakcheck.Check(t)
 	tss, cleanup, err := newLoadBalancer(1)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -405,14 +407,15 @@ func TestGRPCLB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
+	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 	if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
-	cc.Close()
 }
 
 func TestDropRequest(t *testing.T) {
+	defer leakcheck.Check(t)
 	tss, cleanup, err := newLoadBalancer(2)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -443,6 +446,7 @@ func TestDropRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
+	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 	// Wait until the first connection is up.
 	// The first one has Drop set to true, error should contain "drop requests".
@@ -470,10 +474,10 @@ func TestDropRequest(t *testing.T) {
 			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 	}
-	cc.Close()
 }
 
 func TestDropRequestFailedNonFailFast(t *testing.T) {
+	defer leakcheck.Check(t)
 	tss, cleanup, err := newLoadBalancer(1)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -503,17 +507,18 @@ func TestDropRequestFailedNonFailFast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
+	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, %s", testC, err, codes.DeadlineExceeded)
 	}
-	cc.Close()
 }
 
 // When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
 func TestBalancerDisconnects(t *testing.T) {
+	defer leakcheck.Check(t)
 	var (
 		lbAddrs []string
 		lbs     []*grpc.Server
@@ -556,6 +561,7 @@ func TestBalancerDisconnects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
+	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 	var previousTrailer string
 	trailer := metadata.MD{}
@@ -600,7 +606,6 @@ func TestBalancerDisconnects(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	cc.Close()
 }
 
 type failPreRPCCred struct{}
@@ -664,6 +669,7 @@ func runAndGetStats(t *testing.T, dropForLoadBalancing, dropForRateLimiting bool
 const countRPC = 40
 
 func TestGRPCLBStatsUnarySuccess(t *testing.T) {
+	defer leakcheck.Check(t)
 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -685,6 +691,7 @@ func TestGRPCLBStatsUnarySuccess(t *testing.T) {
 }
 
 func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
+	defer leakcheck.Check(t)
 	c := 0
 	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
@@ -712,6 +719,7 @@ func TestGRPCLBStatsUnaryDropLoadBalancing(t *testing.T) {
 }
 
 func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
+	defer leakcheck.Check(t)
 	c := 0
 	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
@@ -739,6 +747,7 @@ func TestGRPCLBStatsUnaryDropRateLimiting(t *testing.T) {
 }
 
 func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
+	defer leakcheck.Check(t)
 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -761,6 +770,7 @@ func TestGRPCLBStatsUnaryFailedToSend(t *testing.T) {
 }
 
 func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
+	defer leakcheck.Check(t)
 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
@@ -796,6 +806,7 @@ func TestGRPCLBStatsStreamingSuccess(t *testing.T) {
 }
 
 func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
+	defer leakcheck.Check(t)
 	c := 0
 	stats := runAndGetStats(t, true, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
@@ -823,6 +834,7 @@ func TestGRPCLBStatsStreamingDropLoadBalancing(t *testing.T) {
 }
 
 func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
+	defer leakcheck.Check(t)
 	c := 0
 	stats := runAndGetStats(t, false, true, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
@@ -850,6 +862,7 @@ func TestGRPCLBStatsStreamingDropRateLimiting(t *testing.T) {
 }
 
 func TestGRPCLBStatsStreamingFailedToSend(t *testing.T) {
+	defer leakcheck.Check(t)
 	stats := runAndGetStats(t, false, false, func(cc *grpc.ClientConn) {
 		testC := testpb.NewTestServiceClient(cc)
 		// The first non-failfast RPC succeeds, all connections are up.
