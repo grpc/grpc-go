@@ -20,25 +20,6 @@ package io.grpc.internal;
  * Abstract base class for {@link ReadableBuffer} implementations.
  */
 public abstract class AbstractReadableBuffer implements ReadableBuffer {
-
-  @Override
-  public final int readUnsignedMedium() {
-    checkReadable(3);
-    int b1 = readUnsignedByte();
-    int b2 = readUnsignedByte();
-    int b3 = readUnsignedByte();
-    return b1 << 16 | b2 << 8 | b3;
-  }
-
-
-  @Override
-  public final int readUnsignedShort() {
-    checkReadable(2);
-    int b1 = readUnsignedByte();
-    int b2 = readUnsignedByte();
-    return b1 << 8 | b2;
-  }
-
   @Override
   public final int readInt() {
     checkReadable(4);

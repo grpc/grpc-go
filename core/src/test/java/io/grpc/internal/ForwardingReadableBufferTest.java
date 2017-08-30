@@ -58,20 +58,6 @@ public class ForwardingReadableBufferTest {
   }
 
   @Test
-  public void readUnsignedMedium() {
-    when(delegate.readUnsignedMedium()).thenReturn(1);
-
-    assertEquals(1, buffer.readUnsignedMedium());
-  }
-
-  @Test
-  public void readUnsignedShort() {
-    when(delegate.readUnsignedShort()).thenReturn(1);
-
-    assertEquals(1, buffer.readUnsignedShort());
-  }
-
-  @Test
   public void readInt() {
     when(delegate.readInt()).thenReturn(1);
 

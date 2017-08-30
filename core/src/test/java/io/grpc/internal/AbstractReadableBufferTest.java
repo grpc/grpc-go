@@ -42,18 +42,6 @@ public class AbstractReadableBufferTest {
   }
 
   @Test
-  public void readUnsignedShortShouldSucceed() {
-    mockBytes(0xFF, 0xEE);
-    assertEquals(0xFFEE, buffer.readUnsignedShort());
-  }
-
-  @Test
-  public void readUnsignedMediumShouldSucceed() {
-    mockBytes(0xFF, 0xEE, 0xDD);
-    assertEquals(0xFFEEDD, buffer.readUnsignedMedium());
-  }
-
-  @Test
   public void readPositiveIntShouldSucceed() {
     mockBytes(0x7F, 0xEE, 0xDD, 0xCC);
     assertEquals(0x7FEEDDCC, buffer.readInt());

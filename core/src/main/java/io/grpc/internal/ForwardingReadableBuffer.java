@@ -51,16 +51,6 @@ public abstract class ForwardingReadableBuffer implements ReadableBuffer {
   }
 
   @Override
-  public int readUnsignedMedium() {
-    return buf.readUnsignedMedium();
-  }
-
-  @Override
-  public int readUnsignedShort() {
-    return buf.readUnsignedShort();
-  }
-
-  @Override
   public int readInt() {
     return buf.readInt();
   }

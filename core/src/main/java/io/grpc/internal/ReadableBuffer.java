@@ -44,22 +44,6 @@ public interface ReadableBuffer extends Closeable {
   int readUnsignedByte();
 
   /**
-   * Reads a 3-byte unsigned integer from this buffer using big-endian byte ordering. Increments the
-   * read position by 3.
-   *
-   * @throws IndexOutOfBoundsException if required bytes are not readable
-   */
-  int readUnsignedMedium();
-
-  /**
-   * Reads a 2-byte unsigned integer from this buffer using big-endian byte ordering. Increments the
-   * read position by 2.
-   *
-   * @throws IndexOutOfBoundsException if required bytes are not readable
-   */
-  int readUnsignedShort();
-
-  /**
    * Reads a 4-byte signed integer from this buffer using big-endian byte ordering. Increments the
    * read position by 4.
    *
