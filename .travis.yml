@@ -4,20 +4,18 @@ go:
   - 1.6.x
   - 1.7.x
   - 1.8.x
+  - 1.9.x
+
+matrix:
+  include:
+  - go: 1.9.x
+    env: ARCH=386
 
 go_import_path: google.golang.org/grpc
 
 before_install:
-  - if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then go get -u github.com/golang/lint/golint honnef.co/go/tools/cmd/staticcheck; fi
-  - go get -u golang.org/x/tools/cmd/goimports github.com/axw/gocov/gocov github.com/mattn/goveralls golang.org/x/tools/cmd/cover
-  - if [[ "$TRAVIS_EVENT_TYPE" = "cron" && $TRAVIS_GO_VERSION = 1.8* ]]; then PROTOBUF_VERSION=3.3.0 ./install-protobuf.sh; fi
+  - if [[ "$TRAVIS_GO_VERSION" = 1.9* && "$ARCH" != "386" ]]; then ./vet.sh -install || exit 1; fi
 
 script:
-  - 'if [[ "$TRAVIS_EVENT_TYPE" = "cron" && $TRAVIS_GO_VERSION = 1.8* ]]; then PATH=/home/travis/bin:$PATH make proto && ! git status --porcelain | tee /dev/stderr | read || (git status; git diff; exit 1); fi'
-  - 'set -o pipefail && git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO NOT EDIT" 2>&1 | tee /dev/stderr | (! read)'
-  - 'set -o pipefail && gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)'
-  - 'set -o pipefail && goimports -l . 2>&1 | tee /dev/stderr | (! read)'
-  - 'if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then ! golint ./... | grep -vE "(_mock|_string|\.pb)\.go:"; fi'
-  - 'if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then ! go tool vet -all . 2>&1 | grep -vF .pb.go:; fi' # https://github.com/golang/protobuf/issues/214
+  - if [[ "$TRAVIS_GO_VERSION" = 1.9* && "$ARCH" != "386" ]]; then ./vet.sh || exit 1; fi
   - make test testrace
-  - 'if [[ $TRAVIS_GO_VERSION = 1.8* ]]; then staticcheck -ignore google.golang.org/grpc/transport/transport_test.go:SA2002 ./...; fi' # TODO(menghanl): fix these
