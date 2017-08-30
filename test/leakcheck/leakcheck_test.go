@@ -32,7 +32,7 @@ func (e *testErrorfer) Errorf(format string, args ...interface{}) {
 }
 
 func TestCheck(t *testing.T) {
-	leakCount := 3
+	const leakCount = 3
 	for i := 0; i < leakCount; i++ {
 		go func() { time.Sleep(2 * time.Second) }()
 	}

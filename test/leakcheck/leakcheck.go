@@ -66,13 +66,15 @@ func interestingGoroutines() (gs []string) {
 	return
 }
 
-type errorfer interface {
+// Errorfer is the interface that wraps the Errorf method. It's a subset of
+// testing.TB to make it easy to use Check.
+type Errorfer interface {
 	Errorf(format string, args ...interface{})
 }
 
-func check(efer errorfer, timeout time.Duration) {
+func check(efer Errorfer, timeout time.Duration) {
 	// Loop, waiting for goroutines to shut down.
-	// Wait up to 10 seconds, but finish as quickly as possible.
+	// Wait up to timeout, but finish as quickly as possible.
 	deadline := time.Now().Add(timeout)
 	var leaked []string
 	for time.Now().Before(deadline) {
@@ -88,7 +90,7 @@ func check(efer errorfer, timeout time.Duration) {
 
 // Check looks at the currently-running goroutines and checks if there are any
 // interestring (created by gRPC) goroutines leaked. It waits up to 10 seconds
-// in th  e error cases.
-func Check(efer errorfer) {
+// in the error cases.
+func Check(efer Errorfer) {
 	check(efer, 10*time.Second)
 }
