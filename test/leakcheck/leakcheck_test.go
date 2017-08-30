@@ -44,4 +44,5 @@ func TestCheck(t *testing.T) {
 	if e.errorCount != leakCount {
 		t.Errorf("check found %v leaks, want %v leaks", e.errorCount, leakCount)
 	}
+	check(t, 3*time.Second)
 }
