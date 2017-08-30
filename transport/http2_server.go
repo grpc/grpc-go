@@ -590,11 +590,11 @@ func (t *http2Server) applySettings(ss []http2.Setting) {
 	for _, s := range ss {
 		if s.ID == http2.SettingInitialWindowSize {
 			t.mu.Lock()
-			defer t.mu.Unlock()
 			for _, stream := range t.activeStreams {
 				stream.sendQuotaPool.addAndUpdate(int(s.Val) - int(t.streamSendQuota))
 			}
 			t.streamSendQuota = s.Val
+			t.mu.Unlock()
 		}
 
 	}
@@ -860,14 +860,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 				// Overbooked transport quota. Return it back.
 				t.sendQuotaPool.add(tq - ps)
 			}
-
-			//TODO((mmukhi): Find a better way to check context timeout.
-			select {
-			case <-s.ctx.Done():
-				t.sendQuotaPool.add(ps)
-				return ContextErr(s.ctx.Err())
-			default:
-			}
 			// Reset ping strikes when sending data since this might cause
 			// the peer to send ping.
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
@@ -997,7 +989,7 @@ func (t *http2Server) itemHandler(i item) error {
 			err = t.framer.writeSettings(false, i.ss...)
 		}
 	case *resetStream:
-		err = t.framer.writeRSTStream(false, i.streamID, i.code)
+		err = t.framer.writeRSTStream(true, i.streamID, i.code)
 	case *goAway:
 		t.mu.Lock()
 		if t.state == closing {
