@@ -73,7 +73,7 @@ func (x *balanceLoadClientStream) Recv() (*lbmpb.LoadBalanceResponse, error) {
 
 // NewGRPCLBBalancer creates a grpclb load balancer.
 func NewGRPCLBBalancer(r naming.Resolver) Balancer {
-	return &balancer{
+	return &grpclbBalancer{
 		r: r,
 	}
 }
@@ -96,7 +96,7 @@ type grpclbAddrInfo struct {
 	dropForLoadBalancing bool
 }
 
-type balancer struct {
+type grpclbBalancer struct {
 	r      naming.Resolver
 	target string
 	mu     sync.Mutex
@@ -113,7 +113,7 @@ type balancer struct {
 	clientStats lbmpb.ClientStats
 }
 
-func (b *balancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
+func (b *grpclbBalancer) watchAddrUpdates(w naming.Watcher, ch chan []remoteBalancerInfo) error {
 	updates, err := w.Next()
 	if err != nil {
 		grpclog.Warningf("grpclb: failed to get next addr update from watcher: %v", err)
@@ -187,7 +187,7 @@ func convertDuration(d *lbmpb.Duration) time.Duration {
 	return time.Duration(d.Seconds)*time.Second + time.Duration(d.Nanos)*time.Nanosecond
 }
 
-func (b *balancer) processServerList(l *lbmpb.ServerList, seq int) {
+func (b *grpclbBalancer) processServerList(l *lbmpb.ServerList, seq int) {
 	if l == nil {
 		return
 	}
@@ -230,7 +230,7 @@ func (b *balancer) processServerList(l *lbmpb.ServerList, seq int) {
 	return
 }
 
-func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
+func (b *grpclbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -259,10 +259,13 @@ func (b *balancer) sendLoadReport(s *balanceLoadClientStream, interval time.Dura
 	}
 }
 
-func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
-	ctx, cancel := context.WithCancel(context.Background())
+func (b *grpclbBalancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry bool) {
+	// This RPC should be a failfast RPC. It should only fail if the server is down.
+	// We cannot make it failfast because the first few RPCs on a clientConn always fail.
+	// TODO(bar) make this failfast when the failfast bahavior in clientConn is fixed.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	stream, err := lbc.BalanceLoad(ctx)
+	stream, err := lbc.BalanceLoad(ctx, FailFast(false))
 	if err != nil {
 		grpclog.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
 		return
@@ -332,7 +335,7 @@ func (b *balancer) callRemoteBalancer(lbc *loadBalancerClient, seq int) (retry b
 	return true
 }
 
-func (b *balancer) Start(target string, config BalancerConfig) error {
+func (b *grpclbBalancer) Start(target string, config BalancerConfig) error {
 	b.rand = rand.New(rand.NewSource(time.Now().Unix()))
 	// TODO: Fall back to the basic direct connection if there is no name resolver.
 	if b.r == nil {
@@ -488,7 +491,7 @@ func (b *balancer) Start(target string, config BalancerConfig) error {
 	return nil
 }
 
-func (b *balancer) down(addr Address, err error) {
+func (b *grpclbBalancer) down(addr Address, err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, a := range b.addrs {
@@ -499,7 +502,7 @@ func (b *balancer) down(addr Address, err error) {
 	}
 }
 
-func (b *balancer) Up(addr Address) func(error) {
+func (b *grpclbBalancer) Up(addr Address) func(error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
@@ -527,7 +530,7 @@ func (b *balancer) Up(addr Address) func(error) {
 	}
 }
 
-func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
+func (b *grpclbBalancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Address, put func(), err error) {
 	var ch chan struct{}
 	b.mu.Lock()
 	if b.done {
@@ -597,17 +600,10 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 		}
 	}
 	if !opts.BlockingWait {
-		if len(b.addrs) == 0 {
-			b.clientStats.NumCallsFinished++
-			b.clientStats.NumCallsFinishedWithClientFailedToSend++
-			b.mu.Unlock()
-			err = Errorf(codes.Unavailable, "there is no address available")
-			return
-		}
-		// Returns the next addr on b.addrs for a failfast RPC.
-		addr = b.addrs[b.next].addr
-		b.next++
+		b.clientStats.NumCallsFinished++
+		b.clientStats.NumCallsFinishedWithClientFailedToSend++
 		b.mu.Unlock()
+		err = Errorf(codes.Unavailable, "there is no address available")
 		return
 	}
 	// Wait on b.waitCh for non-failfast RPCs.
@@ -684,11 +680,11 @@ func (b *balancer) Get(ctx context.Context, opts BalancerGetOptions) (addr Addre
 	}
 }
 
-func (b *balancer) Notify() <-chan []Address {
+func (b *grpclbBalancer) Notify() <-chan []Address {
 	return b.addrCh
 }
 
-func (b *balancer) Close() error {
+func (b *grpclbBalancer) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.done {
