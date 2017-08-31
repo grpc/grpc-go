@@ -45,7 +45,7 @@ func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
 	}
 }
 
-func TestMapAddressEnv(t *testing.T) {
+func TestGetProxyFromEnv(t *testing.T) {
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == envTestAddr {
@@ -59,11 +59,11 @@ func TestMapAddressEnv(t *testing.T) {
 	defer overwrite(hpfe)()
 
 	// envTestAddr should be handled by ProxyFromEnvironment.
-	got, err := mapAddress(context.Background(), envTestAddr)
+	got, err := getProxyFromEnv(context.Background(), envTestAddr)
 	if err != nil {
 		t.Error(err)
 	}
-	if got != envProxyAddr {
+	if got.Host != envProxyAddr {
 		t.Errorf("want %v, got %v", envProxyAddr, got)
 	}
 }
@@ -117,11 +117,7 @@ func (p *proxyServer) stop() {
 	}
 }
 
-func TestHTTPConnect(t *testing.T) {
-	plis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
+func testHTTPConnect(t *testing.T, plis net.Listener, proxyFromEnv *url.URL, dialer func(context.Context, string) (net.Conn, error)) {
 	p := &proxyServer{t: t, lis: plis}
 	go p.run()
 	defer p.stop()
@@ -147,17 +143,11 @@ func TestHTTPConnect(t *testing.T) {
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{Host: plis.Addr().String()}, nil
+		return proxyFromEnv, nil
 	}
 	defer overwrite(hpfe)()
 
 	// Dial to proxy server.
-	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-		if deadline, ok := ctx.Deadline(); ok {
-			return net.DialTimeout("tcp", addr, deadline.Sub(time.Now()))
-		}
-		return net.Dial("tcp", addr)
-	})
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	c, err := dialer(ctx, blis.Addr().String())
@@ -174,4 +164,34 @@ func TestHTTPConnect(t *testing.T) {
 	if string(recvBuf) != string(msg) {
 		t.Fatalf("received msg: %v, want %v", recvBuf, msg)
 	}
+}
+
+func TestHTTPConnectWithProxyFromEnv(t *testing.T) {
+	plis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	proxyFromEnv := &url.URL{Host: plis.Addr().String()}
+	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		if deadline, ok := ctx.Deadline(); ok {
+			return net.DialTimeout("tcp", addr, deadline.Sub(time.Now()))
+		}
+		return net.Dial("tcp", addr)
+	}, nil)
+	testHTTPConnect(t, plis, proxyFromEnv, dialer)
+}
+
+func TestHTTPConnectWithCustomProxy(t *testing.T) {
+	plis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	proxyFromEnv := &url.URL{Host: "6.7.8.9:1234"}
+	dialer := newProxyDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		if deadline, ok := ctx.Deadline(); ok {
+			return net.DialTimeout("tcp", addr, deadline.Sub(time.Now()))
+		}
+		return net.Dial("tcp", addr)
+	}, &url.URL{Host: plis.Addr().String()})
+	testHTTPConnect(t, plis, proxyFromEnv, dialer)
 }
