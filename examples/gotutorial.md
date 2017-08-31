@@ -263,7 +263,7 @@ Once we've implemented all our methods, we also need to start up a gRPC server s
 
 ```go
 flag.Parse()
-lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 if err != nil {
         log.Fatalf("failed to listen: %v", err)
 }
@@ -274,7 +274,7 @@ grpcServer.Serve(lis)
 ```
 To build and start a server, we:
 
-1. Specify the port we want to use to listen for client requests using `lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))`.
+1. Specify the port we want to use to listen for client requests using `lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))`.
 2. Create an instance of the gRPC server using `grpc.NewServer()`.
 3. Register our service implementation with the gRPC server.
 4. Call `Serve()` on the server with our port details to do a blocking wait until the process is killed or `Stop()` is called.
