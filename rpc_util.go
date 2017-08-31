@@ -130,6 +130,8 @@ type callInfo struct {
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
 	creds                 credentials.PerRPCCredentials
+	rpcStatsHandlers      []stats.RPCHandler
+	connStatsHandler	stats.ConnHandler
 }
 
 var defaultCallInfo = callInfo{failFast: true}
@@ -225,6 +227,14 @@ func MaxCallSendMsgSize(s int) CallOption {
 func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.creds = creds
+		return nil
+	})
+}
+
+// PerRPCStatsHandler returns a CallOption that specifies the stats handler for a call.
+func PerRPCStatsHandler(rpcStatsHandler stats.RPCHandler) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.rpcStatsHandlers = append(c.rpcStatsHandlers, rpcStatsHandler)
 		return nil
 	})
 }

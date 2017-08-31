@@ -52,7 +52,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	}
 	p := &parser{r: stream}
 	var inPayload *stats.InPayload
-	if dopts.copts.StatsHandler != nil {
+	if len(c.rpcStatsHandlers) != 0 {
 		inPayload = &stats.InPayload{
 			Client: true,
 		}
@@ -71,7 +71,9 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 	if inPayload != nil && err == io.EOF && stream.Status().Code() == codes.OK {
 		// TODO in the current implementation, inTrailer may be handled before inPayload in some cases.
 		// Fix the order if necessary.
-		dopts.copts.StatsHandler.HandleRPC(ctx, inPayload)
+		for _, h := range c.rpcStatsHandlers {
+			h.HandleRPC(ctx, inPayload)
+		}
 	}
 	c.trailerMD = stream.Trailer()
 	return nil
@@ -94,7 +96,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	if compressor != nil {
 		cbuf = new(bytes.Buffer)
 	}
-	if dopts.copts.StatsHandler != nil {
+	if len(c.rpcStatsHandlers) != 0 {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
@@ -112,7 +114,9 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 	err = t.Write(stream, hdr, data, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
-		dopts.copts.StatsHandler.HandleRPC(ctx, outPayload)
+		for _, h := range c.rpcStatsHandlers {
+			h.HandleRPC(ctx, outPayload)
+		}
 	}
 	// t.NewStream(...) could lead to an early rejection of the RPC (e.g., the service/method
 	// does not exist.) so that t.Write could get io.EOF from wait(...). Leave the following
@@ -179,22 +183,21 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}()
 	}
 	ctx = newContextWithRPCInfo(ctx)
-	sh := cc.dopts.copts.StatsHandler
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
+	for _, h := range c.rpcStatsHandlers {
+		ctx = h.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		begin := &stats.Begin{
 			Client:    true,
 			BeginTime: time.Now(),
 			FailFast:  c.failFast,
 		}
-		sh.HandleRPC(ctx, begin)
+		h.HandleRPC(ctx, begin)
 		defer func() {
 			end := &stats.End{
 				Client:  true,
 				EndTime: time.Now(),
 				Error:   e,
 			}
-			sh.HandleRPC(ctx, end)
+			h.HandleRPC(ctx, end)
 		}()
 	}
 	topts := &transport.Options{

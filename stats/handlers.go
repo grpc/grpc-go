@@ -41,15 +41,18 @@ type RPCTagInfo struct {
 	FailFast bool
 }
 
-// Handler defines the interface for the related stats handling (e.g., RPCs, connections).
-type Handler interface {
+// RPCHandler defines the interface for RPC stats handling.
+type RPCHandler interface {
 	// TagRPC can attach some information to the given context.
 	// The context used for the rest lifetime of the RPC will be derived from
 	// the returned context.
 	TagRPC(context.Context, *RPCTagInfo) context.Context
 	// HandleRPC processes the RPC stats.
 	HandleRPC(context.Context, RPCStats)
+}
 
+// ConnHandler defines the interface for connection stats handling.
+type ConnHandler interface {
 	// TagConn can attach some information to the given context.
 	// The returned context will be used for stats handling.
 	// For conn stats handling, the context used in HandleConn for this
@@ -61,4 +64,10 @@ type Handler interface {
 	TagConn(context.Context, *ConnTagInfo) context.Context
 	// HandleConn processes the Conn stats.
 	HandleConn(context.Context, ConnStats)
+}
+
+// Handler defines the interface for the related stats handling (e.g., RPCs, connections).
+type Handler interface {
+	ConnHandler
+	RPCHandler
 }
