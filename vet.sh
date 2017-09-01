@@ -23,6 +23,8 @@ trap cleanup EXIT
 if [[ "$TRAVIS" != "true" || "$TRAVIS_EVENT_TYPE" = "cron" ]]; then
   check_proto="true"
 fi
+####### XXX REMOVE:
+check_proto="true"
 
 if [ "$1" = "-install" ]; then
   go get -d \
@@ -36,9 +38,10 @@ if [ "$1" = "-install" ]; then
   if [[ "$check_proto" = "true" ]]; then
     if [[ "$TRAVIS" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
+      PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
       cd /home/travis
-      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-      unzip protoc-linux-x86_64.zip
+      wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
+      unzip ${PROTOC_FILENAME}
       bin/protoc --version
     elif ! which protoc > /dev/null; then
       die "Please install protoc into your path"
