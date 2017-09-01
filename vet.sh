@@ -37,8 +37,8 @@ if [ "$1" = "-install" ]; then
     if [[ "$TRAVIS" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
       cd /home/travis
-      wget https://github.com/google/protobuf/releases/download/v$PROTOBUF_VERSION/$basename-linux-x86_64.zip
-      unzip $basename-linux-x86_64.zip
+      wget https://github.com/google/protobuf/releases/download/v$PROTOBUF_VERSION/protoc-linux-x86_64.zip
+      unzip protoc-linux-x86_64.zip
       bin/protoc --version
     elif ! which protoc > /dev/null; then
       die "Please install protoc into your path"
