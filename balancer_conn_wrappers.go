@@ -27,20 +27,135 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// TODO(bar) move ClientConn methods to clientConn file.
+// scStateChangeTuple contains the subConn and the new state it changed to.
+type scStateChangeTuple struct {
+	sc    balancer.SubConn
+	state connectivity.State
+}
 
-func (cc *ClientConn) updatePicker(p balancer.Picker) {
-	// TODO(bar) add a goroutine and sync it.
-	// TODO(bar) implement blocking behavior and unblock the previous pick.
-	cc.pmu.Lock()
-	cc.picker = p
-	cc.pmu.Unlock()
+// tupleBuffer is an unbounded channel for scStateChangeTuple.
+type tupleBuffer struct {
+	c       chan *scStateChangeTuple
+	mu      sync.Mutex
+	backlog []*scStateChangeTuple
+}
+
+func newTupleBuffer() *tupleBuffer {
+	return &tupleBuffer{
+		c: make(chan *scStateChangeTuple, 1),
+	}
+}
+
+func (b *tupleBuffer) put(t *scStateChangeTuple) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.backlog) == 0 {
+		select {
+		case b.c <- t:
+			return
+		default:
+		}
+	}
+	b.backlog = append(b.backlog, t)
+}
+
+func (b *tupleBuffer) load() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.backlog) > 0 {
+		select {
+		case b.c <- b.backlog[0]:
+			b.backlog[0] = nil
+			b.backlog = b.backlog[1:]
+		default:
+		}
+	}
+}
+
+// get returns the channel that receives a recvMsg in the buffer.
+//
+// Upon receiving, the caller should call load to send another
+// scStateChangeTuple onto the channel if there is any.
+func (b *tupleBuffer) get() <-chan *scStateChangeTuple {
+	return b.c
+}
+
+// resolverChangeTuple contains the new resolved addresses or error if there's
+// any.
+type resolverChangeTuple struct {
+	addrs []resolver.Address
+	err   error
 }
 
 // ccBalancerWrapper is a wrapper on top of cc for balancers.
 // It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
-	cc *ClientConn
+	cc               *ClientConn
+	balancer         balancer.Balancer
+	stateChangeQueue *tupleBuffer
+	resolverAddrCh   chan *resolverChangeTuple
+	done             chan struct{}
+}
+
+func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
+	ccb := &ccBalancerWrapper{
+		cc:               cc,
+		stateChangeQueue: newTupleBuffer(),
+		resolverAddrCh:   make(chan *resolverChangeTuple, 1),
+		done:             make(chan struct{}),
+	}
+	go ccb.watcher()
+	ccb.balancer = b.Build(ccb, bopts)
+	return ccb
+}
+
+// watcher balancer functions sequencially, so the balancer can be implemeneted
+// lock-free.
+func (ccb *ccBalancerWrapper) watcher() {
+	for {
+		select {
+		case <-ccb.done:
+			ccb.balancer.Close()
+			return
+		default:
+		}
+
+		select {
+		case t := <-ccb.stateChangeQueue.get():
+			ccb.stateChangeQueue.load()
+			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
+		case t := <-ccb.resolverAddrCh:
+			ccb.balancer.HandleResolvedAddrs(t.addrs, t.err)
+		case <-ccb.done:
+			ccb.balancer.Close()
+			return
+		}
+	}
+}
+
+func (ccb *ccBalancerWrapper) close() {
+	close(ccb.done)
+}
+
+func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	if sc == nil {
+		return
+	}
+	ccb.stateChangeQueue.put(&scStateChangeTuple{
+		sc:    sc,
+		state: s,
+	})
+}
+
+func (ccb *ccBalancerWrapper) handleResolvedAddrs(addrs []resolver.Address, err error) {
+	select {
+	case <-ccb.resolverAddrCh:
+	default:
+	}
+	ccb.resolverAddrCh <- &resolverChangeTuple{
+		addrs: addrs,
+		err:   err,
+	}
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -64,8 +179,9 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	// TODO(bar) update cc connectivity state.
-	ccb.cc.updatePicker(p)
+	grpclog.Infof("ccBalancerWrapper: updating state and picker called by balancer: %v, %p", s, p)
+	ccb.cc.csMgr.updateState(s)
+	ccb.cc.blockingpicker.updatePicker(p)
 }
 
 func (ccb *ccBalancerWrapper) Target() string {
@@ -83,7 +199,6 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 	grpclog.Infof("acBalancerWrapper: UpdateAddresses called with %v", addrs)
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
-	// TODO(bar) update the addresses or tearDown and create a new ac.
 	if !acbw.ac.tryUpdateAddrs(addrs) {
 		cc := acbw.ac.cc
 		acbw.ac.mu.Lock()

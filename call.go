@@ -223,10 +223,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			callHdr.Creds = c.creds
 		}
 
-		gopts := BalancerGetOptions{
-			BlockingWait: !c.failFast,
-		}
-		t, put, err = cc.getTransport(ctx, gopts)
+		t, put, err = cc.getTransport(ctx, c.failFast)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
 			if _, ok := status.FromError(err); ok {
