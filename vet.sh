@@ -13,16 +13,13 @@ die() {
 if git status --porcelain | read; then
   die "Uncommitted or untracked files found; commit changes first"
 fi
-# Undo any edits made by this script.
-cleanup() {
-  git reset --hard HEAD
-}
-trap cleanup EXIT
 
 # Check proto in manual runs or cron runs.
 if [[ "$TRAVIS" != "true" || "$TRAVIS_EVENT_TYPE" = "cron" ]]; then
   check_proto="true"
 fi
+# XXX REMOVE
+check_proto="true"
 
 if [ "$1" = "-install" ]; then
   go get -d \
@@ -37,10 +34,11 @@ if [ "$1" = "-install" ]; then
     if [[ "$TRAVIS" = "true" ]]; then
       PROTOBUF_VERSION=3.3.0
       PROTOC_FILENAME=protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
-      cd /home/travis
+      pushd /home/travis
       wget https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOC_FILENAME}
       unzip ${PROTOC_FILENAME}
       bin/protoc --version
+      popd
     elif ! which protoc > /dev/null; then
       die "Please install protoc into your path"
     fi
@@ -54,6 +52,12 @@ git ls-files "*.go" | xargs grep -L "\(Copyright [0-9]\{4,\} gRPC authors\)\|DO 
 gofmt -s -d -l . 2>&1 | tee /dev/stderr | (! read)
 goimports -l . 2>&1 | tee /dev/stderr | (! read)
 golint ./... 2>&1 | (grep -vE "(_mock|_string|\.pb)\.go:" || true) | tee /dev/stderr | (! read)
+
+# Undo any edits made by this script.
+cleanup() {
+  git reset --hard HEAD
+}
+trap cleanup EXIT
 
 # Rewrite golang.org/x/net/context -> context imports (see grpc/grpc-go#1484).
 # TODO: Remove this mangling once "context" is imported directly (grpc/grpc-go#711).
