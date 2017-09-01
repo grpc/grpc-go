@@ -654,6 +654,14 @@ func (t *http2Client) GracefulClose() error {
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
 func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) error {
+	select {
+	case <-s.ctx.Done():
+		return ContextErr(s.ctx.Err())
+	case <-t.shutdownChan:
+		return ErrConnClosing
+	default:
+	}
+
 	if hdr == nil && data == nil && opts.Last {
 		// stream.CloseSend uses this to send an empty frame with endStream=True
 		t.controlBuf.put(&dataFrame{streamID: s.id, endStream: true})

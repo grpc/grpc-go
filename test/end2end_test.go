@@ -702,7 +702,7 @@ func (l *lazyConn) Write(b []byte) (int, error) {
 }
 
 func TestContextDeadlineNotIgnored(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.leakCheck(t)()
 	e := noBalancerEnv
 	var lc *lazyConn
 	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
