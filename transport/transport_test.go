@@ -152,7 +152,7 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 				p = make([]byte, n+1)
 			}
 		}
-		conn.controlBuf.put(&dataFrame{s.id, false, p})
+		conn.controlBuf.put(&dataFrame{s.id, false, p, func() {}})
 		sent += len(p)
 	}
 }
@@ -1166,7 +1166,7 @@ func TestServerContextCanceledOnClosedConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
-	cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, http2MaxFrameLen)})
+	cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, http2MaxFrameLen), func() {}})
 	// Loop until the server side stream is created.
 	var ss *Stream
 	for {
@@ -1337,7 +1337,7 @@ func TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	st.mu.Unlock()
 	// Trying to write more on a max-ed out stream should result in a RST_STREAM from the server.
 	ct := client.(*http2Client)
-	ct.controlBuf.put(&dataFrame{cstream2.id, true, make([]byte, 1)})
+	ct.controlBuf.put(&dataFrame{cstream2.id, true, make([]byte, 1), func() {}})
 	code := http2ErrConvTab[http2.ErrCodeFlowControl]
 	waitWhileTrue(t, func() (bool, error) {
 		cstream2.mu.Lock()
@@ -1394,7 +1394,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	var sent int
 	// Drain the stream flow control window
-	cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, http2MaxFrameLen)})
+	cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, http2MaxFrameLen), func() {}})
 	sent += http2MaxFrameLen
 	// Wait until the server creates the corresponding stream and receive some data.
 	var ss *Stream
@@ -1419,7 +1419,7 @@ func TestServerWithMisbehavedClient(t *testing.T) {
 	}
 	// Keep sending until the server inbound window is drained for that stream.
 	for sent <= initialWindowSize {
-		cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, 1)})
+		cc.controlBuf.put(&dataFrame{s.id, false, make([]byte, 1), func() {}})
 		sent++
 	}
 	// Server sent a resetStream for s already.

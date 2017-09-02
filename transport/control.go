@@ -66,6 +66,7 @@ type dataFrame struct {
 	streamID  uint32
 	endStream bool
 	d         []byte
+	f         func()
 }
 
 func (*dataFrame) item() {}

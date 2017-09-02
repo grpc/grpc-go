@@ -70,9 +70,9 @@ type http2Server struct {
 	controlBuf *controlBuffer
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
-	sendQuotaPool  *quotaPool
-	localSendQuota *quotaPool
-	stats          stats.Handler
+	sendQuotaPool *quotaPool
+	//localSendQuota *quotaPool
+	stats stats.Handler
 	// Flag to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
 	activity uint32 // Accessed atomically.
@@ -177,18 +177,18 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
 	t := &http2Server{
-		ctx:               context.Background(),
-		conn:              conn,
-		remoteAddr:        conn.RemoteAddr(),
-		localAddr:         conn.LocalAddr(),
-		authInfo:          config.AuthInfo,
-		framer:            framer,
-		maxStreams:        maxStreams,
-		inTapHandle:       config.InTapHandle,
-		controlBuf:        newControlBuffer(),
-		fc:                &inFlow{limit: uint32(icwz)},
-		sendQuotaPool:     newQuotaPool(defaultWindowSize),
-		localSendQuota:    newQuotaPool(http2IOBufSize),
+		ctx:           context.Background(),
+		conn:          conn,
+		remoteAddr:    conn.RemoteAddr(),
+		localAddr:     conn.LocalAddr(),
+		authInfo:      config.AuthInfo,
+		framer:        framer,
+		maxStreams:    maxStreams,
+		inTapHandle:   config.InTapHandle,
+		controlBuf:    newControlBuffer(),
+		fc:            &inFlow{limit: uint32(icwz)},
+		sendQuotaPool: newQuotaPool(defaultWindowSize),
+		//localSendQuota:    newQuotaPool(http2IOBufSize),
 		state:             reachable,
 		shutdownChan:      make(chan struct{}),
 		activeStreams:     make(map[uint32]*Stream),
@@ -304,6 +304,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	t.maxStreamID = streamID
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
+	s.localSendQuota = newQuotaPool(64 * 1024)
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
@@ -892,16 +893,16 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 				t.sendQuotaPool.add(tq - ps)
 			}
 			// Acquire local send quota to be able to write to the controlBuf.
-			ltq, err := wait(s.ctx, nil, nil, t.shutdownChan, t.localSendQuota.acquire())
+			ltq, err := wait(s.ctx, nil, nil, t.shutdownChan, s.localSendQuota.acquire())
 			if err != nil {
 				return err
 			}
-			t.localSendQuota.add(ltq - ps) // It's ok we make this negative.
+			s.localSendQuota.add(ltq - ps) // It's ok we make this negative.
 			// Reset ping strikes when sending data since this might cause
 			// the peer to send ping.
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 			success := func() {
-				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: false, d: p})
+				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: false, d: p, f: func() { s.localSendQuota.add(ps) }})
 				if ps < sq {
 					// Overbooked stream quota. Return it back.
 					s.sendQuotaPool.lockedAdd(sq - ps)
@@ -913,7 +914,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 			}
 			if !s.sendQuotaPool.compareAndExecute(quotaVer, success, failure) {
 				t.sendQuotaPool.add(ps)
-				t.localSendQuota.add(ps)
+				s.localSendQuota.add(ps)
 			}
 		}
 	}
@@ -1014,7 +1015,8 @@ func (t *http2Server) itemHandler(i item) error {
 	case *dataFrame:
 		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
 		if err == nil {
-			t.localSendQuota.add(len(i.d))
+			i.f()
+			//t.localSendQuota.add(len(i.d))
 		}
 	case *headerFrame:
 		err = t.framer.fr.WriteHeaders(i.p)
