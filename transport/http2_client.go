@@ -76,7 +76,8 @@ type http2Client struct {
 	// sendQuotaPool provides flow control to outbound message.
 	sendQuotaPool *quotaPool
 	// streamsQuota limits the max number of concurrent streams.
-	streamsQuota *quotaPool
+	streamsQuota   *quotaPool
+	localSendQuota *quotaPool
 
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
@@ -212,6 +213,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
+		localSendQuota:    newQuotaPool(http2IOBufSize),
 		scheme:            scheme,
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
@@ -703,6 +705,12 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				// Overbooked transport quota. Return it back.
 				t.sendQuotaPool.add(tq - ps)
 			}
+			// Acquire local send quota to be able to write to the controlBuf.
+			ltq, err := wait(s.ctx, s.done, s.goAway, t.shutdownChan, t.localSendQuota.acquire())
+			if err != nil {
+				return err
+			}
+			t.localSendQuota.add(ltq - ps) // It's ok if we make it negative.
 			var endStream bool
 			// See if this is the last frame to be written.
 			if opts.Last {
@@ -728,6 +736,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			}
 			if !s.sendQuotaPool.compareAndExecute(quotaVer, success, failure) {
 				t.sendQuotaPool.add(ps)
+				t.localSendQuota.add(ps)
 			}
 		}
 	}
@@ -1197,6 +1206,9 @@ func (t *http2Client) itemHandler(i item) error {
 	switch i := i.(type) {
 	case *dataFrame:
 		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
+		if err == nil {
+			t.localSendQuota.add(len(i.d))
+		}
 	case *headerFrame:
 		err = t.framer.fr.WriteHeaders(i.p)
 	case *continuationFrame:
