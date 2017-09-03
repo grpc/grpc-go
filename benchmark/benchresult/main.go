@@ -1,8 +1,27 @@
+/*
+ *
+ * Copyright 2017 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 package main
 
 import (
 	"encoding/gob"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -13,16 +32,14 @@ import (
 
 func createMap(fileName string, m map[string]stats.BenchResults) {
 	f, err := os.Open(fileName)
-	defer f.Close()
 	if err != nil {
-		fmt.Println("read file err")
+		log.Fatalf("Read file %s error: %s\n", fileName, err)
 	}
+	defer f.Close()
 	var data []stats.BenchResults
 	decoder := gob.NewDecoder(f)
-	err = decoder.Decode(&data)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	if err = decoder.Decode(&data); err != nil {
+		log.Fatalf("Decode file %s error: %s\n", fileName, err)
 	}
 	for _, d := range data {
 		m[d.RunMode+"-"+d.Features.String()] = d
@@ -39,9 +56,9 @@ func intChange(title string, val1, val2 int64, factor float64) string {
 		strconv.FormatInt(val2, 10), percentChange)
 }
 
-func timeChange(title string, val1, val2 time.Duration, factor float64) string {
+func timeChange(title int, val1, val2 time.Duration, factor float64) string {
 	percentChange := getPercentage(float64(val1), float64(val2), factor)
-	return fmt.Sprintf("%10s  %12s  %12s   %8s \n", title, val1.String(),
+	return fmt.Sprintf("%10s  %12s  %12s   %8s \n", strconv.Itoa(title)+" latency", val1.String(),
 		val2.String(), percentChange)
 }
 
@@ -58,8 +75,8 @@ func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 			changes = changes + intChange("Bytes/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp, factor)
 			changes = changes + intChange("Allocs/op", v1.AllocsPerOp, v2.AllocsPerOp, factor)
 			factor = unit2num[fmt.Sprintf("%v", v1.Latency[0].Value)[1:]] / unit2num[fmt.Sprintf("%v", v2.Latency[0].Value)[1:]]
-			changes = changes + timeChange(v1.Latency[1].Percent+" latency", v1.Latency[1].Value, v2.Latency[1].Value, factor)
-			changes = changes + timeChange(v1.Latency[2].Percent+" latency", v1.Latency[2].Value, v2.Latency[2].Value, factor)
+			changes = changes + timeChange(v1.Latency[1].Percent, v1.Latency[1].Value, v2.Latency[1].Value, factor)
+			changes = changes + timeChange(v1.Latency[2].Percent, v1.Latency[2].Value, v2.Latency[2].Value, factor)
 			fmt.Printf("%s\n", changes)
 		}
 	}
@@ -82,15 +99,17 @@ func printline(benchName, ltc50, ltc90, allocByte, allocsOp string) {
 }
 func formatkBenchmark(fileName string) {
 	f, err := os.Open(fileName)
-	defer f.Close()
 	if err != nil {
 		fmt.Println("read file err")
 	}
+	defer f.Close()
 	var data []stats.BenchResults
 	decoder := gob.NewDecoder(f)
-	err = decoder.Decode(&data)
+	if err = decoder.Decode(&data); err != nil {
+		log.Fatalf("Decode file %s error: %s\n", fileName, err)
+	}
 	if len(data) == 0 {
-		panic("no data in the file")
+		log.Fatalf("No data in file %s\n", fileName)
 	}
 	printPos := data[0].SharedPosion
 	fmt.Println("\n Shared features: \n" + strings.Repeat("-", 20))

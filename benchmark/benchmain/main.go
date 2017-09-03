@@ -25,11 +25,12 @@ go run benchmark/benchmain/main.go -benchtime=10s -workloads=all \
   -compression=on -maxConcurrentCalls=1 -traceMode=false \
   -reqSizeBytes=1,1048576 -respSizeBytes=1,1048576 \
   -latency=0s -kbps=0 -mtu=0 \
-  -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000
+  -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000 -resultFile=result
 */
 package main
 
 import (
+	"encoding/gob"
 	"errors"
 	"flag"
 	"fmt"
@@ -48,8 +49,6 @@ import (
 	"testing"
 	"time"
 
-	"encoding/gob"
-
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	bm "google.golang.org/grpc/benchmark"
@@ -60,12 +59,13 @@ import (
 )
 
 const (
-	compressionOn   = "on"
-	compressionOff  = "off"
-	compressionBoth = "both"
+	modeOn   = "on"
+	modeOff  = "off"
+	modeBoth = "both"
 )
 
-var allCompressionModes = []string{compressionOn, compressionOff, compressionBoth}
+var allCompressionModes = []string{modeOn, modeOff, modeBoth}
+var allTraceModes = []string{modeOn, modeOff, modeBoth}
 
 const (
 	workloadsUnary     = "unary"
@@ -74,11 +74,6 @@ const (
 )
 
 var allWorkloads = []string{workloadsUnary, workloadsStreaming, workloadsAll}
-
-type network struct {
-	latency   time.Duration
-	kbps, mtu int
-}
 
 var (
 	runMode = []bool{true, true} // {runUnary, runStream}
@@ -90,18 +85,18 @@ var (
 	maxConcurrentCalls     = []int{1, 8, 64, 512}
 	reqSizeBytes           = []int{1, 1024, 1024 * 1024}
 	respSizeBytes          = []int{1, 1024, 1024 * 1024}
-	enableTrace            = []bool{false}
+	enableTrace            []bool
 	benchtime              time.Duration
 	memProfile, cpuProfile string
 	memProfileRate         int
 	enableCompressor       []bool
 	networkMode            string
-	benchmarkResulrFile    string
-	networks               = map[string]network{
-		"Nonehaul": {0, 0, 0},
-		"LAN":      {2 * time.Millisecond, 100 * 1024, 1500},
-		"WAN":      {30 * time.Millisecond, 20 * 1024, 1500},
-		"Longhaul": {200 * time.Millisecond, 1000 * 1024, 9000},
+	benchmarkResultFile    string
+	networks               = map[string]latency.Network{
+		"Local":    latency.Local,
+		"LAN":      latency.LAN,
+		"WAN":      latency.WAN,
+		"Longhaul": latency.Longhaul,
 	}
 )
 
@@ -238,14 +233,14 @@ func runBenchmark(caller func(int), startTimer func(), stopTimer func(int32), be
 // Initiate main function to get settings of features.
 func init() {
 	var (
-		workloads, compressorMode, readLatency    string
-		readKbps, readMtu, readMaxConcurrentCalls intSliceType
-		readReqSizeBytes, readRespSizeBytes       intSliceType
-		traceMode                                 bool
+		workloads, traceMode, compressorMode, readLatency string
+		readKbps, readMtu, readMaxConcurrentCalls         intSliceType
+		readReqSizeBytes, readRespSizeBytes               intSliceType
 	)
 	flag.StringVar(&workloads, "workloads", workloadsAll,
 		fmt.Sprintf("Workloads to execute - One of: %v", strings.Join(allWorkloads, ", ")))
-	flag.BoolVar(&traceMode, "traceMode", false, "Enable gRPC tracing")
+	flag.StringVar(&traceMode, "trace", modeOff,
+		fmt.Sprintf("Trace mode - One of: %v", strings.Join(allTraceModes, ", ")))
 	flag.StringVar(&readLatency, "latency", "", "Simulated one-way network latency - may be a comma-separated list")
 	flag.DurationVar(&benchtime, "benchtime", time.Second, "Configures the amount of time to run each benchmark")
 	flag.Var(&readKbps, "kbps", "Simulated network throughput (in kbps) - may be a comma-separated list")
@@ -256,10 +251,10 @@ func init() {
 	flag.StringVar(&memProfile, "memProfile", "", "Enables memory profiling output to the filename provided")
 	flag.IntVar(&memProfileRate, "memProfileRate", 0, "Configures the memory profiling rate")
 	flag.StringVar(&cpuProfile, "cpuProfile", "", "Enables CPU profiling output to the filename provided")
-	flag.StringVar(&compressorMode, "compression", compressionOff,
+	flag.StringVar(&compressorMode, "compression", modeOff,
 		fmt.Sprintf("Compression mode - One of: %v", strings.Join(allCompressionModes, ", ")))
-	flag.StringVar(&benchmarkResulrFile, "resultFile", "", "Save the benchmark result into a binary file")
-	flag.StringVar(&networkMode, "networkMode", "", "Network mode includes LAN, WAN, Nonhaul and Longhaul")
+	flag.StringVar(&benchmarkResultFile, "resultFile", "", "Save the benchmark result into a binary file")
+	flag.StringVar(&networkMode, "networkMode", "", "Network mode includes LAN, WAN, Local and Longhaul")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		log.Fatal("Error: unparsed arguments: ", flag.Args())
@@ -278,17 +273,8 @@ func init() {
 		log.Fatalf("Unknown workloads setting: %v (want one of: %v)",
 			workloads, strings.Join(allWorkloads, ", "))
 	}
-	switch compressorMode {
-	case compressionOn:
-		enableCompressor = []bool{true}
-	case compressionOff:
-		enableCompressor = []bool{false}
-	case compressionBoth:
-		enableCompressor = []bool{false, true}
-	default:
-		log.Fatalf("Unknown compression mode setting: %v (want one of: %v)",
-			compressorMode, strings.Join(allCompressionModes, ", "))
-	}
+	enableCompressor = setMode(compressorMode)
+	enableTrace = setMode(traceMode)
 	// Time input formats as (time + unit).
 	readTimeFromInput(&ltc, readLatency)
 	readIntFromIntSlice(&kbps, readKbps)
@@ -297,12 +283,26 @@ func init() {
 	readIntFromIntSlice(&reqSizeBytes, readReqSizeBytes)
 	readIntFromIntSlice(&respSizeBytes, readRespSizeBytes)
 	// Re-write latency, kpbs and mtu if network mode is set.
-	if networkMode != "" {
-		ltc = []time.Duration{networks[networkMode].latency}
-		kbps = []int{networks[networkMode].kbps}
-		mtu = []int{networks[networkMode].mtu}
+	if network, ok := networks[networkMode]; ok {
+		ltc = []time.Duration{network.Latency}
+		kbps = []int{network.Kbps}
+		mtu = []int{network.MTU}
 	}
+}
 
+func setMode(name string) []bool {
+	switch name {
+	case modeOn:
+		return []bool{true}
+	case modeOff:
+		return []bool{false}
+	case modeBoth:
+		return []bool{false, true}
+	default:
+		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
+			name, name, strings.Join(allCompressionModes, ", "))
+	}
+	return []bool{}
 }
 
 type intSliceType []int
@@ -372,7 +372,7 @@ func main() {
 			Bytes: 0, MemAllocs: memStats.Mallocs - startAllocs, MemBytes: memStats.TotalAlloc - startBytes}
 	}
 	sharedPos := make([]bool, len(featuresPos))
-	for i := 1; i < len(featuresPos); i++ {
+	for i := 0; i < len(featuresPos); i++ {
 		if featuresNum[i] <= 1 {
 			sharedPos[i] = true
 		}
@@ -383,6 +383,7 @@ func main() {
 	for !reflect.DeepEqual(featuresPos, initalPos) || start {
 		start = false
 		benchFeature := stats.Features{
+			NetworkMode:        networkMode,
 			EnableTrace:        enableTrace[featuresPos[0]],
 			Latency:            ltc[featuresPos[1]],
 			Kbps:               kbps[featuresPos[2]],
@@ -397,7 +398,7 @@ func main() {
 		if runMode[0] {
 			unaryBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
 			s.SetBenchmarkResult("Unary", benchFeature, results.N,
-				results.NsPerOp(), results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
 			fmt.Println(s.BenchString())
 			fmt.Println(s.String())
 			resultSlice = append(resultSlice, s.GetBenchmarkResults())
@@ -406,7 +407,7 @@ func main() {
 		if runMode[1] {
 			streamBenchmark(startTimer, stopTimer, benchFeature, benchtime, s)
 			s.SetBenchmarkResult("Stream", benchFeature, results.N,
-				results.NsPerOp(), results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
+				results.AllocedBytesPerOp(), results.AllocsPerOp(), sharedPos)
 			fmt.Println(s.BenchString())
 			fmt.Println(s.String())
 			resultSlice = append(resultSlice, s.GetBenchmarkResults())
@@ -447,16 +448,15 @@ func after(data []stats.BenchResults) {
 		}
 		runtime.GC() // materialize all statistics
 		if err = pprof.WriteHeapProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "testing: can't write %s: %s\n", memProfile, err)
+			fmt.Fprintf(os.Stderr, "testing: can't write heap profile %s: %s\n", memProfile, err)
 			os.Exit(2)
 		}
 		f.Close()
 	}
-	if benchmarkResulrFile != "" {
-		f, err := os.Create(benchmarkResulrFile)
+	if benchmarkResultFile != "" {
+		f, err := os.Create(benchmarkResultFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "testing: %s\n", err)
-			os.Exit(2)
+			log.Fatalf("testing: can't write benchmark result %s: %s\n", benchmarkResultFile, err)
 		}
 		dataEncoder := gob.NewEncoder(f)
 		dataEncoder.Encode(data)

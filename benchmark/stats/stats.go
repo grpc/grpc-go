@@ -28,10 +28,9 @@ import (
 	"time"
 )
 
-var printHistogram bool
-
 // Features contains most fields for a benchmark
 type Features struct {
+	NetworkMode        string
 	EnableTrace        bool
 	Latency            time.Duration
 	Kbps               int
@@ -42,13 +41,14 @@ type Features struct {
 	EnableCompressor   bool
 }
 
+// String returns the textual output of the Features as string.
 func (f Features) String() string {
 	return fmt.Sprintf("traceMode_%t-latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
 		"%#v-reqSize_%#vB-respSize_%#vB-Compressor_%t", f.EnableTrace,
 		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes, f.EnableCompressor)
 }
 
-// PartialPrintString can print subsets of features with different format.
+// PartialPrintString can print certain features with different format.
 func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 	s := ""
 	var (
@@ -62,20 +62,12 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 		prefix = "-"
 		linker = "_"
 	}
-	if shared {
-		if f.Latency == 0 && f.Kbps == 0 && f.Mtu == 0 {
-			s += "Network: NoneHaul \n"
-			isNetwork = true
-		} else if f.Latency == 2*time.Millisecond && f.Kbps == 100*1024 && f.Mtu == 1500 {
-			s += "Network: LAN \n"
-			isNetwork = true
-		} else if f.Latency == 30*time.Millisecond && f.Kbps == 20*1024 && f.Mtu == 1500 {
-			s += "Network: WAN \n"
-			isNetwork = true
-		} else if f.Latency == 200*time.Millisecond && f.Kbps == 1000*1024 && f.Mtu == 9000 {
-			s += "Network: Longhaul \n"
-			isNetwork = true
-		}
+	if noneEmptyPos[0] {
+		s += fmt.Sprintf("%sTrace%s%t%s", prefix, linker, f.EnableCompressor, suffix)
+	}
+	if shared && f.NetworkMode != "" {
+		s += fmt.Sprintf("Network: %s \n", f.NetworkMode)
+		isNetwork = true
 	}
 	if !isNetwork {
 		if noneEmptyPos[1] {
@@ -104,7 +96,7 @@ func PartialPrintString(noneEmptyPos []bool, f Features, shared bool) string {
 }
 
 type percentLatency struct {
-	Percent string
+	Percent int
 	Value   time.Duration
 }
 
@@ -121,11 +113,10 @@ type BenchResults struct {
 }
 
 // SetBenchmarkResult sets features of benchmark and basic results.
-func (stats *Stats) SetBenchmarkResult(mode string, features Features, o int, ns, allocdBytes, allocs int64, sharedPos []bool) {
+func (stats *Stats) SetBenchmarkResult(mode string, features Features, o int, allocdBytes, allocs int64, sharedPos []bool) {
 	stats.result.RunMode = mode
 	stats.result.Features = features
 	stats.result.Operations = o
-	stats.result.NsPerOp = ns
 	stats.result.AllocedBytesPerOp = allocdBytes
 	stats.result.AllocsPerOp = allocs
 	stats.result.SharedPosion = sharedPos
@@ -144,15 +135,16 @@ func (stats *Stats) BenchString() string {
 	if len(s.Latency) != 0 {
 		var statsUnit = s.Latency[0].Value
 		var timeUnit = fmt.Sprintf("%v", statsUnit)[1:]
-		for i := 1; i < len(s.Latency); i++ {
-			res += fmt.Sprintf("%s_Latency: %s %s \t", s.Latency[i].Percent,
+		for i := 1; i < len(s.Latency)-1; i++ {
+			res += fmt.Sprintf("%d_Latency: %s %s \t", s.Latency[i].Percent,
 				strconv.FormatFloat(float64(s.Latency[i].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 		}
+		res += fmt.Sprintf("Avg latency: %s %s \t",
+			strconv.FormatFloat(float64(s.Latency[len(s.Latency)-1].Value)/float64(statsUnit), 'f', 4, 64), timeUnit)
 	}
-	res += fmt.Sprintf("Count: %s \t", strconv.Itoa(s.Operations))
-	res += fmt.Sprintf("%s ns \t", strconv.FormatInt(s.NsPerOp, 10))
-	res += fmt.Sprintf("%s Bytes/op\t", strconv.FormatInt(s.AllocedBytesPerOp, 10))
-	res += fmt.Sprintf("%s Allocs/op\t", strconv.FormatInt(s.AllocsPerOp, 10))
+	res += fmt.Sprintf("Count: %v \t", s.Operations)
+	res += fmt.Sprintf("%v Bytes/op\t", s.AllocedBytesPerOp)
+	res += fmt.Sprintf("%v Allocs/op\t", s.AllocsPerOp)
 
 	return res
 }
@@ -264,11 +256,14 @@ func (stats *Stats) maybeUpdate() {
 
 	if stats.durations.Len() != 0 {
 		var percentToObserve = []int{50, 90}
-		// First line record min unit from the latency result.
-		stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: "Latency / " + fmt.Sprintf("%v", stats.unit)[1:], Value: stats.unit})
+		// First data record min unit from the latency result.
+		stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: -1, Value: stats.unit})
 		for _, position := range percentToObserve {
-			stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: strconv.Itoa(position) + "%", Value: stats.durations[max(stats.histogram.Count*int64(position)/100-1, 0)]})
+			stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: position, Value: stats.durations[max(stats.histogram.Count*int64(position)/100-1, 0)]})
 		}
+		// Last data record the average latency.
+		avg := float64(stats.histogram.Sum) / float64(stats.histogram.Count)
+		stats.result.Latency = append(stats.result.Latency, percentLatency{Percent: -1, Value: time.Duration(avg)})
 	}
 }
 
