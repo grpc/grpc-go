@@ -77,7 +77,6 @@ type http2Client struct {
 	sendQuotaPool *quotaPool
 	// streamsQuota limits the max number of concurrent streams.
 	streamsQuota *quotaPool
-	//localSendQuota *quotaPool
 
 	// The scheme used: https if TLS is on, http otherwise.
 	scheme string
@@ -204,16 +203,15 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		localAddr:  conn.LocalAddr(),
 		authInfo:   authInfo,
 		// The client initiated stream id is odd starting from 1.
-		nextID:          1,
-		shutdownChan:    make(chan struct{}),
-		errorChan:       make(chan struct{}),
-		goAway:          make(chan struct{}),
-		awakenKeepalive: make(chan struct{}, 1),
-		framer:          newFramer(conn),
-		controlBuf:      newControlBuffer(),
-		fc:              &inFlow{limit: uint32(icwz)},
-		sendQuotaPool:   newQuotaPool(defaultWindowSize),
-		//localSendQuota:    newQuotaPool(http2IOBufSize),
+		nextID:            1,
+		shutdownChan:      make(chan struct{}),
+		errorChan:         make(chan struct{}),
+		goAway:            make(chan struct{}),
+		awakenKeepalive:   make(chan struct{}, 1),
+		framer:            newFramer(conn),
+		controlBuf:        newControlBuffer(),
+		fc:                &inFlow{limit: uint32(icwz)},
+		sendQuotaPool:     newQuotaPool(defaultWindowSize),
 		scheme:            scheme,
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
@@ -301,7 +299,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		buf:            newRecvBuffer(),
 		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
 		sendQuotaPool:  newQuotaPool(int(t.streamSendQuota)),
-		localSendQuota: newQuotaPool(64 * 1024),
+		localSendQuota: newQuotaPool(defaultLocalSendQuota),
 		headerChan:     make(chan struct{}),
 	}
 	t.nextID += 2
@@ -709,6 +707,9 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			// Acquire local send quota to be able to write to the controlBuf.
 			ltq, err := wait(s.ctx, s.done, s.goAway, t.shutdownChan, s.localSendQuota.acquire())
 			if err != nil {
+				if _, ok := err.(ConnectionError); !ok {
+					t.sendQuotaPool.add(ps)
+				}
 				return err
 			}
 			s.localSendQuota.add(ltq - ps) // It's ok if we make it negative.
@@ -1209,7 +1210,6 @@ func (t *http2Client) itemHandler(i item) error {
 		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
 		if err == nil {
 			i.f()
-			//t.localSendQuota.add(len(i.d))
 		}
 	case *headerFrame:
 		err = t.framer.fr.WriteHeaders(i.p)

@@ -44,6 +44,10 @@ const (
 	defaultKeepalivePolicyMinTime = time.Duration(5 * time.Minute)
 	// max window limit set by HTTP2 Specs.
 	maxWindowSize = math.MaxInt32
+	// defaultLocalSendQuota sets is default value for number of data
+	// bytes that each stream can schedule before some of it being
+	// flushed out.
+	defaultLocalSendQuota = 64 * 1024
 )
 
 // The following defines various control items which could flow through
