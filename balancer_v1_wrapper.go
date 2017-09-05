@@ -226,7 +226,6 @@ func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s conne
 	}
 	oldS := scSt.s
 	scSt.s = s
-	grpclog.Infof("balancerWrapper: handle state change addr: %v, old state: %v, new state: %v", sc.(*acBalancerWrapper).getAddrConn().addrs, oldS, s)
 	if oldS != connectivity.Ready && s == connectivity.Ready {
 		scSt.down = bw.balancer.Up(scSt.addr)
 	} else if oldS == connectivity.Ready && s != connectivity.Ready {
