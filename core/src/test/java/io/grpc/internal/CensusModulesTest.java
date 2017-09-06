@@ -464,7 +464,9 @@ public class CensusModulesTest {
     // propagated tags.
     Context serverContext = serverTracer.filterContext(Context.ROOT);
     // It also put clientCtx in the Context seen by the call handler
-    assertEquals(clientCtx, STATS_CONTEXT_KEY.get(serverContext));
+    assertEquals(
+        clientCtx.with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(method.getFullMethodName())),
+        STATS_CONTEXT_KEY.get(serverContext));
 
     // Verifies that the server tracer records the status with the propagated tag
     serverTracer.streamClosed(Status.OK);
@@ -585,7 +587,11 @@ public class CensusModulesTest {
         tracerFactory.newServerStreamTracer(method.getFullMethodName(), new Metadata());
 
     Context filteredContext = tracer.filterContext(Context.ROOT);
-    assertNull(STATS_CONTEXT_KEY.get(filteredContext));
+    StatsContext statsCtx = STATS_CONTEXT_KEY.get(filteredContext);
+    assertEquals(
+        statsCtxFactory.getDefault()
+            .with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(method.getFullMethodName())),
+        statsCtx);
 
     tracer.inboundMessage();
     tracer.inboundWireSize(34);

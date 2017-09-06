@@ -322,14 +322,12 @@ final class CensusStatsModule {
       }
       StatsContext ctx = firstNonNull(parentCtx, statsCtxFactory.getDefault());
       ctx
-          .with(
-              RpcConstants.RPC_SERVER_METHOD, TagValue.create(fullMethodName),
-              RpcConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
+          .with(RpcConstants.RPC_STATUS, TagValue.create(status.getCode().toString()))
           .record(builder.build());
     }
 
     @Override
-    public <ReqT, RespT> Context filterContext(Context context) {
+    public Context filterContext(Context context) {
       if (parentCtx != statsCtxFactory.getDefault()) {
         return context.withValue(STATS_CONTEXT_KEY, parentCtx);
       }
@@ -344,6 +342,7 @@ final class CensusStatsModule {
       if (parentCtx == null) {
         parentCtx = statsCtxFactory.getDefault();
       }
+      parentCtx = parentCtx.with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(fullMethodName));
       return new ServerTracer(fullMethodName, parentCtx);
     }
   }
