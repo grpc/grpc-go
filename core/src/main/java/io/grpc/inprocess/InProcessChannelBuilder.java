@@ -48,6 +48,20 @@ public final class InProcessChannelBuilder extends
     return new InProcessChannelBuilder(name);
   }
 
+  /**
+   * Always fails.  Call {@link #forName} instead.
+   */
+  public static InProcessChannelBuilder forTarget(String target) {
+    throw new UnsupportedOperationException("call forName() instead");
+  }
+
+  /**
+   * Always fails.  Call {@link #forName} instead.
+   */
+  public static InProcessChannelBuilder forAddress(String name, int port) {
+    throw new UnsupportedOperationException("call forName() instead");
+  }
+
   private final String name;
 
   private InProcessChannelBuilder(String name) {

@@ -56,6 +56,14 @@ public abstract class AbstractManagedChannelImplBuilder
         <T extends AbstractManagedChannelImplBuilder<T>> extends ManagedChannelBuilder<T> {
   private static final String DIRECT_ADDRESS_SCHEME = "directaddress";
 
+  public static ManagedChannelBuilder<?> forAddress(String name, int port) {
+    throw new UnsupportedOperationException("Subclass failed to hide static factory");
+  }
+
+  public static ManagedChannelBuilder<?> forTarget(String target) {
+    throw new UnsupportedOperationException("Subclass failed to hide static factory");
+  }
+
   /**
    * An idle timeout larger than this would disable idle mode.
    */

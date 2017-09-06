@@ -68,6 +68,13 @@ public final class InProcessServerBuilder
     return new InProcessServerBuilder(name);
   }
 
+  /**
+   * Always fails.  Call {@link #forName} instead.
+   */
+  public static InProcessServerBuilder forPort(int port) {
+    throw new UnsupportedOperationException("call forName() instead");
+  }
+
   private final String name;
 
   private InProcessServerBuilder(String name) {

@@ -37,6 +37,20 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
   protected ForwardingChannelBuilder() {}
 
   /**
+   * This method serves to force sub classes to "hide" this static factory.
+   */
+  public static ManagedChannelBuilder<?> forAddress(String name, int port) {
+    throw new UnsupportedOperationException("Subclass failed to hide static factory");
+  }
+
+  /**
+   * This method serves to force sub classes to "hide" this static factory.
+   */
+  public static ManagedChannelBuilder<?> forTarget(String target) {
+    throw new UnsupportedOperationException("Subclass failed to hide static factory");
+  }
+
+  /**
    * Returns the delegated {@code ManagedChannelBuilder}.
    */
   protected abstract ManagedChannelBuilder<?> delegate();

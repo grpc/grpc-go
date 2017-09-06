@@ -51,6 +51,10 @@ import javax.annotation.Nullable;
 public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuilder<T>>
         extends ServerBuilder<T> {
 
+  public static ServerBuilder<?> forPort(int port) {
+    throw new UnsupportedOperationException("Subclass failed to hide static factory");
+  }
+
   private static final ObjectPool<? extends Executor> DEFAULT_EXECUTOR_POOL =
       SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
   private static final HandlerRegistry DEFAULT_FALLBACK_REGISTRY = new HandlerRegistry() {
