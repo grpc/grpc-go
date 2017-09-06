@@ -22,10 +22,15 @@ Package main provides benchmark with setting flags.
 An example to run some benchmarks with profiling enabled:
 
 go run benchmark/benchmain/main.go -benchtime=10s -workloads=all \
-  -compression=on -maxConcurrentCalls=1 -traceMode=false \
+  -compression=on -maxConcurrentCalls=1 -trace=off \
   -reqSizeBytes=1,1048576 -respSizeBytes=1,1048576 \
   -latency=0s -kbps=0 -mtu=0 \
+  or -networkMode=Local \
   -cpuProfile=cpuProf -memProfile=memProf -memProfileRate=10000 -resultFile=result
+
+As a suggestion, when creating a branch, you can run this benchmark and save the result
+file "-resultFile=baseBench", and later when you at the middle of the work or finish the
+work, you can get the benchmark result and compare it with the base anytime.
 */
 package main
 
@@ -301,8 +306,8 @@ func setMode(name string) []bool {
 	default:
 		log.Fatalf("Unknown %s setting: %v (want one of: %v)",
 			name, name, strings.Join(allCompressionModes, ", "))
+		return []bool{}
 	}
-	return []bool{}
 }
 
 type intSliceType []int
