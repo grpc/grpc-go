@@ -16,16 +16,14 @@
 
 package io.grpc.protobuf.nano;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.protobuf.nano.CodedInputByteBufferNano;
 import com.google.protobuf.nano.MessageNano;
 import io.grpc.MethodDescriptor.Marshaller;
 import io.grpc.Status;
-import java.io.ByteArrayOutputStream;
+import io.grpc.internal.IoUtils;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 /**
  * Utility methods for using nano proto with grpc.
@@ -50,7 +48,7 @@ public class NanoUtils {
         try {
           // TODO(simonma): Investigate whether we can do 0-copy here. 
           CodedInputByteBufferNano input =
-              CodedInputByteBufferNano.newInstance(toByteArray(stream));
+              CodedInputByteBufferNano.newInstance(IoUtils.toByteArray(stream));
           input.setSizeLimit(Integer.MAX_VALUE);
           T message = factory.newInstance();
           message.mergeFrom(input);
@@ -61,29 +59,5 @@ public class NanoUtils {
         }
       }
     };
-  }
-
-  // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
-  private static byte[] toByteArray(InputStream in) throws IOException {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    copy(in, out);
-    return out.toByteArray();
-  }
-
-  // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
-  private static long copy(InputStream from, OutputStream to) throws IOException {
-    checkNotNull(from);
-    checkNotNull(to);
-    byte[] buf = new byte[BUF_SIZE];
-    long total = 0;
-    while (true) {
-      int r = from.read(buf);
-      if (r == -1) {
-        break;
-      }
-      to.write(buf, 0, r);
-      total += r;
-    }
-    return total;
   }
 }
