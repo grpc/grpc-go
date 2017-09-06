@@ -113,7 +113,7 @@ func TestDefaultAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
-	conn.Close()
+	defer conn.Close()
 	if conn.authority != target {
 		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, target)
 	}
@@ -130,7 +130,7 @@ func TestTLSServerNameOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
-	conn.Close()
+	defer conn.Close()
 	if conn.authority != overwriteServerName {
 		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
 	}
@@ -143,7 +143,7 @@ func TestWithAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
-	conn.Close()
+	defer conn.Close()
 	if conn.authority != overwriteServerName {
 		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
 	}
@@ -160,7 +160,7 @@ func TestWithAuthorityAndTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
 	}
-	conn.Close()
+	defer conn.Close()
 	if conn.authority != overwriteServerName {
 		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
 	}
@@ -267,6 +267,7 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 	if err != nil {
 		t.Fatalf("unexpected error dialing connection: %v", err)
 	}
+	defer conn.Close()
 
 	if conn.dopts.bs == nil {
 		t.Fatalf("backoff config not set")
@@ -279,39 +280,6 @@ func testBackoffConfigSet(t *testing.T, expected *BackoffConfig, opts ...DialOpt
 
 	if actual != *expected {
 		t.Fatalf("unexpected backoff config on connection: %v, want %v", actual, expected)
-	}
-	conn.Close()
-}
-
-type testErr struct {
-	temp bool
-}
-
-func (e *testErr) Error() string {
-	return "test error"
-}
-
-func (e *testErr) Temporary() bool {
-	return e.temp
-}
-
-var nonTemporaryError = &testErr{false}
-
-func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, error) {
-	return nil, nonTemporaryError
-}
-
-func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
-	defer leakcheck.Check(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock(), FailOnNonTempDialError(true)); err != nonTemporaryError {
-		t.Fatalf("Dial(%q) = %v, want %v", "", err, nonTemporaryError)
-	}
-
-	// Without FailOnNonTempDialError, gRPC will retry to connect, and dial should exit with time out error.
-	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock()); err != context.DeadlineExceeded {
-		t.Fatalf("Dial(%q) = %v, want %v", "", err, context.DeadlineExceeded)
 	}
 }
 
