@@ -82,7 +82,7 @@ func truncate(x string, l int) string {
 	if l > len(x) {
 		return x
 	}
-	return x[:l]
+	return string([]byte(x[:l]))
 }
 
 func newPayload(sent bool, msg interface{}) stringer {
