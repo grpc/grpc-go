@@ -28,39 +28,61 @@ import (
 	"time"
 )
 
+var goroutinesToIgnore = []string{
+	"testing.Main(",
+	"testing.tRunner(",
+	"testing.(*M).",
+	"runtime.goexit",
+	"created by runtime.gc",
+	"created by runtime/trace.Start",
+	"interestingGoroutines",
+	"runtime.MHeap_Scavenger",
+	"signal.signal_recv",
+	"sigterm.handler",
+	"runtime_mcall",
+	"(*loggingT).flushDaemon",
+	"goroutine in C code",
+}
+
+// RegisterIgnoreGoroutine appends s into the ignore goroutine list. The
+// goroutines whose stack trace contains s will not be identified as leaked
+// goroutines. Not thread-safe, only call this function in init().
+func RegisterIgnoreGoroutine(s string) {
+	goroutinesToIgnore = append(goroutinesToIgnore, s)
+}
+
+func ignore(g string) bool {
+	sl := strings.SplitN(g, "\n", 2)
+	if len(sl) != 2 {
+		return true
+	}
+	stack := strings.TrimSpace(sl[1])
+	if strings.HasPrefix(stack, "testing.RunTests") {
+		return true
+	}
+
+	if stack == "" {
+		return true
+	}
+
+	for _, s := range goroutinesToIgnore {
+		if strings.Contains(stack, s) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // interestingGoroutines returns all goroutines we care about for the purpose of
 // leak checking. It excludes testing or runtime ones.
 func interestingGoroutines() (gs []string) {
 	buf := make([]byte, 2<<20)
 	buf = buf[:runtime.Stack(buf, true)]
 	for _, g := range strings.Split(string(buf), "\n\n") {
-		sl := strings.SplitN(g, "\n", 2)
-		if len(sl) != 2 {
-			continue
+		if !ignore(g) {
+			gs = append(gs, g)
 		}
-		stack := strings.TrimSpace(sl[1])
-		if strings.HasPrefix(stack, "testing.RunTests") {
-			continue
-		}
-
-		if stack == "" ||
-			strings.Contains(stack, "testing.Main(") ||
-			strings.Contains(stack, "testing.tRunner(") ||
-			strings.Contains(stack, "testing.(*M).") ||
-			strings.Contains(stack, "runtime.goexit") ||
-			strings.Contains(stack, "created by runtime.gc") ||
-			strings.Contains(stack, "created by runtime/trace.Start") ||
-			strings.Contains(stack, "created by google3/base/go/log.init") ||
-			strings.Contains(stack, "interestingGoroutines") ||
-			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
-			strings.Contains(stack, "signal.signal_recv") ||
-			strings.Contains(stack, "sigterm.handler") ||
-			strings.Contains(stack, "runtime_mcall") ||
-			strings.Contains(stack, "(*loggingT).flushDaemon") ||
-			strings.Contains(stack, "goroutine in C code") {
-			continue
-		}
-		gs = append(gs, g)
 	}
 	sort.Strings(gs)
 	return
