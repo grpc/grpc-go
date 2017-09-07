@@ -85,7 +85,7 @@ func truncate(x string, l int) string {
 	return string([]byte(x[:l]))
 }
 
-func newPayload(sent bool, msg interface{}) stringer {
+func payloadStringer(sent bool, msg interface{}) stringer {
 	if sent {
 		return stringer(truncate(fmt.Sprintf("sent: %v", msg), truncateSize))
 	}

@@ -799,7 +799,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			sh.HandleRPC(stream.Context(), inPayload)
 		}
 		if trInfo != nil {
-			trInfo.tr.LazyLog(newPayload(false, v), true)
+			trInfo.tr.LazyLog(payloadStringer(false, v), true)
 		}
 		return nil
 	}
@@ -851,7 +851,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		return err
 	}
 	if trInfo != nil {
-		trInfo.tr.LazyLog(newPayload(true, reply), true)
+		trInfo.tr.LazyLog(payloadStringer(true, reply), true)
 	}
 	// TODO: Should we be logging if writing status failed here, like above?
 	// Should the logging be in WriteStatus?  Should we ignore the WriteStatus

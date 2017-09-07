@@ -242,7 +242,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			return Errorf(codes.Internal, "%v", err)
 		}
 		if c.traceInfo.tr != nil {
-			c.traceInfo.tr.LazyLog(newPayload(true, args), true)
+			c.traceInfo.tr.LazyLog(payloadStringer(true, args), true)
 		}
 		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
@@ -295,7 +295,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			return toRPCErr(err)
 		}
 		if c.traceInfo.tr != nil {
-			c.traceInfo.tr.LazyLog(newPayload(false, reply), true)
+			c.traceInfo.tr.LazyLog(payloadStringer(false, reply), true)
 		}
 		t.CloseStream(stream, nil)
 		if put != nil {
