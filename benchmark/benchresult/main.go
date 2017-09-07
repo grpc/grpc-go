@@ -70,7 +70,7 @@ func timeChange(title int, val1, val2 time.Duration) string {
 func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 	for k2, v2 := range m2 {
 		if v1, ok := m1[k2]; ok {
-			changes := k2 + "-"
+			changes := k2
 			changes += fmt.Sprintf("%10s  %12s  %12s   %8s \n", "\nTitle", "\tBefore", "After", "\tPercentage")
 			changes += intChange("Bytes/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp)
 			changes += intChange("Allocs/op", v1.AllocsPerOp, v2.AllocsPerOp)
@@ -93,9 +93,10 @@ func compareBenchmark(file1, file2 string) {
 	compareTwoMap(BenchValueFile1, BenchValueFile2)
 }
 
-func printline(benchName, ltc50, ltc90, allocByte, allocsOp string) {
-	fmt.Printf("%-80s%12s%12s%12s%12s\n", benchName, ltc50, ltc90, allocByte, allocsOp)
+func printline(benchName, ltc50, ltc90, allocByte, allocsOp interface{}) {
+	fmt.Printf("%-80v%12v%12v%12v%12v\n", benchName, ltc50, ltc90, allocByte, allocsOp)
 }
+
 func formatBenchmark(fileName string) {
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -121,7 +122,7 @@ func formatBenchmark(fileName string) {
 	for _, d := range data {
 		name := d.RunMode + stats.PartialPrintString(printPos, d.Features, false)
 		printline(name, d.Latency[1].Value.String(), d.Latency[2].Value.String(),
-			strconv.FormatInt(d.AllocedBytesPerOp, 10), strconv.FormatInt(d.AllocsPerOp, 10))
+			d.AllocedBytesPerOp, d.AllocsPerOp)
 	}
 }
 
