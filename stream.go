@@ -334,7 +334,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.tracing {
 		cs.mu.Lock()
 		if cs.trInfo.tr != nil {
-			cs.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+			cs.trInfo.tr.LazyLog(payloadStringer(true, m), true)
 		}
 		cs.mu.Unlock()
 	}
@@ -412,7 +412,7 @@ func (cs *clientStream) RecvMsg(m interface{}) (err error) {
 		if cs.tracing {
 			cs.mu.Lock()
 			if cs.trInfo.tr != nil {
-				cs.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+				cs.trInfo.tr.LazyLog(payloadStringer(false, m), true)
 			}
 			cs.mu.Unlock()
 		}
@@ -597,7 +597,7 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
 				if err == nil {
-					ss.trInfo.tr.LazyLog(&payload{sent: true, msg: m}, true)
+					ss.trInfo.tr.LazyLog(payloadStringer(true, m), true)
 				} else {
 					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 					ss.trInfo.tr.SetError()
@@ -642,7 +642,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			ss.mu.Lock()
 			if ss.trInfo.tr != nil {
 				if err == nil {
-					ss.trInfo.tr.LazyLog(&payload{sent: false, msg: m}, true)
+					ss.trInfo.tr.LazyLog(payloadStringer(false, m), true)
 				} else if err != io.EOF {
 					ss.trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
 					ss.trInfo.tr.SetError()
