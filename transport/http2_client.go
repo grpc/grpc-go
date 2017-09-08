@@ -772,9 +772,9 @@ func (t *http2Client) adjustWindow(s *Stream, n uint32) {
 	if w := s.fc.maybeAdjust(n); w > 0 {
 		// Piggyback conneciton's window update along.
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw, false})
+			t.controlBuf.put(&windowUpdate{0, cw})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w, true})
+		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }
 
@@ -789,9 +789,9 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 	}
 	if w := s.fc.onRead(n); w > 0 {
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw, false})
+			t.controlBuf.put(&windowUpdate{0, cw})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w, true})
+		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }
 
@@ -805,7 +805,7 @@ func (t *http2Client) updateFlowControl(n uint32) {
 	}
 	t.initialWindowSize = int32(n)
 	t.mu.Unlock()
-	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
+	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
 	t.controlBuf.put(&settings{
 		ack: false,
 		ss: []http2.Setting{
@@ -835,7 +835,9 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	// Furthermore, if a bdpPing is being sent out we can piggyback
 	// connection's window update for the bytes we just received.
 	if sendBDPPing {
-		t.controlBuf.put(&windowUpdate{0, uint32(size), false})
+		if size != 0 { // Could've been an empty data frame.
+			t.controlBuf.put(&windowUpdate{0, uint32(size)})
+		}
 		t.controlBuf.put(bdpPing)
 	} else {
 		if err := t.fc.onData(uint32(size)); err != nil {
@@ -843,7 +845,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 			return
 		}
 		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w, true})
+			t.controlBuf.put(&windowUpdate{0, w})
 		}
 	}
 	// Select the right stream to dispatch.
@@ -867,7 +869,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{s.id, w, true})
+				t.controlBuf.put(&windowUpdate{s.id, w})
 			}
 		}
 		s.mu.Unlock()

@@ -18,4 +18,4 @@ before_install:
 
 script:
   - if [[ "$TRAVIS_GO_VERSION" = 1.9* && "$ARCH" != "386" ]]; then ./vet.sh || exit 1; fi
-  - travis_wait make test testrace
+  - make test testrace

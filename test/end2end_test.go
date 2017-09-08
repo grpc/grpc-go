@@ -35,6 +35,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -686,16 +687,12 @@ func (te *test) withServerTester(fn func(st *serverTester)) {
 
 type lazyConn struct {
 	net.Conn
-	mu     sync.Mutex
-	beLazy bool
+	beLazy int32
 }
 
 func (l *lazyConn) Write(b []byte) (int, error) {
-	l.mu.Lock()
-	bl := l.beLazy
-	l.mu.Unlock()
-	if bl {
-		// The sleep duration here needs to less that the leakCheck deadline.
+	if atomic.LoadInt32(&(l.beLazy)) == 1 {
+		// The sleep duration here needs to less than the leakCheck deadline.
 		time.Sleep(time.Second * 5)
 	}
 	return l.Conn.Write(b)
@@ -723,9 +720,7 @@ func TestContextDeadlineNotIgnored(t *testing.T) {
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	lc.mu.Lock()
-	lc.beLazy = true
-	lc.mu.Unlock()
+	atomic.StoreInt32(&(lc.beLazy), 1)
 	timeout := time.Second * 1
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -733,7 +728,7 @@ func TestContextDeadlineNotIgnored(t *testing.T) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, context.DeadlineExceeded", err)
 	}
-	if time.Now().After(t1.Add(2 * timeout)) {
+	if time.Since(t1) > 2*time.Second {
 		t.Fatalf("TestService/EmptyCall(_, _) ran over the deadline")
 	}
 }

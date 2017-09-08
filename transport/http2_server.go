@@ -447,9 +447,9 @@ func (t *http2Server) adjustWindow(s *Stream, n uint32) {
 	}
 	if w := s.fc.maybeAdjust(n); w > 0 {
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw, false})
+			t.controlBuf.put(&windowUpdate{0, cw})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w, true})
+		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }
 
@@ -464,9 +464,9 @@ func (t *http2Server) updateWindow(s *Stream, n uint32) {
 	}
 	if w := s.fc.onRead(n); w > 0 {
 		if cw := t.fc.resetPendingUpdate(); cw > 0 {
-			t.controlBuf.put(&windowUpdate{0, cw, false})
+			t.controlBuf.put(&windowUpdate{0, cw})
 		}
-		t.controlBuf.put(&windowUpdate{s.id, w, true})
+		t.controlBuf.put(&windowUpdate{s.id, w})
 	}
 }
 
@@ -480,7 +480,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 	}
 	t.initialWindowSize = int32(n)
 	t.mu.Unlock()
-	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n), false})
+	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
 	t.controlBuf.put(&settings{
 		ack: false,
 		ss: []http2.Setting{
@@ -512,7 +512,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// connection's window update for the bytes we just received.
 	if sendBDPPing {
 		if size != 0 { // Could be an empty frame.
-			t.controlBuf.put(&windowUpdate{0, uint32(size), false})
+			t.controlBuf.put(&windowUpdate{0, uint32(size)})
 		}
 		t.controlBuf.put(bdpPing)
 	} else {
@@ -522,7 +522,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			return
 		}
 		if w := t.fc.onRead(uint32(size)); w > 0 {
-			t.controlBuf.put(&windowUpdate{0, w, true})
+			t.controlBuf.put(&windowUpdate{0, w})
 		}
 	}
 	// Select the right stream to dispatch.
@@ -544,7 +544,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 		}
 		if f.Header().Flags.Has(http2.FlagDataPadded) {
 			if w := s.fc.onRead(uint32(size) - uint32(len(f.Data()))); w > 0 {
-				t.controlBuf.put(&windowUpdate{s.id, w, true})
+				t.controlBuf.put(&windowUpdate{s.id, w})
 			}
 		}
 		s.mu.Unlock()

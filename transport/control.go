@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/http2"
@@ -80,7 +81,6 @@ func (*continuationFrame) item() {}
 type windowUpdate struct {
 	streamID  uint32
 	increment uint32
-	flush     bool
 }
 
 func (*windowUpdate) item() {}
@@ -175,21 +175,25 @@ func (qb *quotaPool) lockedAdd(v int) {
 func (qb *quotaPool) addAndUpdate(v int) {
 	qb.mu.Lock()
 	defer qb.mu.Unlock()
-	qb.version++
 	qb.lockedAdd(v)
+	// Update the version only after having added to the quota
+	// so that if acquireWithVesrion sees the new vesrion it is
+	// guaranteed to have seen the updated quota.
+	// Also, still keep this inside of the lock, so that when
+	// compareAndExecute is processing, this function doesn't
+	// get executed partially (quota gets updated but the version
+	// doesn't).
+	atomic.AddUint64(&(qb.version), 1)
 }
 
 func (qb *quotaPool) acquireWithVersion() (<-chan int, uint64) {
-	qb.mu.Lock()
-	version := qb.version
-	qb.mu.Unlock()
-	return qb.c, version
+	return qb.c, atomic.LoadUint64(&(qb.version))
 }
 
 func (qb *quotaPool) compareAndExecute(version uint64, success, failure func()) bool {
 	qb.mu.Lock()
 	defer qb.mu.Unlock()
-	if version == qb.version {
+	if version == atomic.LoadUint64(&(qb.version)) {
 		success()
 		return true
 	}

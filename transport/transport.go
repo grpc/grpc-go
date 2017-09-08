@@ -737,7 +737,7 @@ func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) err
 		case <-done:
 			return
 		}
-	subloop:
+	hasData:
 		for {
 			select {
 			case i := <-cbuf.get():
@@ -751,7 +751,7 @@ func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) err
 				if err := handler(&flushIO{}); err != nil {
 					return
 				}
-				break subloop
+				break hasData
 			}
 		}
 	}
