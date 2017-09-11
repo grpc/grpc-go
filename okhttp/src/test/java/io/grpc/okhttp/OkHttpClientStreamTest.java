@@ -191,7 +191,9 @@ public class OkHttpClientStreamTest {
     verify(transport).streamReadyToStart(eq(stream));
     stream.transportState().start(3);
 
-    verify(frameWriter).synStream(eq(false), eq(false), eq(3), eq(0), headersCaptor.capture());
+    verify(frameWriter)
+        .synStream(eq(true), eq(false), eq(3), eq(0), headersCaptor.capture());
+    assertThat(headersCaptor.getValue()).contains(Headers.METHOD_GET_HEADER);
     assertThat(headersCaptor.getValue()).contains(
         new Header(Header.TARGET_PATH, "/" + getMethod.getFullMethodName() + "?"
             + BaseEncoding.base64().encode(msg)));

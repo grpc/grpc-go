@@ -58,6 +58,8 @@ class OkHttpClientStream extends AbstractClientStream {
   private final TransportState state;
   private final Sink sink = new Sink();
 
+  private boolean useGet = false;
+
   OkHttpClientStream(
       MethodDescriptor<?, ?> method,
       Metadata headers,
@@ -99,6 +101,14 @@ class OkHttpClientStream extends AbstractClientStream {
     return id;
   }
 
+  /**
+   * Returns whether the stream uses GET. This is not known until after {@link Sink#writeHeaders} is
+   * invoked.
+   */
+  boolean useGet() {
+    return useGet;
+  }
+
   @Override
   public void setAuthority(String authority) {
     this.authority = checkNotNull(authority, "authority");
@@ -114,6 +124,7 @@ class OkHttpClientStream extends AbstractClientStream {
     public void writeHeaders(Metadata metadata, byte[] payload) {
       String defaultPath = "/" + method.getFullMethodName();
       if (payload != null) {
+        useGet = true;
         defaultPath += "?" + BaseEncoding.base64().encode(payload);
       }
       metadata.discardAll(GrpcUtil.USER_AGENT_KEY);
@@ -200,7 +211,7 @@ class OkHttpClientStream extends AbstractClientStream {
 
       if (pendingData != null) {
         // Only happens when the stream has neither been started nor cancelled.
-        frameWriter.synStream(false, false, id, 0, requestHeaders);
+        frameWriter.synStream(useGet, false, id, 0, requestHeaders);
         statsTraceCtx.clientOutboundHeaders();
         requestHeaders = null;
 
@@ -346,8 +357,7 @@ class OkHttpClientStream extends AbstractClientStream {
 
     @GuardedBy("lock")
     private void streamReady(Metadata metadata, String path) {
-      requestHeaders =
-          Headers.createRequestHeaders(metadata, path, authority, userAgent);
+      requestHeaders = Headers.createRequestHeaders(metadata, path, authority, userAgent, useGet);
       transport.streamReadyToStart(OkHttpClientStream.this);
     }
   }

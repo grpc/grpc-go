@@ -315,8 +315,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     setInUse();
     stream.transportState().start(nextStreamId);
     // For unary and server streaming, there will be a data frame soon, no need to flush the header.
-    if (stream.getType() != MethodType.UNARY
-        && stream.getType() != MethodType.SERVER_STREAMING) {
+    if ((stream.getType() != MethodType.UNARY && stream.getType() != MethodType.SERVER_STREAMING)
+        || stream.useGet()) {
       frameWriter.flush();
     }
     if (nextStreamId >= Integer.MAX_VALUE - 2) {

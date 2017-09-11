@@ -444,9 +444,13 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         any(Boolean.class));
     ArgumentCaptor<CreateStreamCommand> cmdCap = ArgumentCaptor.forClass(CreateStreamCommand.class);
     verify(writeQueue).enqueue(cmdCap.capture(), eq(true));
-    assertThat(ImmutableListMultimap.copyOf(cmdCap.getValue().headers()))
-        .containsEntry(AsciiString.of(":path"), AsciiString.of(
-            "//testService/test?" + BaseEncoding.base64().encode(msg)));
+    ImmutableListMultimap<CharSequence, CharSequence> headers =
+        ImmutableListMultimap.copyOf(cmdCap.getValue().headers());
+    assertThat(headers).containsEntry(AsciiString.of(":method"), Utils.HTTP_GET_METHOD);
+    assertThat(headers)
+        .containsEntry(
+            AsciiString.of(":path"),
+            AsciiString.of("//testService/test?" + BaseEncoding.base64().encode(msg)));
   }
 
   @Override
