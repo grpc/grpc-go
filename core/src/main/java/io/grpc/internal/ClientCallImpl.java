@@ -28,7 +28,6 @@ import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
 import static java.lang.Math.max;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -146,6 +145,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   @Override
   public void start(final Listener<RespT> observer, Metadata headers) {
     checkState(stream == null, "Already started");
+    checkState(!cancelCalled, "call was cancelled");
     checkNotNull(observer, "observer");
     checkNotNull(headers, "headers");
 
@@ -336,7 +336,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void request(int numMessages) {
-    Preconditions.checkState(stream != null, "Not started");
+    checkState(stream != null, "Not started");
     checkArgument(numMessages >= 0, "Number requested must be non-negative");
     stream.request(numMessages);
   }
@@ -371,18 +371,18 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @Override
   public void halfClose() {
-    Preconditions.checkState(stream != null, "Not started");
-    Preconditions.checkState(!cancelCalled, "call was cancelled");
-    Preconditions.checkState(!halfCloseCalled, "call already half-closed");
+    checkState(stream != null, "Not started");
+    checkState(!cancelCalled, "call was cancelled");
+    checkState(!halfCloseCalled, "call already half-closed");
     halfCloseCalled = true;
     stream.halfClose();
   }
 
   @Override
   public void sendMessage(ReqT message) {
-    Preconditions.checkState(stream != null, "Not started");
-    Preconditions.checkState(!cancelCalled, "call was cancelled");
-    Preconditions.checkState(!halfCloseCalled, "call was half-closed");
+    checkState(stream != null, "Not started");
+    checkState(!cancelCalled, "call was cancelled");
+    checkState(!halfCloseCalled, "call was half-closed");
     try {
       // TODO(notcarl): Find out if messageIs needs to be closed.
       InputStream messageIs = method.streamRequest(message);
@@ -427,7 +427,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     private boolean closed;
 
     public ClientStreamListenerImpl(Listener<RespT> observer) {
-      this.observer = Preconditions.checkNotNull(observer, "observer");
+      this.observer = checkNotNull(observer, "observer");
     }
 
     @Override
