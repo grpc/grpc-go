@@ -312,7 +312,7 @@ func chosenByPercentage(a *int) bool {
 	}
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	if r.Intn(101) > *a {
+	if r.Intn(100)+1 > *a {
 		return false
 	}
 	return true
