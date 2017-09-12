@@ -119,52 +119,68 @@ var (
 	scs = []*SC{
 		{
 			LoadBalancingPolicy: "round_robin",
-			MethodConfig: &MC{
-				Name: &Name{
-					Service: "foo",
-					Method:  "bar",
+			MethodConfig: []*MC{
+				{
+					Name: &Name{
+						Service: "foo",
+						Method:  "bar",
+					},
+					WaitForReady: newBool(true),
 				},
-				WaitForReady: newBool(true),
 			},
 		},
 		{
 			LoadBalancingPolicy: "grpclb",
-			MethodConfig: &MC{
-				Name: &Name{
-					Service: "all",
+			MethodConfig: []*MC{
+				{
+					Name: &Name{
+						Service: "all",
+					},
+					Timeout: "1s",
 				},
-				Timeout: "1s",
 			},
 		},
 		{
-			MethodConfig: &MC{
-				Name: &Name{
-					Method: "bar",
+			MethodConfig: []*MC{
+				{
+					Name: &Name{
+						Method: "bar",
+					},
+					MaxRequestMessageBytes:  newInt(1024),
+					MaxResponseMessageBytes: newInt(1024),
 				},
-				MaxRequestMessageBytes:  newInt(1024),
-				MaxResponseMessageBytes: newInt(1024),
 			},
 		},
 		{
-			MethodConfig: &MC{
-				Name: &Name{
-					Service: "foo",
-					Method:  "bar",
+			MethodConfig: []*MC{
+				{
+					Name: &Name{
+						Service: "foo",
+						Method:  "bar",
+					},
+					WaitForReady:            newBool(true),
+					Timeout:                 "1s",
+					MaxRequestMessageBytes:  newInt(1024),
+					MaxResponseMessageBytes: newInt(1024),
 				},
-				WaitForReady:            newBool(true),
-				Timeout:                 "1s",
-				MaxRequestMessageBytes:  newInt(1024),
-				MaxResponseMessageBytes: newInt(1024),
 			},
 		},
 		{
 			LoadBalancingPolicy: "round_robin",
-			MethodConfig: &MC{
-				Name: &Name{
-					Service: "foo",
+			MethodConfig: []*MC{
+				{
+					Name: &Name{
+						Service: "foo",
+					},
+					WaitForReady: newBool(true),
+					Timeout:      "1s",
 				},
-				WaitForReady: newBool(true),
-				Timeout:      "1s",
+				{
+					Name: &Name{
+						Service: "bar",
+					},
+					WaitForReady: newBool(false),
+				},
 			},
 		},
 	}
@@ -453,7 +469,7 @@ type MC struct {
 
 type SC struct {
 	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        *MC    `json:"methodConfig,omitempty"`
+	MethodConfig        []*MC  `json:"methodConfig,omitempty"`
 }
 
 type Choice struct {
