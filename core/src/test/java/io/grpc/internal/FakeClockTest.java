@@ -18,6 +18,7 @@ package io.grpc.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Stopwatch;
@@ -175,15 +176,20 @@ public class FakeClockTest {
         ignoredDone.set(true);
       }
     };
+    FakeClock.TaskFilter filter = new FakeClock.TaskFilter() {
+        @Override
+        public boolean shouldAccept(Runnable runnable) {
+          return runnable == selectedRunnable;
+        }
+      };
     scheduledExecutorService.execute(selectedRunnable);
     scheduledExecutorService.execute(ignoredRunnable);
     assertEquals(2, fakeClock.numPendingTasks());
-    assertEquals(1, fakeClock.runDueTasks(new FakeClock.TaskFilter() {
-      @Override
-      public boolean shouldRun(Runnable runnable) {
-        return runnable == selectedRunnable;
-      }
-    }));
+    assertEquals(1, fakeClock.numPendingTasks(filter));
+    assertEquals(2, fakeClock.getPendingTasks().size());
+    assertEquals(1, fakeClock.getPendingTasks(filter).size());
+    assertSame(selectedRunnable, fakeClock.getPendingTasks(filter).iterator().next().command);
+    assertEquals(1, fakeClock.runDueTasks(filter));
     assertTrue(selectedDone.get());
     assertFalse(ignoredDone.get());
   }

@@ -111,7 +111,7 @@ public class ServerImplTest {
   private static final FakeClock.TaskFilter CONTEXT_CLOSER_TASK_FITLER =
       new FakeClock.TaskFilter() {
         @Override
-        public boolean shouldRun(Runnable runnable) {
+        public boolean shouldAccept(Runnable runnable) {
           return runnable instanceof ServerImpl.ContextCloser;
         }
       };

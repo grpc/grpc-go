@@ -41,6 +41,13 @@ import java.util.concurrent.TimeUnit;
  */
 public final class FakeClock {
 
+  private static final TaskFilter ACCEPT_ALL_FILTER = new TaskFilter() {
+      @Override
+      public boolean shouldAccept(Runnable command) {
+        return true;
+      }
+    };
+
   private final ScheduledExecutorService scheduledExecutorService = new ScheduledExecutorImpl();
 
   private final PriorityBlockingQueue<ScheduledTask> tasks =
@@ -207,12 +214,7 @@ public final class FakeClock {
    * @return the number of tasks run by this call
    */
   public int runDueTasks() {
-    return runDueTasks(new TaskFilter() {
-      @Override
-      public boolean shouldRun(Runnable runnable) {
-        return true;
-      }
-    });
+    return runDueTasks(ACCEPT_ALL_FILTER);
   }
 
   /**
@@ -229,7 +231,7 @@ public final class FakeClock {
         break;
       }
       if (tasks.remove(task)) {
-        if (filter.shouldRun(task.command)) {
+        if (filter.shouldAccept(task.command)) {
           task.command.run();
           task.complete();
           count++;
@@ -260,7 +262,20 @@ public final class FakeClock {
    * Return all unrun tasks.
    */
   public Collection<ScheduledTask> getPendingTasks() {
-    return new ArrayList<ScheduledTask>(tasks);
+    return getPendingTasks(ACCEPT_ALL_FILTER);
+  }
+
+  /**
+   * Return all unrun tasks accepted by the given filter.
+   */
+  public Collection<ScheduledTask> getPendingTasks(TaskFilter filter) {
+    ArrayList<ScheduledTask> result = new ArrayList<ScheduledTask>();
+    for (ScheduledTask task : tasks) {
+      if (filter.shouldAccept(task.command)) {
+        result.add(task);
+      }
+    }
+    return result;
   }
 
   /**
@@ -289,18 +304,32 @@ public final class FakeClock {
     return tasks.size();
   }
 
+  /**
+   * Return the number of queued tasks accepted by the given filter.
+   */
+  public int numPendingTasks(TaskFilter filter) {
+    int count = 0;
+    for (ScheduledTask task : tasks) {
+      if (filter.shouldAccept(task.command)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   public long currentTimeMillis() {
     // Normally millis and nanos are of different epochs. Add an offset to simulate that.
     return TimeUnit.NANOSECONDS.toMillis(currentTimeNanos + 123456789L);
   }
 
   /**
-   * A filter that allows us to have fine grained control over which tasks are run.
+   * A filter that allows us to have fine grained control over which tasks are accepted for certain
+   * operation.
    */
   public interface TaskFilter {
     /**
-     * Inspect the Runnable and returns true if it should be run.
+     * Inspect the Runnable and returns true if it should be accepted.
      */
-    boolean shouldRun(Runnable runnable);
+    boolean shouldAccept(Runnable runnable);
   }
 }

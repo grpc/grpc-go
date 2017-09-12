@@ -46,6 +46,7 @@ import io.grpc.internal.LogId;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,11 +69,11 @@ import javax.annotation.concurrent.NotThreadSafe;
  * GrpclbLoadBalancer switches to GRPCLB mode.  Closed and discarded when GrpclbLoadBalancer
  * switches away from GRPCLB mode.
  */
-// TODO(zhangkun83): round-robin on the backend list from the resolver if we don't get a server list
-// within a configurable timeout.
 @NotThreadSafe
 final class GrpclbState {
   private static final Logger logger = Logger.getLogger(GrpclbState.class.getName());
+
+  static final long FALLBACK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
   @VisibleForTesting
   static final PickResult DROP_PICK_RESULT =
@@ -84,6 +85,11 @@ final class GrpclbState {
       public PickResult picked(Metadata headers) {
         return PickResult.withNoResult();
       }
+
+      @Override
+      public String toString() {
+        return "BUFFER_ENTRY";
+      }
     };
 
   private final LogId logId;
@@ -94,6 +100,13 @@ final class GrpclbState {
 
   private static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
       Attributes.Key.of("io.grpc.grpclb.GrpclbLoadBalancer.stateInfo");
+
+  // Once set, never go back to null.
+  @Nullable
+  private ScheduledFuture<?> fallbackTimer;
+  private List<EquivalentAddressGroup> fallbackBackendList = Collections.emptyList();
+  private boolean fallbackTimerExpired;
+  private boolean receivedServerListFromBalancer;
 
   @Nullable
   private ManagedChannel lbCommChannel;
@@ -132,9 +145,11 @@ final class GrpclbState {
   }
 
   /**
-   * Set the address of the balancer, and create connection if not yet connected.
+   * Set the new addresses of the balancer and backends, and create connection if not yet connected.
    */
-  void setLbAddress(LbAddressGroup newLbAddressGroup) {
+  void updateAddresses(
+      List<LbAddressGroup> newLbAddressGroups, List<EquivalentAddressGroup> newBackendServers) {
+    LbAddressGroup newLbAddressGroup = flattenLbAddressGroups(newLbAddressGroups);
     startLbComm(newLbAddressGroup);
     // Avoid creating a new RPC just because the addresses were updated, as it can cause a
     // stampeding herd. The current RPC may be on a connection to an address not present in
@@ -143,6 +158,30 @@ final class GrpclbState {
     if (lbStream == null) {
       startLbRpc();
     }
+    // If we don't receive server list from the balancer within the timeout, we round-robin on
+    // the backend list from the resolver (aka fallback), until the balancer returns a server list.
+    fallbackBackendList = newBackendServers;
+    if (fallbackTimer == null) {
+      fallbackTimer =
+          timerService.schedule(new FallbackModeTask(), FALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    } else {
+      maybeUseFallbackBackends();
+    }
+  }
+
+  private void maybeUseFallbackBackends() {
+    // Only use fallback backends after fallback timer expired and before receiving server list from
+    // the balancer.
+    if (receivedServerListFromBalancer || !fallbackTimerExpired) {
+      return;
+    }
+    List<DropEntry> newDropList = new ArrayList<DropEntry>();
+    List<BackendAddressGroup> newBackendAddrList = new ArrayList<BackendAddressGroup>();
+    for (EquivalentAddressGroup eag : fallbackBackendList) {
+      newDropList.add(null);
+      newBackendAddrList.add(new BackendAddressGroup(eag, null));
+    }
+    updateRoundRobinLists(newDropList, newBackendAddrList, null);
   }
 
   private void shutdownLbComm() {
@@ -179,6 +218,7 @@ final class GrpclbState {
     checkState(lbStream == null, "previous lbStream has not been cleared yet");
     LoadBalancerGrpc.LoadBalancerStub stub = LoadBalancerGrpc.newStub(lbCommChannel);
     lbStream = new LbStream(stub);
+    lbStream.start();
 
     LoadBalanceRequest initRequest = LoadBalanceRequest.newBuilder()
         .setInitialRequest(InitialLoadBalanceRequest.newBuilder()
@@ -217,33 +257,106 @@ final class GrpclbState {
     return lbStream.loadRecorder;
   }
 
-  private class LbStream implements StreamObserver<LoadBalanceResponse> {
-    final StreamObserver<LoadBalanceRequest> lbRequestWriter;
-    final GrpclbClientLoadRecorder loadRecorder;
+  private void updateRoundRobinLists(
+      List<DropEntry> newDropList, List<BackendAddressGroup> newBackendAddrList,
+      @Nullable GrpclbClientLoadRecorder loadRecorder) {
+    HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
+        new HashMap<EquivalentAddressGroup, Subchannel>();
+    List<BackendEntry> newBackendList = new ArrayList<BackendEntry>();
 
-    final Runnable loadReportRunnable = new Runnable() {
-        @Override
-        public void run() {
-          helper.runSerialized(new Runnable() {
-              @Override
-              public void run() {
-                loadReportTask = null;
-                sendLoadReport();
-              }
-            });
+    for (BackendAddressGroup backendAddr : newBackendAddrList) {
+      EquivalentAddressGroup eag = backendAddr.getAddresses();
+      Subchannel subchannel = newSubchannelMap.get(eag);
+      if (subchannel == null) {
+        subchannel = subchannels.get(eag);
+        if (subchannel == null) {
+          Attributes subchannelAttrs = Attributes.newBuilder()
+              .set(STATE_INFO,
+                  new AtomicReference<ConnectivityStateInfo>(
+                      ConnectivityStateInfo.forNonError(IDLE)))
+              .build();
+          subchannel = helper.createSubchannel(eag, subchannelAttrs);
+          subchannel.requestConnection();
         }
-      };
+        newSubchannelMap.put(eag, subchannel);
+      }
+      BackendEntry entry;
+      // Only picks with tokens are reported to LoadRecorder
+      if (backendAddr.getToken() == null) {
+        entry = new BackendEntry(subchannel);
+      } else {
+        entry = new BackendEntry(subchannel, loadRecorder, backendAddr.getToken());
+      }
+      newBackendList.add(entry);
+    }
+
+    // Close Subchannels whose addresses have been delisted
+    for (Entry<EquivalentAddressGroup, Subchannel> entry : subchannels.entrySet()) {
+      EquivalentAddressGroup eag = entry.getKey();
+      if (!newSubchannelMap.containsKey(eag)) {
+        entry.getValue().shutdown();
+      }
+    }
+
+    subchannels = Collections.unmodifiableMap(newSubchannelMap);
+    dropList = Collections.unmodifiableList(newDropList);
+    backendList = Collections.unmodifiableList(newBackendList);
+    maybeUpdatePicker();
+  }
+
+  @VisibleForTesting
+  class FallbackModeTask implements Runnable {
+    @Override
+    public void run() {
+      helper.runSerialized(new Runnable() {
+          @Override
+          public void run() {
+            fallbackTimerExpired = true;
+            maybeUseFallbackBackends();
+          }
+        });
+    }
+  }
+
+  @VisibleForTesting
+  class LoadReportingTask implements Runnable {
+    private final LbStream stream;
+
+    LoadReportingTask(LbStream stream) {
+      this.stream = stream;
+    }
+
+    @Override
+    public void run() {
+      helper.runSerialized(new Runnable() {
+          @Override
+          public void run() {
+            stream.loadReportFuture = null;
+            stream.sendLoadReport();
+          }
+        });
+    }
+  }
+
+  private class LbStream implements StreamObserver<LoadBalanceResponse> {
+    final GrpclbClientLoadRecorder loadRecorder;
+    final LoadBalancerGrpc.LoadBalancerStub stub;
+    StreamObserver<LoadBalanceRequest> lbRequestWriter;
 
     // These fields are only accessed from helper.runSerialized()
     boolean initialResponseReceived;
     boolean closed;
     long loadReportIntervalMillis = -1;
-    ScheduledFuture<?> loadReportTask;
+    ScheduledFuture<?> loadReportFuture;
 
     LbStream(LoadBalancerGrpc.LoadBalancerStub stub) {
+      this.stub = checkNotNull(stub, "stub");
       // Stats data only valid for current LbStream.  We do not carry over data from previous
       // stream.
       loadRecorder = new GrpclbClientLoadRecorder(time);
+    }
+
+    void start() {
       lbRequestWriter = stub.withWaitForReady().balanceLoad(this);
     }
 
@@ -294,8 +407,8 @@ final class GrpclbState {
 
     private void scheduleNextLoadReport() {
       if (loadReportIntervalMillis > 0) {
-        loadReportTask = timerService.schedule(
-            loadReportRunnable, loadReportIntervalMillis, TimeUnit.MILLISECONDS);
+        loadReportFuture = timerService.schedule(
+            new LoadReportingTask(this), loadReportIntervalMillis, TimeUnit.MILLISECONDS);
       }
     }
 
@@ -330,12 +443,14 @@ final class GrpclbState {
         return;
       }
 
+      receivedServerListFromBalancer = true;
+      if (fallbackTimer != null) {
+        fallbackTimer.cancel(false);
+      }
       // TODO(zhangkun83): handle delegate from initialResponse
       ServerList serverList = response.getServerList();
-      HashMap<EquivalentAddressGroup, Subchannel> newSubchannelMap =
-          new HashMap<EquivalentAddressGroup, Subchannel>();
       List<DropEntry> newDropList = new ArrayList<DropEntry>();
-      List<BackendEntry> newBackendList = new ArrayList<BackendEntry>();
+      List<BackendAddressGroup> newBackendAddrList = new ArrayList<BackendAddressGroup>();
       // Construct the new collections. Create new Subchannels when necessary.
       for (Server server : serverList.getServersList()) {
         String token = server.getLoadBalanceToken();
@@ -352,35 +467,10 @@ final class GrpclbState {
             continue;
           }
           EquivalentAddressGroup eag = new EquivalentAddressGroup(address);
-          Subchannel subchannel = newSubchannelMap.get(eag);
-          if (subchannel == null) {
-            subchannel = subchannels.get(eag);
-            if (subchannel == null) {
-              Attributes subchannelAttrs = Attributes.newBuilder()
-                  .set(STATE_INFO,
-                      new AtomicReference<ConnectivityStateInfo>(
-                          ConnectivityStateInfo.forNonError(IDLE)))
-                  .build();
-              subchannel = helper.createSubchannel(eag, subchannelAttrs);
-              subchannel.requestConnection();
-            }
-            newSubchannelMap.put(eag, subchannel);
-          }
-          newBackendList.add(new BackendEntry(subchannel, loadRecorder, token));
+          newBackendAddrList.add(new BackendAddressGroup(eag, token));
         }
       }
-      // Close Subchannels whose addresses have been delisted
-      for (Entry<EquivalentAddressGroup, Subchannel> entry : subchannels.entrySet()) {
-        EquivalentAddressGroup eag = entry.getKey();
-        if (!newSubchannelMap.containsKey(eag)) {
-          entry.getValue().shutdown();
-        }
-      }
-
-      subchannels = Collections.unmodifiableMap(newSubchannelMap);
-      dropList = Collections.unmodifiableList(newDropList);
-      backendList = Collections.unmodifiableList(newBackendList);
-      maybeUpdatePicker();
+      updateRoundRobinLists(newDropList, newBackendAddrList, loadRecorder);
     }
 
     private void handleStreamClosed(Status status) {
@@ -411,9 +501,9 @@ final class GrpclbState {
     }
 
     private void cleanUp() {
-      if (loadReportTask != null) {
-        loadReportTask.cancel(false);
-        loadReportTask = null;
+      if (loadReportFuture != null) {
+        loadReportFuture.cancel(false);
+        loadReportFuture = null;
       }
       if (lbStream == this) {
         lbStream = null;
@@ -479,6 +569,37 @@ final class GrpclbState {
     helper.updateBalancingState(state, picker);
   }
 
+  private LbAddressGroup flattenLbAddressGroups(List<LbAddressGroup> groupList) {
+    assert !groupList.isEmpty();
+    List<EquivalentAddressGroup> eags = new ArrayList<EquivalentAddressGroup>(groupList.size());
+    String authority = groupList.get(0).getAuthority();
+    for (LbAddressGroup group : groupList) {
+      if (!authority.equals(group.getAuthority())) {
+        // TODO(ejona): Allow different authorities for different addresses. Requires support from
+        // Helper.
+        logger.log(Level.WARNING,
+            "[{0}] Multiple authorities found for LB. "
+            + "Skipping addresses for {0} in preference to {1}",
+            new Object[] {logId, group.getAuthority(), authority});
+      } else {
+        eags.add(group.getAddresses());
+      }
+    }
+    return new LbAddressGroup(flattenEquivalentAddressGroup(eags), authority);
+  }
+
+  /**
+   * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
+   */
+  private static EquivalentAddressGroup flattenEquivalentAddressGroup(
+      List<EquivalentAddressGroup> groupList) {
+    List<SocketAddress> addrs = new ArrayList<SocketAddress>();
+    for (EquivalentAddressGroup group : groupList) {
+      addrs.addAll(group.getAddresses());
+    }
+    return new EquivalentAddressGroup(addrs);
+  }
+
   @VisibleForTesting
   static final class DropEntry {
     private final GrpclbClientLoadRecorder loadRecorder;
@@ -525,19 +646,35 @@ final class GrpclbState {
   static final class BackendEntry implements RoundRobinEntry {
     @VisibleForTesting
     final PickResult result;
+    @Nullable
     private final GrpclbClientLoadRecorder loadRecorder;
+    @Nullable
     private final String token;
 
+    /**
+     * Creates a BackendEntry whose usage will be reported to load recorder.
+     */
     BackendEntry(Subchannel subchannel, GrpclbClientLoadRecorder loadRecorder, String token) {
       this.result = PickResult.withSubchannel(subchannel, loadRecorder);
       this.loadRecorder = checkNotNull(loadRecorder, "loadRecorder");
       this.token = checkNotNull(token, "token");
     }
 
+    /**
+     * Creates a BackendEntry whose usage will not be reported.
+     */
+    BackendEntry(Subchannel subchannel) {
+      this.result = PickResult.withSubchannel(subchannel);
+      this.loadRecorder = null;
+      this.token = null;
+    }
+
     @Override
     public PickResult picked(Metadata headers) {
       headers.discardAll(GrpclbConstants.TOKEN_METADATA_KEY);
-      headers.put(GrpclbConstants.TOKEN_METADATA_KEY, token);
+      if (token != null) {
+        headers.put(GrpclbConstants.TOKEN_METADATA_KEY, token);
+      }
       return result;
     }
 

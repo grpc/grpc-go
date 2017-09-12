@@ -28,8 +28,8 @@ import io.grpc.grpclb.GrpclbConstants.LbPolicy;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.WithLogId;
-import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
@@ -112,6 +112,9 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
       }
     }
 
+    newLbAddressGroups = Collections.unmodifiableList(newLbAddressGroups);
+    newBackendServers = Collections.unmodifiableList(newBackendServers);
+
     if (!newLbAddressGroups.isEmpty()) {
       if (newLbPolicy != LbPolicy.GRPCLB) {
         newLbPolicy = LbPolicy.GRPCLB;
@@ -139,7 +142,7 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
           grpclbState.propagateError(Status.UNAVAILABLE.withDescription(
                   "NameResolver returned no LB address while asking for GRPCLB"));
         } else {
-          grpclbState.setLbAddress(flattenLbAddressGroups(newLbAddressGroups));
+          grpclbState.updateAddresses(newLbAddressGroups, newBackendServers);
         }
         break;
       default:
@@ -210,36 +213,5 @@ class GrpclbLoadBalancer extends LoadBalancer implements WithLogId {
   @VisibleForTesting
   LbPolicy getLbPolicy() {
     return lbPolicy;
-  }
-
-  private LbAddressGroup flattenLbAddressGroups(List<LbAddressGroup> groupList) {
-    assert !groupList.isEmpty();
-    List<EquivalentAddressGroup> eags = new ArrayList<EquivalentAddressGroup>(groupList.size());
-    String authority = groupList.get(0).getAuthority();
-    for (LbAddressGroup group : groupList) {
-      if (!authority.equals(group.getAuthority())) {
-        // TODO(ejona): Allow different authorities for different addresses. Requires support from
-        // Helper.
-        logger.log(Level.WARNING,
-            "[{0}] Multiple authorities found for LB. "
-            + "Skipping addresses for {0} in preference to {1}",
-            new Object[] {logId, group.getAuthority(), authority});
-      } else {
-        eags.add(group.getAddresses());
-      }
-    }
-    return new LbAddressGroup(flattenEquivalentAddressGroup(eags), authority);
-  }
-
-  /**
-   * Flattens list of EquivalentAddressGroup objects into one EquivalentAddressGroup object.
-   */
-  private static EquivalentAddressGroup flattenEquivalentAddressGroup(
-      List<EquivalentAddressGroup> groupList) {
-    List<SocketAddress> addrs = new ArrayList<SocketAddress>();
-    for (EquivalentAddressGroup group : groupList) {
-      addrs.addAll(group.getAddresses());
-    }
-    return new EquivalentAddressGroup(addrs);
   }
 }
