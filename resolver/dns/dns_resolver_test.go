@@ -19,6 +19,7 @@
 package dns
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -29,26 +30,40 @@ import (
 	"google.golang.org/grpc/test/leakcheck"
 )
 
+const (
+	txtBytesLimit = 255
+)
+
 type testClientConn struct {
 	target string
-	m      sync.Mutex
+	m1     sync.Mutex
 	addrs  []resolver.Address
+	m2     sync.Mutex
+	sc     string
 }
 
 func (t *testClientConn) NewAddress(addresses []resolver.Address) {
-	t.m.Lock()
+	t.m1.Lock()
+	defer t.m1.Unlock()
 	t.addrs = addresses
-	t.m.Unlock()
 }
 
 func (t *testClientConn) getAddress() []resolver.Address {
-	t.m.Lock()
-	defer t.m.Unlock()
+	t.m1.Lock()
+	defer t.m1.Unlock()
 	return t.addrs
 }
 
 func (t *testClientConn) NewServiceConfig(serviceConfig string) {
+	t.m2.Lock()
+	defer t.m2.Unlock()
+	t.sc = serviceConfig
+}
 
+func (t *testClientConn) getSc() string {
+	t.m2.Lock()
+	defer t.m2.Unlock()
+	return t.sc
 }
 
 var hostLookupTbl = map[string][]string{
@@ -81,22 +96,130 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
 }
 
+// div divides a byte slice into a slice of strings, each of which is of maximum
+// 255 bytes length, which is the length limit per TXT record in DNS.
+func div(b []byte) []string {
+	var r []string
+	for i := 0; i < len(b); i += txtBytesLimit {
+		if i+txtBytesLimit > len(b) {
+			r = append(r, string(b[i:len(b)]))
+		} else {
+			r = append(r, string(b[i:i+txtBytesLimit]))
+		}
+	}
+	return r
+}
+
+// A simple servivce config database to be used by test.
+var (
+	scs = []*SC{
+		&SC{
+			LoadBalancingPolicy: "round_robin",
+			MethodConfig: &MC{
+				Name: &Name{
+					Service: "foo",
+					Method:  "bar",
+				},
+				WaitForReady: newBool(true),
+			},
+		},
+		&SC{
+			LoadBalancingPolicy: "grpclb",
+			MethodConfig: &MC{
+				Name: &Name{
+					Service: "all",
+				},
+				Timeout: "1s",
+			},
+		},
+		&SC{
+			MethodConfig: &MC{
+				Name: &Name{
+					Method: "bar",
+				},
+				MaxRequestMessageBytes:  newInt(1024),
+				MaxResponseMessageBytes: newInt(1024),
+			},
+		},
+		&SC{
+			MethodConfig: &MC{
+				Name: &Name{
+					Service: "foo",
+					Method:  "bar",
+				},
+				WaitForReady:            newBool(true),
+				Timeout:                 "1s",
+				MaxRequestMessageBytes:  newInt(1024),
+				MaxResponseMessageBytes: newInt(1024),
+			},
+		},
+	}
+)
+
+// scLookupTbl is a map from target to service config that should be chosen.
+var scLookupTbl = map[string]*SC{
+	"foo.bar.com":          scs[1%len(scs)],
+	"srv.ipv4.single.fake": scs[2%len(scs)],
+	"srv.ipv4.multi.fake":  scs[3%len(scs)],
+	"srv.ipv6.single.fake": scs[1%len(scs)],
+	"srv.ipv6.multi.fake":  scs[2%len(scs)],
+}
+
+// generateSCF generates a service config file according to specification.
+func generateSCF(name string) []string {
+	var scf []*Choice
+	scf = append(scf, &Choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: scs[0]})
+	scf = append(scf, &Choice{Percentage: newInt(0), ServiceConfig: scs[1]})
+	scf = append(scf, &Choice{ClientHostName: []string{"localhost"}, ServiceConfig: scs[2]})
+	// First match (will be returned)
+	scf = append(scf, &Choice{ClientLanguage: []string{"GO"}, ServiceConfig: scLookupTbl[name]})
+	// Second match (ignored)
+	scf = append(scf, &Choice{ServiceConfig: scs[0]})
+	b, _ := json.Marshal(scf)
+	return div(b)
+}
+
+// generateSC generates a service config according to specification.
+func generateSC(name string) string {
+	b, _ := json.Marshal(scLookupTbl[name])
+	return string(b)
+}
+
+var txtLookupTbl = map[string][]string{
+	"foo.bar.com":          generateSCF("foo.bar.com"),
+	"srv.ipv4.single.fake": generateSCF("srv.ipv4.single.fake"),
+	"srv.ipv4.multi.fake":  generateSCF("srv.ipv4.multi.fake"),
+	"srv.ipv6.single.fake": generateSCF("srv.ipv6.single.fake"),
+	"srv.ipv6.multi.fake":  generateSCF("srv.ipv6.multi.fake"),
+}
+
+func txtLookup(host string) ([]string, error) {
+	if scs, ok := txtLookupTbl[host]; ok {
+		return scs, nil
+	}
+	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
+}
+
 func testResolver(t *testing.T) {
 	tests := []struct {
-		target string
-		want   []resolver.Address
+		target   string
+		addrWant []resolver.Address
+		scWant   string
 	}{
 		{
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			generateSC("foo.bar.com"),
 		},
 		{
 			"foo.bar.com:1234",
 			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
+			generateSC("foo.bar.com"),
 		},
 		{
 			"srv.ipv4.single.fake",
 			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}},
+			generateSC("srv.ipv4.single.fake"),
 		},
 		{
 			"srv.ipv4.multi.fake",
@@ -105,10 +228,12 @@ func testResolver(t *testing.T) {
 				{Addr: "5.6.7.8:1234", Type: resolver.GRPCLB, ServerName: "ipv4.multi.fake"},
 				{Addr: "9.10.11.12:1234", Type: resolver.GRPCLB, ServerName: "ipv4.multi.fake"},
 			},
+			generateSC("srv.ipv4.multi.fake"),
 		},
 		{
 			"srv.ipv6.single.fake",
 			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.single.fake"}},
+			generateSC("srv.ipv6.single.fake"),
 		},
 		{
 			"srv.ipv6.multi.fake",
@@ -117,6 +242,7 @@ func testResolver(t *testing.T) {
 				{Addr: "[2607:f8b0:400a:801::1002]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
 				{Addr: "[2607:f8b0:400a:801::1003]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
 			},
+			generateSC("srv.ipv6.multi.fake"),
 		},
 	}
 
@@ -130,11 +256,14 @@ func testResolver(t *testing.T) {
 		for len(cc.getAddress()) == 0 {
 		}
 		addrs := cc.getAddress()
-		if len(addrs) == 0 {
-			fmt.Printf("%+v\n", cc)
+		for len(cc.getSc()) == 0 {
 		}
-		if !reflect.DeepEqual(a.want, addrs) {
-			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
+		sc := cc.getSc()
+		if !reflect.DeepEqual(a.addrWant, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
+		}
+		if !reflect.DeepEqual(a.scWant, sc) {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
 		r.Close()
 	}
@@ -144,6 +273,7 @@ func TestResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 	defer replaceNetFunc()()
 	testResolver(t)
+	testResolveNow(t)
 }
 
 const colonDefaultPort = ":" + defaultPort
@@ -186,6 +316,49 @@ func TestIPWatcher(t *testing.T) {
 	}
 }
 
+func testResolveNow(t *testing.T) {
+	tests := []struct {
+		target string
+		want   []resolver.Address
+		next   []resolver.Address
+	}{
+		{
+			"foo.bar.com",
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
+		},
+	}
+
+	for _, a := range tests {
+		b := NewDNSBuilder()
+		cc := &testClientConn{target: a.target}
+		r, err := b.Build(a.target, cc, resolver.BuildOption{})
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		for len(cc.getAddress()) == 0 {
+		}
+		addrs := cc.getAddress()
+		if len(addrs) == 0 {
+			fmt.Printf("%+v\n", cc)
+		}
+		if !reflect.DeepEqual(a.want, addrs) {
+			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
+		}
+		old := hostLookupTbl[a.target]
+		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(old)-1]
+		r.ResolveNow(resolver.ResolveNowOption{})
+		for len(cc.getAddress()) == len(old) {
+		}
+		addrs = cc.getAddress()
+		if !reflect.DeepEqual(a.next, addrs) {
+			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", a.target, addrs, a.next)
+		}
+		hostLookupTbl[a.target] = old
+		r.Close()
+	}
+}
+
 func TestResolveFunc(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
@@ -220,4 +393,37 @@ func TestResolveFunc(t *testing.T) {
 			t.Errorf("Build(%q, cc, resolver.BuildOption{}) = %v, want %v", v.addr, err, v.want)
 		}
 	}
+}
+
+func newBool(b bool) *bool {
+	return &b
+}
+
+func newInt(b int) *int {
+	return &b
+}
+
+type Name struct {
+	Service string `json:"service,omitempty"`
+	Method  string `json:"method,omitempty"`
+}
+
+type MC struct {
+	Name                    *Name  `json:"name,omitempty"`
+	WaitForReady            *bool  `json:"waitForReady,omitempty"`
+	Timeout                 string `json:"timeout,omitempty"`
+	MaxRequestMessageBytes  *int   `json:"maxRequestMessageBytes,omitempty"`
+	MaxResponseMessageBytes *int   `json:"maxResponseMessageBytes,omitempty"`
+}
+
+type SC struct {
+	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
+	MethodConfig        *MC    `json:"methodConfig,omitempty"`
+}
+
+type Choice struct {
+	ClientLanguage []string `json:"clientLanguage,omitempty"`
+	Percentage     *int     `json:"percentage,omitempty"`
+	ClientHostName []string `json:"clientHostName,omitempty"`
+	ServiceConfig  *SC      `json:"serviceConfig,omitempty"`
 }

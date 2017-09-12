@@ -29,14 +29,19 @@ import (
 func replaceNetFunc() func() {
 	oldLookupHost := lookupHost
 	oldLookupSRV := lookupSRV
+	oldLookupTXT := lookupTXT
 	lookupHost = func(ctx context.Context, host string) ([]string, error) {
 		return hostLookup(host)
 	}
 	lookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
 		return srvLookup(service, proto, name)
 	}
+	lookupTXT = func(ctx context.Context, host string) ([]string, error) {
+		return txtLookup(host)
+	}
 	return func() {
 		lookupHost = oldLookupHost
 		lookupSRV = oldLookupSRV
+		lookupTXT = oldLookupTXT
 	}
 }
