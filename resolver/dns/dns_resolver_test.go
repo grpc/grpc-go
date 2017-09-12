@@ -38,32 +38,36 @@ type testClientConn struct {
 	target string
 	m1     sync.Mutex
 	addrs  []resolver.Address
+	a      int
 	m2     sync.Mutex
 	sc     string
+	s      int
 }
 
 func (t *testClientConn) NewAddress(addresses []resolver.Address) {
 	t.m1.Lock()
 	defer t.m1.Unlock()
 	t.addrs = addresses
+	t.a++
 }
 
-func (t *testClientConn) getAddress() []resolver.Address {
+func (t *testClientConn) getAddress() ([]resolver.Address, int) {
 	t.m1.Lock()
 	defer t.m1.Unlock()
-	return t.addrs
+	return t.addrs, t.a
 }
 
 func (t *testClientConn) NewServiceConfig(serviceConfig string) {
 	t.m2.Lock()
 	defer t.m2.Unlock()
 	t.sc = serviceConfig
+	t.s++
 }
 
-func (t *testClientConn) getSc() string {
+func (t *testClientConn) getSc() (string, int) {
 	t.m2.Lock()
 	defer t.m2.Unlock()
-	return t.sc
+	return t.sc, t.s
 }
 
 var hostLookupTbl = map[string][]string{
@@ -102,7 +106,7 @@ func div(b []byte) []string {
 	var r []string
 	for i := 0; i < len(b); i += txtBytesLimit {
 		if i+txtBytesLimit > len(b) {
-			r = append(r, string(b[i:len(b)]))
+			r = append(r, string(b[i:]))
 		} else {
 			r = append(r, string(b[i:i+txtBytesLimit]))
 		}
@@ -113,7 +117,7 @@ func div(b []byte) []string {
 // A simple servivce config database to be used by test.
 var (
 	scs = []*SC{
-		&SC{
+		{
 			LoadBalancingPolicy: "round_robin",
 			MethodConfig: &MC{
 				Name: &Name{
@@ -123,7 +127,7 @@ var (
 				WaitForReady: newBool(true),
 			},
 		},
-		&SC{
+		{
 			LoadBalancingPolicy: "grpclb",
 			MethodConfig: &MC{
 				Name: &Name{
@@ -132,7 +136,7 @@ var (
 				Timeout: "1s",
 			},
 		},
-		&SC{
+		{
 			MethodConfig: &MC{
 				Name: &Name{
 					Method: "bar",
@@ -141,7 +145,7 @@ var (
 				MaxResponseMessageBytes: newInt(1024),
 			},
 		},
-		&SC{
+		{
 			MethodConfig: &MC{
 				Name: &Name{
 					Service: "foo",
@@ -153,35 +157,50 @@ var (
 				MaxResponseMessageBytes: newInt(1024),
 			},
 		},
+		{
+			LoadBalancingPolicy: "round_robin",
+			MethodConfig: &MC{
+				Name: &Name{
+					Service: "foo",
+				},
+				WaitForReady: newBool(true),
+				Timeout:      "1s",
+			},
+		},
 	}
 )
 
 // scLookupTbl is a map from target to service config that should be chosen.
+// To facilitate checking we are returing the first match, we use scs[0]
+// exclusively for second matched choice.And we use scs[1] exclusively for
+// non-matched choice.
 var scLookupTbl = map[string]*SC{
-	"foo.bar.com":          scs[1%len(scs)],
-	"srv.ipv4.single.fake": scs[2%len(scs)],
-	"srv.ipv4.multi.fake":  scs[3%len(scs)],
-	"srv.ipv6.single.fake": scs[1%len(scs)],
-	"srv.ipv6.multi.fake":  scs[2%len(scs)],
+	"foo.bar.com":          scs[2],
+	"srv.ipv4.single.fake": scs[3],
+	"srv.ipv4.multi.fake":  scs[4],
 }
 
-// generateSCF generates a service config file according to specification.
+// generateSCF generates a service config file according to specification in scLookupTbl.
 func generateSCF(name string) []string {
 	var scf []*Choice
-	scf = append(scf, &Choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: scs[0]})
+	scf = append(scf, &Choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: scs[1]})
 	scf = append(scf, &Choice{Percentage: newInt(0), ServiceConfig: scs[1]})
-	scf = append(scf, &Choice{ClientHostName: []string{"localhost"}, ServiceConfig: scs[2]})
-	// First match (will be returned)
-	scf = append(scf, &Choice{ClientLanguage: []string{"GO"}, ServiceConfig: scLookupTbl[name]})
-	// Second match (ignored)
-	scf = append(scf, &Choice{ServiceConfig: scs[0]})
+	scf = append(scf, &Choice{ClientHostName: []string{"localhost"}, ServiceConfig: scs[1]})
+	if s, ok := scLookupTbl[name]; ok {
+		scf = append(scf, &Choice{Percentage: newInt(100), ClientLanguage: []string{"GO"}, ServiceConfig: s})
+		scf = append(scf, &Choice{ServiceConfig: scs[0]})
+	}
 	b, _ := json.Marshal(scf)
 	return div(b)
 }
 
-// generateSC generates a service config according to specification.
+// generateSC generates a service config according to specification in scLookupTbl.
 func generateSC(name string) string {
-	b, _ := json.Marshal(scLookupTbl[name])
+	s, ok := scLookupTbl[name]
+	if !ok {
+		return ""
+	}
+	b, _ := json.Marshal(s)
 	return string(b)
 }
 
@@ -253,18 +272,75 @@ func testResolver(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		for len(cc.getAddress()) == 0 {
+		var addrs []resolver.Address
+		var ok int
+		for {
+			addrs, ok = cc.getAddress()
+			if ok > 0 {
+				break
+			}
 		}
-		addrs := cc.getAddress()
-		for len(cc.getSc()) == 0 {
+		var sc string
+		for {
+			sc, ok = cc.getSc()
+			if ok > 0 {
+				break
+			}
 		}
-		sc := cc.getSc()
 		if !reflect.DeepEqual(a.addrWant, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
 		}
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
+		r.Close()
+	}
+}
+
+func testResolveNow(t *testing.T) {
+	tests := []struct {
+		target string
+		want   []resolver.Address
+		next   []resolver.Address
+	}{
+		{
+			"foo.bar.com",
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
+		},
+	}
+
+	for _, a := range tests {
+		b := NewDNSBuilder()
+		cc := &testClientConn{target: a.target}
+		r, err := b.Build(a.target, cc, resolver.BuildOption{})
+		if err != nil {
+			t.Fatalf("%v\n", err)
+		}
+		var addrs []resolver.Address
+		var ok int
+		for {
+			addrs, ok = cc.getAddress()
+			if ok > 0 {
+				break
+			}
+		}
+		if !reflect.DeepEqual(a.want, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
+		}
+		old := hostLookupTbl[a.target]
+		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(old)-1]
+		r.ResolveNow(resolver.ResolveNowOption{})
+		for {
+			addrs, ok = cc.getAddress()
+			if ok == 2 {
+				break
+			}
+		}
+		if !reflect.DeepEqual(a.next, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.next)
+		}
+		hostLookupTbl[a.target] = old
 		r.Close()
 	}
 }
@@ -303,58 +379,17 @@ func TestIPWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
-		for len(cc.getAddress()) == 0 {
-		}
-		addrs := cc.getAddress()
-		if len(addrs) == 0 {
-			fmt.Printf("%+v\n", cc)
+		var addrs []resolver.Address
+		var ok int
+		for {
+			addrs, ok = cc.getAddress()
+			if ok > 0 {
+				break
+			}
 		}
 		if !reflect.DeepEqual(v.want, addrs) {
-			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
 		}
-		r.Close()
-	}
-}
-
-func testResolveNow(t *testing.T) {
-	tests := []struct {
-		target string
-		want   []resolver.Address
-		next   []resolver.Address
-	}{
-		{
-			"foo.bar.com",
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
-		},
-	}
-
-	for _, a := range tests {
-		b := NewDNSBuilder()
-		cc := &testClientConn{target: a.target}
-		r, err := b.Build(a.target, cc, resolver.BuildOption{})
-		if err != nil {
-			t.Fatalf("%v\n", err)
-		}
-		for len(cc.getAddress()) == 0 {
-		}
-		addrs := cc.getAddress()
-		if len(addrs) == 0 {
-			fmt.Printf("%+v\n", cc)
-		}
-		if !reflect.DeepEqual(a.want, addrs) {
-			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
-		}
-		old := hostLookupTbl[a.target]
-		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(old)-1]
-		r.ResolveNow(resolver.ResolveNowOption{})
-		for len(cc.getAddress()) == len(old) {
-		}
-		addrs = cc.getAddress()
-		if !reflect.DeepEqual(a.next, addrs) {
-			t.Errorf("Resolved result of target: %q = %+v, want %+v\n", a.target, addrs, a.next)
-		}
-		hostLookupTbl[a.target] = old
 		r.Close()
 	}
 }

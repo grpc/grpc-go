@@ -22,9 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -111,13 +113,12 @@ func dnsWatcher(d *dnsResolver) {
 		case <-d.rn:
 		}
 		result, sc := d.lookup()
-		// Next lookup should happen after an interval defined by w.b.freq.
+		// Next lookup should happen after an interval defined by d.b.freq.
+		d.mu.Lock()
 		d.t.Reset(d.b.freq)
+		d.mu.Unlock()
 		d.cc.NewAddress(result)
-		// TODO: implement service config
-		if sc != nil {
-			d.cc.NewServiceConfig(string(sc))
-		}
+		d.cc.NewServiceConfig(string(sc))
 	}
 }
 
@@ -144,32 +145,35 @@ type dnsResolver struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	cc     resolver.ClientConn
-	t      *time.Timer
 	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
 	rn chan struct{}
+	mu sync.Mutex
+	t  *time.Timer
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
-func (w *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
-	w.t.Stop()
-	w.rn <- struct{}{}
-	w.t.Reset(w.b.freq)
+func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.t.Stop()
+	d.rn <- struct{}{}
+	d.t.Reset(d.b.freq)
 }
 
 // Close closes the dnsResolver.
-func (w *dnsResolver) Close() {
-	w.cancel()
+func (d *dnsResolver) Close() {
+	d.cancel()
 }
 
-func (w *dnsResolver) lookupSRV() []resolver.Address {
+func (d *dnsResolver) lookupSRV() []resolver.Address {
 	var newAddrs []resolver.Address
-	_, srvs, err := lookupSRV(w.ctx, "grpclb", "tcp", w.host)
+	_, srvs, err := lookupSRV(d.ctx, "grpclb", "tcp", d.host)
 	if err != nil {
 		grpclog.Infof("grpc: failed dns SRV record lookup due to %v.\n", err)
 		return nil
 	}
 	for _, s := range srvs {
-		lbAddrs, err := lookupHost(w.ctx, s.Target)
+		lbAddrs, err := lookupHost(d.ctx, s.Target)
 		if err != nil {
 			grpclog.Warningf("grpc: failed load banlacer address dns lookup due to %v.\n", err)
 			continue
@@ -187,8 +191,8 @@ func (w *dnsResolver) lookupSRV() []resolver.Address {
 	return newAddrs
 }
 
-func (w *dnsResolver) lookupTXT() []byte {
-	ss, err := lookupTXT(w.ctx, w.host)
+func (d *dnsResolver) lookupTXT() []byte {
+	ss, err := lookupTXT(d.ctx, d.host)
 	if err != nil {
 		grpclog.Warningf("grpc: failed dns TXT record lookup due to %v.\n", err)
 		return nil
@@ -200,9 +204,9 @@ func (w *dnsResolver) lookupTXT() []byte {
 	return []byte(res)
 }
 
-func (w *dnsResolver) lookupHost() []resolver.Address {
+func (d *dnsResolver) lookupHost() []resolver.Address {
 	var newAddrs []resolver.Address
-	addrs, err := lookupHost(w.ctx, w.host)
+	addrs, err := lookupHost(d.ctx, d.host)
 	if err != nil {
 		grpclog.Warningf("grpc: failed dns A record lookup due to %v.\n", err)
 		return nil
@@ -213,21 +217,21 @@ func (w *dnsResolver) lookupHost() []resolver.Address {
 			grpclog.Errorf("grpc: failed IP parsing due to %v.\n", err)
 			continue
 		}
-		addr := a + ":" + w.port
+		addr := a + ":" + d.port
 		newAddrs = append(newAddrs, resolver.Address{Addr: addr})
 	}
 	return newAddrs
 }
 
-func (w *dnsResolver) lookup() ([]resolver.Address, []byte) {
-	newAddrs := w.lookupSRV()
+func (d *dnsResolver) lookup() ([]resolver.Address, []byte) {
+	newAddrs := d.lookupSRV()
 	if newAddrs == nil {
 		// If failed to get any balancer address (either no corresponding SRV for the
 		// target, or caused by failure during resolution/parsing of the balancer target),
 		// return any A record info available.
-		newAddrs = w.lookupHost()
+		newAddrs = d.lookupHost()
 	}
-	sc := w.lookupTXT()
+	sc := d.lookupTXT()
 	return newAddrs, canaryingSC(sc)
 }
 
@@ -302,11 +306,13 @@ func containsString(a []string, b string) bool {
 	return false
 }
 
-func chosenByPercentage(a *int, b int) bool {
+func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	if *a == 0 {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	if r.Intn(101) > *a {
 		return false
 	}
 	return true
@@ -332,7 +338,7 @@ func canaryingSC(js []byte) []byte {
 	for _, c := range rcs {
 		if !containsString(c.ClientLanguage, "GO") ||
 			!containsString(c.ClientHostName, clihostname) ||
-			!chosenByPercentage(c.Percentage, 1) {
+			!chosenByPercentage(c.Percentage) {
 			continue
 		}
 		sc = c.ServiceConfig
