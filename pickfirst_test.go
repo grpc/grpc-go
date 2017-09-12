@@ -33,16 +33,12 @@ import (
 
 func TestOneBackendPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 1
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -71,16 +67,12 @@ func TestOneBackendPickfirst(t *testing.T) {
 
 func TestBackendsPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 2
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -109,16 +101,12 @@ func TestBackendsPickfirst(t *testing.T) {
 
 func TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 1
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -150,16 +138,12 @@ func TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 
 func TestCloseWithPendingRPCPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 1
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	_, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -191,16 +175,12 @@ func TestCloseWithPendingRPCPickfirst(t *testing.T) {
 
 func TestOneServerDownPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 2
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -237,16 +217,12 @@ func TestOneServerDownPickfirst(t *testing.T) {
 
 func TestAllServersDownPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 2
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
@@ -285,16 +261,12 @@ func TestAllServersDownPickfirst(t *testing.T) {
 
 func TestAddressesRemovedPickfirst(t *testing.T) {
 	defer leakcheck.Check(t)
-	r, cleanup := manual.GenerateAndRegisterManualResolver()
-	defer cleanup()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	numServers := 3
-	servers, _ := startServers(t, numServers, math.MaxInt32)
-	defer func() {
-		for i := 0; i < numServers; i++ {
-			servers[i].stop()
-		}
-	}()
+	servers, _, scleanup := startServers(t, numServers, math.MaxInt32)
+	defer scleanup()
 
 	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithBalancerBuilder(newPickfirstBuilder()), WithCodec(testCodec{}))
 	if err != nil {
