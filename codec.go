@@ -44,12 +44,12 @@ var codecs = map[string]Codec{"proto": protoCodec{}}
 // thread-safe. Codecs can be overwritten in the registry, including the
 // default "proto" Codec.
 //
-func RegisterCodec(c Codec) {
-	contentSubtype := strings.ToLower(c.String())
+func RegisterCodec(codec Codec) {
+	contentSubtype := strings.ToLower(codec.String())
 	if contentSubtype == "" {
 		panic("cannot register Codec with empty string result for String()")
 	}
-	codecs[contentSubtype] = c
+	codecs[contentSubtype] = codec
 }
 
 // Codec defines the interface gRPC uses to encode and decode messages.
