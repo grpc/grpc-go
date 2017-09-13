@@ -71,11 +71,12 @@ func (t *testClientConn) getSc() (string, int) {
 }
 
 var hostLookupTbl = map[string][]string{
-	"foo.bar.com":      {"1.2.3.4", "5.6.7.8"},
-	"ipv4.single.fake": {"1.2.3.4"},
-	"ipv4.multi.fake":  {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-	"ipv6.single.fake": {"2607:f8b0:400a:801::1001"},
-	"ipv6.multi.fake":  {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+	"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
+	"ipv4.single.fake":     {"1.2.3.4"},
+	"srv.ipv4.single.fake": {"2.4.6.8"},
+	"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+	"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
+	"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
 }
 
 func hostLookup(host string) ([]string, error) {
@@ -253,7 +254,7 @@ func testDNSResolver(t *testing.T) {
 		},
 		{
 			"srv.ipv4.single.fake",
-			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}},
+			[]resolver.Address{{Addr: "1.2.3.4:1234", Type: resolver.GRPCLB, ServerName: "ipv4.single.fake"}, {Addr: "2.4.6.8" + colonDefaultPort}},
 			generateSC("srv.ipv4.single.fake"),
 		},
 		{
@@ -364,8 +365,8 @@ func testDNSResolveNow(t *testing.T) {
 func TestResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 	defer replaceNetFunc()()
-	// testDNSResolver(t)
-	// testDNSResolveNow(t)
+	testDNSResolver(t)
+	testDNSResolveNow(t)
 	testIPResolver(t)
 }
 

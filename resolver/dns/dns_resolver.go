@@ -230,13 +230,10 @@ func (d *dnsResolver) lookupHost() []resolver.Address {
 }
 
 func (d *dnsResolver) lookup() ([]resolver.Address, string) {
-	newAddrs := d.lookupSRV()
-	if newAddrs == nil {
-		// If failed to get any balancer address (either no corresponding SRV for the
-		// target, or caused by failure during resolution/parsing of the balancer target),
-		// return any A record info available.
-		newAddrs = d.lookupHost()
-	}
+	var newAddrs []resolver.Address
+	newAddrs = d.lookupSRV()
+	// Support fallback to non-balancer address.
+	newAddrs = append(newAddrs, d.lookupHost()...)
 	sc := d.lookupTXT()
 	return newAddrs, canaryingSC(sc)
 }
