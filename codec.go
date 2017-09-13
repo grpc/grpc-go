@@ -20,10 +20,37 @@ package grpc
 
 import (
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
 )
+
+var codecs = map[string]Codec{"proto": protoCodec{}}
+
+// RegisterCodec registers the provided Codec for use with all gRPC clients
+// and servers.
+//
+// The Codec will be stored and looked up by result of it's String() method,
+// which should match the content-subtype of the encoding handled by the Codec.
+// This is case-insensitive, and is stored and looked up as lowercase.
+// If the result of calling String() is an empty string, RegisterCodec will
+// panic. See Content-Type on https://grpc.io/docs/guides/wire.html#requests
+// for more details.
+//
+// By default, a Codec for "proto" is registered.
+//
+// RegisterCodec should only be called from init() functions, and is not
+// thread-safe. Codecs can be overwritten in the registry, including the
+// default "proto" Codec.
+//
+func RegisterCodec(c Codec) {
+	contentSubtype := strings.ToLower(c.String())
+	if contentSubtype == "" {
+		panic("cannot register Codec with empty string result for String()")
+	}
+	codecs[contentSubtype] = c
+}
 
 // Codec defines the interface gRPC uses to encode and decode messages.
 // Note that implementations of this interface must be thread safe;
