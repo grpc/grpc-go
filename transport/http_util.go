@@ -155,18 +155,6 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 	}
 }
 
-func validContentType(t string) bool {
-	if !strings.HasPrefix(t, baseContentType) {
-		return false
-	}
-	// Support variations on the content-type
-	// (e.g. "application/grpc+blah", "application/grpc;blah").
-	if len(t) > len(baseContentType) && t[len(baseContentType)] != '+' && t[len(baseContentType)] != ';' {
-		return false
-	}
-	return true
-}
-
 // getContentSubtype returns the content-subtype for the given content-type.
 // The given content-type must be a valid content-type that starts with
 // "application/grpc". A content-subtype will follow "application/grpc"
@@ -175,7 +163,8 @@ func validContentType(t string) bool {
 //
 // If contentType is not a valid content-type for gRPC, the boolean
 // will be false, otherwise true. If content-type == "application/grpc",
-// the boolean will be true.
+// "application/grpc+", or "application/grpc;", the boolean will be true,
+// but no content-subtype will be returned.
 //
 // contentType is assumed to be lowercase already.
 func getContentSubtype(contentType string) (string, bool) {
@@ -190,8 +179,8 @@ func getContentSubtype(contentType string) (string, bool) {
 	switch contentType[len(baseContentType)] {
 	case '+', ';':
 		// this will return true for "application/grpc+" or "application/grpc;"
-		// which validContentType is tested to be valid, so we just say
-		// that no content-subtype is specified in this case
+		// which the previous validContentType function tested to be valid, so we
+		// just say that no content-subtype is specified in this case
 		return contentType[len(baseContentType)+1:], true
 	default:
 		return "", false
@@ -283,9 +272,14 @@ func (d *decodeState) addMetadata(k, v string) {
 func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 	switch f.Name {
 	case "content-type":
-		if !validContentType(f.Value) {
+		contentSubtype, validContentType := getContentSubtype(f.Value)
+		if !validContentType {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}
+		d.contentSubtype = contentSubtype
+		// TODO: do we want to propagate the whole content-type, or some up with
+		// a way to just propagate the content-subtype if it was set?
+		d.addMetadata(f.Name, f.Value)
 	case "grpc-encoding":
 		d.encoding = f.Value
 	case "grpc-status":

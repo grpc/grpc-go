@@ -128,6 +128,8 @@ func WithDefaultCallOptions(cos ...CallOption) DialOption {
 }
 
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
+//
+// Deprecated: use WithDefaultCallOptions(WithCustomCodec(c)) instead.
 func WithCodec(c Codec) DialOption {
 	return WithDefaultCallOptions(WithCustomCodec(c))
 }

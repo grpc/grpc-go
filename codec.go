@@ -68,6 +68,7 @@ type Codec interface {
 	Unmarshal(data []byte, v interface{}) error
 	// String returns the name of the Codec implementation. The returned
 	// string will be used as part of content type in transmission.
+	// The result must be static; the result cannot change between calls.
 	String() string
 }
 

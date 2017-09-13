@@ -157,6 +157,8 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 }
 
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
+//
+// This will override any lookups by content-subtype for Codecs registered with RegisterCodec.
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
