@@ -46,6 +46,11 @@ const (
 	http2InitHeaderTableSize = 4096
 	// http2IOBufSize specifies the buffer size for sending frames.
 	http2IOBufSize = 32 * 1024
+	// baseContentType is the base content-type for gRPC.
+	// This is a valid content-type on it's own, but can also include a
+	// content-subtype such as "proto" as a suffix after "+" or ";".
+	// See https://grpc.io/docs/guides/wire.html#requests for more details.
+	baseContentType = "application/grpc"
 )
 
 var (
@@ -111,9 +116,10 @@ type decodeState struct {
 	timeout    time.Duration
 	method     string
 	// key-value metadata map from the peer.
-	mdata      map[string][]string
-	statsTags  []byte
-	statsTrace []byte
+	mdata          map[string][]string
+	statsTags      []byte
+	statsTrace     []byte
+	contentSubtype string
 }
 
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
@@ -150,16 +156,46 @@ func isWhitelistedPseudoHeader(hdr string) bool {
 }
 
 func validContentType(t string) bool {
-	e := "application/grpc"
-	if !strings.HasPrefix(t, e) {
+	if !strings.HasPrefix(t, baseContentType) {
 		return false
 	}
 	// Support variations on the content-type
 	// (e.g. "application/grpc+blah", "application/grpc;blah").
-	if len(t) > len(e) && t[len(e)] != '+' && t[len(e)] != ';' {
+	if len(t) > len(baseContentType) && t[len(baseContentType)] != '+' && t[len(baseContentType)] != ';' {
 		return false
 	}
 	return true
+}
+
+// getContentSubtype returns the content-subtype for the given content-type.
+// The given content-type must be a valid content-type that starts with
+// "application/grpc". A content-subtype will follow "application/grpc"
+// after a "+" or ";". See https://grpc.io/docs/guides/wire.html#requests
+// for more details.
+//
+// If contentType is not a valid content-type for gRPC, the boolean
+// will be false, otherwise true. If content-type == "application/grpc",
+// the boolean will be true.
+//
+// contentType is assumed to be lowercase already.
+func getContentSubtype(contentType string) (string, bool) {
+	if contentType == baseContentType {
+		return "", true
+	}
+	// simplified strings.HasPrefix
+	if !strings.HasPrefix(contentType, baseContentType) {
+		return "", false
+	}
+	// guaranteed since != baseContentType and has baseContentType prefix
+	switch contentType[len(baseContentType)] {
+	case '+', ';':
+		// this will return true for "application/grpc+" or "application/grpc;"
+		// which validContentType is tested to be valid, so we just say
+		// that no content-subtype is specified in this case
+		return contentType[len(baseContentType)+1:], true
+	default:
+		return "", false
+	}
 }
 
 func (d *decodeState) status() *status.Status {

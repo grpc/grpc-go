@@ -299,15 +299,16 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
-		id:            t.nextID,
-		done:          make(chan struct{}),
-		goAway:        make(chan struct{}),
-		method:        callHdr.Method,
-		sendCompress:  callHdr.SendCompress,
-		buf:           newRecvBuffer(),
-		fc:            &inFlow{limit: uint32(t.initialWindowSize)},
-		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
-		headerChan:    make(chan struct{}),
+		id:             t.nextID,
+		done:           make(chan struct{}),
+		goAway:         make(chan struct{}),
+		method:         callHdr.Method,
+		sendCompress:   callHdr.SendCompress,
+		buf:            newRecvBuffer(),
+		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
+		sendQuotaPool:  newQuotaPool(int(t.streamSendQuota)),
+		headerChan:     make(chan struct{}),
+		contentSubtype: callHdr.ContentSubtype,
 	}
 	t.nextID += 2
 	s.requestRead = func(n int) {

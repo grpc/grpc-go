@@ -261,6 +261,9 @@ type Stream struct {
 	// received on this stream.
 	bytesSent     bool
 	bytesReceived bool
+	// contentSubtype is the content-subtype for requests.
+	// this must be lowercase or the behavior is undefined.
+	contentSubtype string
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound
@@ -548,6 +551,13 @@ type CallHdr struct {
 	// for performance purposes.
 	// If it's false, new stream will never be flushed.
 	Flush bool
+
+	// ContentSubtype specifies the content-subtype for a request. For example,
+	// a content-subtype of "proto" will result in a content-type of
+	// "application/grpc+proto". The value of ContentSubtype must be all
+	// lowercase or otherwise the behavior is undefined. See
+	// https://grpc.io/docs/guides/wire.html#requests for more details.
+	ContentSubtype string
 }
 
 // ClientTransport is the common interface for all gRPC client-side transport
