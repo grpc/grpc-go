@@ -162,6 +162,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
 	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	if err := setCallInfoContentSubtypeAndCodec(c); err != nil {
+		return toRPCErr(err)
+	}
 
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)

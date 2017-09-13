@@ -78,7 +78,6 @@ var (
 type dialOptions struct {
 	unaryInt    UnaryClientInterceptor
 	streamInt   StreamClientInterceptor
-	codec       Codec
 	cp          Compressor
 	dc          Decompressor
 	bs          backoffStrategy
@@ -130,9 +129,7 @@ func WithDefaultCallOptions(cos ...CallOption) DialOption {
 
 // WithCodec returns a DialOption which sets a codec for message marshaling and unmarshaling.
 func WithCodec(c Codec) DialOption {
-	return func(o *dialOptions) {
-		o.codec = c
-	}
+	return WithDefaultCallOptions(WithCustomCodec(c))
 }
 
 // WithCompressor returns a DialOption which sets a CompressorGenerator for generating message

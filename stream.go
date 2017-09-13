@@ -133,6 +133,9 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
 	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	if err := setCallInfoContentSubtypeAndCodec(c); err != nil {
+		return toRPCErr(err)
+	}
 
 	callHdr := &transport.CallHdr{
 		Host:   cc.authority,

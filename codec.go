@@ -26,7 +26,10 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-var codecs = map[string]Codec{"proto": protoCodec{}}
+var (
+	registeredProtoCodec = protoCodec{}
+	registeredCodecs     = map[string]Codec{"proto": registeredProtoCodec}
+)
 
 // RegisterCodec registers the provided Codec for use with all gRPC clients
 // and servers.
@@ -49,7 +52,10 @@ func RegisterCodec(codec Codec) {
 	if contentSubtype == "" {
 		panic("cannot register Codec with empty string result for String()")
 	}
-	codecs[contentSubtype] = codec
+	if contentSubtype == "proto" {
+		registeredProtoCodec = codec
+	}
+	registeredCodecs[contentSubtype] = codec
 }
 
 // Codec defines the interface gRPC uses to encode and decode messages.

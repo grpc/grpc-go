@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/binary"
-	"errors"
 	"io"
 	"io/ioutil"
 	"math"
@@ -41,8 +40,8 @@ import (
 )
 
 var (
-	errEmptyContentSubtypeCallContentSubtype = errors.New("cannot set an empty content-subtype with CallContentSubtype")
-	errEmptyContentSubtypeCallCustomCodec    = errors.New("cannot use a codec with an empty result for String() with CallCustomCodec")
+	errEmptyContentSubtypeCallContentSubtype = status.Error(codes.Internal, "cannot set an empty content-subtype with CallContentSubtype")
+	errEmptyContentSubtypeCallCustomCodec    = status.Error(codes.Internal, "cannot use a codec with an empty result for String() with CallCustomCodec")
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -129,16 +128,17 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	failFast              bool
-	headerMD              metadata.MD
-	trailerMD             metadata.MD
-	peer                  *peer.Peer
-	traceInfo             traceInfo // in trace.go
-	maxReceiveMessageSize *int
-	maxSendMessageSize    *int
-	creds                 credentials.PerRPCCredentials
-	contentSubtype        string
-	customCodec           Codec
+	failFast                                bool
+	headerMD                                metadata.MD
+	trailerMD                               metadata.MD
+	peer                                    *peer.Peer
+	traceInfo                               traceInfo // in trace.go
+	maxReceiveMessageSize                   *int
+	maxSendMessageSize                      *int
+	creds                                   credentials.PerRPCCredentials
+	contentSubtype                          string
+	codec                                   Codec
+	useResponseContentSubtypeForCodecLookup bool
 }
 
 func defaultCallInfo() *callInfo {
@@ -280,7 +280,7 @@ func CallCustomCodec(codec Codec) CallOption {
 		if contentSubtype == "" {
 			return errEmptyContentSubtypeCallCustomCodec
 		}
-		c.customCodec = codec
+		c.codec = codec
 		return nil
 	})
 }
@@ -551,6 +551,30 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 		return mcMax
 	}
 	return doptMax
+}
+
+// should be called after options applied
+func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
+	if c.callInfo.contentSubtype != "" {
+		if c.codec == nil {
+			// c.contentSubtype is already lowercased in CallContentSubtype
+			codec, ok := registeredCodecs[c.contentSubtype]
+			if !ok {
+				return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
+			}
+			c.codec = codec
+			c.useResponseContentSubtypeForCodecLookup = true
+		}
+	} else {
+		if c.codec != nil {
+			c.contentSubtype = strings.ToLower(c.codec.String())
+		} else {
+			c.contentSubtype = "proto"
+			c.codec = registeredProtoCodec
+			c.useResponseContentSubtypeForCodecLookup = true
+		}
+	}
+	return nil
 }
 
 // SupportPackageIsVersion3 is referenced from generated protocol buffer files.
