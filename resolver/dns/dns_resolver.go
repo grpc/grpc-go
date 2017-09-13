@@ -26,7 +26,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -37,14 +36,15 @@ import (
 const (
 	defaultPort = "443"
 	defaultFreq = time.Minute * 30
+	golang      = "GO"
 )
 
 var (
 	errMissingAddr = errors.New("missing address")
 )
 
-// NewDNSBuilder creates a dnsBuilder which is used to factory DNS resolvers.
-func NewDNSBuilder() resolver.Builder {
+// NewBuilder creates a dnsBuilder which is used to factory DNS resolvers.
+func NewBuilder() resolver.Builder {
 	return &dnsBuilder{freq: defaultFreq}
 }
 
@@ -60,32 +60,35 @@ func (b *dnsBuilder) Build(target string, cc resolver.ClientConn, opts resolver.
 		return nil, err
 	}
 
-	// IP address
+	// IP address.
 	if net.ParseIP(host) != nil {
-		i := &ipResolver{
-			updateChan: make(chan resolver.Address, 1),
-			cc:         cc,
-		}
 		host, _ = formatIP(host)
-		i.updateChan <- resolver.Address{Addr: host + ":" + port}
-		go ipWatcher(i)
+		addr := []resolver.Address{{Addr: host + ":" + port}}
+		i := &ipResolver{
+			cc: cc,
+			ip: addr,
+			rn: make(chan struct{}, 1),
+			q:  make(chan struct{}),
+		}
+		cc.NewAddress(addr)
+		go i.watcher()
 		return i, nil
 	}
 
-	// DNS address (non-IP)
+	// DNS address (non-IP).
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &dnsResolver{
-		b:      b,
+		freq:   b.freq,
 		host:   host,
 		port:   port,
 		ctx:    ctx,
 		cancel: cancel,
 		cc:     cc,
 		t:      time.NewTimer(0),
-		rn:     make(chan struct{}),
+		rn:     make(chan struct{}, 1),
 	}
 
-	go dnsWatcher(d)
+	go d.watcher()
 	return d, nil
 }
 
@@ -94,17 +97,65 @@ func (b *dnsBuilder) Scheme() string {
 	return "dns"
 }
 
-func ipWatcher(i *ipResolver) {
-	for {
-		a, ok := <-i.updateChan
-		if !ok {
-			return
-		}
-		i.cc.NewAddress([]resolver.Address{a})
+// ipResolver watches for the name resolution update for an IP address.
+type ipResolver struct {
+	cc resolver.ClientConn
+	ip []resolver.Address
+	rn chan struct{}
+	q  chan struct{}
+}
+
+// ResolveNow resend the address it stores, no resolution is needed.
+func (i *ipResolver) ResolveNow(opt resolver.ResolveNowOption) {
+	select {
+	case i.rn <- struct{}{}:
+	default:
 	}
 }
 
-func dnsWatcher(d *dnsResolver) {
+// Close closes the ipResolver.
+func (i *ipResolver) Close() {
+	close(i.q)
+}
+
+func (i *ipResolver) watcher() {
+	for {
+		select {
+		case <-i.rn:
+			i.cc.NewAddress(i.ip)
+		case <-i.q:
+			return
+		}
+	}
+}
+
+// dnsResolver watches for the name resolution update for a non-IP target.
+type dnsResolver struct {
+	freq   time.Duration
+	host   string
+	port   string
+	ctx    context.Context
+	cancel context.CancelFunc
+	cc     resolver.ClientConn
+	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
+	rn chan struct{}
+	t  *time.Timer
+}
+
+// ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
+func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
+	select {
+	case d.rn <- struct{}{}:
+	default:
+	}
+}
+
+// Close closes the dnsResolver.
+func (d *dnsResolver) Close() {
+	d.cancel()
+}
+
+func (d *dnsResolver) watcher() {
 	for {
 		select {
 		case <-d.ctx.Done():
@@ -114,55 +165,10 @@ func dnsWatcher(d *dnsResolver) {
 		}
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.b.freq.
-		d.mu.Lock()
-		d.t.Reset(d.b.freq)
-		d.mu.Unlock()
-		d.cc.NewAddress(result)
+		d.t.Reset(d.freq)
 		d.cc.NewServiceConfig(string(sc))
+		d.cc.NewAddress(result)
 	}
-}
-
-// ipResolver watches for the name resolution update for an IP address.
-type ipResolver struct {
-	cc         resolver.ClientConn
-	updateChan chan resolver.Address
-}
-
-// ResolveNow is a no-op. For IP address, the resolution is itself, thus
-// re-resolution is unncessary.
-func (i *ipResolver) ResolveNow(opt resolver.ResolveNowOption) {}
-
-// Close closes the ipResolver.
-func (i *ipResolver) Close() {
-	close(i.updateChan)
-}
-
-// dnsResolver watches for the name resolution update for a non-IP target.
-type dnsResolver struct {
-	b      *dnsBuilder
-	host   string
-	port   string
-	ctx    context.Context
-	cancel context.CancelFunc
-	cc     resolver.ClientConn
-	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
-	rn chan struct{}
-	mu sync.Mutex
-	t  *time.Timer
-}
-
-// ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
-func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.t.Stop()
-	d.rn <- struct{}{}
-	d.t.Reset(d.b.freq)
-}
-
-// Close closes the dnsResolver.
-func (d *dnsResolver) Close() {
-	d.cancel()
 }
 
 func (d *dnsResolver) lookupSRV() []resolver.Address {
@@ -191,17 +197,17 @@ func (d *dnsResolver) lookupSRV() []resolver.Address {
 	return newAddrs
 }
 
-func (d *dnsResolver) lookupTXT() []byte {
+func (d *dnsResolver) lookupTXT() string {
 	ss, err := lookupTXT(d.ctx, d.host)
 	if err != nil {
 		grpclog.Warningf("grpc: failed dns TXT record lookup due to %v.\n", err)
-		return nil
+		return ""
 	}
 	var res string
 	for _, s := range ss {
 		res += s
 	}
-	return []byte(res)
+	return res
 }
 
 func (d *dnsResolver) lookupHost() []resolver.Address {
@@ -223,7 +229,7 @@ func (d *dnsResolver) lookupHost() []resolver.Address {
 	return newAddrs
 }
 
-func (d *dnsResolver) lookup() ([]resolver.Address, []byte) {
+func (d *dnsResolver) lookup() ([]resolver.Address, string) {
 	newAddrs := d.lookupSRV()
 	if newAddrs == nil {
 		// If failed to get any balancer address (either no corresponding SRV for the
@@ -318,30 +324,30 @@ func chosenByPercentage(a *int) bool {
 	return true
 }
 
-func canaryingSC(js []byte) []byte {
-	if js == nil {
-		return nil
+func canaryingSC(js string) string {
+	if js == "" {
+		return ""
 	}
 	var rcs []rawChoice
-	err := json.Unmarshal(js, &rcs)
+	err := json.Unmarshal([]byte(js), &rcs)
 	if err != nil {
 		grpclog.Warningf("grpc: failed to parse service config json string due to %v.\n", err)
-		return nil
+		return ""
 	}
 
-	var sc []byte
 	clihostname, err := os.Hostname()
 	if err != nil {
 		grpclog.Warningf("grpc: failed to get client hostname due to %v.\n", err)
-		return nil
+		return ""
 	}
+	var sc string
 	for _, c := range rcs {
-		if !containsString(c.ClientLanguage, "GO") ||
+		if !containsString(c.ClientLanguage, golang) ||
 			!containsString(c.ClientHostName, clihostname) ||
 			!chosenByPercentage(c.Percentage) {
 			continue
 		}
-		sc = c.ServiceConfig
+		sc = string(c.ServiceConfig)
 		break
 	}
 	return sc

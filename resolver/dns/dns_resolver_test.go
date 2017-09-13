@@ -235,7 +235,7 @@ func txtLookup(host string) ([]string, error) {
 	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
 }
 
-func testResolver(t *testing.T) {
+func testDNSResolver(t *testing.T) {
 	tests := []struct {
 		target   string
 		addrWant []resolver.Address
@@ -282,7 +282,7 @@ func testResolver(t *testing.T) {
 	}
 
 	for _, a := range tests {
-		b := NewDNSBuilder()
+		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
 		r, err := b.Build(a.target, cc, resolver.BuildOption{})
 		if err != nil {
@@ -313,7 +313,7 @@ func testResolver(t *testing.T) {
 	}
 }
 
-func testResolveNow(t *testing.T) {
+func testDNSResolveNow(t *testing.T) {
 	tests := []struct {
 		target string
 		want   []resolver.Address
@@ -327,7 +327,7 @@ func testResolveNow(t *testing.T) {
 	}
 
 	for _, a := range tests {
-		b := NewDNSBuilder()
+		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
 		r, err := b.Build(a.target, cc, resolver.BuildOption{})
 		if err != nil {
@@ -364,13 +364,14 @@ func testResolveNow(t *testing.T) {
 func TestResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 	defer replaceNetFunc()()
-	testResolver(t)
-	testResolveNow(t)
+	// testDNSResolver(t)
+	// testDNSResolveNow(t)
+	testIPResolver(t)
 }
 
 const colonDefaultPort = ":" + defaultPort
 
-func TestIPWatcher(t *testing.T) {
+func testIPResolver(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
 		target string
@@ -389,7 +390,7 @@ func TestIPWatcher(t *testing.T) {
 	}
 
 	for _, v := range tests {
-		b := NewDNSBuilder()
+		b := NewBuilder()
 		cc := &testClientConn{target: v.target}
 		r, err := b.Build(v.target, cc, resolver.BuildOption{})
 		if err != nil {
@@ -400,6 +401,16 @@ func TestIPWatcher(t *testing.T) {
 		for {
 			addrs, ok = cc.getAddress()
 			if ok > 0 {
+				break
+			}
+		}
+		if !reflect.DeepEqual(v.want, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
+		}
+		r.ResolveNow(resolver.ResolveNowOption{})
+		for {
+			addrs, ok = cc.getAddress()
+			if ok == 2 {
 				break
 			}
 		}
@@ -433,7 +444,7 @@ func TestResolveFunc(t *testing.T) {
 		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address %v", "[2001:db8:a0b:12f0::1")},
 	}
 
-	b := NewDNSBuilder()
+	b := NewBuilder()
 	for _, v := range tests {
 		cc := &testClientConn{target: v.addr}
 		r, err := b.Build(v.addr, cc, resolver.BuildOption{})
