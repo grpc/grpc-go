@@ -34,9 +34,10 @@ import (
 )
 
 const (
-	defaultPort = "443"
-	defaultFreq = time.Minute * 30
-	golang      = "GO"
+	defaultPort  = "443"
+	defaultFreq  = time.Minute * 30
+	golang       = "GO"
+	txtAttribute = "grpc_config="
 )
 
 var (
@@ -207,7 +208,13 @@ func (d *dnsResolver) lookupTXT() string {
 	for _, s := range ss {
 		res += s
 	}
-	return res
+
+	// TXT record must have "grpc_config=" attribute in order to be used as service config.
+	if len(res) < len(txtAttribute) || res[:len(txtAttribute)] != txtAttribute {
+		grpclog.Warningf("grpc: TXT record %p missing %p attribute", res, txtAttribute)
+		return ""
+	}
+	return res[len(txtAttribute):]
 }
 
 func (d *dnsResolver) lookupHost() []resolver.Address {
@@ -291,17 +298,17 @@ func parseTarget(target string) (host, port string, err error) {
 }
 
 type rawChoice struct {
-	ClientLanguage []string        `json:"clientLanguage,omitempty"`
-	Percentage     *int            `json:"percentage,omitempty"`
-	ClientHostName []string        `json:"clientHostName,omitempty"`
-	ServiceConfig  json.RawMessage `json:"serviceConfig,omitempty"`
+	ClientLanguage *[]string        `json:"clientLanguage,omitempty"`
+	Percentage     *int             `json:"percentage,omitempty"`
+	ClientHostName *[]string        `json:"clientHostName,omitempty"`
+	ServiceConfig  *json.RawMessage `json:"serviceConfig,omitempty"`
 }
 
-func containsString(a []string, b string) bool {
-	if len(a) == 0 {
+func containsString(a *[]string, b string) bool {
+	if a == nil {
 		return true
 	}
-	for _, c := range a {
+	for _, c := range *a {
 		if c == b {
 			return true
 		}
@@ -331,7 +338,6 @@ func canaryingSC(js string) string {
 		grpclog.Warningf("grpc: failed to parse service config json string due to %v.\n", err)
 		return ""
 	}
-
 	clihostname, err := os.Hostname()
 	if err != nil {
 		grpclog.Warningf("grpc: failed to get client hostname due to %v.\n", err)
@@ -340,11 +346,12 @@ func canaryingSC(js string) string {
 	var sc string
 	for _, c := range rcs {
 		if !containsString(c.ClientLanguage, golang) ||
+			!chosenByPercentage(c.Percentage) ||
 			!containsString(c.ClientHostName, clihostname) ||
-			!chosenByPercentage(c.Percentage) {
+			c.ServiceConfig == nil {
 			continue
 		}
-		sc = string(c.ServiceConfig)
+		sc = string(*c.ServiceConfig)
 		break
 	}
 	return sc

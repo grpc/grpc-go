@@ -117,14 +117,16 @@ func div(b []byte) []string {
 
 // A simple servivce config database to be used by test.
 var (
-	scs = []*SC{
+	scs = []*sc{
 		{
 			LoadBalancingPolicy: "round_robin",
-			MethodConfig: []*MC{
+			MethodConfig: []mc{
 				{
-					Name: &Name{
-						Service: "foo",
-						Method:  "bar",
+					Name: []name{
+						{
+							Service: "foo",
+							Method:  "bar",
+						},
 					},
 					WaitForReady: newBool(true),
 				},
@@ -132,20 +134,24 @@ var (
 		},
 		{
 			LoadBalancingPolicy: "grpclb",
-			MethodConfig: []*MC{
+			MethodConfig: []mc{
 				{
-					Name: &Name{
-						Service: "all",
+					Name: []name{
+						{
+							Service: "all",
+						},
 					},
 					Timeout: "1s",
 				},
 			},
 		},
 		{
-			MethodConfig: []*MC{
+			MethodConfig: []mc{
 				{
-					Name: &Name{
-						Method: "bar",
+					Name: []name{
+						{
+							Method: "bar",
+						},
 					},
 					MaxRequestMessageBytes:  newInt(1024),
 					MaxResponseMessageBytes: newInt(1024),
@@ -153,11 +159,13 @@ var (
 			},
 		},
 		{
-			MethodConfig: []*MC{
+			MethodConfig: []mc{
 				{
-					Name: &Name{
-						Service: "foo",
-						Method:  "bar",
+					Name: []name{
+						{
+							Service: "foo",
+							Method:  "bar",
+						},
 					},
 					WaitForReady:            newBool(true),
 					Timeout:                 "1s",
@@ -168,17 +176,21 @@ var (
 		},
 		{
 			LoadBalancingPolicy: "round_robin",
-			MethodConfig: []*MC{
+			MethodConfig: []mc{
 				{
-					Name: &Name{
-						Service: "foo",
+					Name: []name{
+						{
+							Service: "foo",
+						},
 					},
 					WaitForReady: newBool(true),
 					Timeout:      "1s",
 				},
 				{
-					Name: &Name{
-						Service: "bar",
+					Name: []name{
+						{
+							Service: "bar",
+						},
 					},
 					WaitForReady: newBool(false),
 				},
@@ -190,31 +202,37 @@ var (
 // scLookupTbl is a map from target to service config that should be chosen.
 // To facilitate checking we are returing the first match, we use scs[0]
 // exclusively for second matched choice.And we use scs[1] exclusively for
-// non-matched choice.
-var scLookupTbl = map[string]*SC{
+// non-matched choice. Both of which should not be chosen to return.
+var scLookupTbl = map[string]*sc{
 	"foo.bar.com":          scs[2],
 	"srv.ipv4.single.fake": scs[3],
 	"srv.ipv4.multi.fake":  scs[4],
+	"no.attribute":         scs[2],
 }
 
 // generateSCF generates a service config file according to specification in scLookupTbl.
 func generateSCF(name string) []string {
-	var scf []*Choice
-	scf = append(scf, &Choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: scs[1]})
-	scf = append(scf, &Choice{Percentage: newInt(0), ServiceConfig: scs[1]})
-	scf = append(scf, &Choice{ClientHostName: []string{"localhost"}, ServiceConfig: scs[1]})
+	var scf []choice
+	scf = append(scf, choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: *scs[1]})
+	scf = append(scf, choice{Percentage: newInt(0), ServiceConfig: *scs[1]})
+	scf = append(scf, choice{ClientHostName: []string{"localhost"}, ServiceConfig: *scs[1]})
 	if s, ok := scLookupTbl[name]; ok {
-		scf = append(scf, &Choice{Percentage: newInt(100), ClientLanguage: []string{"GO"}, ServiceConfig: s})
-		scf = append(scf, &Choice{ServiceConfig: scs[0]})
+		// First match, chosen.
+		scf = append(scf, choice{Percentage: newInt(100), ClientLanguage: []string{"GO"}, ServiceConfig: *s})
+		// Second match.
+		scf = append(scf, choice{ServiceConfig: *scs[0]})
 	}
 	b, _ := json.Marshal(scf)
-	return div(b)
+	if name == "no.attribute" {
+		return div(b)
+	}
+	return div(append([]byte(txtAttribute), b...))
 }
 
 // generateSC generates a service config according to specification in scLookupTbl.
 func generateSC(name string) string {
 	s, ok := scLookupTbl[name]
-	if !ok {
+	if !ok || name == "no.attribute" {
 		return ""
 	}
 	b, _ := json.Marshal(s)
@@ -227,6 +245,7 @@ var txtLookupTbl = map[string][]string{
 	"srv.ipv4.multi.fake":  generateSCF("srv.ipv4.multi.fake"),
 	"srv.ipv6.single.fake": generateSCF("srv.ipv6.single.fake"),
 	"srv.ipv6.multi.fake":  generateSCF("srv.ipv6.multi.fake"),
+	"no.attribute":         generateSCF("no.attribute"),
 }
 
 func txtLookup(host string) ([]string, error) {
@@ -279,6 +298,11 @@ func testDNSResolver(t *testing.T) {
 				{Addr: "[2607:f8b0:400a:801::1003]:1234", Type: resolver.GRPCLB, ServerName: "ipv6.multi.fake"},
 			},
 			generateSC("srv.ipv6.multi.fake"),
+		},
+		{
+			"no.attribute",
+			nil,
+			generateSC("no.attribute"),
 		},
 	}
 
@@ -466,27 +490,27 @@ func newInt(b int) *int {
 	return &b
 }
 
-type Name struct {
+type name struct {
 	Service string `json:"service,omitempty"`
 	Method  string `json:"method,omitempty"`
 }
 
-type MC struct {
-	Name                    *Name  `json:"name,omitempty"`
+type mc struct {
+	Name                    []name `json:"name,omitempty"`
 	WaitForReady            *bool  `json:"waitForReady,omitempty"`
 	Timeout                 string `json:"timeout,omitempty"`
 	MaxRequestMessageBytes  *int   `json:"maxRequestMessageBytes,omitempty"`
 	MaxResponseMessageBytes *int   `json:"maxResponseMessageBytes,omitempty"`
 }
 
-type SC struct {
+type sc struct {
 	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        []*MC  `json:"methodConfig,omitempty"`
+	MethodConfig        []mc   `json:"methodConfig,omitempty"`
 }
 
-type Choice struct {
+type choice struct {
 	ClientLanguage []string `json:"clientLanguage,omitempty"`
 	Percentage     *int     `json:"percentage,omitempty"`
 	ClientHostName []string `json:"clientHostName,omitempty"`
-	ServiceConfig  *SC      `json:"serviceConfig,omitempty"`
+	ServiceConfig  sc       `json:"serviceConfig,omitempty"`
 }
