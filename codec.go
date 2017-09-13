@@ -46,7 +46,6 @@ var (
 // RegisterCodec should only be called from init() functions, and is not
 // thread-safe. Codecs can be overwritten in the registry, including the
 // default "proto" Codec.
-//
 func RegisterCodec(codec Codec) {
 	contentSubtype := strings.ToLower(codec.String())
 	if contentSubtype == "" {

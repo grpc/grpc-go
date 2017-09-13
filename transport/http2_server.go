@@ -244,12 +244,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	buf := newRecvBuffer()
 	s := &Stream{
-		id:           streamID,
-		st:           t,
-		buf:          buf,
-		fc:           &inFlow{limit: uint32(t.initialWindowSize)},
-		recvCompress: state.encoding,
-		method:       state.method,
+		id:             streamID,
+		st:             t,
+		buf:            buf,
+		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
+		recvCompress:   state.encoding,
+		method:         state.method,
+		contentSubtype: state.contentSubtype,
 	}
 
 	if frame.StreamEnded() {
@@ -724,7 +725,8 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	t.hBuf.Reset()
 	t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	// we just mirror the request content-type
+	t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: getContentTypeForSubtype(s.contentSubtype)})
 	if s.sendCompress != "" {
 		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
@@ -786,7 +788,8 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	t.hBuf.Reset()
 	if !headersSent {
 		t.hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-		t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		// we just mirror the request content-type
+		t.hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: getContentTypeForSubtype(s.contentSubtype)})
 	}
 	t.hEnc.WriteField(
 		hpack.HeaderField{

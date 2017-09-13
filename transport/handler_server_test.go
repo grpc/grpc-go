@@ -198,9 +198,10 @@ func TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			},
 			check: func(ht *serverHandlerTransport, tt *testCase) error {
 				want := metadata.MD{
-					"meta-bar":   {"bar-val1", "bar-val2"},
-					"user-agent": {"x/y a/b"},
-					"meta-foo":   {"foo-val"},
+					"meta-bar":     {"bar-val1", "bar-val2"},
+					"user-agent":   {"x/y a/b"},
+					"meta-foo":     {"foo-val"},
+					"content-type": {"application/grpc"},
 				}
 
 				if !reflect.DeepEqual(ht.headerMD, want) {

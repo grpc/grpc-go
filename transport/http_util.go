@@ -187,6 +187,14 @@ func getContentSubtype(contentType string) (string, bool) {
 	}
 }
 
+// contentSubtype is assumed to be lowercase
+func getContentTypeForSubtype(contentSubtype string) string {
+	if contentSubtype == "" {
+		return baseContentType
+	}
+	return baseContentType + "+" + contentSubtype
+}
+
 func (d *decodeState) status() *status.Status {
 	if d.statusGen == nil {
 		// No status-details were provided; generate status using code/msg.
