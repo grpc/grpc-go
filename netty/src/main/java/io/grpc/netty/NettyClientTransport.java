@@ -36,10 +36,13 @@ import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.netty.ProtocolNegotiator.Handler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
@@ -49,19 +52,26 @@ import io.netty.util.AsciiString;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
  * A Netty-based {@link ConnectionClientTransport} implementation.
  */
 class NettyClientTransport implements ConnectionClientTransport {
+  private static final Logger logger = Logger.getLogger(NettyClientTransport.class.getName());
+
   private final LogId logId = LogId.allocate(getClass().getName());
   private final Map<ChannelOption<?>, ?> channelOptions;
   private final SocketAddress address;
   private final Class<? extends Channel> channelType;
   private final EventLoopGroup group;
   private final ProtocolNegotiator negotiator;
+  private final ChannelHandler initHandler;
   private final AsciiString authority;
   private final AsciiString userAgent;
   private final int flowControlWindow;
@@ -73,7 +83,7 @@ class NettyClientTransport implements ConnectionClientTransport {
   private final boolean keepAliveWithoutCalls;
   private final Runnable tooManyPingsRunnable;
 
-  private ProtocolNegotiator.Handler negotiationHandler;
+  private AsciiString negotiatorScheme;
   private NettyClientHandler handler;
   // We should not send on the channel until negotiation completes. This is a hard requirement
   // by SslHandler but is appropriate for HTTP/1.1 Upgrade as well.
@@ -82,15 +92,26 @@ class NettyClientTransport implements ConnectionClientTransport {
   private Status statusExplainingWhyTheChannelIsNull;
   /** Since not thread-safe, may only be used from event loop. */
   private ClientTransportLifecycleManager lifecycleManager;
+  private final AtomicBoolean notifyClosed = new AtomicBoolean();
 
   NettyClientTransport(
-      SocketAddress address, Class<? extends Channel> channelType,
-      Map<ChannelOption<?>, ?> channelOptions, EventLoopGroup group,
-      ProtocolNegotiator negotiator, int flowControlWindow, int maxMessageSize,
-      int maxHeaderListSize, long keepAliveTimeNanos, long keepAliveTimeoutNanos,
-      boolean keepAliveWithoutCalls, String authority, @Nullable String userAgent,
+      SocketAddress address,
+      Class<? extends Channel> channelType,
+      Map<ChannelOption<?>, ?> channelOptions,
+      EventLoopGroup group,
+      ProtocolNegotiator negotiator,
+      @Nullable ChannelHandler initHandler,
+      int flowControlWindow,
+      int maxMessageSize,
+      int maxHeaderListSize,
+      long keepAliveTimeNanos,
+      long keepAliveTimeoutNanos,
+      boolean keepAliveWithoutCalls,
+      String authority,
+      @Nullable String userAgent,
       Runnable tooManyPingsRunnable) {
     this.negotiator = Preconditions.checkNotNull(negotiator, "negotiator");
+    this.initHandler = initHandler;
     this.address = Preconditions.checkNotNull(address, "address");
     this.group = Preconditions.checkNotNull(group, "group");
     this.channelType = Preconditions.checkNotNull(channelType, "channelType");
@@ -151,8 +172,23 @@ class NettyClientTransport implements ConnectionClientTransport {
             return NettyClientTransport.this.statusFromFailedFuture(f);
           }
         },
-        method, headers, channel, authority, negotiationHandler.scheme(), userAgent,
-        statsTraceCtx);
+        method, headers, channel, authority, negotiatorScheme, userAgent, statsTraceCtx);
+  }
+  
+  private void lifecycleManagerNotifyTerminated(String reason, Throwable t) {
+    lifecycleManagerNotifyTerminated(reason, Utils.statusFromThrowable(t));
+  }
+
+  private void lifecycleManagerNotifyTerminated(String detail, Status s) {
+    if (!notifyClosed.compareAndSet(false, true)) {
+      logger.log(
+          Level.FINE, detail + "ignoring additional lifecycle errors", s.asRuntimeException());
+      return;
+    }
+    if (detail != null) {
+      s = s.augmentDescription(detail);
+    }
+    lifecycleManager.notifyTerminated(s);
   }
 
   @SuppressWarnings("unchecked")
@@ -171,8 +207,6 @@ class NettyClientTransport implements ConnectionClientTransport {
         maxHeaderListSize, Ticker.systemTicker(), tooManyPingsRunnable);
     NettyHandlerSettings.setAutoWindow(handler);
 
-    negotiationHandler = negotiator.newHandler(handler);
-
     Bootstrap b = new Bootstrap();
     b.group(eventLoop);
     b.channel(channelType);
@@ -186,13 +220,43 @@ class NettyClientTransport implements ConnectionClientTransport {
       b.option((ChannelOption<Object>) entry.getKey(), entry.getValue());
     }
 
-    /**
-     * We don't use a ChannelInitializer in the client bootstrap because its "initChannel" method
-     * is executed in the event loop and we need this handler to be in the pipeline immediately so
-     * that it may begin buffering writes.
-     */
-    b.handler(negotiationHandler);
+    final class LifecycleChannelFutureListener implements ChannelFutureListener {
+      private final String reason;
+
+      LifecycleChannelFutureListener(String reason) {
+        this.reason = reason;
+      }
+
+      @Override
+      public void operationComplete(ChannelFuture future) throws Exception {
+        if (!future.isSuccess()) {
+          lifecycleManagerNotifyTerminated(reason, future.cause());
+        }
+      }
+    }
+
+    final Handler negotiationHandler = negotiator.newHandler(handler);
+    negotiatorScheme = negotiationHandler.scheme();
+
+    b.handler(new ChannelInitializer<Channel>() {
+      @Override
+      protected void initChannel(Channel ch) throws Exception {
+        if (initHandler != null) {
+          ch.pipeline().addFirst(initHandler);
+        }
+
+        ch.pipeline().addLast(negotiationHandler);
+
+        // This write will have no effect, yet it will only complete once the negotiationHandler
+        // flushes any pending writes.
+        ch.writeAndFlush(NettyClientHandler.NOOP_MESSAGE)
+            .addListener(new LifecycleChannelFutureListener("noop write"));
+      }
+    });
+
     ChannelFuture regFuture = b.register();
+    regFuture.addListener(new LifecycleChannelFutureListener("register"));
+
     channel = regFuture.channel();
     if (channel == null) {
       // Initialization has failed badly. All new streams should be made to fail.
@@ -210,29 +274,15 @@ class NettyClientTransport implements ConnectionClientTransport {
           // could use GlobalEventExecutor (which is what regFuture would use for notifying
           // listeners in this case), but avoiding on-demand thread creation in an error case seems
           // a good idea and is probably clearer threading.
-          lifecycleManager.notifyTerminated(statusExplainingWhyTheChannelIsNull);
+          lifecycleManagerNotifyTerminated(null, statusExplainingWhyTheChannelIsNull);
         }
       };
     }
     // Start the write queue as soon as the channel is constructed
     handler.startWriteQueue(channel);
-    // This write will have no effect, yet it will only complete once the negotiationHandler
-    // flushes any pending writes. We need it to be staged *before* the `connect` so that
-    // the channel can't have been closed yet, removing all handlers. This write will sit in the
-    // AbstractBufferingHandler's buffer, and will either be flushed on a successful connection,
-    // or failed if the connection fails.
-    channel.writeAndFlush(NettyClientHandler.NOOP_MESSAGE).addListener(new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture future) throws Exception {
-        if (!future.isSuccess()) {
-          // Need to notify of this failure, because NettyClientHandler may not have been added to
-          // the pipeline before the error occurred.
-          lifecycleManager.notifyTerminated(Utils.statusFromThrowable(future.cause()));
-        }
-      }
-    });
+
     // Start the connection operation to the server.
-    channel.connect(address);
+    channel.connect(address).addListener(new LifecycleChannelFutureListener("connect"));
 
     if (keepAliveManager != null) {
       keepAliveManager.onTransportStarted();

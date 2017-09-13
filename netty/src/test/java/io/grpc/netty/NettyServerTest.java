@@ -41,6 +41,7 @@ public class NettyServerTest {
         null, // no boss group
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
+        null, // no channel init
         Collections.<ServerStreamTracer.Factory>emptyList(),
         1, // ignore
         1, // ignore
@@ -76,6 +77,7 @@ public class NettyServerTest {
         null, // no boss group
         null, // no event group
         new ProtocolNegotiators.PlaintextNegotiator(),
+        null, // no channel init
         Collections.<ServerStreamTracer.Factory>emptyList(),
         1, // ignore
         1, // ignore
