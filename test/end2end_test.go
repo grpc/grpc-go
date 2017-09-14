@@ -35,6 +35,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -365,11 +366,12 @@ func (s *testServer) HalfDuplexCall(stream testpb.TestService_HalfDuplexCallServ
 }
 
 type env struct {
-	name        string
-	network     string // The type of network such as tcp, unix, etc.
-	security    string // The security protocol such as TLS, SSH, etc.
-	httpHandler bool   // whether to use the http.Handler ServerTransport; requires TLS
-	balancer    bool   // whether to use balancer
+	name         string
+	network      string // The type of network such as tcp, unix, etc.
+	security     string // The security protocol such as TLS, SSH, etc.
+	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
+	balancer     bool   // whether to use balancer
+	customDialer func(string, string, time.Duration) (net.Conn, error)
 }
 
 func (e env) runnable() bool {
@@ -380,6 +382,9 @@ func (e env) runnable() bool {
 }
 
 func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
+	if e.customDialer != nil {
+		return e.customDialer(e.network, addr, timeout)
+	}
 	return net.DialTimeout(e.network, addr, timeout)
 }
 
@@ -678,6 +683,54 @@ func (te *test) withServerTester(fn func(st *serverTester)) {
 	st := newServerTesterFromConn(te.t, c)
 	st.greet()
 	fn(st)
+}
+
+type lazyConn struct {
+	net.Conn
+	beLazy int32
+}
+
+func (l *lazyConn) Write(b []byte) (int, error) {
+	if atomic.LoadInt32(&(l.beLazy)) == 1 {
+		// The sleep duration here needs to less than the leakCheck deadline.
+		time.Sleep(time.Second * 5)
+	}
+	return l.Conn.Write(b)
+}
+
+func TestContextDeadlineNotIgnored(t *testing.T) {
+	defer leakcheck.Check(t)
+	e := noBalancerEnv
+	var lc *lazyConn
+	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, timeout)
+		if err != nil {
+			return nil, err
+		}
+		lc = &lazyConn{Conn: conn}
+		return lc, nil
+	}
+
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	atomic.StoreInt32(&(lc.beLazy), 1)
+	timeout := time.Second * 1
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	t1 := time.Now()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, context.DeadlineExceeded", err)
+	}
+	if time.Since(t1) > 2*time.Second {
+		t.Fatalf("TestService/EmptyCall(_, _) ran over the deadline")
+	}
 }
 
 func TestTimeoutOnDeadServer(t *testing.T) {
