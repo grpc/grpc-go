@@ -52,6 +52,11 @@ class Headers {
     Preconditions.checkNotNull(defaultPath, "defaultPath");
     Preconditions.checkNotNull(authority, "authority");
 
+    // Discard any application supplied duplicates of the reserved headers
+    headers.discardAll(GrpcUtil.CONTENT_TYPE_KEY);
+    headers.discardAll(GrpcUtil.TE_HEADER);
+    headers.discardAll(GrpcUtil.USER_AGENT_KEY);
+
     // 7 is the number of explicit add calls below.
     List<Header> okhttpHeaders = new ArrayList<Header>(7 + InternalMetadata.headerCount(headers));
 

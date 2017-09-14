@@ -29,7 +29,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.AbstractClientStream;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
@@ -121,7 +120,6 @@ class NettyClientStream extends AbstractClientStream {
       } else {
         httpMethod = Utils.HTTP_METHOD;
       }
-      headers.discardAll(GrpcUtil.USER_AGENT_KEY);
       Http2Headers http2Headers = Utils.convertClientHeaders(headers, scheme, defaultPath,
           authority, httpMethod, userAgent);
 

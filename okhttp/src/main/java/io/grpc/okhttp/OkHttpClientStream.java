@@ -25,7 +25,6 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.AbstractClientStream;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.WritableBuffer;
@@ -127,7 +126,6 @@ class OkHttpClientStream extends AbstractClientStream {
         useGet = true;
         defaultPath += "?" + BaseEncoding.base64().encode(payload);
       }
-      metadata.discardAll(GrpcUtil.USER_AGENT_KEY);
       synchronized (state.lock) {
         state.streamReady(metadata, defaultPath);
       }
