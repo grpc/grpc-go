@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -88,7 +89,6 @@ type dialOptions struct {
 	block       bool
 	insecure    bool
 	timeout     time.Duration
-	scChan      <-chan ServiceConfig
 	copts       transport.ConnectOptions
 	callOptions []CallOption
 	// This is to support v1 balancer.
@@ -409,18 +409,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
-	scSet := false
-	if cc.dopts.scChan != nil {
-		// Try to get an initial service config.
-		select {
-		case sc, ok := <-cc.dopts.scChan:
-			if ok {
-				cc.sc = sc
-				scSet = true
-			}
-		default:
-		}
-	}
 	// Set defaults.
 	if cc.dopts.codec == nil {
 		cc.dopts.codec = protoCodec{}
@@ -550,6 +538,7 @@ type ClientConn struct {
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
+	scRaw string
 	conns map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
@@ -789,7 +778,10 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 		i := strings.LastIndex(method, "/")
 		m, _ = cc.sc.Methods[method[:i+1]]
 	}
-	return m
+	if m == nil {
+		return MethodConfig{}
+	}
+	return *m
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transport.ClientTransport, func(balancer.DoneInfo), error) {
@@ -798,6 +790,85 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 		return nil, nil, toRPCErr(err)
 	}
 	return t, done, nil
+}
+
+func getName(n name) string {
+	res := ""
+	if n.Service != nil {
+		res += "/" + *n.Service + "/"
+	}
+	if n.Method != nil {
+		res += *n.Method
+	}
+	return res
+}
+
+func getTimeout(t *string) (*time.Duration, error) {
+	if t == nil {
+		return nil, nil
+	}
+	d, err := time.ParseDuration(*t)
+	return &d, err
+}
+
+type name struct {
+	Service *string `json:"service,omitempty"`
+	Method  *string `json:"method,omitempty"`
+}
+
+type mc struct {
+	Name                    *[]name `json:"name,omitempty"`
+	WaitForReady            *bool   `json:"waitForReady,omitempty"`
+	Timeout                 *string `json:"timeout,omitempty"`
+	MaxRequestMessageBytes  *int    `json:"maxRequestMessageBytes,omitempty"`
+	MaxResponseMessageBytes *int    `json:"maxResponseMessageBytes,omitempty"`
+}
+
+type sc struct {
+	LoadBalancingPolicy *string `json:"loadBalancingPolicy,omitempty"`
+	MethodConfig        *[]mc   `json:"methodConfig,omitempty"`
+}
+
+// HandleServiceConfig parses the service config string in JSON format to Go native
+// struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
+func (cc *ClientConn) HandleServiceConfig(js string) error {
+	var rsc sc
+	err := json.Unmarshal([]byte(js), &rsc)
+	if err != nil {
+		grpclog.Warningf("grpc: handleServiceConfig error unmarshaling %s due to %v", js, err)
+		return err
+	}
+	cc.scRaw = js
+	var sc ServiceConfig
+	sc.LB = rsc.LoadBalancingPolicy
+	sc.Methods = make(map[string]*MethodConfig)
+	if rsc.MethodConfig == nil {
+		cc.sc = sc
+		return nil
+	}
+
+	for _, m := range *rsc.MethodConfig {
+		if m.Name == nil {
+			continue
+		}
+		d, err := getTimeout(m.Timeout)
+		if err != nil {
+			continue
+		}
+
+		mc := MethodConfig{
+			WaitForReady: m.WaitForReady,
+			Timeout:      d,
+			MaxReqSize:   m.MaxRequestMessageBytes,
+			MaxRespSize:  m.MaxResponseMessageBytes,
+		}
+		for _, n := range *m.Name {
+			sc.Methods[getName(n)] = &mc
+		}
+	}
+
+	cc.sc = sc
+	return nil
 }
 
 // Close tears down the ClientConn and all underlying connections.
