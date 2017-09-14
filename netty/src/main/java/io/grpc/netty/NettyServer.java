@@ -30,7 +30,6 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
@@ -53,7 +52,6 @@ class NettyServer implements InternalServer {
 
   private final SocketAddress address;
   private final Class<? extends ServerChannel> channelType;
-  private final ChannelHandler initHandler;
   private final ProtocolNegotiator protocolNegotiator;
   private final int maxStreamsPerConnection;
   private final boolean usingSharedBossGroup;
@@ -76,30 +74,19 @@ class NettyServer implements InternalServer {
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
 
   NettyServer(
-      SocketAddress address,
-      Class<? extends ServerChannel> channelType,
-      @Nullable EventLoopGroup bossGroup,
-      @Nullable EventLoopGroup workerGroup,
-      ProtocolNegotiator protocolNegotiator,
-      @Nullable ChannelHandler initHandler,
-      List<ServerStreamTracer.Factory> streamTracerFactories,
-      int maxStreamsPerConnection,
-      int flowControlWindow,
-      int maxMessageSize,
-      int maxHeaderListSize,
-      long keepAliveTimeInNanos,
-      long keepAliveTimeoutInNanos,
+      SocketAddress address, Class<? extends ServerChannel> channelType,
+      @Nullable EventLoopGroup bossGroup, @Nullable EventLoopGroup workerGroup,
+      ProtocolNegotiator protocolNegotiator, List<ServerStreamTracer.Factory> streamTracerFactories,
+      int maxStreamsPerConnection, int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+      long keepAliveTimeInNanos, long keepAliveTimeoutInNanos,
       long maxConnectionIdleInNanos,
-      long maxConnectionAgeInNanos,
-      long maxConnectionAgeGraceInNanos,
-      boolean permitKeepAliveWithoutCalls,
-      long permitKeepAliveTimeInNanos) {
+      long maxConnectionAgeInNanos, long maxConnectionAgeGraceInNanos,
+      boolean permitKeepAliveWithoutCalls, long permitKeepAliveTimeInNanos) {
     this.address = address;
     this.channelType = checkNotNull(channelType, "channelType");
     this.bossGroup = bossGroup;
     this.workerGroup = workerGroup;
     this.protocolNegotiator = checkNotNull(protocolNegotiator, "protocolNegotiator");
-    this.initHandler = initHandler;
     this.streamTracerFactories = checkNotNull(streamTracerFactories, "streamTracerFactories");
     this.usingSharedBossGroup = bossGroup == null;
     this.usingSharedWorkerGroup = workerGroup == null;
@@ -145,10 +132,6 @@ class NettyServer implements InternalServer {
     b.childHandler(new ChannelInitializer<Channel>() {
       @Override
       public void initChannel(Channel ch) throws Exception {
-
-        if (initHandler != null) {
-          ch.pipeline().addFirst(initHandler);
-        }
 
         long maxConnectionAgeInNanos = NettyServer.this.maxConnectionAgeInNanos;
         if (maxConnectionAgeInNanos != MAX_CONNECTION_AGE_NANOS_DISABLED) {

@@ -35,7 +35,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.io.ByteStreams;
-import com.google.common.truth.Truth;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
@@ -61,7 +60,6 @@ import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.testing.TestUtils;
 import io.netty.channel.ChannelConfig;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannelConfig;
@@ -169,7 +167,7 @@ public class NettyClientTransportTest {
     int soLinger = 123;
     channelOptions.put(ChannelOption.SO_LINGER, soLinger);
     NettyClientTransport transport = new NettyClientTransport(
-        address, NioSocketChannel.class, channelOptions, group, newNegotiator(), null,
+        address, NioSocketChannel.class, channelOptions, group, newNegotiator(),
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE,
         KEEPALIVE_TIME_NANOS_DISABLED, 1L, false, authority, null /* user agent */,
         tooManyPingsRunnable);
@@ -266,9 +264,7 @@ public class NettyClientTransportTest {
       rpc.waitForClose();
       fail("expected exception");
     } catch (ExecutionException ex) {
-      StatusException se = (StatusException) ex.getCause();
-      assertSame(failureStatus.getCode(), se.getStatus().getCode());
-      Truth.assertThat(se.getStatus().getDescription()).contains(failureStatus.getDescription());
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
     }
   }
 
@@ -288,9 +284,7 @@ public class NettyClientTransportTest {
       rpc.waitForClose();
       fail("expected exception");
     } catch (ExecutionException ex) {
-      StatusException se = (StatusException) ex.getCause();
-      assertSame(failureStatus.getCode(), se.getStatus().getCode());
-      Truth.assertThat(se.getStatus().getDescription()).contains(failureStatus.getDescription());
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
     }
   }
 
@@ -321,9 +315,7 @@ public class NettyClientTransportTest {
       rpc.waitForClose();
       fail("expected exception");
     } catch (ExecutionException ex) {
-      StatusException se = (StatusException) ex.getCause();
-      assertSame(failureStatus.getCode(), se.getStatus().getCode());
-      Truth.assertThat(se.getStatus().getDescription()).contains(failureStatus.getDescription());
+      assertSame(failureStatus, ((StatusException) ex.getCause()).getStatus());
     }
   }
 
@@ -380,7 +372,7 @@ public class NettyClientTransportTest {
     authority = GrpcUtil.authorityFromHostAndPort(address.getHostString(), address.getPort());
     NettyClientTransport transport = new NettyClientTransport(
         address, CantConstructChannel.class, new HashMap<ChannelOption<?>, Object>(), group,
-        newNegotiator(), null, DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
+        newNegotiator(), DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE,
         GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE, KEEPALIVE_TIME_NANOS_DISABLED, 1, false, authority,
         null, tooManyPingsRunnable);
     transports.add(transport);
@@ -548,7 +540,7 @@ public class NettyClientTransportTest {
     }
     NettyClientTransport transport = new NettyClientTransport(
         address, NioSocketChannel.class, new HashMap<ChannelOption<?>, Object>(), group, negotiator,
-        (ChannelHandler) null, DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
+        DEFAULT_WINDOW_SIZE, maxMsgSize, maxHeaderListSize,
         keepAliveTimeNano, keepAliveTimeoutNano,
         false, authority, userAgent, tooManyPingsRunnable);
     transports.add(transport);
@@ -562,7 +554,7 @@ public class NettyClientTransportTest {
   private void startServer(int maxStreamsPerConnection, int maxHeaderListSize) throws IOException {
     server = new NettyServer(
         TestUtils.testServerAddress(0),
-        NioServerSocketChannel.class, group, group, negotiator, null,
+        NioServerSocketChannel.class, group, group, negotiator,
         Collections.<ServerStreamTracer.Factory>emptyList(), maxStreamsPerConnection,
         DEFAULT_WINDOW_SIZE, DEFAULT_MAX_MESSAGE_SIZE, maxHeaderListSize,
         DEFAULT_SERVER_KEEPALIVE_TIME_NANOS, DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS,

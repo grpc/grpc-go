@@ -25,11 +25,11 @@ import static io.grpc.internal.GrpcUtil.SERVER_KEEPALIVE_TIME_NANOS_DISABLED;
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.ExperimentalApi;
+import io.grpc.Internal;
 import io.grpc.ServerStreamTracer;
 import io.grpc.internal.AbstractServerImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -68,7 +68,7 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   @Nullable
   private EventLoopGroup workerEventLoopGroup;
   private SslContext sslContext;
-  private ChannelHandler initHandler;
+  private ProtocolNegotiator protocolNegotiator;
   private int maxConcurrentCallsPerConnection = Integer.MAX_VALUE;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxMessageSize = DEFAULT_MAX_MESSAGE_SIZE;
@@ -181,14 +181,16 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return this;
   }
 
-  NettyServerBuilder initHandler(ChannelHandler initHandler) {
-    if (initHandler != null) {
-      checkArgument(
-          initHandler.getClass().isAnnotationPresent(ChannelHandler.Sharable.class),
-          "initHandler must be sharable");
-    }
-
-    this.initHandler = initHandler;
+  /**
+   * Sets the {@link ProtocolNegotiator} to be used. If non-{@code null}, overrides the value
+   * specified in {@link #sslContext(SslContext)}.
+   *
+   * <p>Default: {@code null}.
+   */
+  @Internal
+  public final NettyServerBuilder protocolNegotiator(
+          @Nullable ProtocolNegotiator protocolNegotiator) {
+    this.protocolNegotiator = protocolNegotiator;
     return this;
   }
 
@@ -371,29 +373,19 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
   @CheckReturnValue
   protected NettyServer buildTransportServer(
       List<ServerStreamTracer.Factory> streamTracerFactories) {
-    ProtocolNegotiator negotiator = sslContext != null
-        ? ProtocolNegotiators.serverTls(sslContext)
-        : ProtocolNegotiators.serverPlaintext();
+    ProtocolNegotiator negotiator = protocolNegotiator;
+    if (negotiator == null) {
+      negotiator = sslContext != null ? ProtocolNegotiators.serverTls(sslContext) :
+              ProtocolNegotiators.serverPlaintext();
+    }
 
     return new NettyServer(
-        address,
-        channelType,
-        bossEventLoopGroup,
-        workerEventLoopGroup,
-        negotiator,
-        initHandler,
-        streamTracerFactories,
-        maxConcurrentCallsPerConnection,
-        flowControlWindow,
-        maxMessageSize,
-        maxHeaderListSize,
-        keepAliveTimeInNanos,
-        keepAliveTimeoutInNanos,
+        address, channelType, bossEventLoopGroup, workerEventLoopGroup,
+        negotiator, streamTracerFactories, maxConcurrentCallsPerConnection, flowControlWindow,
+        maxMessageSize, maxHeaderListSize, keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,
-        maxConnectionAgeInNanos,
-        maxConnectionAgeGraceInNanos,
-        permitKeepAliveWithoutCalls,
-        permitKeepAliveTimeInNanos);
+        maxConnectionAgeInNanos, maxConnectionAgeGraceInNanos,
+        permitKeepAliveWithoutCalls, permitKeepAliveTimeInNanos);
   }
 
   @Override

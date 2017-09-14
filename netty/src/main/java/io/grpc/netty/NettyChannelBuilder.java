@@ -38,7 +38,6 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.channel.Channel;
-import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -74,7 +73,6 @@ public final class NettyChannelBuilder
   @Nullable
   private EventLoopGroup eventLoopGroup;
   private SslContext sslContext;
-  @Nullable private ChannelHandler initHandler;
   private int flowControlWindow = DEFAULT_FLOW_CONTROL_WINDOW;
   private int maxHeaderListSize = GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE;
   private long keepAliveTimeNanos = KEEPALIVE_TIME_NANOS_DISABLED;
@@ -223,16 +221,6 @@ public final class NettyChannelBuilder
     return this;
   }
 
-  final NettyChannelBuilder initHandler(ChannelHandler initHandler) {
-    if (initHandler != null) {
-      checkArgument(
-          initHandler.getClass().isAnnotationPresent(ChannelHandler.Sharable.class),
-          "initHandler must be sharable");
-    }
-    this.initHandler = initHandler;
-    return this;
-  }
-
   /**
    * Equivalent to using {@link #negotiationType(NegotiationType)} with {@code PLAINTEXT} or
    * {@code PLAINTEXT_UPGRADE}.
@@ -334,20 +322,9 @@ public final class NettyChannelBuilder
   @CheckReturnValue
   @Internal
   protected ClientTransportFactory buildTransportFactory() {
-    return new NettyTransportFactory(
-        dynamicParamsFactory,
-        channelType,
-        channelOptions,
-        negotiationType,
-        sslContext,
-        initHandler,
-        eventLoopGroup,
-        flowControlWindow,
-        maxInboundMessageSize(),
-        maxHeaderListSize,
-        keepAliveTimeNanos,
-        keepAliveTimeoutNanos,
-        keepAliveWithoutCalls);
+    return new NettyTransportFactory(dynamicParamsFactory, channelType, channelOptions,
+        negotiationType, sslContext, eventLoopGroup, flowControlWindow, maxInboundMessageSize(),
+        maxHeaderListSize, keepAliveTimeNanos, keepAliveTimeoutNanos, keepAliveWithoutCalls);
   }
 
   @Override
@@ -456,7 +433,6 @@ public final class NettyChannelBuilder
     private final Class<? extends Channel> channelType;
     private final Map<ChannelOption<?>, ?> channelOptions;
     private final NegotiationType negotiationType;
-    private final ChannelHandler initHandler;
     private final EventLoopGroup group;
     private final boolean usingSharedGroup;
     private final int flowControlWindow;
@@ -468,20 +444,11 @@ public final class NettyChannelBuilder
 
     private boolean closed;
 
-    NettyTransportFactory(
-        TransportCreationParamsFilterFactory transportCreationParamsFilterFactory,
-        Class<? extends Channel> channelType,
-        Map<ChannelOption<?>, ?> channelOptions,
-        NegotiationType negotiationType,
-        SslContext sslContext,
-        ChannelHandler initHandler,
-        EventLoopGroup group,
-        int flowControlWindow,
-        int maxMessageSize,
-        int maxHeaderListSize,
-        long keepAliveTimeNanos,
-        long keepAliveTimeoutNanos,
-        boolean keepAliveWithoutCalls) {
+    NettyTransportFactory(TransportCreationParamsFilterFactory transportCreationParamsFilterFactory,
+        Class<? extends Channel> channelType, Map<ChannelOption<?>, ?> channelOptions,
+        NegotiationType negotiationType, SslContext sslContext, EventLoopGroup group,
+        int flowControlWindow, int maxMessageSize, int maxHeaderListSize,
+        long keepAliveTimeNanos, long keepAliveTimeoutNanos, boolean keepAliveWithoutCalls) {
       this.channelType = channelType;
       this.negotiationType = negotiationType;
       this.channelOptions = new HashMap<ChannelOption<?>, Object>(channelOptions);
@@ -491,7 +458,6 @@ public final class NettyChannelBuilder
             new DefaultNettyTransportCreationParamsFilterFactory(sslContext);
       }
       this.transportCreationParamsFilterFactory = transportCreationParamsFilterFactory;
-      this.initHandler = initHandler;
 
       this.flowControlWindow = flowControlWindow;
       this.maxMessageSize = maxMessageSize;
@@ -525,7 +491,7 @@ public final class NettyChannelBuilder
       };
       NettyClientTransport transport = new NettyClientTransport(
           dparams.getTargetServerAddress(), channelType, channelOptions, group,
-          dparams.getProtocolNegotiator(), initHandler, flowControlWindow,
+          dparams.getProtocolNegotiator(), flowControlWindow,
           maxMessageSize, maxHeaderListSize, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos,
           keepAliveWithoutCalls, dparams.getAuthority(), dparams.getUserAgent(),
           tooManyPingsRunnable);
