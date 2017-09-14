@@ -126,8 +126,8 @@ type quotaPool struct {
 	c chan int
 
 	mu      sync.Mutex
-	version uint64
 	quota   int
+	version uint64
 }
 
 // newQuotaPool creates a quotaPool which has quota q available to consume.
