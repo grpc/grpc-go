@@ -453,7 +453,6 @@ type test struct {
 	unaryServerInt              grpc.UnaryServerInterceptor
 	streamServerInt             grpc.StreamServerInterceptor
 	unknownHandler              grpc.StreamHandler
-	sc                          <-chan grpc.ServiceConfig
 	customCodec                 grpc.Codec
 	serverInitialWindowSize     int32
 	serverInitialConnWindowSize int32
@@ -740,22 +739,22 @@ func TestContextDeadlineNotIgnored(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) ran over the deadline")
 	}
 
-type Name struct {
+type name struct {
 	Service string `json:"service,omitempty"`
 	Method  string `json:"method,omitempty"`
 }
 
-type MC struct {
-	Name                    []Name `json:"name,omitempty"`
+type mc struct {
+	Name                    []name `json:"name,omitempty"`
 	WaitForReady            *bool  `json:"waitForReady,omitempty"`
 	Timeout                 string `json:"timeout,omitempty"`
 	MaxRequestMessageBytes  *int   `json:"maxRequestMessageBytes,omitempty"`
 	MaxResponseMessageBytes *int   `json:"maxResponseMessageBytes,omitempty"`
 }
 
-type SC struct {
+type sc struct {
 	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        []MC   `json:"methodConfig,omitempty"`
+	MethodConfig        []mc   `json:"methodConfig,omitempty"`
 }
 
 func TestTimeoutOnDeadServer(t *testing.T) {
@@ -1243,10 +1242,10 @@ func testGetMethodConfig(t *testing.T, e env) {
 	te := testServiceConfigSetup(t, e)
 	defer te.tearDown()
 
-	sc := SC{
-		MethodConfig: []MC{
+	s := sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "EmptyCall",
@@ -1256,7 +1255,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 				Timeout:      "1ms",
 			},
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 					},
@@ -1267,7 +1266,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 	}
 
 	cc := te.clientConn()
-	b, _ := json.Marshal(sc)
+	b, _ := json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 	tc := testpb.NewTestServiceClient(cc)
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
@@ -1275,10 +1274,10 @@ func testGetMethodConfig(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	sc = SC{
-		MethodConfig: []MC{
+	s = sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "UnaryCall",
@@ -1288,7 +1287,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 				Timeout:      "1ms",
 			},
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 					},
@@ -1298,7 +1297,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 		},
 	}
 
-	b, _ = json.Marshal(sc)
+	b, _ = json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 	// Wait for the new service config to propagate.
 	for {
@@ -1325,10 +1324,10 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 	defer te.tearDown()
 
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
-	sc := SC{
-		MethodConfig: []MC{
+	s := sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "EmptyCall",
@@ -1345,7 +1344,7 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 	}
 
 	cc := te.clientConn()
-	b, _ := json.Marshal(sc)
+	b, _ := json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 	tc := testpb.NewTestServiceClient(cc)
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
@@ -1358,10 +1357,10 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
-	sc = SC{
-		MethodConfig: []MC{
+	s = sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "EmptyCall",
@@ -1377,7 +1376,7 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 		},
 	}
 
-	b, _ = json.Marshal(sc)
+	b, _ = json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 	// Wait for the new service config to take effect.
 	mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
@@ -1410,10 +1409,10 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 	defer te.tearDown()
 
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	sc := SC{
-		MethodConfig: []MC{
+	s := sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "EmptyCall",
@@ -1430,7 +1429,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 	}
 
 	cc := te.clientConn()
-	b, _ := json.Marshal(sc)
+	b, _ := json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 	tc := testpb.NewTestServiceClient(cc)
 	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
@@ -1447,10 +1446,10 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	sc = SC{
-		MethodConfig: []MC{
+	s = sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "EmptyCall",
@@ -1466,7 +1465,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 		},
 	}
 
-	b, _ = json.Marshal(sc)
+	b, _ = json.Marshal(s)
 	cc.HandleServiceConfig(string(b))
 
 	// Wait for the new service config to take effect.
@@ -1519,10 +1518,10 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 
-	sc := SC{
-		MethodConfig: []MC{
+	s := sc{
+		MethodConfig: []mc{
 			{
-				Name: []Name{
+				Name: []name{
 					{
 						Service: "grpc.testing.TestService",
 						Method:  "UnaryCall",
@@ -1544,7 +1543,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	defer te1.tearDown()
 
 	cc1 := te1.clientConn()
-	b, _ := json.Marshal(sc)
+	b, _ := json.Marshal(s)
 	cc1.HandleServiceConfig(string(b))
 	tc := testpb.NewTestServiceClient(te1.clientConn())
 
@@ -1605,7 +1604,6 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
 	cc2 := te2.clientConn()
-	b, _ = json.Marshal(sc)
 	cc2.HandleServiceConfig(string(b))
 	tc = testpb.NewTestServiceClient(te2.clientConn())
 
@@ -1656,7 +1654,6 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	te3.startServer(&testServer{security: e.security})
 	defer te3.tearDown()
 	cc3 := te3.clientConn()
-	b, _ = json.Marshal(sc)
 	cc3.HandleServiceConfig(string(b))
 	tc = testpb.NewTestServiceClient(te3.clientConn())
 
