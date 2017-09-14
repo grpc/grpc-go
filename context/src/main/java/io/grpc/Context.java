@@ -99,6 +99,11 @@ public class Context {
   private static final PersistentHashArrayMappedTrie<Key<?>, Object> EMPTY_ENTRIES =
       new PersistentHashArrayMappedTrie<Key<?>, Object>();
 
+  // Long chains of contexts are suspicious and usually indicate a misuse of Context.
+  // The threshold is arbitrarily chosen.
+  // VisibleForTesting
+  static final int CONTEXT_DEPTH_WARN_THRESH = 1000;
+
   /**
    * The logical root context which is the ultimate ancestor of all contexts. This context
    * is not cancellable and so will not cascade cancellation or retain listeners.
@@ -181,13 +186,17 @@ public class Context {
   private CancellationListener parentListener = new ParentListener();
   final CancellableContext cancellableAncestor;
   final PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries;
+  // The number parents between this context and the root context.
+  final int generation;
 
   /**
    * Construct a context that cannot be cancelled and will not cascade cancellation from its parent.
    */
-  private Context(PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
+  private Context(PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries, int generation) {
     cancellableAncestor = null;
     this.keyValueEntries = keyValueEntries;
+    this.generation = generation;
+    validateGeneration(generation);
   }
 
   /**
@@ -197,6 +206,8 @@ public class Context {
   private Context(Context parent, PersistentHashArrayMappedTrie<Key<?>, Object> keyValueEntries) {
     cancellableAncestor = cancellableAncestor(parent);
     this.keyValueEntries = keyValueEntries;
+    this.generation = parent == null ? 0 : parent.generation + 1;
+    validateGeneration(generation);
   }
 
   /**
@@ -337,7 +348,7 @@ public class Context {
    * cancellation.
    */
   public Context fork() {
-    return new Context(keyValueEntries);
+    return new Context(keyValueEntries, generation + 1);
   }
 
   boolean canBeCancelled() {
@@ -992,5 +1003,20 @@ public class Context {
     // The parent simply cascades cancellations.
     // Bypass the parent and reference the ancestor directly (may be null).
     return parent.cancellableAncestor;
+  }
+
+  /**
+   * If the ancestry chain length is unreasonably long, then print an error to the log and record
+   * the stack trace.
+   */
+  private static void validateGeneration(int generation) {
+    if (generation == CONTEXT_DEPTH_WARN_THRESH) {
+      log.log(
+          Level.SEVERE,
+          "Context ancestry chain length is abnormally long. "
+              + "This suggests an error in application code. "
+              + "Length exceeded: " + CONTEXT_DEPTH_WARN_THRESH,
+          new Exception());
+    }
   }
 }
