@@ -45,7 +45,12 @@ public class HeadersTest {
     String authority = "localhost";
     String userAgent = "useragent";
 
-    List<Header> headers = Headers.createRequestHeaders(metaData, path, authority, userAgent);
+    List<Header> headers = Headers.createRequestHeaders(
+        metaData,
+        path,
+        authority,
+        userAgent,
+        false);
 
     // 7 reserved headers, 1 user header
     assertEquals(7 + 1, headers.size());
