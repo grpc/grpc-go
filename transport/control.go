@@ -123,10 +123,9 @@ func (*ping) item() {}
 // quotaPool is a pool which accumulates the quota and sends it to acquire()
 // when it is available.
 type quotaPool struct {
-	c chan int
-
 	mu      sync.Mutex
 	version uint32
+	c       chan int
 	quota   int
 }
 
