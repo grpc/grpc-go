@@ -40,35 +40,50 @@ public class NettyChannelBuilderTest {
   @Rule public final ExpectedException thrown = ExpectedException.none();
   private final SslContext noSslContext = null;
 
-  @Test
-  public void authorityIsReadable() {
-    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("original", 1234);
-    assertEquals("original:1234", builder.build().authority());
+  private void shutdown(ManagedChannel mc) throws Exception {
+    mc.shutdownNow();
+    assertTrue(mc.awaitTermination(1, TimeUnit.SECONDS));
   }
 
   @Test
-  public void overrideAuthorityIsReadableForAddress() {
+  public void authorityIsReadable() throws Exception {
+    NettyChannelBuilder builder = NettyChannelBuilder.forAddress("original", 1234);
+
+    ManagedChannel b = builder.build();
+    try {
+      assertEquals("original:1234", b.authority());
+    } finally {
+      shutdown(b);
+    }
+  }
+
+  @Test
+  public void overrideAuthorityIsReadableForAddress() throws Exception {
     NettyChannelBuilder builder = NettyChannelBuilder.forAddress("original", 1234);
     overrideAuthorityIsReadableHelper(builder, "override:5678");
   }
 
   @Test
-  public void overrideAuthorityIsReadableForTarget() {
+  public void overrideAuthorityIsReadableForTarget() throws Exception {
     NettyChannelBuilder builder = NettyChannelBuilder.forTarget("original:1234");
     overrideAuthorityIsReadableHelper(builder, "override:5678");
   }
 
   @Test
-  public void overrideAuthorityIsReadableForSocketAddress() {
+  public void overrideAuthorityIsReadableForSocketAddress() throws Exception {
     NettyChannelBuilder builder = NettyChannelBuilder.forAddress(new SocketAddress(){});
     overrideAuthorityIsReadableHelper(builder, "override:5678");
   }
 
   private void overrideAuthorityIsReadableHelper(NettyChannelBuilder builder,
-      String overrideAuthority) {
+      String overrideAuthority) throws Exception {
     builder.overrideAuthority(overrideAuthority);
     ManagedChannel channel = builder.build();
-    assertEquals(overrideAuthority, channel.authority());
+    try {
+      assertEquals(overrideAuthority, channel.authority());
+    } finally {
+      shutdown(channel);
+    }
   }
 
   @Test
