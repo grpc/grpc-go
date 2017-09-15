@@ -194,6 +194,16 @@ public final class NettyServerBuilder extends AbstractServerImplBuilder<NettySer
     return this;
   }
 
+  @Override
+  protected void setTracingEnabled(boolean value) {
+    super.setTracingEnabled(value);
+  }
+
+  @Override
+  protected void setStatsEnabled(boolean value) {
+    super.setStatsEnabled(value);
+  }
+
   /**
    * The maximum number of concurrent calls permitted for each incoming connection. Defaults to no
    * limit.

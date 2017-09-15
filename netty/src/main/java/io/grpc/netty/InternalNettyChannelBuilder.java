@@ -60,5 +60,13 @@ public final class InternalNettyChannelBuilder {
     builder.setDynamicParamsFactory(factory);
   }
 
+  public static void setStatsEnabled(NettyChannelBuilder builder, boolean value) {
+    builder.setStatsEnabled(value);
+  }
+
+  public static void setTracingEnabled(NettyChannelBuilder builder, boolean value) {
+    builder.setTracingEnabled(value);
+  }
+
   private InternalNettyChannelBuilder() {}
 }

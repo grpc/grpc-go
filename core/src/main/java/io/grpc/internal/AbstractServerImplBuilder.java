@@ -99,6 +99,9 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   @Nullable
   private StatsContextFactory statsFactory;
 
+  private boolean statsEnabled = true;
+  private boolean tracingEnabled = true;
+
   @Override
   public final T directExecutor() {
     return executor(MoreExecutors.directExecutor());
@@ -185,6 +188,20 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return thisT();
   }
 
+  /**
+   * Disable or enable stats features.  Enabled by default.
+   */
+  protected void setStatsEnabled(boolean value) {
+    statsEnabled = value;
+  }
+
+  /**
+   * Disable or enable tracing features.  Enabled by default.
+   */
+  protected void setTracingEnabled(boolean value) {
+    tracingEnabled = value;
+  }
+
   @Override
   public Server build() {
     ServerImpl server = new ServerImpl(
@@ -197,21 +214,25 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     return server;
   }
 
-  private List<ServerStreamTracer.Factory> getTracerFactories() {
+  @VisibleForTesting
+  final List<ServerStreamTracer.Factory> getTracerFactories() {
     ArrayList<ServerStreamTracer.Factory> tracerFactories =
         new ArrayList<ServerStreamTracer.Factory>();
-    StatsContextFactory statsFactory =
-        this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
-    if (statsFactory != null) {
-      CensusStatsModule censusStats =
-          new CensusStatsModule(
-              statsFactory, GrpcUtil.STOPWATCH_SUPPLIER, true /** only matters on client-side **/);
-      tracerFactories.add(censusStats.getServerTracerFactory());
+    if (statsEnabled) {
+      StatsContextFactory statsFactory =
+          this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
+      if (statsFactory != null) {
+        CensusStatsModule censusStats =
+            new CensusStatsModule(statsFactory, GrpcUtil.STOPWATCH_SUPPLIER, true);
+        tracerFactories.add(censusStats.getServerTracerFactory());
+      }
     }
-    CensusTracingModule censusTracing =
-        new CensusTracingModule(Tracing.getTracer(),
-            Tracing.getPropagationComponent().getBinaryFormat());
-    tracerFactories.add(censusTracing.getServerTracerFactory());
+    if (tracingEnabled) {
+      CensusTracingModule censusTracing =
+          new CensusTracingModule(Tracing.getTracer(),
+              Tracing.getPropagationComponent().getBinaryFormat());
+      tracerFactories.add(censusTracing.getServerTracerFactory());
+    }
     tracerFactories.addAll(streamTracerFactories);
     return tracerFactories;
   }

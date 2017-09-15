@@ -335,7 +335,8 @@ final class CensusStatsModule {
     }
   }
 
-  private final class ServerTracerFactory extends ServerStreamTracer.Factory {
+  @VisibleForTesting
+  final class ServerTracerFactory extends ServerStreamTracer.Factory {
     @Override
     public ServerStreamTracer newServerStreamTracer(String fullMethodName, Metadata headers) {
       StatsContext parentCtx = headers.get(statsHeader);
@@ -347,7 +348,8 @@ final class CensusStatsModule {
     }
   }
 
-  private class StatsClientInterceptor implements ClientInterceptor {
+  @VisibleForTesting
+  final class StatsClientInterceptor implements ClientInterceptor {
     @Override
     public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
         MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {

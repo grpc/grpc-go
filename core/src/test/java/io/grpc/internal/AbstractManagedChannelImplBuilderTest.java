@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static junit.framework.TestCase.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -26,13 +27,22 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.instrumentation.stats.StatsContext;
+import com.google.instrumentation.stats.StatsContextFactory;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.LoadBalancer;
+import io.grpc.MethodDescriptor;
 import io.grpc.NameResolver;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
@@ -42,6 +52,28 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link AbstractManagedChannelImplBuilder}. */
 @RunWith(JUnit4.class)
 public class AbstractManagedChannelImplBuilderTest {
+  private static final ClientInterceptor DUMMY_USER_INTERCEPTOR =
+      new ClientInterceptor() {
+        @Override
+        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
+            MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+          return next.newCall(method, callOptions);
+        }
+      };
+
+  private static final StatsContextFactory DUMMY_STATS_FACTORY =
+      new StatsContextFactory() {
+        @Override
+        public StatsContext deserialize(InputStream input) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public StatsContext getDefault() {
+          throw new UnsupportedOperationException();
+        }
+      };
+
   private Builder builder = new Builder("fake");
   private Builder directAddressBuilder = new Builder(new SocketAddress(){}, "fake");
 
@@ -229,6 +261,49 @@ public class AbstractManagedChannelImplBuilderTest {
   }
 
   @Test
+  public void getEffectiveInterceptors_default() {
+    builder.intercept(DUMMY_USER_INTERCEPTOR);
+    List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
+    assertEquals(3, effectiveInterceptors.size());
+    assertThat(effectiveInterceptors.get(0))
+        .isInstanceOf(CensusTracingModule.TracingClientInterceptor.class);
+    assertThat(effectiveInterceptors.get(1))
+        .isInstanceOf(CensusStatsModule.StatsClientInterceptor.class);
+    assertThat(effectiveInterceptors.get(2)).isSameAs(DUMMY_USER_INTERCEPTOR);
+  }
+
+  @Test
+  public void getEffectiveInterceptors_disableStats() {
+    builder.intercept(DUMMY_USER_INTERCEPTOR);
+    builder.setStatsEnabled(false);
+    List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
+    assertEquals(2, effectiveInterceptors.size());
+    assertThat(effectiveInterceptors.get(0))
+        .isInstanceOf(CensusTracingModule.TracingClientInterceptor.class);
+    assertThat(effectiveInterceptors.get(1)).isSameAs(DUMMY_USER_INTERCEPTOR);
+  }
+
+  @Test
+  public void getEffectiveInterceptors_disableTracing() {
+    builder.intercept(DUMMY_USER_INTERCEPTOR);
+    builder.setTracingEnabled(false);
+    List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
+    assertEquals(2, effectiveInterceptors.size());
+    assertThat(effectiveInterceptors.get(0))
+        .isInstanceOf(CensusStatsModule.StatsClientInterceptor.class);
+    assertThat(effectiveInterceptors.get(1)).isSameAs(DUMMY_USER_INTERCEPTOR);
+  }
+
+  @Test
+  public void getEffectiveInterceptors_disableBoth() {
+    builder.intercept(DUMMY_USER_INTERCEPTOR);
+    builder.setStatsEnabled(false);
+    builder.setTracingEnabled(false);
+    List<ClientInterceptor> effectiveInterceptors = builder.getEffectiveInterceptors();
+    assertThat(effectiveInterceptors).containsExactly(DUMMY_USER_INTERCEPTOR);
+  }
+
+  @Test
   public void idleTimeout() {
     Builder builder = new Builder("target");
 
@@ -260,10 +335,12 @@ public class AbstractManagedChannelImplBuilderTest {
   static class Builder extends AbstractManagedChannelImplBuilder<Builder> {
     Builder(String target) {
       super(target);
+      statsContextFactory(DUMMY_STATS_FACTORY);
     }
 
     Builder(SocketAddress directServerAddress, String authority) {
       super(directServerAddress, authority);
+      statsContextFactory(DUMMY_STATS_FACTORY);
     }
 
     @Override
