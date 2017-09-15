@@ -126,7 +126,7 @@ type quotaPool struct {
 	c chan int
 
 	mu      sync.Mutex
-	version uint64
+	version uint32
 	quota   int
 }
 
@@ -183,17 +183,17 @@ func (qb *quotaPool) addAndUpdate(v int) {
 	// compareAndExecute is processing, this function doesn't
 	// get executed partially (quota gets updated but the version
 	// doesn't).
-	atomic.AddUint64(&(qb.version), 1)
+	atomic.AddUint32(&(qb.version), 1)
 }
 
-func (qb *quotaPool) acquireWithVersion() (<-chan int, uint64) {
-	return qb.c, atomic.LoadUint64(&(qb.version))
+func (qb *quotaPool) acquireWithVersion() (<-chan int, uint32) {
+	return qb.c, atomic.LoadUint32(&(qb.version))
 }
 
-func (qb *quotaPool) compareAndExecute(version uint64, success, failure func()) bool {
+func (qb *quotaPool) compareAndExecute(version uint32, success, failure func()) bool {
 	qb.mu.Lock()
 	defer qb.mu.Unlock()
-	if version == atomic.LoadUint64(&(qb.version)) {
+	if version == atomic.LoadUint32(&(qb.version)) {
 		success()
 		return true
 	}
