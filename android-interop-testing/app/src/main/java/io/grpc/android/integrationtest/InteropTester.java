@@ -216,7 +216,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     }
     final Messages.SimpleRequest request = new Messages.SimpleRequest();
     request.responseSize = 314159;
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     request.payload = new Payload();
     request.payload.body = new byte[271828];
 
@@ -229,7 +229,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
   public void serverStreaming() throws Exception {
     final Messages.StreamingOutputCallRequest request = new Messages.StreamingOutputCallRequest();
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     request.responseParameters = new Messages.ResponseParameters[4];
     for (int i = 0; i < 4; i++) {
       request.responseParameters[i] = new Messages.ResponseParameters();
@@ -244,7 +244,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     for (int i = 0; i < 4; i++) {
       goldenResponses[i] = new Messages.StreamingOutputCallResponse();
       goldenResponses[i].payload = new Payload();
-      goldenResponses[i].payload.type = Messages.COMPRESSABLE;
+      goldenResponses[i].payload.type = Messages.PayloadType.COMPRESSABLE;
     }
     goldenResponses[0].payload.body = new byte[31415];
     goldenResponses[1].payload.body = new byte[9];
@@ -307,7 +307,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     for (int i = 0; i < 4; i++) {
       goldenResponses[i] = new Messages.StreamingOutputCallResponse();
       goldenResponses[i].payload = new Payload();
-      goldenResponses[i].payload.type = Messages.COMPRESSABLE;
+      goldenResponses[i].payload.type = Messages.PayloadType.COMPRESSABLE;
     }
     goldenResponses[0].payload.body = new byte[31415];
     goldenResponses[1].payload.body = new byte[9];
@@ -361,7 +361,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     request.payload.body = new byte[27182];
     final StreamingOutputCallResponse goldenResponse = new StreamingOutputCallResponse();
     goldenResponse.payload = new Payload();
-    goldenResponse.payload.type = Messages.COMPRESSABLE;
+    goldenResponse.payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponse.payload.body = new byte[31415];
 
     ResponseObserver responseObserver = new ResponseObserver();
@@ -387,7 +387,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     Integer[] responseSizes = {50, 100, 150, 200};
     final StreamingOutputCallRequest request = new StreamingOutputCallRequest();
     request.responseParameters = new ResponseParameters[responseSizes.length];
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     for (int i = 0; i < responseSizes.length; ++i) {
       request.responseParameters[i] = new ResponseParameters();
       request.responseParameters[i].size = responseSizes[i];
@@ -408,7 +408,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     assertEquals(responseSizes.length * numRequests, recorder.getValues().size());
     for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
       StreamingOutputCallResponse response = recorder.getValues().get(ix);
-      assertEquals(Messages.COMPRESSABLE, response.payload.type);
+      assertEquals(Messages.PayloadType.COMPRESSABLE, response.payload.type);
       int length = response.payload.body.length;
       int expectedSize = responseSizes[ix % responseSizes.length];
       assertEquals("comparison failed at index " + ix, expectedSize, length);
@@ -420,7 +420,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     Integer[] responseSizes = {50, 100, 150, 200};
     final StreamingOutputCallRequest request = new StreamingOutputCallRequest();
     request.responseParameters = new ResponseParameters[responseSizes.length];
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     for (int i = 0; i < responseSizes.length; ++i) {
       request.responseParameters[i] = new ResponseParameters();
       request.responseParameters[i].size = responseSizes[i];
@@ -440,7 +440,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     assertEquals(responseSizes.length * numRequests, recorder.getValues().size());
     for (int ix = 0; ix < recorder.getValues().size(); ++ix) {
       StreamingOutputCallResponse response = recorder.getValues().get(ix);
-      assertEquals(Messages.COMPRESSABLE, response.payload.type);
+      assertEquals(Messages.PayloadType.COMPRESSABLE, response.payload.type);
       int length = response.payload.body.length;
       int expectedSize = responseSizes[ix % responseSizes.length];
       assertEquals("comparison failed at index " + ix, expectedSize, length);
@@ -449,7 +449,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
   public void serverStreamingShouldBeFlowControlled() throws Exception {
     final StreamingOutputCallRequest request = new StreamingOutputCallRequest();
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     request.responseParameters = new ResponseParameters[2];
     request.responseParameters[0] = new ResponseParameters();
     request.responseParameters[0].size = 100000;
@@ -458,11 +458,11 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     final StreamingOutputCallResponse[] goldenResponses = new StreamingOutputCallResponse[2];
     goldenResponses[0] = new StreamingOutputCallResponse();
     goldenResponses[0].payload = new Payload();
-    goldenResponses[0].payload.type = Messages.COMPRESSABLE;
+    goldenResponses[0].payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponses[0].payload.body = new byte[100000];
     goldenResponses[1] = new StreamingOutputCallResponse();
     goldenResponses[1].payload = new Payload();
-    goldenResponses[1].payload.type = Messages.COMPRESSABLE;
+    goldenResponses[1].payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponses[1].payload.body = new byte[100001];
 
     long start = System.nanoTime();
@@ -514,13 +514,13 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     }
     final SimpleRequest request = new SimpleRequest();
     request.payload = new Payload();
-    request.payload.type = Messages.COMPRESSABLE;
+    request.payload.type = Messages.PayloadType.COMPRESSABLE;
     request.payload.body = new byte[unaryPayloadLength()];
     request.responseSize = 10;
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     final SimpleResponse goldenResponse = new SimpleResponse();
     goldenResponse.payload = new Payload();
-    goldenResponse.payload.type = Messages.COMPRESSABLE;
+    goldenResponse.payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponse.payload.body = new byte[10];
 
     assertMessageEquals(goldenResponse, blockingStub.unaryCall(request));
@@ -532,12 +532,12 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     }
     final SimpleRequest request = new SimpleRequest();
     request.responseSize = unaryPayloadLength();
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
 
     SimpleResponse resp = blockingStub.unaryCall(request);
     final SimpleResponse goldenResponse = new SimpleResponse();
     goldenResponse.payload = new Payload();
-    goldenResponse.payload.type = Messages.COMPRESSABLE;
+    goldenResponse.payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponse.payload.body = new byte[unaryPayloadLength()];
 
     assertMessageSizeEquals(goldenResponse, resp);
@@ -579,7 +579,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     responseParameters.size = 1;
     responseParameters.intervalUs = 10000;
     StreamingOutputCallRequest request = new StreamingOutputCallRequest();
-    request.responseType = Messages.COMPRESSABLE;
+    request.responseType = Messages.PayloadType.COMPRESSABLE;
     request.responseParameters = new ResponseParameters[4];
     request.responseParameters[0] = responseParameters;
     request.responseParameters[1] = responseParameters;
@@ -623,15 +623,15 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
     StreamingOutputCallResponse[] goldenResponses = new StreamingOutputCallResponse[3];
     goldenResponses[0] = new StreamingOutputCallResponse();
     goldenResponses[0].payload = new Payload();
-    goldenResponses[0].payload.type = Messages.COMPRESSABLE;
+    goldenResponses[0].payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponses[0].payload.body = new byte[3];
     goldenResponses[1] = new StreamingOutputCallResponse();
     goldenResponses[1].payload = new Payload();
-    goldenResponses[1].payload.type = Messages.COMPRESSABLE;
+    goldenResponses[1].payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponses[1].payload.body = new byte[1];
     goldenResponses[2] = new StreamingOutputCallResponse();
     goldenResponses[2].payload = new Payload();
-    goldenResponses[2].payload.type = Messages.COMPRESSABLE;
+    goldenResponses[2].payload.type = Messages.PayloadType.COMPRESSABLE;
     goldenResponses[2].payload.body = new byte[4];
 
 

@@ -42,6 +42,7 @@ protobuf {
                 javanano {
                     // Options added to --javanano_out
                     option 'ignore_services=true'
+                    option 'enum_style=java'
                 }
             }
 
