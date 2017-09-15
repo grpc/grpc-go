@@ -42,6 +42,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
@@ -633,15 +635,27 @@ public class NettyClientHandlerTest extends NettyHandlerTestBase<NettyClientHand
     Http2Stream stream = connection.local().createStream(streamId - 2, true);
     stream.close();
 
-    Ticker ticker = new Ticker() {
+    final Ticker ticker = new Ticker() {
       @Override
       public long read() {
         return nanoTime;
       }
     };
-
-    return NettyClientHandler.newHandler(connection, frameReader(), frameWriter(),
-        lifecycleManager, mockKeepAliveManager, flowControlWindow, maxHeaderListSize, ticker,
+    Supplier<Stopwatch> stopwatchSupplier = new Supplier<Stopwatch>() {
+      @Override
+      public Stopwatch get() {
+        return Stopwatch.createUnstarted(ticker);
+      }
+    };
+    return NettyClientHandler.newHandler(
+        connection,
+        frameReader(),
+        frameWriter(),
+        lifecycleManager,
+        mockKeepAliveManager,
+        flowControlWindow,
+        maxHeaderListSize,
+        stopwatchSupplier,
         tooManyPingsRunnable);
   }
 

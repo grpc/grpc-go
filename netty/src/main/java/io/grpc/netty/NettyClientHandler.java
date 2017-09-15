@@ -22,7 +22,7 @@ import static io.netty.util.CharsetUtil.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Ticker;
+import com.google.common.base.Supplier;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -95,14 +95,19 @@ class NettyClientHandler extends AbstractNettyHandler {
   private final Http2Connection.PropertyKey streamKey;
   private final ClientTransportLifecycleManager lifecycleManager;
   private final KeepAliveManager keepAliveManager;
-  private final Ticker ticker;
+  // Returns new unstarted stopwatches
+  private final Supplier<Stopwatch> stopwatchFactory;
   private WriteQueue clientWriteQueue;
   private Http2Ping ping;
   private Attributes attributes = Attributes.EMPTY;
 
-  static NettyClientHandler newHandler(ClientTransportLifecycleManager lifecycleManager,
-      @Nullable KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
-      Ticker ticker, Runnable tooManyPingsRunnable) {
+  static NettyClientHandler newHandler(
+      ClientTransportLifecycleManager lifecycleManager,
+      @Nullable KeepAliveManager keepAliveManager,
+      int flowControlWindow,
+      int maxHeaderListSize,
+      Supplier<Stopwatch> stopwatchFactory,
+      Runnable tooManyPingsRunnable) {
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Http2HeadersDecoder headersDecoder = new GrpcHttp2ClientHeadersDecoder(maxHeaderListSize);
     Http2FrameReader frameReader = new DefaultHttp2FrameReader(headersDecoder);
@@ -114,21 +119,35 @@ class NettyClientHandler extends AbstractNettyHandler {
         new DefaultHttp2RemoteFlowController(connection, dist);
     connection.remote().flowController(controller);
 
-    return newHandler(connection, frameReader, frameWriter, lifecycleManager, keepAliveManager,
-        flowControlWindow, maxHeaderListSize, ticker, tooManyPingsRunnable);
+    return newHandler(
+        connection,
+        frameReader,
+        frameWriter,
+        lifecycleManager,
+        keepAliveManager,
+        flowControlWindow,
+        maxHeaderListSize,
+        stopwatchFactory,
+        tooManyPingsRunnable);
   }
 
   @VisibleForTesting
-  static NettyClientHandler newHandler(Http2Connection connection, Http2FrameReader frameReader,
-      Http2FrameWriter frameWriter, ClientTransportLifecycleManager lifecycleManager,
-      KeepAliveManager keepAliveManager, int flowControlWindow, int maxHeaderListSize,
-      Ticker ticker, Runnable tooManyPingsRunnable) {
+  static NettyClientHandler newHandler(
+      Http2Connection connection,
+      Http2FrameReader frameReader,
+      Http2FrameWriter frameWriter,
+      ClientTransportLifecycleManager lifecycleManager,
+      KeepAliveManager keepAliveManager,
+      int flowControlWindow,
+      int maxHeaderListSize,
+      Supplier<Stopwatch> stopwatchFactory,
+      Runnable tooManyPingsRunnable) {
     Preconditions.checkNotNull(connection, "connection");
     Preconditions.checkNotNull(frameReader, "frameReader");
     Preconditions.checkNotNull(lifecycleManager, "lifecycleManager");
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
     Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
-    Preconditions.checkNotNull(ticker, "ticker");
+    Preconditions.checkNotNull(stopwatchFactory, "stopwatchFactory");
     Preconditions.checkNotNull(tooManyPingsRunnable, "tooManyPingsRunnable");
 
     Http2FrameLogger frameLogger = new Http2FrameLogger(LogLevel.DEBUG, NettyClientHandler.class);
@@ -151,17 +170,28 @@ class NettyClientHandler extends AbstractNettyHandler {
     settings.maxConcurrentStreams(0);
     settings.maxHeaderListSize(maxHeaderListSize);
 
-    return new NettyClientHandler(decoder, encoder, settings, lifecycleManager, keepAliveManager,
-        ticker, tooManyPingsRunnable);
+    return new NettyClientHandler(
+        decoder,
+        encoder,
+        settings,
+        lifecycleManager,
+        keepAliveManager,
+        stopwatchFactory,
+        tooManyPingsRunnable);
   }
 
-  private NettyClientHandler(Http2ConnectionDecoder decoder, StreamBufferingEncoder encoder,
-      Http2Settings settings, ClientTransportLifecycleManager lifecycleManager,
-      KeepAliveManager keepAliveManager, Ticker ticker, final Runnable tooManyPingsRunnable) {
+  private NettyClientHandler(
+      Http2ConnectionDecoder decoder,
+      StreamBufferingEncoder encoder,
+      Http2Settings settings,
+      ClientTransportLifecycleManager lifecycleManager,
+      KeepAliveManager keepAliveManager,
+      Supplier<Stopwatch> stopwatchFactory,
+      final Runnable tooManyPingsRunnable) {
     super(decoder, encoder, settings);
     this.lifecycleManager = lifecycleManager;
     this.keepAliveManager = keepAliveManager;
-    this.ticker = ticker;
+    this.stopwatchFactory = stopwatchFactory;
 
     // Set the frame listener on the decoder.
     decoder().frameListener(new FrameListener());
@@ -509,7 +539,8 @@ class NettyClientHandler extends AbstractNettyHandler {
     long data = USER_PING_PAYLOAD;
     ByteBuf buffer = ctx.alloc().buffer(8);
     buffer.writeLong(data);
-    Stopwatch stopwatch = Stopwatch.createStarted(ticker);
+    Stopwatch stopwatch = stopwatchFactory.get();
+    stopwatch.start();
     ping = new Http2Ping(data, stopwatch);
     ping.addCallback(callback, executor);
     // and then write the ping

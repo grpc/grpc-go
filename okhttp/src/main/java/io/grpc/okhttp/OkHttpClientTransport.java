@@ -22,7 +22,7 @@ import static io.grpc.internal.GrpcUtil.TIMER_SERVICE;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
-import com.google.common.base.Ticker;
+import com.google.common.base.Supplier;
 import com.google.common.util.concurrent.SettableFuture;
 import com.squareup.okhttp.Credentials;
 import com.squareup.okhttp.HttpUrl;
@@ -124,7 +124,8 @@ class OkHttpClientTransport implements ConnectionClientTransport {
   private final String defaultAuthority;
   private final String userAgent;
   private final Random random = new Random();
-  private final Ticker ticker;
+  // Returns new unstarted stopwatches
+  private final Supplier<Stopwatch> stopwatchFactory;
   private Listener listener;
   private FrameReader testFrameReader;
   private AsyncFrameWriter frameWriter;
@@ -199,7 +200,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.sslSocketFactory = sslSocketFactory;
     this.hostnameVerifier = hostnameVerifier;
     this.connectionSpec = Preconditions.checkNotNull(connectionSpec, "connectionSpec");
-    this.ticker = Ticker.systemTicker();
+    this.stopwatchFactory = GrpcUtil.STOPWATCH_SUPPLIER;
     this.userAgent = GrpcUtil.getGrpcUserAgent("okhttp", userAgent);
     this.proxyAddress = proxyAddress;
     this.proxyUsername = proxyUsername;
@@ -212,10 +213,18 @@ class OkHttpClientTransport implements ConnectionClientTransport {
    * Create a transport connected to a fake peer for test.
    */
   @VisibleForTesting
-  OkHttpClientTransport(String userAgent, Executor executor, FrameReader frameReader,
-      FrameWriter testFrameWriter, int nextStreamId, Socket socket, Ticker ticker,
-      @Nullable Runnable connectingCallback, SettableFuture<Void> connectedFuture,
-      int maxMessageSize, Runnable tooManyPingsRunnable) {
+  OkHttpClientTransport(
+      String userAgent,
+      Executor executor,
+      FrameReader frameReader,
+      FrameWriter testFrameWriter,
+      int nextStreamId,
+      Socket socket,
+      Supplier<Stopwatch> stopwatchFactory,
+      @Nullable Runnable connectingCallback,
+      SettableFuture<Void> connectedFuture,
+      int maxMessageSize,
+      Runnable tooManyPingsRunnable) {
     address = null;
     this.maxMessageSize = maxMessageSize;
     defaultAuthority = "notarealauthority:80";
@@ -226,7 +235,7 @@ class OkHttpClientTransport implements ConnectionClientTransport {
     this.testFrameWriter = Preconditions.checkNotNull(testFrameWriter, "testFrameWriter");
     this.socket = Preconditions.checkNotNull(socket, "socket");
     this.nextStreamId = nextStreamId;
-    this.ticker = ticker;
+    this.stopwatchFactory = stopwatchFactory;
     this.connectionSpec = null;
     this.connectingCallback = connectingCallback;
     this.connectedFuture = Preconditions.checkNotNull(connectedFuture, "connectedFuture");
@@ -271,7 +280,9 @@ class OkHttpClientTransport implements ConnectionClientTransport {
       } else {
         // set outstanding operation and then write the ping after releasing lock
         data = random.nextLong();
-        p = ping = new Http2Ping(data, Stopwatch.createStarted(ticker));
+        Stopwatch stopwatch = stopwatchFactory.get();
+        stopwatch.start();
+        p = ping = new Http2Ping(data, stopwatch);
         writePing = true;
       }
     }

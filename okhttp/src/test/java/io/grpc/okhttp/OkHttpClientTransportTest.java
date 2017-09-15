@@ -45,6 +45,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
+import com.google.common.base.Stopwatch;
+import com.google.common.base.Supplier;
 import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
@@ -168,15 +170,30 @@ public class OkHttpClientTransportTest {
   private void startTransport(int startId, @Nullable Runnable connectingCallback,
       boolean waitingForConnected, int maxMessageSize, String userAgent) throws Exception {
     connectedFuture = SettableFuture.create();
-    Ticker ticker = new Ticker() {
+    final Ticker ticker = new Ticker() {
       @Override
       public long read() {
         return nanoTime;
       }
     };
-    clientTransport = new OkHttpClientTransport(userAgent, executor, frameReader,
-        frameWriter, startId, new MockSocket(frameReader), ticker, connectingCallback,
-        connectedFuture, maxMessageSize, tooManyPingsRunnable);
+    Supplier<Stopwatch> stopwatchSupplier = new Supplier<Stopwatch>() {
+      @Override
+      public Stopwatch get() {
+        return Stopwatch.createUnstarted(ticker);
+      }
+    };
+    clientTransport = new OkHttpClientTransport(
+        userAgent,
+        executor,
+        frameReader,
+        frameWriter,
+        startId,
+        new MockSocket(frameReader),
+        stopwatchSupplier,
+        connectingCallback,
+        connectedFuture,
+        maxMessageSize,
+        tooManyPingsRunnable);
     clientTransport.start(transportListener);
     if (waitingForConnected) {
       connectedFuture.get(TIME_OUT_MS, TimeUnit.MILLISECONDS);

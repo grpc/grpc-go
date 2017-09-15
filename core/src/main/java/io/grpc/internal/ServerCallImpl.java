@@ -24,6 +24,7 @@ import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.grpc.Attributes;
 import io.grpc.Codec;
@@ -37,7 +38,6 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.Status;
 import java.io.InputStream;
-import java.util.List;
 import java.util.logging.Logger;
 
 final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
@@ -90,9 +90,9 @@ final class ServerCallImpl<ReqT, RespT> extends ServerCall<ReqT, RespT> {
     } else {
       if (messageAcceptEncoding != null) {
         // TODO(carl-mastrangelo): remove the string allocation.
-        List<String> acceptedEncodingsList = ACCEPT_ENCODING_SPLITTER.splitToList(
-            new String(messageAcceptEncoding, GrpcUtil.US_ASCII));
-        if (!acceptedEncodingsList.contains(compressor.getMessageEncoding())) {
+        if (!Iterables.contains(
+            ACCEPT_ENCODING_SPLITTER.split(new String(messageAcceptEncoding, GrpcUtil.US_ASCII)),
+            compressor.getMessageEncoding())) {
           // resort to using no compression.
           compressor = Codec.Identity.NONE;
         }

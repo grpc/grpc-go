@@ -16,7 +16,6 @@
 
 package io.grpc.protobuf.lite;
 
-import com.google.common.io.ByteStreams;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;
@@ -53,7 +52,7 @@ class ProtoInputStream extends InputStream implements Drainable, KnownLength {
       message.writeTo(target);
       message = null;
     } else if (partial != null) {
-      written = (int) ByteStreams.copy(partial, target);
+      written = (int) ProtoLiteUtils.copy(partial, target);
       partial = null;
     } else {
       written = 0;

@@ -21,7 +21,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static java.lang.Math.min;
 
-import com.google.common.io.ByteStreams;
 import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Drainable;
@@ -251,7 +250,7 @@ public class MessageFramer implements Framer {
     } else {
       // This makes an unnecessary copy of the bytes when bytebuf supports array(). However, we
       // expect performance-critical code to support flushTo().
-      long written = ByteStreams.copy(message, outputStream);
+      long written = IoUtils.copy(message, outputStream);
       checkArgument(written <= Integer.MAX_VALUE, "Message size overflow: %s", written);
       return (int) written;
     }

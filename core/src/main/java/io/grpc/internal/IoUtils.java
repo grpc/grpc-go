@@ -16,27 +16,41 @@
 
 package io.grpc.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 /** Common IoUtils for thrift and nanopb to convert inputstream to bytes. */
 public final class IoUtils {
 
   /** maximum buffer to be read is 16 KB. */
-  private static final int MAX_BUFFER_LENGTH = 16384; 
-  
+  private static final int MAX_BUFFER_LENGTH = 16384;
+
   /** Returns the byte array. */
-  public static byte[] toByteArray(InputStream is) throws IOException {
-    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-    int nRead;
-    byte[] bytes = new byte[MAX_BUFFER_LENGTH];
+  public static byte[] toByteArray(InputStream in) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    copy(in, out);
+    return out.toByteArray();
+  }
 
-    while ((nRead = is.read(bytes, 0, bytes.length)) != -1) {
-      buffer.write(bytes, 0, nRead);
+  /** Copies the data from input stream to output stream. */
+  public static long copy(InputStream from, OutputStream to) throws IOException {
+    // Copied from guava com.google.common.io.ByteStreams because its API is unstable (beta)
+    checkNotNull(from);
+    checkNotNull(to);
+    byte[] buf = new byte[MAX_BUFFER_LENGTH];
+    long total = 0;
+    while (true) {
+      int r = from.read(buf);
+      if (r == -1) {
+        break;
+      }
+      to.write(buf, 0, r);
+      total += r;
     }
-
-    buffer.flush();
-    return buffer.toByteArray();
+    return total;
   }
 }
