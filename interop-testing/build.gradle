@@ -24,7 +24,8 @@ dependencies {
             libraries.junit,
             libraries.mockito,
             libraries.netty_tcnative,
-            libraries.oauth_client
+            libraries.oauth_client,
+            libraries.truth
 }
 
 configureProtoCompilation()

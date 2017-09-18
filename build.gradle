@@ -221,11 +221,20 @@ subprojects {
     // Define a separate configuration for managing the dependency on Jetty ALPN agent.
     configurations {
         alpnagent
+
+        compile {
+            // Detect Maven Enforcer's dependencyConvergence failures. We only
+            // care for artifacts used as libraries by others.
+            if (!(project.name in ['grpc-benchmarks', 'grpc-interop-testing'])) {
+                resolutionStrategy.failOnVersionConflict()
+            }
+        }
     }
 
     dependencies {
         testCompile libraries.junit,
-                    libraries.mockito
+                    libraries.mockito,
+                    libraries.truth
 
         // Configuration for modules that use Jetty ALPN agent
         alpnagent libraries.jetty_alpn_agent
