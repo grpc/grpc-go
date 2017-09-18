@@ -1027,7 +1027,7 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new AssertionError();
+    TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
@@ -1035,7 +1035,7 @@ public class ServerImplTest {
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (TestError t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1052,7 +1052,7 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new RuntimeException();
+    RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener)
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     // Closing the InputStream is done by the delegated listener (generally ServerCallImpl)
@@ -1060,7 +1060,7 @@ public class ServerImplTest {
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (RuntimeException t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1077,13 +1077,13 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new AssertionError();
+    TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener).halfClosed();
     listener.halfClosed();
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (TestError t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1100,13 +1100,13 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new RuntimeException();
+    RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener).halfClosed();
     listener.halfClosed();
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (RuntimeException t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1123,13 +1123,13 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new AssertionError();
+    TestError expectedT = new TestError();
     doThrow(expectedT).when(mockListener).onReady();
     listener.onReady();
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (TestError t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1146,13 +1146,13 @@ public class ServerImplTest {
     ServerStreamListener mockListener = mock(ServerStreamListener.class);
     listener.setListener(mockListener);
 
-    Throwable expectedT = new RuntimeException();
+    RuntimeException expectedT = new RuntimeException();
     doThrow(expectedT).when(mockListener).onReady();
     listener.onReady();
     try {
       executor.runDueTasks();
       fail("Expected exception");
-    } catch (Throwable t) {
+    } catch (RuntimeException t) {
       assertSame(expectedT, t);
       ensureServerStateNotLeaked();
     }
@@ -1249,4 +1249,7 @@ public class ServerImplTest {
       throw new UnsupportedOperationException();
     }
   }
+
+  /** Allows more precise catch blocks than plain Error to avoid catching AssertionError. */
+  private static final class TestError extends Error {}
 }

@@ -455,7 +455,7 @@ public class ContextTest {
     assertSame(current, observed);
     assertSame(current, Context.current());
 
-    final Error err = new Error();
+    final TestError err = new TestError();
     try {
       base.wrap(new Runnable() {
         @Override
@@ -464,7 +464,7 @@ public class ContextTest {
         }
       }).run();
       fail("Expected exception");
-    } catch (Error ex) {
+    } catch (TestError ex) {
       assertSame(err, ex);
     }
     assertSame(current, Context.current());
@@ -495,7 +495,7 @@ public class ContextTest {
     assertSame(current, observed);
     assertSame(current, Context.current());
 
-    final Error err = new Error();
+    final TestError err = new TestError();
     try {
       base.wrap(new Callable<Object>() {
         @Override
@@ -504,7 +504,7 @@ public class ContextTest {
         }
       }).call();
       fail("Excepted exception");
-    } catch (Error ex) {
+    } catch (TestError ex) {
       assertSame(err, ex);
     }
     assertSame(current, Context.current());
@@ -987,4 +987,7 @@ public class ContextTest {
       }
     }
   }
+
+  /** Allows more precise catch blocks than plain Error to avoid catching AssertionError. */
+  private static final class TestError extends Error {}
 }
