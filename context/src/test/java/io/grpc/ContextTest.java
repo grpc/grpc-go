@@ -832,8 +832,7 @@ public class ContextTest {
 
   @Test
   public void storageReturnsNullTest() throws Exception {
-    Class<?> contextClass = Class.forName("io.grpc.Context");
-    Field storage = contextClass.getDeclaredField("storage");
+    Field storage = Context.class.getDeclaredField("storage");
     assertTrue(Modifier.isFinal(storage.getModifiers()));
     // use reflection to forcibly change the storage object to a test object
     storage.setAccessible(true);
