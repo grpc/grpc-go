@@ -16,9 +16,9 @@
  *
  */
 
-// Package primitives contains benchmarks for various synchronization primitives
+// Package primitives_test contains benchmarks for various synchronization primitives
 // available in Go.
-package primitives
+package primitives_test
 
 import (
 	"sync"
