@@ -150,24 +150,50 @@ public final class StatsTraceContext {
   }
 
   /**
-   * See {@link StreamTracer#outboundMessage}.
+   * See {@link StreamTracer#outboundMessage(int)}.
    *
    * <p>Called from {@link io.grpc.internal.Framer}.
    */
-  public void outboundMessage() {
+  @SuppressWarnings("deprecation")
+  public void outboundMessage(int seqNo) {
     for (StreamTracer tracer : tracers) {
+      tracer.outboundMessage(seqNo);
       tracer.outboundMessage();
     }
   }
 
   /**
-   * See {@link StreamTracer#inboundMessage}.
+   * See {@link StreamTracer#inboundMessage(int)}.
    *
    * <p>Called from {@link io.grpc.internal.MessageDeframer}.
    */
-  public void inboundMessage() {
+  @SuppressWarnings("deprecation")
+  public void inboundMessage(int seqNo) {
     for (StreamTracer tracer : tracers) {
+      tracer.inboundMessage(seqNo);
       tracer.inboundMessage();
+    }
+  }
+
+  /**
+   * See {@link StreamTracer#outboundMessageSent}.
+   *
+   * <p>Called from {@link io.grpc.internal.Framer}.
+   */
+  public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+    for (StreamTracer tracer : tracers) {
+      tracer.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+    }
+  }
+
+  /**
+   * See {@link StreamTracer#inboundMessageRead}.
+   *
+   * <p>Called from {@link io.grpc.internal.MessageDeframer}.
+   */
+  public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+    for (StreamTracer tracer : tracers) {
+      tracer.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
     }
   }
 

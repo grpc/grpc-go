@@ -48,11 +48,6 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
-  public int getInboundMessageCount() {
-    return delegate.getInboundMessageCount();
-  }
-
-  @Override
   public Status getStatus() {
     return delegate.getStatus();
   }
@@ -68,11 +63,6 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
-  public int getOutboundMessageCount() {
-    return delegate.getOutboundMessageCount();
-  }
-
-  @Override
   public long getOutboundWireSize() {
     return delegate.getOutboundWireSize();
   }
@@ -80,6 +70,16 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   @Override
   public long getOutboundUncompressedSize() {
     return delegate.getOutboundUncompressedSize();
+  }
+
+  @Override
+  public String nextOutboundEvent() {
+    return delegate.nextOutboundEvent();
+  }
+
+  @Override
+  public String nextInboundEvent() {
+    return delegate.nextInboundEvent();
   }
 
   @Override
@@ -108,13 +108,35 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public void inboundMessage() {
     delegate.inboundMessage();
   }
 
   @Override
+  public void inboundMessage(int seqNo) {
+    delegate.inboundMessage(seqNo);
+  }
+
+  @Override
+  @SuppressWarnings("deprecation")
   public void outboundMessage() {
     delegate.outboundMessage();
+  }
+
+  @Override
+  public void outboundMessage(int seqNo) {
+    delegate.outboundMessage(seqNo);
+  }
+
+  @Override
+  public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+    delegate.outboundMessageSent(seqNo, optionalWireSize, optionalUncompressedSize);
+  }
+
+  @Override
+  public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+    delegate.inboundMessageRead(seqNo, optionalWireSize, optionalUncompressedSize);
   }
 
   @Override

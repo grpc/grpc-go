@@ -36,16 +36,66 @@ public abstract class StreamTracer {
    * An outbound message has been passed to the stream.  This is called as soon as the stream knows
    * about the message, but doesn't have further guarantee such as whether the message is serialized
    * or not.
+   *
+   * @deprecated use {@link #outboundMessage(int)}
    */
+  @Deprecated
   public void outboundMessage() {
+  }
+
+  /**
+   * An outbound message has been passed to the stream.  This is called as soon as the stream knows
+   * about the message, but doesn't have further guarantee such as whether the message is serialized
+   * or not.
+   *
+   * @param seqNo the sequential number of the message within the stream, starting from 0.  It can
+   *              be used to correlate with {@link #outboundMessageSent} for the same message.
+   */
+  public void outboundMessage(int seqNo) {
   }
 
   /**
    * An inbound message has been received by the stream.  This is called as soon as the stream knows
    * about the message, but doesn't have further guarantee such as whether the message is
    * deserialized or not.
+   *
+   * @deprecated use {@link #inboundMessage(int)}
    */
+  @Deprecated
   public void inboundMessage() {
+  }
+
+  /**
+   * An inbound message has been received by the stream.  This is called as soon as the stream knows
+   * about the message, but doesn't have further guarantee such as whether the message is
+   * deserialized or not.
+   *
+   * @param seqNo the sequential number of the message within the stream, starting from 0.  It can
+   *              be used to correlate with {@link #inboundMessageRead} for the same message.
+   */
+  public void inboundMessage(int seqNo) {
+  }
+
+  /**
+   * An outbound message has been serialized and sent to the transport.
+   *
+   * @param seqNo the sequential number of the message within the stream, starting from 0.  It can
+   *              be used to correlate with {@link #outboundMessage(int)} for the same message.
+   * @param optionalWireSize the wire size of the message. -1 if unknown
+   * @param optionalUncompressedSize the uncompressed serialized size of the message. -1 if unknown
+   */
+  public void outboundMessageSent(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+  }
+
+  /**
+   * An inbound message has been fully read from the transport.
+   *
+   * @param seqNo the sequential number of the message within the stream, starting from 0.  It can
+   *              be used to correlate with {@link #inboundMessage(int)} for the same message.
+   * @param optionalWireSize the wire size of the message. -1 if unknown
+   * @param optionalUncompressedSize the uncompressed serialized size of the message. -1 if unknown
+   */
+  public void inboundMessageRead(int seqNo, long optionalWireSize, long optionalUncompressedSize) {
   }
 
   /**

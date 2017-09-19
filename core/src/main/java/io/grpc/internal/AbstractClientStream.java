@@ -359,7 +359,8 @@ public abstract class AbstractClientStream extends AbstractStream
       } catch (java.io.IOException ex) {
         throw new RuntimeException(ex);
       }
-      statsTraceCtx.outboundMessage();
+      statsTraceCtx.outboundMessage(0);
+      statsTraceCtx.outboundMessageSent(0, payload.length, payload.length);
       statsTraceCtx.outboundUncompressedSize(payload.length);
       // NB(zhangkun83): this is not accurate, because the underlying transport will probably encode
       // it using e.g., base64.  However, we are not supposed to know such detail here.

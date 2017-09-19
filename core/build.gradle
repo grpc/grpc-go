@@ -12,6 +12,8 @@ dependencies {
         exclude group: 'io.grpc', module: 'grpc-context'
     }
     compile (libraries.opencensus_api) {
+        // prefer 3.0.0 from libraries instead of 3.0.1
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
         // prefer 2.0.19 from libraries instead of 2.0.11
         exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
         // we'll always be more up-to-date

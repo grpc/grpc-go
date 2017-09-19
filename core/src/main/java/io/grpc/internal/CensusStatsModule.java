@@ -161,12 +161,12 @@ final class CensusStatsModule {
     }
 
     @Override
-    public void inboundMessage() {
+    public void inboundMessage(int seqNo) {
       inboundMessageCount.incrementAndGet();
     }
 
     @Override
-    public void outboundMessage() {
+    public void outboundMessage(int seqNo) {
       outboundMessageCount.incrementAndGet();
     }
   }
@@ -282,12 +282,12 @@ final class CensusStatsModule {
     }
 
     @Override
-    public void inboundMessage() {
+    public void inboundMessage(int seqNo) {
       inboundMessageCount.incrementAndGet();
     }
 
     @Override
-    public void outboundMessage() {
+    public void outboundMessage(int seqNo) {
       outboundMessageCount.incrementAndGet();
     }
 

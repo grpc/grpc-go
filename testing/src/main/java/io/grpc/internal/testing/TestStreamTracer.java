@@ -19,11 +19,12 @@ package io.grpc.internal.testing;
 import io.grpc.Status;
 import io.grpc.StreamTracer;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.annotation.Nullable;
 
 /**
  * A {@link StreamTracer} suitable for testing.
@@ -39,16 +40,6 @@ public interface TestStreamTracer {
    * Waits for the stream to be done.
    */
   boolean await(long timeout, TimeUnit timeUnit) throws InterruptedException;
-
-  /**
-   * Returns how many times {@link StreamTracer#inboundMessage} has been called.
-   */
-  int getInboundMessageCount();
-
-  /**
-   * Returns how many times {@link StreamTracer#outboundMessage} has been called.
-   */
-  int getOutboundMessageCount();
 
   /**
    * Returns the status passed to {@link StreamTracer#streamClosed}.
@@ -76,6 +67,17 @@ public interface TestStreamTracer {
   long getOutboundUncompressedSize();
 
   /**
+   * Returns the next captured outbound message event.
+   */
+  @Nullable
+  String nextOutboundEvent();
+
+  /**
+   * Returns the next captured outbound message event.
+   */
+  String nextInboundEvent();
+
+  /**
    * A {@link StreamTracer} suitable for testing.
    */
   public static class TestBaseStreamTracer extends StreamTracer implements TestStreamTracer {
@@ -84,8 +86,8 @@ public interface TestStreamTracer {
     protected final AtomicLong inboundWireSize = new AtomicLong();
     protected final AtomicLong outboundUncompressedSize = new AtomicLong();
     protected final AtomicLong inboundUncompressedSize = new AtomicLong();
-    protected final AtomicInteger inboundMessageCount = new AtomicInteger();
-    protected final AtomicInteger outboundMessageCount = new AtomicInteger();
+    protected final LinkedBlockingQueue<String> outboundEvents = new LinkedBlockingQueue<String>();
+    protected final LinkedBlockingQueue<String> inboundEvents = new LinkedBlockingQueue<String>();
     protected final AtomicReference<Status> streamClosedStatus = new AtomicReference<Status>();
     protected final CountDownLatch streamClosed = new CountDownLatch(1);
     protected final AtomicBoolean failDuplicateCallbacks = new AtomicBoolean(true);
@@ -98,16 +100,6 @@ public interface TestStreamTracer {
     @Override
     public boolean await(long timeout, TimeUnit timeUnit) throws InterruptedException {
       return streamClosed.await(timeout, timeUnit);
-    }
-
-    @Override
-    public int getInboundMessageCount() {
-      return inboundMessageCount.get();
-    }
-
-    @Override
-    public int getOutboundMessageCount() {
-      return outboundMessageCount.get();
     }
 
     @Override
@@ -167,13 +159,52 @@ public interface TestStreamTracer {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void inboundMessage() {
-      inboundMessageCount.incrementAndGet();
+      inboundEvents.add("inboundMessage()");
     }
 
     @Override
+    public void inboundMessage(int seqNo) {
+      inboundEvents.add("inboundMessage(" + seqNo + ")");
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
     public void outboundMessage() {
-      outboundMessageCount.incrementAndGet();
+      outboundEvents.add("outboundMessage()");
+    }
+
+    @Override
+    public void outboundMessage(int seqNo) {
+      outboundEvents.add("outboundMessage(" + seqNo + ")");
+    }
+
+    @Override
+    public void outboundMessageSent(
+        int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+      outboundEvents.add(
+          String.format(
+              "outboundMessageSent(%d, %d, %d)",
+              seqNo, optionalWireSize, optionalUncompressedSize));
+    }
+
+    @Override
+    public void inboundMessageRead(
+        int seqNo, long optionalWireSize, long optionalUncompressedSize) {
+      inboundEvents.add(
+          String.format(
+              "inboundMessageRead(%d, %d, %d)", seqNo, optionalWireSize, optionalUncompressedSize));
+    }
+
+    @Override
+    public String nextOutboundEvent() {
+      return outboundEvents.poll();
+    }
+
+    @Override
+    public String nextInboundEvent() {
+      return inboundEvents.poll();
     }
   }
 }

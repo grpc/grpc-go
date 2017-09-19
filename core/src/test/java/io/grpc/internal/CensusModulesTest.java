@@ -31,8 +31,10 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
@@ -63,6 +65,7 @@ import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.EndSpanOptions;
 import io.opencensus.trace.Link;
 import io.opencensus.trace.NetworkEvent;
+import io.opencensus.trace.NetworkEvent.Type;
 import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanBuilder;
@@ -90,6 +93,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -166,6 +170,8 @@ public class CensusModulesTest {
   private ArgumentCaptor<ClientCall.Listener<String>> clientCallListenerCaptor;
   @Captor
   private ArgumentCaptor<Status> statusCaptor;
+  @Captor
+  private ArgumentCaptor<NetworkEvent> networkEventCaptor;
 
   private CensusStatsModule censusStats;
   private CensusTracingModule censusTracing;
@@ -322,20 +328,20 @@ public class CensusModulesTest {
     tracer.outboundHeaders();
 
     fakeClock.forwardTime(100, MILLISECONDS);
-    tracer.outboundMessage();
+    tracer.outboundMessage(0);
     tracer.outboundWireSize(1028);
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
-    tracer.inboundMessage();
+    tracer.inboundMessage(0);
     tracer.inboundWireSize(33);
     tracer.inboundUncompressedSize(67);
-    tracer.outboundMessage();
+    tracer.outboundMessage(1);
     tracer.outboundWireSize(99);
     tracer.outboundUncompressedSize(865);
 
     fakeClock.forwardTime(24, MILLISECONDS);
-    tracer.inboundMessage();
+    tracer.inboundMessage(1);
     tracer.inboundWireSize(154);
     tracer.inboundUncompressedSize(552);
     tracer.streamClosed(Status.OK);
@@ -372,11 +378,32 @@ public class CensusModulesTest {
         eq("Sent.package1.service2.method3"), isNull(Span.class));
     verify(spyClientSpan, never()).end(any(EndSpanOptions.class));
 
+    clientStreamTracer.outboundMessage(0);
+    clientStreamTracer.outboundMessageSent(0, 882, -1);
+    clientStreamTracer.inboundMessage(0);
+    clientStreamTracer.outboundMessage(1);
+    clientStreamTracer.outboundMessageSent(1, -1, 27);
+    clientStreamTracer.inboundMessageRead(0, 255, 90);
+
     clientStreamTracer.streamClosed(Status.OK);
     callTracer.callEnded(Status.OK);
 
-    verify(spyClientSpan).end(
+    InOrder inOrder = inOrder(spyClientSpan);
+    inOrder.verify(spyClientSpan, times(3)).addNetworkEvent(networkEventCaptor.capture());
+    List<NetworkEvent> events = networkEventCaptor.getAllValues();
+    assertEquals(
+        NetworkEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
+    assertEquals(
+        NetworkEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
+    assertEquals(
+        NetworkEvent.builder(Type.RECV, 0)
+            .setCompressedMessageSize(255)
+            .setUncompressedMessageSize(90)
+            .build(),
+        events.get(2));
+    inOrder.verify(spyClientSpan).end(
         EndSpanOptions.builder().setStatus(io.opencensus.trace.Status.OK).build());
+    verifyNoMoreInteractions(spyClientSpan);
     verifyNoMoreInteractions(tracer);
   }
 
@@ -424,7 +451,7 @@ public class CensusModulesTest {
                 io.opencensus.trace.Status.DEADLINE_EXCEEDED
                     .withDescription("3 seconds"))
             .build());
-    verify(spyClientSpan, never()).end();
+    verifyNoMoreInteractions(spyClientSpan);
   }
 
   @Test
@@ -593,20 +620,20 @@ public class CensusModulesTest {
             .with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(method.getFullMethodName())),
         statsCtx);
 
-    tracer.inboundMessage();
+    tracer.inboundMessage(0);
     tracer.inboundWireSize(34);
     tracer.inboundUncompressedSize(67);
 
     fakeClock.forwardTime(100, MILLISECONDS);
-    tracer.outboundMessage();
+    tracer.outboundMessage(0);
     tracer.outboundWireSize(1028);
     tracer.outboundUncompressedSize(1128);
 
     fakeClock.forwardTime(16, MILLISECONDS);
-    tracer.inboundMessage();
+    tracer.inboundMessage(1);
     tracer.inboundWireSize(154);
     tracer.inboundUncompressedSize(552);
-    tracer.outboundMessage();
+    tracer.outboundMessage(1);
     tracer.outboundWireSize(99);
     tracer.outboundUncompressedSize(865);
 
@@ -648,12 +675,33 @@ public class CensusModulesTest {
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
 
     verify(spyServerSpan, never()).end(any(EndSpanOptions.class));
+
+    serverStreamTracer.outboundMessage(0);
+    serverStreamTracer.outboundMessageSent(0, 882, -1);
+    serverStreamTracer.inboundMessage(0);
+    serverStreamTracer.outboundMessage(1);
+    serverStreamTracer.outboundMessageSent(1, -1, 27);
+    serverStreamTracer.inboundMessageRead(0, 255, 90);
+
     serverStreamTracer.streamClosed(Status.CANCELLED);
 
-    verify(spyServerSpan).end(
+    InOrder inOrder = inOrder(spyServerSpan);
+    inOrder.verify(spyServerSpan, times(3)).addNetworkEvent(networkEventCaptor.capture());
+    List<NetworkEvent> events = networkEventCaptor.getAllValues();
+    assertEquals(
+        NetworkEvent.builder(Type.SENT, 0).setCompressedMessageSize(882).build(), events.get(0));
+    assertEquals(
+        NetworkEvent.builder(Type.SENT, 1).setUncompressedMessageSize(27).build(), events.get(1));
+    assertEquals(
+        NetworkEvent.builder(Type.RECV, 0)
+            .setCompressedMessageSize(255)
+            .setUncompressedMessageSize(90)
+            .build(),
+        events.get(2));
+    inOrder.verify(spyServerSpan).end(
         EndSpanOptions.builder()
             .setStatus(io.opencensus.trace.Status.CANCELLED).build());
-    verify(spyServerSpan, never()).end();
+    verifyNoMoreInteractions(spyServerSpan);
   }
 
   @Test
@@ -713,6 +761,7 @@ public class CensusModulesTest {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void addAttributes(Map<String, AttributeValue> attributes) {}
 
     @Override

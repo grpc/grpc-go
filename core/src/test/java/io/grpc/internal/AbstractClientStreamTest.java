@@ -16,8 +16,10 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -239,7 +241,11 @@ public class AbstractClientStreamTest {
     // GET requests don't have BODY.
     verify(sink, never())
         .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Boolean.class));
-    assertEquals(1, tracer.getOutboundMessageCount());
+    assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
+    assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage()");
+    assertThat(tracer.nextOutboundEvent()).matches("outboundMessageSent\\(0, [0-9]+, [0-9]+\\)");
+    assertNull(tracer.nextOutboundEvent());
+    assertNull(tracer.nextInboundEvent());
     assertEquals(1, tracer.getOutboundWireSize());
     assertEquals(1, tracer.getOutboundUncompressedSize());
   }

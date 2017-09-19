@@ -75,6 +75,10 @@ public class MessageFramer implements Framer {
   private final StatsTraceContext statsTraceCtx;
   private boolean closed;
 
+  // Tracing and stats-related states
+  private int currentMessageSeqNo = -1;
+  private long currentMessageWireSize;
+
   /**
    * Creates a {@code MessageFramer}.
    *
@@ -114,7 +118,9 @@ public class MessageFramer implements Framer {
   @Override
   public void writePayload(InputStream message) {
     verifyNotClosed();
-    statsTraceCtx.outboundMessage();
+    currentMessageSeqNo++;
+    currentMessageWireSize = 0;
+    statsTraceCtx.outboundMessage(currentMessageSeqNo);
     boolean compressed = messageCompression && compressor != Codec.Identity.NONE;
     int written = -1;
     int messageLength = -2;
@@ -143,11 +149,13 @@ public class MessageFramer implements Framer {
       throw Status.INTERNAL.withDescription(err).asRuntimeException();
     }
     statsTraceCtx.outboundUncompressedSize(written);
+    statsTraceCtx.outboundWireSize(currentMessageWireSize);
+    statsTraceCtx.outboundMessageSent(currentMessageSeqNo, currentMessageWireSize, written);
   }
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {
     if (messageLength != -1) {
-      statsTraceCtx.outboundWireSize(messageLength);
+      currentMessageWireSize = messageLength;
       return writeKnownLengthUncompressed(message, messageLength);
     }
     BufferChainOutputStream bufferChain = new BufferChainOutputStream();
@@ -240,7 +248,7 @@ public class MessageFramer implements Framer {
     // Assign the current buffer to the last in the chain so it can be used
     // for future writes or written with end-of-stream=true on close.
     buffer = bufferList.get(bufferList.size() - 1);
-    statsTraceCtx.outboundWireSize(messageLength);
+    currentMessageWireSize = messageLength;
   }
 
   private static int writeToOutputStream(InputStream message, OutputStream outputStream)

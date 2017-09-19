@@ -732,7 +732,8 @@ public abstract class AbstractTransportTest {
     assertTrue(clientStream.isReady());
     clientStream.writeMessage(methodDescriptor.streamRequest("Hello!"));
     if (metricsExpected()) {
-      assertThat(clientStreamTracer1.getOutboundMessageCount()).isGreaterThan(0);
+      assertThat(clientStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
+      assertThat(clientStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage()");
     }
 
     clientStream.flush();
@@ -740,10 +741,12 @@ public abstract class AbstractTransportTest {
     assertEquals("Hello!", methodDescriptor.parseRequest(message));
     message.close();
     if (metricsExpected()) {
-      assertThat(clientStreamTracer1.getOutboundMessageCount()).isGreaterThan(0);
+      assertThat(clientStreamTracer1.nextOutboundEvent())
+          .matches("outboundMessageSent\\(0, -?[0-9]+, -?[0-9]+\\)");
       assertThat(clientStreamTracer1.getOutboundWireSize()).isGreaterThan(0L);
       assertThat(clientStreamTracer1.getOutboundUncompressedSize()).isGreaterThan(0L);
-      assertEquals(1, serverStreamTracer1.getInboundMessageCount());
+      assertThat(serverStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage(0)");
+      assertThat(serverStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage()");
     }
     assertNull("no additional message expected", serverStreamMessageQueue.poll());
 
@@ -753,6 +756,8 @@ public abstract class AbstractTransportTest {
     if (metricsExpected()) {
       assertThat(serverStreamTracer1.getInboundWireSize()).isGreaterThan(0L);
       assertThat(serverStreamTracer1.getInboundUncompressedSize()).isGreaterThan(0L);
+      assertThat(serverStreamTracer1.nextInboundEvent())
+          .matches("inboundMessageRead\\(0, -?[0-9]+, -?[0-9]+\\)");
     }
 
     Metadata serverHeaders = new Metadata();
@@ -774,7 +779,8 @@ public abstract class AbstractTransportTest {
     assertTrue(serverStream.isReady());
     serverStream.writeMessage(methodDescriptor.streamResponse("Hi. Who are you?"));
     if (metricsExpected()) {
-      assertEquals(1, serverStreamTracer1.getOutboundMessageCount());
+      assertThat(serverStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
+      assertThat(serverStreamTracer1.nextOutboundEvent()).isEqualTo("outboundMessage()");
     }
 
     serverStream.flush();
@@ -782,13 +788,18 @@ public abstract class AbstractTransportTest {
         .messagesAvailable(any(StreamListener.MessageProducer.class));
     message = clientStreamMessageQueue.poll(TIMEOUT_MS, TimeUnit.MILLISECONDS);
     if (metricsExpected()) {
+      assertThat(serverStreamTracer1.nextOutboundEvent())
+          .matches("outboundMessageSent\\(0, -?[0-9]+, -?[0-9]+\\)");
       assertThat(serverStreamTracer1.getOutboundWireSize()).isGreaterThan(0L);
       assertThat(serverStreamTracer1.getOutboundUncompressedSize()).isGreaterThan(0L);
       assertTrue(clientStreamTracer1.getInboundHeaders());
-      assertThat(clientStreamTracer1.getInboundMessageCount()).isGreaterThan(0);
+      assertThat(clientStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage(0)");
+      assertThat(clientStreamTracer1.nextInboundEvent()).isEqualTo("inboundMessage()");
     }
     assertEquals("Hi. Who are you?", methodDescriptor.parseResponse(message));
     if (metricsExpected()) {
+      assertThat(clientStreamTracer1.nextInboundEvent())
+          .matches("inboundMessageRead\\(0, -?[0-9]+, -?[0-9]+\\)");
       assertThat(clientStreamTracer1.getInboundWireSize()).isGreaterThan(0L);
       assertThat(clientStreamTracer1.getInboundUncompressedSize()).isGreaterThan(0L);
     }
@@ -804,6 +815,8 @@ public abstract class AbstractTransportTest {
     serverStream.close(status, trailers);
     if (metricsExpected()) {
       assertSame(status, serverStreamTracer1.getStatus());
+      assertNull(serverStreamTracer1.nextInboundEvent());
+      assertNull(serverStreamTracer1.nextOutboundEvent());
     }
     verify(mockServerStreamListener, timeout(TIMEOUT_MS)).closed(statusCaptor.capture());
     assertCodeEquals(Status.OK, statusCaptor.getValue());
@@ -811,6 +824,8 @@ public abstract class AbstractTransportTest {
         .closed(statusCaptor.capture(), metadataCaptor.capture());
     if (metricsExpected()) {
       assertSame(statusCaptor.getValue(), clientStreamTracer1.getStatus());
+      assertNull(clientStreamTracer1.nextInboundEvent());
+      assertNull(clientStreamTracer1.nextOutboundEvent());
     }
     assertEquals(status.getCode(), statusCaptor.getValue().getCode());
     assertEquals(status.getDescription(), statusCaptor.getValue().getDescription());
@@ -1118,11 +1133,9 @@ public abstract class AbstractTransportTest {
     if (metricsExpected()) {
       assertTrue(clientStreamTracer1.getOutboundHeaders());
       assertTrue(clientStreamTracer1.getInboundHeaders());
-      assertEquals(1, clientStreamTracer1.getInboundMessageCount());
       assertThat(clientStreamTracer1.getInboundWireSize()).isGreaterThan(0L);
       assertThat(clientStreamTracer1.getInboundUncompressedSize()).isGreaterThan(0L);
       assertSame(status, clientStreamTracer1.getStatus());
-      assertEquals(1, serverStreamTracer1.getOutboundMessageCount());
       assertThat(serverStreamTracer1.getOutboundWireSize()).isGreaterThan(0L);
       assertThat(serverStreamTracer1.getOutboundUncompressedSize()).isGreaterThan(0L);
       // There is a race between client cancelling and server closing.  The final status seen by the

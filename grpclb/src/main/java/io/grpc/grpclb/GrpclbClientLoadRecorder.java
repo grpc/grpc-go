@@ -117,7 +117,7 @@ final class GrpclbClientLoadRecorder extends ClientStreamTracer.Factory {
     }
 
     @Override
-    public void inboundMessage() {
+    public void inboundMessage(int seqNo) {
       anythingReceived.set(true);
     }
 
