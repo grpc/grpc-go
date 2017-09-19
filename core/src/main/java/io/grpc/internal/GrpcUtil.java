@@ -19,6 +19,7 @@ package io.grpc.internal;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Stopwatch;
@@ -43,6 +44,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -628,6 +630,30 @@ public final class GrpcUtil {
     } catch (IOException ioException) {
       // do nothing
     }
+  }
+
+  /**
+   * Checks whether the given item exists in the iterable.  This is copied from Guava Collect's
+   * {@code Iterables.contains()} because Guava Collect is not Android-friendly thus core can't
+   * depend on it.
+   */
+  static <T> boolean iterableContains(Iterable<T> iterable, T item) {
+    if (iterable instanceof Collection) {
+      Collection<?> collection = (Collection<?>) iterable;
+      try {
+        return collection.contains(item);
+      } catch (NullPointerException e) {
+        return false;
+      } catch (ClassCastException e) {
+        return false;
+      }
+    }
+    for (T i : iterable) {
+      if (Objects.equal(i, item)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private GrpcUtil() {}
