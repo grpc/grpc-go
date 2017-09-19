@@ -678,7 +678,7 @@ func (ac *addrConn) connect(block bool) error {
 	ac.mu.Unlock()
 
 	if block {
-		if err := ac.resetTransport(false); err != nil {
+		if err := ac.resetTransport(); err != nil {
 			if err != errConnClosing {
 				ac.tearDown(err)
 			}
@@ -692,7 +692,7 @@ func (ac *addrConn) connect(block bool) error {
 	} else {
 		// Start a goroutine connecting to the server asynchronously.
 		go func() {
-			if err := ac.resetTransport(false); err != nil {
+			if err := ac.resetTransport(); err != nil {
 				grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
 				if err != errConnClosing {
 					// Keep this ac in cc.conns, to get the reason it's torn down.
@@ -867,12 +867,10 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 	}
 }
 
-// resetTransport recreates a transport to the address for ac.
-// For the old transport:
-// - if drain is true, it will be gracefully closed.
-// - otherwise, it will be closed.
+// resetTransport recreates a transport to the address for ac.  The old
+// transport will close itself on error or when the clientconn is closed.
 // TODO(bar) make sure all state transitions are valid.
-func (ac *addrConn) resetTransport(drain bool) error {
+func (ac *addrConn) resetTransport() error {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
@@ -888,13 +886,9 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		close(ac.ready)
 		ac.ready = nil
 	}
-	t := ac.transport
 	ac.transport = nil
 	ac.curAddr = resolver.Address{}
 	ac.mu.Unlock()
-	if t != nil && !drain {
-		t.Close()
-	}
 	ac.cc.mu.RLock()
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 	ac.cc.mu.RUnlock()
@@ -931,17 +925,12 @@ func (ac *addrConn) resetTransport(drain bool) error {
 				return errConnClosing
 			}
 			ac.mu.Unlock()
-			ctx, cancel := context.WithTimeout(ac.ctx, timeout)
 			sinfo := transport.TargetInfo{
 				Addr:     addr.Addr,
 				Metadata: addr.Metadata,
 			}
-			newTransport, err := transport.NewClientTransport(ctx, sinfo, copts)
-			// Don't call cancel in success path due to a race in Go 1.6:
-			// https://github.com/golang/go/issues/15078.
+			newTransport, err := transport.NewClientTransport(ac.cc.ctx, sinfo, copts, timeout)
 			if err != nil {
-				cancel()
-
 				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
 					return err
 				}
@@ -1012,58 +1001,28 @@ func (ac *addrConn) transportMonitor() {
 		ac.mu.Lock()
 		t := ac.transport
 		ac.mu.Unlock()
+		// Block until we receive a goaway or an error occurs.
 		select {
-		// This is needed to detect the teardown when
-		// the addrConn is idle (i.e., no RPC in flight).
-		case <-ac.ctx.Done():
-			select {
-			case <-t.Error():
-				t.Close()
-			default:
-			}
-			return
+		case <-t.GoAway():
+		case <-t.Error():
+		}
+		// If a GoAway happened, regardless of error, adjust our keepalive
+		// parameters as appropriate.
+		select {
 		case <-t.GoAway():
 			ac.adjustParams(t.GetGoAwayReason())
-			// If GoAway happens without any network I/O error, the underlying transport
-			// will be gracefully closed, and a new transport will be created.
-			// (The transport will be closed when all the pending RPCs finished or failed.)
-			// If GoAway and some network I/O error happen concurrently, the underlying transport
-			// will be closed, and a new transport will be created.
-			var drain bool
-			select {
-			case <-t.Error():
-			default:
-				drain = true
+		default:
+		}
+		if err := ac.resetTransport(); err != nil {
+			ac.mu.Lock()
+			ac.printf("transport exiting: %v", err)
+			ac.mu.Unlock()
+			grpclog.Warningf("grpc: addrConn.transportMonitor exits due to: %v", err)
+			if err != errConnClosing {
+				// Keep this ac in cc.conns, to get the reason it's torn down.
+				ac.tearDown(err)
 			}
-			if err := ac.resetTransport(drain); err != nil {
-				grpclog.Infof("get error from resetTransport %v, transportMonitor returning", err)
-				if err != errConnClosing {
-					// Keep this ac in cc.conns, to get the reason it's torn down.
-					ac.tearDown(err)
-				}
-				return
-			}
-		case <-t.Error():
-			select {
-			case <-ac.ctx.Done():
-				t.Close()
-				return
-			case <-t.GoAway():
-				ac.adjustParams(t.GetGoAwayReason())
-			default:
-			}
-			if err := ac.resetTransport(false); err != nil {
-				grpclog.Infof("get error from resetTransport %v, transportMonitor returning", err)
-				ac.mu.Lock()
-				ac.printf("transport exiting: %v", err)
-				ac.mu.Unlock()
-				grpclog.Warningf("grpc: addrConn.transportMonitor exits due to: %v", err)
-				if err != errConnClosing {
-					// Keep this ac in cc.conns, to get the reason it's torn down.
-					ac.tearDown(err)
-				}
-				return
-			}
+			return
 		}
 	}
 }
@@ -1137,7 +1096,6 @@ func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 // tearDown doesn't remove ac from ac.cc.conns.
 func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
-
 	ac.mu.Lock()
 	ac.curAddr = resolver.Address{}
 	defer ac.mu.Unlock()
@@ -1165,9 +1123,6 @@ func (ac *addrConn) tearDown(err error) {
 	if ac.ready != nil {
 		close(ac.ready)
 		ac.ready = nil
-	}
-	if ac.transport != nil && err != errConnDrain {
-		ac.transport.Close()
 	}
 	return
 }
