@@ -105,7 +105,7 @@ type http2Server struct {
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 	// idle is the time instant when the connection went idle.
-	// This is either the begining of the connection or when the number of
+	// This is either the beginning of the connection or when the number of
 	// RPCs go down to 0.
 	// When the connection is busy, this value is set to 0.
 	idle time.Time
@@ -938,7 +938,7 @@ func (t *http2Server) keepalive() {
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
 	keepalive := time.NewTimer(t.kp.Time)
 	// NOTE: All exit paths of this function should reset their
-	// respecitve timers. A failure to do so will cause the
+	// respective timers. A failure to do so will cause the
 	// following clean-up to deadlock and eventually leak.
 	defer func() {
 		if !maxIdle.Stop() {

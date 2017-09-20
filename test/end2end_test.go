@@ -2175,7 +2175,7 @@ func testLargeUnary(t *testing.T, e env) {
 	}
 }
 
-// Test backward-compatability API for setting msg size limit.
+// Test backward-compatibility API for setting msg size limit.
 func TestExceedMsgLimit(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
