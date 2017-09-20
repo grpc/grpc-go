@@ -70,7 +70,14 @@ public abstract class ManagedChannelProvider {
   @VisibleForTesting
   public static Iterable<ManagedChannelProvider> getCandidatesViaServiceLoader(
       ClassLoader classLoader) {
-    return ServiceLoader.load(ManagedChannelProvider.class, classLoader);
+    Iterable<ManagedChannelProvider> i
+        = ServiceLoader.load(ManagedChannelProvider.class, classLoader);
+    // Attempt to load using the context class loader and ServiceLoader.
+    // This allows frameworks like http://aries.apache.org/modules/spi-fly.html to plug in.
+    if (!i.iterator().hasNext()) {
+      i = ServiceLoader.load(ManagedChannelProvider.class);
+    }
+    return i;
   }
 
   /**

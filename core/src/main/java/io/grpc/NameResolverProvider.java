@@ -71,10 +71,21 @@ public abstract class NameResolverProvider extends NameResolver.Factory {
     return Collections.unmodifiableList(list);
   }
 
+  /**
+   * Loads service providers for the {@link NameResolverProvider} service using
+   * {@link ServiceLoader}.
+   */
   @VisibleForTesting
   public static Iterable<NameResolverProvider> getCandidatesViaServiceLoader(
       ClassLoader classLoader) {
-    return ServiceLoader.load(NameResolverProvider.class, classLoader);
+    Iterable<NameResolverProvider> i
+        = ServiceLoader.load(NameResolverProvider.class, classLoader);
+    // Attempt to load using the context class loader and ServiceLoader.
+    // This allows frameworks like http://aries.apache.org/modules/spi-fly.html to plug in.
+    if (!i.iterator().hasNext()) {
+      i = ServiceLoader.load(NameResolverProvider.class);
+    }
+    return i;
   }
 
   /**

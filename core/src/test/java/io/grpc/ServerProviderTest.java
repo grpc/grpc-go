@@ -49,6 +49,25 @@ public class ServerProviderTest {
     assertNull(ServerProvider.load(cl));
   }
 
+  @Test
+  public void contextClassLoaderProvider() {
+    ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+    try {
+      ClassLoader cl = new ReplacingClassLoader(
+              getClass().getClassLoader(), serviceFile,
+              "io/grpc/ServerProviderTest-empty.txt");
+
+      // test that the context classloader is used as fallback
+      ClassLoader rcll = new ReplacingClassLoader(
+          getClass().getClassLoader(), serviceFile,
+          "io/grpc/ServerProviderTest-multipleProvider.txt");
+      Thread.currentThread().setContextClassLoader(rcll);
+      assertSame(Available7Provider.class, ServerProvider.load(cl).getClass());
+    } finally {
+      Thread.currentThread().setContextClassLoader(ccl);
+    }
+  }
+
   private static class BaseProvider extends ServerProvider {
     private final boolean isAvailable;
     private final int priority;
@@ -103,4 +122,3 @@ public class ServerProviderTest {
     }
   }
 }
-

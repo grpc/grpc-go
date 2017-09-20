@@ -35,6 +35,13 @@ public abstract class ServerProvider {
   @VisibleForTesting
   static final ServerProvider load(ClassLoader cl) {
     ServiceLoader<ServerProvider> providers = ServiceLoader.load(ServerProvider.class, cl);
+
+    // Attempt to load using the context class loader and ServiceLoader.
+    // This allows frameworks like http://aries.apache.org/modules/spi-fly.html to plug in.
+    if (!providers.iterator().hasNext()) {
+      providers = ServiceLoader.load(ServerProvider.class);
+    }
+
     ServerProvider best = null;
 
     for (ServerProvider current : providers) {
@@ -81,4 +88,3 @@ public abstract class ServerProvider {
    */
   protected abstract ServerBuilder<?> builderForPort(int port);
 }
-

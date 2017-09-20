@@ -49,11 +49,17 @@ public class NameResolverProviderTest {
 
   @Test
   public void noProvider() {
-    ClassLoader cl = new ReplacingClassLoader(
-        getClass().getClassLoader(), serviceFile,
-        "io/grpc/NameResolverProviderTest-doesNotExist.txt");
-    List<NameResolverProvider> providers = NameResolverProvider.load(cl);
-    assertEquals(Collections.<NameResolverProvider>emptyList(), providers);
+    ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+    try {
+      ClassLoader cl = new ReplacingClassLoader(
+          getClass().getClassLoader(), serviceFile,
+          "io/grpc/NameResolverProviderTest-doesNotExist.txt");
+      Thread.currentThread().setContextClassLoader(cl);
+      List<NameResolverProvider> providers = NameResolverProvider.load(cl);
+      assertEquals(Collections.<NameResolverProvider>emptyList(), providers);
+    } finally {
+      Thread.currentThread().setContextClassLoader(ccl);
+    }
   }
 
   @Test
@@ -143,11 +149,15 @@ public class NameResolverProviderTest {
       }
     };
     cl = new StaticTestingClassLoader(cl, Pattern.compile("io\\.grpc\\.[^.]*"));
+    ClassLoader ccl = Thread.currentThread().getContextClassLoader();
     try {
+      Thread.currentThread().setContextClassLoader(cl);
       invokeGetCandidatesViaHardCoded(cl);
       fail("Expected exception");
     } catch (RuntimeException ex) {
       assertSame(toThrow, ex);
+    } finally {
+      Thread.currentThread().setContextClassLoader(ccl);
     }
   }
 
@@ -167,8 +177,14 @@ public class NameResolverProviderTest {
       }
     };
     cl = new StaticTestingClassLoader(cl, Pattern.compile("io\\.grpc\\.[^.]*"));
-    Iterable<?> i = invokeGetCandidatesViaHardCoded(cl);
-    assertFalse("Iterator should be empty", i.iterator().hasNext());
+    ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+    try {
+      Thread.currentThread().setContextClassLoader(cl);
+      Iterable<?> i = invokeGetCandidatesViaHardCoded(cl);
+      assertFalse("Iterator should be empty", i.iterator().hasNext());
+    } finally {
+      Thread.currentThread().setContextClassLoader(ccl);
+    }
   }
 
   @Test
@@ -297,4 +313,3 @@ public class NameResolverProviderTest {
     }
   }
 }
-
