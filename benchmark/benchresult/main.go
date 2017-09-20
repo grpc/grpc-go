@@ -70,8 +70,8 @@ func timeChange(title int, val1, val2 time.Duration) string {
 func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 	for k2, v2 := range m2 {
 		if v1, ok := m1[k2]; ok {
-			changes := k2
-			changes += fmt.Sprintf("%10s  %12s  %12s   %8s \n", "\nTitle", "\tBefore", "After", "\tPercentage")
+			changes := k2 + "\n"
+			changes += fmt.Sprintf("%10s  %12s  %12s   %8s \n", "Title", "Before", "After", "Percentage")
 			changes += intChange("Bytes/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp)
 			changes += intChange("Allocs/op", v1.AllocsPerOp, v2.AllocsPerOp)
 			changes += timeChange(v1.Latency[1].Percent, v1.Latency[1].Value, v2.Latency[1].Value)

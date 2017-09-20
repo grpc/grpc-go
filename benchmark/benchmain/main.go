@@ -31,7 +31,7 @@ file "-resultFile=basePerf", and later when you at the middle of the work or fin
 work, you can get the benchmark result and compare it with the base anytime.
 
 Assume there are two result files names as "basePerf" and "curPerf" created by adding
--resulrFile=basePerf and -resulrFile=curPerf.
+-resultFile=basePerf and -resultFile=curPerf.
 	To format the curPerf, run:
   	go run benchmark/benchresult/main.go curPerf
 	To observe how the performance changes based on a base result, run:
@@ -98,7 +98,7 @@ var (
 	enableTrace            []bool
 	benchtime              time.Duration
 	memProfile, cpuProfile string
-	memProfileRate         = 512 * 1024
+	memProfileRate         int
 	enableCompressor       []bool
 	networkMode            string
 	benchmarkResultFile    string
@@ -258,10 +258,10 @@ func init() {
 	flag.Var(&readMaxConcurrentCalls, "maxConcurrentCalls", "Number of concurrent RPCs during benchmarks")
 	flag.Var(&readReqSizeBytes, "reqSizeBytes", "Request size in bytes - may be a comma-separated list")
 	flag.Var(&readRespSizeBytes, "respSizeBytes", "Response size in bytes - may be a comma-separated list")
-	flag.StringVar(&memProfile, "memProfile", "", "Enables memory profiling output to the filename provided. \n"+
-		"To include every allocated block in the profile, set MemProfileRate to 1. To turn off profiling entirely, set MemProfileRate to 0."+
-		"524288 by default.")
-	flag.IntVar(&memProfileRate, "memProfileRate", 0, "Configures the memory profiling rate")
+	flag.StringVar(&memProfile, "memProfile", "", "Enables memory profiling output to the filename provided.")
+	flag.IntVar(&memProfileRate, "memProfileRate", 512*1024, "Configures the memory profiling rate. \n"+
+		"memProfile should be set before setting profile rate. To include every allocated block in the profile, "+
+		"set MemProfileRate to 1. To turn off profiling entirely, set MemProfileRate to 0. 512 * 1024 by default.")
 	flag.StringVar(&cpuProfile, "cpuProfile", "", "Enables CPU profiling output to the filename provided")
 	flag.StringVar(&compressorMode, "compression", modeOff,
 		fmt.Sprintf("Compression mode - One of: %v", strings.Join(allCompressionModes, ", ")))
@@ -431,7 +431,7 @@ func main() {
 }
 
 func before() {
-	if memProfileRate > 0 {
+	if memProfile != "" {
 		runtime.MemProfileRate = memProfileRate
 	}
 	if cpuProfile != "" {
