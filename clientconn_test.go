@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/naming"
+	"google.golang.org/grpc/test/leakcheck"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -43,13 +44,9 @@ func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.Sta
 }
 
 func TestConnectivityStates(t *testing.T) {
-	servers, resolver := startServers(t, 2, math.MaxUint32)
-	defer func() {
-		for i := 0; i < 2; i++ {
-			servers[i].stop()
-		}
-	}()
-
+	defer leakcheck.Check(t)
+	servers, resolver, cleanup := startServers(t, 2, math.MaxUint32)
+	defer cleanup()
 	cc, err := Dial("foo.bar.com", WithBalancer(RoundRobin(resolver)), WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial(\"foo.bar.com\", WithBalancer(_)) = _, %v, want _ <nil>", err)
@@ -84,6 +81,7 @@ func TestConnectivityStates(t *testing.T) {
 }
 
 func TestDialTimeout(t *testing.T) {
+	defer leakcheck.Check(t)
 	conn, err := Dial("Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
 	if err == nil {
 		conn.Close()
@@ -94,6 +92,7 @@ func TestDialTimeout(t *testing.T) {
 }
 
 func TestTLSDialTimeout(t *testing.T) {
+	defer leakcheck.Check(t)
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
@@ -108,6 +107,7 @@ func TestTLSDialTimeout(t *testing.T) {
 }
 
 func TestDefaultAuthority(t *testing.T) {
+	defer leakcheck.Check(t)
 	target := "Non-Existent.Server:8080"
 	conn, err := Dial(target, WithInsecure())
 	if err != nil {
@@ -120,6 +120,7 @@ func TestDefaultAuthority(t *testing.T) {
 }
 
 func TestTLSServerNameOverwrite(t *testing.T) {
+	defer leakcheck.Check(t)
 	overwriteServerName := "over.write.server.name"
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
@@ -136,6 +137,7 @@ func TestTLSServerNameOverwrite(t *testing.T) {
 }
 
 func TestWithAuthority(t *testing.T) {
+	defer leakcheck.Check(t)
 	overwriteServerName := "over.write.server.name"
 	conn, err := Dial("Non-Existent.Server:80", WithInsecure(), WithAuthority(overwriteServerName))
 	if err != nil {
@@ -148,6 +150,7 @@ func TestWithAuthority(t *testing.T) {
 }
 
 func TestWithAuthorityAndTLS(t *testing.T) {
+	defer leakcheck.Check(t)
 	overwriteServerName := "over.write.server.name"
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), overwriteServerName)
 	if err != nil {
@@ -164,6 +167,7 @@ func TestWithAuthorityAndTLS(t *testing.T) {
 }
 
 func TestDialContextCancel(t *testing.T) {
+	defer leakcheck.Check(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
@@ -198,6 +202,7 @@ func (b *blockingBalancer) Close() error {
 }
 
 func TestDialWithBlockingBalancer(t *testing.T) {
+	defer leakcheck.Check(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	dialDone := make(chan struct{})
 	go func() {
@@ -220,6 +225,7 @@ func (c securePerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func TestCredentialsMisuse(t *testing.T) {
+	defer leakcheck.Check(t)
 	tlsCreds, err := credentials.NewClientTLSFromFile(testdata.Path("ca.pem"), "x.test.youtube.com")
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
@@ -235,10 +241,12 @@ func TestCredentialsMisuse(t *testing.T) {
 }
 
 func TestWithBackoffConfigDefault(t *testing.T) {
+	defer leakcheck.Check(t)
 	testBackoffConfigSet(t, &DefaultBackoffConfig)
 }
 
 func TestWithBackoffConfig(t *testing.T) {
+	defer leakcheck.Check(t)
 	b := BackoffConfig{MaxDelay: DefaultBackoffConfig.MaxDelay / 2}
 	expected := b
 	setDefaults(&expected) // defaults should be set
@@ -246,6 +254,7 @@ func TestWithBackoffConfig(t *testing.T) {
 }
 
 func TestWithBackoffMaxDelay(t *testing.T) {
+	defer leakcheck.Check(t)
 	md := DefaultBackoffConfig.MaxDelay / 2
 	expected := BackoffConfig{MaxDelay: md}
 	setDefaults(&expected)
@@ -293,6 +302,7 @@ func nonTemporaryErrorDialer(addr string, timeout time.Duration) (net.Conn, erro
 }
 
 func TestDialWithBlockErrorOnNonTemporaryErrorDialer(t *testing.T) {
+	defer leakcheck.Check(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	if _, err := DialContext(ctx, "", WithInsecure(), WithDialer(nonTemporaryErrorDialer), WithBlock(), FailOnNonTempDialError(true)); err != nonTemporaryError {
@@ -332,6 +342,7 @@ func (b *emptyBalancer) Close() error {
 }
 
 func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
+	defer leakcheck.Check(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	dialDone := make(chan error)
@@ -350,6 +361,7 @@ func TestNonblockingDialWithEmptyBalancer(t *testing.T) {
 }
 
 func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+	defer leakcheck.Check(t)
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
@@ -374,21 +386,5 @@ func TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	v := cc.mkp.Time
 	if v < 100*time.Millisecond {
 		t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 100ms", v)
-	}
-}
-
-func TestClientLBWatcherWithClosedBalancer(t *testing.T) {
-	b := newBlockingBalancer()
-	cc := &ClientConn{dopts: dialOptions{balancer: b}}
-
-	doneChan := make(chan struct{})
-	go cc.lbWatcher(doneChan)
-	// Balancer closes before any successful connections.
-	b.Close()
-
-	select {
-	case <-doneChan:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("lbWatcher with closed balancer didn't close doneChan after 100ms")
 	}
 }

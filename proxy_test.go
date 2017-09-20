@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 const (
@@ -118,6 +119,7 @@ func (p *proxyServer) stop() {
 }
 
 func TestHTTPConnect(t *testing.T) {
+	defer leakcheck.Check(t)
 	plis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
