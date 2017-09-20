@@ -56,22 +56,20 @@ func createMap(fileName string, m map[string]stats.BenchResults) {
 }
 
 func intChange(title string, val1, val2 int64) string {
-	percentChange := strconv.FormatFloat(float64((val2-val1)*100/val1), 'f', 2, 64) + "% "
-	return fmt.Sprintf("%10s  %12s  %12s   %8s \n", title, strconv.FormatInt(val1, 10),
-		strconv.FormatInt(val2, 10), percentChange)
+	return fmt.Sprintf("%10s %12s %12s %8.2f%%\n", title, strconv.FormatInt(val1, 10),
+		strconv.FormatInt(val2, 10), float64(val2-val1)*100/float64(val1))
 }
 
 func timeChange(title int, val1, val2 time.Duration) string {
-	percentChange := strconv.FormatFloat(float64((val2-val1)*100/val1), 'f', 2, 64) + "% "
-	return fmt.Sprintf("%10s  %12s  %12s   %8s \n", strconv.Itoa(title)+" latency", val1.String(),
-		val2.String(), percentChange)
+	return fmt.Sprintf("%10s %12s %12s %8.2f%%\n", strconv.Itoa(title)+" latency", val1.String(),
+		val2.String(), float64(val2-val1)*100/float64(val1))
 }
 
 func compareTwoMap(m1, m2 map[string]stats.BenchResults) {
 	for k2, v2 := range m2 {
 		if v1, ok := m1[k2]; ok {
 			changes := k2 + "\n"
-			changes += fmt.Sprintf("%10s  %12s  %12s   %8s \n", "Title", "Before", "After", "Percentage")
+			changes += fmt.Sprintf("%10s %12s %12s %8s\n", "Title", "Before", "After", "Percentage")
 			changes += intChange("Bytes/op", v1.AllocedBytesPerOp, v2.AllocedBytesPerOp)
 			changes += intChange("Allocs/op", v1.AllocsPerOp, v2.AllocsPerOp)
 			changes += timeChange(v1.Latency[1].Percent, v1.Latency[1].Value, v2.Latency[1].Value)
@@ -112,7 +110,7 @@ func formatBenchmark(fileName string) {
 		log.Fatalf("No data in file %s\n", fileName)
 	}
 	printPos := data[0].SharedPosion
-	fmt.Println("\n Shared features: \n" + strings.Repeat("-", 20))
+	fmt.Println("\nShared features:\n" + strings.Repeat("-", 20))
 	fmt.Print(stats.PartialPrintString(printPos, data[0].Features, true))
 	fmt.Println(strings.Repeat("-", 35))
 	for i := 0; i < len(data[0].SharedPosion); i++ {
