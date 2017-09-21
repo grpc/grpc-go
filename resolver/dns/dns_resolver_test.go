@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/test/leakcheck"
@@ -320,6 +321,7 @@ func testDNSResolver(t *testing.T) {
 			if ok > 0 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		var sc string
 		for {
@@ -327,6 +329,7 @@ func testDNSResolver(t *testing.T) {
 			if ok > 0 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(a.addrWant, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
@@ -365,6 +368,7 @@ func testDNSResolveNow(t *testing.T) {
 			if ok > 0 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(a.want, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
@@ -377,6 +381,7 @@ func testDNSResolveNow(t *testing.T) {
 			if ok == 2 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(a.next, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.next)
@@ -428,6 +433,7 @@ func testIPResolver(t *testing.T) {
 			if ok > 0 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(v.want, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
@@ -438,6 +444,7 @@ func testIPResolver(t *testing.T) {
 			if ok == 2 {
 				break
 			}
+			time.Sleep(time.Millisecond)
 		}
 		if !reflect.DeepEqual(v.want, addrs) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", v.target, addrs, v.want)
@@ -466,7 +473,7 @@ func TestResolveFunc(t *testing.T) {
 		{"[2001:db8::1]:http", nil},
 		{":", nil},
 		{"", errMissingAddr},
-		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address %v", "[2001:db8:a0b:12f0::1")},
+		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")},
 	}
 
 	b := NewBuilder()

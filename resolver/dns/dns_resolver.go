@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -33,10 +34,16 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+func init() {
+	resolver.Register(NewBuilder())
+}
+
 const (
-	defaultPort  = "443"
-	defaultFreq  = time.Minute * 30
-	golang       = "GO"
+	defaultPort = "443"
+	defaultFreq = time.Minute * 30
+	golang      = "GO"
+	// In DNS, service config is encoded in a TXT record via the mechanism
+	// described in RFC-1464 using the attribute name grpc_config.
 	txtAttribute = "grpc_config="
 )
 
@@ -165,7 +172,7 @@ func (d *dnsResolver) watcher() {
 		case <-d.rn:
 		}
 		result, sc := d.lookup()
-		// Next lookup should happen after an interval defined by d.b.freq.
+		// Next lookup should happen after an interval defined by d.freq.
 		d.t.Reset(d.freq)
 		d.cc.NewServiceConfig(string(sc))
 		d.cc.NewAddress(result)
@@ -210,11 +217,11 @@ func (d *dnsResolver) lookupTXT() string {
 	}
 
 	// TXT record must have "grpc_config=" attribute in order to be used as service config.
-	if len(res) < len(txtAttribute) || res[:len(txtAttribute)] != txtAttribute {
+	if !strings.HasPrefix(res, txtAttribute) {
 		grpclog.Warningf("grpc: TXT record %p missing %p attribute", res, txtAttribute)
 		return ""
 	}
-	return res[len(txtAttribute):]
+	return strings.TrimPrefix(res, txtAttribute)
 }
 
 func (d *dnsResolver) lookupHost() []resolver.Address {
@@ -273,12 +280,11 @@ func parseTarget(target string) (host, port string, err error) {
 	if target == "" {
 		return "", "", errMissingAddr
 	}
-
 	if ip := net.ParseIP(target); ip != nil {
 		// target is an IPv4 or IPv6(without brackets) address
 		return target, defaultPort, nil
 	}
-	if host, port, err := net.SplitHostPort(target); err == nil {
+	if host, port, err = net.SplitHostPort(target); err == nil {
 		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
 		if host == "" {
 			// Keep consistent with net.Dial(): If the host is empty, as in ":80", the local system is assumed.
@@ -290,11 +296,11 @@ func parseTarget(target string) (host, port string, err error) {
 		}
 		return host, port, nil
 	}
-	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
+	if host, port, err = net.SplitHostPort(target + ":" + defaultPort); err == nil {
 		// target doesn't have port
 		return host, port, nil
 	}
-	return "", "", fmt.Errorf("invalid target address %v", target)
+	return "", "", fmt.Errorf("invalid target address %v, error info: %v", target, err)
 }
 
 type rawChoice struct {
@@ -338,7 +344,7 @@ func canaryingSC(js string) string {
 		grpclog.Warningf("grpc: failed to parse service config json string due to %v.\n", err)
 		return ""
 	}
-	clihostname, err := os.Hostname()
+	cliHostname, err := os.Hostname()
 	if err != nil {
 		grpclog.Warningf("grpc: failed to get client hostname due to %v.\n", err)
 		return ""
@@ -347,7 +353,7 @@ func canaryingSC(js string) string {
 	for _, c := range rcs {
 		if !containsString(c.ClientLanguage, golang) ||
 			!chosenByPercentage(c.Percentage) ||
-			!containsString(c.ClientHostName, clihostname) ||
+			!containsString(c.ClientHostName, cliHostname) ||
 			c.ServiceConfig == nil {
 			continue
 		}
