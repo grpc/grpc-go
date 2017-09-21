@@ -136,3 +136,37 @@ func BenchmarkRWMutexW(b *testing.B) {
 		b.Fatal("error")
 	}
 }
+
+func BenchmarkMutexWithDefer(b *testing.B) {
+	c := sync.Mutex{}
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		func() {
+			c.Lock()
+			defer c.Unlock()
+			x++
+		}()
+	}
+	b.StopTimer()
+	if x != b.N {
+		b.Fatal("error")
+	}
+}
+
+func BenchmarkMutexWithoutDefer(b *testing.B) {
+	c := sync.Mutex{}
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		func() {
+			c.Lock()
+			x++
+			c.Unlock()
+		}()
+	}
+	b.StopTimer()
+	if x != b.N {
+		b.Fatal("error")
+	}
+}
