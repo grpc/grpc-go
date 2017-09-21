@@ -154,6 +154,23 @@ func BenchmarkMutexWithDefer(b *testing.B) {
 	}
 }
 
+func BenchmarkMutexWithClosureDefer(b *testing.B) {
+	c := sync.Mutex{}
+	x := 0
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		func() {
+			c.Lock()
+			defer func() { c.Unlock() }()
+			x++
+		}()
+	}
+	b.StopTimer()
+	if x != b.N {
+		b.Fatal("error")
+	}
+}
+
 func BenchmarkMutexWithoutDefer(b *testing.B) {
 	c := sync.Mutex{}
 	x := 0
