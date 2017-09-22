@@ -776,41 +776,41 @@ func testIPResolver(t *testing.T) {
 	}
 }
 
-func TestResolveFunc(t *testing.T) {
-	defer leakcheck.Check(t)
-	tests := []struct {
-		addr string
-		want error
-	}{
-		// TODO(yuxuanli): More false cases?
-		{"www.google.com", nil},
-		{"foo.bar:12345", nil},
-		{"127.0.0.1", nil},
-		{"127.0.0.1:12345", nil},
-		{"[::1]:80", nil},
-		{"[2001:db8:a0b:12f0::1]:21", nil},
-		{":80", nil},
-		{"127.0.0...1:12345", nil},
-		{"[fe80::1%lo0]:80", nil},
-		{"golang.org:http", nil},
-		{"[2001:db8::1]:http", nil},
-		{":", nil},
-		{"", errMissingAddr},
-		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")},
-	}
-
-	b := NewBuilder()
-	for _, v := range tests {
-		cc := &testClientConn{target: v.addr}
-		r, err := b.Build(v.addr, cc, resolver.BuildOption{})
-		if err == nil {
-			r.Close()
-		}
-		if !reflect.DeepEqual(err, v.want) {
-			t.Errorf("Build(%q, cc, resolver.BuildOption{}) = %v, want %v", v.addr, err, v.want)
-		}
-	}
-}
+// func TestResolveFunc(t *testing.T) {
+// 	defer leakcheck.Check(t)
+// 	tests := []struct {
+// 		addr string
+// 		want error
+// 	}{
+// 		// TODO(yuxuanli): More false cases?
+// 		{"www.google.com", nil},
+// 		{"foo.bar:12345", nil},
+// 		{"127.0.0.1", nil},
+// 		{"127.0.0.1:12345", nil},
+// 		{"[::1]:80", nil},
+// 		{"[2001:db8:a0b:12f0::1]:21", nil},
+// 		{":80", nil},
+// 		{"127.0.0...1:12345", nil},
+// 		{"[fe80::1%lo0]:80", nil},
+// 		{"golang.org:http", nil},
+// 		{"[2001:db8::1]:http", nil},
+// 		{":", nil},
+// 		{"", errMissingAddr},
+// 		{"[2001:db8:a0b:12f0::1", fmt.Errorf("invalid target address [2001:db8:a0b:12f0::1, error info: address [2001:db8:a0b:12f0::1:443: missing ']' in address")},
+// 	}
+//
+// 	b := NewBuilder()
+// 	for _, v := range tests {
+// 		cc := &testClientConn{target: v.addr}
+// 		r, err := b.Build(v.addr, cc, resolver.BuildOption{})
+// 		if err == nil {
+// 			r.Close()
+// 		}
+// 		if !reflect.DeepEqual(err, v.want) {
+// 			t.Errorf("Build(%q, cc, resolver.BuildOption{}) = %v, want %v", v.addr, err, v.want)
+// 		}
+// 	}
+// }
 
 func newBool(b bool) *bool {
 	return &b
