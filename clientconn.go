@@ -89,6 +89,7 @@ type dialOptions struct {
 	block       bool
 	insecure    bool
 	timeout     time.Duration
+	scChan      <-chan ServiceConfig
 	copts       transport.ConnectOptions
 	callOptions []CallOption
 	// This is to support v1 balancer.
@@ -409,6 +410,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
+	scSet := false
+	if cc.dopts.scChan != nil {
+		// Try to get an initial service config.
+		select {
+		case sc, ok := <-cc.dopts.scChan:
+			if ok {
+				cc.sc = sc
+				scSet = true
+			}
+		default:
+		}
+	}
 	// Set defaults.
 	if cc.dopts.codec == nil {
 		cc.dopts.codec = protoCodec{}
@@ -778,10 +791,7 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 		i := strings.LastIndex(method, "/")
 		m, _ = cc.sc.Methods[method[:i+1]]
 	}
-	if m == nil {
-		return MethodConfig{}
-	}
-	return *m
+	return m
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transport.ClientTransport, func(balancer.DoneInfo), error) {
@@ -792,18 +802,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 	return t, done, nil
 }
 
-func getName(n name) string {
-	res := ""
-	if n.Service != nil {
-		res += "/" + *n.Service + "/"
-	}
-	if n.Method != nil {
-		res += *n.Method
-	}
-	return res
-}
-
-func getTimeout(t *string) (*time.Duration, error) {
+func parseTimeout(t *string) (*time.Duration, error) {
 	if t == nil {
 		return nil, nil
 	}
@@ -811,28 +810,39 @@ func getTimeout(t *string) (*time.Duration, error) {
 	return &d, err
 }
 
-type name struct {
+type jsonName struct {
 	Service *string `json:"service,omitempty"`
 	Method  *string `json:"method,omitempty"`
 }
 
-type mc struct {
-	Name                    *[]name `json:"name,omitempty"`
-	WaitForReady            *bool   `json:"waitForReady,omitempty"`
-	Timeout                 *string `json:"timeout,omitempty"`
-	MaxRequestMessageBytes  *int    `json:"maxRequestMessageBytes,omitempty"`
-	MaxResponseMessageBytes *int    `json:"maxResponseMessageBytes,omitempty"`
+func (j jsonName) Stringer() string {
+	res := ""
+	if j.Service != nil {
+		res += "/" + *j.Service + "/"
+	}
+	if j.Method != nil {
+		res += *j.Method
+	}
+	return res
 }
 
-type sc struct {
-	LoadBalancingPolicy *string `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        *[]mc   `json:"methodConfig,omitempty"`
+type jsonMC struct {
+	Name                    *[]jsonName `json:"name,omitempty"`
+	WaitForReady            *bool       `json:"waitForReady,omitempty"`
+	Timeout                 *string     `json:"timeout,omitempty"`
+	MaxRequestMessageBytes  *int        `json:"maxRequestMessageBytes,omitempty"`
+	MaxResponseMessageBytes *int        `json:"maxResponseMessageBytes,omitempty"`
+}
+
+type jsonSC struct {
+	LoadBalancingPolicy *string   `json:"loadBalancingPolicy,omitempty"`
+	MethodConfig        *[]jsonMC `json:"methodConfig,omitempty"`
 }
 
 // HandleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) HandleServiceConfig(js string) error {
-	var rsc sc
+	var rsc jsonSC
 	err := json.Unmarshal([]byte(js), &rsc)
 	if err != nil {
 		grpclog.Warningf("grpc: handleServiceConfig error unmarshaling %s due to %v", js, err)
@@ -841,7 +851,7 @@ func (cc *ClientConn) HandleServiceConfig(js string) error {
 	cc.scRaw = js
 	var sc ServiceConfig
 	sc.LB = rsc.LoadBalancingPolicy
-	sc.Methods = make(map[string]*MethodConfig)
+	sc.Methods = make(map[string]MethodConfig)
 	if rsc.MethodConfig == nil {
 		cc.sc = sc
 		return nil
@@ -851,7 +861,7 @@ func (cc *ClientConn) HandleServiceConfig(js string) error {
 		if m.Name == nil {
 			continue
 		}
-		d, err := getTimeout(m.Timeout)
+		d, err := parseTimeout(m.Timeout)
 		if err != nil {
 			continue
 		}
@@ -863,7 +873,7 @@ func (cc *ClientConn) HandleServiceConfig(js string) error {
 			MaxRespSize:  m.MaxResponseMessageBytes,
 		}
 		for _, n := range *m.Name {
-			sc.Methods[getName(n)] = &mc
+			sc.Methods[n.Stringer()] = mc
 		}
 	}
 

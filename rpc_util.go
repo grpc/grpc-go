@@ -528,7 +528,7 @@ type ServiceConfig struct {
 	// If there is an exact match for a method (i.e. /service/method) in the map, use the corresponding MethodConfig.
 	// If there's no exact match, look for the default config for the service (/service/) and use the corresponding MethodConfig if it exists.
 	// Otherwise, the method has no MethodConfig to use.
-	Methods map[string]*MethodConfig
+	Methods map[string]MethodConfig
 }
 
 func min(a, b *int) *int {
