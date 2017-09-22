@@ -19,7 +19,6 @@
 package dns
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -116,128 +115,452 @@ func div(b []byte) []string {
 	return r
 }
 
-// A simple servivce config database to be used by test.
+// scfs contains an array of service config file string in JSON format.
 var (
-	scs = []*sc{
-		{
-			LoadBalancingPolicy: "round_robin",
-			MethodConfig: []mc{
+	scfs = []string{
+		`[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
 				{
-					Name: []name{
+					"name": [
 						{
-							Service: "foo",
-							Method:  "bar",
-						},
-					},
-					WaitForReady: newBool(true),
-				},
-			},
-		},
-		{
-			LoadBalancingPolicy: "grpclb",
-			MethodConfig: []mc{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
 				{
-					Name: []name{
+					"name": [
 						{
-							Service: "all",
-						},
-					},
-					Timeout: "1s",
-				},
-			},
-		},
-		{
-			MethodConfig: []mc{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
 				{
-					Name: []name{
+					"name": [
 						{
-							Method: "bar",
-						},
-					},
-					MaxRequestMessageBytes:  newInt(1024),
-					MaxResponseMessageBytes: newInt(1024),
-				},
-			},
-		},
-		{
-			MethodConfig: []mc{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientLanguage": [
+			"GO"
+		],
+		"percentage": 100,
+		"serviceConfig": {
+			"methodConfig": [
 				{
-					Name: []name{
+					"name": [
 						{
-							Service: "foo",
-							Method:  "bar",
-						},
-					},
-					WaitForReady:            newBool(true),
-					Timeout:                 "1s",
-					MaxRequestMessageBytes:  newInt(1024),
-					MaxResponseMessageBytes: newInt(1024),
-				},
-			},
-		},
-		{
-			LoadBalancingPolicy: "round_robin",
-			MethodConfig: []mc{
+							"method": "bar"
+						}
+					],
+					"maxRequestMessageBytes": 1024,
+					"maxResponseMessageBytes": 1024
+				}
+			]
+		}
+	},
+	{
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
 				{
-					Name: []name{
+					"name": [
 						{
-							Service: "foo",
-						},
-					},
-					WaitForReady: newBool(true),
-					Timeout:      "1s",
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true
+				}
+			]
+		}
+	}
+]`,
+		`[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientLanguage": [
+			"GO"
+		],
+		"percentage": 100,
+		"serviceConfig": {
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true,
+					"timeout": "1s",
+					"maxRequestMessageBytes": 1024,
+					"maxResponseMessageBytes": 1024
+				}
+			]
+		}
+	},
+	{
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true
+				}
+			]
+		}
+	}
+]`,
+		`[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientLanguage": [
+			"GO"
+		],
+		"percentage": 100,
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo"
+						}
+					],
+					"waitForReady": true,
+					"timeout": "1s"
 				},
 				{
-					Name: []name{
+					"name": [
 						{
-							Service: "bar",
-						},
-					},
-					WaitForReady: newBool(false),
-				},
-			},
-		},
+							"service": "bar"
+						}
+					],
+					"waitForReady": false
+				}
+			]
+		}
+	},
+	{
+		"serviceConfig": {
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true
+				}
+			]
+		}
+	}
+]`,
+		`[
+	{
+		"clientLanguage": [
+			"CPP",
+			"JAVA"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"percentage": 0,
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	},
+	{
+		"clientHostName": [
+			"localhost"
+		],
+		"serviceConfig": {
+			"loadBalancingPolicy": "grpclb",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "all"
+						}
+					],
+					"timeout": "1s"
+				}
+			]
+		}
+	}
+]`,
 	}
 )
 
-// scLookupTbl is a map from target to service config that should be chosen.
-// To facilitate checking we are returing the first match, we use scs[0]
-// exclusively for second matched choice.And we use scs[1] exclusively for
-// non-matched choice. Both of which should not be chosen to return.
-var scLookupTbl = map[string]*sc{
-	"foo.bar.com":          scs[2],
-	"srv.ipv4.single.fake": scs[3],
-	"srv.ipv4.multi.fake":  scs[4],
-	"no.attribute":         scs[2],
+// scs contains an array of service config string in JSON format.
+var (
+	scs = []string{
+		`{
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"method": "bar"
+						}
+					],
+					"maxRequestMessageBytes": 1024,
+					"maxResponseMessageBytes": 1024
+				}
+			]
+		}`,
+		`{
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo",
+							"method": "bar"
+						}
+					],
+					"waitForReady": true,
+					"timeout": "1s",
+					"maxRequestMessageBytes": 1024,
+					"maxResponseMessageBytes": 1024
+				}
+			]
+		}`,
+		`{
+			"loadBalancingPolicy": "round_robin",
+			"methodConfig": [
+				{
+					"name": [
+						{
+							"service": "foo"
+						}
+					],
+					"waitForReady": true,
+					"timeout": "1s"
+				},
+				{
+					"name": [
+						{
+							"service": "bar"
+						}
+					],
+					"waitForReady": false
+				}
+			]
+		}`,
+	}
+)
+
+// scLookupTbl is a set, which contains targets that have service config. Target
+// not in this set should have no service config.
+var scLookupTbl = map[string]bool{
+	"foo.bar.com":          true,
+	"srv.ipv4.single.fake": true,
+	"srv.ipv4.multi.fake":  true,
+	"no.attribute":         true,
 }
 
-// generateSCF generates a service config file according to specification in scLookupTbl.
+// generateSCF generates a slice of strings (aggregately representing a single
+// service config file) for the input name, which mocks the result from a real
+// DNS TXT record lookup.
 func generateSCF(name string) []string {
-	var scf []choice
-	scf = append(scf, choice{ClientLanguage: []string{"CPP", "JAVA"}, ServiceConfig: *scs[1]})
-	scf = append(scf, choice{Percentage: newInt(0), ServiceConfig: *scs[1]})
-	scf = append(scf, choice{ClientHostName: []string{"localhost"}, ServiceConfig: *scs[1]})
-	if s, ok := scLookupTbl[name]; ok {
-		// First match, chosen.
-		scf = append(scf, choice{Percentage: newInt(100), ClientLanguage: []string{"GO"}, ServiceConfig: *s})
-		// Second match.
-		scf = append(scf, choice{ServiceConfig: *scs[0]})
+	var b []byte
+	switch name {
+	case "foo.bar.com":
+		b = []byte(scfs[0])
+	case "srv.ipv4.single.fake":
+		b = []byte(scfs[1])
+	case "srv.ipv4.multi.fake":
+		b = []byte(scfs[2])
+	default:
+		b = []byte(scfs[3])
 	}
-	b, _ := json.Marshal(scf)
 	if name == "no.attribute" {
 		return div(b)
 	}
 	return div(append([]byte(txtAttribute), b...))
 }
 
-// generateSC generates a service config according to specification in scLookupTbl.
+// generateSC returns a service config string in JSON format for the input name.
 func generateSC(name string) string {
-	s, ok := scLookupTbl[name]
+	_, ok := scLookupTbl[name]
 	if !ok || name == "no.attribute" {
 		return ""
 	}
-	b, _ := json.Marshal(s)
-	return string(b)
+	switch name {
+	case "foo.bar.com":
+		return scs[0]
+	case "srv.ipv4.single.fake":
+		return scs[1]
+	case "srv.ipv4.multi.fake":
+		return scs[2]
+	default:
+		return ""
+	}
 }
 
 var txtLookupTbl = map[string][]string{
@@ -495,29 +818,4 @@ func newBool(b bool) *bool {
 
 func newInt(b int) *int {
 	return &b
-}
-
-type name struct {
-	Service string `json:"service,omitempty"`
-	Method  string `json:"method,omitempty"`
-}
-
-type mc struct {
-	Name                    []name `json:"name,omitempty"`
-	WaitForReady            *bool  `json:"waitForReady,omitempty"`
-	Timeout                 string `json:"timeout,omitempty"`
-	MaxRequestMessageBytes  *int   `json:"maxRequestMessageBytes,omitempty"`
-	MaxResponseMessageBytes *int   `json:"maxResponseMessageBytes,omitempty"`
-}
-
-type sc struct {
-	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        []mc   `json:"methodConfig,omitempty"`
-}
-
-type choice struct {
-	ClientLanguage []string `json:"clientLanguage,omitempty"`
-	Percentage     *int     `json:"percentage,omitempty"`
-	ClientHostName []string `json:"clientHostName,omitempty"`
-	ServiceConfig  sc       `json:"serviceConfig,omitempty"`
 }
