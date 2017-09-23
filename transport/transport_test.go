@@ -163,12 +163,13 @@ func (h *testStreamHandler) handleStreamEncodingRequiredStatus(t *testing.T, s *
 }
 
 func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stream) {
-	hBuf := bytes.NewBuffer([]byte{})
-	hEnc := hpack.NewEncoder(hBuf)
-	hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
-	if err := h.t.writeHeaders(s, hBuf, false); err != nil {
-		t.Fatalf("Failed to write headers: %v", err)
-	}
+	headerFields := []hpack.HeaderField{}
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
+	h.t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: false,
+	})
 }
 
 func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {

@@ -63,6 +63,8 @@ type http2Server struct {
 	// blocking forever after Close.
 	shutdownChan chan struct{}
 	framer       *framer
+	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
+	hEnc         *hpack.Encoder // HPACK encoder
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -105,7 +107,7 @@ type http2Server struct {
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 	// idle is the time instant when the connection went idle.
-	// This is either the beginning of the connection or when the number of
+	// This is either the begining of the connection or when the number of
 	// RPCs go down to 0.
 	// When the connection is busy, this value is set to 0.
 	idle time.Time
@@ -175,6 +177,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
+	var buf bytes.Buffer
 	t := &http2Server{
 		ctx:               context.Background(),
 		conn:              conn,
@@ -182,6 +185,8 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		localAddr:         conn.LocalAddr(),
 		authInfo:          config.AuthInfo,
 		framer:            framer,
+		hBuf:              &buf,
+		hEnc:              hpack.NewEncoder(&buf),
 		maxStreams:        maxStreams,
 		inTapHandle:       config.InTapHandle,
 		controlBuf:        newControlBuffer(),
@@ -669,34 +674,6 @@ func (t *http2Server) handleWindowUpdate(f *http2.WindowUpdateFrame) {
 	}
 }
 
-func (t *http2Server) writeHeaders(s *Stream, b *bytes.Buffer, endStream bool) error {
-	first := true
-	endHeaders := false
-	// Sends the headers in a single batch.
-	for !endHeaders {
-		size := b.Len()
-		if size > http2MaxFrameLen {
-			size = http2MaxFrameLen
-		} else {
-			endHeaders = true
-		}
-		if first {
-			p := http2.HeadersFrameParam{
-				StreamID:      s.id,
-				BlockFragment: b.Next(size),
-				EndStream:     endStream,
-				EndHeaders:    endHeaders,
-			}
-			t.controlBuf.put(&headerFrame{p})
-			first = false
-		} else {
-			t.controlBuf.put(&continuationFrame{streamID: s.id, endHeaders: endHeaders, headerBlockFragment: b.Next(size)})
-		}
-	}
-	atomic.StoreUint32(&t.resetPingStrikes, 1)
-	return nil
-}
-
 // WriteHeader sends the header metedata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	select {
@@ -722,13 +699,11 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	md = s.header
 	s.mu.Unlock()
-
-	hBuf := bytes.NewBuffer([]byte{}) // TODO(mmukhi): Try and re-use this memory later.
-	hEnc := hpack.NewEncoder(hBuf)
-	hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-	hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	headerFields := make([]hpack.HeaderField, 0, 2) // aleast :status, content-type will be there if none else.
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	if s.sendCompress != "" {
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-encoding", Value: s.sendCompress})
 	}
 	for k, vv := range md {
 		if isReservedHeader(k) {
@@ -736,16 +711,17 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 			continue
 		}
 		for _, v := range vv {
-			hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
-	bufLen := hBuf.Len()
-	if err := t.writeHeaders(s, hBuf, false); err != nil {
-		return err
-	}
+	t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: false,
+	})
 	if t.stats != nil {
 		outHeader := &stats.OutHeader{
-			WireLength: bufLen,
+		//WireLength: // TODO(mmukhi): Revisit this later, if needed.
 		}
 		t.stats.HandleRPC(s.Context(), outHeader)
 	}
@@ -782,18 +758,13 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
-	hBuf := bytes.NewBuffer([]byte{}) // TODO(mmukhi): Try and re-use this memory.
-	hEnc := hpack.NewEncoder(hBuf)
+	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
 	if !headersSent {
-		hEnc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-		hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+		headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	}
-	hEnc.WriteField(
-		hpack.HeaderField{
-			Name:  "grpc-status",
-			Value: strconv.Itoa(int(st.Code())),
-		})
-	hEnc.WriteField(hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
 
 	if p := st.Proto(); p != nil && len(p.Details) > 0 {
 		stBytes, err := proto.Marshal(p)
@@ -802,7 +773,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 			panic(err)
 		}
 
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-status-details-bin", Value: encodeBinHeader(stBytes)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status-details-bin", Value: encodeBinHeader(stBytes)})
 	}
 
 	// Attach the trailer metadata.
@@ -812,17 +783,17 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 			continue
 		}
 		for _, v := range vv {
-			hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+			headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 		}
 	}
-	bufLen := hBuf.Len()
-	if err := t.writeHeaders(s, hBuf, true); err != nil {
-		t.Close()
-		return err
-	}
+	t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: true,
+	})
 	if t.stats != nil {
 		outTrailer := &stats.OutTrailer{
-			WireLength: bufLen,
+		// WireLength:TODO(mmukhi): Revisit this later, if needed.
 		}
 		t.stats.HandleRPC(s.Context(), outTrailer)
 	}
@@ -938,7 +909,7 @@ func (t *http2Server) keepalive() {
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
 	keepalive := time.NewTimer(t.kp.Time)
 	// NOTE: All exit paths of this function should reset their
-	// respective timers. A failure to do so will cause the
+	// respecitve timers. A failure to do so will cause the
 	// following clean-up to deadlock and eventually leak.
 	defer func() {
 		if !maxIdle.Stop() {
@@ -1022,9 +993,39 @@ func (t *http2Server) itemHandler(i item) error {
 			i.f()
 		}
 	case *headerFrame:
-		err = t.framer.fr.WriteHeaders(i.p)
-	case *continuationFrame:
-		err = t.framer.fr.WriteContinuation(i.streamID, i.endHeaders, i.headerBlockFragment)
+		t.hBuf.Reset()
+		for _, f := range i.hf {
+			t.hEnc.WriteField(f)
+		}
+		first := true
+		endHeaders := false
+		for !endHeaders {
+			size := t.hBuf.Len()
+			if size > http2MaxFrameLen {
+				size = http2MaxFrameLen
+			} else {
+				endHeaders = true
+			}
+			if first {
+				first = false
+				err = t.framer.fr.WriteHeaders(http2.HeadersFrameParam{
+					StreamID:      i.streamID,
+					BlockFragment: t.hBuf.Next(size),
+					EndStream:     i.endStream,
+					EndHeaders:    endHeaders,
+				})
+			} else {
+				err = t.framer.fr.WriteContinuation(
+					i.streamID,
+					endHeaders,
+					t.hBuf.Next(size),
+				)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		atomic.StoreUint32(&t.resetPingStrikes, 1)
 	case *windowUpdate:
 		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:

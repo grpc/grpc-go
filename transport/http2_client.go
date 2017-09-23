@@ -193,6 +193,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		icwz = opts.InitialConnWindowSize
 		dynamicWindow = false
 	}
+	var buf bytes.Buffer
 	t := &http2Client{
 		ctx:        ctx,
 		target:     addr.Addr,
@@ -209,6 +210,8 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		goAway:            make(chan struct{}),
 		awakenKeepalive:   make(chan struct{}, 1),
 		framer:            newFramer(conn),
+		hBuf:              &buf,
+		hEnc:              hpack.NewEncoder(&buf),
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
@@ -361,13 +364,13 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			authData[k] = v
 		}
 	}
-	callAuthData := make(map[string]string)
+	callAuthData := map[string]string{}
 	// Check if credentials.PerRPCCredentials were provided via call options.
 	// Note: if these credentials are provided both via dial options and call
 	// options, then both sets of credentials will be applied.
 	if callCreds := callHdr.Creds; callCreds != nil {
 		if !t.isSecure && callCreds.RequireTransportSecurity() {
-			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure connection")
+			return nil, streamErrorf(codes.Unauthenticated, "transport: cannot send secure credentials on an insecure conneciton")
 		}
 		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {
@@ -401,40 +404,38 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if sq > 1 {
 		t.streamsQuota.add(sq - 1)
 	}
-	// HPACK encodes various headers.
-	hBuf := bytes.NewBuffer([]byte{})
-	hEnc := hpack.NewEncoder(hBuf)
-	hEnc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"})
-	hEnc.WriteField(hpack.HeaderField{Name: ":scheme", Value: t.scheme})
-	hEnc.WriteField(hpack.HeaderField{Name: ":path", Value: callHdr.Method})
-	hEnc.WriteField(hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
-	hEnc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-	hEnc.WriteField(hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
-	hEnc.WriteField(hpack.HeaderField{Name: "te", Value: "trailers"})
+	// Make the slice of certain predictable size to reduce allocations made by append.
+	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
+	hfLen += len(authData) + len(callAuthData)
+	headerFields := make([]hpack.HeaderField, 0, hfLen)
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":path", Value: callHdr.Method})
+	headerFields = append(headerFields, hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "te", Value: "trailers"})
 
 	if callHdr.SendCompress != "" {
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-encoding", Value: callHdr.SendCompress})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-encoding", Value: callHdr.SendCompress})
 	}
 	if dl, ok := ctx.Deadline(); ok {
 		// Send out timeout regardless its value. The server can detect timeout context by itself.
+		// TODO(mmukhi): Perhaps this field should be updated when actually writing out to the wire.
 		timeout := dl.Sub(time.Now())
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: encodeTimeout(timeout)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-timeout", Value: encodeTimeout(timeout)})
 	}
-
 	for k, v := range authData {
-		hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
 	for k, v := range callAuthData {
-		hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
-	var (
-		endHeaders bool
-	)
 	if b := stats.OutgoingTags(ctx); b != nil {
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-tags-bin", Value: encodeBinHeader(b)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-tags-bin", Value: encodeBinHeader(b)})
 	}
 	if b := stats.OutgoingTrace(ctx); b != nil {
-		hEnc.WriteField(hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
+		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
 	}
 	if md, ok := metadata.FromOutgoingContext(ctx); ok {
 		for k, vv := range md {
@@ -443,7 +444,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				continue
 			}
 			for _, v := range vv {
-				hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 			}
 		}
 	}
@@ -453,7 +454,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 				continue
 			}
 			for _, v := range vv {
-				hEnc.WriteField(hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
+				headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 			}
 		}
 	}
@@ -482,34 +483,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		default:
 		}
 	}
-	first := true
-	bufLen := hBuf.Len()
-	// Sends the headers in a single batch even when they span multiple frames.
-	for !endHeaders {
-		size := hBuf.Len()
-		if size > http2MaxFrameLen {
-			size = http2MaxFrameLen
-		} else {
-			endHeaders = true
-		}
-		if first {
-			// Sends a HeadersFrame to server to start a new stream.
-			p := http2.HeadersFrameParam{
-				StreamID:      s.id,
-				BlockFragment: hBuf.Next(size),
-				EndStream:     false,
-				EndHeaders:    endHeaders,
-			}
-			// Do a force flush for the buffered frames iff it is the last headers frame
-			// and there is header metadata to be sent. Otherwise, there is flushing until
-			// the corresponding data frame is written.
-			t.controlBuf.put(&headerFrame{p})
-			first = false
-		} else {
-			// Sends Continuation frames for the leftover headers.
-			t.controlBuf.put(&continuationFrame{streamID: s.id, endHeaders: endHeaders, headerBlockFragment: hBuf.Next(size)})
-		}
-	}
+	t.controlBuf.put(&headerFrame{
+		streamID:  s.id,
+		hf:        headerFields,
+		endStream: false,
+	})
 	t.mu.Unlock()
 
 	s.mu.Lock()
@@ -518,8 +496,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 
 	if t.statsHandler != nil {
 		outHeader := &stats.OutHeader{
-			Client:      true,
-			WireLength:  bufLen,
+			Client: true,
+			//WireLength: // TODO(mmukhi): Revisit this if needed.
 			FullMethod:  callHdr.Method,
 			RemoteAddr:  t.remoteAddr,
 			LocalAddr:   t.localAddr,
@@ -961,7 +939,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		t.notifyError(connectionErrorf(true, nil, "received illegal http2 GOAWAY frame: stream ID %d is even", f.LastStreamID))
 		return
 	}
-	// A client can receive multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
+	// A client can recieve multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
 	// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
 	// with the ID of the last stream the server will process.
 	// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
@@ -1214,9 +1192,38 @@ func (t *http2Client) itemHandler(i item) error {
 			i.f()
 		}
 	case *headerFrame:
-		err = t.framer.fr.WriteHeaders(i.p)
-	case *continuationFrame:
-		err = t.framer.fr.WriteContinuation(i.streamID, i.endHeaders, i.headerBlockFragment)
+		t.hBuf.Reset()
+		for _, f := range i.hf {
+			t.hEnc.WriteField(f)
+		}
+		endHeaders := false
+		first := true
+		for !endHeaders {
+			size := t.hBuf.Len()
+			if size > http2MaxFrameLen {
+				size = http2MaxFrameLen
+			} else {
+				endHeaders = true
+			}
+			if first {
+				first = false
+				err = t.framer.fr.WriteHeaders(http2.HeadersFrameParam{
+					StreamID:      i.streamID,
+					BlockFragment: t.hBuf.Next(size),
+					EndStream:     i.endStream,
+					EndHeaders:    endHeaders,
+				})
+			} else {
+				err = t.framer.fr.WriteContinuation(
+					i.streamID,
+					endHeaders,
+					t.hBuf.Next(size),
+				)
+			}
+			if err != nil {
+				return err
+			}
+		}
 	case *windowUpdate:
 		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
