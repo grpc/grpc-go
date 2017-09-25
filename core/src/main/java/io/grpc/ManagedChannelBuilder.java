@@ -268,6 +268,54 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   }
 
   /**
+   * Sets the time without read activity before sending a keepalive ping. An unreasonably small
+   * value might be increased, and {@code Long.MAX_VALUE} nano seconds or an unreasonably large
+   * value will disable keepalive. Defaults to infinite.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives can increase the load on services and are commonly "invisible" making it hard to
+   * notice when they are causing excessive load. Clients are strongly encouraged to use only as
+   * small of a value as necessary.
+   *
+   * @throws UnsupportedOperationException if unsupported
+   * @since 1.7.0
+   */
+  public T keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Sets the time waiting for read activity after sending a keepalive ping. If the time expires
+   * without any read activity on the connection, the connection is considered dead. An unreasonably
+   * small value might be increased. Defaults to 20 seconds.
+   *
+   * <p>This value should be at least multiple times the RTT to allow for lost packets.
+   *
+   * @throws UnsupportedOperationException if unsupported
+   * @since 1.7.0
+   */
+  public T keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Sets whether keepalive will be performed when there are no outstanding RPC on a connection.
+   * Defaults to {@code false}.
+   *
+   * <p>Clients must receive permission from the service owner before enabling this option.
+   * Keepalives on unused connections can easilly accidentally consume a considerable amount of
+   * bandwidth and CPU. {@link ManagedChannelBuilder#idleTimeout idleTimeout()} should generally be
+   * used instead of this option.
+   *
+   * @throws UnsupportedOperationException if unsupported
+   * @see #keepAliveTime(long, TimeUnit)
+   * @since 1.7.0
+   */
+  public T keepAliveWithoutCalls(boolean enable) {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Builds a channel using the given parameters.
    *
    * @since 1.0.0

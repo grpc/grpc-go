@@ -26,6 +26,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder;
 import java.net.SocketAddress;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Builder for a channel that issues in-process requests. Clients identify the in-process server by
@@ -84,6 +85,24 @@ public final class InProcessChannelBuilder extends
    */
   @Override
   public InProcessChannelBuilder usePlaintext(boolean skipNegotiation) {
+    return this;
+  }
+
+  /** Does nothing. */
+  @Override
+  public InProcessChannelBuilder keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    return this;
+  }
+
+  /** Does nothing. */
+  @Override
+  public InProcessChannelBuilder keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    return this;
+  }
+
+  /** Does nothing. */
+  @Override
+  public InProcessChannelBuilder keepAliveWithoutCalls(boolean enable) {
     return this;
   }
 

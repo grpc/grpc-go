@@ -139,6 +139,24 @@ public abstract class ForwardingChannelBuilder<T extends ForwardingChannelBuilde
     return thisT();
   }
 
+  @Override
+  public T keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
+    delegate().keepAliveTime(keepAliveTime, timeUnit);
+    return thisT();
+  }
+
+  @Override
+  public T keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
+    delegate().keepAliveTimeout(keepAliveTimeout, timeUnit);
+    return thisT();
+  }
+
+  @Override
+  public T keepAliveWithoutCalls(boolean enable) {
+    delegate().keepAliveWithoutCalls(enable);
+    return thisT();
+  }
+
   /**
    * Returns the {@link ManagedChannel} built by the delegate by default. Overriding method can
    * return different value.
