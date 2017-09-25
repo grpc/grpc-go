@@ -57,6 +57,9 @@ subprojects {
     repositories {
         mavenCentral()
         mavenLocal()
+        maven {
+          url "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
     }
 
     [compileJava, compileTestJava, compileJmhJava].each() {
@@ -190,7 +193,8 @@ subprojects {
                 google_auth_credentials: 'com.google.auth:google-auth-library-credentials:0.4.0',
                 okhttp: 'com.squareup.okhttp:okhttp:2.5.0',
                 okio: 'com.squareup.okio:okio:1.6.0',
-                opencensus_api: 'io.opencensus:opencensus-api:0.6.0',
+                opencensus_api: 'io.opencensus:opencensus-api:0.7.0',
+                opencensus_impl: 'io.opencensus:opencensus-impl:0.7.0',
                 instrumentation_api: 'com.google.instrumentation:instrumentation-api:0.4.3',
                 protobuf: "com.google.protobuf:protobuf-java:${protobufVersion}",
                 protobuf_lite: "com.google.protobuf:protobuf-lite:3.0.1",

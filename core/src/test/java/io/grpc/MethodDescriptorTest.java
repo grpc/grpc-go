@@ -94,4 +94,12 @@ public class MethodDescriptorTest {
     // Never reached
     assert discard == null;
   }
+
+  @Test
+  public void generateTraceSpanName() {
+    assertEquals(
+        "Sent.io.grpc.Foo", MethodDescriptor.generateTraceSpanName(false, "io.grpc/Foo"));
+    assertEquals(
+        "Recv.io.grpc.Bar", MethodDescriptor.generateTraceSpanName(true, "io.grpc/Bar"));
+  }
 }

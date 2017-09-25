@@ -34,6 +34,7 @@ public final class ReportQpsScenarioServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.ReportQpsScenarioService", "ReportScenario"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

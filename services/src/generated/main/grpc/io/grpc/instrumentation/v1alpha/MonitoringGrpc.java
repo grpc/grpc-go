@@ -34,6 +34,7 @@ public final class MonitoringGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.instrumentation.v1alpha.Monitoring", "GetCanonicalRpcStats"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               com.google.protobuf.Empty.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -47,6 +48,7 @@ public final class MonitoringGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.instrumentation.v1alpha.Monitoring", "GetStats"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -60,6 +62,7 @@ public final class MonitoringGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.instrumentation.v1alpha.Monitoring", "WatchStats"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.instrumentation.v1alpha.StatsRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -73,6 +76,7 @@ public final class MonitoringGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.instrumentation.v1alpha.Monitoring", "GetRequestTraces"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.instrumentation.v1alpha.TraceRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -86,6 +90,7 @@ public final class MonitoringGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.instrumentation.v1alpha.Monitoring", "GetCustomMonitoringData"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.instrumentation.v1alpha.MonitoringDataGroup.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

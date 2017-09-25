@@ -13,6 +13,9 @@ buildscript {
 dependencies {
     compile project(':grpc-protobuf'),
             project(':grpc-stub')
+    testCompile libraries.opencensus_api,
+                libraries.truth
+    testRuntime libraries.opencensus_impl
 }
 
 configureProtoCompilation()

@@ -34,6 +34,7 @@ public final class BenchmarkServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.BenchmarkService", "UnaryCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -47,6 +48,7 @@ public final class BenchmarkServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.BenchmarkService", "StreamingCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -60,6 +62,7 @@ public final class BenchmarkServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.BenchmarkService", "StreamingFromClient"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -73,6 +76,7 @@ public final class BenchmarkServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.BenchmarkService", "StreamingFromServer"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -86,6 +90,7 @@ public final class BenchmarkServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.BenchmarkService", "StreamingBothWays"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.benchmarks.proto.Messages.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

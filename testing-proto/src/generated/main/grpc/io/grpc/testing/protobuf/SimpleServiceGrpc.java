@@ -37,6 +37,7 @@ public final class SimpleServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.SimpleService", "UnaryRpc"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.testing.protobuf.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -50,6 +51,7 @@ public final class SimpleServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.SimpleService", "ClientStreamingRpc"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.testing.protobuf.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -63,6 +65,7 @@ public final class SimpleServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.SimpleService", "ServerStreamingRpc"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.testing.protobuf.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -76,6 +79,7 @@ public final class SimpleServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.SimpleService", "BidiStreamingRpc"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               io.grpc.testing.protobuf.SimpleRequest.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

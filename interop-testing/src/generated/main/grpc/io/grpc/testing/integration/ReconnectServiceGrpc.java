@@ -37,6 +37,7 @@ public final class ReconnectServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.ReconnectService", "Start"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -50,6 +51,7 @@ public final class ReconnectServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.ReconnectService", "Stop"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
               com.google.protobuf.EmptyProtos.Empty.getDefaultInstance()))
           .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

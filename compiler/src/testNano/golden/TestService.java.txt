@@ -41,6 +41,7 @@ public final class TestServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.TestService", "UnaryCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleRequest>marshaller(
               new NanoFactory<io.grpc.testing.integration.nano.Test.SimpleRequest>(ARG_IN_METHOD_UNARY_CALL)))
           .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.SimpleResponse>marshaller(
@@ -55,6 +56,7 @@ public final class TestServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.SERVER_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.TestService", "StreamingOutputCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
               new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_STREAMING_OUTPUT_CALL)))
           .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
@@ -69,6 +71,7 @@ public final class TestServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.CLIENT_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.TestService", "StreamingInputCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>marshaller(
               new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingInputCallRequest>(ARG_IN_METHOD_STREAMING_INPUT_CALL)))
           .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingInputCallResponse>marshaller(
@@ -83,6 +86,7 @@ public final class TestServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.TestService", "FullBidiCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
               new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_FULL_BIDI_CALL)))
           .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
@@ -97,6 +101,7 @@ public final class TestServiceGrpc {
           .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
           .setFullMethodName(generateFullMethodName(
               "grpc.testing.TestService", "HalfBidiCall"))
+          .setRegisterForTracing(true)
           .setRequestMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>marshaller(
               new NanoFactory<io.grpc.testing.integration.nano.Test.StreamingOutputCallRequest>(ARG_IN_METHOD_HALF_BIDI_CALL)))
           .setResponseMarshaller(io.grpc.protobuf.nano.NanoUtils.<io.grpc.testing.integration.nano.Test.StreamingOutputCallResponse>marshaller(
