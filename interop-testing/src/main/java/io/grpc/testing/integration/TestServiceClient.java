@@ -80,6 +80,7 @@ public class TestServiceClient {
   private String defaultServiceAccount;
   private String serviceAccountKeyFile;
   private String oauthScope;
+  private boolean fullStreamDecompression;
 
   private Tester tester = new Tester();
 
@@ -130,6 +131,8 @@ public class TestServiceClient {
         serviceAccountKeyFile = value;
       } else if ("oauth_scope".equals(key)) {
         oauthScope = value;
+      } else if ("full_stream_decompression".equals(key)) {
+        fullStreamDecompression = Boolean.parseBoolean(value);
       } else {
         System.err.println("Unknown argument: " + key);
         usage = true;
@@ -158,6 +161,8 @@ public class TestServiceClient {
           + "\n  --service_account_key_file  Path to service account json key file."
             + c.serviceAccountKeyFile
           + "\n  --oauth_scope               Scope for OAuth tokens. Default " + c.oauthScope
+          + "\n  --full_stream_decompression Enable full-stream decompression. Default "
+            + c.fullStreamDecompression
       );
       System.exit(1);
     }
@@ -329,6 +334,9 @@ public class TestServiceClient {
         if (serverHostOverride != null) {
           builder.overrideAuthority(serverHostOverride);
         }
+        if (fullStreamDecompression) {
+          builder.enableFullStreamDecompression();
+        }
         return builder.build();
       } else {
         OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);
@@ -349,6 +357,9 @@ public class TestServiceClient {
           }
         } else {
           builder.usePlaintext(true);
+        }
+        if (fullStreamDecompression) {
+          builder.enableFullStreamDecompression();
         }
         return builder.build();
       }

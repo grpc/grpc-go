@@ -593,6 +593,9 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
       public void setCompressor(Compressor compressor) {}
 
       @Override
+      public void setFullStreamDecompression(boolean fullStreamDecompression) {}
+
+      @Override
       public void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {}
 
       @Override

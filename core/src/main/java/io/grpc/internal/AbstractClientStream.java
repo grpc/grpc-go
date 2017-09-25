@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -117,6 +118,11 @@ public abstract class AbstractClientStream extends AbstractStream
   }
 
   @Override
+  public final void setFullStreamDecompression(boolean fullStreamDecompression) {
+    transportState().setFullStreamDecompression(fullStreamDecompression);
+  }
+
+  @Override
   public final void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
     transportState().setDecompressorRegistry(decompressorRegistry);
   }
@@ -182,6 +188,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private final StatsTraceContext statsTraceCtx;
     private boolean listenerClosed;
     private ClientStreamListener listener;
+    private boolean fullStreamDecompression;
     private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
 
     private boolean deframerClosed = false;
@@ -196,6 +203,10 @@ public abstract class AbstractClientStream extends AbstractStream
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
+    }
+
+    private void setFullStreamDecompression(boolean fullStreamDecompression) {
+      this.fullStreamDecompression = fullStreamDecompression;
     }
 
     private void setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
@@ -233,17 +244,43 @@ public abstract class AbstractClientStream extends AbstractStream
       Preconditions.checkState(!statusReported, "Received headers on closed stream");
       statsTraceCtx.clientInboundHeaders();
 
-      Decompressor decompressor = Codec.Identity.NONE;
-      String encoding = headers.get(MESSAGE_ENCODING_KEY);
-      if (encoding != null) {
-        decompressor = decompressorRegistry.lookupDecompressor(encoding);
-        if (decompressor == null) {
-          deframeFailed(Status.INTERNAL.withDescription(
-              String.format("Can't find decompressor for %s", encoding)).asRuntimeException());
+      boolean compressedStream = false;
+      String streamEncoding = headers.get(CONTENT_ENCODING_KEY);
+      if (fullStreamDecompression && streamEncoding != null) {
+        if (streamEncoding.equalsIgnoreCase("gzip")) {
+          setFullStreamDecompressor(new GzipInflatingBuffer());
+          compressedStream = true;
+        } else if (!streamEncoding.equalsIgnoreCase("identity")) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(
+                      String.format("Can't find full stream decompressor for %s", streamEncoding))
+                  .asRuntimeException());
           return;
         }
       }
-      setDecompressor(decompressor);
+
+      String messageEncoding = headers.get(MESSAGE_ENCODING_KEY);
+      if (messageEncoding != null) {
+        Decompressor decompressor = decompressorRegistry.lookupDecompressor(messageEncoding);
+        if (decompressor == null) {
+          deframeFailed(
+              Status.INTERNAL
+                  .withDescription(String.format("Can't find decompressor for %s", messageEncoding))
+                  .asRuntimeException());
+          return;
+        } else if (decompressor != Codec.Identity.NONE) {
+          if (compressedStream) {
+            deframeFailed(
+                Status.INTERNAL
+                    .withDescription(
+                        String.format("Full stream and gRPC message encoding cannot both be set"))
+                    .asRuntimeException());
+            return;
+          }
+          setDecompressor(decompressor);
+        }
+      }
 
       listener().headersRead(headers);
     }

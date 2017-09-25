@@ -118,6 +118,8 @@ public abstract class AbstractManagedChannelImplBuilder
 
   LoadBalancer.Factory loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
 
+  boolean fullStreamDecompression;
+
   DecompressorRegistry decompressorRegistry = DEFAULT_DECOMPRESSOR_REGISTRY;
 
   CompressorRegistry compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
@@ -224,6 +226,12 @@ public abstract class AbstractManagedChannelImplBuilder
     } else {
       this.loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
     }
+    return thisT();
+  }
+
+  @Override
+  public final T enableFullStreamDecompression() {
+    this.fullStreamDecompression = true;
     return thisT();
   }
 

@@ -193,8 +193,21 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
   public abstract T loadBalancerFactory(LoadBalancer.Factory loadBalancerFactory);
 
   /**
-   * Set the decompression registry for use in the channel.  This is an advanced API call and
-   * shouldn't be used unless you are using custom message encoding.   The default supported
+   * Enables full-stream decompression of inbound streams. This will cause the channel's outbound
+   * headers to advertise support for GZIP compressed streams, and gRPC servers which support the
+   * feature may respond with a GZIP compressed stream.
+   *
+   * <p>EXPERIMENTAL: This method is here to enable an experimental feature, and may be changed or
+   * removed once the feature is stable.
+   *
+   * @since 1.7.0
+   */
+  @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3399")
+  public abstract T enableFullStreamDecompression();
+
+  /**
+   * Set the decompression registry for use in the channel. This is an advanced API call and
+   * shouldn't be used unless you are using custom message encoding. The default supported
    * decompressors are in {@link DecompressorRegistry#getDefaultInstance}.
    *
    * @return this

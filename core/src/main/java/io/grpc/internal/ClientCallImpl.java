@@ -22,6 +22,8 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static io.grpc.Contexts.statusFromCancelled;
 import static io.grpc.Status.DEADLINE_EXCEEDED;
+import static io.grpc.internal.GrpcUtil.CONTENT_ACCEPT_ENCODING_KEY;
+import static io.grpc.internal.GrpcUtil.CONTENT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ACCEPT_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.MESSAGE_ENCODING_KEY;
 import static io.grpc.internal.GrpcUtil.TIMEOUT_KEY;
@@ -45,6 +47,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.MethodDescriptor.MethodType;
 import io.grpc.Status;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -60,6 +63,8 @@ import javax.annotation.Nullable;
 final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   private static final Logger log = Logger.getLogger(ClientCallImpl.class.getName());
+  private static final byte[] FULL_STREAM_DECOMPRESSION_ENCODINGS
+      = "gzip".getBytes(Charset.forName("US-ASCII"));
 
   private final MethodDescriptor<ReqT, RespT> method;
   private final Executor callExecutor;
@@ -74,6 +79,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
   private final ClientTransportProvider clientTransportProvider;
   private final CancellationListener cancellationListener = new ContextCancellationListener();
   private ScheduledExecutorService deadlineCancellationExecutor;
+  private boolean fullStreamDecompression;
   private DecompressorRegistry decompressorRegistry = DecompressorRegistry.getDefaultInstance();
   private CompressorRegistry compressorRegistry = CompressorRegistry.getDefaultInstance();
 
@@ -116,6 +122,11 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
     ClientTransport get(PickSubchannelArgs args);
   }
 
+  ClientCallImpl<ReqT, RespT> setFullStreamDecompression(boolean fullStreamDecompression) {
+    this.fullStreamDecompression = fullStreamDecompression;
+    return this;
+  }
+
   ClientCallImpl<ReqT, RespT> setDecompressorRegistry(DecompressorRegistry decompressorRegistry) {
     this.decompressorRegistry = decompressorRegistry;
     return this;
@@ -128,7 +139,10 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
 
   @VisibleForTesting
   static void prepareHeaders(
-      Metadata headers, DecompressorRegistry decompressorRegistry, Compressor compressor) {
+      Metadata headers,
+      DecompressorRegistry decompressorRegistry,
+      Compressor compressor,
+      boolean fullStreamDecompression) {
     headers.discardAll(MESSAGE_ENCODING_KEY);
     if (compressor != Codec.Identity.NONE) {
       headers.put(MESSAGE_ENCODING_KEY, compressor.getMessageEncoding());
@@ -139,6 +153,12 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
         InternalDecompressorRegistry.getRawAdvertisedMessageEncodings(decompressorRegistry);
     if (advertisedEncodings.length != 0) {
       headers.put(MESSAGE_ACCEPT_ENCODING_KEY, advertisedEncodings);
+    }
+
+    headers.discardAll(CONTENT_ENCODING_KEY);
+    headers.discardAll(CONTENT_ACCEPT_ENCODING_KEY);
+    if (fullStreamDecompression) {
+      headers.put(CONTENT_ACCEPT_ENCODING_KEY, FULL_STREAM_DECOMPRESSION_ENCODINGS);
     }
   }
 
@@ -195,7 +215,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       compressor = Codec.Identity.NONE;
     }
 
-    prepareHeaders(headers, decompressorRegistry, compressor);
+    prepareHeaders(headers, decompressorRegistry, compressor, fullStreamDecompression);
 
     Deadline effectiveDeadline = effectiveDeadline();
     boolean deadlineExceeded = effectiveDeadline != null && effectiveDeadline.isExpired();
@@ -224,6 +244,7 @@ final class ClientCallImpl<ReqT, RespT> extends ClientCall<ReqT, RespT> {
       stream.setMaxOutboundMessageSize(callOptions.getMaxOutboundMessageSize());
     }
     stream.setCompressor(compressor);
+    stream.setFullStreamDecompression(fullStreamDecompression);
     stream.setDecompressorRegistry(decompressorRegistry);
     stream.start(new ClientStreamListenerImpl(observer));
 

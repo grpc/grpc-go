@@ -84,6 +84,18 @@ public final class GrpcUtil {
   public static final Metadata.Key<byte[]> MESSAGE_ACCEPT_ENCODING_KEY =
       InternalMetadata.keyOf(GrpcUtil.MESSAGE_ACCEPT_ENCODING, new AcceptEncodingMarshaller());
 
+  /**
+   * {@link io.grpc.Metadata.Key} for the stream's content encoding header.
+   */
+  public static final Metadata.Key<String> CONTENT_ENCODING_KEY =
+      Metadata.Key.of(GrpcUtil.CONTENT_ENCODING, Metadata.ASCII_STRING_MARSHALLER);
+
+  /**
+   * {@link io.grpc.Metadata.Key} for the stream's accepted content encoding header.
+   */
+  public static final Metadata.Key<byte[]> CONTENT_ACCEPT_ENCODING_KEY =
+      InternalMetadata.keyOf(GrpcUtil.CONTENT_ACCEPT_ENCODING, new AcceptEncodingMarshaller());
+
   private static final class AcceptEncodingMarshaller implements TrustedAsciiMarshaller<byte[]> {
     @Override
     public byte[] toAsciiString(byte[] value) {
@@ -153,6 +165,16 @@ public final class GrpcUtil {
    * The accepted message encodings (i.e. compression) that can be used in the stream.
    */
   public static final String MESSAGE_ACCEPT_ENCODING = "grpc-accept-encoding";
+
+  /**
+   * The content-encoding used to compress the full gRPC stream.
+   */
+  public static final String CONTENT_ENCODING = "content-encoding";
+
+  /**
+   * The accepted content-encodings that can be used to compress the full gRPC stream.
+   */
+  public static final String CONTENT_ACCEPT_ENCODING = "accept-encoding";
 
   /**
    * The default maximum uncompressed size (in bytes) for inbound messages. Defaults to 4 MiB.

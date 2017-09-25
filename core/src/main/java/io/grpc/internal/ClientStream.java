@@ -53,6 +53,12 @@ public interface ClientStream extends Stream {
   void setAuthority(String authority);
 
   /**
+   * Enables full-stream decompression, allowing the client stream to use {@link
+   * GzipInflatingBuffer} to decode inbound GZIP compressed streams.
+   */
+  void setFullStreamDecompression(boolean fullStreamDecompression);
+
+  /**
    * Sets the registry to find a decompressor for the framer. May only be called before {@link
    * #start}. If the transport does not support compression, this may do nothing.
    *

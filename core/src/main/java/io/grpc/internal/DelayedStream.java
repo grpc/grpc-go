@@ -303,6 +303,17 @@ class DelayedStream implements ClientStream {
   }
 
   @Override
+  public void setFullStreamDecompression(final boolean fullStreamDecompression) {
+    delayOrExecute(
+        new Runnable() {
+          @Override
+          public void run() {
+            realStream.setFullStreamDecompression(fullStreamDecompression);
+          }
+        });
+  }
+
+  @Override
   public void setDecompressorRegistry(final DecompressorRegistry decompressorRegistry) {
     checkNotNull(decompressorRegistry, "decompressorRegistry");
     delayOrExecute(new Runnable() {

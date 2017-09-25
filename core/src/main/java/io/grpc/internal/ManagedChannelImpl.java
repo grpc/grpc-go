@@ -111,6 +111,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final ChannelExecutor channelExecutor = new ChannelExecutor();
 
+  private boolean fullStreamDecompression;
+
   private final DecompressorRegistry decompressorRegistry;
   private final CompressorRegistry compressorRegistry;
 
@@ -411,6 +413,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           "invalid idleTimeoutMillis %s", builder.idleTimeoutMillis);
       this.idleTimeoutMillis = builder.idleTimeoutMillis;
     }
+    this.fullStreamDecompression = builder.fullStreamDecompression;
     this.decompressorRegistry = checkNotNull(builder.decompressorRegistry, "decompressorRegistry");
     this.compressorRegistry = checkNotNull(builder.compressorRegistry, "compressorRegistry");
     this.userAgent = builder.userAgent;
@@ -562,13 +565,14 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
         executor = ManagedChannelImpl.this.executor;
       }
       return new ClientCallImpl<ReqT, RespT>(
-          method,
-          executor,
-          callOptions,
-          transportProvider,
-          terminated ? null : transportFactory.getScheduledExecutorService())
-              .setDecompressorRegistry(decompressorRegistry)
-              .setCompressorRegistry(compressorRegistry);
+              method,
+              executor,
+              callOptions,
+              transportProvider,
+              terminated ? null : transportFactory.getScheduledExecutorService())
+          .setFullStreamDecompression(fullStreamDecompression)
+          .setDecompressorRegistry(decompressorRegistry)
+          .setCompressorRegistry(compressorRegistry);
     }
 
     @Override

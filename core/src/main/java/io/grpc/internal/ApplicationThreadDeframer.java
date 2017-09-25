@@ -45,15 +45,12 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
 
   ApplicationThreadDeframer(
       MessageDeframer.Listener listener,
-      Decompressor decompressor,
-      int maxMessageSize,
-      StatsTraceContext statsTraceCtx,
-      String debugString,
-      TransportExecutor transportExecutor) {
-    this.deframer =
-        new MessageDeframer(this, decompressor, maxMessageSize, statsTraceCtx, debugString);
+      TransportExecutor transportExecutor,
+      MessageDeframer deframer) {
     this.storedListener = checkNotNull(listener, "listener");
     this.transportExecutor = checkNotNull(transportExecutor, "transportExecutor");
+    deframer.setListener(this);
+    this.deframer = deframer;
   }
 
   @Override
@@ -64,6 +61,11 @@ public class ApplicationThreadDeframer implements Deframer, MessageDeframer.List
   @Override
   public void setDecompressor(Decompressor decompressor) {
     deframer.setDecompressor(decompressor);
+  }
+
+  @Override
+  public void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {
+    deframer.setFullStreamDecompressor(fullStreamDecompressor);
   }
 
   @Override

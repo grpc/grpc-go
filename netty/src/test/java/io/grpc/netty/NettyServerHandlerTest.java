@@ -42,6 +42,7 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -55,6 +56,7 @@ import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
+import io.grpc.Status.Code;
 import io.grpc.StreamTracer;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
@@ -271,9 +273,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertNull("no messages expected", streamListenerMessageQueue.poll());
   }
 
-  // TODO(ericgribkoff) Figure out how this test should be restructured to accommodate application-
-  // thread deframing.
-  /*
   @Test
   public void streamErrorShouldNotCloseChannel() throws Exception {
     manualSetUp();
@@ -297,7 +296,6 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertEquals(e, captor.getValue().asException().getCause());
     assertEquals(Code.UNKNOWN, captor.getValue().getCode());
   }
-  */
 
   @Test
   public void closeShouldCloseChannel() throws Exception {

@@ -33,6 +33,14 @@ public interface Deframer {
   void setDecompressor(Decompressor decompressor);
 
   /**
+   * Sets the decompressor used for full-stream decompression. Full-stream decompression disables
+   * any per-message decompressor set by {@link #setDecompressor}.
+   *
+   * @param fullStreamDecompressor the decompressing wrapper
+   */
+  void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor);
+
+  /**
    * Requests up to the given number of messages from the call. No additional messages will be
    * delivered.
    *

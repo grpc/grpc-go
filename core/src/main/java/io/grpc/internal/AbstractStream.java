@@ -93,7 +93,7 @@ public abstract class AbstractStream implements Stream {
 
   /**
    * Stream state as used by the transport. This should only called from the transport thread
-   * (except for private interactions with {@code AbstractStream2}).
+   * (except for private interactions with {@code AbstractStream}).
    */
   public abstract static class TransportState
       implements ApplicationThreadDeframer.TransportExecutor, MessageDeframer.Listener {
@@ -103,9 +103,8 @@ public abstract class AbstractStream implements Stream {
      */
     @VisibleForTesting
     public static final int DEFAULT_ONREADY_THRESHOLD = 32 * 1024;
-    private static final boolean DEFRAME_IN_APPLICATION_THREAD = false;
 
-    private final Deframer deframer;
+    private Deframer deframer;
     private final Object onReadyLock = new Object();
     private final StatsTraceContext statsTraceCtx;
 
@@ -130,20 +129,14 @@ public abstract class AbstractStream implements Stream {
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      if (DEFRAME_IN_APPLICATION_THREAD) {
-        deframer =
-            new ApplicationThreadDeframer(
-                this,
-                Codec.Identity.NONE,
-                maxMessageSize,
-                statsTraceCtx,
-                getClass().getName(),
-                this);
-      } else {
-        deframer =
+      deframer =
             new MessageDeframer(
                 this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
-      }
+    }
+
+    protected void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {
+      deframer.setFullStreamDecompressor(fullStreamDecompressor);
+      deframer = new ApplicationThreadDeframer(this, this, (MessageDeframer) deframer);
     }
 
     final void setMaxInboundMessageSize(int maxSize) {
