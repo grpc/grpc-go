@@ -116,6 +116,18 @@ func div(b []byte) []string {
 }
 
 // scfs contains an array of service config file string in JSON format.
+// Notes about the scfs contents and usage:
+// scfs contains 4 service config file JSON strings for testing. Inside each
+// service config file, there are multiple choices. scfs[0:3] each contains 5
+// choices, and first 3 choices are nonmatching choices based on canarying rule,
+// while the last two are matched choices. scfs[3] only contains 3 choices, and
+// all of them are nonmatching based on canarying rule. For each of scfs[0:3],
+// the eventually returned service config from the matches choices (first of the
+// two matched choices), is stored in the corresponding scs element (e.g.
+// scfs[0]->scs[0]). scfs and scs elements are used in pair to test the dns
+// resolver functionality, with scfs as the input and scs as the validation of
+// the output. For scfs[3], it corresponds to empty service config, since there
+// isn't a matched choice.
 var (
 	scfs = []string{
 		`[
@@ -810,12 +822,4 @@ func TestResolveFunc(t *testing.T) {
 			t.Errorf("Build(%q, cc, resolver.BuildOption{}) = %v, want %v", v.addr, err, v.want)
 		}
 	}
-}
-
-func newBool(b bool) *bool {
-	return &b
-}
-
-func newInt(b int) *int {
-	return &b
 }
