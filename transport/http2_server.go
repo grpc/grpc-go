@@ -875,7 +875,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 			success := func() {
 				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: false, d: p, f: func() {
-					//fmt.Println("Adding quota back to localEendQuota", ps)
 					s.localSendQuota.add(ps)
 				}})
 				if ps < sq {
