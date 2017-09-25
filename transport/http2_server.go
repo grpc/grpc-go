@@ -107,7 +107,7 @@ type http2Server struct {
 	// the per-stream outbound flow control window size set by the peer.
 	streamSendQuota uint32
 	// idle is the time instant when the connection went idle.
-	// This is either the begining of the connection or when the number of
+	// This is either the beginning of the connection or when the number of
 	// RPCs go down to 0.
 	// When the connection is busy, this value is set to 0.
 	idle time.Time
@@ -644,7 +644,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	t.mu.Unlock()
 	if ns < 1 && !t.kep.PermitWithoutStream {
 		// Keepalive shouldn't be active thus, this new ping should
-		// have come after atleast defaultPingTimeout.
+		// have come after at least defaultPingTimeout.
 		if t.lastPingAt.Add(defaultPingTimeout).After(now) {
 			t.pingStrikes++
 		}
@@ -699,7 +699,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	md = s.header
 	s.mu.Unlock()
-	headerFields := make([]hpack.HeaderField, 0, 2) // aleast :status, content-type will be there if none else.
+	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
 	if s.sendCompress != "" {
@@ -792,10 +792,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		endStream: true,
 	})
 	if t.stats != nil {
-		outTrailer := &stats.OutTrailer{
-		// WireLength:TODO(mmukhi): Revisit this later, if needed.
-		}
-		t.stats.HandleRPC(s.Context(), outTrailer)
+		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{})
 	}
 	t.closeStream(s)
 	return nil
@@ -908,7 +905,7 @@ func (t *http2Server) keepalive() {
 	maxAge := time.NewTimer(t.kp.MaxConnectionAge)
 	keepalive := time.NewTimer(t.kp.Time)
 	// NOTE: All exit paths of this function should reset their
-	// respecitve timers. A failure to do so will cause the
+	// respective timers. A failure to do so will cause the
 	// following clean-up to deadlock and eventually leak.
 	defer func() {
 		if !maxIdle.Stop() {
