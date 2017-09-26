@@ -10,6 +10,7 @@
   <name>examples</name>
   <url>http://maven.apache.org</url>
   <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <grpc.version>1.7.0-SNAPSHOT</grpc.version><!-- CURRENT_GRPC_VERSION -->
   </properties>
   <dependencies>
