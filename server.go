@@ -96,6 +96,7 @@ type Server struct {
 	cv     *sync.Cond
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
+	quit   chan struct{}
 }
 
 type options struct {
@@ -307,6 +308,7 @@ func NewServer(opt ...ServerOption) *Server {
 		opts:  opts,
 		conns: make(map[io.Closer]bool),
 		m:     make(map[string]*service),
+		quit:  make(chan struct{}, 1),
 	}
 	s.cv = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -485,6 +487,11 @@ func (s *Server) Serve(lis net.Listener) error {
 			s.mu.Lock()
 			s.printf("done serving; Accept = %v", err)
 			s.mu.Unlock()
+			select {
+			case <-s.quit:
+				return nil
+			default:
+			}
 			return err
 		}
 		tempDelay = 0
@@ -1052,6 +1059,11 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 // pending RPCs on the client side will get notified by connection
 // errors.
 func (s *Server) Stop() {
+	select {
+	case s.quit <- struct{}{}:
+	default:
+	}
+
 	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
@@ -1081,6 +1093,10 @@ func (s *Server) Stop() {
 // accepting new connections and RPCs and blocks until all the pending RPCs are
 // finished.
 func (s *Server) GracefulStop() {
+	select {
+	case s.quit <- struct{}{}:
+	default:
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conns == nil {
