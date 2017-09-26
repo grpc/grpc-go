@@ -99,14 +99,6 @@ public class ProtoReflectionServiceTest {
   }
 
   @Test
-  @Deprecated
-  public void deprecatedGetterReturnsCorrectType() throws Exception {
-    assertEquals(
-        io.grpc.protobuf.service.ProtoReflectionService.getInstance().getClass(),
-        ProtoReflectionService.class);
-  }
-
-  @Test
   public void listServices() throws Exception {
     Set<ServiceResponse> originalServices =
         new HashSet<ServiceResponse>(
