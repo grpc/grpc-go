@@ -26,6 +26,11 @@ import java.util.Set;
 abstract class AbstractHttp2Headers implements Http2Headers {
 
   @Override
+  public Iterator<CharSequence> valueIterator(CharSequence name) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public int size() {
     throw new UnsupportedOperationException();
   }
