@@ -200,10 +200,13 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>EXPERIMENTAL: This method is here to enable an experimental feature, and may be changed or
    * removed once the feature is stable.
    *
+   * @throws UnsupportedOperationException if unsupported
    * @since 1.7.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/3399")
-  public abstract T enableFullStreamDecompression();
+  public T enableFullStreamDecompression() {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Set the decompression registry for use in the channel. This is an advanced API call and
