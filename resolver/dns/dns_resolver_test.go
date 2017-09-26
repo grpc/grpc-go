@@ -21,6 +21,7 @@ package dns
 import (
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -29,6 +30,13 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/test/leakcheck"
 )
+
+func TestMain(m *testing.M) {
+	cleanup := replaceNetFunc()
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
+}
 
 const (
 	txtBytesLimit = 255
@@ -70,6 +78,9 @@ func (t *testClientConn) getSc() (string, int) {
 	return t.sc, t.s
 }
 
+// lookupMu guards read/write into the three lookup tables.
+var lookupMu sync.Mutex
+
 var hostLookupTbl = map[string][]string{
 	"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
 	"ipv4.single.fake":     {"1.2.3.4"},
@@ -80,6 +91,8 @@ var hostLookupTbl = map[string][]string{
 }
 
 func hostLookup(host string) ([]string, error) {
+	lookupMu.Lock()
+	defer lookupMu.Unlock()
 	if addrs, ok := hostLookupTbl[host]; ok {
 		return addrs, nil
 	}
@@ -94,6 +107,8 @@ var srvLookupTbl = map[string][]*net.SRV{
 }
 
 func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
+	lookupMu.Lock()
+	defer lookupMu.Unlock()
 	cname := "_" + service + "._" + proto + "." + name
 	if srvs, ok := srvLookupTbl[cname]; ok {
 		return cname, srvs, nil
@@ -122,10 +137,10 @@ func div(b []byte) []string {
 // choices, and first 3 choices are nonmatching choices based on canarying rule,
 // while the last two are matched choices. scfs[3] only contains 3 choices, and
 // all of them are nonmatching based on canarying rule. For each of scfs[0:3],
-// the eventually returned service config from the matches choices (first of the
-// two matched choices), is stored in the corresponding scs element (e.g.
+// the eventually returned service config, which is from the first of the two
+// matched choices, is stored in the corresponding scs element (e.g.
 // scfs[0]->scs[0]). scfs and scs elements are used in pair to test the dns
-// resolver functionality, with scfs as the input and scs as the validation of
+// resolver functionality, with scfs as the input and scs used for validation of
 // the output. For scfs[3], it corresponds to empty service config, since there
 // isn't a matched choice.
 var (
@@ -528,7 +543,7 @@ var (
 )
 
 // scLookupTbl is a set, which contains targets that have service config. Target
-// not in this set should have no service config.
+// not in this set should not have service config.
 var scLookupTbl = map[string]bool{
 	"foo.bar.com":          true,
 	"srv.ipv4.single.fake": true,
@@ -585,13 +600,22 @@ var txtLookupTbl = map[string][]string{
 }
 
 func txtLookup(host string) ([]string, error) {
+	lookupMu.Lock()
+	defer lookupMu.Unlock()
 	if scs, ok := txtLookupTbl[host]; ok {
 		return scs, nil
 	}
 	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
 }
 
+func TestResolve(t *testing.T) {
+	testDNSResolver(t)
+	testDNSResolveNow(t)
+	testIPResolver(t)
+}
+
 func testDNSResolver(t *testing.T) {
+	defer leakcheck.Check(t)
 	tests := []struct {
 		target   string
 		addrWant []resolver.Address
@@ -677,15 +701,20 @@ func testDNSResolver(t *testing.T) {
 }
 
 func testDNSResolveNow(t *testing.T) {
+	defer leakcheck.Check(t)
 	tests := []struct {
-		target string
-		want   []resolver.Address
-		next   []resolver.Address
+		target   string
+		addrWant []resolver.Address
+		addrNext []resolver.Address
+		scWant   string
+		scNext   string
 	}{
 		{
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}},
+			generateSC("foo.bar.com"),
+			"",
 		},
 	}
 
@@ -705,11 +734,26 @@ func testDNSResolveNow(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 		}
-		if !reflect.DeepEqual(a.want, addrs) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.want)
+		var sc string
+		for {
+			sc, ok = cc.getSc()
+			if ok > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond)
 		}
-		old := hostLookupTbl[a.target]
-		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(old)-1]
+		if !reflect.DeepEqual(a.addrWant, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrWant)
+		}
+		if !reflect.DeepEqual(a.scWant, sc) {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
+		}
+		lookupMu.Lock()
+		oldHostTblEntry := hostLookupTbl[a.target]
+		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(oldHostTblEntry)-1]
+		oldTxtTblEntry := txtLookupTbl[a.target]
+		txtLookupTbl[a.target] = []string{""}
+		lookupMu.Unlock()
 		r.ResolveNow(resolver.ResolveNowOption{})
 		for {
 			addrs, ok = cc.getAddress()
@@ -718,20 +762,25 @@ func testDNSResolveNow(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 		}
-		if !reflect.DeepEqual(a.next, addrs) {
-			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.next)
+		for {
+			sc, ok = cc.getSc()
+			if ok == 2 {
+				break
+			}
+			time.Sleep(time.Millisecond)
 		}
-		hostLookupTbl[a.target] = old
+		if !reflect.DeepEqual(a.addrNext, addrs) {
+			t.Errorf("Resolved addresses of target: %q = %+v, want %+v\n", a.target, addrs, a.addrNext)
+		}
+		if !reflect.DeepEqual(a.scNext, sc) {
+			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scNext)
+		}
+		lookupMu.Lock()
+		hostLookupTbl[a.target] = oldHostTblEntry
+		txtLookupTbl[a.target] = oldTxtTblEntry
+		lookupMu.Unlock()
 		r.Close()
 	}
-}
-
-func TestResolve(t *testing.T) {
-	defer leakcheck.Check(t)
-	defer replaceNetFunc()()
-	testDNSResolver(t)
-	testDNSResolveNow(t)
-	testIPResolver(t)
 }
 
 const colonDefaultPort = ":" + defaultPort
