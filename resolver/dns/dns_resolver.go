@@ -27,6 +27,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -96,6 +97,7 @@ func (b *dnsBuilder) Build(target string, cc resolver.ClientConn, opts resolver.
 		rn:     make(chan struct{}, 1),
 	}
 
+	d.wg.Add(1)
 	go d.watcher()
 	return d, nil
 }
@@ -149,6 +151,8 @@ type dnsResolver struct {
 	// rn channel is used by ResolveNow() to force an immediate resolution of the target.
 	rn chan struct{}
 	t  *time.Timer
+	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
+	wg sync.WaitGroup
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
@@ -162,20 +166,17 @@ func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
 	d.cancel()
+	d.wg.Wait()
 }
 
 func (d *dnsResolver) watcher() {
+	defer d.wg.Done()
 	for {
 		select {
 		case <-d.ctx.Done():
 			return
 		case <-d.t.C:
 		case <-d.rn:
-		}
-		select {
-		case <-d.ctx.Done():
-			return
-		default:
 		}
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
