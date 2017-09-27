@@ -172,6 +172,11 @@ func (d *dnsResolver) watcher() {
 		case <-d.t.C:
 		case <-d.rn:
 		}
+		select {
+		case <-d.ctx.Done():
+			return
+		default:
+		}
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
 		d.t.Reset(d.freq)
