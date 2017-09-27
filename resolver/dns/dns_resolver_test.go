@@ -78,39 +78,46 @@ func (t *testClientConn) getSc() (string, int) {
 	return t.sc, t.s
 }
 
-// lookupMu guards read/write into the three lookup tables.
-var lookupMu sync.Mutex
-
-var hostLookupTbl = map[string][]string{
-	"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
-	"ipv4.single.fake":     {"1.2.3.4"},
-	"srv.ipv4.single.fake": {"2.4.6.8"},
-	"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
-	"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
-	"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+var hostLookupTbl = struct {
+	sync.Mutex
+	tbl map[string][]string
+}{
+	tbl: map[string][]string{
+		"foo.bar.com":          {"1.2.3.4", "5.6.7.8"},
+		"ipv4.single.fake":     {"1.2.3.4"},
+		"srv.ipv4.single.fake": {"2.4.6.8"},
+		"ipv4.multi.fake":      {"1.2.3.4", "5.6.7.8", "9.10.11.12"},
+		"ipv6.single.fake":     {"2607:f8b0:400a:801::1001"},
+		"ipv6.multi.fake":      {"2607:f8b0:400a:801::1001", "2607:f8b0:400a:801::1002", "2607:f8b0:400a:801::1003"},
+	},
 }
 
 func hostLookup(host string) ([]string, error) {
-	lookupMu.Lock()
-	defer lookupMu.Unlock()
-	if addrs, ok := hostLookupTbl[host]; ok {
+	hostLookupTbl.Lock()
+	defer hostLookupTbl.Unlock()
+	if addrs, ok := hostLookupTbl.tbl[host]; ok {
 		return addrs, nil
 	}
 	return nil, fmt.Errorf("failed to lookup host:%s resolution in hostLookupTbl", host)
 }
 
-var srvLookupTbl = map[string][]*net.SRV{
-	"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
-	"_grpclb._tcp.srv.ipv4.multi.fake":  {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
-	"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
-	"_grpclb._tcp.srv.ipv6.multi.fake":  {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
+var srvLookupTbl = struct {
+	sync.Mutex
+	tbl map[string][]*net.SRV
+}{
+	tbl: map[string][]*net.SRV{
+		"_grpclb._tcp.srv.ipv4.single.fake": {&net.SRV{Target: "ipv4.single.fake", Port: 1234}},
+		"_grpclb._tcp.srv.ipv4.multi.fake":  {&net.SRV{Target: "ipv4.multi.fake", Port: 1234}},
+		"_grpclb._tcp.srv.ipv6.single.fake": {&net.SRV{Target: "ipv6.single.fake", Port: 1234}},
+		"_grpclb._tcp.srv.ipv6.multi.fake":  {&net.SRV{Target: "ipv6.multi.fake", Port: 1234}},
+	},
 }
 
 func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
-	lookupMu.Lock()
-	defer lookupMu.Unlock()
 	cname := "_" + service + "._" + proto + "." + name
-	if srvs, ok := srvLookupTbl[cname]; ok {
+	srvLookupTbl.Lock()
+	defer srvLookupTbl.Unlock()
+	if srvs, ok := srvLookupTbl.tbl[cname]; ok {
 		return cname, srvs, nil
 	}
 	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
@@ -590,19 +597,24 @@ func generateSC(name string) string {
 	}
 }
 
-var txtLookupTbl = map[string][]string{
-	"foo.bar.com":          generateSCF("foo.bar.com"),
-	"srv.ipv4.single.fake": generateSCF("srv.ipv4.single.fake"),
-	"srv.ipv4.multi.fake":  generateSCF("srv.ipv4.multi.fake"),
-	"srv.ipv6.single.fake": generateSCF("srv.ipv6.single.fake"),
-	"srv.ipv6.multi.fake":  generateSCF("srv.ipv6.multi.fake"),
-	"no.attribute":         generateSCF("no.attribute"),
+var txtLookupTbl = struct {
+	sync.Mutex
+	tbl map[string][]string
+}{
+	tbl: map[string][]string{
+		"foo.bar.com":          generateSCF("foo.bar.com"),
+		"srv.ipv4.single.fake": generateSCF("srv.ipv4.single.fake"),
+		"srv.ipv4.multi.fake":  generateSCF("srv.ipv4.multi.fake"),
+		"srv.ipv6.single.fake": generateSCF("srv.ipv6.single.fake"),
+		"srv.ipv6.multi.fake":  generateSCF("srv.ipv6.multi.fake"),
+		"no.attribute":         generateSCF("no.attribute"),
+	},
 }
 
 func txtLookup(host string) ([]string, error) {
-	lookupMu.Lock()
-	defer lookupMu.Unlock()
-	if scs, ok := txtLookupTbl[host]; ok {
+	txtLookupTbl.Lock()
+	defer txtLookupTbl.Unlock()
+	if scs, ok := txtLookupTbl.tbl[host]; ok {
 		return scs, nil
 	}
 	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
@@ -700,6 +712,26 @@ func testDNSResolver(t *testing.T) {
 	}
 }
 
+func mutateTbl(target string) func() {
+	hostLookupTbl.Lock()
+	oldHostTblEntry := hostLookupTbl.tbl[target]
+	hostLookupTbl.tbl[target] = hostLookupTbl.tbl[target][:len(oldHostTblEntry)-1]
+	hostLookupTbl.Unlock()
+	txtLookupTbl.Lock()
+	oldTxtTblEntry := txtLookupTbl.tbl[target]
+	txtLookupTbl.tbl[target] = []string{""}
+	txtLookupTbl.Unlock()
+
+	return func() {
+		hostLookupTbl.Lock()
+		hostLookupTbl.tbl[target] = oldHostTblEntry
+		hostLookupTbl.Unlock()
+		txtLookupTbl.Lock()
+		txtLookupTbl.tbl[target] = oldTxtTblEntry
+		txtLookupTbl.Unlock()
+	}
+}
+
 func testDNSResolveNow(t *testing.T) {
 	defer leakcheck.Check(t)
 	tests := []struct {
@@ -748,12 +780,7 @@ func testDNSResolveNow(t *testing.T) {
 		if !reflect.DeepEqual(a.scWant, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scWant)
 		}
-		lookupMu.Lock()
-		oldHostTblEntry := hostLookupTbl[a.target]
-		hostLookupTbl[a.target] = hostLookupTbl[a.target][:len(oldHostTblEntry)-1]
-		oldTxtTblEntry := txtLookupTbl[a.target]
-		txtLookupTbl[a.target] = []string{""}
-		lookupMu.Unlock()
+		revertTbl := mutateTbl(a.target)
 		r.ResolveNow(resolver.ResolveNowOption{})
 		for {
 			addrs, ok = cc.getAddress()
@@ -775,10 +802,7 @@ func testDNSResolveNow(t *testing.T) {
 		if !reflect.DeepEqual(a.scNext, sc) {
 			t.Errorf("Resolved service config of target: %q = %+v, want %+v\n", a.target, sc, a.scNext)
 		}
-		lookupMu.Lock()
-		hostLookupTbl[a.target] = oldHostTblEntry
-		txtLookupTbl[a.target] = oldTxtTblEntry
-		lookupMu.Unlock()
+		revertTbl()
 		r.Close()
 	}
 }

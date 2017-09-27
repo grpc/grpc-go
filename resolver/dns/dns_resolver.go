@@ -115,7 +115,6 @@ type ipResolver struct {
 }
 
 // ResolveNow resend the address it stores, no resolution is needed.
-// SHOULD NOT call ResolveNow() after resolver has been closed.
 func (i *ipResolver) ResolveNow(opt resolver.ResolveNowOption) {
 	select {
 	case i.rn <- struct{}{}:
@@ -126,7 +125,6 @@ func (i *ipResolver) ResolveNow(opt resolver.ResolveNowOption) {
 // Close closes the ipResolver.
 func (i *ipResolver) Close() {
 	close(i.q)
-	close(i.rn)
 }
 
 func (i *ipResolver) watcher() {
@@ -154,7 +152,6 @@ type dnsResolver struct {
 }
 
 // ResolveNow invoke an immediate resolution of the target that this dnsResolver watches.
-// SHOULD NOT call ResolveNow() after resolver has been closed.
 func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
 	select {
 	case d.rn <- struct{}{}:
@@ -165,7 +162,6 @@ func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
 	d.cancel()
-	close(d.rn)
 }
 
 func (d *dnsResolver) watcher() {
@@ -175,11 +171,6 @@ func (d *dnsResolver) watcher() {
 			return
 		case <-d.t.C:
 		case <-d.rn:
-		}
-		select {
-		case <-d.ctx.Done():
-			return
-		default:
 		}
 		result, sc := d.lookup()
 		// Next lookup should happen after an interval defined by d.freq.
