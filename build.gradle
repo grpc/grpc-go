@@ -11,6 +11,7 @@ buildscript {
     classpath 'ru.vyarus:gradle-animalsniffer-plugin:1.4.0'
     classpath 'net.ltgt.gradle:gradle-errorprone-plugin:0.0.11'
     classpath "me.champeau.gradle:jmh-gradle-plugin:0.4.4"
+    classpath 'me.champeau.gradle:japicmp-gradle-plugin:0.2.5'
   }
 }
 
@@ -375,5 +376,72 @@ subprojects {
             showStackTraces true
         }
         maxHeapSize = '1500m'
+    }
+}
+
+// Run with: ./gradlew japicmp --continue
+def baselineGrpcVersion = '1.6.1'
+def publicApiSubprojects = [
+        ':grpc-auth',
+        ':grpc-context',
+        ':grpc-core',
+        ':grpc-grpclb',
+        ':grpc-netty',
+        ':grpc-okhttp',
+        ':grpc-protobuf',
+        ':grpc-protobuf-lite',
+        ':grpc-protobuf-nano',
+        ':grpc-stub',
+        ':grpc-testing',
+]
+
+publicApiSubprojects.each { name ->
+    project(":$name") {
+        apply plugin: 'me.champeau.gradle.japicmp'
+
+        // Get the baseline version's jar for this subproject
+        File baselineArtifact = null
+        // Use a detached configuration, otherwise the current version's jar will take precedence
+        // over the baseline jar.
+        // A necessary hack, the intuitive thing does NOT work:
+        // https://discuss.gradle.org/t/is-the-default-configuration-leaking-into-independent-configurations/2088/6
+        def oldGroup = project.group
+        try {
+            project.group = 'virtual_group_for_japicmp'
+            String depModule = "io.grpc:${project.name}:${baselineGrpcVersion}@jar"
+            String depJar = "${project.name}-${baselineGrpcVersion}.jar"
+            Configuration configuration = configurations.detachedConfiguration(
+                    dependencies.create(depModule)
+            )
+            baselineArtifact = files(configuration.files).filter {
+                it.name.equals(depJar)
+            }.singleFile
+        } finally {
+            project.group = oldGroup
+        }
+
+        // Add a japicmp task that compares the current .jar with baseline .jar
+        task japicmp(type: me.champeau.gradle.japicmp.JapicmpTask, dependsOn: jar) {
+            oldClasspath = files(baselineArtifact)
+            newClasspath = files(jar.archivePath)
+            onlyBinaryIncompatibleModified = false
+            // Be quiet about things that did not change
+            onlyModified = true
+            // This task should fail if there are incompatible changes
+            failOnModification = true
+            ignoreMissingClasses = true
+            htmlOutputFile = file("$buildDir/reports/japi.html")
+
+            packageExcludes = ['io.grpc.internal']
+
+            // Also break on source incompatible changes, not just binary.
+            // Eg adding abstract method to public class.
+            // TODO(zpencer): enable after japicmp-gradle-plugin/pull/14
+            // breakOnSourceIncompatibility = true
+
+            // Ignore any classes or methods marked @ExperimentalApi
+            // TODO(zpencer): enable after japicmp-gradle-plugin/pull/15
+            // annotationExcludes = ['@io.grpc.ExperimentalApi']
+        }
     }
 }
