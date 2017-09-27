@@ -95,7 +95,7 @@ var hostLookupTbl = struct {
 func hostLookup(host string) ([]string, error) {
 	hostLookupTbl.Lock()
 	defer hostLookupTbl.Unlock()
-	if addrs, ok := hostLookupTbl.tbl[host]; ok {
+	if addrs, cnt := hostLookupTbl.tbl[host]; cnt {
 		return addrs, nil
 	}
 	return nil, fmt.Errorf("failed to lookup host:%s resolution in hostLookupTbl", host)
@@ -117,7 +117,7 @@ func srvLookup(service, proto, name string) (string, []*net.SRV, error) {
 	cname := "_" + service + "._" + proto + "." + name
 	srvLookupTbl.Lock()
 	defer srvLookupTbl.Unlock()
-	if srvs, ok := srvLookupTbl.tbl[cname]; ok {
+	if srvs, cnt := srvLookupTbl.tbl[cname]; cnt {
 		return cname, srvs, nil
 	}
 	return "", nil, fmt.Errorf("failed to lookup srv record for %s in srvLookupTbl", cname)
@@ -581,8 +581,8 @@ func generateSCF(name string) []string {
 
 // generateSC returns a service config string in JSON format for the input name.
 func generateSC(name string) string {
-	_, ok := scLookupTbl[name]
-	if !ok || name == "no.attribute" {
+	_, cnt := scLookupTbl[name]
+	if !cnt || name == "no.attribute" {
 		return ""
 	}
 	switch name {
@@ -614,7 +614,7 @@ var txtLookupTbl = struct {
 func txtLookup(host string) ([]string, error) {
 	txtLookupTbl.Lock()
 	defer txtLookupTbl.Unlock()
-	if scs, ok := txtLookupTbl.tbl[host]; ok {
+	if scs, cnt := txtLookupTbl.tbl[host]; cnt {
 		return scs, nil
 	}
 	return nil, fmt.Errorf("failed to lookup TXT:%s resolution in txtLookupTbl", host)
@@ -686,18 +686,18 @@ func testDNSResolver(t *testing.T) {
 			t.Fatalf("%v\n", err)
 		}
 		var addrs []resolver.Address
-		var ok int
+		var cnt int
 		for {
-			addrs, ok = cc.getAddress()
-			if ok > 0 {
+			addrs, cnt = cc.getAddress()
+			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
 		var sc string
 		for {
-			sc, ok = cc.getSc()
-			if ok > 0 {
+			sc, cnt = cc.getSc()
+			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
@@ -758,18 +758,18 @@ func testDNSResolveNow(t *testing.T) {
 			t.Fatalf("%v\n", err)
 		}
 		var addrs []resolver.Address
-		var ok int
+		var cnt int
 		for {
-			addrs, ok = cc.getAddress()
-			if ok > 0 {
+			addrs, cnt = cc.getAddress()
+			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
 		var sc string
 		for {
-			sc, ok = cc.getSc()
-			if ok > 0 {
+			sc, cnt = cc.getSc()
+			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
@@ -783,15 +783,15 @@ func testDNSResolveNow(t *testing.T) {
 		revertTbl := mutateTbl(a.target)
 		r.ResolveNow(resolver.ResolveNowOption{})
 		for {
-			addrs, ok = cc.getAddress()
-			if ok == 2 {
+			addrs, cnt = cc.getAddress()
+			if cnt == 2 {
 				break
 			}
 			time.Sleep(time.Millisecond)
 		}
 		for {
-			sc, ok = cc.getSc()
-			if ok == 2 {
+			sc, cnt = cc.getSc()
+			if cnt == 2 {
 				break
 			}
 			time.Sleep(time.Millisecond)
@@ -835,10 +835,10 @@ func testIPResolver(t *testing.T) {
 			t.Fatalf("%v\n", err)
 		}
 		var addrs []resolver.Address
-		var ok int
+		var cnt int
 		for {
-			addrs, ok = cc.getAddress()
-			if ok > 0 {
+			addrs, cnt = cc.getAddress()
+			if cnt > 0 {
 				break
 			}
 			time.Sleep(time.Millisecond)
@@ -848,8 +848,8 @@ func testIPResolver(t *testing.T) {
 		}
 		r.ResolveNow(resolver.ResolveNowOption{})
 		for {
-			addrs, ok = cc.getAddress()
-			if ok == 2 {
+			addrs, cnt = cc.getAddress()
+			if cnt == 2 {
 				break
 			}
 			time.Sleep(time.Millisecond)

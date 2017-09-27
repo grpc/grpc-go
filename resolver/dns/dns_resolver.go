@@ -152,7 +152,11 @@ type dnsResolver struct {
 	rn chan struct{}
 	t  *time.Timer
 	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
-	// Otherwise, data race will be possible.
+	// Otherwise, data race will be possible. [Race Example] in dns_resolver_test we
+	// replace the real lookup functions with mocked ones to facilitate testing.
+	// If Close() doesn't wait for watcher() goroutine finishes, race detector sometimes
+	// will warns lookup (READ the lookup function pointers) inside watcher() goroutine
+	// has data race with replaceNetFunc (WRITE the lookup function pointers).
 	wg sync.WaitGroup
 }
 
@@ -167,8 +171,8 @@ func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
 	d.cancel()
-	d.t.Stop()
 	d.wg.Wait()
+	d.t.Stop()
 }
 
 func (d *dnsResolver) watcher() {
