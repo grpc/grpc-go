@@ -152,6 +152,7 @@ type dnsResolver struct {
 	rn chan struct{}
 	t  *time.Timer
 	// wg is used to enforce Close() to return after the watcher() goroutine has finished.
+	// Otherwise, data race will be possible.
 	wg sync.WaitGroup
 }
 
@@ -166,6 +167,7 @@ func (d *dnsResolver) ResolveNow(opt resolver.ResolveNowOption) {
 // Close closes the dnsResolver.
 func (d *dnsResolver) Close() {
 	d.cancel()
+	d.t.Stop()
 	d.wg.Wait()
 }
 
