@@ -29,31 +29,32 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
-// blockingPicker is a wrapper of balancer.Picker. It blocks certain pick
+// pickerWrapper is a wrapper of balancer.Picker. It blocks on certain pick
 // actions and unblock when there's a picker update.
-type blockingPicker struct {
+type pickerWrapper struct {
 	mu         sync.Mutex
 	done       bool
 	blockingCh chan struct{}
 	picker     balancer.Picker
 }
 
-func newBlockPicker() *blockingPicker {
-	bp := &blockingPicker{blockingCh: make(chan struct{})}
+func newPickerWrapper() *pickerWrapper {
+	bp := &pickerWrapper{blockingCh: make(chan struct{})}
 	return bp
 }
 
-// Called by UpdateBalancerState. Unblocks any blocked pick.
-func (bp *blockingPicker) updatePicker(p balancer.Picker) {
+// updatePicker is called by UpdateBalancerState. It unblocks all blocked pick.
+func (bp *pickerWrapper) updatePicker(p balancer.Picker) {
 	bp.mu.Lock()
-	defer bp.mu.Unlock()
 	if bp.done {
+		bp.mu.Unlock()
 		return
 	}
 	bp.picker = p
 	// bp.blockingCh should never be nil.
 	close(bp.blockingCh)
 	bp.blockingCh = make(chan struct{})
+	bp.mu.Unlock()
 }
 
 // pick returns the transport that will be used for the RPC.
@@ -63,7 +64,7 @@ func (bp *blockingPicker) updatePicker(p balancer.Picker) {
 // - the current picker returns other errors and failfast is false.
 // - the subConn returned by the current picker is not READY
 // When one of these situations happens, pick blocks until the picker gets updated.
-func (bp *blockingPicker) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+func (bp *pickerWrapper) pick(ctx context.Context, failfast bool, opts balancer.PickOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
 	var (
 		p  balancer.Picker
 		ch chan struct{}
@@ -115,11 +116,10 @@ func (bp *blockingPicker) pick(ctx context.Context, failfast bool, opts balancer
 
 		acw, ok := subConn.(*acBalancerWrapper)
 		if !ok {
-			grpclog.Infof("subconn returned from pick is not *subConnBalancerWrapper")
+			grpclog.Infof("subconn returned from pick is not *acBalancerWrapper")
 			continue
 		}
-		t, ok := acw.getAddrConn().getReadyTransport()
-		if ok {
+		if t, ok := acw.getAddrConn().getReadyTransport(); ok {
 			return t, put, nil
 		}
 		grpclog.Infof("blockingPicker: the picked transport is not ready, loop back to repick")
@@ -130,7 +130,7 @@ func (bp *blockingPicker) pick(ctx context.Context, failfast bool, opts balancer
 	}
 }
 
-func (bp *blockingPicker) close() {
+func (bp *pickerWrapper) close() {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 	if bp.done {

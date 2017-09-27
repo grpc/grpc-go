@@ -27,26 +27,27 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// scStateChangeTuple contains the subConn and the new state it changed to.
-type scStateChangeTuple struct {
+// scStateUpdate contains the subConn and the new state it changed to.
+type scStateUpdate struct {
 	sc    balancer.SubConn
 	state connectivity.State
 }
 
-// tupleBuffer is an unbounded channel for scStateChangeTuple.
-type tupleBuffer struct {
-	c       chan *scStateChangeTuple
+// scStateUpdateBuffer is an unbounded channel for scStateChangeTuple.
+// TODO make a general purpose buffer that uses interface{}.
+type scStateUpdateBuffer struct {
+	c       chan *scStateUpdate
 	mu      sync.Mutex
-	backlog []*scStateChangeTuple
+	backlog []*scStateUpdate
 }
 
-func newTupleBuffer() *tupleBuffer {
-	return &tupleBuffer{
-		c: make(chan *scStateChangeTuple, 1),
+func newSCStateUpdateBuffer() *scStateUpdateBuffer {
+	return &scStateUpdateBuffer{
+		c: make(chan *scStateUpdate, 1),
 	}
 }
 
-func (b *tupleBuffer) put(t *scStateChangeTuple) {
+func (b *scStateUpdateBuffer) put(t *scStateUpdate) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.backlog) == 0 {
@@ -59,7 +60,7 @@ func (b *tupleBuffer) put(t *scStateChangeTuple) {
 	b.backlog = append(b.backlog, t)
 }
 
-func (b *tupleBuffer) load() {
+func (b *scStateUpdateBuffer) load() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.backlog) > 0 {
@@ -76,13 +77,13 @@ func (b *tupleBuffer) load() {
 //
 // Upon receiving, the caller should call load to send another
 // scStateChangeTuple onto the channel if there is any.
-func (b *tupleBuffer) get() <-chan *scStateChangeTuple {
+func (b *scStateUpdateBuffer) get() <-chan *scStateUpdate {
 	return b.c
 }
 
-// resolverChangeTuple contains the new resolved addresses or error if there's
+// resolverUpdate contains the new resolved addresses or error if there's
 // any.
-type resolverChangeTuple struct {
+type resolverUpdate struct {
 	addrs []resolver.Address
 	err   error
 }
@@ -92,16 +93,16 @@ type resolverChangeTuple struct {
 type ccBalancerWrapper struct {
 	cc               *ClientConn
 	balancer         balancer.Balancer
-	stateChangeQueue *tupleBuffer
-	resolverAddrCh   chan *resolverChangeTuple
+	stateChangeQueue *scStateUpdateBuffer
+	resolverUpdateCh chan *resolverUpdate
 	done             chan struct{}
 }
 
 func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{
 		cc:               cc,
-		stateChangeQueue: newTupleBuffer(),
-		resolverAddrCh:   make(chan *resolverChangeTuple, 1),
+		stateChangeQueue: newSCStateUpdateBuffer(),
+		resolverUpdateCh: make(chan *resolverUpdate, 1),
 		done:             make(chan struct{}),
 	}
 	go ccb.watcher()
@@ -114,21 +115,19 @@ func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.Bui
 func (ccb *ccBalancerWrapper) watcher() {
 	for {
 		select {
+		case t := <-ccb.stateChangeQueue.get():
+			ccb.stateChangeQueue.load()
+			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
+		case t := <-ccb.resolverUpdateCh:
+			ccb.balancer.HandleResolvedAddrs(t.addrs, t.err)
+		case <-ccb.done:
+		}
+
+		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
 			return
 		default:
-		}
-
-		select {
-		case t := <-ccb.stateChangeQueue.get():
-			ccb.stateChangeQueue.load()
-			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
-		case t := <-ccb.resolverAddrCh:
-			ccb.balancer.HandleResolvedAddrs(t.addrs, t.err)
-		case <-ccb.done:
-			ccb.balancer.Close()
-			return
 		}
 	}
 }
@@ -138,10 +137,17 @@ func (ccb *ccBalancerWrapper) close() {
 }
 
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	// When updating addresses for a SubConn, if the address in use is not in
+	// the new addresses, the old ac will be tearDown() and a new ac will be
+	// created. tearDown() generates a state change with Shutdown state, we
+	// don't want the balancer to receive this state change. So before
+	// tearDown() on the old ac, ac.acbw (acWrapper) will be set to nil, and
+	// this function will be called with (nil, Shutdown). We don't need to call
+	// balancer method in this case.
 	if sc == nil {
 		return
 	}
-	ccb.stateChangeQueue.put(&scStateChangeTuple{
+	ccb.stateChangeQueue.put(&scStateUpdate{
 		sc:    sc,
 		state: s,
 	})
@@ -149,10 +155,10 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 
 func (ccb *ccBalancerWrapper) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	select {
-	case <-ccb.resolverAddrCh:
+	case <-ccb.resolverUpdateCh:
 	default:
 	}
-	ccb.resolverAddrCh <- &resolverChangeTuple{
+	ccb.resolverUpdateCh <- &resolverUpdate{
 		addrs: addrs,
 		err:   err,
 	}
@@ -202,7 +208,11 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 	if !acbw.ac.tryUpdateAddrs(addrs) {
 		cc := acbw.ac.cc
 		acbw.ac.mu.Lock()
-		// Set old ac.acbw to nil so the states update will be ignored by balancer.
+		// Set old ac.acbw to nil so the Shutdown state update will be ignored
+		// by balancer.
+		//
+		// TODO(bar) the state transition could be wrong when tearDown() old ac
+		// and creating new ac, fix the transition.
 		acbw.ac.acbw = nil
 		acbw.ac.mu.Unlock()
 		acState := acbw.ac.getState()

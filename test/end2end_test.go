@@ -46,7 +46,8 @@ import (
 	"golang.org/x/net/http2"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -646,7 +647,11 @@ func (te *test) clientConn() *grpc.ClientConn {
 	case "v1":
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
 	case "roundrobin":
-		opts = append(opts, grpc.WithBalancerBuilder(roundrobin.NewBuilder()))
+		rr := balancer.Get("roundrobin")
+		if rr == nil {
+			te.t.Fatalf("got nil when trying to get roundrobin balancer builder")
+		}
+		opts = append(opts, grpc.WithBalancerBuilder(rr))
 		scheme = "passthrough:///"
 	}
 	if te.clientInitialWindowSize > 0 {

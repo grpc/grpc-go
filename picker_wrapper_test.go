@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/transport"
 )
 
+const goroutineCount = 5
+
 var (
 	testT  = &testTransport{}
 	testSC = &acBalancerWrapper{ac: &addrConn{
@@ -41,7 +43,6 @@ var (
 	testSCNotReady = &acBalancerWrapper{ac: &addrConn{
 		state: connectivity.TransientFailure,
 	}}
-	goroutineCount int64 = 5
 )
 
 type testTransport struct {
@@ -54,7 +55,7 @@ type testingPicker struct {
 	maxCalled int64
 }
 
-func (p *testingPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, put func(balancer.DoneInfo), err error) {
+func (p *testingPicker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
 		return nil, nil, fmt.Errorf("Pick called to many times (> goroutineCount)")
 	}
@@ -66,7 +67,7 @@ func (p *testingPicker) Pick(ctx context.Context, opts balancer.PickOptions) (co
 
 func TestBlockingPickTimeout(t *testing.T) {
 	defer leakcheck.Check(t)
-	bp := newBlockPicker()
+	bp := newPickerWrapper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	if _, _, err := bp.pick(ctx, true, balancer.PickOptions{}); err != context.DeadlineExceeded {
@@ -76,7 +77,7 @@ func TestBlockingPickTimeout(t *testing.T) {
 
 func TestBlockingPick(t *testing.T) {
 	defer leakcheck.Check(t)
-	bp := newBlockPicker()
+	bp := newPickerWrapper()
 	// All goroutines should block because picker is nil in bp.
 	var finishedCount uint64
 	for i := goroutineCount; i > 0; i-- {
@@ -87,7 +88,7 @@ func TestBlockingPick(t *testing.T) {
 			atomic.AddUint64(&finishedCount, 1)
 		}()
 	}
-	time.Sleep(time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	if c := atomic.LoadUint64(&finishedCount); c != 0 {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
@@ -96,7 +97,7 @@ func TestBlockingPick(t *testing.T) {
 
 func TestBlockingPickNoSubAvailable(t *testing.T) {
 	defer leakcheck.Check(t)
-	bp := newBlockPicker()
+	bp := newPickerWrapper()
 	var finishedCount uint64
 	bp.updatePicker(&testingPicker{err: balancer.ErrNoSubConnAvailable, maxCalled: goroutineCount})
 	// All goroutines should block because picker returns no sc avilable.
@@ -108,7 +109,7 @@ func TestBlockingPickNoSubAvailable(t *testing.T) {
 			atomic.AddUint64(&finishedCount, 1)
 		}()
 	}
-	time.Sleep(time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	if c := atomic.LoadUint64(&finishedCount); c != 0 {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
@@ -117,7 +118,7 @@ func TestBlockingPickNoSubAvailable(t *testing.T) {
 
 func TestBlockingPickTransientWaitforready(t *testing.T) {
 	defer leakcheck.Check(t)
-	bp := newBlockPicker()
+	bp := newPickerWrapper()
 	bp.updatePicker(&testingPicker{err: balancer.ErrTransientFailure, maxCalled: goroutineCount})
 	var finishedCount uint64
 	// All goroutines should block because picker returns transientFailure and
@@ -139,7 +140,7 @@ func TestBlockingPickTransientWaitforready(t *testing.T) {
 
 func TestBlockingPickSCNotReady(t *testing.T) {
 	defer leakcheck.Check(t)
-	bp := newBlockPicker()
+	bp := newPickerWrapper()
 	bp.updatePicker(&testingPicker{sc: testSCNotReady, maxCalled: goroutineCount})
 	var finishedCount uint64
 	// All goroutines should block because sc is not ready.

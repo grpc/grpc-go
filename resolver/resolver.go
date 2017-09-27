@@ -127,9 +127,9 @@ type Resolver interface {
 	Close()
 }
 
-// Unregister removes the resolver builder with the given scheme from the
+// UnregisterForTesting removes the resolver builder with the given scheme from the
 // resolver map.
 // This function is for testing only.
-func Unregister(scheme string) {
+func UnregisterForTesting(scheme string) {
 	delete(m, scheme)
 }

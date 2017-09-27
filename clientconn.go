@@ -163,9 +163,10 @@ func WithBalancer(b Balancer) DialOption {
 	}
 }
 
-// WithBalancerBuilder is for testing only and should be removed.
-// TODO(bar) remove this or change the comment.
+// WithBalancerBuilder is for testing only. Users using custom balancers should
+// register their balancer and use service config to choose the balancer to use.
 func WithBalancerBuilder(b balancer.Builder) DialOption {
+	// TODO(bar) remove this when switching balancer is done.
 	return func(o *dialOptions) {
 		o.balancerBuilder = b
 	}
@@ -333,7 +334,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		csMgr:  &connectivityStateManager{},
 		conns:  make(map[*addrConn]struct{}),
 
-		blockingpicker: newBlockPicker(),
+		blockingpicker: newPickerWrapper(),
 	}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
@@ -556,7 +557,7 @@ type ClientConn struct {
 	balancerWrapper *ccBalancerWrapper
 	resolverWrapper *ccResolverWrapper
 
-	blockingpicker *blockingPicker
+	blockingpicker *pickerWrapper
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -744,6 +745,8 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 		cc.mu.RLock()
 		if cc.conns == nil {
 			cc.mu.RUnlock()
+			// TODO this function returns toRPCErr and non-toRPCErr. Clean up
+			// the errors in ClientConn.
 			return nil, nil, toRPCErr(ErrClientConnClosing)
 		}
 		var ac *addrConn
@@ -762,11 +765,11 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 		return t, nil, nil
 	}
 
-	t, put, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{})
+	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{})
 	if err != nil {
 		return nil, nil, toRPCErr(err)
 	}
-	return t, put, nil
+	return t, done, nil
 }
 
 // Close tears down the ClientConn and all underlying connections.
@@ -1091,7 +1094,7 @@ func (ac *addrConn) wait(ctx context.Context, hasBalancer, failfast bool) (trans
 
 // getReadyTransport returns the transport if ac's state is READY.
 // Otherwise it returns nil, false.
-// Besides, if ac's state is IDLE, it will trigger ac to connect.
+// If ac's state is IDLE, it will trigger ac to connect.
 func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 	ac.mu.Lock()
 	if ac.state == connectivity.Ready {

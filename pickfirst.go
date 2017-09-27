@@ -80,9 +80,6 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 }
 
 func (b *pickfirstBalancer) Close() {
-	if b.sc != nil {
-		b.cc.RemoveSubConn(b.sc)
-	}
 }
 
 type picker struct {
@@ -90,7 +87,7 @@ type picker struct {
 	sc  balancer.SubConn
 }
 
-func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, put func(balancer.DoneInfo), err error) {
+func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if p.err != nil {
 		return nil, nil, p.err
 	}

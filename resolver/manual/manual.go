@@ -78,5 +78,5 @@ func GenerateAndRegisterManualResolver() (*Resolver, func()) {
 	scheme := strconv.FormatInt(time.Now().UnixNano(), 36)
 	r := NewBuilderWithScheme(scheme)
 	resolver.Register(r)
-	return r, func() { resolver.Unregister(scheme) }
+	return r, func() { resolver.UnregisterForTesting(scheme) }
 }

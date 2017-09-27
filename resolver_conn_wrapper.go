@@ -51,7 +51,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 
 	rb := resolver.Get(scheme)
 	if rb == nil {
-		// TODO(bar) return error when DNS becomes the default (implemeneted and
+		// TODO(bar) return error when DNS becomes the default (implemented and
 		// registered by DNS package).
 		grpclog.Infof("could not get resolver for scheme: %q", scheme)
 		return nil, nil

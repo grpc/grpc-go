@@ -16,7 +16,9 @@
  *
  */
 
-// Package roundrobin defines a roundrobin balancer.
+// Package roundrobin defines a roundrobin balancer. Roundrobin balancer is
+// installed as one of the default balancers in gRPC, users don't need to
+// explicitly install this balancer.
 package roundrobin
 
 import (
@@ -29,15 +31,19 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// NewBuilder creates a new roundrobin balancer builder.
-func NewBuilder() balancer.Builder {
+// newBuilder creates a new roundrobin balancer builder.
+func newBuilder() balancer.Builder {
 	return &roundrobinBuilder{}
+}
+
+func init() {
+	balancer.Register(newBuilder())
 }
 
 type roundrobinBuilder struct{}
 
 func (*roundrobinBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	b := &roundrobinBalancer{
+	return &roundrobinBalancer{
 		cc:       cc,
 		subConns: make(map[resolver.Address]balancer.SubConn),
 		scStates: make(map[balancer.SubConn]connectivity.State),
@@ -47,7 +53,6 @@ func (*roundrobinBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOption
 		// may call UpdateBalancerState with this picker.
 		picker: newPicker([]balancer.SubConn{}, nil),
 	}
-	return b
 }
 
 func (*roundrobinBuilder) Name() string {
@@ -71,20 +76,20 @@ func (b *roundrobinBalancer) HandleResolvedAddrs(addrs []resolver.Address, err e
 		return
 	}
 	grpclog.Infoln("roundrobinBalancer: got new resolved addresses: ", addrs)
-	// addrsSet is the set converted from addrs, it's used to quick lookup for an address.
+	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
 	addrsSet := make(map[resolver.Address]struct{})
 	for _, a := range addrs {
 		addrsSet[a] = struct{}{}
 		if _, ok := b.subConns[a]; !ok {
 			// a is a new address (not existing in b.subConns).
 			sc, err := b.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{})
-			if err == nil {
-				b.subConns[a] = sc
-				b.scStates[sc] = connectivity.Idle
-				sc.Connect()
-			} else {
+			if err != nil {
 				grpclog.Warningf("roundrobinBalancer: failed to create new SubConn: %v", err)
+				continue
 			}
+			b.subConns[a] = sc
+			b.scStates[sc] = connectivity.Idle
+			sc.Connect()
 		}
 	}
 	for a, sc := range b.subConns {
@@ -98,10 +103,10 @@ func (b *roundrobinBalancer) HandleResolvedAddrs(addrs []resolver.Address, err e
 	}
 }
 
-// regeneratePicker takes a snapshot of the balancer, and generate a picker from
-// it. The picker
-//  - always return ErrTransientFailure if the balancer is in TransientFailure,
-//  - do roundrobin on existing subConns otherwise.
+// regeneratePicker takes a snapshot of the balancer, and generates a picker
+// from it. The picker
+//  - always returns ErrTransientFailure if the balancer is in TransientFailure,
+//  - or does round robin selection of all READY SubConns otherwise.
 func (b *roundrobinBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
 		b.picker = newPicker(nil, balancer.ErrTransientFailure)
@@ -114,19 +119,24 @@ func (b *roundrobinBalancer) regeneratePicker() {
 		}
 	}
 	b.picker = newPicker(readySCs, nil)
-	return
 }
 
 func (b *roundrobinBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	grpclog.Infof("roundrobinBalancer: handle SubConn state change: %p, %v", sc, s)
 	oldS, ok := b.scStates[sc]
 	if !ok {
+		grpclog.Infof("roundrobinBalancer: got state changes for an unknown SubConn: %p, %v", sc, s)
 		return
 	}
-	if s == connectivity.Idle {
-		sc.Connect()
-	}
 	b.scStates[sc] = s
+	switch s {
+	case connectivity.Idle:
+		sc.Connect()
+	case connectivity.Shutdown:
+		// When an address was removed by resolver, b called RemoveSubConn but
+		// kept the sc's state in scStates. Remove state for this sc here.
+		delete(b.scStates, sc)
+	}
 
 	oldAggrState := b.state
 	b.state = b.csEvltr.recordTransition(oldS, s)
@@ -136,36 +146,33 @@ func (b *roundrobinBalancer) HandleSubConnStateChange(sc balancer.SubConn, s con
 	//  - this sc became not-ready from ready
 	//  - the aggregated state of balancer became TransientFailure from non-TransientFailure
 	//  - the aggregated state of balancer became non-TransientFailure from TransientFailure
-	if oldS != connectivity.Ready && s == connectivity.Ready ||
-		oldS == connectivity.Ready && s != connectivity.Ready ||
-		b.state != connectivity.TransientFailure && oldAggrState == connectivity.TransientFailure ||
-		b.state == connectivity.TransientFailure && oldAggrState != connectivity.TransientFailure {
+	if (s == connectivity.Ready) != (oldS == connectivity.Ready) ||
+		(b.state == connectivity.TransientFailure) != (oldAggrState == connectivity.TransientFailure) {
 		b.regeneratePicker()
 	}
 
 	b.cc.UpdateBalancerState(b.state, b.picker)
-	if s == connectivity.Shutdown {
-		// When an address was removed by resolver, b called RemoveSubConn but
-		// kept the sc's state in scStates. Remove state for this sc here.
-		delete(b.scStates, sc)
-	}
 	return
 }
 
+// Close is a nop because roundrobin balancer doesn't internal state to clean
+// up, and it doesn't need to call RemoveSubConn for the SubConns.
 func (b *roundrobinBalancer) Close() {
-	for _, sc := range b.subConns {
-		b.cc.RemoveSubConn(sc)
-	}
 }
 
 type picker struct {
-	// If err is not nil, Pick always returns this err.
+	// If err is not nil, Pick always returns this err. It's immutable after
+	// picker is created.
 	err error
 
-	mu       sync.Mutex
-	next     int
-	size     int
+	// subConns is the snapshot of the roundrobin balancer when this picker was
+	// created. The slice is immutable. Each Get() will do a round robin
+	// selection from it and return the selected SubConn.
+	size     int // size if the size of subConns.
 	subConns []balancer.SubConn
+
+	mu   sync.Mutex
+	next int
 }
 
 func newPicker(scs []balancer.SubConn, err error) *picker {
@@ -179,7 +186,7 @@ func newPicker(scs []balancer.SubConn, err error) *picker {
 	}
 }
 
-func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, put func(balancer.DoneInfo), err error) {
+func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.SubConn, func(balancer.DoneInfo), error) {
 	if p.err != nil {
 		return nil, nil, p.err
 	}
@@ -188,9 +195,9 @@ func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (conn bala
 	}
 
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	sc := p.subConns[p.next]
 	p.next = (p.next + 1) % p.size
+	p.mu.Unlock()
 	return sc, nil, nil
 }
 
@@ -198,7 +205,6 @@ func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (conn bala
 // states transition, based on which it evaluates the state of
 // ClientConn.
 type connectivityStateEvaluator struct {
-	mu                  sync.Mutex
 	numReady            uint64 // Number of addrConns in ready state.
 	numConnecting       uint64 // Number of addrConns in connecting state.
 	numTransientFailure uint64 // Number of addrConns in transientFailure.
@@ -210,10 +216,9 @@ type connectivityStateEvaluator struct {
 // Idle and Shutdown are transitioned into by ClientConn; in the begining of the connection
 // before any subConn is created ClientConn is in idle state. In the end when ClientConn
 // closes it is in Shutdown state.
+//
+// recordTransition should only be called synchronously from the same goroutine.
 func (cse *connectivityStateEvaluator) recordTransition(oldState, newState connectivity.State) connectivity.State {
-	cse.mu.Lock()
-	defer cse.mu.Unlock()
-
 	// Update counters.
 	for idx, state := range []connectivity.State{oldState, newState} {
 		updateVal := 2*uint64(idx) - 1 // -1 for oldState and +1 for new.

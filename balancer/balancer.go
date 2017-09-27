@@ -184,7 +184,7 @@ type Picker interface {
 // It also generates and updates the Picker used by gRPC to pick SubConns for RPCs.
 //
 // HandleSubConnectionStateChange, HandleResolvedAddrs and Close are guaranteed
-// to be called sequentially by the same goroutine.
+// to be called synchronously from the same goroutine.
 // There's no guarantee on picker.Pick, it may be called anytime.
 type Balancer interface {
 	// HandleSubConnStateChange is called by gRPC when the connectivity state
@@ -200,7 +200,7 @@ type Balancer interface {
 	// An empty address slice and a non-nil error will be passed if the resolver returns
 	// non-nil error to gRPC.
 	HandleResolvedAddrs([]resolver.Address, error)
-	// Close closes the balancer. Balancer is expected to call RemoveSubConn for
-	// the SubConns that were created but not removed.
+	// Close closes the balancer. The balancer is not required to call
+	// ClientConn.RemoveSubConn for its existing SubConns.
 	Close()
 }

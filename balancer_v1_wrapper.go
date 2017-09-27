@@ -289,9 +289,9 @@ func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) 
 	if err != nil {
 		return nil, nil, err
 	}
-	var put func(balancer.DoneInfo)
+	var done func(balancer.DoneInfo)
 	if p != nil {
-		put = func(i balancer.DoneInfo) { p() }
+		done = func(i balancer.DoneInfo) { p() }
 	}
 	var sc balancer.SubConn
 	bw.mu.Lock()
@@ -319,7 +319,7 @@ func (bw *balancerWrapper) Pick(ctx context.Context, opts balancer.PickOptions) 
 		}
 	}
 
-	return sc, put, nil
+	return sc, done, nil
 }
 
 // connectivityStateEvaluator gets updated by addrConns when their
