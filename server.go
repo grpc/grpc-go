@@ -893,9 +893,6 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		trInfo:                trInfo,
 		statsHandler:          sh,
 	}
-	if ss.cp != nil {
-		ss.cbuf = new(bytes.Buffer)
-	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 		defer func() {
