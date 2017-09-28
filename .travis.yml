@@ -27,7 +27,6 @@ before_install:
 install:
   - ./gradlew assemble generateTestProto install
   - pushd examples && ./gradlew build && popd
-  - pushd examples/thrift && ./gradlew build && popd
   - pushd examples && mvn verify && popd
 
 before_script:

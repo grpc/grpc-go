@@ -321,7 +321,6 @@ subprojects {
         repository(url: stagingUrl, configureAuth)
         snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
     }
-    uploadArchives.onlyIf { !name.contains("thrift") }
 
     [
       install.repositories.mavenInstaller,
@@ -358,7 +357,7 @@ subprojects {
             }
         }
         if (!(project.name in
-            ["grpc-stub", "grpc-protobuf", "grpc-protobuf-lite", "grpc-protobuf-nano", "grpc-thrift"])) {
+            ["grpc-stub", "grpc-protobuf", "grpc-protobuf-lite", "grpc-protobuf-nano"])) {
           def core = pom.dependencies.find {dep -> dep.artifactId == 'grpc-core'}
           if (core != null) {
             // Depend on specific version of grpc-core because internal package is unstable
