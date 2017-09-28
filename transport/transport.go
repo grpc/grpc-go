@@ -458,7 +458,6 @@ type transportState int
 
 const (
 	reachable transportState = iota
-	unreachable
 	closing
 	draining
 )

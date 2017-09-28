@@ -149,12 +149,17 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	connectCtx, connectCancel := context.WithTimeout(ctx, timeout)
+	defer func() {
+		if err != nil {
+			cancel()
+			// Don't call connectCancel in success path due to a race in Go 1.6:
+			// https://github.com/golang/go/issues/15078.
+			connectCancel()
+		}
+	}()
+
 	conn, err := dial(connectCtx, opts.Dialer, addr.Addr)
 	if err != nil {
-		// Don't call cancel in success path due to a race in Go 1.6:
-		// https://github.com/golang/go/issues/15078.
-		cancel()
-		connectCancel()
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)
 		}
@@ -163,8 +168,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
 		if err != nil {
-			cancel()
-			connectCancel()
 			conn.Close()
 		}
 	}(conn)
@@ -590,9 +593,7 @@ func (t *http2Client) Close() (err error) {
 		t.mu.Unlock()
 		return
 	}
-	if t.state == reachable || t.state == draining {
-		close(t.errorChan)
-	}
+	close(t.errorChan)
 	t.state = closing
 	t.mu.Unlock()
 	t.cancel()
@@ -623,17 +624,7 @@ func (t *http2Client) Close() (err error) {
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
 	switch t.state {
-	case unreachable:
-		// The server may close the connection concurrently. t is not available for
-		// any streams. Close it now.
-		t.mu.Unlock()
-		t.Close()
-		return nil
-	case closing:
-		t.mu.Unlock()
-		return nil
-	}
-	if t.state == draining {
+	case closing, draining:
 		t.mu.Unlock()
 		return nil
 	}
