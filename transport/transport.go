@@ -531,8 +531,8 @@ type Options struct {
 	Last bool
 
 	// Delay is a hint to the transport implementation for whether
-	// the data could be buffered for adetermines how much data can be batched before it's written on the wire. batching write. The
-	// Transport implementation may ignore the hint.
+	// the data could be buffered for a batching write. The
+	// transport implementation may ignore the hint.
 	Delay bool
 }
 
