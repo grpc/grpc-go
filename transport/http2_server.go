@@ -699,6 +699,8 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	md = s.header
 	s.mu.Unlock()
+	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
@@ -758,6 +760,8 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
+	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
 	if !headersSent {
 		headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
@@ -974,6 +978,9 @@ func (t *http2Server) keepalive() {
 
 var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 
+// TODO(mmukhi): A lot of this code(and code in other places in the tranpsort layer)
+// is duplicated between the client and the server.
+// The transport layer needs to be refactored to take care of this.
 func (t *http2Server) itemHandler(i item) error {
 	var err error
 	defer func() {
