@@ -444,10 +444,6 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
 	}
-	// TODO check real length, not just > 0.
-	if st.WireLength <= 0 {
-		t.Fatalf("st.Lenght = 0, want > 0")
-	}
 	if !d.client {
 		if st.FullMethod != e.method {
 			t.Fatalf("st.FullMethod = %s, want %v", st.FullMethod, e.method)
@@ -530,17 +526,12 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
-		st *stats.InTrailer
 	)
-	if st, ok = d.s.(*stats.InTrailer); !ok {
+	if _, ok = d.s.(*stats.InTrailer); !ok {
 		t.Fatalf("got %T, want InTrailer", d.s)
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
-	}
-	// TODO check real length, not just > 0.
-	if st.WireLength <= 0 {
-		t.Fatalf("st.Lenght = 0, want > 0")
 	}
 }
 
@@ -554,10 +545,6 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	}
 	if d.ctx == nil {
 		t.Fatalf("d.ctx = nil, want <non-nil>")
-	}
-	// TODO check real length, not just > 0.
-	if st.WireLength <= 0 {
-		t.Fatalf("st.Lenght = 0, want > 0")
 	}
 	if d.client {
 		if st.FullMethod != e.method {
@@ -641,10 +628,6 @@ func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
 	}
 	if st.Client {
 		t.Fatalf("st IsClient = true, want false")
-	}
-	// TODO check real length, not just > 0.
-	if st.WireLength <= 0 {
-		t.Fatalf("st.Lenght = 0, want > 0")
 	}
 }
 
