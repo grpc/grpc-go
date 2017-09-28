@@ -1989,8 +1989,8 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			t.Errorf("Error at server-side while reading preface from cleint. Err: %v", err)
 			return
 		}
-		reader := bufio.NewReaderSize(s.conn, http2IOBufSize)
-		writer := bufio.NewWriterSize(s.conn, http2IOBufSize)
+		reader := bufio.NewReaderSize(s.conn, defaultWriteBufSize)
+		writer := bufio.NewWriterSize(s.conn, defaultReadBufSize)
 		framer := http2.NewFramer(writer, reader)
 		if err = framer.WriteSettingsAck(); err != nil {
 			t.Errorf("Error at server-side while sending Settings ack. Err: %v", err)
