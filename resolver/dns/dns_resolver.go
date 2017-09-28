@@ -16,6 +16,8 @@
  *
  */
 
+// Package dns implements a dns resolver to be installed as the default resolver
+// in grpc.
 package dns
 
 import (
