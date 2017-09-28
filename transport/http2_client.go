@@ -194,6 +194,14 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		dynamicWindow = false
 	}
 	var buf bytes.Buffer
+	writeBufSize := defaultWriteBufSize
+	if opts.WriteBufferSize > 0 {
+		writeBufSize = opts.WriteBufferSize
+	}
+	readBufSize := defaultReadBufSize
+	if opts.ReadBufferSize > 0 {
+		readBufSize = opts.ReadBufferSize
+	}
 	t := &http2Client{
 		ctx:        ctx,
 		target:     addr.Addr,
@@ -209,9 +217,9 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions) (
 		errorChan:         make(chan struct{}),
 		goAway:            make(chan struct{}),
 		awakenKeepalive:   make(chan struct{}, 1),
-		framer:            newFramer(conn),
 		hBuf:              &buf,
 		hEnc:              hpack.NewEncoder(&buf),
+		framer:            newFramer(conn, writeBufSize, readBufSize),
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),

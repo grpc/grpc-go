@@ -472,6 +472,8 @@ type ServerConfig struct {
 	KeepalivePolicy       keepalive.EnforcementPolicy
 	InitialWindowSize     int32
 	InitialConnWindowSize int32
+	WriteBufferSize       int
+	ReadBufferSize        int
 }
 
 // NewServerTransport creates a ServerTransport with conn or non-nil error
@@ -503,6 +505,10 @@ type ConnectOptions struct {
 	InitialWindowSize int32
 	// InitialConnWindowSize sets the initial window size for a connection.
 	InitialConnWindowSize int32
+	// WriteBufferSize sets the size of write buffer which in turn determines how much data can be batched before it's written on the wire.
+	WriteBufferSize int
+	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
+	ReadBufferSize int
 }
 
 // TargetInfo contains the information of the target such as network address and metadata.
@@ -525,7 +531,7 @@ type Options struct {
 	Last bool
 
 	// Delay is a hint to the transport implementation for whether
-	// the data could be buffered for a batching write. The
+	// the data could be buffered for adetermines how much data can be batched before it's written on the wire. batching write. The
 	// Transport implementation may ignore the hint.
 	Delay bool
 }

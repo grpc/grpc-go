@@ -116,6 +116,8 @@ type options struct {
 	keepalivePolicy       keepalive.EnforcementPolicy
 	initialWindowSize     int32
 	initialConnWindowSize int32
+	writeBufferSize       int
+	readBufferSize        int
 }
 
 var defaultServerOptions = options{
@@ -125,6 +127,22 @@ var defaultServerOptions = options{
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
+
+// WriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
+// before doing a write on the wire.
+func WriteBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.writeBufferSize = s
+	}
+}
+
+// ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
+// for one read syscall.
+func ReadBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.readBufferSize = s
+	}
+}
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
@@ -524,6 +542,8 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		KeepalivePolicy:       s.opts.keepalivePolicy,
 		InitialWindowSize:     s.opts.initialWindowSize,
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
+		WriteBufferSize:       s.opts.writeBufferSize,
+		ReadBufferSize:        s.opts.readBufferSize,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {

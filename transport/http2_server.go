@@ -116,7 +116,15 @@ type http2Server struct {
 // newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
 // returned if something goes wrong.
 func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
-	framer := newFramer(conn)
+	writeBufSize := defaultWriteBufSize
+	if config.WriteBufferSize > 0 {
+		writeBufSize = config.WriteBufferSize
+	}
+	readBufSize := defaultReadBufSize
+	if config.ReadBufferSize > 0 {
+		readBufSize = config.ReadBufferSize
+	}
+	framer := newFramer(conn, writeBufSize, readBufSize)
 	// Send initial settings as connection preface to client.
 	var isettings []http2.Setting
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
