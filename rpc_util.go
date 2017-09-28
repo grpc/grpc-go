@@ -555,7 +555,7 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 
 // should be called after options applied
 func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
-	if c.callInfo.contentSubtype != "" {
+	if c.contentSubtype != "" {
 		if c.codec == nil {
 			// c.contentSubtype is already lowercased in CallContentSubtype
 			codec, ok := registeredCodecs[c.contentSubtype]

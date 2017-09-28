@@ -170,7 +170,6 @@ func getContentSubtype(contentType string) (string, bool) {
 	if contentType == baseContentType {
 		return "", true
 	}
-	// simplified strings.HasPrefix
 	if !strings.HasPrefix(contentType, baseContentType) {
 		return "", false
 	}

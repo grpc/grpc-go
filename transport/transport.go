@@ -330,6 +330,14 @@ func (s *Stream) ServerTransport() ServerTransport {
 	return s.st
 }
 
+// ContentSubtype returns the content-subtype for a request. For example,
+// a content-subtype of "proto" will result in a content-type of
+// "application/grpc+proto". See https://grpc.io/docs/guides/wire.html#requests
+// for more details.
+func (s *Stream) ContentSubtype() string {
+	return s.contentSubtype
+}
+
 // Context returns the context of the stream.
 func (s *Stream) Context() context.Context {
 	return s.ctx
