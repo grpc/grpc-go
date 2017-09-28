@@ -53,8 +53,6 @@ type http2Client struct {
 	authInfo   credentials.AuthInfo // auth info about the connection
 	nextID     uint32               // the next stream ID to be used
 
-	// errorChan is closed to notify the I/O error to the caller.
-	errorChan chan struct{}
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
@@ -221,7 +219,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 		authInfo:   authInfo,
 		// The client initiated stream id is odd starting from 1.
 		nextID:            1,
-		errorChan:         make(chan struct{}),
 		goAway:            make(chan struct{}),
 		awakenKeepalive:   make(chan struct{}, 1),
 		hBuf:              &buf,
@@ -593,7 +590,6 @@ func (t *http2Client) Close() (err error) {
 		t.mu.Unlock()
 		return
 	}
-	close(t.errorChan)
 	t.state = closing
 	t.mu.Unlock()
 	t.cancel()
@@ -621,6 +617,11 @@ func (t *http2Client) Close() (err error) {
 	return err
 }
 
+// GracefulClose sets the state to draining, which prevents new streams from
+// being created and causes the transport to be closed when the last active
+// stream is closed.  If there are no active streams, the transport is closed
+// immediately.  This does nothing if the transport is already draining or
+// closing.
 func (t *http2Client) GracefulClose() error {
 	t.mu.Lock()
 	switch t.state {
@@ -1315,7 +1316,7 @@ func (t *http2Client) keepalive() {
 }
 
 func (t *http2Client) Error() <-chan struct{} {
-	return t.errorChan
+	return t.ctx.Done()
 }
 
 func (t *http2Client) GoAway() <-chan struct{} {
