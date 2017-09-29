@@ -240,7 +240,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		opts:   opts,
 		c:      c,
 		desc:   desc,
-		codec:  cc.dopts.codec,
+		codec:  c.codec,
 		cp:     cc.dopts.cp,
 		dc:     cc.dopts.dc,
 		cancel: cancel,

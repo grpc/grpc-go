@@ -62,7 +62,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		if c.maxReceiveMessageSize == nil {
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
+		if err = recv(p, c.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -100,7 +100,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	hdr, data, err := encode(c.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return err
 	}

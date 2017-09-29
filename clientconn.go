@@ -391,10 +391,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		default:
 		}
 	}
-	// Set defaults.
-	if cc.dopts.codec == nil {
-		cc.dopts.codec = protoCodec{}
-	}
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}

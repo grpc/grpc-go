@@ -300,10 +300,6 @@ func NewServer(opt ...ServerOption) *Server {
 	for _, o := range opt {
 		o(&opts)
 	}
-	if opts.codec == nil {
-		// Set the default codec.
-		opts.codec = protoCodec{}
-	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
 		opts:  opts,
@@ -699,7 +695,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	hdr, data, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	hdr, data, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, cbuf, outPayload)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
@@ -811,7 +807,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			// java implementation.
 			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 		}
-		if err := s.opts.codec.Unmarshal(req, v); err != nil {
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 		if inPayload != nil {
@@ -905,7 +901,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		t:     t,
 		s:     stream,
 		p:     &parser{r: stream},
-		codec: s.opts.codec,
+		codec: s.getCodec(stream.ContentSubtype()),
 		cp:    s.opts.cp,
 		dc:    s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
@@ -1129,6 +1125,22 @@ func (s *Server) testingCloseConns() {
 		delete(s.conns, c)
 	}
 	s.mu.Unlock()
+}
+
+// contentSubtype must be lowercase
+// cannot return nil
+func (s *Server) getCodec(contentSubtype string) Codec {
+	if s.codec != nil {
+		return s.codec
+	}
+	if contentSubtype == "" {
+		return registeredProtoCodec
+	}
+	codec, ok := registeredCodecs[contentSubtype]
+	if !ok {
+		return registeredProtoCodec
+	}
+	return codec
 }
 
 // SetHeader sets the header metadata.

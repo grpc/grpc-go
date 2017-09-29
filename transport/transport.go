@@ -332,8 +332,8 @@ func (s *Stream) ServerTransport() ServerTransport {
 
 // ContentSubtype returns the content-subtype for a request. For example,
 // a content-subtype of "proto" will result in a content-type of
-// "application/grpc+proto". See https://grpc.io/docs/guides/wire.html#requests
-// for more details.
+// "application/grpc+proto". This will always be lowercase.
+// See https://grpc.io/docs/guides/wire.html#requests for more details.
 func (s *Stream) ContentSubtype() string {
 	return s.contentSubtype
 }
