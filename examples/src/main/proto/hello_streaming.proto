@@ -15,16 +15,24 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "io.grpc.examples.helloworld";
-option java_outer_classname = "HelloWorldStreamingProto";
+option java_package = "io.grpc.examples.manualflowcontrol";
+option java_outer_classname = "HelloStreamingProto";
 option objc_class_prefix = "HLWS";
 
-import "helloworld.proto";
-
-package helloworld;
+package manualflowcontrol;
 
 // The greeting service definition.
 service StreamingGreeter {
   // Streams a many greetings
   rpc SayHelloStreaming (stream HelloRequest) returns (stream HelloReply) {}
+}
+
+// The request message containing the user's name.
+message HelloRequest {
+  string name = 1;
+}
+
+// The response message containing the greetings
+message HelloReply {
+  string message = 1;
 }
