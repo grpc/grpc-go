@@ -99,6 +99,22 @@ const (
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+// WithWriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
+// before doing a write on the wire.
+func WithWriteBufferSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.copts.WriteBufferSize = s
+	}
+}
+
+// WithReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
+// for each read syscall.
+func WithReadBufferSize(s int) DialOption {
+	return func(o *dialOptions) {
+		o.copts.ReadBufferSize = s
+	}
+}
+
 // WithInitialWindowSize returns a DialOption which sets the value for initial window size on a stream.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
 func WithInitialWindowSize(s int32) DialOption {

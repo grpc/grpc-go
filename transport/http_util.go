@@ -44,7 +44,8 @@ const (
 	// http://http2.github.io/http2-spec/#SettingValues
 	http2InitHeaderTableSize = 4096
 	// http2IOBufSize specifies the buffer size for sending frames.
-	http2IOBufSize = 32 * 1024
+	defaultWriteBufSize = 32 * 1024
+	defaultReadBufSize  = 32 * 1024
 	// baseContentType is the base content-type for gRPC.
 	// This is a valid content-type on it's own, but can also include a
 	// content-subtype such as "proto" as a suffix after "+" or ";".
@@ -511,10 +512,10 @@ type framer struct {
 	fr         *http2.Framer
 }
 
-func newFramer(conn net.Conn) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int) *framer {
 	f := &framer{
-		reader: bufio.NewReaderSize(conn, http2IOBufSize),
-		writer: bufio.NewWriterSize(conn, http2IOBufSize),
+		reader: bufio.NewReaderSize(conn, readBufferSize),
+		writer: bufio.NewWriterSize(conn, writeBufferSize),
 	}
 	f.fr = http2.NewFramer(f.writer, f.reader)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
