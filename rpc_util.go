@@ -128,17 +128,16 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	failFast                                bool
-	headerMD                                metadata.MD
-	trailerMD                               metadata.MD
-	peer                                    *peer.Peer
-	traceInfo                               traceInfo // in trace.go
-	maxReceiveMessageSize                   *int
-	maxSendMessageSize                      *int
-	creds                                   credentials.PerRPCCredentials
-	contentSubtype                          string
-	codec                                   Codec
-	useResponseContentSubtypeForCodecLookup bool
+	failFast              bool
+	headerMD              metadata.MD
+	trailerMD             metadata.MD
+	peer                  *peer.Peer
+	traceInfo             traceInfo // in trace.go
+	maxReceiveMessageSize *int
+	maxSendMessageSize    *int
+	creds                 credentials.PerRPCCredentials
+	contentSubtype        string
+	codec                 Codec
 }
 
 func defaultCallInfo() *callInfo {
@@ -250,9 +249,6 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 // look up the Codec to use in the registry controlled by RegisterCodec. See
 // the documention on RegisterCodec for details on registration. If no such
 // Codec is found, the call will result in an error with code codes.Internal.
-// If the response Content-Type includes a content-subtype, this will be
-// independently used to look up a Codec in the registry, otherwise if no
-// content-subtype is returned, the same Codec will be used for the response.
 //
 // If CallCustomCodec is used, this Codec will be used for all request and
 // response messages, with the content-subtype still being set to the given
@@ -563,7 +559,6 @@ func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
 				return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 			}
 			c.codec = codec
-			c.useResponseContentSubtypeForCodecLookup = true
 		}
 	} else {
 		if c.codec != nil {
@@ -571,7 +566,6 @@ func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
 		} else {
 			c.contentSubtype = "proto"
 			c.codec = registeredProtoCodec
-			c.useResponseContentSubtypeForCodecLookup = true
 		}
 	}
 	return nil
