@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	registeredProtoCodec = protoCodec{}
-	registeredCodecs     = map[string]Codec{"proto": registeredProtoCodec}
+	registeredProtoCodec Codec = protoCodec{}
+	registeredCodecs           = map[string]Codec{"proto": registeredProtoCodec}
 )
 
 // RegisterCodec registers the provided Codec for use with all gRPC clients
@@ -47,6 +47,9 @@ var (
 // thread-safe. Codecs can be overwritten in the registry, including the
 // default "proto" Codec.
 func RegisterCodec(codec Codec) {
+	if codec == nil {
+		panic("cannot register a nil Codec")
+	}
 	contentSubtype := strings.ToLower(codec.String())
 	if contentSubtype == "" {
 		panic("cannot register Codec with empty string result for String()")

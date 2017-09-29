@@ -1130,8 +1130,8 @@ func (s *Server) testingCloseConns() {
 // contentSubtype must be lowercase
 // cannot return nil
 func (s *Server) getCodec(contentSubtype string) Codec {
-	if s.codec != nil {
-		return s.codec
+	if s.opts.codec != nil {
+		return s.opts.codec
 	}
 	if contentSubtype == "" {
 		return registeredProtoCodec
