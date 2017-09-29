@@ -60,8 +60,8 @@ type http2Server struct {
 	authInfo    credentials.AuthInfo // auth info about the connection
 	inTapHandle tap.ServerInHandle
 	framer      *framer
-	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
-	hEnc         *hpack.Encoder // HPACK encoder
+	hBuf        *bytes.Buffer  // the buffer for HPACK encoding
+	hEnc        *hpack.Encoder // HPACK encoder
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -1012,6 +1012,7 @@ func (t *http2Server) itemHandler(i item) error {
 			} else {
 				endHeaders = true
 			}
+			var err error
 			if first {
 				first = false
 				err = t.framer.fr.WriteHeaders(http2.HeadersFrameParam{
@@ -1032,6 +1033,7 @@ func (t *http2Server) itemHandler(i item) error {
 			}
 		}
 		atomic.StoreUint32(&t.resetPingStrikes, 1)
+		return nil
 	case *windowUpdate:
 		return t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
