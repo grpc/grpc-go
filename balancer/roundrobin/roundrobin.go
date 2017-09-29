@@ -33,17 +33,17 @@ import (
 
 // newBuilder creates a new roundrobin balancer builder.
 func newBuilder() balancer.Builder {
-	return &roundrobinBuilder{}
+	return &rrBuilder{}
 }
 
 func init() {
 	balancer.Register(newBuilder())
 }
 
-type roundrobinBuilder struct{}
+type rrBuilder struct{}
 
-func (*roundrobinBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
-	return &roundrobinBalancer{
+func (*rrBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) balancer.Balancer {
+	return &rrBalancer{
 		cc:       cc,
 		subConns: make(map[resolver.Address]balancer.SubConn),
 		scStates: make(map[balancer.SubConn]connectivity.State),
@@ -55,11 +55,11 @@ func (*roundrobinBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOption
 	}
 }
 
-func (*roundrobinBuilder) Name() string {
+func (*rrBuilder) Name() string {
 	return "roundrobin"
 }
 
-type roundrobinBalancer struct {
+type rrBalancer struct {
 	cc balancer.ClientConn
 
 	csEvltr *connectivityStateEvaluator
@@ -70,12 +70,12 @@ type roundrobinBalancer struct {
 	picker   *picker
 }
 
-func (b *roundrobinBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+func (b *rrBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 	if err != nil {
-		grpclog.Infof("roundrobinBalancer: HandleResolvedAddrs called with error %v", err)
+		grpclog.Infof("roundrobin.rrBalancer: HandleResolvedAddrs called with error %v", err)
 		return
 	}
-	grpclog.Infoln("roundrobinBalancer: got new resolved addresses: ", addrs)
+	grpclog.Infoln("roundrobin.rrBalancer: got new resolved addresses: ", addrs)
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
 	addrsSet := make(map[resolver.Address]struct{})
 	for _, a := range addrs {
@@ -84,7 +84,7 @@ func (b *roundrobinBalancer) HandleResolvedAddrs(addrs []resolver.Address, err e
 			// a is a new address (not existing in b.subConns).
 			sc, err := b.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{})
 			if err != nil {
-				grpclog.Warningf("roundrobinBalancer: failed to create new SubConn: %v", err)
+				grpclog.Warningf("roundrobin.rrBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
 			b.subConns[a] = sc
@@ -107,7 +107,7 @@ func (b *roundrobinBalancer) HandleResolvedAddrs(addrs []resolver.Address, err e
 // from it. The picker
 //  - always returns ErrTransientFailure if the balancer is in TransientFailure,
 //  - or does round robin selection of all READY SubConns otherwise.
-func (b *roundrobinBalancer) regeneratePicker() {
+func (b *rrBalancer) regeneratePicker() {
 	if b.state == connectivity.TransientFailure {
 		b.picker = newPicker(nil, balancer.ErrTransientFailure)
 		return
@@ -121,11 +121,11 @@ func (b *roundrobinBalancer) regeneratePicker() {
 	b.picker = newPicker(readySCs, nil)
 }
 
-func (b *roundrobinBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("roundrobinBalancer: handle SubConn state change: %p, %v", sc, s)
+func (b *rrBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	grpclog.Infof("roundrobin.rrBalancer: handle SubConn state change: %p, %v", sc, s)
 	oldS, ok := b.scStates[sc]
 	if !ok {
-		grpclog.Infof("roundrobinBalancer: got state changes for an unknown SubConn: %p, %v", sc, s)
+		grpclog.Infof("roundrobin.rrBalancer: got state changes for an unknown SubConn: %p, %v", sc, s)
 		return
 	}
 	b.scStates[sc] = s
@@ -157,7 +157,7 @@ func (b *roundrobinBalancer) HandleSubConnStateChange(sc balancer.SubConn, s con
 
 // Close is a nop because roundrobin balancer doesn't internal state to clean
 // up, and it doesn't need to call RemoveSubConn for the SubConns.
-func (b *roundrobinBalancer) Close() {
+func (b *rrBalancer) Close() {
 }
 
 type picker struct {
@@ -168,7 +168,6 @@ type picker struct {
 	// subConns is the snapshot of the roundrobin balancer when this picker was
 	// created. The slice is immutable. Each Get() will do a round robin
 	// selection from it and return the selected SubConn.
-	size     int // size if the size of subConns.
 	subConns []balancer.SubConn
 
 	mu   sync.Mutex
@@ -181,7 +180,6 @@ func newPicker(scs []balancer.SubConn, err error) *picker {
 		return &picker{err: err}
 	}
 	return &picker{
-		size:     len(scs),
 		subConns: scs,
 	}
 }
@@ -190,13 +188,13 @@ func (p *picker) Pick(ctx context.Context, opts balancer.PickOptions) (balancer.
 	if p.err != nil {
 		return nil, nil, p.err
 	}
-	if p.size <= 0 {
+	if len(p.subConns) <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
 
 	p.mu.Lock()
 	sc := p.subConns[p.next]
-	p.next = (p.next + 1) % p.size
+	p.next = (p.next + 1) % len(p.subConns)
 	p.mu.Unlock()
 	return sc, nil, nil
 }
