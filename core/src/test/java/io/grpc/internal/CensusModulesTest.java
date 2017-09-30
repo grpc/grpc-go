@@ -725,6 +725,15 @@ public class CensusModulesTest {
     }
   }
 
+
+  @Test
+  public void generateTraceSpanName() {
+    assertEquals(
+        "Sent.io.grpc.Foo", CensusTracingModule.generateTraceSpanName(false, "io.grpc/Foo"));
+    assertEquals(
+        "Recv.io.grpc.Bar", CensusTracingModule.generateTraceSpanName(true, "io.grpc/Bar"));
+  }
+
   private static void assertNoServerContent(StatsTestUtils.MetricsRecord record) {
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
     assertNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_COUNT));

@@ -29,6 +29,7 @@ import io.grpc.Context;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.InternalMethodDescriptor;
+import io.grpc.InternalMethodDescriptor.RegisterForTracingCallback;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.ServerStreamTracer;
@@ -39,7 +40,11 @@ import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
+import io.opencensus.trace.Tracing;
+import io.opencensus.trace.export.SampledSpanStore;
 import io.opencensus.trace.propagation.BinaryFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -64,6 +69,24 @@ final class CensusTracingModule {
   final Metadata.Key<SpanContext> tracingHeader;
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
+
+  private static final boolean isRegistered = registerCensusTracer();
+
+  private static boolean registerCensusTracer() {
+    InternalMethodDescriptor.setRegisterCallback(new RegisterForTracingCallback() {
+      @Override
+      public void onRegister(MethodDescriptor<?, ?> md) {
+        SampledSpanStore sampledStore = Tracing.getExportComponent().getSampledSpanStore();
+        if (sampledStore != null) {
+          List<String> spanNames = new ArrayList<String>(2);
+          spanNames.add(generateTraceSpanName(false, md.getFullMethodName()));
+          spanNames.add(generateTraceSpanName(true, md.getFullMethodName()));
+          sampledStore.registerSpanNamesForCollection(spanNames);
+        }
+      }
+    });
+    return true;
+  }
 
   CensusTracingModule(
       Tracer censusTracer, final BinaryFormat censusPropagationBinaryFormat) {
@@ -202,7 +225,7 @@ final class CensusTracingModule {
       this.span =
           censusTracer
               .spanBuilderWithExplicitParent(
-                  InternalMethodDescriptor.generateTraceSpanName(false, fullMethodName),
+                  generateTraceSpanName(false, fullMethodName),
                   parentSpan)
               .setRecordEvents(true)
               .startSpan();
@@ -260,7 +283,7 @@ final class CensusTracingModule {
       this.span =
           censusTracer
               .spanBuilderWithRemoteParent(
-                  InternalMethodDescriptor.generateTraceSpanName(true, fullMethodName),
+                  generateTraceSpanName(true, fullMethodName),
                   remoteSpan)
               .setRecordEvents(true)
               .startSpan();
@@ -345,4 +368,19 @@ final class CensusTracingModule {
       };
     }
   }
+
+  /**
+   * Convert a full method name to a tracing span name.
+   *
+   * @param isServer {@code false} if the span is on the client-side, {@code true} if on the
+   *                 server-side
+   * @param fullMethodName the method name as returned by
+   *        {@link MethodDescriptor#getFullMethodName}.
+   */
+  @VisibleForTesting
+  static String generateTraceSpanName(boolean isServer, String fullMethodName) {
+    String prefix = isServer ? "Recv" : "Sent";
+    return prefix + "." + fullMethodName.replace('/', '.');
+  }
+
 }

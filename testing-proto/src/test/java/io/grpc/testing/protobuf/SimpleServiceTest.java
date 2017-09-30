@@ -24,7 +24,6 @@ import static io.grpc.MethodDescriptor.MethodType.UNARY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import io.grpc.InternalMethodDescriptor;
 import io.grpc.MethodDescriptor;
 import io.opencensus.trace.Tracing;
 import io.opencensus.trace.export.SampledSpanStore;
@@ -61,8 +60,9 @@ public class SimpleServiceTest {
 
   @Test
   public void registerSampledMethodsForTracing() throws Exception {
-    // Make sure SimpleServiceGrpc class is loaded
+    // Make sure SimpleServiceGrpc and CensusTracingModule classes are loaded.
     assertNotNull(Class.forName(SimpleServiceGrpc.class.getName()));
+    assertNotNull(Class.forName("io.grpc.internal.CensusTracingModule"));
 
     String[] methodNames = new String[] {
       "grpc.testing.SimpleService/UnaryRpc",
@@ -72,12 +72,20 @@ public class SimpleServiceTest {
 
     ArrayList<String> expectedSpans = new ArrayList<String>();
     for (String methodName : methodNames) {
-      expectedSpans.add(InternalMethodDescriptor.generateTraceSpanName(false, methodName));
-      expectedSpans.add(InternalMethodDescriptor.generateTraceSpanName(true, methodName));
+      expectedSpans.add(generateTraceSpanName(false, methodName));
+      expectedSpans.add(generateTraceSpanName(true, methodName));
     }
 
     SampledSpanStore sampledStore = Tracing.getExportComponent().getSampledSpanStore();
     Set<String> registeredSpans = sampledStore.getRegisteredSpanNamesForCollection();
     assertThat(registeredSpans).containsAllIn(expectedSpans);
+  }
+
+  /**
+   * Copy of {@link io.grpc.internal.CensusTracingModule#generateTraceSpanName} to break dependency.
+   */
+  private static String generateTraceSpanName(boolean isServer, String fullMethodName) {
+    String prefix = isServer ? "Recv" : "Sent";
+    return prefix + "." + fullMethodName.replace('/', '.');
   }
 }

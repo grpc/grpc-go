@@ -38,7 +38,10 @@ public final class InternalMethodDescriptor {
     md.setRawMethodName(transport.ordinal(), o);
   }
 
-  public static String generateTraceSpanName(boolean isServer, String fullMethodName) {
-    return MethodDescriptor.generateTraceSpanName(isServer, fullMethodName);
+  public interface RegisterForTracingCallback extends
+      MethodDescriptor.Registrations.RegisterForTracingCallback {}
+
+  public static void setRegisterCallback(RegisterForTracingCallback registerCallback) {
+    MethodDescriptor.Registrations.setRegisterForTracingCallback(registerCallback);
   }
 }
