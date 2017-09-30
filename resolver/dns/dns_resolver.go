@@ -233,7 +233,7 @@ func (d *dnsResolver) lookupTXT() string {
 
 	// TXT record must have "grpc_config=" attribute in order to be used as service config.
 	if !strings.HasPrefix(res, txtAttribute) {
-		grpclog.Warningf("grpc: TXT record %p missing %p attribute", res, txtAttribute)
+		grpclog.Warningf("grpc: TXT record %v missing %v attribute", res, txtAttribute)
 		return ""
 	}
 	return strings.TrimPrefix(res, txtAttribute)
