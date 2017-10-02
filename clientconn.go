@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"net"
 	"reflect"
@@ -175,6 +176,15 @@ func WithBalancer(b Balancer) DialOption {
 		o.balancerBuilder = &balancerWrapperBuilder{
 			b: b,
 		}
+	}
+}
+
+// WithBalancerBuilder is for testing only. Users using custom balancers should
+// register their balancer and use service config to choose the balancer to use.
+func WithBalancerBuilder(b balancer.Builder) DialOption {
+	// TODO(bar) remove this when switching balancer is done.
+	return func(o *dialOptions) {
+		o.balancerBuilder = b
 	}
 }
 
@@ -339,13 +349,30 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		target: target,
 		csMgr:  &connectivityStateManager{},
 		conns:  make(map[*addrConn]struct{}),
+
+		blockingpicker: newPickerWrapper(),
 	}
-	cc.csEvltr = &connectivityStateEvaluator{csMgr: cc.csMgr}
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {
 		opt(&cc.dopts)
 	}
+
+	if !cc.dopts.insecure {
+		if cc.dopts.copts.TransportCredentials == nil {
+			return nil, errNoTransportSecurity
+		}
+	} else {
+		if cc.dopts.copts.TransportCredentials != nil {
+			return nil, errCredentialsConflict
+		}
+		for _, cd := range cc.dopts.copts.PerRPCCredentials {
+			if cd.RequireTransportSecurity() {
+				return nil, errTransportCredentialsMissing
+			}
+		}
+	}
+
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
 	if cc.dopts.copts.Dialer == nil {
@@ -408,7 +435,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = target
 	}
 
-	// TODO(bar) parse scheme and start resolver.
 	if cc.dopts.balancerBuilder != nil {
 		var credsClone credentials.TransportCredentials
 		if creds != nil {
@@ -420,7 +446,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 		// Build should not take long time. So it's ok to not have a goroutine for it.
 		// TODO(bar) init balancer after first resolver result to support service config balancer.
-		cc.balancer = cc.dopts.balancerBuilder.Build(&ccBalancerWrapper{cc: cc}, buildOpts)
+		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, buildOpts)
 	} else {
 		waitC := make(chan error, 1)
 		go func() {
@@ -460,11 +486,18 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.scWatcher()
 	}
 
-	if cc.balancer != nil {
-		// Unblock balancer initialization with a fake resolver update.
+	// Build the resolver.
+	cc.resolverWrapper, err = newCCResolverWrapper(cc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build resolver: %v", err)
+	}
+
+	if cc.balancerWrapper != nil && cc.resolverWrapper == nil {
+		// TODO(bar) there should always be a resolver (DNS as the default).
+		// Unblock balancer initialization with a fake resolver update if there's no resolver.
 		// The balancer wrapper will not read the addresses, so an empty list works.
 		// TODO(bar) remove this after the real resolver is started.
-		cc.balancer.HandleResolvedAddrs([]resolver.Address{}, nil)
+		cc.balancerWrapper.handleResolvedAddrs([]resolver.Address{}, nil)
 	}
 
 	// A blocking dial blocks until the clientConn is ready.
@@ -482,54 +515,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	return cc, nil
-}
-
-// connectivityStateEvaluator gets updated by addrConns when their
-// states transition, based on which it evaluates the state of
-// ClientConn.
-// Note: This code will eventually sit in the balancer in the new design.
-type connectivityStateEvaluator struct {
-	csMgr               *connectivityStateManager
-	mu                  sync.Mutex
-	numReady            uint64 // Number of addrConns in ready state.
-	numConnecting       uint64 // Number of addrConns in connecting state.
-	numTransientFailure uint64 // Number of addrConns in transientFailure.
-}
-
-// recordTransition records state change happening in every addrConn and based on
-// that it evaluates what state the ClientConn is in.
-// It can only transition between connectivity.Ready, connectivity.Connecting and connectivity.TransientFailure. Other states,
-// Idle and connectivity.Shutdown are transitioned into by ClientConn; in the beginning of the connection
-// before any addrConn is created ClientConn is in idle state. In the end when ClientConn
-// closes it is in connectivity.Shutdown state.
-// TODO Note that in later releases, a ClientConn with no activity will be put into an Idle state.
-func (cse *connectivityStateEvaluator) recordTransition(oldState, newState connectivity.State) {
-	cse.mu.Lock()
-	defer cse.mu.Unlock()
-
-	// Update counters.
-	for idx, state := range []connectivity.State{oldState, newState} {
-		updateVal := 2*uint64(idx) - 1 // -1 for oldState and +1 for new.
-		switch state {
-		case connectivity.Ready:
-			cse.numReady += updateVal
-		case connectivity.Connecting:
-			cse.numConnecting += updateVal
-		case connectivity.TransientFailure:
-			cse.numTransientFailure += updateVal
-		}
-	}
-
-	// Evaluate.
-	if cse.numReady > 0 {
-		cse.csMgr.updateState(connectivity.Ready)
-		return
-	}
-	if cse.numConnecting > 0 {
-		cse.csMgr.updateState(connectivity.Connecting)
-		return
-	}
-	cse.csMgr.updateState(connectivity.TransientFailure)
 }
 
 // connectivityStateManager keeps the connectivity.State of ClientConn.
@@ -584,13 +569,11 @@ type ClientConn struct {
 	authority string
 	dopts     dialOptions
 	csMgr     *connectivityStateManager
-	csEvltr   *connectivityStateEvaluator // This will eventually be part of balancer.
 
-	balancer balancer.Balancer
+	balancerWrapper *ccBalancerWrapper
+	resolverWrapper *ccResolverWrapper
 
-	// TODO(bar) move the mutex and picker into a struct that does blocking pick().
-	pmu    sync.Mutex
-	picker balancer.Picker
+	blockingpicker *pickerWrapper
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
@@ -647,7 +630,6 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 		dopts: cc.dopts,
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
-	ac.csEvltr = cc.csEvltr
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
 	cc.mu.Lock()
 	if cc.conns == nil {
@@ -674,6 +656,7 @@ func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
 
 // connect starts to creating transport and also starts the transport monitor
 // goroutine for this ac.
+// It does nothing if the ac is not IDLE.
 // TODO(bar) Move this to the addrConn section.
 // This was part of resetAddrConn, keep it here to make the diff look clean.
 func (ac *addrConn) connect(block bool) error {
@@ -682,25 +665,17 @@ func (ac *addrConn) connect(block bool) error {
 		ac.mu.Unlock()
 		return errConnClosing
 	}
-	ac.mu.Unlock()
-
-	if EnableTracing {
-		ac.events = trace.NewEventLog("grpc.ClientConn", ac.addrs[0].Addr)
+	if ac.state != connectivity.Idle {
+		ac.mu.Unlock()
+		return nil
 	}
-	if !ac.dopts.insecure {
-		if ac.dopts.copts.TransportCredentials == nil {
-			return errNoTransportSecurity
-		}
+	ac.state = connectivity.Connecting
+	if ac.cc.balancerWrapper != nil {
+		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
 	} else {
-		if ac.dopts.copts.TransportCredentials != nil {
-			return errCredentialsConflict
-		}
-		for _, cd := range ac.dopts.copts.PerRPCCredentials {
-			if cd.RequireTransportSecurity() {
-				return errTransportCredentialsMissing
-			}
-		}
+		ac.cc.csMgr.updateState(ac.state)
 	}
+	ac.mu.Unlock()
 
 	if block {
 		if err := ac.resetTransport(false); err != nil {
@@ -780,56 +755,37 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 	return m
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, opts BalancerGetOptions) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	var (
-		ac  *addrConn
-		put func(balancer.DoneInfo)
-	)
-	if cc.balancer == nil {
+func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+	if cc.balancerWrapper == nil {
 		// If balancer is nil, there should be only one addrConn available.
 		cc.mu.RLock()
 		if cc.conns == nil {
 			cc.mu.RUnlock()
+			// TODO this function returns toRPCErr and non-toRPCErr. Clean up
+			// the errors in ClientConn.
 			return nil, nil, toRPCErr(ErrClientConnClosing)
 		}
+		var ac *addrConn
 		for ac = range cc.conns {
 			// Break after the first iteration to get the first addrConn.
 			break
 		}
 		cc.mu.RUnlock()
-	} else {
-		cc.pmu.Lock()
-		// TODO(bar) call pick on struct blockPicker instead of the real picker.
-		p := cc.picker
-		cc.pmu.Unlock()
-
-		var (
-			err error
-			sc  balancer.SubConn
-		)
-		sc, put, err = p.Pick(ctx, balancer.PickOptions{})
+		if ac == nil {
+			return nil, nil, errConnClosing
+		}
+		t, err := ac.wait(ctx, false /*hasBalancer*/, failfast)
 		if err != nil {
-			return nil, nil, toRPCErr(err)
+			return nil, nil, err
 		}
-		if acbw, ok := sc.(*acBalancerWrapper); ok {
-			ac = acbw.getAddrConn()
-		} else if put != nil {
-			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
-			put(balancer.DoneInfo{Err: errors.New("SubConn returned by pick cannot be recognized")})
-		}
+		return t, nil, nil
 	}
-	if ac == nil {
-		return nil, nil, errConnClosing
-	}
-	t, err := ac.wait(ctx, cc.balancer != nil, !opts.BlockingWait)
+
+	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{})
 	if err != nil {
-		if put != nil {
-			updateRPCInfoInContext(ctx, rpcInfo{bytesSent: false, bytesReceived: false})
-			put(balancer.DoneInfo{Err: err})
-		}
-		return nil, nil, err
+		return nil, nil, toRPCErr(err)
 	}
-	return t, put, nil
+	return t, done, nil
 }
 
 // Close tears down the ClientConn and all underlying connections.
@@ -845,8 +801,12 @@ func (cc *ClientConn) Close() error {
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
 	cc.mu.Unlock()
-	if cc.balancer != nil {
-		cc.balancer.Close()
+	cc.blockingpicker.close()
+	if cc.resolverWrapper != nil {
+		cc.resolverWrapper.close()
+	}
+	if cc.balancerWrapper != nil {
+		cc.balancerWrapper.close()
 	}
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
@@ -865,8 +825,6 @@ type addrConn struct {
 	dopts   dialOptions
 	events  trace.EventLog
 	acbw    balancer.SubConn
-
-	csEvltr *connectivityStateEvaluator
 
 	mu    sync.Mutex
 	state connectivity.State
@@ -920,19 +878,19 @@ func (ac *addrConn) resetTransport(drain bool) error {
 		ac.mu.Unlock()
 		return errConnClosing
 	}
-	oldState := ac.state
-	ac.state = connectivity.Connecting
-	ac.csEvltr.recordTransition(oldState, ac.state)
-	if ac.cc.balancer != nil {
-		ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
+	ac.state = connectivity.TransientFailure
+	if ac.cc.balancerWrapper != nil {
+		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+	} else {
+		ac.cc.csMgr.updateState(ac.state)
 	}
-	// TODO(bar) don't call balancer functions to handle subconn state change if ac.acbw is nil.
 	if ac.ready != nil {
 		close(ac.ready)
 		ac.ready = nil
 	}
 	t := ac.transport
 	ac.transport = nil
+	ac.curAddr = resolver.Address{}
 	ac.mu.Unlock()
 	if t != nil && !drain {
 		t.Close()
@@ -953,16 +911,17 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			return errConnClosing
 		}
 		ac.printf("connecting")
-		oldState := ac.state
 		ac.state = connectivity.Connecting
-		ac.csEvltr.recordTransition(oldState, ac.state)
 		// TODO(bar) remove condition once we always have a balancer.
-		if ac.cc.balancer != nil {
-			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
+		if ac.cc.balancerWrapper != nil {
+			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+		} else {
+			ac.cc.csMgr.updateState(ac.state)
 		}
 		// copy ac.addrs in case of race
 		addrsIter := make([]resolver.Address, len(ac.addrs))
 		copy(addrsIter, ac.addrs)
+		copts := ac.dopts.copts
 		ac.mu.Unlock()
 		for _, addr := range addrsIter {
 			ac.mu.Lock()
@@ -977,7 +936,7 @@ func (ac *addrConn) resetTransport(drain bool) error {
 				Addr:     addr.Addr,
 				Metadata: addr.Metadata,
 			}
-			newTransport, err := transport.NewClientTransport(ctx, sinfo, ac.dopts.copts)
+			newTransport, err := transport.NewClientTransport(ctx, sinfo, copts)
 			// Don't call cancel in success path due to a race in Go 1.6:
 			// https://github.com/golang/go/issues/15078.
 			if err != nil {
@@ -1004,13 +963,17 @@ func (ac *addrConn) resetTransport(drain bool) error {
 				newTransport.Close()
 				return errConnClosing
 			}
-			oldState = ac.state
 			ac.state = connectivity.Ready
-			ac.csEvltr.recordTransition(oldState, ac.state)
-			if ac.cc.balancer != nil {
-				ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
+			if ac.cc.balancerWrapper != nil {
+				ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+			} else {
+				ac.cc.csMgr.updateState(ac.state)
 			}
+			t := ac.transport
 			ac.transport = newTransport
+			if t != nil {
+				t.Close()
+			}
 			ac.curAddr = addr
 			if ac.ready != nil {
 				close(ac.ready)
@@ -1020,11 +983,11 @@ func (ac *addrConn) resetTransport(drain bool) error {
 			return nil
 		}
 		ac.mu.Lock()
-		oldState = ac.state
 		ac.state = connectivity.TransientFailure
-		ac.csEvltr.recordTransition(oldState, ac.state)
-		if ac.cc.balancer != nil {
-			ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
+		if ac.cc.balancerWrapper != nil {
+			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+		} else {
+			ac.cc.csMgr.updateState(ac.state)
 		}
 		if ac.ready != nil {
 			close(ac.ready)
@@ -1145,6 +1108,28 @@ func (ac *addrConn) wait(ctx context.Context, hasBalancer, failfast bool) (trans
 	}
 }
 
+// getReadyTransport returns the transport if ac's state is READY.
+// Otherwise it returns nil, false.
+// If ac's state is IDLE, it will trigger ac to connect.
+func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
+	ac.mu.Lock()
+	if ac.state == connectivity.Ready {
+		t := ac.transport
+		ac.mu.Unlock()
+		return t, true
+	}
+	var idle bool
+	if ac.state == connectivity.Idle {
+		idle = true
+	}
+	ac.mu.Unlock()
+	// Trigger idle ac to connect.
+	if idle {
+		ac.connect(false)
+	}
+	return nil, false
+}
+
 // tearDown starts to tear down the addrConn.
 // TODO(zhaoq): Make this synchronous to avoid unbounded memory consumption in
 // some edge cases (e.g., the caller opens and closes many addrConn's in a
@@ -1166,12 +1151,12 @@ func (ac *addrConn) tearDown(err error) {
 	if ac.state == connectivity.Shutdown {
 		return
 	}
-	oldState := ac.state
 	ac.state = connectivity.Shutdown
 	ac.tearDownErr = err
-	ac.csEvltr.recordTransition(oldState, ac.state)
-	if ac.cc.balancer != nil {
-		ac.cc.balancer.HandleSubConnStateChange(ac.acbw, ac.state)
+	if ac.cc.balancerWrapper != nil {
+		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+	} else {
+		ac.cc.csMgr.updateState(ac.state)
 	}
 	if ac.events != nil {
 		ac.events.Finish()
