@@ -52,19 +52,16 @@ var ErrIllegalHeaderWrite = errors.New("transport: the stream is done or WriteHe
 // http2Server implements the ServerTransport interface with HTTP2.
 type http2Server struct {
 	ctx         context.Context
+	cancel      context.CancelFunc
 	conn        net.Conn
 	remoteAddr  net.Addr
 	localAddr   net.Addr
 	maxStreamID uint32               // max stream ID ever seen
 	authInfo    credentials.AuthInfo // auth info about the connection
 	inTapHandle tap.ServerInHandle
-	// shutdownChan is closed when Close is called.
-	// Blocking operations should select on shutdownChan to avoid
-	// blocking forever after Close.
-	shutdownChan chan struct{}
-	framer       *framer
-	hBuf         *bytes.Buffer  // the buffer for HPACK encoding
-	hEnc         *hpack.Encoder // HPACK encoder
+	framer      *framer
+	hBuf        *bytes.Buffer  // the buffer for HPACK encoding
+	hEnc        *hpack.Encoder // HPACK encoder
 	// The max number of concurrent streams.
 	maxStreams uint32
 	// controlBuf delivers all the control related tasks (e.g., window
@@ -186,8 +183,10 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
 	var buf bytes.Buffer
+	ctx, cancel := context.WithCancel(context.Background())
 	t := &http2Server{
-		ctx:               context.Background(),
+		ctx:               ctx,
+		cancel:            cancel,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
 		localAddr:         conn.LocalAddr(),
@@ -201,7 +200,6 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
 		state:             reachable,
-		shutdownChan:      make(chan struct{}),
 		activeStreams:     make(map[uint32]*Stream),
 		streamSendQuota:   defaultWindowSize,
 		stats:             config.StatsHandler,
@@ -225,7 +223,10 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		t.stats.HandleConn(t.ctx, connBegin)
 	}
 	t.framer.writer.Flush()
-	go loopyWriter(t.controlBuf, t.shutdownChan, t.itemHandler)
+	go func() {
+		loopyWriter(t.ctx, t.controlBuf, t.itemHandler)
+		t.Close()
+	}()
 	go t.keepalive()
 	return t, nil
 }
@@ -687,7 +688,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	select {
 	case <-s.ctx.Done():
 		return ContextErr(s.ctx.Err())
-	case <-t.shutdownChan:
+	case <-t.ctx.Done():
 		return ErrConnClosing
 	default:
 	}
@@ -744,7 +745,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	select {
-	case <-t.shutdownChan:
+	case <-t.ctx.Done():
 		return ErrConnClosing
 	default:
 	}
@@ -816,7 +817,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 	select {
 	case <-s.ctx.Done():
 		return ContextErr(s.ctx.Err())
-	case <-t.shutdownChan:
+	case <-t.ctx.Done():
 		return ErrConnClosing
 	default:
 	}
@@ -846,12 +847,12 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 			size := http2MaxFrameLen
 			// Wait until the stream has some quota to send the data.
 			quotaChan, quotaVer := s.sendQuotaPool.acquireWithVersion()
-			sq, err := wait(s.ctx, nil, nil, t.shutdownChan, quotaChan)
+			sq, err := wait(s.ctx, t.ctx, nil, nil, quotaChan)
 			if err != nil {
 				return err
 			}
 			// Wait until the transport has some quota to send the data.
-			tq, err := wait(s.ctx, nil, nil, t.shutdownChan, t.sendQuotaPool.acquire())
+			tq, err := wait(s.ctx, t.ctx, nil, nil, t.sendQuotaPool.acquire())
 			if err != nil {
 				return err
 			}
@@ -871,7 +872,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) (
 				t.sendQuotaPool.add(tq - ps)
 			}
 			// Acquire local send quota to be able to write to the controlBuf.
-			ltq, err := wait(s.ctx, nil, nil, t.shutdownChan, s.localSendQuota.acquire())
+			ltq, err := wait(s.ctx, t.ctx, nil, nil, s.localSendQuota.acquire())
 			if err != nil {
 				if _, ok := err.(ConnectionError); !ok {
 					t.sendQuotaPool.add(ps)
@@ -960,7 +961,7 @@ func (t *http2Server) keepalive() {
 				t.Close()
 				// Reseting the timer so that the clean-up doesn't deadlock.
 				maxAge.Reset(infinity)
-			case <-t.shutdownChan:
+			case <-t.ctx.Done():
 			}
 			return
 		case <-keepalive.C:
@@ -978,7 +979,7 @@ func (t *http2Server) keepalive() {
 			pingSent = true
 			t.controlBuf.put(p)
 			keepalive.Reset(t.kp.Timeout)
-		case <-t.shutdownChan:
+		case <-t.ctx.Done():
 			return
 		}
 	}
@@ -990,19 +991,13 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 // is duplicated between the client and the server.
 // The transport layer needs to be refactored to take care of this.
 func (t *http2Server) itemHandler(i item) error {
-	var err error
-	defer func() {
-		if err != nil {
-			t.Close()
-			errorf("transport: Error while writing: %v", err)
-		}
-	}()
 	switch i := i.(type) {
 	case *dataFrame:
-		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
-		if err == nil {
-			i.f()
+		if err := t.framer.fr.WriteData(i.streamID, i.endStream, i.d); err != nil {
+			return err
 		}
+		i.f()
+		return nil
 	case *headerFrame:
 		t.hBuf.Reset()
 		for _, f := range i.hf {
@@ -1017,6 +1012,7 @@ func (t *http2Server) itemHandler(i item) error {
 			} else {
 				endHeaders = true
 			}
+			var err error
 			if first {
 				first = false
 				err = t.framer.fr.WriteHeaders(http2.HeadersFrameParam{
@@ -1037,17 +1033,17 @@ func (t *http2Server) itemHandler(i item) error {
 			}
 		}
 		atomic.StoreUint32(&t.resetPingStrikes, 1)
+		return nil
 	case *windowUpdate:
-		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
+		return t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
 		if i.ack {
 			t.applySettings(i.ss)
-			err = t.framer.fr.WriteSettingsAck()
-		} else {
-			err = t.framer.fr.WriteSettings(i.ss...)
+			return t.framer.fr.WriteSettingsAck()
 		}
+		return t.framer.fr.WriteSettings(i.ss...)
 	case *resetStream:
-		err = t.framer.fr.WriteRSTStream(i.streamID, i.code)
+		return t.framer.fr.WriteRSTStream(i.streamID, i.code)
 	case *goAway:
 		t.mu.Lock()
 		if t.state == closing {
@@ -1060,15 +1056,13 @@ func (t *http2Server) itemHandler(i item) error {
 			// Stop accepting more streams now.
 			t.state = draining
 			t.mu.Unlock()
-			err = t.framer.fr.WriteGoAway(sid, i.code, i.debugData)
-			if err != nil {
+			if err := t.framer.fr.WriteGoAway(sid, i.code, i.debugData); err != nil {
 				return err
 			}
 			if i.closeConn {
-				// Abruptly close the connection following the GoAway.
-				// But flush out what's inside the buffer first.
+				// Abruptly close the connection following the GoAway (via
+				// loopywriter).  But flush out what's inside the buffer first.
 				t.framer.writer.Flush()
-				t.Close()
 				return fmt.Errorf("transport: Connection closing")
 			}
 			return nil
@@ -1080,36 +1074,42 @@ func (t *http2Server) itemHandler(i item) error {
 		// originated before the GoAway reaches the client.
 		// After getting the ack or timer expiration send out another GoAway this
 		// time with an ID of the max stream server intends to process.
-		err = t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{})
-		err = t.framer.fr.WritePing(false, goAwayPing.data)
+		if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{}); err != nil {
+			return err
+		}
+		if err := t.framer.fr.WritePing(false, goAwayPing.data); err != nil {
+			return err
+		}
 		go func() {
 			timer := time.NewTimer(time.Minute)
 			defer timer.Stop()
 			select {
 			case <-t.drainChan:
 			case <-timer.C:
-			case <-t.shutdownChan:
+			case <-t.ctx.Done():
 				return
 			}
 			t.controlBuf.put(&goAway{code: i.code, debugData: i.debugData})
 		}()
+		return nil
 	case *flushIO:
-		err = t.framer.writer.Flush()
+		return t.framer.writer.Flush()
 	case *ping:
 		if !i.ack {
 			t.bdpEst.timesnap(i.data)
 		}
-		err = t.framer.fr.WritePing(i.ack, i.data)
+		return t.framer.fr.WritePing(i.ack, i.data)
 	default:
-		errorf("transport: http2Server.controller got unexpected item type %v\n", i)
+		err := status.Errorf(codes.Internal, "transport: http2Server.controller got unexpected item type %t\n", i)
+		errorf("%v", err)
+		return err
 	}
-	return err
 }
 
 // Close starts shutting down the http2Server transport.
 // TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
-func (t *http2Server) Close() (err error) {
+func (t *http2Server) Close() error {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
@@ -1119,8 +1119,8 @@ func (t *http2Server) Close() (err error) {
 	streams := t.activeStreams
 	t.activeStreams = nil
 	t.mu.Unlock()
-	close(t.shutdownChan)
-	err = t.conn.Close()
+	t.cancel()
+	err := t.conn.Close()
 	// Cancel all active streams.
 	for _, s := range streams {
 		s.cancel()
@@ -1129,7 +1129,7 @@ func (t *http2Server) Close() (err error) {
 		connEnd := &stats.ConnEnd{}
 		t.stats.HandleConn(t.ctx, connEnd)
 	}
-	return
+	return err
 }
 
 // closeStream clears the footprint of a stream when the stream is not needed
