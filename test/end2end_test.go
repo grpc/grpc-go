@@ -638,7 +638,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		opts = append(opts, grpc.WithInsecure())
 	}
 	// TODO(bar) switch balancer case "pickfirst".
-	var scheme string
+	scheme := "passthrough:///"
 	switch te.e.balancer {
 	case "v1":
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
@@ -648,7 +648,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 			te.t.Fatalf("got nil when trying to get roundrobin balancer builder")
 		}
 		opts = append(opts, grpc.WithBalancerBuilder(rr))
-		scheme = "passthrough:///"
 	}
 	if te.clientInitialWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -665,6 +664,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
 		opts = append(opts, grpc.WithBlock())
+	}
+	if te.srvAddr == "" {
+		te.srvAddr = "client.side.only.test"
 	}
 	var err error
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)

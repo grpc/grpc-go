@@ -31,17 +31,15 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
+	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
-
-	// TODO(bar switching) remove this when dns is imported by grpc.
-	// and remove the init() in passthrough package.
-	_ "google.golang.org/grpc/resolver/passthrough"
 )
 
 var (
@@ -608,7 +606,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	}
 	defer cc.mu.Unlock()
 
-	// TODO(bar switching) check address type and start grpclb.
+	// TODO(bar switching) when grpclb is submitted, check address type and start grpclb.
 	if !cc.customBalancer && cc.balancerWrapper == nil {
 		// No customBalancer was specified by DialOption, and this is the first
 		// time handling resolved addresses, create a pickfirst balancer.
@@ -617,7 +615,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 		cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
 	}
 
-	// TODO(bar) compare addresses, if there's no update, don't notify balancer.
+	// TODO(bar switching) compare addresses, if there's no update, don't notify balancer.
 	cc.curAddresses = addrs
 	cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
 }
@@ -662,6 +660,8 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 		return
 	}
 	defer cc.mu.Unlock()
+	// TODO(bar switching) send updates to all balancer wrappers when balancer
+	// gracefully switching is supported.
 	cc.balancerWrapper.handleSubConnStateChange(sc, s)
 }
 

@@ -56,16 +56,3 @@ func (*passthroughResolver) Close() {}
 func init() {
 	resolver.Register(&passthroughBuilder{})
 }
-
-// TODO(bar switching) remove this when dns resolver is installed!!!
-type fakeDNSBuilder struct {
-	passthroughBuilder
-}
-
-func (*fakeDNSBuilder) Scheme() string {
-	return "dns"
-}
-
-func init() {
-	resolver.Register(&fakeDNSBuilder{})
-}

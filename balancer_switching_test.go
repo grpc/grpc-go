@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/test/leakcheck"
