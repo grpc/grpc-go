@@ -4145,21 +4145,22 @@ func TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 }
 
 type serverDispatchCred struct {
-	ready   chan struct{}
-	rawConn net.Conn
+	rawConnCh chan net.Conn
 }
 
 func newServerDispatchCred() *serverDispatchCred {
 	return &serverDispatchCred{
-		ready: make(chan struct{}),
+		rawConnCh: make(chan net.Conn, 1),
 	}
 }
 func (c *serverDispatchCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
 func (c *serverDispatchCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	c.rawConn = rawConn
-	close(c.ready)
+	select {
+	case c.rawConnCh <- rawConn:
+	default:
+	}
 	return nil, nil, credentials.ErrConnDispatched
 }
 func (c *serverDispatchCred) Info() credentials.ProtocolInfo {
@@ -4172,8 +4173,7 @@ func (c *serverDispatchCred) OverrideServerName(s string) error {
 	return nil
 }
 func (c *serverDispatchCred) getRawConn() net.Conn {
-	<-c.ready
-	return c.rawConn
+	return <-c.rawConnCh
 }
 
 func TestServerCredsDispatch(t *testing.T) {
@@ -4192,8 +4192,10 @@ func TestServerCredsDispatch(t *testing.T) {
 	}
 	defer cc.Close()
 
+	rawConn := cred.getRawConn()
+	time.Sleep(100 * time.Millisecond)
 	// Check rawConn is not closed.
-	if n, err := cred.getRawConn().Write([]byte{0}); n <= 0 || err != nil {
+	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
 		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
 	}
 }
