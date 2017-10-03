@@ -189,7 +189,9 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{ac: ac}
+	acbw.ac.mu.Lock()
 	ac.acbw = acbw
+	acbw.ac.mu.Unlock()
 	ccb.subConns[acbw] = struct{}{}
 	return acbw, nil
 }
