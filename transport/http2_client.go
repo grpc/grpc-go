@@ -148,11 +148,9 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	ctx, cancel := context.WithCancel(ctx)
 	connectCtx, connectCancel := context.WithTimeout(ctx, timeout)
 	defer func() {
+		connectCancel()
 		if err != nil {
 			cancel()
-			// Don't call connectCancel in success path due to a race in Go 1.6:
-			// https://github.com/golang/go/issues/15078.
-			connectCancel()
 		}
 	}()
 
