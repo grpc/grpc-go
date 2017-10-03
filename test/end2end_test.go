@@ -4193,6 +4193,8 @@ func TestServerCredsDispatch(t *testing.T) {
 	defer cc.Close()
 
 	rawConn := cred.getRawConn()
+	// Give grpc a chance to see the error and potentially close the connection.
+	// And check that connection is not closed after that.
 	time.Sleep(100 * time.Millisecond)
 	// Check rawConn is not closed.
 	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
