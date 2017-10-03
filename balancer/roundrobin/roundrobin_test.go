@@ -16,7 +16,7 @@
  *
  */
 
-package roundrobin
+package roundrobin_test
 
 import (
 	"fmt"
@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/grpclog/glogger"
 	"google.golang.org/grpc/peer"
@@ -99,7 +100,11 @@ func TestOneBackend(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -131,7 +136,11 @@ func TestBackendsRoundRobin(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -190,7 +199,11 @@ func TestAddressesRemoved(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -232,7 +245,11 @@ func TestCloseWithPendingRPC(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -266,7 +283,11 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -315,7 +336,11 @@ func TestOneServerDown(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -408,7 +433,11 @@ func TestAllServersDown(t *testing.T) {
 	}
 	defer test.cleanup()
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(newBuilder()))
+	rr := balancer.Get("roundrobin")
+	if rr == nil {
+		t.Fatalf("got nil when trying to get roundrobin balancer builder")
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithBalancerBuilder(rr))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
