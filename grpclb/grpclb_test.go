@@ -422,7 +422,7 @@ func TestGRPCLBWeighted(t *testing.T) {
 		}
 		tss.ls.sls <- &lbmpb.ServerList{Servers: bes}
 
-		for i := 0; i < 25; i++ {
+		for i := 0; i < 1000; i++ {
 			if _, err := testC.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
 				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 			}
