@@ -104,21 +104,6 @@ public final class Metadata {
         }
       };
 
-  /** Simple metadata marshaller that encodes an integer as a signed decimal string. */
-  static final AsciiMarshaller<Integer> INTEGER_MARSHALLER =
-      new AsciiMarshaller<Integer>() {
-
-        @Override
-        public String toAsciiString(Integer value) {
-          return value.toString();
-        }
-
-        @Override
-        public Integer parseAsciiString(String serialized) {
-          return Integer.parseInt(serialized);
-        }
-      };
-
   /**
    * Constructor called by the transport layer when it receives binary metadata. Metadata will
    * mutate the passed in array.

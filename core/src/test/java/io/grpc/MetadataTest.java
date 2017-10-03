@@ -214,20 +214,6 @@ public class MetadataTest {
   }
 
   @Test
-  public void integerMarshallerIsDecimal() {
-    assertEquals("12345678", Metadata.INTEGER_MARSHALLER.toAsciiString(12345678));
-  }
-
-  @Test
-  public void roundTripIntegerMarshaller() {
-    roundTripInteger(0);
-    roundTripInteger(1);
-    roundTripInteger(-1);
-    roundTripInteger(0x12345678);
-    roundTripInteger(0x87654321);
-  }
-
-  @Test
   public void shortBinaryKeyName() {
     thrown.expect(IllegalArgumentException.class);
 
@@ -240,11 +226,6 @@ public class MetadataTest {
     thrown.expectMessage("Binary header is named");
 
     Metadata.Key.of("nonbinary", FISH_MARSHALLER);
-  }
-
-  private void roundTripInteger(Integer i) {
-    assertEquals(i, Metadata.INTEGER_MARSHALLER.parseAsciiString(
-        Metadata.INTEGER_MARSHALLER.toAsciiString(i)));
   }
 
   @Test
@@ -329,9 +310,9 @@ public class MetadataTest {
 
   @Test
   public void keyEqualsHashNameWorks() {
-    Key<Integer> k1 = Key.of("case", Metadata.INTEGER_MARSHALLER);
+    Key<?> k1 = Key.of("case", Metadata.ASCII_STRING_MARSHALLER);
 
-    Key<Integer> k2 = Key.of("CASE", Metadata.INTEGER_MARSHALLER);
+    Key<?> k2 = Key.of("CASE", Metadata.ASCII_STRING_MARSHALLER);
     assertEquals(k1, k1);
     assertNotEquals(k1, null);
     assertNotEquals(k1, new Object(){});
@@ -346,7 +327,7 @@ public class MetadataTest {
   @Test
   public void invalidKeyName() {
     try {
-      Key.of("io.grpc/key1", Metadata.INTEGER_MARSHALLER);
+      Key.of("io.grpc/key1", Metadata.ASCII_STRING_MARSHALLER);
       fail("Should have thrown");
     } catch (IllegalArgumentException e) {
       assertEquals("Invalid character '/' in key name 'io.grpc/key1'", e.getMessage());
