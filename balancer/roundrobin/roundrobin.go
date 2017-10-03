@@ -211,7 +211,7 @@ type connectivityStateEvaluator struct {
 // recordTransition records state change happening in every subConn and based on
 // that it evaluates what aggregated state should be.
 // It can only transition between Ready, Connecting and TransientFailure. Other states,
-// Idle and Shutdown are transitioned into by ClientConn; in the begining of the connection
+// Idle and Shutdown are transitioned into by ClientConn; in the beginning of the connection
 // before any subConn is created ClientConn is in idle state. In the end when ClientConn
 // closes it is in Shutdown state.
 //

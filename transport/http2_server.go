@@ -1100,7 +1100,7 @@ func (t *http2Server) itemHandler(i item) error {
 		}
 		return t.framer.fr.WritePing(i.ack, i.data)
 	default:
-		err := status.Errorf(codes.Internal, "transport: http2Server.controller got unexpected item type %t\n", i)
+		err := status.Errorf(codes.Internal, "transport: http2Server.controller got unexpected item type %t", i)
 		errorf("%v", err)
 		return err
 	}
