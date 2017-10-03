@@ -38,6 +38,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagValue;
@@ -969,6 +970,7 @@ public abstract class AbstractInteropTest {
 
   @Test(timeout = 10000)
   public void sendsTimeoutHeader() {
+    Assume.assumeTrue("can not capture server side request headers", server != null);
     long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);
@@ -1208,22 +1210,46 @@ public abstract class AbstractInteropTest {
                 .setBody(ByteString.copyFrom(new byte[4])))
             .build());
 
-    @SuppressWarnings("unchecked")
-    StreamObserver<StreamingOutputCallResponse> responseObserver = mock(StreamObserver.class);
+    final ArrayBlockingQueue<StreamingOutputCallResponse> responses =
+        new ArrayBlockingQueue<StreamingOutputCallResponse>(3);
+    final SettableFuture<Void> completed = SettableFuture.create();
+    final SettableFuture<Void> errorSeen = SettableFuture.create();
+    StreamObserver<StreamingOutputCallResponse> responseObserver =
+        new StreamObserver<StreamingOutputCallResponse>() {
+
+          @Override
+          public void onNext(StreamingOutputCallResponse value) {
+            responses.add(value);
+          }
+
+          @Override
+          public void onError(Throwable t) {
+            errorSeen.set(null);
+          }
+
+          @Override
+          public void onCompleted() {
+            completed.set(null);
+          }
+        };
     StreamObserver<StreamingOutputCallRequest> requestObserver
         = asyncStub.fullDuplexCall(responseObserver);
     requestObserver.onNext(requests.get(0));
-    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(0));
+    assertEquals(
+        goldenResponses.get(0), responses.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     // Initiate graceful shutdown.
     channel.shutdown();
     requestObserver.onNext(requests.get(1));
-    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(1));
+    assertEquals(
+        goldenResponses.get(1), responses.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
     // The previous ping-pong could have raced with the shutdown, but this one certainly shouldn't.
     requestObserver.onNext(requests.get(2));
-    verify(responseObserver, timeout(operationTimeoutMillis())).onNext(goldenResponses.get(2));
+    assertEquals(
+        goldenResponses.get(2), responses.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
+    assertFalse(completed.isDone());
     requestObserver.onCompleted();
-    verify(responseObserver, timeout(operationTimeoutMillis())).onCompleted();
-    verifyNoMoreInteractions(responseObserver);
+    completed.get(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
+    assertFalse(errorSeen.isDone());
   }
 
   @Test(timeout = 10000)
