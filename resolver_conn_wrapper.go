@@ -81,8 +81,11 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	if err != nil {
 		return nil, err
 	}
-	go ccr.watcher()
 	return ccr, nil
+}
+
+func (ccr *ccResolverWrapper) start() {
+	go ccr.watcher()
 }
 
 // watcher processes address updates and service config updates sequencially.
@@ -117,6 +120,10 @@ func (ccr *ccResolverWrapper) watcher() {
 			return
 		}
 	}
+}
+
+func (ccr *ccResolverWrapper) resolveNow(o resolver.ResolveNowOption) {
+	ccr.resolver.ResolveNow(o)
 }
 
 func (ccr *ccResolverWrapper) close() {
