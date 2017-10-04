@@ -109,6 +109,7 @@ func (ccr *ccResolverWrapper) watcher() {
 			default:
 			}
 			grpclog.Infof("ccResolverWrapper: got new service config: %v", sc)
+			ccr.cc.handleServiceConfig(sc)
 		case <-ccr.done:
 			return
 		}

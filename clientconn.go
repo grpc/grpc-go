@@ -839,9 +839,9 @@ type jsonSC struct {
 	MethodConfig        *[]jsonMC `json:"methodConfig,omitempty"`
 }
 
-// HandleServiceConfig parses the service config string in JSON format to Go native
+// handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
-func (cc *ClientConn) HandleServiceConfig(js string) error {
+func (cc *ClientConn) handleServiceConfig(js string) error {
 	var rsc jsonSC
 	err := json.Unmarshal([]byte(js), &rsc)
 	if err != nil {
