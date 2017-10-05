@@ -16,6 +16,7 @@
 
 package io.grpc.stub;
 
+import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.ExperimentalApi;
 
 /**
@@ -36,6 +37,7 @@ import io.grpc.ExperimentalApi;
  *
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
+@DoNotMock
 public abstract class CallStreamObserver<V> implements StreamObserver<V> {
 
   /**

@@ -16,6 +16,7 @@
 
 package io.grpc.stub;
 
+import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.ExperimentalApi;
 
 /**
@@ -23,6 +24,7 @@ import io.grpc.ExperimentalApi;
  * cancellation events on the server side.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
+@DoNotMock
 public abstract class ServerCallStreamObserver<V> extends CallStreamObserver<V> {
 
   /**

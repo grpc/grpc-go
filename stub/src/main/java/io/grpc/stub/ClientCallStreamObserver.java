@@ -16,6 +16,7 @@
 
 package io.grpc.stub;
 
+import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.ExperimentalApi;
 
 import javax.annotation.Nullable;
@@ -25,6 +26,7 @@ import javax.annotation.Nullable;
  * client calls.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
+@DoNotMock
 public abstract class ClientCallStreamObserver<V> extends CallStreamObserver<V> {
   /**
    * Prevent any further processing for this {@code ClientCallStreamObserver}. No further messages

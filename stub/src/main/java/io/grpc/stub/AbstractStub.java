@@ -18,6 +18,7 @@ package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.errorprone.annotations.DoNotMock;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -42,6 +43,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * @param <S> the concrete type of this stub.
  */
 @ThreadSafe
+@DoNotMock
 public abstract class AbstractStub<S extends AbstractStub<S>> {
   private final Channel channel;
   private final CallOptions callOptions;
