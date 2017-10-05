@@ -1597,7 +1597,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	defer te1.tearDown()
 
 	te1.resolverScheme = r.Scheme()
-	// te1.nonBlockingDial = true
+	te1.nonBlockingDial = true
 	te1.startServer(&testServer{security: e.security})
 	cc1 := te1.clientConn()
 
