@@ -35,6 +35,36 @@ type ccResolverWrapper struct {
 	done     chan struct{}
 }
 
+// parseEndpoint splits endpoint into authority and endpoint.
+func parseEndpoint(endpoint string) (a, e string) {
+	endpointSplited := strings.SplitN(endpoint, "/", 2)
+	if len(endpointSplited) < 2 { // No authority.
+		return "", endpoint
+	}
+	return endpointSplited[0], endpointSplited[1]
+}
+
+// parseTarget splits target into a struct containing scheme, authority and
+// endpoint.
+func parseTarget(target string) resolver.Target {
+	targetSplitted := strings.SplitN(target, "://", 2)
+
+	if len(targetSplitted) < 2 { // No scheme.
+		authority, endpoint := parseEndpoint(target)
+		return resolver.Target{
+			Authority: authority,
+			Endpoint:  endpoint,
+		}
+	}
+
+	authority, endpoint := parseEndpoint(targetSplitted[1])
+	return resolver.Target{
+		Scheme:    targetSplitted[0],
+		Authority: authority,
+		Endpoint:  endpoint,
+	}
+}
+
 // newCCResolverWrapper parses cc.target for scheme and gets the resolver
 // builder for this scheme. It then builds the resolver and starts the
 // monitoring goroutine for it.
@@ -42,18 +72,14 @@ type ccResolverWrapper struct {
 // This function could return nil, nil, in tests for old behaviors.
 // TODO(bar) never return nil, nil when DNS becomes the default resolver.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	var scheme string
-	targetSplitted := strings.Split(cc.target, "://")
-	if len(targetSplitted) >= 2 {
-		scheme = targetSplitted[0]
-	}
-	grpclog.Infof("dialing to target with scheme: %q", scheme)
+	target := parseTarget(cc.target)
+	grpclog.Infof("dialing to target with scheme: %q", target.Scheme)
 
-	rb := resolver.Get(scheme)
+	rb := resolver.Get(target.Scheme)
 	if rb == nil {
 		// TODO(bar) return error when DNS becomes the default (implemented and
 		// registered by DNS package).
-		grpclog.Infof("could not get resolver for scheme: %q", scheme)
+		grpclog.Infof("could not get resolver for scheme: %q", target.Scheme)
 		return nil, nil
 	}
 
@@ -65,7 +91,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	var err error
-	ccr.resolver, err = rb.Build(cc.target, ccr, resolver.BuildOption{})
+	ccr.resolver, err = rb.Build(target, ccr, resolver.BuildOption{})
 	if err != nil {
 		return nil, err
 	}
