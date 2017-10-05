@@ -8,7 +8,7 @@ For this sample, we've already generated the server and client stubs from [hello
 PREREQUISITES
 -------------
 
-- This requires Go 1.5 or later
+- This requires Go 1.7 or later
 - Requires that [GOPATH is set](https://golang.org/doc/code.html#GOPATH)
 
 ```
@@ -51,7 +51,10 @@ OPTIONAL - Rebuilding the generated code
 
 ```
 $ go get -a github.com/golang/protobuf/protoc-gen-go
-$
-$ # from this dir; invoke protoc
-$  protoc -I ./helloworld/helloworld/ ./helloworld/helloworld/helloworld.proto --go_out=plugins=grpc:helloworld
+```
+
+3 Rebuild the generated Go code.
+
+```
+$ go generate google.golang.org/grpc/examples/helloworld/...
 ```

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"reflect"
@@ -31,11 +32,14 @@ import (
 	"sync"
 	"time"
 
+	"io/ioutil"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/keepalive"
@@ -48,7 +52,7 @@ import (
 
 const (
 	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
-	defaultServerMaxSendMessageSize    = 1024 * 1024 * 4
+	defaultServerMaxSendMessageSize    = math.MaxInt32
 )
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor UnaryServerInterceptor) (interface{}, error)
@@ -115,6 +119,8 @@ type options struct {
 	keepalivePolicy       keepalive.EnforcementPolicy
 	initialWindowSize     int32
 	initialConnWindowSize int32
+	writeBufferSize       int
+	readBufferSize        int
 }
 
 var defaultServerOptions = options{
@@ -124,6 +130,22 @@ var defaultServerOptions = options{
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption func(*options)
+
+// WriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
+// before doing a write on the wire.
+func WriteBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.writeBufferSize = s
+	}
+}
+
+// ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
+// for one read syscall.
+func ReadBufferSize(s int) ServerOption {
+	return func(o *options) {
+		o.readBufferSize = s
+	}
+}
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
@@ -163,6 +185,8 @@ func CustomCodec(codec Codec) ServerOption {
 }
 
 // RPCCompressor returns a ServerOption that sets a compressor for outbound messages.
+// It has lower priority than the compressor set by RegisterCompressor.
+// This function will be deprecated.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
@@ -170,6 +194,8 @@ func RPCCompressor(cp Compressor) ServerOption {
 }
 
 // RPCDecompressor returns a ServerOption that sets a decompressor for inbound messages.
+// It has higher priority than the decompressor set by RegisterCompressor.
+// This function will be deprecated.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
@@ -523,6 +549,8 @@ func (s *Server) serveHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) 
 		KeepalivePolicy:       s.opts.keepalivePolicy,
 		InitialWindowSize:     s.opts.initialWindowSize,
 		InitialConnWindowSize: s.opts.initialConnWindowSize,
+		WriteBufferSize:       s.opts.writeBufferSize,
+		ReadBufferSize:        s.opts.readBufferSize,
 	}
 	st, err := transport.NewServerTransport("http2", c, config)
 	if err != nil {
@@ -607,10 +635,11 @@ func (s *Server) serveUsingHandler(conn net.Conn) {
 //   	yourMux.ServeHTTP(w, r)
 //   }
 //
-// Note that ServeHTTP uses Go's HTTP/2 server implementation which is
-// totally separate from grpc-go's HTTP/2 server. Performance and
-// features may vary between the two paths. ServeHTTP may not respect
-// all provided grpc.ServerOption values.
+// Note that ServeHTTP uses Go's HTTP/2 server implementation which is totally
+// separate from grpc-go's HTTP/2 server. Performance and features may vary
+// between the two paths. ServeHTTP does not support some gRPC features
+// available through grpc-go's HTTP/2 server, and it is currently EXPERIMENTAL
+// and subject to change.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st, err := transport.NewServerHandlerTransport(w, r)
 	if err != nil {
@@ -666,24 +695,26 @@ func (s *Server) removeConn(c io.Closer) {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
-		cbuf       *bytes.Buffer
 		outPayload *stats.OutPayload
 	)
-	if cp != nil {
-		cbuf = new(bytes.Buffer)
-	}
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	p, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	if stream.RecvCompress() != "" {
+		// Server receives compressor, check compressor set by register and default.
+		if encoding.GetCompressor(stream.RecvCompress()) == nil && (cp == nil || cp != nil && cp.Type() != stream.RecvCompress()) {
+			return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", stream.RecvCompress())
+		}
+	}
+	hdr, data, err := encode(s.opts.codec, msg, cp, outPayload, encoding.GetCompressor(stream.RecvCompress()))
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
 	}
-	if len(p) > s.opts.maxSendMessageSize {
-		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(p), s.opts.maxSendMessageSize)
+	if len(data) > s.opts.maxSendMessageSize {
+		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(data), s.opts.maxSendMessageSize)
 	}
-	err = t.Write(stream, p, opts)
+	err = t.Write(stream, hdr, data, opts)
 	if err == nil && outPayload != nil {
 		outPayload.SentTime = time.Now()
 		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload)
@@ -719,7 +750,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}()
 	}
-	if s.opts.cp != nil {
+	if stream.RecvCompress() != "" {
+		stream.SetSendCompress(stream.RecvCompress())
+	} else if s.opts.cp != nil {
 		// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
@@ -751,7 +784,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
-
 	if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
 		if st, ok := status.FromError(err); ok {
 			if e := t.WriteStatus(stream, st); e != nil {
@@ -777,9 +809,18 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if pf == compressionMade {
 			var err error
-			req, err = s.opts.dc.Do(bytes.NewReader(req))
-			if err != nil {
-				return Errorf(codes.Internal, err.Error())
+			if s.opts.dc != nil {
+				req, err = s.opts.dc.Do(bytes.NewReader(req))
+				if err != nil {
+					return Errorf(codes.Internal, err.Error())
+				}
+			} else {
+				dcReader := encoding.GetCompressor(stream.RecvCompress())
+				tmp, _ := dcReader.Decompress(bytes.NewReader(req))
+				req, err = ioutil.ReadAll(tmp)
+				if err != nil {
+					return Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
+				}
 			}
 		}
 		if len(req) > s.opts.maxReceiveMessageSize {
@@ -874,23 +915,23 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			sh.HandleRPC(stream.Context(), end)
 		}()
 	}
-	if s.opts.cp != nil {
+	if stream.RecvCompress() != "" {
+		stream.SetSendCompress(stream.RecvCompress())
+	} else if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	ss := &serverStream{
-		t:     t,
-		s:     stream,
-		p:     &parser{r: stream},
-		codec: s.opts.codec,
-		cp:    s.opts.cp,
-		dc:    s.opts.dc,
+		t:      t,
+		s:      stream,
+		p:      &parser{r: stream},
+		codec:  s.opts.codec,
+		cpType: stream.RecvCompress(),
+		cp:     s.opts.cp,
+		dc:     s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
 		statsHandler:          sh,
-	}
-	if ss.cp != nil {
-		ss.cbuf = new(bytes.Buffer)
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)

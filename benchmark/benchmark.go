@@ -16,6 +16,8 @@
  *
  */
 
+//go:generate protoc -I grpc_testing --go_out=plugins=grpc:grpc_testing grpc_testing/control.proto grpc_testing/messages.proto grpc_testing/payloads.proto grpc_testing/services.proto grpc_testing/stats.proto
+
 /*
 Package benchmark implements the building blocks to setup end-to-end gRPC benchmarks.
 */
@@ -36,23 +38,6 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 )
-
-// Features contains most fields for a benchmark
-type Features struct {
-	EnableTrace        bool
-	Latency            time.Duration
-	Kbps               int
-	Mtu                int
-	MaxConcurrentCalls int
-	ReqSizeBytes       int
-	RespSizeBytes      int
-}
-
-func (f Features) String() string {
-	return fmt.Sprintf("latency_%s-kbps_%#v-MTU_%#v-maxConcurrentCalls_"+
-		"%#v-reqSize_%#vB-respSize_%#vB",
-		f.Latency.String(), f.Kbps, f.Mtu, f.MaxConcurrentCalls, f.ReqSizeBytes, f.RespSizeBytes)
-}
 
 // AddOne add 1 to the features slice
 func AddOne(features []int, featuresMaxPosition []int) {
@@ -178,6 +163,8 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) (string, func()) {
 	if nw != nil {
 		lis = nw.Listener(lis)
 	}
+	opts = append(opts, grpc.WriteBufferSize(128*1024))
+	opts = append(opts, grpc.ReadBufferSize(128*1024))
 	s := grpc.NewServer(opts...)
 	switch info.Type {
 	case "protobuf":
@@ -251,6 +238,8 @@ func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallCli
 
 // NewClientConn creates a gRPC client connection to addr.
 func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
+	opts = append(opts, grpc.WithWriteBufferSize(128*1024))
+	opts = append(opts, grpc.WithReadBufferSize(128*1024))
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		grpclog.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
@@ -258,7 +247,7 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 	return conn
 }
 
-func runUnary(b *testing.B, benchFeatures Features) {
+func runUnary(b *testing.B, benchFeatures stats.Features) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
@@ -306,7 +295,7 @@ func runUnary(b *testing.B, benchFeatures Features) {
 	conn.Close()
 }
 
-func runStream(b *testing.B, benchFeatures Features) {
+func runStream(b *testing.B, benchFeatures stats.Features) {
 	s := stats.AddStats(b, 38)
 	nw := &latency.Network{Kbps: benchFeatures.Kbps, Latency: benchFeatures.Latency, MTU: benchFeatures.Mtu}
 	target, stopper := StartServer(ServerInfo{Addr: "localhost:0", Type: "protobuf", Network: nw}, grpc.MaxConcurrentStreams(uint32(benchFeatures.MaxConcurrentCalls+1)))
