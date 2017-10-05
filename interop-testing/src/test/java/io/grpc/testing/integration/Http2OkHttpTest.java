@@ -17,8 +17,8 @@
 package io.grpc.testing.integration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.base.Throwables;
 import com.google.protobuf.EmptyProtos.Empty;
@@ -42,7 +42,6 @@ import java.io.IOException;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
-
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -150,14 +149,16 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     TestServiceGrpc.TestServiceBlockingStub blockingStub =
         TestServiceGrpc.newBlockingStub(channel);
 
+    Throwable actualThrown = null;
     try {
       blockingStub.emptyCall(Empty.getDefaultInstance());
-      fail("The rpc should have been failed due to hostname verification");
     } catch (Throwable t) {
-      Throwable cause = Throwables.getRootCause(t);
-      assertTrue("Failed by unexpected exception: " + cause,
-          cause instanceof SSLPeerUnverifiedException);
+      actualThrown = t;
     }
+    assertNotNull("The rpc should have been failed due to hostname verification", actualThrown);
+    Throwable cause = Throwables.getRootCause(actualThrown);
+    assertTrue(
+        "Failed by unexpected exception: " + cause, cause instanceof SSLPeerUnverifiedException);
     channel.shutdown();
   }
 
@@ -196,14 +197,16 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     TestServiceGrpc.TestServiceBlockingStub blockingStub =
         TestServiceGrpc.newBlockingStub(channel);
 
+    Throwable actualThrown = null;
     try {
       blockingStub.emptyCall(Empty.getDefaultInstance());
-      fail("The rpc should have been failed due to hostname verification");
     } catch (Throwable t) {
-      Throwable cause = Throwables.getRootCause(t);
-      assertTrue("Failed by unexpected exception: " + cause,
-          cause instanceof SSLPeerUnverifiedException);
+      actualThrown = t;
     }
+    assertNotNull("The rpc should have been failed due to hostname verification", actualThrown);
+    Throwable cause = Throwables.getRootCause(actualThrown);
+    assertTrue(
+        "Failed by unexpected exception: " + cause, cause instanceof SSLPeerUnverifiedException);
     channel.shutdown();
   }
 }

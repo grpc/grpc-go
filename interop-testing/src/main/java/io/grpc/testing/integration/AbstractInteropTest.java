@@ -27,7 +27,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ComputeEngineCredentials;
@@ -1658,10 +1657,6 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  private static <T> T verify(T mock) {
-    return verify(mock, times(1));
-  }
-
   /**
    * Wrapper around {@link Mockito#verify}, to keep log spam down on failure.
    */
@@ -1702,7 +1697,6 @@ public abstract class AbstractInteropTest {
     TestClientStreamTracer tracer = clientStreamTracers.poll();
     assertNotNull(tracer);
     assertTrue(tracer.getOutboundHeaders());
-    ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
     // assertClientMetrics() is called right after application receives status,
     // but streamClosed() may be called slightly later than that.  So we need a timeout.
     try {
@@ -1727,6 +1721,7 @@ public abstract class AbstractInteropTest {
     assertClientMetrics(method, status, null, null);
   }
 
+  @SuppressWarnings("AssertionFailureIgnored") // Failure is checked in the end by the passed flag.
   private void assertServerMetrics(String method, Status.Code code,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     AssertionError checkFailure = null;
@@ -1777,7 +1772,6 @@ public abstract class AbstractInteropTest {
       try {
         assertEquals(method, tracerInfo.fullMethodName);
         assertNotNull(tracerInfo.tracer.contextCapture);
-        ArgumentCaptor<Status> statusCaptor = ArgumentCaptor.forClass(Status.class);
         // On the server, streamClosed() may be called after the client receives the final status.
         // So we use a timeout.
         try {
