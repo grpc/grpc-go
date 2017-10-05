@@ -46,11 +46,7 @@ protobuf {
   }
   generateProtoTasks {
     all()*.plugins {
-      grpc {
-        // To generate deprecated interfaces and static bindService method,
-        // turn the enable_deprecated option to true below:
-        option 'enable_deprecated=false'
-      }
+      grpc {}
     }
   }
 }

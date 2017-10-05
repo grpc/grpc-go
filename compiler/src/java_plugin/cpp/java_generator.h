@@ -50,7 +50,6 @@ string ServiceClassName(const google::protobuf::ServiceDescriptor* service);
 void GenerateService(const google::protobuf::ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
                      ProtoFlavor flavor,
-                     bool enable_deprecated,
                      bool disable_version);
 
 }  // namespace java_grpc_generator

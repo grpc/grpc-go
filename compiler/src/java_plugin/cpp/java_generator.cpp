@@ -452,43 +452,11 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
                                    Printer* p,
                                    bool generate_nano);
 
-static void PrintDeprecatedDocComment(const ServiceDescriptor* service,
-                                      std::map<string, string>* vars,
-                                      Printer* p) {
-  p->Print(
-      *vars,
-      "/**\n"
-      " * This will be removed in the next release.\n"
-      " * If your code has been using gRPC-java v0.15.0 or higher already,\n"
-      " * the following changes to your code are suggested:\n"
-      " * <ul>\n"
-      " *   <li> replace {@code extends/implements $service_name$}"
-      " with {@code extends $service_name$ImplBase} for server side;</li>\n"
-      " *   <li> replace {@code $service_name$} with {@code $service_name$Stub} for client side;"
-      "</li>\n"
-      " *   <li> replace usage of {@code $service_name$} with {@code $service_name$ImplBase};"
-      "</li>\n"
-      " *   <li> replace usage of {@code Abstract$service_name$}"
-      " with {@link $service_name$ImplBase};</li>\n"
-      " *   <li> replace"
-      " {@code serverBuilder.addService($service_class_name$.bindService(serviceImpl))}\n"
-      " *        with {@code serverBuilder.addService(serviceImpl)};</li>\n"
-      " *   <li> if you are mocking stubs using mockito, please do not mock them.\n"
-      " *        See the documentation on testing with gRPC-java;</li>\n"
-      " *   <li> replace {@code $service_name$BlockingClient}"
-      " with {@link $service_name$BlockingStub};</li>\n"
-      " *   <li> replace {@code $service_name$FutureClient}"
-      " with {@link $service_name$FutureStub}.</li>\n"
-      " * </ul>\n"
-      " */\n");
-}
-
 // Prints a client interface or implementation class, or a server interface.
 static void PrintStub(
     const ServiceDescriptor* service,
     std::map<string, string>* vars,
-    Printer* p, StubType type, bool generate_nano,
-    bool enable_deprecated) {
+    Printer* p, StubType type, bool generate_nano) {
   const string service_name = service->name();
   (*vars)["service_name"] = service_name;
   (*vars)["abstract_name"] = service_name + "ImplBase";
@@ -537,34 +505,13 @@ static void PrintStub(
     GrpcWriteServiceDocComment(p, service);
   }
   if (impl_base) {
-    if (enable_deprecated) {
-      p->Print(
-          *vars,
-          "public static abstract class $abstract_name$ implements $BindableService$, "
-          "$service_name$ {\n");
-    }
-    else {
-      p->Print(
-          *vars,
-          "public static abstract class $abstract_name$ implements $BindableService$ {\n");
-    }
+    p->Print(
+        *vars,
+        "public static abstract class $abstract_name$ implements $BindableService$ {\n");
   } else {
-    if (enable_deprecated) {
-      if (interface) {
-        p->Print(
-            *vars,
-            "@$Deprecated$ public static interface $client_name$ {\n");
-      } else {
-        p->Print(
-            *vars,
-            "public static class $stub_name$ extends $AbstractStub$<$stub_name$>\n"
-            "    implements $client_name$ {\n");
-      }
-    } else {
-      p->Print(
-          *vars,
-          "public static final class $stub_name$ extends $AbstractStub$<$stub_name$> {\n");
-    }
+    p->Print(
+        *vars,
+        "public static final class $stub_name$ extends $AbstractStub$<$stub_name$> {\n");
   }
   p->Indent();
 
@@ -625,11 +572,6 @@ static void PrintStub(
     // TODO(nmittler): Replace with WriteMethodDocComment once included by the protobuf distro.
     if (!interface) {
       GrpcWriteMethodDocComment(p, method);
-      if (enable_deprecated) {
-        p->Print(
-            *vars,
-            "@$Override$\n");
-      }
     }
     p->Print("public ");
     switch (call_type) {
@@ -784,8 +726,7 @@ static bool CompareMethodClientStreaming(const MethodDescriptor* method1,
 static void PrintMethodHandlerClass(const ServiceDescriptor* service,
                                    std::map<string, string>* vars,
                                    Printer* p,
-                                   bool generate_nano,
-                                   bool enable_deprecated) {
+                                   bool generate_nano) {
   // Sort method ids based on client_streaming() so switch tables are compact.
   std::vector<const MethodDescriptor*> sorted_methods(service->method_count());
   for (int i = 0; i < service->method_count(); ++i) {
@@ -802,11 +743,7 @@ static void PrintMethodHandlerClass(const ServiceDescriptor* service,
         "private static final int $method_id_name$ = $method_id$;\n");
   }
   p->Print("\n");
-  if (enable_deprecated) {
-    (*vars)["service_name"] = service->name();
-  } else {
-    (*vars)["service_name"] = service->name() + "ImplBase";
-  }
+  (*vars)["service_name"] = service->name() + "ImplBase";
   p->Print(
       *vars,
       "private static final class MethodHandlers<Req, Resp> implements\n"
@@ -1059,7 +996,6 @@ static void PrintService(const ServiceDescriptor* service,
                          std::map<string, string>* vars,
                          Printer* p,
                          ProtoFlavor flavor,
-                         bool enable_deprecated,
                          bool disable_version) {
   (*vars)["service_name"] = service->name();
   (*vars)["file_name"] = service->file()->name();
@@ -1131,38 +1067,12 @@ static void PrintService(const ServiceDescriptor* service,
   p->Print("}\n\n");
 
   bool generate_nano = flavor == ProtoFlavor::NANO;
-  PrintStub(service, vars, p, ABSTRACT_CLASS, generate_nano, enable_deprecated);
-  PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano, enable_deprecated);
-  PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano, enable_deprecated);
-  PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano, enable_deprecated);
+  PrintStub(service, vars, p, ABSTRACT_CLASS, generate_nano);
+  PrintStub(service, vars, p, ASYNC_CLIENT_IMPL, generate_nano);
+  PrintStub(service, vars, p, BLOCKING_CLIENT_IMPL, generate_nano);
+  PrintStub(service, vars, p, FUTURE_CLIENT_IMPL, generate_nano);
 
-  if (enable_deprecated) {
-    PrintDeprecatedDocComment(service, vars, p);
-    PrintStub(service, vars, p, ASYNC_INTERFACE, generate_nano, true);
-    PrintDeprecatedDocComment(service, vars, p);
-    PrintStub(service, vars, p, BLOCKING_CLIENT_INTERFACE, generate_nano, true);
-    PrintDeprecatedDocComment(service, vars, p);
-    PrintStub(service, vars, p, FUTURE_CLIENT_INTERFACE, generate_nano, true);
-
-    PrintDeprecatedDocComment(service, vars, p);
-    p->Print(
-        *vars,
-        "@$Deprecated$ public static abstract class Abstract$service_name$"
-        " extends $service_name$ImplBase {}\n\n");
-
-    // static bindService method
-    PrintDeprecatedDocComment(service, vars, p);
-    p->Print(
-        *vars,
-        "@$Deprecated$ public static $ServerServiceDefinition$ bindService("
-        "final $service_name$ serviceImpl) {\n");
-    (*vars)["instance"] = "serviceImpl";
-    PrintBindServiceMethodBody(service, vars, p, generate_nano);
-    p->Print(
-        *vars,
-        "}\n\n");
-  }
-  PrintMethodHandlerClass(service, vars, p, generate_nano, enable_deprecated);
+  PrintMethodHandlerClass(service, vars, p, generate_nano);
   PrintGetServiceDescriptorMethod(service, vars, p, flavor);
   p->Outdent();
   p->Print("}\n");
@@ -1206,14 +1116,12 @@ void PrintImports(Printer* p, bool generate_nano) {
 void GenerateService(const ServiceDescriptor* service,
                      google::protobuf::io::ZeroCopyOutputStream* out,
                      ProtoFlavor flavor,
-                     bool enable_deprecated,
                      bool disable_version) {
   // All non-generated classes must be referred by fully qualified names to
   // avoid collision with generated classes.
   std::map<string, string> vars;
   vars["String"] = "java.lang.String";
   vars["Override"] = "java.lang.Override";
-  vars["Deprecated"] = "java.lang.Deprecated";
   vars["Channel"] = "io.grpc.Channel";
   vars["CallOptions"] = "io.grpc.CallOptions";
   vars["MethodType"] = "io.grpc.MethodDescriptor.MethodType";
@@ -1255,7 +1163,7 @@ void GenerateService(const ServiceDescriptor* service,
   if (!vars["Package"].empty()) {
     vars["Package"].append(".");
   }
-  PrintService(service, &vars, &printer, flavor, enable_deprecated, disable_version);
+  PrintService(service, &vars, &printer, flavor, disable_version);
 }
 
 string ServiceJavaPackage(const FileDescriptor* file, bool nano) {
