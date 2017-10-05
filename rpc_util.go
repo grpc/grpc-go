@@ -42,8 +42,8 @@ import (
 )
 
 var (
-	errEmptyContentSubtypeCallContentSubtype = status.Error(codes.Internal, "cannot set an empty content-subtype with CallContentSubtype")
-	errEmptyContentSubtypeCallCustomCodec    = status.Error(codes.Internal, "cannot use a codec with an empty result for String() with CallCustomCodec")
+	errEmptyContentSubtype = status.Error(codes.Internal, "cannot set an empty content-subtype with CallContentSubtype")
+	errEmptyCodecString    = status.Error(codes.Internal, "cannot use a codec with an empty result for String() with CallCustomCodec")
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -243,23 +243,25 @@ func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 
 // CallContentSubtype returns a CallOption that will set the content-subtype
 // for a call. For example, if content-subtype is "json", the Content-Type
-// over the wire will be "application/grpc+json". See Content-Type on
-// https://grpc.io/docs/guides/wire.html#requests for more details. Note that
-// content-subtypes are case-insensitive.
+// over the wire will be "application/grpc+json". The content-subtype is
+// converted to lowercase before being included in Content-Type. See
+// Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
+// details.
 //
 // If CallCustomCodec is not also used, the content-subtype will be used to
 // look up the Codec to use in the registry controlled by RegisterCodec. See
-// the documention on RegisterCodec for details on registration. If no such
-// Codec is found, the call will result in an error with code codes.Internal.
+// the documention on RegisterCodec for details on registration. The lookup
+// of content-subtype is case-insensitive. If no such Codec is found, the call
+// will result in an error with code codes.Internal.
 //
-// If CallCustomCodec is used, this Codec will be used for all request and
+// If CallCustomCodec is used, that Codec will be used for all request and
 // response messages, with the content-subtype still being set to the given
 // content-subtype for all requests.
 func CallContentSubtype(contentSubtype string) CallOption {
 	contentSubtype = strings.ToLower(contentSubtype)
 	return beforeCall(func(c *callInfo) error {
 		if contentSubtype == "" {
-			return errEmptyContentSubtypeCallContentSubtype
+			return errEmptyContentSubtype
 		}
 		c.contentSubtype = contentSubtype
 		return nil
@@ -276,7 +278,7 @@ func CallCustomCodec(codec Codec) CallOption {
 	contentSubtype := codec.String()
 	return beforeCall(func(c *callInfo) error {
 		if contentSubtype == "" {
-			return errEmptyContentSubtypeCallCustomCodec
+			return errEmptyCodecString
 		}
 		c.codec = codec
 		return nil

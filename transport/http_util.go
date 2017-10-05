@@ -284,8 +284,10 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) error {
 			return streamErrorf(codes.FailedPrecondition, "transport: received the unexpected content-type %q", f.Value)
 		}
 		d.contentSubtype = contentSubtype
-		// TODO: do we want to propagate the whole content-type, or some up with
-		// a way to just propagate the content-subtype if it was set?
+		// TODO: do we want to propagate the whole content-type in the metadata,
+		// or come up with a way to just propagate the content-subtype if it was set?
+		// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
+		// in the metadata?
 		d.addMetadata(f.Name, f.Value)
 	case "grpc-encoding":
 		d.encoding = f.Value

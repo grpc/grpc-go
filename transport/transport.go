@@ -578,7 +578,7 @@ type CallHdr struct {
 	// ContentSubtype specifies the content-subtype for a request. For example,
 	// a content-subtype of "proto" will result in a content-type of
 	// "application/grpc+proto". The value of ContentSubtype must be all
-	// lowercase or otherwise the behavior is undefined. See
+	// lowercase, otherwise the behavior is undefined. See
 	// https://grpc.io/docs/guides/wire.html#requests for more details.
 	ContentSubtype string
 }
