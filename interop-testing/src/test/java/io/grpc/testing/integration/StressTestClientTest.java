@@ -33,13 +33,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Unit tests for {@link StressTestClient}. */
 @RunWith(JUnit4.class)
 public class StressTestClientTest {
+
+  @Rule
+  public final Timeout globalTimeout = Timeout.seconds(5);
 
   @Test
   public void ipv6AddressesShouldBeSupported() {
@@ -108,7 +113,7 @@ public class StressTestClientTest {
     assertEquals("foo.test.google.fr", client.addresses().get(0).getHostName());
   }
 
-  @Test(timeout = 5000)
+  @Test
   public void gaugesShouldBeExported() throws Exception {
 
     TestServiceServer server = new TestServiceServer();

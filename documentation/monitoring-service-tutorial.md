@@ -46,7 +46,7 @@ monitoring service, we need to make the following changes:
 +  compile "io.grpc:grpc-services:${grpcVersion}"
    compile "io.grpc:grpc-stub:${grpcVersion}"
  
-   testCompile "junit:junit:4.11"
+   testCompile "junit:junit:4.12"
 --- a/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java
 +++ b/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldServer.java
 @@ -33,6 +33,8 @@ package io.grpc.examples.helloworld;
@@ -113,7 +113,7 @@ Unix domain socket (`/tmp/grpc_monitoring.sock`) alongside the
 +  // This must match the version of netty used by grpcVersion
 +  compile "io.netty:netty-transport-native-epoll:4.1.8.Final:linux-x86_64"
  
-   testCompile "junit:junit:4.11"
+   testCompile "junit:junit:4.12"
    testCompile "org.mockito:mockito-core:1.9.5"
 --- a/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldClient.java
 +++ b/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldClient.java

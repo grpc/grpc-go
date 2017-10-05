@@ -44,7 +44,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -59,6 +61,9 @@ import org.junit.runners.JUnit4;
 // bidirectional streaming requests also.
 @RunWith(JUnit4.class)
 public class ConcurrencyTest {
+
+  @Rule public final Timeout globalTimeout = Timeout.seconds(10);
+  
   /**
    * A response observer that signals a {@code CountDownLatch} when the proper number of responses
    * arrives and the server signals that the RPC is complete.
@@ -165,7 +170,7 @@ public class ConcurrencyTest {
   /**
    * Tests that gRPC can handle concurrent server-streaming RPCs.
    */
-  @Test(timeout = 10000)
+  @Test
   public void serverStreamingTest() throws Exception {
     CyclicBarrier startBarrier = new CyclicBarrier(NUM_CONCURRENT_REQUESTS);
     CountDownLatch responsesDoneSignal = new CountDownLatch(NUM_CONCURRENT_REQUESTS);

@@ -31,7 +31,7 @@ dependencies {
   compile "io.grpc:grpc-stub:${grpcVersion}"
 
   testCompile "io.grpc:grpc-testing:${grpcVersion}"
-  testCompile "junit:junit:4.11"
+  testCompile "junit:junit:4.12"
   testCompile "org.mockito:mockito-core:1.9.5"
 }
 

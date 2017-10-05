@@ -110,7 +110,9 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.verification.VerificationMode;
@@ -121,6 +123,9 @@ import org.mockito.verification.VerificationMode;
  * <p> New tests should avoid using Mockito to support running on AppEngine.</p>
  */
 public abstract class AbstractInteropTest {
+
+  @Rule public final Timeout globalTimeout = Timeout.seconds(30);
+
   /** Must be at least {@link #unaryPayloadLength()}, plus some to account for encoding overhead. */
   public static final int MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
   public static final Metadata.Key<Messages.SimpleContext> METADATA_KEY =
@@ -266,7 +271,7 @@ public abstract class AbstractInteropTest {
     return true;
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void emptyUnary() throws Exception {
     assertEquals(EMPTY, blockingStub.emptyCall(EMPTY));
   }
@@ -309,7 +314,7 @@ public abstract class AbstractInteropTest {
     assertNotEquals(response1, response3);
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void largeUnary() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
@@ -393,7 +398,7 @@ public abstract class AbstractInteropTest {
    * compliant server, this test will exercise the code path for receiving a compressed response but
    * cannot itself verify that the response was compressed.
    */
-  @Test(timeout = 10000)
+  @Test
   public void serverCompressedUnary() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest responseShouldBeCompressed =
@@ -432,7 +437,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void serverStreaming() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(PayloadType.COMPRESSABLE)
@@ -474,7 +479,7 @@ public abstract class AbstractInteropTest {
     assertEquals(goldenResponses, recorder.getValues());
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void clientStreaming() throws Exception {
     final List<StreamingInputCallRequest> requests = Arrays.asList(
         StreamingInputCallRequest.newBuilder()
@@ -589,7 +594,7 @@ public abstract class AbstractInteropTest {
     assertEquals(goldenResponses, recorder.getValues());
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void pingPong() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(
         StreamingOutputCallRequest.newBuilder()
@@ -666,7 +671,7 @@ public abstract class AbstractInteropTest {
     assertEquals("Completed", queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void emptyStream() throws Exception {
     StreamRecorder<StreamingOutputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingOutputCallRequest> requestObserver
@@ -675,7 +680,7 @@ public abstract class AbstractInteropTest {
     responseObserver.awaitCompletion(operationTimeoutMillis(), TimeUnit.MILLISECONDS);
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void cancelAfterBegin() throws Exception {
     StreamRecorder<StreamingInputCallResponse> responseObserver = StreamRecorder.create();
     StreamObserver<StreamingInputCallRequest> requestObserver =
@@ -698,7 +703,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void cancelAfterFirstResponse() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder()
@@ -728,7 +733,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void fullDuplexCallShouldSucceed() throws Exception {
     // Build the request.
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
@@ -769,7 +774,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void halfDuplexCallShouldSucceed() throws Exception {
     // Build the request.
     List<Integer> responseSizes = Arrays.asList(50, 100, 150, 200);
@@ -804,7 +809,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void serverStreamingShouldBeFlowControlled() throws Exception {
     final StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .setResponseType(COMPRESSABLE)
@@ -863,7 +868,7 @@ public abstract class AbstractInteropTest {
     assertEquals(Status.OK, queue.poll(operationTimeoutMillis(), TimeUnit.MILLISECONDS));
   }
 
-  @Test(timeout = 30000)
+  @Test
   public void veryLargeRequest() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
@@ -882,7 +887,7 @@ public abstract class AbstractInteropTest {
     assertEquals(goldenResponse, blockingStub.unaryCall(request));
   }
 
-  @Test(timeout = 30000)
+  @Test
   public void veryLargeResponse() throws Exception {
     assumeEnoughMemory();
     final SimpleRequest request = SimpleRequest.newBuilder()
@@ -898,7 +903,7 @@ public abstract class AbstractInteropTest {
     assertEquals(goldenResponse, blockingStub.unaryCall(request));
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void exchangeMetadataUnaryCall() throws Exception {
     TestServiceGrpc.TestServiceBlockingStub stub = blockingStub;
 
@@ -921,7 +926,7 @@ public abstract class AbstractInteropTest {
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void exchangeMetadataStreamingCall() throws Exception {
     TestServiceGrpc.TestServiceStub stub = asyncStub;
 
@@ -968,7 +973,7 @@ public abstract class AbstractInteropTest {
     Assert.assertEquals(contextValue, trailersCapture.get().get(METADATA_KEY));
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void sendsTimeoutHeader() {
     Assume.assumeTrue("can not capture server side request headers", server != null);
     long configuredTimeoutMinutes = 100;
@@ -996,7 +1001,7 @@ public abstract class AbstractInteropTest {
                 .build()).next();
   }
 
-  @Test(timeout = 25000)
+  @Test
   public void deadlineExceeded() throws Exception {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
@@ -1024,7 +1029,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void deadlineExceededServerStreaming() throws Exception {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
@@ -1057,7 +1062,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void deadlineInPast() throws Exception {
     // Test once with idle channel and once with active channel
     try {
@@ -1099,7 +1104,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void maxInboundSize_exact() {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
@@ -1112,7 +1117,7 @@ public abstract class AbstractInteropTest {
     stub.streamingOutputCall(request).next();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void maxInboundSize_tooBig() {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
@@ -1132,7 +1137,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void maxOutboundSize_exact() {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
@@ -1147,7 +1152,7 @@ public abstract class AbstractInteropTest {
     stub.streamingOutputCall(request).next();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void maxOutboundSize_tooBig() {
     // warm up the channel and JVM
     blockingStub.emptyCall(Empty.getDefaultInstance());
@@ -1172,7 +1177,7 @@ public abstract class AbstractInteropTest {
     return 10485760;
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void gracefulShutdown() throws Exception {
     final List<StreamingOutputCallRequest> requests = Arrays.asList(
         StreamingOutputCallRequest.newBuilder()
@@ -1252,7 +1257,7 @@ public abstract class AbstractInteropTest {
     assertFalse(errorSeen.isDone());
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void customMetadata() throws Exception {
     final int responseSize = 314159;
     final int requestSize = 271828;
@@ -1331,7 +1336,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void statusCodeAndMessage() throws Exception {
     int errorCode = 2;
     String errorMessage = "test status message";
@@ -1378,7 +1383,7 @@ public abstract class AbstractInteropTest {
   }
 
   /** Sends an rpc to an unimplemented method within TestService. */
-  @Test(timeout = 10000)
+  @Test
   public void unimplementedMethod() {
     try {
       blockingStub.unimplementedCall(Empty.getDefaultInstance());
@@ -1394,7 +1399,7 @@ public abstract class AbstractInteropTest {
   }
 
   /** Sends an rpc to an unimplemented service on the server. */
-  @Test(timeout = 10000)
+  @Test
   public void unimplementedService() {
     UnimplementedServiceGrpc.UnimplementedServiceBlockingStub stub =
         UnimplementedServiceGrpc.newBlockingStub(channel).withInterceptors(tracerSetupInterceptor);
@@ -1413,7 +1418,7 @@ public abstract class AbstractInteropTest {
 
   /** Start a fullDuplexCall which the server will not respond, and verify the deadline expires. */
   @SuppressWarnings("MissingFail")
-  @Test(timeout = 10000)
+  @Test
   public void timeoutOnSleepingServer() throws Exception {
     TestServiceGrpc.TestServiceStub stub =
         asyncStub.withDeadlineAfter(1, TimeUnit.MILLISECONDS);

@@ -51,7 +51,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -62,6 +64,9 @@ import org.mockito.MockitoAnnotations;
 /** Unit tests for {@link DnsNameResolver}. */
 @RunWith(JUnit4.class)
 public class DnsNameResolverTest {
+
+  @Rule public final Timeout globalTimeout = Timeout.seconds(10);
+
   private static final int DEFAULT_PORT = 887;
   private static final Attributes NAME_RESOLVER_PARAMS =
       Attributes.newBuilder().set(NameResolver.Factory.PARAMS_DEFAULT_PORT, DEFAULT_PORT).build();
@@ -270,7 +275,7 @@ public class DnsNameResolverTest {
     verifyNoMoreInteractions(mockListener);
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void jdkResolverWorks() throws Exception {
     DnsNameResolver.DelegateResolver resolver = new DnsNameResolver.JdkResolver();
 
@@ -280,7 +285,7 @@ public class DnsNameResolverTest {
     assertThat(results.txtRecords).isNotNull();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void jndiResolverWorks() throws Exception {
     Assume.assumeTrue(DnsNameResolver.jndiAvailable());
     DnsNameResolver.DelegateResolver resolver = new DnsNameResolver.JndiResolver();

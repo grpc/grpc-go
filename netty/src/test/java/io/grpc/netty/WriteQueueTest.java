@@ -33,7 +33,9 @@ import io.netty.channel.EventLoop;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
@@ -44,6 +46,9 @@ import org.mockito.stubbing.Answer;
 
 @RunWith(JUnit4.class)
 public class WriteQueueTest {
+
+  @Rule
+  public final Timeout globalTimeout = Timeout.seconds(10);
 
   private final Object lock = new Object();
 
@@ -138,7 +143,7 @@ public class WriteQueueTest {
     verify(channel, times(2)).flush();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void concurrentWriteAndFlush() throws Throwable {
     final WriteQueue queue = new WriteQueue(channel);
     final CountDownLatch flusherStarted = new CountDownLatch(1);

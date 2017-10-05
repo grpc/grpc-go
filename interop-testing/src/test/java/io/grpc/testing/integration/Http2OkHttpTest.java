@@ -116,7 +116,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     return builder;
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void receivedDataForFinishedStream() throws Exception {
     Messages.ResponseParameters.Builder responseParameters =
         Messages.ResponseParameters.newBuilder()
@@ -141,7 +141,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     assertEquals(EMPTY, blockingStub.emptyCall(EMPTY));
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void wrongHostNameFailHostnameVerification() throws Exception {
     ManagedChannel channel = createChannelBuilder()
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
@@ -161,7 +161,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     channel.shutdown();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void hostnameVerifierWithBadHostname() throws Exception {
     ManagedChannel channel = createChannelBuilder()
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(
@@ -181,7 +181,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
     channel.shutdown();
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void hostnameVerifierWithCorrectHostname() throws Exception {
     ManagedChannel channel = createChannelBuilder()
         .overrideAuthority(GrpcUtil.authorityFromHostAndPort(

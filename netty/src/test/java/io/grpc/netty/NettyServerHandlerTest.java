@@ -87,7 +87,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -102,6 +104,9 @@ import org.mockito.stubbing.Answer;
  */
 @RunWith(JUnit4.class)
 public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHandler> {
+
+  @Rule
+  public final Timeout globalTimeout = Timeout.seconds(1);
 
   private static final int STREAM_ID = 3;
 
@@ -529,7 +534,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertFalse(channel().isActive());
   }
 
-  @Test(timeout = 1000)
+  @Test
   public void keepAliveEnforcer_sendingDataResetsCounters() throws Exception {
     permitKeepAliveWithoutCalls = false;
     permitKeepAliveTimeInNanos = TimeUnit.HOURS.toNanos(1);

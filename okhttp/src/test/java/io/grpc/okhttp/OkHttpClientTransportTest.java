@@ -118,8 +118,7 @@ public class OkHttpClientTransportTest {
   private static final int HEADER_LENGTH = 5;
   private static final Status SHUTDOWN_REASON = Status.UNAVAILABLE.withDescription("for test");
 
-  @Rule
-  public Timeout globalTimeout = new Timeout(10 * 1000);
+  @Rule public final Timeout globalTimeout = Timeout.seconds(10);
 
   @Mock
   private FrameWriter frameWriter;

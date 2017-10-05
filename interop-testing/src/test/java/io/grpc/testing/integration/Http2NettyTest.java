@@ -82,12 +82,12 @@ public class Http2NettyTest extends AbstractInteropTest {
     }
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void remoteAddr() {
     assertRemoteAddr("/0:0:0:0:0:0:0:1");
   }
 
-  @Test(timeout = 10000)
+  @Test
   public void tlsInfo() {
     assertX500SubjectDn("CN=testclient, O=Internet Widgits Pty Ltd, ST=Some-State, C=AU");
   }

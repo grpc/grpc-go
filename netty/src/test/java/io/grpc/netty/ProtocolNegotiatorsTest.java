@@ -63,6 +63,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -73,6 +74,8 @@ public class ProtocolNegotiatorsTest {
   private static final Runnable NOOP_RUNNABLE = new Runnable() {
     @Override public void run() {}
   };
+
+  @Rule public final Timeout globalTimeout = Timeout.seconds(5);
 
   @Rule
   public final ExpectedException thrown = ExpectedException.none();
@@ -303,7 +306,7 @@ public class ProtocolNegotiatorsTest {
         ProtocolNegotiators.plaintext()));
   }
 
-  @Test(timeout = 5000)
+  @Test
   public void httpProxy_completes() throws Exception {
     DefaultEventLoopGroup elg = new DefaultEventLoopGroup(1);
     // ProxyHandler is incompatible with EmbeddedChannel because when channelRegistered() is called
@@ -367,7 +370,7 @@ public class ProtocolNegotiatorsTest {
     channel.close();
   }
 
-  @Test(timeout = 5000)
+  @Test
   public void httpProxy_500() throws Exception {
     DefaultEventLoopGroup elg = new DefaultEventLoopGroup(1);
     // ProxyHandler is incompatible with EmbeddedChannel because when channelRegistered() is called
