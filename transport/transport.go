@@ -21,10 +21,12 @@
 package transport // import "google.golang.org/grpc/transport"
 
 import (
+	stdctx "context"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -468,7 +470,6 @@ type transportState int
 
 const (
 	reachable transportState = iota
-	unreachable
 	closing
 	draining
 )
@@ -530,8 +531,8 @@ type TargetInfo struct {
 
 // NewClientTransport establishes the transport with the required ConnectOptions
 // and returns it to the caller.
-func NewClientTransport(ctx context.Context, target TargetInfo, opts ConnectOptions) (ClientTransport, error) {
-	return newHTTP2Client(ctx, target, opts)
+func NewClientTransport(ctx context.Context, target TargetInfo, opts ConnectOptions, timeout time.Duration) (ClientTransport, error) {
+	return newHTTP2Client(ctx, target, opts, timeout)
 }
 
 // Options provides additional hints and information for message
@@ -720,14 +721,8 @@ func (e StreamError) Error() string {
 	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
-// wait blocks until it can receive from ctx.Done, closing, or proceed.
-// If it receives from ctx.Done, it returns 0, the StreamError for ctx.Err.
-// If it receives from done, it returns 0, io.EOF if ctx is not done; otherwise
-// it return the StreamError for ctx.Err.
-// If it receives from goAway, it returns 0, ErrStreamDrain.
-// If it receives from closing, it returns 0, ErrConnClosing.
-// If it receives from proceed, it returns the received integer, nil.
-func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-chan int) (int, error) {
+// wait blocks until it can receive from one of the provided contexts or channels
+func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
 		return 0, ContextErr(ctx.Err())
@@ -735,11 +730,22 @@ func wait(ctx context.Context, done, goAway, closing <-chan struct{}, proceed <-
 		return 0, io.EOF
 	case <-goAway:
 		return 0, ErrStreamDrain
-	case <-closing:
+	case <-tctx.Done():
 		return 0, ErrConnClosing
 	case i := <-proceed:
 		return i, nil
 	}
+}
+
+// ContextErr converts the error from context package into a StreamError.
+func ContextErr(err error) StreamError {
+	switch err {
+	case context.DeadlineExceeded, stdctx.DeadlineExceeded:
+		return streamErrorf(codes.DeadlineExceeded, "%v", err)
+	case context.Canceled, stdctx.Canceled:
+		return streamErrorf(codes.Canceled, "%v", err)
+	}
+	return streamErrorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }
 
 // GoAwayReason contains the reason for the GoAway frame received.
@@ -757,7 +763,7 @@ const (
 
 // loopyWriter is run in a separate go routine. It is the single code path that will
 // write data on wire.
-func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) error) {
+func loopyWriter(ctx context.Context, cbuf *controlBuffer, handler func(item) error) {
 	for {
 		select {
 		case i := <-cbuf.get():
@@ -765,7 +771,7 @@ func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) err
 			if err := handler(i); err != nil {
 				return
 			}
-		case <-done:
+		case <-ctx.Done():
 			return
 		}
 	hasData:
@@ -776,7 +782,7 @@ func loopyWriter(cbuf *controlBuffer, done chan struct{}, handler func(item) err
 				if err := handler(i); err != nil {
 					return
 				}
-			case <-done:
+			case <-ctx.Done():
 				return
 			default:
 				if err := handler(&flushIO{}); err != nil {

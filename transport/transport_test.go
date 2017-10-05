@@ -357,7 +357,7 @@ func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hTy
 	target := TargetInfo{
 		Addr: addr,
 	}
-	ct, connErr = NewClientTransport(context.Background(), target, copts)
+	ct, connErr = NewClientTransport(context.Background(), target, copts, 2*time.Second)
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
@@ -380,7 +380,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		}
 		done <- conn
 	}()
-	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts)
+	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, 2*time.Second)
 	if err != nil {
 		// Server clean-up.
 		lis.Close()
@@ -1680,7 +1680,7 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	serverSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+	serverSendQuota, err := wait(ctx, context.Background(), nil, nil, st.sendQuotaPool.acquire())
 	if err != nil {
 		t.Fatalf("Error while acquiring sendQuota on server. Err: %v", err)
 	}
@@ -1702,7 +1702,7 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Client transport flow control window size is %v, want %v", limit, connectOptions.InitialConnWindowSize)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	clientSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+	clientSendQuota, err := wait(ctx, context.Background(), nil, nil, ct.sendQuotaPool.acquire())
 	if err != nil {
 		t.Fatalf("Error while acquiring sendQuota on client. Err: %v", err)
 	}
@@ -1838,7 +1838,7 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow conrtrol window on client stream is equal to out flow on server stream.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		serverStreamSendQuota, err := wait(ctx, nil, nil, nil, sstream.sendQuotaPool.acquire())
+		serverStreamSendQuota, err := wait(ctx, context.Background(), nil, nil, sstream.sendQuotaPool.acquire())
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring server stream send quota. Err: %v", err)
@@ -1853,7 +1853,7 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on server stream is equal to out flow on client stream.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		clientStreamSendQuota, err := wait(ctx, nil, nil, nil, cstream.sendQuotaPool.acquire())
+		clientStreamSendQuota, err := wait(ctx, context.Background(), nil, nil, cstream.sendQuotaPool.acquire())
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client stream send quota. Err: %v", err)
@@ -1868,7 +1868,7 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on client transport is equal to out flow of server transport.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		serverTrSendQuota, err := wait(ctx, nil, nil, nil, st.sendQuotaPool.acquire())
+		serverTrSendQuota, err := wait(ctx, context.Background(), nil, nil, st.sendQuotaPool.acquire())
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquring server transport send quota. Err: %v", err)
@@ -1883,7 +1883,7 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on server transport is equal to out flow of client transport.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		clientTrSendQuota, err := wait(ctx, nil, nil, nil, ct.sendQuotaPool.acquire())
+		clientTrSendQuota, err := wait(ctx, context.Background(), nil, nil, ct.sendQuotaPool.acquire())
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client transport send quota. Err: %v", err)
@@ -2055,7 +2055,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		wh:         wh,
 	}
 	server.start(t, lis)
-	client, err = newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{})
+	client, err = newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, 2*time.Second)
 	if err != nil {
 		t.Fatalf("Error creating client. Err: %v", err)
 	}

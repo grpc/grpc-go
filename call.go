@@ -210,9 +210,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			err    error
 			t      transport.ClientTransport
 			stream *transport.Stream
-			// Record the put handler from Balancer.Get(...). It is called once the
+			// Record the done handler from Balancer.Get(...). It is called once the
 			// RPC has completed or failed.
-			put func(balancer.DoneInfo)
+			done func(balancer.DoneInfo)
 		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
@@ -227,10 +227,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			callHdr.Creds = c.creds
 		}
 
-		gopts := BalancerGetOptions{
-			BlockingWait: !c.failFast,
-		}
-		t, put, err = cc.getTransport(ctx, gopts)
+		t, done, err = cc.getTransport(ctx, c.failFast)
 		if err != nil {
 			// TODO(zhaoq): Probably revisit the error handling.
 			if _, ok := status.FromError(err); ok {
@@ -250,14 +247,14 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		stream, err = t.NewStream(ctx, callHdr)
 		if err != nil {
-			if put != nil {
+			if done != nil {
 				if _, ok := err.(transport.ConnectionError); ok {
 					// If error is connection error, transport was sending data on wire,
 					// and we are not sure if anything has been sent on wire.
 					// If error is not connection error, we are sure nothing has been sent.
 					updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
 				}
-				put(balancer.DoneInfo{Err: err})
+				done(balancer.DoneInfo{Err: err})
 			}
 			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
@@ -269,12 +266,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		err = sendRequest(ctx, cc.dopts, cc.dopts.cp, c, callHdr, stream, t, args, topts)
 		if err != nil {
-			if put != nil {
+			if done != nil {
 				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
-				put(balancer.DoneInfo{Err: err})
+				done(balancer.DoneInfo{Err: err})
 			}
 			// Retry a non-failfast RPC when
 			// i) there is a connection error; or
@@ -286,12 +283,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		}
 		err = recvResponse(ctx, cc.dopts, t, c, stream, reply)
 		if err != nil {
-			if put != nil {
+			if done != nil {
 				updateRPCInfoInContext(ctx, rpcInfo{
 					bytesSent:     stream.BytesSent(),
 					bytesReceived: stream.BytesReceived(),
 				})
-				put(balancer.DoneInfo{Err: err})
+				done(balancer.DoneInfo{Err: err})
 			}
 			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
 				continue
@@ -302,12 +299,12 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			c.traceInfo.tr.LazyLog(&payload{sent: false, msg: reply}, true)
 		}
 		t.CloseStream(stream, nil)
-		if put != nil {
+		if done != nil {
 			updateRPCInfoInContext(ctx, rpcInfo{
 				bytesSent:     stream.BytesSent(),
 				bytesReceived: stream.BytesReceived(),
 			})
-			put(balancer.DoneInfo{Err: err})
+			done(balancer.DoneInfo{Err: err})
 		}
 		return stream.Status().Err()
 	}

@@ -813,7 +813,9 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		err:         err,
 	}
 
+	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
+	h.mu.Unlock()
 	checkServerStats(t, h.gotRPC, expect, checkFuncs)
 }
 
@@ -1106,7 +1108,9 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		err:         err,
 	}
 
+	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
+	h.mu.Unlock()
 	checkClientStats(t, h.gotRPC, expect, checkFuncs)
 }
 

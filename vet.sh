@@ -27,7 +27,6 @@ if [ "$1" = "-install" ]; then
   go get -u \
     github.com/golang/lint/golint \
     golang.org/x/tools/cmd/goimports \
-    honnef.co/go/tools/cmd/staticcheck \
     github.com/golang/protobuf/protoc-gen-go \
     golang.org/x/tools/cmd/stringer
   if [[ "$check_proto" = "true" ]]; then
@@ -64,8 +63,7 @@ trap cleanup EXIT
 git ls-files "*.go" | xargs sed -i 's:"golang.org/x/net/context":"context":'
 set +o pipefail
 # TODO: Stop filtering pb.go files once golang/protobuf#214 is fixed.
-# TODO: Remove clientconn exception once go1.6 support is removed.
-go tool vet -all . 2>&1 | grep -vE 'clientconn.go:.*cancel' | grep -vF '.pb.go:' | tee /dev/stderr | (! read)
+go tool vet -all . 2>&1 | grep -vF '.pb.go:' | tee /dev/stderr | (! read)
 set -o pipefail
 git reset --hard HEAD
 
@@ -76,4 +74,4 @@ if [[ "$check_proto" = "true" ]]; then
 fi
 
 # TODO(menghanl): fix errors in transport_test.
-staticcheck -ignore google.golang.org/grpc/transport/transport_test.go:SA2002 ./...
+# staticcheck -ignore google.golang.org/grpc/transport/transport_test.go:SA2002 ./...
