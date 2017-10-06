@@ -21,7 +21,6 @@ package grpc
 import (
 	"testing"
 
-	"github.com/menghanl/mydump"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -39,7 +38,6 @@ func TestParseTarget(t *testing.T) {
 		{"dns", "a.server.com", "google.com"},
 		{"dns", "a.server.com", "google.com/?a=b"},
 	} {
-		mydump.Dump(test)
 		str := test.Scheme + "://" + test.Authority + "/" + test.Endpoint
 		got := parseTarget(str)
 		if got != test {
