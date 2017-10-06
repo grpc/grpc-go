@@ -16,10 +16,13 @@
 
 package io.grpc;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -31,11 +34,13 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public final class Attributes {
 
-  private final HashMap<Key<?>, Object> data = new HashMap<Key<?>, Object>();
+  private final Map<Key<?>, Object> data;
 
-  public static final Attributes EMPTY = new Attributes();
+  public static final Attributes EMPTY = new Attributes(Collections.<Key<?>, Object>emptyMap());
 
-  private Attributes() {
+  private Attributes(Map<Key<?>, Object> data) {
+    assert data != null;
+    this.data = data;
   }
 
   /**
@@ -60,14 +65,15 @@ public final class Attributes {
    * Create a new builder that is pre-populated with the content from a given container.
    */
   public static Builder newBuilder(Attributes base) {
-    return newBuilder().setAll(base);
+    checkNotNull(base, "base");
+    return new Builder(base);
   }
 
   /**
    * Create a new builder.
    */
   public static Builder newBuilder() {
-    return new Builder();
+    return new Builder(EMPTY);
   }
 
   /**
@@ -144,30 +150,45 @@ public final class Attributes {
    * The helper class to build an Attributes instance.
    */
   public static final class Builder {
-    private Attributes product;
+    private Attributes base;
+    private Map<Key<?>, Object> newdata;
 
-    private Builder() {
-      this.product = new Attributes();
+    private Builder(Attributes base) {
+      assert base != null;
+      this.base = base;
+    }
+
+    private Map<Key<?>, Object> data(int size) {
+      if (newdata == null) {
+        newdata = new IdentityHashMap<Key<?>, Object>(size);
+      }
+      return newdata;
     }
 
     public <T> Builder set(Key<T> key, T value) {
-      product.data.put(key, value);
+      data(1).put(key, value);
       return this;
     }
 
     public <T> Builder setAll(Attributes other) {
-      product.data.putAll(other.data);
+      data(other.data.size()).putAll(other.data);
       return this;
     }
 
     /**
-     * Build the attributes. Can only be called once.
+     * Build the attributes.
      */
     public Attributes build() {
-      Preconditions.checkState(product != null, "Already built");
-      Attributes result = product;
-      product = null;
-      return result;
+      if (newdata != null) {
+        for (Entry<Key<?>, Object> entry : base.data.entrySet()) {
+          if (!newdata.containsKey(entry.getKey())) {
+            newdata.put(entry.getKey(), entry.getValue());
+          }
+        }
+        base = new Attributes(newdata);
+        newdata = null;
+      }
+      return base;
     }
   }
 }
