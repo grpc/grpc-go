@@ -35,34 +35,22 @@ type ccResolverWrapper struct {
 	done     chan struct{}
 }
 
-// parseEndpoint splits endpoint into authority and endpoint.
-func parseEndpoint(endpoint string) (a, e string) {
-	endpointSplited := strings.SplitN(endpoint, "/", 2)
-	if len(endpointSplited) < 2 { // No authority.
-		return "", endpoint
+// split2 returns the values from strings.SplitN(s, sep, 2).
+// If sep is not found, it returns "", s instead.
+func split2(s, sep string) (string, string) {
+	spl := strings.SplitN(s, sep, 2)
+	if len(spl) < 2 {
+		return "", s
 	}
-	return endpointSplited[0], endpointSplited[1]
+	return spl[0], spl[1]
 }
 
 // parseTarget splits target into a struct containing scheme, authority and
 // endpoint.
-func parseTarget(target string) resolver.Target {
-	targetSplitted := strings.SplitN(target, "://", 2)
-
-	if len(targetSplitted) < 2 { // No scheme.
-		authority, endpoint := parseEndpoint(target)
-		return resolver.Target{
-			Authority: authority,
-			Endpoint:  endpoint,
-		}
-	}
-
-	authority, endpoint := parseEndpoint(targetSplitted[1])
-	return resolver.Target{
-		Scheme:    targetSplitted[0],
-		Authority: authority,
-		Endpoint:  endpoint,
-	}
+func parseTarget(target string) (ret resolver.Target) {
+	ret.Scheme, ret.Endpoint = split2(target, "://")
+	ret.Authority, ret.Endpoint = split2(ret.Endpoint, "/")
+	return ret
 }
 
 // newCCResolverWrapper parses cc.target for scheme and gets the resolver
