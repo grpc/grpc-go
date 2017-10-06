@@ -77,7 +77,7 @@ final class GrpclbState {
 
   @VisibleForTesting
   static final PickResult DROP_PICK_RESULT =
-      PickResult.withError(Status.UNAVAILABLE.withDescription("Dropped as requested by balancer"));
+      PickResult.withDrop(Status.UNAVAILABLE.withDescription("Dropped as requested by balancer"));
 
   @VisibleForTesting
   static final RoundRobinEntry BUFFER_ENTRY = new RoundRobinEntry() {

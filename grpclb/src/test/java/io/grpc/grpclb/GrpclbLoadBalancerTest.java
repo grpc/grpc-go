@@ -293,6 +293,7 @@ public class GrpclbLoadBalancerTest {
 
   @Test
   public void roundRobinPickerWithDrop() {
+    assertTrue(DROP_PICK_RESULT.isDrop());
     GrpclbClientLoadRecorder loadRecorder = new GrpclbClientLoadRecorder(timeProvider);
     Subchannel subchannel = mock(Subchannel.class);
     // 1 out of 2 requests are to be dropped

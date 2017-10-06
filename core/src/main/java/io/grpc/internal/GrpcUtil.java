@@ -631,7 +631,7 @@ public final class GrpcUtil {
         }
       };
     }
-    if (!result.getStatus().isOk() && !isWaitForReady) {
+    if (!result.getStatus().isOk() && (result.isDrop() || !isWaitForReady)) {
       return new FailingClientTransport(result.getStatus());
     }
     return null;

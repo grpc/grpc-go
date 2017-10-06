@@ -235,7 +235,7 @@ public abstract class LoadBalancer {
    */
   @Immutable
   public static final class PickResult {
-    private static final PickResult NO_RESULT = new PickResult(null, null, Status.OK);
+    private static final PickResult NO_RESULT = new PickResult(null, null, Status.OK, false);
 
     @Nullable private final Subchannel subchannel;
     @Nullable private final ClientStreamTracer.Factory streamTracerFactory;
@@ -243,13 +243,16 @@ public abstract class LoadBalancer {
     // Or OK if there is no error.
     // subchannel being null and error being OK means RPC needs to wait
     private final Status status;
+    // True if the result is created by withDrop()
+    private final boolean drop;
 
     private PickResult(
         @Nullable Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory,
-        Status status) {
+        Status status, boolean drop) {
       this.subchannel = subchannel;
       this.streamTracerFactory = streamTracerFactory;
       this.status = Preconditions.checkNotNull(status, "status");
+      this.drop = drop;
     }
 
     /**
@@ -320,7 +323,8 @@ public abstract class LoadBalancer {
     public static PickResult withSubchannel(
         Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory) {
       return new PickResult(
-          Preconditions.checkNotNull(subchannel, "subchannel"), streamTracerFactory, Status.OK);
+          Preconditions.checkNotNull(subchannel, "subchannel"), streamTracerFactory, Status.OK,
+          false);
     }
 
     /**
@@ -339,7 +343,18 @@ public abstract class LoadBalancer {
      */
     public static PickResult withError(Status error) {
       Preconditions.checkArgument(!error.isOk(), "error status shouldn't be OK");
-      return new PickResult(null, null, error);
+      return new PickResult(null, null, error, false);
+    }
+
+    /**
+     * A decision to fail an RPC immediately.  This is a final decision and will ignore retry
+     * policy.
+     *
+     * @param status the status with which the RPC will fail.  Must not be OK.
+     */
+    public static PickResult withDrop(Status status) {
+      Preconditions.checkArgument(!status.isOk(), "drop status shouldn't be OK");
+      return new PickResult(null, null, status, true);
     }
 
     /**
@@ -374,12 +389,20 @@ public abstract class LoadBalancer {
       return status;
     }
 
+    /**
+     * Returns {@code true} if this result was created by {@link #withDrop withDrop()}.
+     */
+    public boolean isDrop() {
+      return drop;
+    }
+
     @Override
     public String toString() {
       return MoreObjects.toStringHelper(this)
           .add("subchannel", subchannel)
           .add("streamTracerFactory", streamTracerFactory)
           .add("status", status)
+          .add("drop", drop)
           .toString();
     }
 

@@ -653,6 +653,65 @@ public class ManagedChannelImplTest {
         any(Metadata.class), any(CallOptions.class));
   }
 
+  @Test
+  public void failFastRpcFailFromErrorFromBalancer() {
+    subtestFailRpcFromBalancer(false, false, true);
+  }
+
+  @Test
+  public void failFastRpcFailFromDropFromBalancer() {
+    subtestFailRpcFromBalancer(false, true, true);
+  }
+
+  @Test
+  public void waitForReadyRpcImmuneFromErrorFromBalancer() {
+    subtestFailRpcFromBalancer(true, false, false);
+  }
+
+  @Test
+  public void waitForReadyRpcFailFromDropFromBalancer() {
+    subtestFailRpcFromBalancer(true, true, true);
+  }
+
+  private void subtestFailRpcFromBalancer(boolean waitForReady, boolean drop, boolean shouldFail) {
+    createChannel(new FakeNameResolverFactory(true), NO_INTERCEPTOR);
+
+    // This call will be buffered by the channel, thus involve delayed transport
+    CallOptions callOptions = CallOptions.DEFAULT;
+    if (waitForReady) {
+      callOptions = callOptions.withWaitForReady();
+    } else {
+      callOptions = callOptions.withoutWaitForReady();
+    }
+    ClientCall<String, Integer> call1 = channel.newCall(method, callOptions);
+    call1.start(mockCallListener, new Metadata());
+
+    SubchannelPicker picker = mock(SubchannelPicker.class);
+    Status status = Status.UNAVAILABLE.withDescription("for test");
+
+    when(picker.pickSubchannel(any(PickSubchannelArgs.class)))
+        .thenReturn(drop ? PickResult.withDrop(status) : PickResult.withError(status));
+    helper.updateBalancingState(READY, picker);
+
+    executor.runDueTasks();
+    if (shouldFail) {
+      verify(mockCallListener).onClose(same(status), any(Metadata.class));
+    } else {
+      verifyZeroInteractions(mockCallListener);
+    }
+
+    // This call doesn't involve delayed transport
+    ClientCall<String, Integer> call2 = channel.newCall(method, callOptions);
+    call2.start(mockCallListener2, new Metadata());
+
+    executor.runDueTasks();
+    if (shouldFail) {
+      verify(mockCallListener2).onClose(same(status), any(Metadata.class));
+    } else {
+      verifyZeroInteractions(mockCallListener2);
+    }
+  }
+
   /**
    * Verify that if all resolved addresses failed to connect, a fail-fast call will fail, while a
    * wait-for-ready call will still be buffered.
