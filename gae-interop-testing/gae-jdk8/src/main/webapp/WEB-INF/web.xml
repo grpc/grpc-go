@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://java.sun.com/xml/ns/javaee"
+  xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+  xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+  version="2.5">
+  <servlet>
+    <servlet-name>interoptest</servlet-name>
+    <servlet-class>io.grpc.testing.integration.NettyClientInteropServlet</servlet-class>
+  </servlet>
+  <servlet>
+    <servlet-name>longlivedchannel</servlet-name>
+    <servlet-class>io.grpc.testing.integration.LongLivedChannel</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>interoptest</servlet-name>
+    <url-pattern>/</url-pattern>
+  </servlet-mapping>
+  <servlet-mapping>
+    <servlet-name>longlivedchannel</servlet-name>
+    <url-pattern>/long_lived_channel</url-pattern>
+  </servlet-mapping>
+</web-app>

@@ -1,0 +1,108 @@
+// Copyright 2017, gRPC Authors All rights reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+description = 'gRPC: gae interop testing (jdk8)'
+
+buildscript {    // Configuration for building
+  repositories {
+    jcenter()    // Bintray's repository - a fast Maven Central mirror & more
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'com.google.cloud.tools:appengine-gradle-plugin:1.3.3'
+    classpath 'com.squareup.okhttp:okhttp:2.5.0'
+  }
+}
+
+repositories {   // repositories for Jar's you access in your code
+  mavenLocal()
+  maven {
+    url 'https://maven-central.storage.googleapis.com'             // Google's mirror of Maven Central
+  }
+  jcenter()
+  mavenCentral()
+}
+
+apply plugin: 'java'                              // standard Java tasks
+apply plugin: 'war'                               // standard Web Archive plugin
+apply plugin: 'com.google.cloud.tools.appengine'  // App Engine tasks
+
+dependencies {
+  providedCompile group: 'javax.servlet', name: 'servlet-api', version:'2.5'
+  compile 'com.google.appengine:appengine:+'
+  // Deps needed by all gRPC apps in GAE
+  compile libraries.google_api_protos
+  compile project(":grpc-okhttp")
+  compile project(":grpc-protobuf")
+  compile project(":grpc-stub")
+  compile (project(":grpc-interop-testing"))
+  compile libraries.netty_tcnative
+}
+
+// [START model]
+appengine {  // App Engine tasks configuration
+  run {      // local (dev_appserver) configuration (standard environments only)
+    port = 8080                 // default
+  }
+
+  deploy {   // deploy configuration
+    stopPreviousVersion = true  // default - stop the current version
+    promote = true              // default - & make this the current version
+  }
+}
+// [END model]
+
+group = 'io.grpc'   // Generated output GroupId
+version = '1.0-SNAPSHOT'          // Version in generated output
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+def getAppName() {
+  def stream = new ByteArrayOutputStream()
+  exec {
+    executable 'gcloud'
+    args = ['config', 'get-value', 'project']
+    standardOutput = stream
+  }
+  return stream.toString().trim()
+}
+
+task runInteropTestRemote(dependsOn: 'appengineDeploy') {
+  doLast {
+    // give remote app some time to settle down
+    sleep(5000)
+
+    def appName = getAppName()
+    def client = new com.squareup.okhttp.OkHttpClient()
+    // The '?jdk8' argument is ignored by the server, it exists only to tag the request log entry
+    client.setReadTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+    def request = new com.squareup.okhttp.Request.Builder()
+            .url("http://${appName}.appspot.com/long_lived_channel?jdk8").build()
+    def result1 = client.newCall(request).execute()
+    def result2 = client.newCall(request).execute()
+    if (result1.code() != 200 || result2.code() != 200) {
+      throw new GradleException("Unable to reuse same channel across requests")
+    }
+
+    // The test suite can take a while to run
+    client.setReadTimeout(3, java.util.concurrent.TimeUnit.MINUTES)
+    // The '?jdk8' argument is ignored by the server, it exists only to tag the request log entry
+    def interopRequest = new com.squareup.okhttp.Request.Builder()
+            .url("http://${appName}.appspot.com/?jdk8").build()
+    def result = client.newCall(interopRequest).execute()
+    if (result.code() != 200) {
+      throw new GradleException("Interop test failed: " + result.body().string())
+    }
+  }
+}

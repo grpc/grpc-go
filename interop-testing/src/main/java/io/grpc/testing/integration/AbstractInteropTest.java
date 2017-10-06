@@ -974,7 +974,7 @@ public abstract class AbstractInteropTest {
 
   @Test
   public void sendsTimeoutHeader() {
-    Assume.assumeTrue("can not capture server side request headers", server != null);
+    Assume.assumeTrue("can not capture request headers on server side", server != null);
     long configuredTimeoutMinutes = 100;
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withDeadlineAfter(configuredTimeoutMinutes, TimeUnit.MINUTES);

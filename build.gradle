@@ -318,6 +318,7 @@ subprojects {
         repository(url: stagingUrl, configureAuth)
         snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
     }
+    uploadArchives.onlyIf { !name.contains("grpc-gae-interop-testing") }
 
     [
       install.repositories.mavenInstaller,
