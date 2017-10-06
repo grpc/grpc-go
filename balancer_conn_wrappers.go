@@ -73,7 +73,7 @@ func (b *scStateUpdateBuffer) load() {
 	}
 }
 
-// get returns the channel that receives a recvMsg in the buffer.
+// get returns the channel that the scStateUpdate will be sent to.
 //
 // Upon receiving, the caller should call load to send another
 // scStateChangeTuple onto the channel if there is any.
