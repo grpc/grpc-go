@@ -46,9 +46,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -115,7 +115,7 @@ final class CensusStatsModule {
    */
   @VisibleForTesting
   ClientCallTracer newClientCallTracer(StatsContext parentCtx, String fullMethodName) {
-    return new ClientCallTracer(parentCtx, fullMethodName);
+    return new ClientCallTracer(this, parentCtx, fullMethodName);
   }
 
   /**
@@ -133,57 +133,81 @@ final class CensusStatsModule {
   }
 
   private static final class ClientTracer extends ClientStreamTracer {
-    final AtomicLong outboundMessageCount = new AtomicLong();
-    final AtomicLong inboundMessageCount = new AtomicLong();
-    final AtomicLong outboundWireSize = new AtomicLong();
-    final AtomicLong inboundWireSize = new AtomicLong();
-    final AtomicLong outboundUncompressedSize = new AtomicLong();
-    final AtomicLong inboundUncompressedSize = new AtomicLong();
+
+    private static final AtomicLongFieldUpdater<ClientTracer> outboundMessageCountUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "outboundMessageCount");
+    private static final AtomicLongFieldUpdater<ClientTracer> inboundMessageCountUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "inboundMessageCount");
+    private static final AtomicLongFieldUpdater<ClientTracer> outboundWireSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "outboundWireSize");
+    private static final AtomicLongFieldUpdater<ClientTracer> inboundWireSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "inboundWireSize");
+    private static final AtomicLongFieldUpdater<ClientTracer> outboundUncompressedSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "outboundUncompressedSize");
+    private static final AtomicLongFieldUpdater<ClientTracer> inboundUncompressedSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ClientTracer.class, "inboundUncompressedSize");
+
+    volatile long outboundMessageCount;
+    volatile long inboundMessageCount;
+    volatile long outboundWireSize;
+    volatile long inboundWireSize;
+    volatile long outboundUncompressedSize;
+    volatile long inboundUncompressedSize;
 
     @Override
     public void outboundWireSize(long bytes) {
-      outboundWireSize.addAndGet(bytes);
+      outboundWireSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundWireSize(long bytes) {
-      inboundWireSize.addAndGet(bytes);
+      inboundWireSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void outboundUncompressedSize(long bytes) {
-      outboundUncompressedSize.addAndGet(bytes);
+      outboundUncompressedSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundUncompressedSize(long bytes) {
-      inboundUncompressedSize.addAndGet(bytes);
+      inboundUncompressedSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundMessage(int seqNo) {
-      inboundMessageCount.incrementAndGet();
+      inboundMessageCountUpdater.getAndIncrement(this);
     }
 
     @Override
     public void outboundMessage(int seqNo) {
-      outboundMessageCount.incrementAndGet();
+      outboundMessageCountUpdater.getAndIncrement(this);
     }
   }
 
-  @VisibleForTesting
-  final class ClientCallTracer extends ClientStreamTracer.Factory {
 
+
+  @VisibleForTesting
+  static final class ClientCallTracer extends ClientStreamTracer.Factory {
+    private static final AtomicReferenceFieldUpdater<ClientCallTracer, ClientTracer>
+        streamTracerUpdater =
+            AtomicReferenceFieldUpdater.newUpdater(
+                ClientCallTracer.class, ClientTracer.class, "streamTracer");
+    private static final AtomicIntegerFieldUpdater<ClientCallTracer> callEndedUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(ClientCallTracer.class, "callEnded");
+
+    private final CensusStatsModule module;
     private final String fullMethodName;
     private final Stopwatch stopwatch;
-    private final AtomicReference<ClientTracer> streamTracer = new AtomicReference<ClientTracer>();
-    private final AtomicBoolean callEnded = new AtomicBoolean(false);
+    private volatile ClientTracer streamTracer;
+    private volatile int callEnded;
     private final StatsContext parentCtx;
 
-    ClientCallTracer(StatsContext parentCtx, String fullMethodName) {
+    ClientCallTracer(CensusStatsModule module, StatsContext parentCtx, String fullMethodName) {
+      this.module = module;
       this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
-      this.stopwatch = stopwatchSupplier.get().start();
+      this.stopwatch = module.stopwatchSupplier.get().start();
     }
 
     @Override
@@ -191,12 +215,13 @@ final class CensusStatsModule {
       ClientTracer tracer = new ClientTracer();
       // TODO(zhangkun83): Once retry or hedging is implemented, a ClientCall may start more than
       // one streams.  We will need to update this file to support them.
-      checkState(streamTracer.compareAndSet(null, tracer),
+      checkState(
+          streamTracerUpdater.compareAndSet(this, null, tracer),
           "Are you creating multiple streams per call? This class doesn't yet support this case.");
-      if (propagateTags) {
-        headers.discardAll(statsHeader);
-        if (parentCtx != statsCtxFactory.getDefault()) {
-          headers.put(statsHeader, parentCtx);
+      if (module.propagateTags) {
+        headers.discardAll(module.statsHeader);
+        if (parentCtx != module.statsCtxFactory.getDefault()) {
+          headers.put(module.statsHeader, parentCtx);
         }
       }
       return tracer;
@@ -209,28 +234,28 @@ final class CensusStatsModule {
      * is a no-op.
      */
     void callEnded(Status status) {
-      if (!callEnded.compareAndSet(false, true)) {
+      if (callEndedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
       stopwatch.stop();
       long roundtripNanos = stopwatch.elapsed(TimeUnit.NANOSECONDS);
-      ClientTracer tracer = streamTracer.get();
+      ClientTracer tracer = streamTracer;
       if (tracer == null) {
         tracer = BLANK_CLIENT_TRACER;
       }
       MeasurementMap.Builder builder = MeasurementMap.builder()
           // The metrics are in double
           .put(RpcConstants.RPC_CLIENT_ROUNDTRIP_LATENCY, roundtripNanos / NANOS_PER_MILLI)
-          .put(RpcConstants.RPC_CLIENT_REQUEST_COUNT, tracer.outboundMessageCount.get())
-          .put(RpcConstants.RPC_CLIENT_RESPONSE_COUNT, tracer.inboundMessageCount.get())
-          .put(RpcConstants.RPC_CLIENT_REQUEST_BYTES, tracer.outboundWireSize.get())
-          .put(RpcConstants.RPC_CLIENT_RESPONSE_BYTES, tracer.inboundWireSize.get())
+          .put(RpcConstants.RPC_CLIENT_REQUEST_COUNT, tracer.outboundMessageCount)
+          .put(RpcConstants.RPC_CLIENT_RESPONSE_COUNT, tracer.inboundMessageCount)
+          .put(RpcConstants.RPC_CLIENT_REQUEST_BYTES, tracer.outboundWireSize)
+          .put(RpcConstants.RPC_CLIENT_RESPONSE_BYTES, tracer.inboundWireSize)
           .put(
               RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES,
-              tracer.outboundUncompressedSize.get())
+              tracer.outboundUncompressedSize)
           .put(
               RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES,
-              tracer.inboundUncompressedSize.get());
+              tracer.inboundUncompressedSize);
       if (!status.isOk()) {
         builder.put(RpcConstants.RPC_CLIENT_ERROR_COUNT, 1.0);
       }
@@ -242,53 +267,74 @@ final class CensusStatsModule {
     }
   }
 
-  private final class ServerTracer extends ServerStreamTracer {
+  private static final class ServerTracer extends ServerStreamTracer {
+    private static final AtomicIntegerFieldUpdater<ServerTracer> streamClosedUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(ServerTracer.class, "streamClosed");
+    private static final AtomicLongFieldUpdater<ServerTracer> outboundMessageCountUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "outboundMessageCount");
+    private static final AtomicLongFieldUpdater<ServerTracer> inboundMessageCountUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "inboundMessageCount");
+    private static final AtomicLongFieldUpdater<ServerTracer> outboundWireSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "outboundWireSize");
+    private static final AtomicLongFieldUpdater<ServerTracer> inboundWireSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "inboundWireSize");
+    private static final AtomicLongFieldUpdater<ServerTracer> outboundUncompressedSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "outboundUncompressedSize");
+    private static final AtomicLongFieldUpdater<ServerTracer> inboundUncompressedSizeUpdater =
+        AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "inboundUncompressedSize");
+
     private final String fullMethodName;
     @Nullable
     private final StatsContext parentCtx;
-    private final AtomicBoolean streamClosed = new AtomicBoolean(false);
+    private volatile int streamClosed;
     private final Stopwatch stopwatch;
-    private final AtomicLong outboundMessageCount = new AtomicLong();
-    private final AtomicLong inboundMessageCount = new AtomicLong();
-    private final AtomicLong outboundWireSize = new AtomicLong();
-    private final AtomicLong inboundWireSize = new AtomicLong();
-    private final AtomicLong outboundUncompressedSize = new AtomicLong();
-    private final AtomicLong inboundUncompressedSize = new AtomicLong();
+    private final StatsContextFactory statsCtxFactory;
+    private volatile long outboundMessageCount;
+    private volatile long inboundMessageCount;
+    private volatile long outboundWireSize;
+    private volatile long inboundWireSize;
+    private volatile long outboundUncompressedSize;
+    private volatile long inboundUncompressedSize;
 
-    ServerTracer(String fullMethodName, StatsContext parentCtx) {
+    ServerTracer(
+        String fullMethodName,
+        StatsContext parentCtx,
+        Supplier<Stopwatch> stopwatchSupplier,
+        StatsContextFactory statsCtxFactory) {
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.stopwatch = stopwatchSupplier.get().start();
+      this.statsCtxFactory = statsCtxFactory;
     }
 
     @Override
     public void outboundWireSize(long bytes) {
-      outboundWireSize.addAndGet(bytes);
+      outboundWireSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundWireSize(long bytes) {
-      inboundWireSize.addAndGet(bytes);
+      inboundWireSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void outboundUncompressedSize(long bytes) {
-      outboundUncompressedSize.addAndGet(bytes);
+      outboundUncompressedSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundUncompressedSize(long bytes) {
-      inboundUncompressedSize.addAndGet(bytes);
+      inboundUncompressedSizeUpdater.getAndAdd(this, bytes);
     }
 
     @Override
     public void inboundMessage(int seqNo) {
-      inboundMessageCount.incrementAndGet();
+      inboundMessageCountUpdater.getAndIncrement(this);
     }
 
     @Override
     public void outboundMessage(int seqNo) {
-      outboundMessageCount.incrementAndGet();
+      outboundMessageCountUpdater.getAndIncrement(this);
     }
 
     /**
@@ -299,7 +345,7 @@ final class CensusStatsModule {
      */
     @Override
     public void streamClosed(Status status) {
-      if (!streamClosed.compareAndSet(false, true)) {
+      if (streamClosedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
       stopwatch.stop();
@@ -307,16 +353,12 @@ final class CensusStatsModule {
       MeasurementMap.Builder builder = MeasurementMap.builder()
           // The metrics are in double
           .put(RpcConstants.RPC_SERVER_SERVER_LATENCY, elapsedTimeNanos / NANOS_PER_MILLI)
-          .put(RpcConstants.RPC_SERVER_RESPONSE_COUNT, outboundMessageCount.get())
-          .put(RpcConstants.RPC_SERVER_REQUEST_COUNT, inboundMessageCount.get())
-          .put(RpcConstants.RPC_SERVER_RESPONSE_BYTES, outboundWireSize.get())
-          .put(RpcConstants.RPC_SERVER_REQUEST_BYTES, inboundWireSize.get())
-          .put(
-              RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES,
-              outboundUncompressedSize.get())
-          .put(
-              RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES,
-              inboundUncompressedSize.get());
+          .put(RpcConstants.RPC_SERVER_RESPONSE_COUNT, outboundMessageCount)
+          .put(RpcConstants.RPC_SERVER_REQUEST_COUNT, inboundMessageCount)
+          .put(RpcConstants.RPC_SERVER_RESPONSE_BYTES, outboundWireSize)
+          .put(RpcConstants.RPC_SERVER_REQUEST_BYTES, inboundWireSize)
+          .put(RpcConstants.RPC_SERVER_UNCOMPRESSED_RESPONSE_BYTES, outboundUncompressedSize)
+          .put(RpcConstants.RPC_SERVER_UNCOMPRESSED_REQUEST_BYTES, inboundUncompressedSize);
       if (!status.isOk()) {
         builder.put(RpcConstants.RPC_SERVER_ERROR_COUNT, 1.0);
       }
@@ -344,7 +386,7 @@ final class CensusStatsModule {
         parentCtx = statsCtxFactory.getDefault();
       }
       parentCtx = parentCtx.with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(fullMethodName));
-      return new ServerTracer(fullMethodName, parentCtx);
+      return new ServerTracer(fullMethodName, parentCtx, stopwatchSupplier, statsCtxFactory);
     }
   }
 

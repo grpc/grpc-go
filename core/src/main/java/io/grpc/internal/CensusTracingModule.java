@@ -45,7 +45,7 @@ import io.opencensus.trace.export.SampledSpanStore;
 import io.opencensus.trace.propagation.BinaryFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -63,6 +63,10 @@ import javax.annotation.Nullable;
  */
 final class CensusTracingModule {
   private static final Logger logger = Logger.getLogger(CensusTracingModule.class.getName());
+  private static final AtomicIntegerFieldUpdater<ClientCallTracer> callEndedUpdater =
+      AtomicIntegerFieldUpdater.newUpdater(ClientCallTracer.class, "callEnded");
+  private static final AtomicIntegerFieldUpdater<ServerTracer> streamClosedUpdater =
+      AtomicIntegerFieldUpdater.newUpdater(ServerTracer.class, "streamClosed");
 
   private final Tracer censusTracer;
   @VisibleForTesting
@@ -216,8 +220,8 @@ final class CensusTracingModule {
 
   @VisibleForTesting
   final class ClientCallTracer extends ClientStreamTracer.Factory {
+    volatile int callEnded;
 
-    private final AtomicBoolean callEnded = new AtomicBoolean(false);
     private final Span span;
 
     ClientCallTracer(@Nullable Span parentSpan, String fullMethodName) {
@@ -245,7 +249,7 @@ final class CensusTracingModule {
      * is a no-op.
      */
     void callEnded(io.grpc.Status status) {
-      if (!callEnded.compareAndSet(false, true)) {
+      if (callEndedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
       span.end(createEndSpanOptions(status));
@@ -274,9 +278,10 @@ final class CensusTracingModule {
     }
   }
 
+
   private final class ServerTracer extends ServerStreamTracer {
     private final Span span;
-    private final AtomicBoolean streamClosed = new AtomicBoolean(false);
+    volatile int streamClosed;
 
     ServerTracer(String fullMethodName, @Nullable SpanContext remoteSpan) {
       checkNotNull(fullMethodName, "fullMethodName");
@@ -297,7 +302,7 @@ final class CensusTracingModule {
      */
     @Override
     public void streamClosed(io.grpc.Status status) {
-      if (!streamClosed.compareAndSet(false, true)) {
+      if (streamClosedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
       span.end(createEndSpanOptions(status));
