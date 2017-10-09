@@ -65,8 +65,8 @@ type dnsBuilder struct {
 }
 
 // Build creates and starts a DNS resolver that watches the name resolution of the target.
-func (b *dnsBuilder) Build(target string, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
-	host, port, err := parseTarget(target)
+func (b *dnsBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+	host, port, err := parseTarget(target.Endpoint)
 	if err != nil {
 		return nil, err
 	}

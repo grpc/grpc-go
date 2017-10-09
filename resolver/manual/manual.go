@@ -39,13 +39,11 @@ type Resolver struct {
 	scheme string
 
 	// Fields actually belong to the resolver.
-	target string
-	cc     resolver.ClientConn
+	cc resolver.ClientConn
 }
 
 // Build returns itself for Resolver, because it's both a builder and a resolver.
-func (r *Resolver) Build(target string, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
-	r.target = target
+func (r *Resolver) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
 	r.cc = cc
 	return r, nil
 }

@@ -681,7 +681,7 @@ func testDNSResolver(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(a.target, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -753,7 +753,7 @@ func testDNSResolveNow(t *testing.T) {
 	for _, a := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: a.target}
-		r, err := b.Build(a.target, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: a.target}, cc, resolver.BuildOption{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -830,7 +830,7 @@ func testIPResolver(t *testing.T) {
 	for _, v := range tests {
 		b := NewBuilder()
 		cc := &testClientConn{target: v.target}
-		r, err := b.Build(v.target, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: v.target}, cc, resolver.BuildOption{})
 		if err != nil {
 			t.Fatalf("%v\n", err)
 		}
@@ -887,7 +887,7 @@ func TestResolveFunc(t *testing.T) {
 	b := NewBuilder()
 	for _, v := range tests {
 		cc := &testClientConn{target: v.addr}
-		r, err := b.Build(v.addr, cc, resolver.BuildOption{})
+		r, err := b.Build(resolver.Target{Endpoint: v.addr}, cc, resolver.BuildOption{})
 		if err == nil {
 			r.Close()
 		}
