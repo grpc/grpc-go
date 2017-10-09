@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/keepalive"
@@ -1134,11 +1135,11 @@ func (s *Server) getCodec(contentSubtype string) Codec {
 		return s.opts.codec
 	}
 	if contentSubtype == "" {
-		return registeredProtoCodec
+		return encoding.GetCodec("proto")
 	}
-	codec, ok := registeredCodecs[contentSubtype]
-	if !ok {
-		return registeredProtoCodec
+	codec := encoding.GetCodec(contentSubtype)
+	if codec == nil {
+		return encoding.GetCodec("proto")
 	}
 	return codec
 }

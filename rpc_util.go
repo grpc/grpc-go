@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
@@ -609,8 +610,8 @@ func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
 	if c.contentSubtype != "" {
 		if c.codec == nil {
 			// c.contentSubtype is already lowercased in CallContentSubtype
-			codec, ok := registeredCodecs[c.contentSubtype]
-			if !ok {
+			codec := encoding.GetCodec(c.contentSubtype)
+			if codec == nil {
 				return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 			}
 			c.codec = codec
@@ -620,7 +621,7 @@ func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
 			c.contentSubtype = strings.ToLower(c.codec.String())
 		} else {
 			c.contentSubtype = "proto"
-			c.codec = registeredProtoCodec
+			c.codec = encoding.GetCodec("proto")
 		}
 	}
 	return nil

@@ -19,46 +19,11 @@
 package grpc
 
 import (
-	"math"
-	"strings"
-	"sync"
-
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/encoding"
+	_ "google.golang.org/grpc/encoding/proto" // to register the Codec for "proto"
 )
 
-var (
-	registeredProtoCodec Codec = protoCodec{}
-	registeredCodecs           = map[string]Codec{"proto": registeredProtoCodec}
-)
-
-// RegisterCodec registers the provided Codec for use with all gRPC clients
-// and servers.
-//
-// The Codec will be stored and looked up by result of it's String() method,
-// which should match the content-subtype of the encoding handled by the Codec.
-// This is case-insensitive, and is stored and looked up as lowercase.
-// If the result of calling String() is an empty string, RegisterCodec will
-// panic. See Content-Type on https://grpc.io/docs/guides/wire.html#requests
-// for more details.
-//
-// By default, a Codec for "proto" is registered.
-//
-// RegisterCodec should only be called from init() functions, and is not
-// thread-safe. Codecs can be overwritten in the registry, including the
-// default "proto" Codec.
-func RegisterCodec(codec Codec) {
-	if codec == nil {
-		panic("cannot register a nil Codec")
-	}
-	contentSubtype := strings.ToLower(codec.String())
-	if contentSubtype == "" {
-		panic("cannot register Codec with empty string result for String()")
-	}
-	if contentSubtype == "proto" {
-		registeredProtoCodec = codec
-	}
-	registeredCodecs[contentSubtype] = codec
-}
+var _ Codec = encoding.Codec(nil)
 
 // Codec defines the interface gRPC uses to encode and decode messages.
 // Note that implementations of this interface must be thread safe;
@@ -73,68 +38,3 @@ type Codec interface {
 	// The result must be static; the result cannot change between calls.
 	String() string
 }
-
-// protoCodec is a Codec implementation with protobuf. It is the default codec for gRPC.
-type protoCodec struct {
-}
-
-type cachedProtoBuffer struct {
-	lastMarshaledSize uint32
-	proto.Buffer
-}
-
-func capToMaxInt32(val int) uint32 {
-	if val > math.MaxInt32 {
-		return uint32(math.MaxInt32)
-	}
-	return uint32(val)
-}
-
-func (p protoCodec) marshal(v interface{}, cb *cachedProtoBuffer) ([]byte, error) {
-	protoMsg := v.(proto.Message)
-	newSlice := make([]byte, 0, cb.lastMarshaledSize)
-
-	cb.SetBuf(newSlice)
-	cb.Reset()
-	if err := cb.Marshal(protoMsg); err != nil {
-		return nil, err
-	}
-	out := cb.Bytes()
-	cb.lastMarshaledSize = capToMaxInt32(len(out))
-	return out, nil
-}
-
-func (p protoCodec) Marshal(v interface{}) ([]byte, error) {
-	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	out, err := p.marshal(v, cb)
-
-	// put back buffer and lose the ref to the slice
-	cb.SetBuf(nil)
-	protoBufferPool.Put(cb)
-	return out, err
-}
-
-func (p protoCodec) Unmarshal(data []byte, v interface{}) error {
-	cb := protoBufferPool.Get().(*cachedProtoBuffer)
-	cb.SetBuf(data)
-	v.(proto.Message).Reset()
-	err := cb.Unmarshal(v.(proto.Message))
-	cb.SetBuf(nil)
-	protoBufferPool.Put(cb)
-	return err
-}
-
-func (protoCodec) String() string {
-	return "proto"
-}
-
-var (
-	protoBufferPool = &sync.Pool{
-		New: func() interface{} {
-			return &cachedProtoBuffer{
-				Buffer:            proto.Buffer{},
-				lastMarshaledSize: 16,
-			}
-		},
-	}
-)

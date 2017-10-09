@@ -18,13 +18,14 @@
  *
  */
 
-package grpc
+package proto
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/test/codec_perf"
 )
 
@@ -89,7 +90,7 @@ func benchmarkProtoCodec(codec *protoCodec, protoStructs []proto.Message, pb *te
 	}
 }
 
-func fastMarshalAndUnmarshal(protoCodec Codec, protoStruct proto.Message, b *testing.B) {
+func fastMarshalAndUnmarshal(protoCodec encoding.Codec, protoStruct proto.Message, b *testing.B) {
 	marshaledBytes, err := protoCodec.Marshal(protoStruct)
 	if err != nil {
 		b.Errorf("protoCodec.Marshal(_) returned an error")
