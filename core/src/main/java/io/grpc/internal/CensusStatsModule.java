@@ -239,7 +239,7 @@ final class CensusStatsModule {
       if (callEndedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      if (!recordStats) {
+      if (!module.recordStats) {
         return;
       }
       stopwatch.stop();
@@ -288,6 +288,7 @@ final class CensusStatsModule {
     private static final AtomicLongFieldUpdater<ServerTracer> inboundUncompressedSizeUpdater =
         AtomicLongFieldUpdater.newUpdater(ServerTracer.class, "inboundUncompressedSize");
 
+    private final CensusStatsModule module;
     private final String fullMethodName;
     @Nullable
     private final StatsContext parentCtx;
@@ -302,10 +303,12 @@ final class CensusStatsModule {
     private volatile long inboundUncompressedSize;
 
     ServerTracer(
+        CensusStatsModule module,
         String fullMethodName,
         StatsContext parentCtx,
         Supplier<Stopwatch> stopwatchSupplier,
         StatsContextFactory statsCtxFactory) {
+      this.module = module;
       this.fullMethodName = checkNotNull(fullMethodName, "fullMethodName");
       this.parentCtx = checkNotNull(parentCtx, "parentCtx");
       this.stopwatch = stopwatchSupplier.get().start();
@@ -353,7 +356,7 @@ final class CensusStatsModule {
       if (streamClosedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      if (!recordStats) {
+      if (!module.recordStats) {
         return;
       }
       stopwatch.stop();
@@ -394,7 +397,8 @@ final class CensusStatsModule {
         parentCtx = statsCtxFactory.getDefault();
       }
       parentCtx = parentCtx.with(RpcConstants.RPC_SERVER_METHOD, TagValue.create(fullMethodName));
-      return new ServerTracer(fullMethodName, parentCtx, stopwatchSupplier, statsCtxFactory);
+      return new ServerTracer(
+          CensusStatsModule.this, fullMethodName, parentCtx, stopwatchSupplier, statsCtxFactory);
     }
   }
 
