@@ -26,6 +26,6 @@ import (
 
 func TestGetCodecForProtoIsNotNil(t *testing.T) {
 	if encoding.GetCodec("proto") == nil {
-		t.Fatal(`encoding.GetCodec("proto") must not be nil by default `)
+		t.Fatal(`encoding.GetCodec("proto") must not be nil by default`)
 	}
 }
