@@ -33,7 +33,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
 
   @Override
   protected InternalServer newServer(List<ServerStreamTracer.Factory> streamTracerFactories) {
-    return new InProcessServer(TRANSPORT_NAME, GrpcUtil.TIMER_SERVICE);
+    return new InProcessServer(TRANSPORT_NAME, GrpcUtil.TIMER_SERVICE, streamTracerFactories);
   }
 
   @Override
@@ -53,7 +53,7 @@ public class InProcessTransportTest extends AbstractTransportTest {
   }
 
   @Override
-  protected boolean metricsExpected() {
+  protected boolean sizesReported() {
     // TODO(zhangkun83): InProcessTransport doesn't record metrics for now
     // (https://github.com/grpc/grpc-java/issues/2284)
     return false;

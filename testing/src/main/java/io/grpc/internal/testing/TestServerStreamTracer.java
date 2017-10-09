@@ -73,6 +73,11 @@ public class TestServerStreamTracer extends ServerStreamTracer implements TestSt
   }
 
   @Override
+  public void setFailDuplicateCallbacks(boolean fail) {
+    delegate.setFailDuplicateCallbacks(fail);
+  }
+
+  @Override
   public String nextOutboundEvent() {
     return delegate.nextOutboundEvent();
   }

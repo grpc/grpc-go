@@ -28,9 +28,25 @@ import com.google.instrumentation.stats.StatsContextFactory;
 import com.google.instrumentation.stats.TagKey;
 import com.google.instrumentation.stats.TagValue;
 import io.grpc.internal.IoUtils;
+import io.opencensus.trace.Annotation;
+import io.opencensus.trace.AttributeValue;
+import io.opencensus.trace.EndSpanOptions;
+import io.opencensus.trace.Link;
+import io.opencensus.trace.NetworkEvent;
+import io.opencensus.trace.Sampler;
+import io.opencensus.trace.Span;
+import io.opencensus.trace.SpanBuilder;
+import io.opencensus.trace.SpanContext;
+import io.opencensus.trace.SpanId;
+import io.opencensus.trace.TraceId;
+import io.opencensus.trace.TraceOptions;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -158,7 +174,7 @@ public class StatsTestUtils {
     }
   }
 
-  public static class FakeStatsContext extends StatsContext {
+  public static final class FakeStatsContext extends StatsContext {
     private final ImmutableMap<TagKey, TagValue> tags;
     private final FakeStatsContextFactory factory;
     private final BlockingQueue<MetricsRecord> recordSink;
@@ -168,6 +184,10 @@ public class StatsTestUtils {
       this.tags = tags;
       this.factory = factory;
       this.recordSink = factory.getCurrentRecordSink();
+    }
+
+    public Map<TagKey, TagValue> getTags() {
+      return tags;
     }
 
     @Override
@@ -235,6 +255,72 @@ public class StatsTestUtils {
       FakeStatsContext context = new FakeStatsContext(tagsBuilder.build(), base.factory);
       base.factory.contexts.add(context);
       return context;
+    }
+  }
+
+  // TODO(bdrutu): Remove this class after OpenCensus releases support for this class.
+  public static class MockableSpan extends Span {
+    /**
+     * Creates a MockableSpan with a random trace ID and span ID.
+     */
+    public static MockableSpan generateRandomSpan(Random random) {
+      return new MockableSpan(
+          SpanContext.create(
+              TraceId.generateRandomId(random),
+              SpanId.generateRandomId(random),
+              TraceOptions.DEFAULT),
+          null);
+    }
+
+    @Override
+    public void putAttributes(Map<String, AttributeValue> attributes) {}
+
+    @Override
+    public void addAnnotation(String description, Map<String, AttributeValue> attributes) {}
+
+    @Override
+    public void addAnnotation(Annotation annotation) {}
+
+    @Override
+    public void addNetworkEvent(NetworkEvent networkEvent) {}
+
+    @Override
+    public void addLink(Link link) {}
+
+    @Override
+    public void end(EndSpanOptions options) {}
+
+    private MockableSpan(SpanContext context, @Nullable EnumSet<Options> options) {
+      super(context, options);
+    }
+
+    /**
+     * Mockable implementation for the {@link SpanBuilder} class.
+     *
+     * <p>Not {@code final} to allow easy mocking.
+     *
+     */
+    public static class Builder extends SpanBuilder {
+
+      @Override
+      public SpanBuilder setSampler(Sampler sampler) {
+        return this;
+      }
+
+      @Override
+      public SpanBuilder setParentLinks(List<Span> parentLinks) {
+        return this;
+      }
+
+      @Override
+      public SpanBuilder setRecordEvents(boolean recordEvents) {
+        return this;
+      }
+
+      @Override
+      public Span startSpan() {
+        return null;
+      }
     }
   }
 }

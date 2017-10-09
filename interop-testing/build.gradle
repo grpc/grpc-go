@@ -26,6 +26,7 @@ dependencies {
             libraries.netty_tcnative,
             libraries.oauth_client,
             libraries.truth
+    runtime libraries.opencensus_impl
 }
 
 configureProtoCompilation()

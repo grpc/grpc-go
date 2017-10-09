@@ -79,15 +79,15 @@ public final class InProcessServerBuilder
 
   private InProcessServerBuilder(String name) {
     this.name = Preconditions.checkNotNull(name, "name");
+    // In-process transport should not record its traffic to the stats module.
+    // https://github.com/grpc/grpc-java/issues/2284
+    setRecordStats(false);
   }
 
   @Override
   protected InProcessServer buildTransportServer(
       List<ServerStreamTracer.Factory> streamTracerFactories) {
-    // TODO(zhangkun83): InProcessTransport by-passes framer and deframer, thus message sizses are
-    // not counted.  Therefore, we disable stats for now.
-    // (https://github.com/grpc/grpc-java/issues/2284)
-    return new InProcessServer(name, GrpcUtil.TIMER_SERVICE);
+    return new InProcessServer(name, GrpcUtil.TIMER_SERVICE, streamTracerFactories);
   }
 
   @Override

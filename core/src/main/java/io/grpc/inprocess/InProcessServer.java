@@ -16,7 +16,10 @@
 
 package io.grpc.inprocess;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.annotations.VisibleForTesting;
+import io.grpc.ServerStreamTracer;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
@@ -24,6 +27,8 @@ import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.SharedResourcePool;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,6 +44,7 @@ final class InProcessServer implements InternalServer {
   }
 
   private final String name;
+  private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private ServerListener listener;
   private boolean shutdown;
   /** Expected to be a SharedResourcePool except in testing. */
@@ -49,14 +55,20 @@ final class InProcessServer implements InternalServer {
    */
   private ScheduledExecutorService scheduler;
 
-  InProcessServer(String name, Resource<ScheduledExecutorService> schedulerResource) {
-    this(name, SharedResourcePool.forResource(schedulerResource));
+  InProcessServer(
+      String name, Resource<ScheduledExecutorService> schedulerResource,
+      List<ServerStreamTracer.Factory> streamTracerFactories) {
+    this(name, SharedResourcePool.forResource(schedulerResource), streamTracerFactories);
   }
 
   @VisibleForTesting
-  InProcessServer(String name, ObjectPool<ScheduledExecutorService> schedulerPool) {
+  InProcessServer(
+      String name, ObjectPool<ScheduledExecutorService> schedulerPool,
+      List<ServerStreamTracer.Factory> streamTracerFactories) {
     this.name = name;
     this.schedulerPool = schedulerPool;
+    this.streamTracerFactories =
+        Collections.unmodifiableList(checkNotNull(streamTracerFactories, "streamTracerFactories"));
   }
 
   @Override
@@ -95,5 +107,9 @@ final class InProcessServer implements InternalServer {
 
   ObjectPool<ScheduledExecutorService> getScheduledExecutorServicePool() {
     return schedulerPool;
+  }
+
+  List<ServerStreamTracer.Factory> getStreamTracerFactories() {
+    return streamTracerFactories;
   }
 }

@@ -20,7 +20,7 @@ import io.grpc.ClientStreamTracer;
 import io.grpc.Status;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A {@link ClientStreamTracer} suitable for testing.
@@ -28,8 +28,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class TestClientStreamTracer extends ClientStreamTracer implements TestStreamTracer {
   private final TestBaseStreamTracer delegate = new TestBaseStreamTracer();
   protected final CountDownLatch outboundHeadersLatch = new CountDownLatch(1);
-  protected final AtomicBoolean outboundHeadersCalled = new AtomicBoolean();
-  protected final AtomicBoolean inboundHeadersCalled = new AtomicBoolean();
+  protected final AtomicReference<Throwable> outboundHeadersCalled =
+      new AtomicReference<Throwable>();
+  protected final AtomicReference<Throwable> inboundHeadersCalled =
+      new AtomicReference<Throwable>();
 
   @Override
   public void await() throws InterruptedException {
@@ -45,14 +47,14 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
    * Returns if {@link ClientStreamTracer#inboundHeaders} has been called.
    */
   public boolean getInboundHeaders() {
-    return inboundHeadersCalled.get();
+    return inboundHeadersCalled.get() != null;
   }
 
   /**
    * Returns if {@link ClientStreamTracer#outboundHeaders} has been called.
    */
   public boolean getOutboundHeaders() {
-    return outboundHeadersCalled.get();
+    return outboundHeadersCalled.get() != null;
   }
 
   /**
@@ -88,6 +90,11 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
   @Override
   public long getOutboundUncompressedSize() {
     return delegate.getOutboundUncompressedSize();
+  }
+
+  @Override
+  public void setFailDuplicateCallbacks(boolean fail) {
+    delegate.setFailDuplicateCallbacks(fail);
   }
 
   @Override
@@ -159,17 +166,22 @@ public class TestClientStreamTracer extends ClientStreamTracer implements TestSt
 
   @Override
   public void outboundHeaders() {
-    if (!outboundHeadersCalled.compareAndSet(false, true)
+    if (!outboundHeadersCalled.compareAndSet(null, new Exception("first stack"))
         && delegate.failDuplicateCallbacks.get()) {
-      throw new AssertionError("outboundHeaders called more than once");
+      throw new AssertionError(
+          "outboundHeaders called more than once",
+          new Exception("second stack", outboundHeadersCalled.get()));
     }
     outboundHeadersLatch.countDown();
   }
 
   @Override
   public void inboundHeaders() {
-    if (!inboundHeadersCalled.compareAndSet(false, true) && delegate.failDuplicateCallbacks.get()) {
-      throw new AssertionError("inboundHeaders called more than once");
+    if (!inboundHeadersCalled.compareAndSet(null, new Exception("first stack"))
+        && delegate.failDuplicateCallbacks.get()) {
+      throw new AssertionError(
+          "inboundHeaders called more than once",
+          new Exception("second stack", inboundHeadersCalled.get()));
     }
   }
 }

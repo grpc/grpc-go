@@ -67,6 +67,11 @@ public interface TestStreamTracer {
   long getOutboundUncompressedSize();
 
   /**
+   * Sets whether to fail on unexpected duplicate calls to callback methods.
+   */
+  void setFailDuplicateCallbacks(boolean fail);
+
+  /**
    * Returns the next captured outbound message event.
    */
   @Nullable
@@ -195,6 +200,11 @@ public interface TestStreamTracer {
       inboundEvents.add(
           String.format(
               "inboundMessageRead(%d, %d, %d)", seqNo, optionalWireSize, optionalUncompressedSize));
+    }
+
+    @Override
+    public void setFailDuplicateCallbacks(boolean fail) {
+      failDuplicateCallbacks.set(fail);
     }
 
     @Override

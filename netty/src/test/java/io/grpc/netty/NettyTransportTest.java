@@ -79,11 +79,6 @@ public class NettyTransportTest extends AbstractTransportTest {
         null /* agent */);
   }
 
-  @Override
-  protected boolean metricsExpected() {
-    return true;
-  }
-
   @Test
   @Ignore("flaky")
   @Override

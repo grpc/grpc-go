@@ -100,6 +100,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   private StatsContextFactory statsFactory;
 
   private boolean statsEnabled = true;
+  private boolean recordStats = true;
   private boolean tracingEnabled = true;
 
   @Override
@@ -196,6 +197,14 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   }
 
   /**
+   * Disable or enable stats recording.  Effective only if {@link #setStatsEnabled} is set to true.
+   * Enabled by default.
+   */
+  protected void setRecordStats(boolean value) {
+    recordStats = value;
+  }
+
+  /**
    * Disable or enable tracing features.  Enabled by default.
    */
   protected void setTracingEnabled(boolean value) {
@@ -223,7 +232,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
           this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
       if (statsFactory != null) {
         CensusStatsModule censusStats =
-            new CensusStatsModule(statsFactory, GrpcUtil.STOPWATCH_SUPPLIER, true);
+            new CensusStatsModule(statsFactory, GrpcUtil.STOPWATCH_SUPPLIER, true, recordStats);
         tracerFactories.add(censusStats.getServerTracerFactory());
       }
     }

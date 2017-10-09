@@ -59,32 +59,23 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.testing.StatsTestUtils;
 import io.grpc.internal.testing.StatsTestUtils.FakeStatsContextFactory;
+import io.grpc.internal.testing.StatsTestUtils.MockableSpan;
 import io.grpc.testing.GrpcServerRule;
-import io.opencensus.trace.Annotation;
-import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.EndSpanOptions;
-import io.opencensus.trace.Link;
 import io.opencensus.trace.NetworkEvent;
 import io.opencensus.trace.NetworkEvent.Type;
-import io.opencensus.trace.Sampler;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanBuilder;
 import io.opencensus.trace.SpanContext;
-import io.opencensus.trace.SpanId;
-import io.opencensus.trace.TraceId;
-import io.opencensus.trace.TraceOptions;
 import io.opencensus.trace.Tracer;
 import io.opencensus.trace.propagation.BinaryFormat;
 import io.opencensus.trace.propagation.SpanContextParseException;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -190,7 +181,8 @@ public class CensusModulesTest {
         .thenReturn(binarySpanContext);
     when(mockTracingPropagationHandler.fromByteArray(any(byte[].class)))
         .thenReturn(fakeClientSpanContext);
-    censusStats = new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), true);
+    censusStats =
+        new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), true, true);
     censusTracing = new CensusTracingModule(tracer, mockTracingPropagationHandler);
   }
 
@@ -455,23 +447,33 @@ public class CensusModulesTest {
   }
 
   @Test
-  public void statsHeadersPropagateTags() {
-    subtestStatsHeadersPropagateTags(true);
+  public void statsHeadersPropagateTags_record() {
+    subtestStatsHeadersPropagateTags(true, true);
   }
 
   @Test
-  public void statsHeadersNotPropagateTags() {
-    subtestStatsHeadersPropagateTags(false);
+  public void statsHeadersPropagateTags_notRecord() {
+    subtestStatsHeadersPropagateTags(true, false);
   }
 
-  private void subtestStatsHeadersPropagateTags(boolean propagate) {
+  @Test
+  public void statsHeadersNotPropagateTags_record() {
+    subtestStatsHeadersPropagateTags(false, true);
+  }
+
+  @Test
+  public void statsHeadersNotPropagateTags_notRecord() {
+    subtestStatsHeadersPropagateTags(false, false);
+  }
+
+  private void subtestStatsHeadersPropagateTags(boolean propagate, boolean recordStats) {
     // EXTRA_TAG is propagated by the FakeStatsContextFactory. Note that not all tags are
     // propagated.  The StatsContextFactory decides which tags are to propagated.  gRPC facilitates
     // the propagation by putting them in the headers.
     StatsContext clientCtx = statsCtxFactory.getDefault().with(
         StatsTestUtils.EXTRA_TAG, TagValue.create("extra-tag-value-897"));
-    CensusStatsModule census =
-        new CensusStatsModule(statsCtxFactory, fakeClock.getStopwatchSupplier(), propagate);
+    CensusStatsModule census = new CensusStatsModule(
+        statsCtxFactory, fakeClock.getStopwatchSupplier(), propagate, recordStats);
     Metadata headers = new Metadata();
     CensusStatsModule.ClientCallTracer callTracer =
         census.newClientCallTracer(clientCtx, method.getFullMethodName());
@@ -498,31 +500,39 @@ public class CensusModulesTest {
     // Verifies that the server tracer records the status with the propagated tag
     serverTracer.streamClosed(Status.OK);
 
-    StatsTestUtils.MetricsRecord serverRecord = statsCtxFactory.pollRecord();
-    assertNotNull(serverRecord);
-    assertNoClientContent(serverRecord);
-    TagValue serverMethodTag = serverRecord.tags.get(RpcConstants.RPC_SERVER_METHOD);
-    assertEquals(method.getFullMethodName(), serverMethodTag.toString());
-    TagValue serverStatusTag = serverRecord.tags.get(RpcConstants.RPC_STATUS);
-    assertEquals(Status.Code.OK.toString(), serverStatusTag.toString());
-    assertNull(serverRecord.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
-    TagValue serverPropagatedTag = serverRecord.tags.get(StatsTestUtils.EXTRA_TAG);
-    assertEquals("extra-tag-value-897", serverPropagatedTag.toString());
+    if (recordStats) {
+      StatsTestUtils.MetricsRecord serverRecord = statsCtxFactory.pollRecord();
+      assertNotNull(serverRecord);
+      assertNoClientContent(serverRecord);
+      TagValue serverMethodTag = serverRecord.tags.get(RpcConstants.RPC_SERVER_METHOD);
+      assertEquals(method.getFullMethodName(), serverMethodTag.toString());
+      TagValue serverStatusTag = serverRecord.tags.get(RpcConstants.RPC_STATUS);
+      assertEquals(Status.Code.OK.toString(), serverStatusTag.toString());
+      assertNull(serverRecord.getMetric(RpcConstants.RPC_SERVER_ERROR_COUNT));
+      TagValue serverPropagatedTag = serverRecord.tags.get(StatsTestUtils.EXTRA_TAG);
+      assertEquals("extra-tag-value-897", serverPropagatedTag.toString());
+    }
 
     // Verifies that the client tracer factory uses clientCtx, which includes the custom tags, to
     // record stats.
     callTracer.callEnded(Status.OK);
 
-    StatsTestUtils.MetricsRecord clientRecord = statsCtxFactory.pollRecord();
-    assertNotNull(clientRecord);
-    assertNoServerContent(clientRecord);
-    TagValue clientMethodTag = clientRecord.tags.get(RpcConstants.RPC_CLIENT_METHOD);
-    assertEquals(method.getFullMethodName(), clientMethodTag.toString());
-    TagValue clientStatusTag = clientRecord.tags.get(RpcConstants.RPC_STATUS);
-    assertEquals(Status.Code.OK.toString(), clientStatusTag.toString());
-    assertNull(clientRecord.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
-    TagValue clientPropagatedTag = clientRecord.tags.get(StatsTestUtils.EXTRA_TAG);
-    assertEquals("extra-tag-value-897", clientPropagatedTag.toString());
+    if (recordStats) {
+      StatsTestUtils.MetricsRecord clientRecord = statsCtxFactory.pollRecord();
+      assertNotNull(clientRecord);
+      assertNoServerContent(clientRecord);
+      TagValue clientMethodTag = clientRecord.tags.get(RpcConstants.RPC_CLIENT_METHOD);
+      assertEquals(method.getFullMethodName(), clientMethodTag.toString());
+      TagValue clientStatusTag = clientRecord.tags.get(RpcConstants.RPC_STATUS);
+      assertEquals(Status.Code.OK.toString(), clientStatusTag.toString());
+      assertNull(clientRecord.getMetric(RpcConstants.RPC_CLIENT_ERROR_COUNT));
+      TagValue clientPropagatedTag = clientRecord.tags.get(StatsTestUtils.EXTRA_TAG);
+      assertEquals("extra-tag-value-897", clientPropagatedTag.toString());
+    }
+
+    if (!recordStats) {
+      assertNull(statsCtxFactory.pollRecord());
+    }
   }
 
   @Test
@@ -756,68 +766,5 @@ public class CensusModulesTest {
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
-  }
-
-  // TODO(bdrutu): Remove this class after OpenCensus releases support for this class.
-  private static class MockableSpan extends Span {
-    private static MockableSpan generateRandomSpan(Random random) {
-      return new MockableSpan(
-          SpanContext.create(
-              TraceId.generateRandomId(random),
-              SpanId.generateRandomId(random),
-              TraceOptions.DEFAULT),
-          null);
-    }
-
-    @Override
-    public void putAttributes(Map<String, AttributeValue> attributes) {}
-
-    @Override
-    public void addAnnotation(String description, Map<String, AttributeValue> attributes) {}
-
-    @Override
-    public void addAnnotation(Annotation annotation) {}
-
-    @Override
-    public void addNetworkEvent(NetworkEvent networkEvent) {}
-
-    @Override
-    public void addLink(Link link) {}
-
-    @Override
-    public void end(EndSpanOptions options) {}
-
-    private MockableSpan(SpanContext context, @Nullable EnumSet<Options> options) {
-      super(context, options);
-    }
-
-    /**
-     * Mockable implementation for the {@link SpanBuilder} class.
-     *
-     * <p>Not {@code final} to allow easy mocking.
-     *
-     */
-    public static class Builder extends SpanBuilder {
-
-      @Override
-      public SpanBuilder setSampler(Sampler sampler) {
-        return this;
-      }
-
-      @Override
-      public SpanBuilder setParentLinks(List<Span> parentLinks) {
-        return this;
-      }
-
-      @Override
-      public SpanBuilder setRecordEvents(boolean recordEvents) {
-        return this;
-      }
-
-      @Override
-      public Span startSpan() {
-        return null;
-      }
-    }
   }
 }
