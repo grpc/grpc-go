@@ -288,6 +288,10 @@ public abstract class AbstractInteropTest {
     return true;
   }
 
+  protected boolean serverInProcess() {
+    return true;
+  }
+
   @Test
   public void emptyUnary() throws Exception {
     assertEquals(EMPTY, blockingStub.emptyCall(EMPTY));
@@ -1754,6 +1758,9 @@ public abstract class AbstractInteropTest {
   @SuppressWarnings("AssertionFailureIgnored") // Failure is checked in the end by the passed flag.
   private void assertServerMetrics(String method, Status.Code code,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
+    if (!serverInProcess()) {
+      return;
+    }
     AssertionError checkFailure = null;
     boolean passed = false;
 
@@ -1875,7 +1882,7 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  private static void checkCensusMetrics(MetricsRecord record, boolean server,
+  private void checkCensusMetrics(MetricsRecord record, boolean server,
       Collection<? extends MessageLite> requests, Collection<? extends MessageLite> responses) {
     int uncompressedRequestsSize = 0;
     for (MessageLite request : requests) {
@@ -1885,7 +1892,7 @@ public abstract class AbstractInteropTest {
     for (MessageLite response : responses) {
       uncompressedResponsesSize += response.getSerializedSize();
     }
-    if (server) {
+    if (server && serverInProcess()) {
       assertEquals(
           requests.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_SERVER_REQUEST_COUNT));
       assertEquals(
@@ -1899,7 +1906,8 @@ public abstract class AbstractInteropTest {
       // check if they are recorded.
       assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_REQUEST_BYTES));
       assertNotNull(record.getMetric(RpcConstants.RPC_SERVER_RESPONSE_BYTES));
-    } else {
+    }
+    if (!server) {
       assertEquals(
           requests.size(), record.getMetricAsLongOrFail(RpcConstants.RPC_CLIENT_REQUEST_COUNT));
       assertEquals(

@@ -19,6 +19,7 @@ package io.grpc.testing.integration;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
 import io.grpc.ManagedChannel;
+import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.testing.TestUtils;
 import io.grpc.netty.GrpcSslContexts;
@@ -316,6 +317,7 @@ public class TestServiceClient {
   private class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
+      AbstractManagedChannelImplBuilder<?> builder;
       if (!useOkHttp) {
         SslContext sslContext = null;
         if (useTestCa) {
@@ -326,23 +328,23 @@ public class TestServiceClient {
             throw new RuntimeException(ex);
           }
         }
-        NettyChannelBuilder builder =
+        NettyChannelBuilder nettyBuilder =
             NettyChannelBuilder.forAddress(serverHost, serverPort)
                 .flowControlWindow(65 * 1024)
                 .negotiationType(useTls ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
                 .sslContext(sslContext);
         if (serverHostOverride != null) {
-          builder.overrideAuthority(serverHostOverride);
+          nettyBuilder.overrideAuthority(serverHostOverride);
         }
         if (fullStreamDecompression) {
-          builder.enableFullStreamDecompression();
+          nettyBuilder.enableFullStreamDecompression();
         }
-        return builder.build();
+        builder = nettyBuilder;
       } else {
-        OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);
+        OkHttpChannelBuilder okBuilder = OkHttpChannelBuilder.forAddress(serverHost, serverPort);
         if (serverHostOverride != null) {
           // Force the hostname to match the cert the server uses.
-          builder.overrideAuthority(
+          okBuilder.overrideAuthority(
               GrpcUtil.authorityFromHostAndPort(serverHostOverride, serverPort));
         }
         if (useTls) {
@@ -351,23 +353,25 @@ public class TestServiceClient {
                 ? TestUtils.newSslSocketFactoryForCa(Platform.get().getProvider(),
                     TestUtils.loadCert("ca.pem"))
                 : (SSLSocketFactory) SSLSocketFactory.getDefault();
-            builder.sslSocketFactory(factory);
+            okBuilder.sslSocketFactory(factory);
           } catch (Exception e) {
             throw new RuntimeException(e);
           }
         } else {
-          builder.usePlaintext(true);
+          okBuilder.usePlaintext(true);
         }
         if (fullStreamDecompression) {
-          builder.enableFullStreamDecompression();
+          okBuilder.enableFullStreamDecompression();
         }
-        return builder.build();
+        builder = okBuilder;
       }
+      io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
+      return builder.build();
     }
 
     @Override
-    protected boolean metricsExpected() {
-      // Server-side metrics won't be found, because server is a separate process.
+    protected boolean serverInProcess() {
+      // Server is a separate process.
       return false;
     }
   }
