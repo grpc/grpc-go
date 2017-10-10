@@ -28,37 +28,37 @@ Download [the JARs][]. Or for Maven with non-Android, add to your `pom.xml`:
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-netty</artifactId>
-  <version>1.6.1</version>
+  <version>1.7.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-protobuf</artifactId>
-  <version>1.6.1</version>
+  <version>1.7.0</version>
 </dependency>
 <dependency>
   <groupId>io.grpc</groupId>
   <artifactId>grpc-stub</artifactId>
-  <version>1.6.1</version>
+  <version>1.7.0</version>
 </dependency>
 ```
 
 Or for Gradle with non-Android, add to your dependencies:
 ```gradle
-compile 'io.grpc:grpc-netty:1.6.1'
-compile 'io.grpc:grpc-protobuf:1.6.1'
-compile 'io.grpc:grpc-stub:1.6.1'
+compile 'io.grpc:grpc-netty:1.7.0'
+compile 'io.grpc:grpc-protobuf:1.7.0'
+compile 'io.grpc:grpc-stub:1.7.0'
 ```
 
 For Android client, use `grpc-okhttp` instead of `grpc-netty` and
 `grpc-protobuf-lite` or `grpc-protobuf-nano` instead of `grpc-protobuf`:
 ```gradle
-compile 'io.grpc:grpc-okhttp:1.6.1'
-compile 'io.grpc:grpc-protobuf-lite:1.6.1'
-compile 'io.grpc:grpc-stub:1.6.1'
+compile 'io.grpc:grpc-okhttp:1.7.0'
+compile 'io.grpc:grpc-protobuf-lite:1.7.0'
+compile 'io.grpc:grpc-stub:1.7.0'
 ```
 
 [the JARs]:
-http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%221.6.1%22
+http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.grpc%22%20AND%20v%3A%221.7.0%22
 
 Development snapshots are available in [Sonatypes's snapshot
 repository](https://oss.sonatype.org/content/repositories/snapshots/).
@@ -85,9 +85,9 @@ For protobuf-based codegen integrated with the Maven build system, you can use
       <artifactId>protobuf-maven-plugin</artifactId>
       <version>0.5.0</version>
       <configuration>
-        <protocArtifact>com.google.protobuf:protoc:3.3.0:exe:${os.detected.classifier}</protocArtifact>
+        <protocArtifact>com.google.protobuf:protoc:3.4.0:exe:${os.detected.classifier}</protocArtifact>
         <pluginId>grpc-java</pluginId>
-        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.6.1:exe:${os.detected.classifier}</pluginArtifact>
+        <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.7.0:exe:${os.detected.classifier}</pluginArtifact>
       </configuration>
       <executions>
         <execution>
@@ -123,11 +123,11 @@ buildscript {
 
 protobuf {
   protoc {
-    artifact = "com.google.protobuf:protoc:3.3.0"
+    artifact = "com.google.protobuf:protoc:3.4.0"
   }
   plugins {
     grpc {
-      artifact = 'io.grpc:protoc-gen-grpc-java:1.6.1'
+      artifact = 'io.grpc:protoc-gen-grpc-java:1.7.0'
     }
   }
   generateProtoTasks {
