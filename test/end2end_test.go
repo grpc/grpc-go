@@ -1226,22 +1226,17 @@ func newDuration(b time.Duration) (a *time.Duration) {
 	return
 }
 
-func TestServiceConfigGetMethodConfig(t *testing.T) {
+func TestGetMethodConfig(t *testing.T) {
 	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		if e.balancer == "roundrobin" {
-			testGetMethodConfig(t, e)
-		}
-	}
-}
-
-func testGetMethodConfig(t *testing.T, e env) {
-	te := testServiceConfigSetup(t, e)
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
-	scjs := `{
+	te.resolverScheme = r.Scheme()
+	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
 	"methodConfig": [
 		{
 			"name": [
@@ -1262,12 +1257,8 @@ func testGetMethodConfig(t *testing.T, e env) {
 			"waitForReady": false
 		}
 	]
-}`
+}`)
 
-	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(scjs)
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
@@ -1287,7 +1278,7 @@ func testGetMethodConfig(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	scjs = `{
+	r.NewServiceConfig(`{
 		"methodConfig": [
 				{
 						"name": [
@@ -1308,9 +1299,8 @@ func testGetMethodConfig(t *testing.T, e env) {
 						"waitForReady": false
 				}
 		]
-}`
+}`)
 
-	r.NewServiceConfig(scjs)
 	// Make sure service config has been processed by grpc.
 	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
@@ -1329,21 +1319,16 @@ func testGetMethodConfig(t *testing.T, e env) {
 
 func TestServiceConfigWaitForReady(t *testing.T) {
 	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		if e.balancer == "roundrobin" {
-			testServiceConfigWaitForReady(t, e)
-		}
-	}
-}
-
-func testServiceConfigWaitForReady(t *testing.T, e env) {
-	te := testServiceConfigSetup(t, e)
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
-	scjs := `{
+	te.resolverScheme = r.Scheme()
+	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
 	"methodConfig": [
 		{
 			"name": [
@@ -1360,12 +1345,8 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 			"timeout": "1ms"
 		}
 	]
-}`
+}`)
 
-	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(scjs)
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
@@ -1390,7 +1371,7 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
-	scjs = `{
+	r.NewServiceConfig(`{
 	"methodConfig": [
 		{
 			"name": [
@@ -1407,9 +1388,8 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 			"timeout": "1ms"
 		}
 	]
-}`
+}`)
 
-	r.NewServiceConfig(scjs)
 	// Wait for the new service config to take effect.
 	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
@@ -1431,21 +1411,16 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 
 func TestServiceConfigTimeout(t *testing.T) {
 	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		if e.balancer == "roundrobin" {
-			testServiceConfigTimeout(t, e)
-		}
-	}
-}
-
-func testServiceConfigTimeout(t *testing.T, e env) {
-	te := testServiceConfigSetup(t, e)
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	scjs := `{
+	te.resolverScheme = r.Scheme()
+	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
 	"methodConfig": [
 		{
 			"name": [
@@ -1462,12 +1437,8 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 			"timeout": "1h"
 		}
 	]
-}`
+}`)
 
-	te.resolverScheme = r.Scheme()
-	cc := te.clientConn()
-	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
-	r.NewServiceConfig(scjs)
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
@@ -1497,7 +1468,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	scjs = `{
+	r.NewServiceConfig(`{
 	"methodConfig": [
 		{
 			"name": [
@@ -1514,9 +1485,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 			"timeout": "1ns"
 		}
 	]
-}`
-
-	r.NewServiceConfig(scjs)
+}`)
 
 	// Wait for the new service config to take effect.
 	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
@@ -1544,14 +1513,7 @@ func testServiceConfigTimeout(t *testing.T, e env) {
 
 func TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		if e.balancer == "roundrobin" {
-			testServiceConfigMaxMsgSize(t, e)
-		}
-	}
-}
-
-func testServiceConfigMaxMsgSize(t *testing.T, e env) {
+	e := tcpClearRREnv
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
 

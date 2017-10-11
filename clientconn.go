@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -802,85 +801,17 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 	return t, done, nil
 }
 
-func parseTimeout(t *string) (*time.Duration, error) {
-	if t == nil {
-		return nil, nil
-	}
-	d, err := time.ParseDuration(*t)
-	return &d, err
-}
-
-type jsonName struct {
-	Service *string `json:"service,omitempty"`
-	Method  *string `json:"method,omitempty"`
-}
-
-func (j jsonName) Stringer() string {
-	res := ""
-	if j.Service != nil {
-		res += "/" + *j.Service + "/"
-	}
-	if j.Method != nil {
-		res += *j.Method
-	}
-	return res
-}
-
-type jsonMC struct {
-	Name                    *[]jsonName `json:"name,omitempty"`
-	WaitForReady            *bool       `json:"waitForReady,omitempty"`
-	Timeout                 *string     `json:"timeout,omitempty"`
-	MaxRequestMessageBytes  *int        `json:"maxRequestMessageBytes,omitempty"`
-	MaxResponseMessageBytes *int        `json:"maxResponseMessageBytes,omitempty"`
-}
-
-type jsonSC struct {
-	LoadBalancingPolicy *string   `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        *[]jsonMC `json:"methodConfig,omitempty"`
-}
-
 // handleServiceConfig parses the service config string in JSON format to Go native
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
-	var rsc jsonSC
-	err := json.Unmarshal([]byte(js), &rsc)
-	if err != nil {
-		grpclog.Warningf("grpc: handleServiceConfig error unmarshaling %s due to %v", js, err)
-		return err
-	}
-	cc.scRaw = js
-	var sc ServiceConfig
-	sc.LB = rsc.LoadBalancingPolicy
-	sc.Methods = make(map[string]MethodConfig)
-	if rsc.MethodConfig == nil {
+	sc, err := parseServiceConfig(js)
+	if err == nil {
+		cc.mu.Lock()
+		cc.scRaw = js
 		cc.sc = sc
-		return nil
+		cc.mu.Unlock()
 	}
-
-	for _, m := range *rsc.MethodConfig {
-		if m.Name == nil {
-			continue
-		}
-		d, err := parseTimeout(m.Timeout)
-		if err != nil {
-			continue
-		}
-
-		mc := MethodConfig{
-			WaitForReady: m.WaitForReady,
-			Timeout:      d,
-			MaxReqSize:   m.MaxRequestMessageBytes,
-			MaxRespSize:  m.MaxResponseMessageBytes,
-		}
-		for _, n := range *m.Name {
-			sc.Methods[n.Stringer()] = mc
-		}
-	}
-
-	cc.sc = sc
-	return nil
+	return err
 }
 
 // Close tears down the ClientConn and all underlying connections.

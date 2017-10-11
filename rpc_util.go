@@ -551,6 +551,20 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 	return doptMax
 }
 
+func newBool(b bool) (a *bool) {
+	return &b
+}
+
+func newInt(b int) (a *int) {
+	return &b
+}
+
+func newDuration(b time.Duration) (a *time.Duration) {
+	a = new(time.Duration)
+	*a = b
+	return
+}
+
 // SupportPackageIsVersion3 is referenced from generated protocol buffer files.
 // The latest support package version is 4.
 // SupportPackageIsVersion3 is kept for compatibility. It will be removed in the
