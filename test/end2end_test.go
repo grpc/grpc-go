@@ -143,7 +143,7 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 		return nil, fmt.Errorf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
-		Type: t.Enum(),
+		Type: t,
 		Body: body,
 	}, nil
 }
@@ -256,7 +256,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 		in, err := stream.Recv()
 		if err == io.EOF {
 			return stream.SendAndClose(&testpb.StreamingInputCallResponse{
-				AggregatedPayloadSize: proto.Int32(int32(sum)),
+				AggregatedPayloadSize: int32(sum),
 			})
 		}
 		if err != nil {
@@ -894,7 +894,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -902,7 +902,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -978,7 +978,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -986,7 +986,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -1093,7 +1093,7 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	te.srv.Stop()
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -1101,7 +1101,7 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -1456,8 +1456,8 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te1.clientConn())
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(extraLargeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(extraLargeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
@@ -1467,7 +1467,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Test for unary RPC send.
 	req.Payload = extraLargePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
@@ -1475,11 +1475,11 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	// Test for streaming RPC recv.
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(extraLargeSize)),
+			Size: int32(extraLargeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1495,7 +1495,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = extraLargePayload
 	stream, err = tc.FullDuplexCall(te1.ctx)
 	if err != nil {
@@ -1516,7 +1516,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Test for unary RPC recv.
 	req.Payload = smallPayload
-	req.ResponseSize = proto.Int32(int32(largeSize))
+	req.ResponseSize = int32(largeSize)
 
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
@@ -1524,14 +1524,14 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC recv.
 	stream, err = tc.FullDuplexCall(te2.ctx)
-	respParam[0].Size = proto.Int32(int32(largeSize))
+	respParam[0].Size = int32(largeSize)
 	sreq.Payload = smallPayload
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
@@ -1544,7 +1544,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te2.ctx)
 	if err != nil {
@@ -1565,20 +1565,20 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 
 	// Test for unary RPC recv.
 	req.Payload = smallPayload
-	req.ResponseSize = proto.Int32(int32(largeSize))
+	req.ResponseSize = int32(largeSize)
 
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
 	}
 
-	req.ResponseSize = proto.Int32(int32(extraLargeSize))
+	req.ResponseSize = int32(extraLargeSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
 	}
@@ -1593,7 +1593,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = proto.Int32(int32(largeSize))
+	respParam[0].Size = int32(largeSize)
 	sreq.Payload = smallPayload
 
 	if err := stream.Send(sreq); err != nil {
@@ -1603,7 +1603,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want <nil>", stream, err)
 	}
 
-	respParam[0].Size = proto.Int32(int32(extraLargeSize))
+	respParam[0].Size = int32(extraLargeSize)
 
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -1613,7 +1613,7 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te3.ctx)
 	if err != nil {
@@ -1656,8 +1656,8 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
@@ -1667,11 +1667,11 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1726,8 +1726,8 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
@@ -1737,18 +1737,18 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1766,7 +1766,7 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
@@ -1812,8 +1812,8 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC send.
@@ -1823,18 +1823,18 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 
 	// Test for unary RPC recv.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1852,7 +1852,7 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC recv.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
@@ -1919,8 +1919,8 @@ func testTap(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(45),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: 45,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); grpc.Code(err) != codes.Unavailable {
@@ -2173,8 +2173,8 @@ func testLargeUnary(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
@@ -2217,15 +2217,15 @@ func testExceedMsgLimit(t *testing.T, e env) {
 
 	// Test on server side for unary RPC.
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(smallSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: smallSize,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 	// Test on client side for unary RPC.
-	req.ResponseSize = proto.Int32(int32(*te.maxMsgSize) + 1)
+	req.ResponseSize = int32(*te.maxMsgSize) + 1
 	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
@@ -2238,7 +2238,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 
@@ -2248,7 +2248,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            spayload,
 	}
@@ -2264,7 +2264,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = proto.Int32(int32(*te.maxMsgSize) + 1)
+	respParam[0].Size = int32(*te.maxMsgSize) + 1
 	sreq.Payload = smallPayload
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -2362,7 +2362,7 @@ func testPeerFailedRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		Payload:      largePayload,
 	}
 
@@ -2413,8 +2413,8 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header, trailer metadata.MD
@@ -2459,8 +2459,8 @@ func testMultipleSetTrailerUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var trailer metadata.MD
@@ -2533,8 +2533,8 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header metadata.MD
@@ -2576,8 +2576,8 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 
@@ -2620,8 +2620,8 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header metadata.MD
@@ -2713,9 +2713,9 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
-			{Size: proto.Int32(respSize)},
+			{Size: respSize},
 		},
 		Payload: payload,
 	}
@@ -2777,9 +2777,9 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
-			{Size: proto.Int32(respSize)},
+			{Size: respSize},
 		},
 		Payload: payload,
 	}
@@ -2831,8 +2831,8 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(314),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: 314,
 		Payload:      payload,
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), malformedHTTP2Metadata)
@@ -2853,8 +2853,8 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
@@ -2951,8 +2951,8 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	for i := -1; i <= 10; i++ {
@@ -2989,8 +2989,8 @@ func testCancel(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3115,7 +3115,7 @@ func testPingPong(t *testing.T, e env) {
 	for index < len(reqSizes) {
 		respParam := []*testpb.ResponseParameters{
 			{
-				Size: proto.Int32(int32(respSizes[index])),
+				Size: int32(respSizes[index]),
 			},
 		}
 
@@ -3125,7 +3125,7 @@ func testPingPong(t *testing.T, e env) {
 		}
 
 		req := &testpb.StreamingOutputCallRequest{
-			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
 			ResponseParameters: respParam,
 			Payload:            payload,
 		}
@@ -3193,7 +3193,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 			for index := 0; index < len(reqSizes); index++ {
 				respParam := []*testpb.ResponseParameters{
 					{
-						Size: proto.Int32(int32(respSizes[index])),
+						Size: int32(respSizes[index]),
 					},
 				}
 
@@ -3203,7 +3203,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 				}
 
 				req := &testpb.StreamingOutputCallRequest{
-					ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+					ResponseType:       testpb.PayloadType_COMPRESSABLE,
 					ResponseParameters: respParam,
 					Payload:            payload,
 				}
@@ -3246,11 +3246,11 @@ func testServerStreaming(t *testing.T, e env) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
-			Size: proto.Int32(int32(s)),
+			Size: int32(s),
 		}
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 	}
 	stream, err := tc.StreamingOutputCall(context.Background(), req)
@@ -3302,11 +3302,11 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
-			Size: proto.Int32(int32(s)),
+			Size: int32(s),
 		}
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 	}
 	ctx := metadata.NewOutgoingContext(te.ctx, testMetadata)
@@ -3647,8 +3647,8 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 				return
 			}
 			req := &testpb.SimpleRequest{
-				ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-				ResponseSize: proto.Int32(1592),
+				ResponseType: testpb.PayloadType_COMPRESSABLE,
+				ResponseSize: 1592,
 				Payload:      payload,
 			}
 			// No rpc should go through due to the max streams limit.
@@ -3684,8 +3684,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Unimplemented {
@@ -3698,7 +3698,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(31415),
+			Size: 31415,
 		},
 	}
 	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
@@ -3706,7 +3706,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3741,8 +3741,8 @@ func testCompressOK(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
@@ -3758,7 +3758,7 @@ func testCompressOK(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(31415),
+			Size: 31415,
 		},
 	}
 	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
@@ -3766,7 +3766,7 @@ func testCompressOK(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3830,7 +3830,7 @@ func testStreamClientInterceptor(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(1)),
+			Size: int32(1),
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
@@ -3838,7 +3838,7 @@ func testStreamClientInterceptor(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3898,7 +3898,7 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(1)),
+			Size: int32(1),
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
@@ -3906,7 +3906,7 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -4753,11 +4753,11 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	}
 	respParams := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(messageSize),
+			Size: messageSize,
 		},
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
@@ -4994,11 +4994,11 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(smallSize)),
+			Size: int32(smallSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            extraLargePayload,
 	}
@@ -5015,7 +5015,7 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	}
 	// Test send case: server sends a message larger than maxServerSendMsgSize.
 	sreq.Payload = smallPayload
-	respParam[0].Size = proto.Int32(int32(extraLargeSize))
+	respParam[0].Size = int32(extraLargeSize)
 
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
