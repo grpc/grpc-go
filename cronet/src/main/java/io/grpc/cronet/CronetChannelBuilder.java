@@ -41,8 +41,8 @@ import org.chromium.net.ExperimentalCronetEngine;
 
 /** Convenience class for building channels with the cronet transport. */
 @ExperimentalApi("There is no plan to make this API stable, given transport API instability")
-public class CronetChannelBuilder extends
-        AbstractManagedChannelImplBuilder<CronetChannelBuilder> {
+public final class CronetChannelBuilder extends
+    AbstractManagedChannelImplBuilder<CronetChannelBuilder> {
 
   /** BidirectionalStream.Builder factory used for getting the gRPC BidirectionalStream. */
   public static abstract class StreamBuilderFactory {
