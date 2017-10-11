@@ -408,7 +408,7 @@ public abstract class LoadBalancer {
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(subchannel, status, streamTracerFactory);
+      return Objects.hashCode(subchannel, status, streamTracerFactory, drop);
     }
 
     /**
@@ -422,7 +422,8 @@ public abstract class LoadBalancer {
       }
       PickResult that = (PickResult) other;
       return Objects.equal(subchannel, that.subchannel) && Objects.equal(status, that.status)
-          && Objects.equal(streamTracerFactory, that.streamTracerFactory);
+          && Objects.equal(streamTracerFactory, that.streamTracerFactory)
+          && drop == that.drop;
     }
   }
 
