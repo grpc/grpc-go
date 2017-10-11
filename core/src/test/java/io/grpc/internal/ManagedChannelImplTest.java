@@ -444,6 +444,52 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void noMoreCallbackAfterLoadBalancerShutdown() {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    Status resolutionError = Status.UNAVAILABLE.withDescription("Resolution failed");
+    createChannel(nameResolverFactory, NO_INTERCEPTOR);
+
+    FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.get(0);
+    verify(mockLoadBalancerFactory).newLoadBalancer(any(Helper.class));
+    verify(mockLoadBalancer).handleResolvedAddressGroups(
+        eq(Arrays.asList(addressGroup)), eq(Attributes.EMPTY));
+
+    Subchannel subchannel1 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    Subchannel subchannel2 = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+    subchannel1.requestConnection();
+    subchannel2.requestConnection();
+    verify(mockTransportFactory, times(2)).newClientTransport(
+        any(SocketAddress.class), any(String.class), any(String.class));
+    MockClientTransportInfo transportInfo1 = transports.poll();
+    MockClientTransportInfo transportInfo2 = transports.poll();
+
+    // LoadBalancer receives all sorts of callbacks
+    transportInfo1.listener.transportReady();
+    verify(mockLoadBalancer, times(2))
+        .handleSubchannelState(same(subchannel1), stateInfoCaptor.capture());
+    assertSame(CONNECTING, stateInfoCaptor.getAllValues().get(0).getState());
+    assertSame(READY, stateInfoCaptor.getAllValues().get(1).getState());
+
+    verify(mockLoadBalancer)
+        .handleSubchannelState(same(subchannel2), stateInfoCaptor.capture());
+    assertSame(CONNECTING, stateInfoCaptor.getValue().getState());
+
+    resolver.listener.onError(resolutionError);
+    verify(mockLoadBalancer).handleNameResolutionError(resolutionError);
+
+    verifyNoMoreInteractions(mockLoadBalancer);
+
+    channel.shutdown();
+    verify(mockLoadBalancer).shutdown();
+
+    // No more callback should be delivered to LoadBalancer after it's shut down
+    transportInfo2.listener.transportReady();
+    resolver.listener.onError(resolutionError);
+    resolver.resolved();
+    verifyNoMoreInteractions(mockLoadBalancer);
+  }
+
+  @Test
   public void interceptor() throws Exception {
     final AtomicLong atomic = new AtomicLong();
     ClientInterceptor interceptor = new ClientInterceptor() {

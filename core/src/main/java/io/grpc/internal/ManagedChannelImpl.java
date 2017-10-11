@@ -660,7 +660,10 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
                 if ((newState.getState() == TRANSIENT_FAILURE || newState.getState() == IDLE)) {
                   nr.refresh();
                 }
-                lb.handleSubchannelState(subchannel, newState);
+                // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+                if (LbHelperImpl.this == ManagedChannelImpl.this.lbHelper) {
+                  lb.handleSubchannelState(subchannel, newState);
+                }
               }
 
               @Override
@@ -846,7 +849,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       helper.runSerialized(new Runnable() {
           @Override
           public void run() {
-            if (terminated) {
+            // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+            if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
               return;
             }
             try {
@@ -871,7 +875,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       channelExecutor.executeLater(new Runnable() {
           @Override
           public void run() {
-            if (terminated) {
+            // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
+            if (NameResolverListenerImpl.this.helper != ManagedChannelImpl.this.lbHelper) {
               return;
             }
             balancer.handleNameResolutionError(error);
