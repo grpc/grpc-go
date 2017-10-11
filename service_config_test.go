@@ -29,7 +29,62 @@ import (
 
 func TestParseLoadBalancer(t *testing.T) {
 	defer leakcheck.Check(t)
+	testcases := []struct {
+		scjs    string
+		wantSC  ServiceConfig
+		wantErr error
+	}{
+		{
+			`{
+      "loadBalancingPolicy":"round_robin",
+    	"methodConfig": [
+    		{
+    			"name": [
+    				{
+    					"service": "foo",
+              "method": "Bar"
+    				}
+    			],
+    			"waitForReady": true
+    		}
+    	]
+    }`,
+			ServiceConfig{
+				LB: newString("round_robin"),
+				Methods: map[string]MethodConfig{
+					"/foo/Bar": {
+						WaitForReady: newBool(true),
+					},
+				},
+			},
+			nil,
+		},
+		{
+			`{
+      "loadBalancingPolicy": 1,
+      "methodConfig": [
+        {
+          "name": [
+            {
+              "service": "foo",
+              "method": "Bar"
+            }
+          ],
+          "waitForReady": false
+        }
+      ]
+    }`,
+			ServiceConfig{},
+			fmt.Errorf("json: cannot unmarshal number into Go struct field jsonSC.loadBalancingPolicy of type string"),
+		},
+	}
 
+	for _, c := range testcases {
+		sc, err := parseServiceConfig(c.scjs)
+		if !errEqual(err, c.wantErr) || !reflect.DeepEqual(sc, c.wantSC) {
+			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
+		}
+	}
 }
 
 func errEqual(a error, b error) bool {

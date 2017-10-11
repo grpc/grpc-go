@@ -565,6 +565,10 @@ func newDuration(b time.Duration) (a *time.Duration) {
 	return
 }
 
+func newString(b string) (a *string) {
+	return &b
+}
+
 // SupportPackageIsVersion3 is referenced from generated protocol buffer files.
 // The latest support package version is 4.
 // SupportPackageIsVersion3 is kept for compatibility. It will be removed in the
