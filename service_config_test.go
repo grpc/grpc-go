@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -32,7 +31,7 @@ func TestParseLoadBalancer(t *testing.T) {
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
-		wantErr error
+		wantErr bool
 	}{
 		{
 			`{
@@ -57,7 +56,7 @@ func TestParseLoadBalancer(t *testing.T) {
 					},
 				},
 			},
-			nil,
+			false,
 		},
 		{
 			`{
@@ -75,26 +74,16 @@ func TestParseLoadBalancer(t *testing.T) {
       ]
     }`,
 			ServiceConfig{},
-			fmt.Errorf("json: cannot unmarshal number into Go struct field jsonSC.loadBalancingPolicy of type string"),
+			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if !errEqual(err, c.wantErr) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
-}
-
-func errEqual(a error, b error) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a != nil && b != nil && a.Error() == b.Error() {
-		return true
-	}
-	return false
 }
 
 func TestPraseWaitForReady(t *testing.T) {
@@ -102,7 +91,7 @@ func TestPraseWaitForReady(t *testing.T) {
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
-		wantErr error
+		wantErr bool
 	}{
 		{
 			`{
@@ -125,7 +114,7 @@ func TestPraseWaitForReady(t *testing.T) {
 					},
 				},
 			},
-			nil,
+			false,
 		},
 		{
 			`{
@@ -148,7 +137,7 @@ func TestPraseWaitForReady(t *testing.T) {
 					},
 				},
 			},
-			nil,
+			false,
 		},
 		{
 			`{
@@ -174,13 +163,13 @@ func TestPraseWaitForReady(t *testing.T) {
       ]
     }`,
 			ServiceConfig{},
-			fmt.Errorf("invalid character 'l' in literal false (expecting 's')"),
+			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if !errEqual(err, c.wantErr) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -191,7 +180,7 @@ func TestPraseTimeOut(t *testing.T) {
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
-		wantErr error
+		wantErr bool
 	}{
 		{
 			`{
@@ -214,7 +203,7 @@ func TestPraseTimeOut(t *testing.T) {
 					},
 				},
 			},
-			nil,
+			false,
 		},
 		{
 			`{
@@ -231,7 +220,7 @@ func TestPraseTimeOut(t *testing.T) {
       ]
     }`,
 			ServiceConfig{},
-			fmt.Errorf("time: unknown unit c in duration 3c"),
+			true,
 		},
 		{
 			`{
@@ -257,13 +246,13 @@ func TestPraseTimeOut(t *testing.T) {
       ]
     }`,
 			ServiceConfig{},
-			fmt.Errorf("time: unknown unit c in duration 3c"),
+			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if !errEqual(err, c.wantErr) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
@@ -274,7 +263,7 @@ func TestPraseMsgSize(t *testing.T) {
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
-		wantErr error
+		wantErr bool
 	}{
 		{
 			`{
@@ -299,7 +288,7 @@ func TestPraseMsgSize(t *testing.T) {
 					},
 				},
 			},
-			nil,
+			false,
 		},
 		{
 			`{
@@ -327,13 +316,13 @@ func TestPraseMsgSize(t *testing.T) {
       ]
     }`,
 			ServiceConfig{},
-			fmt.Errorf("json: cannot unmarshal string into Go struct field jsonMC.maxRequestMessageBytes of type int"),
+			true,
 		},
 	}
 
 	for _, c := range testcases {
 		sc, err := parseServiceConfig(c.scjs)
-		if !errEqual(err, c.wantErr) || !reflect.DeepEqual(sc, c.wantSC) {
+		if c.wantErr != (err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
 			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, err, c.wantSC, c.wantErr)
 		}
 	}
