@@ -1253,7 +1253,7 @@ func (t *http2Client) itemHandler(i item) error {
 		}
 		err = t.framer.fr.WritePing(i.ack, i.data)
 	default:
-		errorf("transport: http2Client.controller got unexpected item type %v\n", i)
+		errorf("transport: http2Client.controller got unexpected item type %v", i)
 	}
 	return err
 }
