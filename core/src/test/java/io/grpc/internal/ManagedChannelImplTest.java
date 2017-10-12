@@ -1333,36 +1333,6 @@ public class ManagedChannelImplTest {
   }
 
   @Test
-  @Deprecated
-  public void getState_loadBalancerDoesNotSupportChannelState() {
-    createChannel(new FakeNameResolverFactory(false), NO_INTERCEPTOR);
-    assertEquals(IDLE, channel.getState(false));
-    helper.updatePicker(mockPicker);
-
-    thrown.expect(UnsupportedOperationException.class);
-    channel.getState(false);
-  }
-
-  @Test
-  @Deprecated
-  public void notifyWhenStateChanged_loadBalancerDoesNotSupportChannelState() {
-    createChannel(new FakeNameResolverFactory(false), NO_INTERCEPTOR);
-    assertEquals(IDLE, channel.getState(false));
-
-    Runnable onStateChanged = mock(Runnable.class);
-    channel.notifyWhenStateChanged(IDLE, onStateChanged);
-    executor.runDueTasks();
-    verify(onStateChanged, never()).run();
-
-    helper.updatePicker(mockPicker);
-    executor.runDueTasks();
-
-    verify(onStateChanged).run();
-    thrown.expect(UnsupportedOperationException.class);
-    channel.getState(false);
-  }
-
-  @Test
   public void notifyWhenStateChanged() {
     final AtomicBoolean stateChanged = new AtomicBoolean();
     Runnable onStateChanged = new Runnable() {

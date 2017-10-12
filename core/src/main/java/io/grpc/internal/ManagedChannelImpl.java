@@ -52,7 +52,6 @@ import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -794,22 +793,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     public void runSerialized(Runnable task) {
       channelExecutor.executeLater(task).drain();
     }
-
-    @Deprecated
-    @Override
-    public void updatePicker(final SubchannelPicker picker) {
-      runSerialized(new Runnable() {
-          @Override
-          public void run() {
-            if (LbHelperImpl.this != lbHelper) {
-              return;
-            }
-            subchannelPicker = picker;
-            delayedTransport.reprocess(picker);
-            channelStateManager.disable();
-          }
-        });
-    }
   }
 
   @Override
@@ -824,18 +807,6 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     NameResolverListenerImpl(LbHelperImpl helperImpl) {
       this.balancer = helperImpl.lb;
       this.helper = helperImpl;
-    }
-
-    @Deprecated
-    @Override
-    public void onUpdate(
-        final List<io.grpc.ResolvedServerInfoGroup> servers, final Attributes config) {
-      ArrayList<EquivalentAddressGroup> eags =
-          new ArrayList<EquivalentAddressGroup>(servers.size());
-      for (io.grpc.ResolvedServerInfoGroup infoGroup : servers) {
-        eags.add(infoGroup.toEquivalentAddressGroup());
-      }
-      onAddresses(eags, config);
     }
 
     @Override

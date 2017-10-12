@@ -111,19 +111,6 @@ public abstract class NameResolver {
      *
      * <p>Implementations will not modify the given {@code servers}.
      *
-     * @deprecated call {@link #onAddresses} instead
-     * @param servers the resolved server groups, containing {@link ResolvedServerInfo} objects. An
-     *                empty list will trigger {@link #onError}
-     * @param attributes extra metadata from naming system
-     */
-    @Deprecated
-    void onUpdate(List<ResolvedServerInfoGroup> servers, Attributes attributes);
-
-    /**
-     * Handles updates on resolved addresses and attributes.
-     *
-     * <p>Implementations will not modify the given {@code servers}.
-     *
      * @param servers the resolved server addresses. An empty list will trigger {@link #onError}
      * @param attributes extra metadata from naming system
      */

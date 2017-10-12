@@ -19,8 +19,6 @@ package io.grpc;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
-import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -100,26 +98,6 @@ import javax.annotation.concurrent.ThreadSafe;
 public abstract class LoadBalancer {
   /**
    * Handles newly resolved server groups and metadata attributes from name resolution system.
-   * {@code servers} contained in {@link ResolvedServerInfoGroup} should be considered equivalent
-   * but may be flattened into a single list if needed.
-   *
-   * <p>Implementations should not modify the given {@code servers}.
-   *
-   * @deprecated Implement {@link #handleResolvedAddressGroups} instead.  As it is deprecated, the
-   *             {@link ResolvedServerInfo}s from the passed-in {@link ResolvedServerInfoGroup}s
-   *             lose all their attributes.
-   *
-   * @param servers the resolved server addresses, never empty.
-   * @param attributes extra metadata from naming system.
-   */
-  @Deprecated
-  public void handleResolvedAddresses(
-      List<ResolvedServerInfoGroup> servers, Attributes attributes) {
-    throw new UnsupportedOperationException("This is deprecated and should not be called");
-  }
-
-  /**
-   * Handles newly resolved server groups and metadata attributes from name resolution system.
    * {@code servers} contained in {@link EquivalentAddressGroup} should be considered equivalent
    * but may be flattened into a single list if needed.
    *
@@ -128,21 +106,8 @@ public abstract class LoadBalancer {
    * @param servers the resolved server addresses, never empty.
    * @param attributes extra metadata from naming system.
    */
-  @SuppressWarnings("deprecation")
-  public void handleResolvedAddressGroups(
-      List<EquivalentAddressGroup> servers, Attributes attributes) {
-    ArrayList<ResolvedServerInfoGroup> serverInfoGroups =
-        new ArrayList<ResolvedServerInfoGroup>(servers.size());
-    for (EquivalentAddressGroup eag : servers) {
-      ResolvedServerInfoGroup.Builder serverInfoGroupBuilder =
-          ResolvedServerInfoGroup.builder(eag.getAttributes());
-      for (SocketAddress addr : eag.getAddresses()) {
-        serverInfoGroupBuilder.add(new ResolvedServerInfo(addr));
-      }
-      serverInfoGroups.add(serverInfoGroupBuilder.build());
-    }
-    handleResolvedAddresses(serverInfoGroups, attributes);
-  }
+  public abstract void handleResolvedAddressGroups(
+      List<EquivalentAddressGroup> servers, Attributes attributes);
 
   /**
    * Handles an error from the name resolution system.
@@ -158,9 +123,9 @@ public abstract class LoadBalancer {
    * state.
    *
    * <p>If the new state is not SHUTDOWN, this method should create a new picker and call {@link
-   * Helper#updatePicker Helper.updatePicker()}.  Failing to do so may result in unnecessary delays
-   * of RPCs. Please refer to {@link PickResult#withSubchannel PickResult.withSubchannel()}'s
-   * javadoc for more information.
+   * Helper#updateBalancingState Helper.updateBalancingState()}.  Failing to do so may result in
+   * unnecessary delays of RPCs. Please refer to {@link PickResult#withSubchannel
+   * PickResult.withSubchannel()}'s javadoc for more information.
    *
    * <p>SHUTDOWN can only happen in two cases.  One is that LoadBalancer called {@link
    * Subchannel#shutdown} earlier, thus it should have already discarded this Subchannel.  The other
@@ -207,7 +172,8 @@ public abstract class LoadBalancer {
     public abstract CallOptions getCallOptions();
 
     /**
-     * Headers of the call. {@code pickSubchannel()} may mutate it before before returning.
+     * Headers of the call. {@link SubchannelPicker#pickSubchannel} may mutate it before before
+     * returning.
      */
     public abstract Metadata getHeaders();
 
@@ -229,8 +195,8 @@ public abstract class LoadBalancer {
    *       wait-for-ready (i.e., {@link CallOptions#withWaitForReady} was not called), the RPC will
    *       fail immediately with the given error.</li>
    *   <li>Buffer: in all other cases, the RPC will be buffered in the Channel, until the next
-   *       picker is provided via {@link Helper#updatePicker Helper.updatePicker()}, when the RPC
-   *       will go through the same picking process again.</li>
+   *       picker is provided via {@link Helper#updateBalancingState Helper.updateBalancingState()},
+   *       when the RPC will go through the same picking process again.</li>
    * </ul>
    */
   @Immutable
@@ -271,7 +237,8 @@ public abstract class LoadBalancer {
      * </ul>
      *
      * <p><strong>All buffered RPCs will stay buffered</strong> until the next call of {@link
-     * Helper#updatePicker Helper.updatePicker()}, which will trigger a new picking process.
+     * Helper#updateBalancingState Helper.updateBalancingState()}, which will trigger a new picking
+     * process.
      *
      * <p>Note that Subchannel's state may change at the same time the picker is making the
      * decision, which means the decision may be made with (to-be) outdated information.  For
@@ -309,10 +276,10 @@ public abstract class LoadBalancer {
      *             whenever the Subchannel has transitioned to IDLE, then you don't need to include
      *             IDLE Subchannels in your pick results.</li>
      *       </ul></li>
-     *   <li>Always create a new picker and call {@link Helper#updatePicker Helper.updatePicker()}
-     *       whenever {@link #handleSubchannelState handleSubchannelState()} is called, unless the
-     *       new state is SHUTDOWN. See {@code handleSubchannelState}'s javadoc for more
-     *       details.</li>
+     *   <li>Always create a new picker and call {@link Helper#updateBalancingState
+     *       Helper.updateBalancingState()} whenever {@link #handleSubchannelState
+     *       handleSubchannelState()} is called, unless the new state is SHUTDOWN. See
+     *       {@code handleSubchannelState}'s javadoc for more details.</li>
      * </ol>
      *
      * @param subchannel the picked Subchannel
@@ -451,7 +418,8 @@ public abstract class LoadBalancer {
      * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
      *     #createSubchannel}
      */
-    public void updateSubchannelAddresses(Subchannel subchannel, EquivalentAddressGroup addrs) {
+    public void updateSubchannelAddresses(
+        Subchannel subchannel, EquivalentAddressGroup addrs) {
       throw new UnsupportedOperationException();
     }
 
@@ -477,25 +445,6 @@ public abstract class LoadBalancer {
     }
 
     /**
-     * Set a new picker to the channel.
-     *
-     * <p>When a new picker is provided via {@code updatePicker()}, the channel will apply the
-     * picker on all buffered RPCs, by calling {@link SubchannelPicker#pickSubchannel(
-     * LoadBalancer.PickSubchannelArgs)}.
-     *
-     * <p>The channel will hold the picker and use it for all RPCs, until {@code updatePicker()} is
-     * called again and a new picker replaces the old one.  If {@code updatePicker()} has never been
-     * called, the channel will buffer all RPCs until a picker is provided.
-     *
-     * <p>Using this method implies that this load balancer doesn't support channel state, and the
-     * application will get exception when trying to get the channel state.
-     *
-     * @deprecated Please migrate ALL usages to {@link #updateBalancingState}
-     */
-    @Deprecated
-    public abstract void updatePicker(SubchannelPicker picker);
-
-    /**
      * Set a new state with a new picker to the channel.
      *
      * <p>When a new picker is provided via {@code updateBalancingState()}, the channel will apply
@@ -510,11 +459,9 @@ public abstract class LoadBalancer {
      * <p>The passed state will be the channel's new state. The SHUTDOWN state should not be passed
      * and its behavior is undefined.
      */
-    public void updateBalancingState(
-        @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker) {
-      updatePicker(newPicker);
-    }
-
+    public abstract void updateBalancingState(
+        @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker);
+    
     /**
      * Schedule a task to be run in the Channel Executor, which serializes the task with the
      * callback methods on the {@link LoadBalancer} interface.
