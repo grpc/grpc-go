@@ -703,7 +703,12 @@ func (e StreamError) Error() string {
 	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
-// wait blocks until it can receive from one of the provided contexts or channels
+// wait blocks until it can receive from one of the provided contexts or
+// channels.  ctx is the context of the RPC, tctx is the context of the
+// transport, done is a channel closed to indicate the end of the RPC, goAway
+// is a channel closed to indicate a GOAWAY was received, and proceed is a
+// quota channel, whose received value is returned from this function if none
+// of the other signals occur first.
 func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
