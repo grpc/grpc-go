@@ -1237,39 +1237,36 @@ func TestGetMethodConfig(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "EmptyCall"
-				}
-			],
-			"waitForReady": true,
-			"timeout": "1ms"
-		},
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService"
-				}
-			],
-			"waitForReady": false
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
 }`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
-		if mc.WaitForReady == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-			continue
+		if cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
@@ -1279,37 +1276,34 @@ func TestGetMethodConfig(t *testing.T) {
 	}
 
 	r.NewServiceConfig(`{
-		"methodConfig": [
-				{
-						"name": [
-								{
-										"service": "grpc.testing.TestService",
-										"method": "UnaryCall"
-								}
-						],
-						"waitForReady": true,
-						"timeout": "1ms"
-				},
-				{
-						"name": [
-								{
-										"service": "grpc.testing.TestService"
-								}
-						],
-						"waitForReady": false
-				}
-		]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
 }`)
 
 	// Make sure service config has been processed by grpc.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
-		if mc.WaitForReady == nil || *mc.WaitForReady {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall"); mc.WaitForReady != nil && !*mc.WaitForReady {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 	// The following RPCs are expected to become fail-fast.
 	if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
@@ -1329,35 +1323,32 @@ func TestServiceConfigWaitForReady(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "EmptyCall"
-				},
-				{
-					"service": "grpc.testing.TestService",
-					"method": "FullDuplexCall"
-				}
-			],
-			"waitForReady": false,
-			"timeout": "1ms"
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": false,
+            "timeout": "1ms"
+        }
+    ]
 }`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	mc := cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.WaitForReady == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
@@ -1372,33 +1363,30 @@ func TestServiceConfigWaitForReady(t *testing.T) {
 	// Generate a service config update.
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.NewServiceConfig(`{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "EmptyCall"
-				},
-				{
-					"service": "grpc.testing.TestService",
-					"method": "FullDuplexCall"
-				}
-			],
-			"waitForReady": true,
-			"timeout": "1ms"
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        }
+    ]
 }`)
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
-		if mc.WaitForReady == nil || !*mc.WaitForReady {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall"); mc.WaitForReady != nil && *mc.WaitForReady {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
@@ -1421,35 +1409,32 @@ func TestServiceConfigTimeout(t *testing.T) {
 	cc := te.clientConn()
 	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
 	r.NewServiceConfig(`{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "EmptyCall"
-				},
-				{
-					"service": "grpc.testing.TestService",
-					"method": "FullDuplexCall"
-				}
-			],
-			"waitForReady": true,
-			"timeout": "1h"
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1h"
+        }
+    ]
 }`)
 
 	tc := testpb.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	mc := cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.Timeout == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
@@ -1469,33 +1454,30 @@ func TestServiceConfigTimeout(t *testing.T) {
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.NewServiceConfig(`{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "EmptyCall"
-				},
-				{
-					"service": "grpc.testing.TestService",
-					"method": "FullDuplexCall"
-				}
-			],
-			"waitForReady": true,
-			"timeout": "1ns"
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ns"
+        }
+    ]
 }`)
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.Timeout == nil || *mc.Timeout != time.Nanosecond {
-			time.Sleep(time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall"); mc.Timeout != nil && *mc.Timeout == time.Nanosecond {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
@@ -1536,22 +1518,22 @@ func TestServiceConfigMaxMsgSize(t *testing.T) {
 	}
 
 	scjs := `{
-	"methodConfig": [
-		{
-			"name": [
-				{
-					"service": "grpc.testing.TestService",
-					"method": "UnaryCall"
-				},
-				{
-					"service": "grpc.testing.TestService",
-					"method": "FullDuplexCall"
-				}
-			],
-			"maxRequestMessageBytes": 2048,
-			"maxResponseMessageBytes": 2048
-		}
-	]
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "maxRequestMessageBytes": 2048,
+            "maxResponseMessageBytes": 2048
+        }
+    ]
 }`
 
 	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
@@ -1573,14 +1555,11 @@ func TestServiceConfigMaxMsgSize(t *testing.T) {
 		Payload:      smallPayload,
 	}
 
-	mc := cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.MaxReqSize == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// Test for unary RPC recv.
@@ -1642,14 +1621,11 @@ func TestServiceConfigMaxMsgSize(t *testing.T) {
 	r.NewServiceConfig(scjs)
 	tc = testpb.NewTestServiceClient(cc2)
 
-	mc = cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.MaxReqSize == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// Test for unary RPC recv.
@@ -1707,14 +1683,11 @@ func TestServiceConfigMaxMsgSize(t *testing.T) {
 	r.NewServiceConfig(scjs)
 	tc = testpb.NewTestServiceClient(cc3)
 
-	mc = cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if mc.MaxReqSize == nil {
-			time.Sleep(time.Millisecond)
-			mc = cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	// Test for unary RPC recv.

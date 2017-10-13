@@ -492,45 +492,6 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return status.Errorf(c, format, a...)
 }
 
-// MethodConfig defines the configuration recommended by the service providers for a
-// particular method.
-// This is EXPERIMENTAL and subject to change.
-type MethodConfig struct {
-	// WaitForReady indicates whether RPCs sent to this method should wait until
-	// the connection is ready by default (!failfast). The value specified via the
-	// gRPC client API will override the value set here.
-	WaitForReady *bool
-	// Timeout is the default timeout for RPCs sent to this method. The actual
-	// deadline used will be the minimum of the value specified here and the value
-	// set by the application via the gRPC client API.  If either one is not set,
-	// then the other will be used.  If neither is set, then the RPC has no deadline.
-	Timeout *time.Duration
-	// MaxReqSize is the maximum allowed payload size for an individual request in a
-	// stream (client->server) in bytes. The size which is measured is the serialized
-	// payload after per-message compression (but before stream compression) in bytes.
-	// The actual value used is the minimum of the value specified here and the value set
-	// by the application via the gRPC client API. If either one is not set, then the other
-	// will be used.  If neither is set, then the built-in default is used.
-	MaxReqSize *int
-	// MaxRespSize is the maximum allowed payload size for an individual response in a
-	// stream (server->client) in bytes.
-	MaxRespSize *int
-}
-
-// ServiceConfig is provided by the service provider and contains parameters for how
-// clients that connect to the service should behave.
-// This is EXPERIMENTAL and subject to change.
-type ServiceConfig struct {
-	// LB is the load balancer the service providers recommends. The balancer specified
-	// via grpc.WithBalancer will override this.
-	LB *string
-	// Methods contains a map for the methods in this service.
-	// If there is an exact match for a method (i.e. /service/method) in the map, use the corresponding MethodConfig.
-	// If there's no exact match, look for the default config for the service (/service/) and use the corresponding MethodConfig if it exists.
-	// Otherwise, the method has no MethodConfig to use.
-	Methods map[string]MethodConfig
-}
-
 func min(a, b *int) *int {
 	if *a < *b {
 		return a

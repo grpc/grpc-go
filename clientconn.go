@@ -805,13 +805,14 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 // struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
 func (cc *ClientConn) handleServiceConfig(js string) error {
 	sc, err := parseServiceConfig(js)
-	if err == nil {
-		cc.mu.Lock()
-		cc.scRaw = js
-		cc.sc = sc
-		cc.mu.Unlock()
+	if err != nil {
+		return err
 	}
-	return err
+	cc.mu.Lock()
+	cc.scRaw = js
+	cc.sc = sc
+	cc.mu.Unlock()
+	return nil
 }
 
 // Close tears down the ClientConn and all underlying connections.
