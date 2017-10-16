@@ -623,15 +623,14 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 // switchBalancer starts the switching from current balancer to the balancer with name.
 func (cc *ClientConn) switchBalancer(name string) {
 	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	if cc.conns == nil {
-		cc.mu.Unlock()
 		return
 	}
-	defer cc.mu.Unlock()
 	grpclog.Infof("ClientConn switching balancer to %q", name)
 
 	if cc.customBalancer {
-		grpclog.Infoln("failed to switch balancer because custom balancer was set")
+		grpclog.Infoln("ignoring service config balancer configuration: WithBalancer DialOption used instead")
 		return
 	}
 
@@ -659,10 +658,10 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 		cc.mu.Unlock()
 		return
 	}
-	defer cc.mu.Unlock()
 	// TODO(bar switching) send updates to all balancer wrappers when balancer
 	// gracefully switching is supported.
 	cc.balancerWrapper.handleSubConnStateChange(sc, s)
+	cc.mu.Unlock()
 }
 
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.

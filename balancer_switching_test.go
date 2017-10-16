@@ -37,14 +37,25 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 		reply string
 		err   error
 	)
-	// The second RPC should succeed with the first server.
+	connected := false
 	for i := 0; i < 1000; i++ {
 		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
-			return nil
+			connected = true
+			break
 		}
 		time.Sleep(time.Millisecond)
 	}
-	return fmt.Errorf("EmptyCall() = _, %v, want _, %v", err, servers[0].port)
+	if !connected {
+		return fmt.Errorf("EmptyCall() = _, %v, want _, %v", err, servers[0].port)
+	}
+	// The following RPCs should all succeed with the first server.
+	for i := 0; i < 3; i++ {
+		err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
+		if ErrorDesc(err) != servers[0].port {
+			return fmt.Errorf("Index %d: want peer %v, got peer %v", i, servers[0].port, err)
+		}
+	}
+	return nil
 }
 
 func checkRoundRobin(cc *ClientConn, servers []*server) error {
