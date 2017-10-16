@@ -1227,7 +1227,6 @@ func newDuration(b time.Duration) (a *time.Duration) {
 }
 
 func TestGetMethodConfig(t *testing.T) {
-	defer leakcheck.Check(t)
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -1312,7 +1311,6 @@ func TestGetMethodConfig(t *testing.T) {
 }
 
 func TestServiceConfigWaitForReady(t *testing.T) {
-	defer leakcheck.Check(t)
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -1398,7 +1396,6 @@ func TestServiceConfigWaitForReady(t *testing.T) {
 }
 
 func TestServiceConfigTimeout(t *testing.T) {
-	defer leakcheck.Check(t)
 	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
@@ -1494,7 +1491,6 @@ func TestServiceConfigTimeout(t *testing.T) {
 }
 
 func TestServiceConfigMaxMsgSize(t *testing.T) {
-	defer leakcheck.Check(t)
 	e := tcpClearRREnv
 	r, rcleanup := manual.GenerateAndRegisterManualResolver()
 	defer rcleanup()
