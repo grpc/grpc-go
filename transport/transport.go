@@ -21,7 +21,6 @@
 package transport // import "google.golang.org/grpc/transport"
 
 import (
-	stdctx "context"
 	"fmt"
 	"io"
 	"net"
@@ -722,17 +721,6 @@ func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-cha
 	case i := <-proceed:
 		return i, nil
 	}
-}
-
-// ContextErr converts the error from context package into a StreamError.
-func ContextErr(err error) StreamError {
-	switch err {
-	case context.DeadlineExceeded, stdctx.DeadlineExceeded:
-		return streamErrorf(codes.DeadlineExceeded, "%v", err)
-	case context.Canceled, stdctx.Canceled:
-		return streamErrorf(codes.Canceled, "%v", err)
-	}
-	return streamErrorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }
 
 // GoAwayReason contains the reason for the GoAway frame received.
