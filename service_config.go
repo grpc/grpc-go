@@ -141,3 +141,39 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 
 	return sc, nil
 }
+
+func min(a, b *int) *int {
+	if *a < *b {
+		return a
+	}
+	return b
+}
+
+func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
+	if mcMax == nil && doptMax == nil {
+		return &defaultVal
+	}
+	if mcMax != nil && doptMax != nil {
+		return min(mcMax, doptMax)
+	}
+	if mcMax != nil {
+		return mcMax
+	}
+	return doptMax
+}
+
+func newBool(b bool) *bool {
+	return &b
+}
+
+func newInt(b int) *int {
+	return &b
+}
+
+func newDuration(b time.Duration) *time.Duration {
+	return &b
+}
+
+func newString(b string) *string {
+	return &b
+}

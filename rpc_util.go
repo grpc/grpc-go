@@ -492,44 +492,6 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return status.Errorf(c, format, a...)
 }
 
-func min(a, b *int) *int {
-	if *a < *b {
-		return a
-	}
-	return b
-}
-
-func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
-	if mcMax == nil && doptMax == nil {
-		return &defaultVal
-	}
-	if mcMax != nil && doptMax != nil {
-		return min(mcMax, doptMax)
-	}
-	if mcMax != nil {
-		return mcMax
-	}
-	return doptMax
-}
-
-func newBool(b bool) (a *bool) {
-	return &b
-}
-
-func newInt(b int) (a *int) {
-	return &b
-}
-
-func newDuration(b time.Duration) (a *time.Duration) {
-	a = new(time.Duration)
-	*a = b
-	return
-}
-
-func newString(b string) (a *string) {
-	return &b
-}
-
 // SupportPackageIsVersion3 is referenced from generated protocol buffer files.
 // The latest support package version is 4.
 // SupportPackageIsVersion3 is kept for compatibility. It will be removed in the
