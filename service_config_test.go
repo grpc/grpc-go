@@ -22,12 +22,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestParseLoadBalancer(t *testing.T) {
-	defer leakcheck.Check(t)
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
@@ -87,7 +84,6 @@ func TestParseLoadBalancer(t *testing.T) {
 }
 
 func TestPraseWaitForReady(t *testing.T) {
-	defer leakcheck.Check(t)
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
@@ -176,7 +172,6 @@ func TestPraseWaitForReady(t *testing.T) {
 }
 
 func TestPraseTimeOut(t *testing.T) {
-	defer leakcheck.Check(t)
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
@@ -259,7 +254,6 @@ func TestPraseTimeOut(t *testing.T) {
 }
 
 func TestPraseMsgSize(t *testing.T) {
-	defer leakcheck.Check(t)
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
