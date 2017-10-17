@@ -48,13 +48,13 @@ import io.grpc.LoadBalancer.PickSubchannelArgs;
 import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.Status;
 import io.grpc.util.RoundRobinLoadBalancerFactory.Picker;
+import io.grpc.util.RoundRobinLoadBalancerFactory.Ref;
 import io.grpc.util.RoundRobinLoadBalancerFactory.RoundRobinLoadBalancer;
 import java.net.SocketAddress;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -98,7 +98,9 @@ public class RoundRobinLoadBalancerTest {
       SocketAddress addr = new FakeSocketAddress("server" + i);
       EquivalentAddressGroup eag = new EquivalentAddressGroup(addr);
       servers.add(eag);
-      subchannels.put(eag, mock(Subchannel.class));
+      Subchannel sc = mock(Subchannel.class);
+      when(sc.getAddresses()).thenReturn(eag);
+      subchannels.put(eag, sc);
     }
 
     when(mockHelper.createSubchannel(any(EquivalentAddressGroup.class), any(Attributes.class)))
@@ -155,7 +157,7 @@ public class RoundRobinLoadBalancerTest {
     for (Subchannel subchannel : Lists.newArrayList(removedSubchannel, oldSubchannel,
         newSubchannel)) {
       when(subchannel.getAttributes()).thenReturn(Attributes.newBuilder().set(STATE_INFO,
-          new AtomicReference<ConnectivityStateInfo>(
+          new Ref<ConnectivityStateInfo>(
               ConnectivityStateInfo.forNonError(READY))).build());
     }
 
@@ -224,43 +226,27 @@ public class RoundRobinLoadBalancerTest {
   }
 
   @Test
-  public void pickAfterStateChangeBeforeResolution() throws Exception {
-    loadBalancer.handleSubchannelState(mockSubchannel,
-        ConnectivityStateInfo.forNonError(READY));
-    verifyNoMoreInteractions(mockSubchannel);
-    verifyNoMoreInteractions(mockHelper);
-  }
-
-  @Test
-  public void pickAfterStateChangeAndResolutionError() throws Exception {
-    loadBalancer.handleSubchannelState(mockSubchannel,
-        ConnectivityStateInfo.forNonError(READY));
-    verifyNoMoreInteractions(mockSubchannel);
-    verifyNoMoreInteractions(mockHelper);
-  }
-
-  @Test
   public void pickAfterStateChange() throws Exception {
     InOrder inOrder = inOrder(mockHelper);
     loadBalancer.handleResolvedAddressGroups(servers, Attributes.EMPTY);
     Subchannel subchannel = loadBalancer.getSubchannels().iterator().next();
-    AtomicReference<ConnectivityStateInfo> subchannelStateInfo = subchannel.getAttributes().get(
+    Ref<ConnectivityStateInfo> subchannelStateInfo = subchannel.getAttributes().get(
         STATE_INFO);
 
     inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), isA(Picker.class));
-    assertThat(subchannelStateInfo.get()).isEqualTo(ConnectivityStateInfo.forNonError(IDLE));
+    assertThat(subchannelStateInfo.value).isEqualTo(ConnectivityStateInfo.forNonError(IDLE));
 
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forNonError(READY));
     inOrder.verify(mockHelper).updateBalancingState(eq(READY), pickerCaptor.capture());
     assertNull(pickerCaptor.getValue().getStatus());
-    assertThat(subchannelStateInfo.get()).isEqualTo(
+    assertThat(subchannelStateInfo.value).isEqualTo(
         ConnectivityStateInfo.forNonError(READY));
 
     Status error = Status.UNKNOWN.withDescription("¯\\_(ツ)_//¯");
     loadBalancer.handleSubchannelState(subchannel,
         ConnectivityStateInfo.forTransientFailure(error));
-    assertThat(subchannelStateInfo.get()).isEqualTo(
+    assertThat(subchannelStateInfo.value).isEqualTo(
         ConnectivityStateInfo.forTransientFailure(error));
     inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
     assertNull(pickerCaptor.getValue().getStatus());
@@ -269,7 +255,7 @@ public class RoundRobinLoadBalancerTest {
         ConnectivityStateInfo.forNonError(IDLE));
     inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
     assertNull(pickerCaptor.getValue().getStatus());
-    assertThat(subchannelStateInfo.get()).isEqualTo(
+    assertThat(subchannelStateInfo.value).isEqualTo(
         ConnectivityStateInfo.forNonError(IDLE));
 
     verify(subchannel, times(2)).requestConnection();

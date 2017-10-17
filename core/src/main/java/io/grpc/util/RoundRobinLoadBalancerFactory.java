@@ -37,7 +37,6 @@ import io.grpc.NameResolver;
 import io.grpc.Status;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,9 +44,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 /**
  * A {@link LoadBalancer} that provides round-robin load balancing mechanism over the
@@ -56,11 +54,23 @@ import javax.annotation.concurrent.GuardedBy;
  * what is then balanced across.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
-public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
+public final class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
+
   private static final RoundRobinLoadBalancerFactory INSTANCE =
       new RoundRobinLoadBalancerFactory();
 
-  private RoundRobinLoadBalancerFactory() {
+  private RoundRobinLoadBalancerFactory() {}
+
+  /**
+   * A lighter weight Reference than AtomicReference.
+   */
+  @VisibleForTesting
+  static final class Ref<T> {
+    T value;
+
+    Ref(T value) {
+      this.value = value;
+    }
   }
 
   /**
@@ -76,14 +86,14 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
   }
 
   @VisibleForTesting
-  static class RoundRobinLoadBalancer extends LoadBalancer {
+  static final class RoundRobinLoadBalancer extends LoadBalancer {
+    @VisibleForTesting
+    static final Attributes.Key<Ref<ConnectivityStateInfo>> STATE_INFO =
+        Attributes.Key.of("state-info");
+
     private final Helper helper;
     private final Map<EquivalentAddressGroup, Subchannel> subchannels =
         new HashMap<EquivalentAddressGroup, Subchannel>();
-
-    @VisibleForTesting
-    static final Attributes.Key<AtomicReference<ConnectivityStateInfo>> STATE_INFO =
-        Attributes.Key.of("state-info");
 
     RoundRobinLoadBalancer(Helper helper) {
       this.helper = checkNotNull(helper, "helper");
@@ -106,12 +116,12 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
             // NB(lukaszx0): because attributes are immutable we can't set new value for the key
             // after creation but since we can mutate the values we leverge that and set
             // AtomicReference which will allow mutating state info for given channel.
-            .set(STATE_INFO, new AtomicReference<ConnectivityStateInfo>(
-                ConnectivityStateInfo.forNonError(IDLE)))
+            .set(
+                STATE_INFO, new Ref<ConnectivityStateInfo>(ConnectivityStateInfo.forNonError(IDLE)))
             .build();
 
-        Subchannel subchannel = checkNotNull(helper.createSubchannel(addressGroup, subchannelAttrs),
-            "subchannel");
+        Subchannel subchannel =
+            checkNotNull(helper.createSubchannel(addressGroup, subchannelAttrs), "subchannel");
         subchannels.put(addressGroup, subchannel);
         subchannel.requestConnection();
       }
@@ -132,13 +142,13 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
 
     @Override
     public void handleSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
-      if (!subchannels.containsValue(subchannel)) {
+      if (subchannels.get(subchannel.getAddresses()) != subchannel) {
         return;
       }
       if (stateInfo.getState() == IDLE) {
         subchannel.requestConnection();
       }
-      getSubchannelStateInfoRef(subchannel).set(stateInfo);
+      getSubchannelStateInfoRef(subchannel).value = stateInfo;
       updateBalancingState(getAggregatedState(), getAggregatedError());
     }
 
@@ -164,7 +174,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
         Collection<Subchannel> subchannels) {
       List<Subchannel> readySubchannels = new ArrayList<Subchannel>(subchannels.size());
       for (Subchannel subchannel : subchannels) {
-        if (getSubchannelStateInfoRef(subchannel).get().getState() == READY) {
+        if (getSubchannelStateInfoRef(subchannel).value.getState() == READY) {
           readySubchannels.add(subchannel);
         }
       }
@@ -176,7 +186,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
      * remove all attributes.
      */
     private static Set<EquivalentAddressGroup> stripAttrs(List<EquivalentAddressGroup> groupList) {
-      Set<EquivalentAddressGroup> addrs = new HashSet<EquivalentAddressGroup>();
+      Set<EquivalentAddressGroup> addrs = new HashSet<EquivalentAddressGroup>(groupList.size());
       for (EquivalentAddressGroup group : groupList) {
         addrs.add(new EquivalentAddressGroup(group.getAddresses()));
       }
@@ -191,7 +201,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     private Status getAggregatedError() {
       Status status = null;
       for (Subchannel subchannel : getSubchannels()) {
-        ConnectivityStateInfo stateInfo = getSubchannelStateInfoRef(subchannel).get();
+        ConnectivityStateInfo stateInfo = getSubchannelStateInfoRef(subchannel).value;
         if (stateInfo.getState() != TRANSIENT_FAILURE) {
           return null;
         }
@@ -203,7 +213,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     private ConnectivityState getAggregatedState() {
       Set<ConnectivityState> states = EnumSet.noneOf(ConnectivityState.class);
       for (Subchannel subchannel : getSubchannels()) {
-        states.add(getSubchannelStateInfoRef(subchannel).get().getState());
+        states.add(getSubchannelStateInfoRef(subchannel).value.getState());
       }
       if (states.contains(READY)) {
         return READY;
@@ -225,7 +235,7 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
       return subchannels.values();
     }
 
-    private static AtomicReference<ConnectivityStateInfo> getSubchannelStateInfoRef(
+    private static Ref<ConnectivityStateInfo> getSubchannelStateInfoRef(
         Subchannel subchannel) {
       return checkNotNull(subchannel.getAttributes().get(STATE_INFO), "STATE_INFO");
     }
@@ -239,22 +249,23 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
 
   @VisibleForTesting
   static final class Picker extends SubchannelPicker {
+    private static final AtomicIntegerFieldUpdater<Picker> indexUpdater =
+        AtomicIntegerFieldUpdater.newUpdater(Picker.class, "index");
+
     @Nullable
     private final Status status;
     private final List<Subchannel> list;
-    private final int size;
-    @GuardedBy("this")
-    private int index = 0;
+    @SuppressWarnings("unused")
+    private volatile int index = -1; // start off at -1 so the address on first use is 0.
 
     Picker(List<Subchannel> list, @Nullable Status status) {
-      this.list = Collections.unmodifiableList(list);
-      this.size = list.size();
+      this.list = list;
       this.status = status;
     }
 
     @Override
     public PickResult pickSubchannel(PickSubchannelArgs args) {
-      if (size > 0) {
+      if (list.size() > 0) {
         return PickResult.withSubchannel(nextSubchannel());
       }
 
@@ -266,17 +277,18 @@ public class RoundRobinLoadBalancerFactory extends LoadBalancer.Factory {
     }
 
     private Subchannel nextSubchannel() {
-      if (size == 0) {
+      if (list.isEmpty()) {
         throw new NoSuchElementException();
       }
-      synchronized (this) {
-        Subchannel val = list.get(index);
-        index++;
-        if (index >= size) {
-          index = 0;
-        }
-        return val;
+      int size = list.size();
+
+      int i = indexUpdater.incrementAndGet(this);
+      if (i >= size) {
+        int oldi = i;
+        i %= size;
+        indexUpdater.compareAndSet(this, oldi, i);
       }
+      return list.get(i);
     }
 
     @VisibleForTesting
