@@ -63,7 +63,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 
 	rb := resolver.Get(target.Scheme)
 	if rb == nil {
-		return nil, fmt.Errorf("could not get resolver for scheme: %q", scheme)
+		return nil, fmt.Errorf("could not get resolver for scheme: %q", target.Scheme)
 	}
 
 	ccr := &ccResolverWrapper{
