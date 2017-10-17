@@ -27,7 +27,7 @@ import (
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
-// This is going to be DEPRECATED. Users should not use this struct. It is for grpc
+// DEPRECATED: Users should not use this struct. It is for grpc
 // internal usage only.
 type MethodConfig struct {
 	// WaitForReady indicates whether RPCs sent to this method should wait until
@@ -53,7 +53,7 @@ type MethodConfig struct {
 
 // ServiceConfig is provided by the service provider and contains parameters for how
 // clients that connect to the service should behave.
-// This is going to be DEPRECATED. Users should not use this struct. It is for grpc
+// DEPRECATED: Users should not use this struct. It is for grpc
 // internal usage only.
 type ServiceConfig struct {
 	// LB is the load balancer the service providers recommends. The balancer specified
