@@ -317,6 +317,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 		sendQuotaPool:  newQuotaPool(int(t.streamSendQuota)),
 		localSendQuota: newQuotaPool(defaultLocalSendQuota),
 		headerChan:     make(chan struct{}),
+		contentSubtype: callHdr.ContentSubtype,
 	}
 	t.nextID += 2
 	s.requestRead = func(n int) {
@@ -427,7 +428,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":path", Value: callHdr.Method})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
-	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: getContentTypeForSubtype(callHdr.ContentSubtype)})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "te", Value: "trailers"})
 

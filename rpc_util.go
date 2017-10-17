@@ -27,17 +27,24 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
+)
+
+var (
+	errEmptyContentSubtype = status.Error(codes.Internal, "cannot set an empty content-subtype with CallContentSubtype")
+	errEmptyCodecString    = status.Error(codes.Internal, "cannot use a codec with an empty result for String() with CallCustomCodec")
 )
 
 // Compressor defines the interface gRPC uses to compress a message.
@@ -132,6 +139,8 @@ type callInfo struct {
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
 	creds                 credentials.PerRPCCredentials
+	contentSubtype        string
+	codec                 Codec
 }
 
 func defaultCallInfo() *callInfo {
@@ -228,6 +237,50 @@ func MaxCallSendMsgSize(s int) CallOption {
 func PerRPCCredentials(creds credentials.PerRPCCredentials) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.creds = creds
+		return nil
+	})
+}
+
+// CallContentSubtype returns a CallOption that will set the content-subtype
+// for a call. For example, if content-subtype is "json", the Content-Type
+// over the wire will be "application/grpc+json". The content-subtype is
+// converted to lowercase before being included in Content-Type. See
+// Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
+// details.
+//
+// If CallCustomCodec is not also used, the content-subtype will be used to
+// look up the Codec to use in the registry controlled by RegisterCodec. See
+// the documention on RegisterCodec for details on registration. The lookup
+// of content-subtype is case-insensitive. If no such Codec is found, the call
+// will result in an error with code codes.Internal.
+//
+// If CallCustomCodec is used, that Codec will be used for all request and
+// response messages, with the content-subtype still being set to the given
+// content-subtype for all requests.
+func CallContentSubtype(contentSubtype string) CallOption {
+	contentSubtype = strings.ToLower(contentSubtype)
+	return beforeCall(func(c *callInfo) error {
+		if contentSubtype == "" {
+			return errEmptyContentSubtype
+		}
+		c.contentSubtype = contentSubtype
+		return nil
+	})
+}
+
+// CallCustomCodec returns a CallOption that will set the given Codec to be
+// used for all request and response messages for a call. The result of calling
+// String() will be used as the content-subtype in a case-insensitive manner.
+// See Content-Type on https://grpc.io/docs/guides/wire.html#requests for more
+// details. Also see the documentation on RegisterCodec and CallContentSubtype
+// for more details on the interaction between Codec and content-subtype.
+func CallCustomCodec(codec Codec) CallOption {
+	contentSubtype := codec.String()
+	return beforeCall(func(c *callInfo) error {
+		if contentSubtype == "" {
+			return errEmptyCodecString
+		}
+		c.codec = codec
 		return nil
 	})
 }
@@ -549,6 +602,28 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 		return mcMax
 	}
 	return doptMax
+}
+
+// should be called after options applied
+func setCallInfoContentSubtypeAndCodec(c *callInfo) error {
+	if c.contentSubtype != "" {
+		if c.codec == nil {
+			// c.contentSubtype is already lowercased in CallContentSubtype
+			codec := encoding.GetCodec(c.contentSubtype)
+			if codec == nil {
+				return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
+			}
+			c.codec = codec
+		}
+	} else {
+		if c.codec != nil {
+			c.contentSubtype = strings.ToLower(c.codec.String())
+		} else {
+			c.contentSubtype = "proto"
+			c.codec = encoding.GetCodec("proto")
+		}
+	}
+	return nil
 }
 
 // SupportPackageIsVersion3 is referenced from generated protocol buffer files.

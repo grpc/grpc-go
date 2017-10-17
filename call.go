@@ -62,7 +62,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		if c.maxReceiveMessageSize == nil {
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
+		if err = recv(p, c.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -100,7 +100,7 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 			Client: true,
 		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	hdr, data, err := encode(c.codec, args, compressor, cbuf, outPayload)
 	if err != nil {
 		return err
 	}
@@ -162,6 +162,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 
 	c.maxSendMessageSize = getMaxSize(mc.MaxReqSize, c.maxSendMessageSize, defaultClientMaxSendMessageSize)
 	c.maxReceiveMessageSize = getMaxSize(mc.MaxRespSize, c.maxReceiveMessageSize, defaultClientMaxReceiveMessageSize)
+	if err := setCallInfoContentSubtypeAndCodec(c); err != nil {
+		return toRPCErr(err)
+	}
 
 	if EnableTracing {
 		c.traceInfo.tr = trace.New("grpc.Sent."+methodFamily(method), method)
@@ -213,8 +216,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 		)
 		// TODO(zhaoq): Need a formal spec of fail-fast.
 		callHdr := &transport.CallHdr{
-			Host:   cc.authority,
-			Method: method,
+			Host:           cc.authority,
+			Method:         method,
+			ContentSubtype: c.contentSubtype,
 		}
 		if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()

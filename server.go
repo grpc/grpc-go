@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/keepalive"
@@ -175,6 +176,8 @@ func KeepaliveEnforcementPolicy(kep keepalive.EnforcementPolicy) ServerOption {
 }
 
 // CustomCodec returns a ServerOption that sets a codec for message marshaling and unmarshaling.
+//
+// This will override any lookups by content-subtype for Codecs registered with RegisterCodec.
 func CustomCodec(codec Codec) ServerOption {
 	return func(o *options) {
 		o.codec = codec
@@ -297,10 +300,6 @@ func NewServer(opt ...ServerOption) *Server {
 	opts := defaultServerOptions
 	for _, o := range opt {
 		o(&opts)
-	}
-	if opts.codec == nil {
-		// Set the default codec.
-		opts.codec = protoCodec{}
 	}
 	s := &Server{
 		lis:   make(map[net.Listener]bool),
@@ -697,7 +696,7 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	hdr, data, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	hdr, data, err := encode(s.getCodec(stream.ContentSubtype()), msg, cp, cbuf, outPayload)
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
@@ -809,7 +808,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			// java implementation.
 			return status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", len(req), s.opts.maxReceiveMessageSize)
 		}
-		if err := s.opts.codec.Unmarshal(req, v); err != nil {
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(req, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 		if inPayload != nil {
@@ -903,7 +902,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		t:     t,
 		s:     stream,
 		p:     &parser{r: stream},
-		codec: s.opts.codec,
+		codec: s.getCodec(stream.ContentSubtype()),
 		cp:    s.opts.cp,
 		dc:    s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
@@ -1127,6 +1126,22 @@ func (s *Server) testingCloseConns() {
 		delete(s.conns, c)
 	}
 	s.mu.Unlock()
+}
+
+// contentSubtype must be lowercase
+// cannot return nil
+func (s *Server) getCodec(contentSubtype string) Codec {
+	if s.opts.codec != nil {
+		return s.opts.codec
+	}
+	if contentSubtype == "" {
+		return encoding.GetCodec("proto")
+	}
+	codec := encoding.GetCodec(contentSubtype)
+	if codec == nil {
+		return encoding.GetCodec("proto")
+	}
+	return codec
 }
 
 // SetHeader sets the header metadata.
