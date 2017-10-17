@@ -663,3 +663,12 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	}
 	return nil
 }
+
+// GetMethodFromStream returns the method string that the input stream is used for.
+func GetMethodFromStream(stream Stream) string {
+	s, ok := transport.StreamFromContext(stream.Context())
+	if !ok {
+		return ""
+	}
+	return s.Method()
+}

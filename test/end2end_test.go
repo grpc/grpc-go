@@ -5535,3 +5535,24 @@ func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
+
+func TestGetMethodFromStream(t *testing.T) {
+	defer leakcheck.Check(t)
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
+		method := grpc.GetMethodFromStream(stream)
+		if method == "/grpc.testing.TestService/EmptyCall" {
+			return nil
+		}
+		return fmt.Errorf("GetMethodFromStream(%p) = %s, want %s", stream, method, "/grpc.testing.TestService/EmptyCall")
+	}
+
+	te.startServer(nil)
+	defer te.tearDown()
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	_, err := tc.EmptyCall(te.ctx, &testpb.Empty{})
+	if err != nil && grpc.Code(err) == codes.Unknown {
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+	}
+}
