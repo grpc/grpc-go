@@ -600,11 +600,10 @@ func (cc *ClientConn) scWatcher() {
 
 func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
 	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	if cc.conns == nil {
-		cc.mu.Unlock()
 		return
 	}
-	defer cc.mu.Unlock()
 
 	// TODO(bar switching) when grpclb is submitted, check address type and start grpclb.
 	if !cc.customBalancer && cc.balancerWrapper == nil {
