@@ -18,8 +18,8 @@ specification, with the following exceptions:
 - MINOR releases will not break backward compatibility, except in the following
 circumstances:
 
-  - An API is marked as EXPERIMENTAL upon its introduction.
-  - An API is marked as DEPRECATED in the initial MAJOR release.
+  - An API was marked as EXPERIMENTAL upon its introduction.
+  - An API was marked as DEPRECATED in the initial MAJOR release.
   - An API is inherently flawed and cannot provide correct or secure behavior.
 
   In these cases, APIs MAY be changed or removed without a MAJOR release.
