@@ -5551,8 +5551,7 @@ func TestGetMethodFromStream(t *testing.T) {
 	te.startServer(nil)
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
-	_, err := tc.EmptyCall(te.ctx, &testpb.Empty{})
-	if err != nil && grpc.Code(err) == codes.Unknown {
+	if _, err := tc.EmptyCall(te.ctx, &testpb.Empty{}); err != nil && grpc.Code(err) == codes.Unknown {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 }
