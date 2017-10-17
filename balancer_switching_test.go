@@ -39,14 +39,21 @@ func checkPickFirst(cc *ClientConn, servers []*server) error {
 	)
 	connected := false
 	for i := 0; i < 1000; i++ {
-		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == servers[0].port {
+		if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); ErrorDesc(err) == servers[0].port {
+			if connected {
+				// connected is set to false if peer is not server[0]. So if
+				// connected is true here, this is the second time we saw
+				// server[0] in a row. Break because pickfirst is in effect.
+				break
+			}
 			connected = true
-			break
+		} else {
+			connected = false
 		}
 		time.Sleep(time.Millisecond)
 	}
 	if !connected {
-		return fmt.Errorf("EmptyCall() = _, %v, want _, %v", err, servers[0].port)
+		return fmt.Errorf("pickfirst is not in effect after 1 second, EmptyCall() = _, %v, want _, %v", err, servers[0].port)
 	}
 	// The following RPCs should all succeed with the first server.
 	for i := 0; i < 3; i++ {
@@ -72,7 +79,7 @@ func checkRoundRobin(cc *ClientConn, servers []*server) error {
 		for _, s := range servers {
 			var up bool
 			for i := 0; i < 1000; i++ {
-				if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != nil && ErrorDesc(err) == s.port {
+				if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); ErrorDesc(err) == s.port {
 					up = true
 					break
 				}
