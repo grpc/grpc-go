@@ -103,7 +103,7 @@ var (
 	})
 )
 
-var raceMode bool // set by race_test.go in race mode
+var raceMode bool // set by race.go in race mode
 
 type testServer struct {
 	security           string // indicate the authentication protocol used by this server.
