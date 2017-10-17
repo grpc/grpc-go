@@ -27,7 +27,8 @@ import (
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
-// This is EXPERIMENTAL and subject to change.
+// This is going to be DEPRECATED. Users should not use this struct. It is for grpc
+// internal usage only.
 type MethodConfig struct {
 	// WaitForReady indicates whether RPCs sent to this method should wait until
 	// the connection is ready by default (!failfast). The value specified via the
@@ -52,7 +53,8 @@ type MethodConfig struct {
 
 // ServiceConfig is provided by the service provider and contains parameters for how
 // clients that connect to the service should behave.
-// This is EXPERIMENTAL and subject to change.
+// This is going to be DEPRECATED. Users should not use this struct. It is for grpc
+// internal usage only.
 type ServiceConfig struct {
 	// LB is the load balancer the service providers recommends. The balancer specified
 	// via grpc.WithBalancer will override this.
@@ -88,6 +90,7 @@ func (j jsonName) generatePath() (string, bool) {
 	return res, true
 }
 
+// TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonMC struct {
 	Name                    *[]jsonName `json:"name,omitempty"`
 	WaitForReady            *bool       `json:"waitForReady,omitempty"`
@@ -96,6 +99,7 @@ type jsonMC struct {
 	MaxResponseMessageBytes *int        `json:"maxResponseMessageBytes,omitempty"`
 }
 
+// TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
 	LoadBalancingPolicy *string   `json:"loadBalancingPolicy,omitempty"`
 	MethodConfig        *[]jsonMC `json:"methodConfig,omitempty"`
