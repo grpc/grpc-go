@@ -137,13 +137,17 @@ final class InternalSubchannel implements WithLogId {
   @GuardedBy("lock")
   private ConnectivityStateInfo state = ConnectivityStateInfo.forNonError(IDLE);
 
+  private final ProxyDetector proxyDetector;
+
   @GuardedBy("lock")
   private Status shutdownReason;
+
 
   InternalSubchannel(EquivalentAddressGroup addressGroup, String authority, String userAgent,
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-      Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback) {
+      Supplier<Stopwatch> stopwatchSupplier, ChannelExecutor channelExecutor, Callback callback,
+      ProxyDetector proxyDetector) {
     this.addressGroup = Preconditions.checkNotNull(addressGroup, "addressGroup");
     this.authority = authority;
     this.userAgent = userAgent;
@@ -153,6 +157,7 @@ final class InternalSubchannel implements WithLogId {
     this.connectingTimer = stopwatchSupplier.get();
     this.channelExecutor = channelExecutor;
     this.callback = callback;
+    this.proxyDetector = proxyDetector;
   }
 
   /**
@@ -194,8 +199,9 @@ final class InternalSubchannel implements WithLogId {
     List<SocketAddress> addrs = addressGroup.getAddresses();
     final SocketAddress address = addrs.get(addressIndex);
 
+    ProxyParameters proxy = proxyDetector.proxyFor(address);
     ConnectionClientTransport transport =
-        transportFactory.newClientTransport(address, authority, userAgent);
+        transportFactory.newClientTransport(address, authority, userAgent, proxy);
     if (log.isLoggable(Level.FINE)) {
       log.log(Level.FINE, "[{0}] Created {1} for {2}",
           new Object[] {logId, transport.getLogId(), address});

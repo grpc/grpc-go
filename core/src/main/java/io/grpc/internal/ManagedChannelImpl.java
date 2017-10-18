@@ -133,6 +133,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
   // Only null after channel is terminated. Must be assigned from the channelExecutor.
   private NameResolver nameResolver;
 
+  private final ProxyDetector proxyDetector;
+
   // null when channel is in idle mode.  Must be assigned from channelExecutor.
   @Nullable
   private LbHelperImpl lbHelper;
@@ -386,7 +388,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       BackoffPolicy.Provider backoffPolicyProvider,
       ObjectPool<? extends Executor> oobExecutorPool,
       Supplier<Stopwatch> stopwatchSupplier,
-      List<ClientInterceptor> interceptors) {
+      List<ClientInterceptor> interceptors,
+      ProxyDetector proxyDetector) {
     this.target = checkNotNull(builder.target, "target");
     this.nameResolverFactory = builder.getNameResolverFactory();
     this.nameResolverParams = checkNotNull(builder.getNameResolverParams(), "nameResolverParams");
@@ -416,6 +419,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     this.decompressorRegistry = checkNotNull(builder.decompressorRegistry, "decompressorRegistry");
     this.compressorRegistry = checkNotNull(builder.compressorRegistry, "compressorRegistry");
     this.userAgent = builder.userAgent;
+    this.proxyDetector = proxyDetector;
 
     phantom = new ManagedChannelReference(this);
     logger.log(Level.FINE, "[{0}] Created with target {1}", new Object[] {getLogId(), target});
@@ -674,7 +678,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
               void onNotInUse(InternalSubchannel is) {
                 inUseStateAggregator.updateObjectInUse(is, false);
               }
-            });
+            },
+            proxyDetector);
       subchannel.subchannel = internalSubchannel;
       logger.log(Level.FINE, "[{0}] {1} created for {2}",
           new Object[] {getLogId(), internalSubchannel.getLogId(), addressGroup});
@@ -754,7 +759,8 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
             void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) {
               oobChannel.handleSubchannelStateChange(newState);
             }
-          });
+          },
+          proxyDetector);
       oobChannel.setSubchannel(internalSubchannel);
       runSerialized(new Runnable() {
           @Override

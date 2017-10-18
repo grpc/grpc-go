@@ -80,6 +80,7 @@ public class ManagedChannelImplIdlenessTest {
   private final FakeClock oobExecutor = new FakeClock();
   private static final String AUTHORITY = "fakeauthority";
   private static final String USER_AGENT = "fakeagent";
+  private static final ProxyParameters NO_PROXY = null;
   private static final long IDLE_TIMEOUT_SECONDS = 30;
   private ManagedChannelImpl channel;
 
@@ -141,7 +142,8 @@ public class ManagedChannelImplIdlenessTest {
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
         oobExecutorPool, timer.getStopwatchSupplier(),
-        Collections.<ClientInterceptor>emptyList());
+        Collections.<ClientInterceptor>emptyList(),
+        ProxyDetector.NOOP_INSTANCE);
     newTransports = TestUtils.captureTransports(mockTransportFactory);
 
     for (int i = 0; i < 2; i++) {
@@ -155,7 +157,7 @@ public class ManagedChannelImplIdlenessTest {
     // Verify the initial idleness
     verify(mockLoadBalancerFactory, never()).newLoadBalancer(any(Helper.class));
     verify(mockTransportFactory, never()).newClientTransport(
-        any(SocketAddress.class), anyString(), anyString());
+        any(SocketAddress.class), anyString(), anyString(), any(ProxyParameters.class));
     verify(mockNameResolver, never()).start(any(NameResolver.Listener.class));
   }
 
@@ -352,11 +354,13 @@ public class ManagedChannelImplIdlenessTest {
     // Now make an RPC on an OOB channel
     ManagedChannel oob = helper.createOobChannel(servers.get(0), "oobauthority");
     verify(mockTransportFactory, never())
-        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT));
+        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT),
+            same(NO_PROXY));
     ClientCall<String, Integer> oobCall = oob.newCall(method, CallOptions.DEFAULT);
     oobCall.start(mockCallListener2, new Metadata());
     verify(mockTransportFactory)
-        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT));
+        .newClientTransport(any(SocketAddress.class), same("oobauthority"), same(USER_AGENT),
+            same(NO_PROXY));
     MockClientTransportInfo oobTransportInfo = newTransports.poll();
     assertEquals(0, newTransports.size());
     // The OOB transport reports in-use state

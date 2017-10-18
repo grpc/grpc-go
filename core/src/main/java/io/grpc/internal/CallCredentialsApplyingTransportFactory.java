@@ -42,9 +42,10 @@ final class CallCredentialsApplyingTransportFactory implements ClientTransportFa
 
   @Override
   public ConnectionClientTransport newClientTransport(
-      SocketAddress serverAddress, String authority, @Nullable String userAgent) {
+      SocketAddress serverAddress, String authority, @Nullable String userAgent,
+      @Nullable ProxyParameters proxy) {
     return new CallCredentialsApplyingTransport(
-        delegate.newClientTransport(serverAddress, authority, userAgent), authority);
+        delegate.newClientTransport(serverAddress, authority, userAgent, proxy), authority);
   }
 
   @Override

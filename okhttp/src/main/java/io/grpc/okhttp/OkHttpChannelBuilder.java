@@ -35,6 +35,7 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.okhttp.internal.Platform;
@@ -403,19 +404,10 @@ public class OkHttpChannelBuilder extends
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress addr, String authority, @Nullable String userAgent) {
+        SocketAddress addr, String authority, @Nullable String userAgent,
+        @Nullable ProxyParameters proxy) {
       if (closed) {
         throw new IllegalStateException("The transport factory is closed.");
-      }
-      InetSocketAddress proxyAddress = null;
-      String proxy = System.getenv("GRPC_PROXY_EXP");
-      if (proxy != null) {
-        String[] parts = proxy.split(":", 2);
-        int port = 80;
-        if (parts.length > 1) {
-          port = Integer.parseInt(parts[1]);
-        }
-        proxyAddress = new InetSocketAddress(parts[0], port);
       }
       final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
       Runnable tooManyPingsRunnable = new Runnable() {
@@ -425,9 +417,19 @@ public class OkHttpChannelBuilder extends
         }
       };
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
-      OkHttpClientTransport transport = new OkHttpClientTransport(inetSocketAddr, authority,
-          userAgent, executor, socketFactory, hostnameVerifier, Utils.convertSpec(connectionSpec),
-          maxMessageSize, proxyAddress, null, null, tooManyPingsRunnable);
+      OkHttpClientTransport transport = new OkHttpClientTransport(
+          inetSocketAddr,
+          authority,
+          userAgent,
+          executor,
+          socketFactory,
+          hostnameVerifier,
+          Utils.convertSpec(connectionSpec),
+          maxMessageSize,
+          proxy == null ? null : proxy.proxyAddress,
+          proxy == null ? null : proxy.username,
+          proxy == null ? null : proxy.password,
+          tooManyPingsRunnable);
       if (enableKeepAlive) {
         transport.enableKeepAlive(
             true, keepAliveTimeNanosState.get(), keepAliveTimeoutNanos, keepAliveWithoutCalls);

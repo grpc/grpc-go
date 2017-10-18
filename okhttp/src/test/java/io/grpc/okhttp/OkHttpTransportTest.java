@@ -76,7 +76,8 @@ public class OkHttpTransportTest extends AbstractTransportTest {
     return clientFactory.newClientTransport(
         new InetSocketAddress("::1", port),
         testAuthority(server),
-        null /* agent */);
+        null /* agent */,
+        null /* proxy */);
   }
 
   // TODO(ejona): Flaky/Broken

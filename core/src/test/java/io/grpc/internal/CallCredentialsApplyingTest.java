@@ -75,6 +75,7 @@ public class CallCredentialsApplyingTest {
 
   private static final String AUTHORITY = "testauthority";
   private static final String USER_AGENT = "testuseragent";
+  private static final ProxyParameters NO_PROXY = null;
   private static final Attributes.Key<String> ATTR_KEY = Attributes.Key.of("somekey");
   private static final String ATTR_VALUE = "somevalue";
   private static final MethodDescriptor<String, Integer> method =
@@ -99,16 +100,16 @@ public class CallCredentialsApplyingTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     origHeaders.put(ORIG_HEADER_KEY, ORIG_HEADER_VALUE);
-    when(mockTransportFactory.newClientTransport(address, AUTHORITY, USER_AGENT))
+    when(mockTransportFactory.newClientTransport(address, AUTHORITY, USER_AGENT, NO_PROXY))
         .thenReturn(mockTransport);
     when(mockTransport.newStream(same(method), any(Metadata.class), any(CallOptions.class)))
         .thenReturn(mockStream);
     ClientTransportFactory transportFactory = new CallCredentialsApplyingTransportFactory(
         mockTransportFactory, mockExecutor);
     transport = (ForwardingConnectionClientTransport) transportFactory.newClientTransport(
-        address, AUTHORITY, USER_AGENT);
+        address, AUTHORITY, USER_AGENT, NO_PROXY);
     callOptions = CallOptions.DEFAULT.withCallCredentials(mockCreds);
-    verify(mockTransportFactory).newClientTransport(address, AUTHORITY, USER_AGENT);
+    verify(mockTransportFactory).newClientTransport(address, AUTHORITY, USER_AGENT, NO_PROXY);
     assertSame(mockTransport, transport.delegate());
   }
 

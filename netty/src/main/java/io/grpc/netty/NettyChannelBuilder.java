@@ -36,6 +36,7 @@ import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.KeepAliveManager;
+import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
@@ -341,18 +342,13 @@ public final class NettyChannelBuilder
   static ProtocolNegotiator createProtocolNegotiator(
       String authority,
       NegotiationType negotiationType,
-      SslContext sslContext) {
+      SslContext sslContext,
+      ProxyParameters proxy) {
     ProtocolNegotiator negotiator =
         createProtocolNegotiatorByType(authority, negotiationType, sslContext);
-    String proxy = System.getenv("GRPC_PROXY_EXP");
     if (proxy != null) {
-      String[] parts = proxy.split(":", 2);
-      int port = 80;
-      if (parts.length > 1) {
-        port = Integer.parseInt(parts[1]);
-      }
-      InetSocketAddress proxyAddress = new InetSocketAddress(parts[0], port);
-      negotiator = ProtocolNegotiators.httpProxy(proxyAddress, null, null, negotiator);
+      negotiator = ProtocolNegotiators.httpProxy(
+          proxy.proxyAddress, proxy.username, proxy.password, negotiator);
     }
     return negotiator;
   }
@@ -406,7 +402,10 @@ public final class NettyChannelBuilder
   interface TransportCreationParamsFilterFactory {
     @CheckReturnValue
     TransportCreationParamsFilter create(
-        SocketAddress targetServerAddress, String authority, @Nullable String userAgent);
+        SocketAddress targetServerAddress,
+        String authority,
+        @Nullable String userAgent,
+        @Nullable ProxyParameters proxy);
   }
 
   @CheckReturnValue
@@ -472,11 +471,12 @@ public final class NettyChannelBuilder
 
     @Override
     public ConnectionClientTransport newClientTransport(
-        SocketAddress serverAddress, String authority, @Nullable String userAgent) {
+        SocketAddress serverAddress, String authority, @Nullable String userAgent,
+        @Nullable ProxyParameters proxy) {
       checkState(!closed, "The transport factory is closed.");
 
       TransportCreationParamsFilter dparams =
-          transportCreationParamsFilterFactory.create(serverAddress, authority, userAgent);
+          transportCreationParamsFilterFactory.create(serverAddress, authority, userAgent, proxy);
 
       final AtomicBackoff.State keepAliveTimeNanosState = keepAliveTimeNanos.getState();
       Runnable tooManyPingsRunnable = new Runnable() {
@@ -528,8 +528,12 @@ public final class NettyChannelBuilder
 
       @Override
       public TransportCreationParamsFilter create(
-          SocketAddress targetServerAddress, String authority, String userAgent) {
-        return new DynamicNettyTransportParams(targetServerAddress, authority, userAgent);
+          SocketAddress targetServerAddress,
+          String authority,
+          String userAgent,
+          ProxyParameters proxyParams) {
+        return new DynamicNettyTransportParams(
+            targetServerAddress, authority, userAgent, proxyParams);
       }
 
       @CheckReturnValue
@@ -538,12 +542,17 @@ public final class NettyChannelBuilder
         private final SocketAddress targetServerAddress;
         private final String authority;
         @Nullable private final String userAgent;
+        private ProxyParameters proxyParams;
 
         private DynamicNettyTransportParams(
-            SocketAddress targetServerAddress, String authority, String userAgent) {
+            SocketAddress targetServerAddress,
+            String authority,
+            String userAgent,
+            ProxyParameters proxyParams) {
           this.targetServerAddress = targetServerAddress;
           this.authority = authority;
           this.userAgent = userAgent;
+          this.proxyParams = proxyParams;
         }
 
         @Override
@@ -563,7 +572,7 @@ public final class NettyChannelBuilder
 
         @Override
         public ProtocolNegotiator getProtocolNegotiator() {
-          return createProtocolNegotiator(authority, negotiationType, sslContext);
+          return createProtocolNegotiator(authority, negotiationType, sslContext, proxyParams);
         }
       }
     }

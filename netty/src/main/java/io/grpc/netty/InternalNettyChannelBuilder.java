@@ -17,6 +17,7 @@
 package io.grpc.netty;
 
 import io.grpc.Internal;
+import io.grpc.internal.ProxyParameters;
 import java.net.SocketAddress;
 
 /**
@@ -44,7 +45,8 @@ public final class InternalNettyChannelBuilder {
       extends NettyChannelBuilder.TransportCreationParamsFilterFactory {
     @Override
     TransportCreationParamsFilter create(
-        SocketAddress targetServerAddress, String authority, String userAgent);
+        SocketAddress targetServerAddress, String authority, String userAgent,
+        ProxyParameters proxy);
   }
 
   /**

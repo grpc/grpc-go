@@ -39,8 +39,10 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 import io.grpc.internal.StreamListener.MessageProducer;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
@@ -533,6 +535,25 @@ public final class GrpcUtil {
         return Stopwatch.createUnstarted();
       }
     };
+
+  /**
+   * Returns the host via {@link InetSocketAddress#getHostString} if it is possible,
+   * i.e. in jdk >= 7.
+   * Otherwise, return it via {@link InetSocketAddress#getHostName} which may incur a DNS lookup.
+   */
+  public static String getHost(InetSocketAddress addr) {
+    try {
+      Method getHostStringMethod = InetSocketAddress.class.getMethod("getHostString");
+      return (String) getHostStringMethod.invoke(addr);
+    } catch (NoSuchMethodException e) {
+      // noop
+    } catch (IllegalAccessException e) {
+      // noop
+    } catch (InvocationTargetException e) {
+      // noop
+    }
+    return addr.getHostName();
+  }
 
   /**
    * Marshals a nanoseconds representation of the timeout to and from a string representation,

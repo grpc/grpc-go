@@ -40,6 +40,6 @@ public abstract class AbstractClientTransportFactoryTest {
     ClientTransportFactory transportFactory = newClientTransportFactory();
     transportFactory.close();
     transportFactory.newClientTransport(
-        new InetSocketAddress("localhost", 12345), "localhost:" + 12345, "agent");
+        new InetSocketAddress("localhost", 12345), "localhost:" + 12345, "agent", null);
   }
 }
