@@ -639,6 +639,13 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       this.nr = checkNotNull(nr, "NameResolver");
     }
 
+    // Must be called from channelExecutor
+    private void handleInternalSubchannelState(ConnectivityStateInfo newState) {
+      if (newState.getState() == TRANSIENT_FAILURE || newState.getState() == IDLE) {
+        nr.refresh();
+      }
+    }
+
     @Override
     public AbstractSubchannel createSubchannel(
         EquivalentAddressGroup addressGroup, Attributes attrs) {
@@ -660,9 +667,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
               @Override
               void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) {
-                if ((newState.getState() == TRANSIENT_FAILURE || newState.getState() == IDLE)) {
-                  nr.refresh();
-                }
+                handleInternalSubchannelState(newState);
                 // Call LB only if it's not shutdown.  If LB is shutdown, lbHelper won't match.
                 if (LbHelperImpl.this == ManagedChannelImpl.this.lbHelper) {
                   lb.handleSubchannelState(subchannel, newState);
@@ -757,6 +762,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
             @Override
             void onStateChange(InternalSubchannel is, ConnectivityStateInfo newState) {
+              handleInternalSubchannelState(newState);
               oobChannel.handleSubchannelStateChange(newState);
             }
           },

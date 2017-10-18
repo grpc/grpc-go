@@ -124,6 +124,7 @@ public class ManagedChannelImplTest {
           .build();
   private static final Attributes.Key<String> SUBCHANNEL_ATTR_KEY =
       Attributes.Key.of("subchannel-attr-key");
+  private static final long RECONNECT_BACKOFF_INTERVAL_NANOS = 1;
   private static int unterminatedChannels;
   private final String serviceName = "fake.example.com";
   private final String authority = serviceName;
@@ -1132,6 +1133,49 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void refreshNameResolutionWhenSubchannelConnectionFailed() {
+    subtestRefreshNameResolutionWhenConnectionFailed(false);
+  }
+
+  @Test
+  public void refreshNameResolutionWhenOobChannelConnectionFailed() {
+    subtestRefreshNameResolutionWhenConnectionFailed(true);
+  }
+
+  private void subtestRefreshNameResolutionWhenConnectionFailed(boolean isOobChannel) {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    FakeNameResolverFactory.FakeNameResolver resolver = nameResolverFactory.resolvers.get(0);
+
+    if (isOobChannel) {
+      OobChannel oobChannel = (OobChannel) helper.createOobChannel(addressGroup, "oobAuthority");
+      oobChannel.getSubchannel().requestConnection();
+    } else {
+      Subchannel subchannel = helper.createSubchannel(addressGroup, Attributes.EMPTY);
+      subchannel.requestConnection();
+    }
+    
+    MockClientTransportInfo transportInfo = transports.poll();
+    assertNotNull(transportInfo);
+
+    // Transport closed when connecting
+    assertEquals(0, resolver.refreshCalled);
+    transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
+    assertEquals(1, resolver.refreshCalled);
+
+    timer.forwardNanos(RECONNECT_BACKOFF_INTERVAL_NANOS);
+    transportInfo = transports.poll();
+    assertNotNull(transportInfo);
+
+    transportInfo.listener.transportReady();
+
+    // Transport closed when ready
+    assertEquals(1, resolver.refreshCalled);
+    transportInfo.listener.transportShutdown(Status.UNAVAILABLE);
+    assertEquals(2, resolver.refreshCalled);
+  }
+
+  @Test
   public void uriPattern() {
     assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("a:/").matches());
     assertTrue(ManagedChannelImpl.URI_PATTERN.matcher("Z019+-.:/!@ #~ ").matches());
@@ -1570,7 +1614,7 @@ public class ManagedChannelImplTest {
       return new BackoffPolicy() {
         @Override
         public long nextBackoffNanos() {
-          return 1;
+          return RECONNECT_BACKOFF_INTERVAL_NANOS;
         }
       };
     }
@@ -1621,6 +1665,7 @@ public class ManagedChannelImplTest {
     private class FakeNameResolver extends NameResolver {
       Listener listener;
       boolean shutdown;
+      int refreshCalled;
 
       @Override public String getServiceAuthority() {
         return expectedUri.getAuthority();
@@ -1631,6 +1676,10 @@ public class ManagedChannelImplTest {
         if (resolvedAtStart) {
           resolved();
         }
+      }
+
+      @Override public void refresh() {
+        refreshCalled++;
       }
 
       void resolved() {

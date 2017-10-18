@@ -18,11 +18,13 @@ package io.grpc.internal;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer.Subchannel;
 import io.grpc.LoadBalancer;
 import io.grpc.LoadBalancer.PickResult;
 import io.grpc.LoadBalancer.PickSubchannelArgs;
@@ -222,5 +224,10 @@ final class OobChannel extends ManagedChannel implements WithLogId {
     // both delayedTransport and subchannel have terminated.
     executorPool.returnObject(executor);
     terminatedLatch.countDown();
+  }
+
+  @VisibleForTesting
+  Subchannel getSubchannel() {
+    return subchannelImpl;
   }
 }
