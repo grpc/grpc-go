@@ -417,7 +417,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if sq > 1 {
 		t.streamsQuota.add(sq - 1)
 	}
-	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
