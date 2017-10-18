@@ -594,6 +594,7 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revist this decision in the future.
 			cc.sc = sc
+			cc.scRaw = ""
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
