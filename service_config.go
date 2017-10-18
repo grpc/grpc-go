@@ -27,8 +27,9 @@ import (
 
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
-// DEPRECATED: Users should not use this struct. It is for grpc
-// internal usage only.
+// DEPRECATED: Users should not use this struct. Service config should be received
+// through name resolver, as specified here
+// https://github.com/grpc/grpc/blob/master/doc/service_config.md
 type MethodConfig struct {
 	// WaitForReady indicates whether RPCs sent to this method should wait until
 	// the connection is ready by default (!failfast). The value specified via the
@@ -53,8 +54,9 @@ type MethodConfig struct {
 
 // ServiceConfig is provided by the service provider and contains parameters for how
 // clients that connect to the service should behave.
-// DEPRECATED: Users should not use this struct. It is for grpc
-// internal usage only.
+// DEPRECATED: Users should not use this struct. Service config should be received
+// through name resolver, as specified here
+// https://github.com/grpc/grpc/blob/master/doc/service_config.md
 type ServiceConfig struct {
 	// LB is the load balancer the service providers recommends. The balancer specified
 	// via grpc.WithBalancer will override this.
