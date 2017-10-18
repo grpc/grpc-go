@@ -77,8 +77,8 @@ func parseTimeout(t *string) (*time.Duration, error) {
 }
 
 type jsonName struct {
-	Service *string `json:"service,omitempty"`
-	Method  *string `json:"method,omitempty"`
+	Service *string
+	Method  *string
 }
 
 func (j jsonName) generatePath() (string, bool) {
@@ -94,17 +94,17 @@ func (j jsonName) generatePath() (string, bool) {
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonMC struct {
-	Name                    *[]jsonName `json:"name,omitempty"`
-	WaitForReady            *bool       `json:"waitForReady,omitempty"`
-	Timeout                 *string     `json:"timeout,omitempty"`
-	MaxRequestMessageBytes  *int        `json:"maxRequestMessageBytes,omitempty"`
-	MaxResponseMessageBytes *int        `json:"maxResponseMessageBytes,omitempty"`
+	Name                    *[]jsonName
+	WaitForReady            *bool
+	Timeout                 *string
+	MaxRequestMessageBytes  *int
+	MaxResponseMessageBytes *int
 }
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
 type jsonSC struct {
-	LoadBalancingPolicy *string   `json:"loadBalancingPolicy,omitempty"`
-	MethodConfig        *[]jsonMC `json:"methodConfig,omitempty"`
+	LoadBalancingPolicy *string
+	MethodConfig        *[]jsonMC
 }
 
 func parseServiceConfig(js string) (ServiceConfig, error) {
