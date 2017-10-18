@@ -394,12 +394,10 @@ func DoPerRPCCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScop
 	}
 }
 
-var (
-	testMetadata = metadata.MD{
-		"key1": []string{"value1"},
-		"key2": []string{"value2"},
-	}
-)
+var testMetadata = metadata.MD{
+	"key1": []string{"value1"},
+	"key2": []string{"value2"},
+}
 
 // DoCancelAfterBegin cancels the RPC after metadata has been sent but before payloads are sent.
 func DoCancelAfterBegin(tc testpb.TestServiceClient, args ...grpc.CallOption) {

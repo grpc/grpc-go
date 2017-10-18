@@ -418,11 +418,9 @@ func (s *Server) GetServiceInfo() map[string]ServiceInfo {
 	return ret
 }
 
-var (
-	// ErrServerStopped indicates that the operation is now illegal because of
-	// the server being stopped.
-	ErrServerStopped = errors.New("grpc: the server has been stopped")
-)
+// ErrServerStopped indicates that the operation is now illegal because of
+// the server being stopped.
+var ErrServerStopped = errors.New("grpc: the server has been stopped")
 
 func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if s.opts.creds == nil {

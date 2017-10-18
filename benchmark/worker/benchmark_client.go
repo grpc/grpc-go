@@ -37,9 +37,7 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-var (
-	caFile = flag.String("ca_file", "", "The file containing the CA root cert file")
-)
+var caFile = flag.String("ca_file", "", "The file containing the CA root cert file")
 
 type lockingHistogram struct {
 	mu        sync.Mutex
