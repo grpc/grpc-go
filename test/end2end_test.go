@@ -5536,16 +5536,16 @@ func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
 	}
 }
 
-func TestGetMethodFromStream(t *testing.T) {
+func TestMethodFromServerStream(t *testing.T) {
 	defer leakcheck.Check(t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
-		method := grpc.GetMethodFromStream(stream)
-		if method == "/grpc.testing.TestService/EmptyCall" {
+		method, ok := grpc.MethodFromServerStream(stream)
+		if ok && method == "/grpc.testing.TestService/EmptyCall" {
 			return nil
 		}
-		return fmt.Errorf("GetMethodFromStream(%p) = %s, want %s", stream, method, "/grpc.testing.TestService/EmptyCall")
+		return fmt.Errorf("GetMethodFromStream(%p) = %s, %v , want %s, true", stream, method, ok, "/grpc.testing.TestService/EmptyCall")
 	}
 
 	te.startServer(nil)
