@@ -145,7 +145,16 @@ func TestPraseWaitForReady(t *testing.T) {
                     "method": "Bar"
                 }
             ],
-            "waitForReady": false
+            "waitForReady": fall
+        },
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
         }
     ]
 }`,
