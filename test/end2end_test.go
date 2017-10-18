@@ -818,7 +818,17 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	te.srv.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+
+	// Wait for the client to notice the connection is gone.
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	state := cc.GetState()
+	for ; state == connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state == connectivity.Ready {
+		t.Fatalf("Want connection state to be Ready, got %v", state)
+	}
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
 	_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
 	cancel()
 	if e.balancer != "" && grpc.Code(err) != codes.DeadlineExceeded {
@@ -932,7 +942,9 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		close(ch)
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
-	for {
+	abort := false
+	time.AfterFunc(time.Second, func() { abort = true })
+	for !abort {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err != nil {
 			cancel()
@@ -940,11 +952,11 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		}
 		cancel()
 	}
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: 1,
-		},
+	// Don't bother stopping the timer; it will have no effect past here.
+	if abort {
+		t.Fatalf("GoAway never received by client")
 	}
+	respParam := []*testpb.ResponseParameters{{Size: 1}}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
 	if err != nil {
 		t.Fatal(err)
@@ -961,6 +973,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	if _, err := stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
 	}
+	// The RPC will run until canceled.
 	cancel()
 	<-ch
 	awaitNewConnLogOutput()
@@ -1217,18 +1230,22 @@ func testFailFast(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
+	cancel()
 	// Stop the server and tear down all the exisiting connections.
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
-		_, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_, err := tc.EmptyCall(ctx, &testpb.Empty{})
+		cancel()
 		if grpc.Code(err) == codes.Unavailable {
 			break
 		}
-		fmt.Printf("%v.EmptyCall(_, _) = _, %v", tc, err)
+		t.Logf("%v.EmptyCall(_, _) = _, %v", tc, err)
 		time.Sleep(10 * time.Millisecond)
 	}
 	// The client keeps reconnecting and ongoing fail-fast RPCs should fail with code.Unavailable.
@@ -3006,35 +3023,6 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 }
 
-func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup) {
-	defer wg.Done()
-	const argSize = 2718
-	const respSize = 314
-
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, argSize)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: respSize,
-		Payload:      payload,
-	}
-	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
-	if err != nil {
-		t.Errorf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
-		return
-	}
-	pt := reply.GetPayload().GetType()
-	ps := len(reply.GetPayload().GetBody())
-	if pt != testpb.PayloadType_COMPRESSABLE || ps != respSize {
-		t.Errorf("Got reply with type %d len %d; want %d, %d", pt, ps, testpb.PayloadType_COMPRESSABLE, respSize)
-		return
-	}
-}
-
 func TestRetry(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
@@ -3046,49 +3034,54 @@ func TestRetry(t *testing.T) {
 	}
 }
 
-// This test mimics a user who sends 1000 RPCs concurrently on a faulty transport.
-// TODO(zhaoq): Refactor to make this clearer and add more cases to test racy
-// and error-prone paths.
+// This test make sure RPCs are retried times when they receive a RST_STREAM
+// with the REFUSED_STREAM error code, which the InTapHandle provokes.
 func testRetry(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.declareLogNoise("transport: http2Client.notifyError got notified that the client transport was broken")
+	attempts := 0
+	successAttempt := 2
+	te.tapHandle = func(ctx context.Context, _ *tap.Info) (context.Context, error) {
+		attempts++
+		if attempts < successAttempt {
+			return nil, errors.New("not now")
+		}
+		return ctx, nil
+	}
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	var wg sync.WaitGroup
+	tsc := testpb.NewTestServiceClient(cc)
+	testCases := []struct {
+		successAttempt int
+		failFast       bool
+		errCode        codes.Code
+	}{{
+		successAttempt: 1,
+	}, {
+		successAttempt: 2,
+	}, {
+		successAttempt: 3,
+		errCode:        codes.Unavailable,
+	}, {
+		successAttempt: 1,
+		failFast:       true,
+	}, {
+		successAttempt: 2,
+		failFast:       true,
+		errCode:        codes.Unavailable, // We won't retry on fail fast.
+	}}
+	for _, tc := range testCases {
+		attempts = 0
+		successAttempt = tc.successAttempt
 
-	numRPC := 1000
-	rpcSpacing := 2 * time.Millisecond
-	if raceMode {
-		// The race detector has a limit on how many goroutines it can track.
-		// This test is near the upper limit, and goes over the limit
-		// depending on the environment (the http.Handler environment uses
-		// more goroutines)
-		t.Logf("Shortening test in race mode.")
-		numRPC /= 2
-		rpcSpacing *= 2
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(tc.failFast))
+		cancel()
+		if grpc.Code(err) != tc.errCode {
+			t.Errorf("%+v: tsc.EmptyCall(_, _) = _, %v, want _, Code=%v", tc, err, tc.errCode)
+		}
 	}
-
-	wg.Add(1)
-	go func() {
-		// Halfway through starting RPCs, kill all connections:
-		time.Sleep(time.Duration(numRPC/2) * rpcSpacing)
-
-		// The server shuts down the network connection to make a
-		// transport error which will be detected by the client side
-		// code.
-		internal.TestingCloseConns(te.srv)
-		wg.Done()
-	}()
-	// All these RPCs should succeed eventually.
-	for i := 0; i < numRPC; i++ {
-		time.Sleep(rpcSpacing)
-		wg.Add(1)
-		go performOneRPC(t, tc, &wg)
-	}
-	wg.Wait()
 }
 
 func TestRPCTimeout(t *testing.T) {

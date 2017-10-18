@@ -1165,23 +1165,9 @@ func (s *Server) GracefulStop() {
 }
 
 func init() {
-	internal.TestingCloseConns = func(arg interface{}) {
-		arg.(*Server).testingCloseConns()
-	}
 	internal.TestingUseHandlerImpl = func(arg interface{}) {
 		arg.(*Server).opts.useHandlerImpl = true
 	}
-}
-
-// testingCloseConns closes all existing transports but keeps s.lis
-// accepting new connections.
-func (s *Server) testingCloseConns() {
-	s.mu.Lock()
-	for c := range s.conns {
-		c.Close()
-		delete(s.conns, c)
-	}
-	s.mu.Unlock()
 }
 
 // SetHeader sets the header metadata.
