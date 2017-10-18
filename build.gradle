@@ -212,7 +212,7 @@ subprojects {
                 truth: 'com.google.truth:truth:0.28',
 
                 // Benchmark dependencies
-                hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.8',
+                hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.10',
                 math: 'org.apache.commons:commons-math3:3.6',
 
                 // Jetty ALPN dependencies
