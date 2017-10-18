@@ -32,19 +32,19 @@ func TestParseLoadBalancer(t *testing.T) {
 	}{
 		{
 			`{
-      "loadBalancingPolicy":"round_robin",
-    	"methodConfig": [
-    		{
-    			"name": [
-    				{
-    					"service": "foo",
-              "method": "Bar"
-    				}
-    			],
-    			"waitForReady": true
-    		}
-    	]
-    }`,
+    "loadBalancingPolicy": "round_robin",
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`,
 			ServiceConfig{
 				LB: newString("round_robin"),
 				Methods: map[string]MethodConfig{
@@ -57,19 +57,19 @@ func TestParseLoadBalancer(t *testing.T) {
 		},
 		{
 			`{
-      "loadBalancingPolicy": 1,
-      "methodConfig": [
+    "loadBalancingPolicy": 1,
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "waitForReady": false
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": false
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{},
 			true,
 		},
@@ -91,18 +91,18 @@ func TestPraseWaitForReady(t *testing.T) {
 	}{
 		{
 			`{
-    	"methodConfig": [
-    		{
-    			"name": [
-    				{
-    					"service": "foo",
-              "method": "Bar"
-    				}
-    			],
-    			"waitForReady": true
-    		}
-    	]
-    }`,
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": true
+        }
+    ]
+}`,
 			ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
@@ -114,18 +114,18 @@ func TestPraseWaitForReady(t *testing.T) {
 		},
 		{
 			`{
-      "methodConfig": [
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "waitForReady": false
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": false
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
@@ -137,27 +137,18 @@ func TestPraseWaitForReady(t *testing.T) {
 		},
 		{
 			`{
-      "methodConfig": [
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "waitForReady": fall
-        },
-        {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "waitForReady": true
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "waitForReady": false
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{},
 			true,
 		},
@@ -179,18 +170,18 @@ func TestPraseTimeOut(t *testing.T) {
 	}{
 		{
 			`{
-    	"methodConfig": [
-    		{
-    			"name": [
-    				{
-    					"service": "foo",
-              "method": "Bar"
-    				}
-    			],
-    			"timeout": "1s"
-    		}
-    	]
-    }`,
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "timeout": "1s"
+        }
+    ]
+}`,
 			ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
@@ -202,44 +193,44 @@ func TestPraseTimeOut(t *testing.T) {
 		},
 		{
 			`{
-      "methodConfig": [
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "timeout": "3c"
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "timeout": "3c"
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{},
 			true,
 		},
 		{
 			`{
-      "methodConfig": [
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "timeout": "3c"
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "timeout": "3c"
         },
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "timeout": "1s"
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "timeout": "1s"
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{},
 			true,
 		},
@@ -261,19 +252,19 @@ func TestPraseMsgSize(t *testing.T) {
 	}{
 		{
 			`{
-    	"methodConfig": [
-    		{
-    			"name": [
-    				{
-    					"service": "foo",
-              "method": "Bar"
-    				}
-    			],
-    			"maxRequestMessageBytes": 1024,
-          "maxResponseMessageBytes": 2048
-    		}
-    	]
-    }`,
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "maxRequestMessageBytes": 1024,
+            "maxResponseMessageBytes": 2048
+        }
+    ]
+}`,
 			ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
@@ -286,29 +277,29 @@ func TestPraseMsgSize(t *testing.T) {
 		},
 		{
 			`{
-      "methodConfig": [
+    "methodConfig": [
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "maxRequestMessageBytes": "1024",
-          "maxResponseMessageBytes": "2048"
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "maxRequestMessageBytes": "1024",
+            "maxResponseMessageBytes": "2048"
         },
         {
-          "name": [
-            {
-              "service": "foo",
-              "method": "Bar"
-            }
-          ],
-          "maxRequestMessageBytes": 1024,
-          "maxResponseMessageBytes": 2048
+            "name": [
+                {
+                    "service": "foo",
+                    "method": "Bar"
+                }
+            ],
+            "maxRequestMessageBytes": 1024,
+            "maxResponseMessageBytes": 2048
         }
-      ]
-    }`,
+    ]
+}`,
 			ServiceConfig{},
 			true,
 		},
