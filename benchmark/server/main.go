@@ -30,9 +30,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-var (
-	duration = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark server")
-)
+var duration = flag.Int("duration", math.MaxInt32, "The duration in seconds to run the benchmark server")
 
 func main() {
 	flag.Parse()

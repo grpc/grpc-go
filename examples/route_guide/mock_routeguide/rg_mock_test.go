@@ -29,12 +29,10 @@ import (
 	rgpb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
-var (
-	msg = &rgpb.RouteNote{
-		Location: &rgpb.Point{Latitude: 17, Longitude: 29},
-		Message:  "Taxi-cab",
-	}
-)
+var msg = &rgpb.RouteNote{
+	Location: &rgpb.Point{Latitude: 17, Longitude: 29},
+	Message:  "Taxi-cab",
+}
 
 func TestRouteChat(t *testing.T) {
 	ctrl := gomock.NewController(t)

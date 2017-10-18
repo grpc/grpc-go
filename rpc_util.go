@@ -195,12 +195,11 @@ func Peer(peer *peer.Peer) CallOption {
 }
 
 // FailFast configures the action to take when an RPC is attempted on broken
-// connections or unreachable servers. If failfast is true, the RPC will fail
+// connections or unreachable servers. If failFast is true, the RPC will fail
 // immediately. Otherwise, the RPC client will block the call until a
-// connection is available (or the call is canceled or times out) and will retry
-// the call if it fails due to a transient error. Please refer to
-// https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
-// Note: failFast is default to true.
+// connection is available (or the call is canceled or times out). Please refer
+// to https://github.com/grpc/grpc/blob/master/doc/wait-for-ready.md.
+// The default behavior of RPCs is to fail fast.
 func FailFast(failFast bool) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.failFast = failFast
