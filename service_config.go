@@ -156,17 +156,21 @@ func min(a, b *int) *int {
 	return b
 }
 
-func getMaxSize(mcMax, doptMax *int, defaultVal int) (res *int) {
-	defer func() {
-		// Cap the max size to the max int of current machine due to limit of
-		// slice length.
-		res = min(res, newInt(int((^uint(0) >> 1))))
-		if int64(*res) > int64(math.MaxUint32) {
-			// Only reach here on 64-bit machine, where we need to cap the max size
-			// to MaxUint32.
-			res = newInt(math.MaxUint32)
-		}
-	}()
+func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
+	res := getRawMaxSize(mcMax, doptMax, defaultVal)
+
+	// Cap the max size to the max int of current machine due to limit of
+	// slice length.
+	res = min(res, newInt(int((^uint(0) >> 1))))
+	if int64(*res) > int64(math.MaxUint32) {
+		// Only reach here on 64-bit machine, where we need to cap the max size
+		// to MaxUint32.
+		res = newInt(math.MaxUint32)
+	}
+	return res
+}
+
+func getRawMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 	if mcMax == nil && doptMax == nil {
 		return &defaultVal
 	}
