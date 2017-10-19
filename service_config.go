@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -155,7 +156,17 @@ func min(a, b *int) *int {
 	return b
 }
 
-func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
+func getMaxSize(mcMax, doptMax *int, defaultVal int) (res *int) {
+	defer func() {
+		// Cap the max size to the max int of current machine due to limit of
+		// slice length.
+		res = min(res, newInt(int((^uint(0) >> 1))))
+		if int64(*res) > int64(math.MaxUint32) {
+			// Only reach here on 64-bit machine, where we need to cap the max size
+			// to MaxUint32.
+			res = newInt(math.MaxUint32)
+		}
+	}()
 	if mcMax == nil && doptMax == nil {
 		return &defaultVal
 	}
