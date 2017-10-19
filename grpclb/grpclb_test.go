@@ -151,9 +151,19 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string,
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	b := make([]byte, len(c.expected))
-	if _, err := rawConn.Read(b); err != nil {
-		fmt.Printf("Failed to read the server name from the server %v", err)
-		return nil, nil, err
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := rawConn.Read(b)
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			fmt.Printf("Failed to read the server name from the server %v", err)
+			return nil, nil, err
+		}
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 	if c.expected != string(b) {
 		fmt.Printf("Read the server name %s want %s", string(b), c.expected)
