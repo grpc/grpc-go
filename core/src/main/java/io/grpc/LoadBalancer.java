@@ -92,6 +92,8 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>No synchronization should be necessary between LoadBalancer and its pickers if you follow
  * the pattern above.  It may be possible to implement in a different way, but that would usually
  * result in more complicated threading.
+ *
+ * @since 1.2.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1771")
 @NotThreadSafe
@@ -105,6 +107,7 @@ public abstract class LoadBalancer {
    *
    * @param servers the resolved server addresses, never empty.
    * @param attributes extra metadata from naming system.
+   * @since 1.2.0
    */
   public abstract void handleResolvedAddressGroups(
       List<EquivalentAddressGroup> servers, Attributes attributes);
@@ -113,6 +116,7 @@ public abstract class LoadBalancer {
    * Handles an error from the name resolution system.
    *
    * @param error a non-OK status
+   * @since 1.2.0
    */
   public abstract void handleNameResolutionError(Status error);
 
@@ -135,6 +139,7 @@ public abstract class LoadBalancer {
    *
    * @param subchannel the involved Subchannel
    * @param stateInfo the new state
+   * @since 1.2.0
    */
   public abstract void handleSubchannelState(
       Subchannel subchannel, ConnectivityStateInfo stateInfo);
@@ -143,12 +148,16 @@ public abstract class LoadBalancer {
    * The channel asks the load-balancer to shutdown.  No more callbacks will be called after this
    * method.  The implementation should shutdown all Subchannels and OOB channels, and do any other
    * cleanup as necessary.
+   *
+   * @since 1.2.0
    */
   public abstract void shutdown();
 
   /**
    * The main balancing logic.  It <strong>must be thread-safe</strong>. Typically it should only
    * synchronize on its own state, and avoid synchronizing with the LoadBalancer's state.
+   *
+   * @since 1.2.0
    */
   @ThreadSafe
   public abstract static class SubchannelPicker {
@@ -156,6 +165,7 @@ public abstract class LoadBalancer {
      * Make a balancing decision for a new RPC.
      *
      * @param args the pick arguments
+     * @since 1.3.0
      */
     public abstract PickResult pickSubchannel(PickSubchannelArgs args);
   }
@@ -163,22 +173,30 @@ public abstract class LoadBalancer {
   /**
    * Provides arguments for a {@link SubchannelPicker#pickSubchannel(
    * LoadBalancer.PickSubchannelArgs)}.
+   *
+   * @since 1.2.0
    */
   public abstract static class PickSubchannelArgs {
 
     /**
      * Call options.
+     *
+     * @since 1.2.0
      */
     public abstract CallOptions getCallOptions();
 
     /**
      * Headers of the call. {@link SubchannelPicker#pickSubchannel} may mutate it before before
      * returning.
+     *
+     * @since 1.2.0
      */
     public abstract Metadata getHeaders();
 
     /**
      * Call method.
+     *
+     * @since 1.2.0
      */
     public abstract MethodDescriptor<?, ?> getMethodDescriptor();
   }
@@ -198,6 +216,8 @@ public abstract class LoadBalancer {
    *       picker is provided via {@link Helper#updateBalancingState Helper.updateBalancingState()},
    *       when the RPC will go through the same picking process again.</li>
    * </ul>
+   *
+   * @since 1.2.0
    */
   @Immutable
   public static final class PickResult {
@@ -286,6 +306,7 @@ public abstract class LoadBalancer {
      * @param streamTracerFactory if not null, will be used to trace the activities of the stream
      *                            created as a result of this pick. Note it's possible that no
      *                            stream is created at all in some cases.
+     * @since 1.3.0
      */
     public static PickResult withSubchannel(
         Subchannel subchannel, @Nullable ClientStreamTracer.Factory streamTracerFactory) {
@@ -296,6 +317,8 @@ public abstract class LoadBalancer {
 
     /**
      * Equivalent to {@code withSubchannel(subchannel, null)}.
+     *
+     * @since 1.2.0
      */
     public static PickResult withSubchannel(Subchannel subchannel) {
       return withSubchannel(subchannel, null);
@@ -307,6 +330,7 @@ public abstract class LoadBalancer {
      * with the given error.
      *
      * @param error the error status.  Must not be OK.
+     * @since 1.2.0
      */
     public static PickResult withError(Status error) {
       Preconditions.checkArgument(!error.isOk(), "error status shouldn't be OK");
@@ -318,6 +342,7 @@ public abstract class LoadBalancer {
      * policy.
      *
      * @param status the status with which the RPC will fail.  Must not be OK.
+     * @since 1.8.0
      */
     public static PickResult withDrop(Status status) {
       Preconditions.checkArgument(!status.isOk(), "drop status shouldn't be OK");
@@ -326,6 +351,8 @@ public abstract class LoadBalancer {
 
     /**
      * No decision could be made.  The RPC will stay buffered.
+     *
+     * @since 1.2.0
      */
     public static PickResult withNoResult() {
       return NO_RESULT;
@@ -334,6 +361,8 @@ public abstract class LoadBalancer {
     /**
      * The Subchannel if this result was created by {@link #withSubchannel withSubchannel()}, or
      * null otherwise.
+     *
+     * @since 1.2.0
      */
     @Nullable
     public Subchannel getSubchannel() {
@@ -342,6 +371,8 @@ public abstract class LoadBalancer {
 
     /**
      * The stream tracer factory this result was created with.
+     *
+     * @since 1.3.0
      */
     @Nullable
     public ClientStreamTracer.Factory getStreamTracerFactory() {
@@ -351,6 +382,8 @@ public abstract class LoadBalancer {
     /**
      * The status associated with this result.  Non-{@code OK} if created with {@link #withError
      * withError}, or {@code OK} otherwise.
+     *
+     * @since 1.2.0
      */
     public Status getStatus() {
       return status;
@@ -358,6 +391,8 @@ public abstract class LoadBalancer {
 
     /**
      * Returns {@code true} if this result was created by {@link #withDrop withDrop()}.
+     *
+     * @since 1.8.0
      */
     public boolean isDrop() {
       return drop;
@@ -396,6 +431,8 @@ public abstract class LoadBalancer {
 
   /**
    * Provides essentials for LoadBalancer implementations.
+   *
+   * @since 1.2.0
    */
   @ThreadSafe
   public abstract static class Helper {
@@ -407,6 +444,8 @@ public abstract class LoadBalancer {
      *
      * <p>The LoadBalancer is responsible for closing unused Subchannels, and closing all
      * Subchannels within {@link #shutdown}.
+     *
+     * @since 1.2.0
      */
     public abstract Subchannel createSubchannel(EquivalentAddressGroup addrs, Attributes attrs);
 
@@ -417,6 +456,7 @@ public abstract class LoadBalancer {
      *
      * @throws IllegalArgumentException if {@code subchannel} was not returned from {@link
      *     #createSubchannel}
+     * @since 1.4.0
      */
     public void updateSubchannelAddresses(
         Subchannel subchannel, EquivalentAddressGroup addrs) {
@@ -429,6 +469,8 @@ public abstract class LoadBalancer {
      *
      * <p>The LoadBalancer is responsible for closing unused OOB channels, and closing all OOB
      * channels within {@link #shutdown}.
+     *
+     * @since 1.4.0
      */
     public abstract ManagedChannel createOobChannel(EquivalentAddressGroup eag, String authority);
 
@@ -439,6 +481,7 @@ public abstract class LoadBalancer {
      *
      * @throws IllegalArgumentException if {@code channel} was not returned from {@link
      *     #createOobChannel}
+     * @since 1.4.0
      */
     public void updateOobChannelAddresses(ManagedChannel channel, EquivalentAddressGroup eag) {
       throw new UnsupportedOperationException();
@@ -458,23 +501,31 @@ public abstract class LoadBalancer {
      *
      * <p>The passed state will be the channel's new state. The SHUTDOWN state should not be passed
      * and its behavior is undefined.
+     *
+     * @since 1.6.0
      */
     public abstract void updateBalancingState(
         @Nonnull ConnectivityState newState, @Nonnull SubchannelPicker newPicker);
-    
+
     /**
      * Schedule a task to be run in the Channel Executor, which serializes the task with the
      * callback methods on the {@link LoadBalancer} interface.
+     *
+     * @since 1.2.0
      */
     public abstract void runSerialized(Runnable task);
 
     /**
      * Returns the NameResolver of the channel.
+     *
+     * @since 1.2.0
      */
     public abstract NameResolver.Factory getNameResolverFactory();
 
     /**
      * Returns the authority string of the channel, which is derived from the DNS-style target name.
+     *
+     * @since 1.2.0
      */
     public abstract String getAuthority();
   }
@@ -490,22 +541,30 @@ public abstract class LoadBalancer {
    * create a new transport.  It won't actively create transports otherwise.  {@link
    * #requestConnection requestConnection()} can be used to ask Subchannel to create a transport if
    * there isn't any.
+   *
+   * @since 1.2.0
    */
   @ThreadSafe
   public abstract static class Subchannel {
     /**
      * Shuts down the Subchannel.  After this method is called, this Subchannel should no longer
      * be returned by the latest {@link SubchannelPicker picker}, and can be safely discarded.
+     *
+     * @since 1.2.0
      */
     public abstract void shutdown();
 
     /**
      * Asks the Subchannel to create a connection (aka transport), if there isn't an active one.
+     *
+     * @since 1.2.0
      */
     public abstract void requestConnection();
 
     /**
      * Returns the addresses that this Subchannel is bound to.
+     *
+     * @since 1.2.0
      */
     public abstract EquivalentAddressGroup getAddresses();
 
@@ -513,17 +572,23 @@ public abstract class LoadBalancer {
      * The same attributes passed to {@link Helper#createSubchannel Helper.createSubchannel()}.
      * LoadBalancer can use it to attach additional information here, e.g., the shard this
      * Subchannel belongs to.
+     *
+     * @since 1.2.0
      */
     public abstract Attributes getAttributes();
   }
 
   /**
    * Factory to create {@link LoadBalancer} instance.
+   *
+   * @since 1.2.0
    */
   @ThreadSafe
   public abstract static class Factory {
     /**
      * Creates a {@link LoadBalancer} that will be used inside a channel.
+     *
+     * @since 1.2.0
      */
     public abstract LoadBalancer newLoadBalancer(Helper helper);
   }

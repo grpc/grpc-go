@@ -29,6 +29,8 @@ import javax.annotation.concurrent.ThreadSafe;
  *
  * <p>The addresses and attributes of a target may be changed over time, thus the caller registers a
  * {@link Listener} to receive continuous updates.
+ *
+ * @since 1.0.0
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1770")
 @ThreadSafe
@@ -41,6 +43,8 @@ public abstract class NameResolver {
    * <p>An implementation must generate it without blocking, typically in line, and
    * <strong>must</strong> keep it unchanged. {@code NameResolver}s created from the same factory
    * with the same argument must return the same authority.
+   *
+   * @since 1.0.0
    */
   public abstract String getServiceAuthority();
 
@@ -48,11 +52,14 @@ public abstract class NameResolver {
    * Starts the resolution.
    *
    * @param listener used to receive updates on the target
+   * @since 1.0.0
    */
   public abstract void start(Listener listener);
 
   /**
    * Stops the resolution. Updates to the Listener will stop.
+   *
+   * @since 1.0.0
    */
   public abstract void shutdown();
 
@@ -65,16 +72,22 @@ public abstract class NameResolver {
    * immediately. It should never throw.
    *
    * <p>The default implementation is no-op.
+   *
+   * @since 1.0.0
    */
   public void refresh() {}
 
   /**
    * Factory that creates {@link NameResolver} instances.
+   *
+   * @since 1.0.0
    */
   public abstract static class Factory {
     /**
      * The port number used in case the target or the underlying naming system doesn't provide a
      * port number.
+     *
+     * @since 1.0.0
      */
     public static final Attributes.Key<Integer> PARAMS_DEFAULT_PORT =
         Attributes.Key.of("params-default-port");
@@ -87,6 +100,7 @@ public abstract class NameResolver {
      * @param targetUri the target URI to be resolved, whose scheme must not be {@code null}
      * @param params optional parameters. Canonical keys are defined as {@code PARAMS_*} fields in
      *               {@link Factory}.
+     * @since 1.0.0
      */
     @Nullable
     public abstract NameResolver newNameResolver(URI targetUri, Attributes params);
@@ -95,6 +109,8 @@ public abstract class NameResolver {
      * Returns the default scheme, which will be used to construct a URI when {@link
      * ManagedChannelBuilder#forTarget(String)} is given an authority string instead of a compliant
      * URI.
+     *
+     * @since 1.0.0
      */
     public abstract String getDefaultScheme();
   }
@@ -103,6 +119,8 @@ public abstract class NameResolver {
    * Receives address updates.
    *
    * <p>All methods are expected to return quickly.
+   *
+   * @since 1.0.0
    */
   @ThreadSafe
   public interface Listener {
@@ -113,6 +131,7 @@ public abstract class NameResolver {
      *
      * @param servers the resolved server addresses. An empty list will trigger {@link #onError}
      * @param attributes extra metadata from naming system
+     * @since 1.3.0
      */
     void onAddresses(List<EquivalentAddressGroup> servers, Attributes attributes);
 
@@ -120,6 +139,7 @@ public abstract class NameResolver {
      * Handles an error from the resolver.
      *
      * @param error a non-OK status
+     * @since 1.0.0
      */
     void onError(Status error);
   }
