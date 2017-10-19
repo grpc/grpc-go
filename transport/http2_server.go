@@ -708,7 +708,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	md = s.header
 	s.mu.Unlock()
-	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // at least :status, content-type will be there if none else.
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":status", Value: "200"})
@@ -769,7 +769,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		headersSent = true
 	}
 
-	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
 	if !headersSent {
