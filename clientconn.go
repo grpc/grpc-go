@@ -191,6 +191,8 @@ func WithBalancerBuilder(b balancer.Builder) DialOption {
 }
 
 // WithServiceConfig returns a DialOption which has a channel to read the service configuration.
+// DEPRECATED: service config should be received through name resolver, as specified here.
+// https://github.com/grpc/grpc/blob/master/doc/service_config.md
 func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	return func(o *dialOptions) {
 		o.scChan = c
@@ -550,6 +552,7 @@ type ClientConn struct {
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
+	scRaw string
 	conns map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
 	mkp             keepalive.ClientParameters
@@ -591,6 +594,7 @@ func (cc *ClientConn) scWatcher() {
 			// TODO: load balance policy runtime change is ignored.
 			// We may revist this decision in the future.
 			cc.sc = sc
+			cc.scRaw = ""
 			cc.mu.Unlock()
 		case <-cc.ctx.Done():
 			return
@@ -798,6 +802,20 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transpor
 		return nil, nil, toRPCErr(err)
 	}
 	return t, done, nil
+}
+
+// handleServiceConfig parses the service config string in JSON format to Go native
+// struct ServiceConfig, and store both the struct and the JSON string in ClientConn.
+func (cc *ClientConn) handleServiceConfig(js string) error {
+	sc, err := parseServiceConfig(js)
+	if err != nil {
+		return err
+	}
+	cc.mu.Lock()
+	cc.scRaw = js
+	cc.sc = sc
+	cc.mu.Unlock()
+	return nil
 }
 
 // Close tears down the ClientConn and all underlying connections.
