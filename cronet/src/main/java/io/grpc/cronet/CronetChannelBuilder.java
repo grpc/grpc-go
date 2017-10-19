@@ -29,6 +29,7 @@ import io.grpc.internal.AbstractManagedChannelImplBuilder;
 import io.grpc.internal.ClientTransportFactory;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.internal.ProxyParameters;
 import io.grpc.internal.SharedResourceHolder;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -160,7 +161,7 @@ public final class CronetChannelBuilder extends
 
     @Override
     public ConnectionClientTransport newClientTransport(SocketAddress addr, String authority,
-        @Nullable String userAgent) {
+        @Nullable String userAgent, @Nullable ProxyParameters proxy) {
       InetSocketAddress inetSocketAddr = (InetSocketAddress) addr;
       return new CronetClientTransport(streamFactory, inetSocketAddr, authority, userAgent,
           executor, maxMessageSize, alwaysUsePut);
