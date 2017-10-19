@@ -1097,8 +1097,8 @@ func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 func (ac *addrConn) tearDown(err error) {
 	ac.cancel()
 	ac.mu.Lock()
-	ac.curAddr = resolver.Address{}
 	defer ac.mu.Unlock()
+	ac.curAddr = resolver.Address{}
 	if err == errConnDrain && ac.transport != nil {
 		// GracefulClose(...) may be executed multiple times when
 		// i) receiving multiple GoAway frames from the server; or
