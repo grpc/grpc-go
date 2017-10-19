@@ -73,7 +73,7 @@ func (b *scStateUpdateBuffer) load() {
 	}
 }
 
-// get returns the channel that receives a recvMsg in the buffer.
+// get returns the channel that the scStateUpdate will be sent to.
 //
 // Upon receiving, the caller should call load to send another
 // scStateChangeTuple onto the channel if there is any.
@@ -96,6 +96,8 @@ type ccBalancerWrapper struct {
 	stateChangeQueue *scStateUpdateBuffer
 	resolverUpdateCh chan *resolverUpdate
 	done             chan struct{}
+
+	subConns map[*acBalancerWrapper]struct{}
 }
 
 func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
@@ -104,6 +106,7 @@ func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.Bui
 		stateChangeQueue: newSCStateUpdateBuffer(),
 		resolverUpdateCh: make(chan *resolverUpdate, 1),
 		done:             make(chan struct{}),
+		subConns:         make(map[*acBalancerWrapper]struct{}),
 	}
 	go ccb.watcher()
 	ccb.balancer = b.Build(ccb, bopts)
@@ -117,8 +120,20 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case t := <-ccb.stateChangeQueue.get():
 			ccb.stateChangeQueue.load()
+			select {
+			case <-ccb.done:
+				ccb.balancer.Close()
+				return
+			default:
+			}
 			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
 		case t := <-ccb.resolverUpdateCh:
+			select {
+			case <-ccb.done:
+				ccb.balancer.Close()
+				return
+			default:
+			}
 			ccb.balancer.HandleResolvedAddrs(t.addrs, t.err)
 		case <-ccb.done:
 		}
@@ -126,6 +141,9 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
+			for acbw := range ccb.subConns {
+				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
+			}
 			return
 		default:
 		}
@@ -171,7 +189,10 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{ac: ac}
+	acbw.ac.mu.Lock()
 	ac.acbw = acbw
+	acbw.ac.mu.Unlock()
+	ccb.subConns[acbw] = struct{}{}
 	return acbw, nil
 }
 
@@ -181,6 +202,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	if !ok {
 		return
 	}
+	delete(ccb.subConns, acbw)
 	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 

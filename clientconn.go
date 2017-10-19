@@ -31,11 +31,13 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/roundrobin" // To register roundrobin.
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
+	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
@@ -435,42 +437,6 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.authority = target
 	}
 
-	if cc.dopts.balancerBuilder != nil {
-		var credsClone credentials.TransportCredentials
-		if creds != nil {
-			credsClone = creds.Clone()
-		}
-		buildOpts := balancer.BuildOptions{
-			DialCreds: credsClone,
-			Dialer:    cc.dopts.copts.Dialer,
-		}
-		// Build should not take long time. So it's ok to not have a goroutine for it.
-		// TODO(bar) init balancer after first resolver result to support service config balancer.
-		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, buildOpts)
-	} else {
-		waitC := make(chan error, 1)
-		go func() {
-			defer close(waitC)
-			// No balancer, or no resolver within the balancer.  Connect directly.
-			ac, err := cc.newAddrConn([]resolver.Address{{Addr: target}})
-			if err != nil {
-				waitC <- err
-				return
-			}
-			if err := ac.connect(cc.dopts.block); err != nil {
-				waitC <- err
-				return
-			}
-		}()
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case err := <-waitC:
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
 	if cc.dopts.scChan != nil && !scSet {
 		// Blocking wait for the initial service config.
 		select {
@@ -486,18 +452,25 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		go cc.scWatcher()
 	}
 
+	var credsClone credentials.TransportCredentials
+	if creds := cc.dopts.copts.TransportCredentials; creds != nil {
+		credsClone = creds.Clone()
+	}
+	cc.balancerBuildOpts = balancer.BuildOptions{
+		DialCreds: credsClone,
+		Dialer:    cc.dopts.copts.Dialer,
+	}
+
+	if cc.dopts.balancerBuilder != nil {
+		cc.customBalancer = true
+		// Build should not take long time. So it's ok to not have a goroutine for it.
+		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+	}
+
 	// Build the resolver.
 	cc.resolverWrapper, err = newCCResolverWrapper(cc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build resolver: %v", err)
-	}
-
-	if cc.balancerWrapper != nil && cc.resolverWrapper == nil {
-		// TODO(bar) there should always be a resolver (DNS as the default).
-		// Unblock balancer initialization with a fake resolver update if there's no resolver.
-		// The balancer wrapper will not read the addresses, so an empty list works.
-		// TODO(bar) remove this after the real resolver is started.
-		cc.balancerWrapper.handleResolvedAddrs([]resolver.Address{}, nil)
 	}
 
 	// A blocking dial blocks until the clientConn is ready.
@@ -570,16 +543,19 @@ type ClientConn struct {
 	dopts     dialOptions
 	csMgr     *connectivityStateManager
 
-	balancerWrapper *ccBalancerWrapper
-	resolverWrapper *ccResolverWrapper
-
-	blockingpicker *pickerWrapper
+	customBalancer    bool // If this is true, switching balancer will be disabled.
+	balancerBuildOpts balancer.BuildOptions
+	resolverWrapper   *ccResolverWrapper
+	blockingpicker    *pickerWrapper
 
 	mu    sync.RWMutex
 	sc    ServiceConfig
 	conns map[*addrConn]struct{}
 	// Keepalive parameter can be updated if a GoAway is received.
-	mkp keepalive.ClientParameters
+	mkp             keepalive.ClientParameters
+	curBalancerName string
+	curAddresses    []resolver.Address
+	balancerWrapper *ccBalancerWrapper
 }
 
 // WaitForStateChange waits until the connectivity.State of ClientConn changes from sourceState or
@@ -620,6 +596,71 @@ func (cc *ClientConn) scWatcher() {
 			return
 		}
 	}
+}
+
+func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	if cc.conns == nil {
+		return
+	}
+
+	// TODO(bar switching) when grpclb is submitted, check address type and start grpclb.
+	if !cc.customBalancer && cc.balancerWrapper == nil {
+		// No customBalancer was specified by DialOption, and this is the first
+		// time handling resolved addresses, create a pickfirst balancer.
+		builder := newPickfirstBuilder()
+		cc.curBalancerName = builder.Name()
+		cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
+	}
+
+	// TODO(bar switching) compare addresses, if there's no update, don't notify balancer.
+	cc.curAddresses = addrs
+	cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
+}
+
+// switchBalancer starts the switching from current balancer to the balancer with name.
+func (cc *ClientConn) switchBalancer(name string) {
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
+	if cc.conns == nil {
+		return
+	}
+	grpclog.Infof("ClientConn switching balancer to %q", name)
+
+	if cc.customBalancer {
+		grpclog.Infoln("ignoring service config balancer configuration: WithBalancer DialOption used instead")
+		return
+	}
+
+	if cc.curBalancerName == name {
+		return
+	}
+
+	// TODO(bar switching) change this to two steps: drain and close.
+	// Keep track of sc in wrapper.
+	cc.balancerWrapper.close()
+
+	builder := balancer.Get(name)
+	if builder == nil {
+		grpclog.Infof("failed to get balancer builder for: %v (this should never happen...)", name)
+		builder = newPickfirstBuilder()
+	}
+	cc.curBalancerName = builder.Name()
+	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
+	cc.balancerWrapper.handleResolvedAddrs(cc.curAddresses, nil)
+}
+
+func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+	cc.mu.Lock()
+	if cc.conns == nil {
+		cc.mu.Unlock()
+		return
+	}
+	// TODO(bar switching) send updates to all balancer wrappers when balancer
+	// gracefully switching is supported.
+	cc.balancerWrapper.handleSubConnStateChange(sc, s)
+	cc.mu.Unlock()
 }
 
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
@@ -670,11 +711,7 @@ func (ac *addrConn) connect(block bool) error {
 		return nil
 	}
 	ac.state = connectivity.Connecting
-	if ac.cc.balancerWrapper != nil {
-		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-	} else {
-		ac.cc.csMgr.updateState(ac.state)
-	}
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
 
 	if block {
@@ -756,31 +793,6 @@ func (cc *ClientConn) GetMethodConfig(method string) MethodConfig {
 }
 
 func (cc *ClientConn) getTransport(ctx context.Context, failfast bool) (transport.ClientTransport, func(balancer.DoneInfo), error) {
-	if cc.balancerWrapper == nil {
-		// If balancer is nil, there should be only one addrConn available.
-		cc.mu.RLock()
-		if cc.conns == nil {
-			cc.mu.RUnlock()
-			// TODO this function returns toRPCErr and non-toRPCErr. Clean up
-			// the errors in ClientConn.
-			return nil, nil, toRPCErr(ErrClientConnClosing)
-		}
-		var ac *addrConn
-		for ac = range cc.conns {
-			// Break after the first iteration to get the first addrConn.
-			break
-		}
-		cc.mu.RUnlock()
-		if ac == nil {
-			return nil, nil, errConnClosing
-		}
-		t, err := ac.wait(ctx, false /*hasBalancer*/, failfast)
-		if err != nil {
-			return nil, nil, err
-		}
-		return t, nil, nil
-	}
-
 	t, done, err := cc.blockingpicker.pick(ctx, failfast, balancer.PickOptions{})
 	if err != nil {
 		return nil, nil, toRPCErr(err)
@@ -800,13 +812,18 @@ func (cc *ClientConn) Close() error {
 	conns := cc.conns
 	cc.conns = nil
 	cc.csMgr.updateState(connectivity.Shutdown)
+
+	rWrapper := cc.resolverWrapper
+	cc.resolverWrapper = nil
+	bWrapper := cc.balancerWrapper
+	cc.balancerWrapper = nil
 	cc.mu.Unlock()
 	cc.blockingpicker.close()
-	if cc.resolverWrapper != nil {
-		cc.resolverWrapper.close()
+	if rWrapper != nil {
+		rWrapper.close()
 	}
-	if cc.balancerWrapper != nil {
-		cc.balancerWrapper.close()
+	if bWrapper != nil {
+		bWrapper.close()
 	}
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
@@ -877,11 +894,7 @@ func (ac *addrConn) resetTransport() error {
 		return errConnClosing
 	}
 	ac.state = connectivity.TransientFailure
-	if ac.cc.balancerWrapper != nil {
-		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-	} else {
-		ac.cc.csMgr.updateState(ac.state)
-	}
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.ready != nil {
 		close(ac.ready)
 		ac.ready = nil
@@ -906,12 +919,7 @@ func (ac *addrConn) resetTransport() error {
 		}
 		ac.printf("connecting")
 		ac.state = connectivity.Connecting
-		// TODO(bar) remove condition once we always have a balancer.
-		if ac.cc.balancerWrapper != nil {
-			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-		} else {
-			ac.cc.csMgr.updateState(ac.state)
-		}
+		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		// copy ac.addrs in case of race
 		addrsIter := make([]resolver.Address, len(ac.addrs))
 		copy(addrsIter, ac.addrs)
@@ -953,11 +961,7 @@ func (ac *addrConn) resetTransport() error {
 				return errConnClosing
 			}
 			ac.state = connectivity.Ready
-			if ac.cc.balancerWrapper != nil {
-				ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-			} else {
-				ac.cc.csMgr.updateState(ac.state)
-			}
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 			t := ac.transport
 			ac.transport = newTransport
 			if t != nil {
@@ -973,11 +977,7 @@ func (ac *addrConn) resetTransport() error {
 		}
 		ac.mu.Lock()
 		ac.state = connectivity.TransientFailure
-		if ac.cc.balancerWrapper != nil {
-			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-		} else {
-			ac.cc.csMgr.updateState(ac.state)
-		}
+		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		if ac.ready != nil {
 			close(ac.ready)
 			ac.ready = nil
@@ -1111,11 +1111,7 @@ func (ac *addrConn) tearDown(err error) {
 	}
 	ac.state = connectivity.Shutdown
 	ac.tearDownErr = err
-	if ac.cc.balancerWrapper != nil {
-		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-	} else {
-		ac.cc.csMgr.updateState(ac.state)
-	}
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.events != nil {
 		ac.events.Finish()
 		ac.events = nil
