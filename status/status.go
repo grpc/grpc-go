@@ -72,12 +72,22 @@ func (s *Status) Message() string {
 	return s.s.Message
 }
 
+// ProtoClone returns s's status as an spb.Status proto message. It makes a
+// deep copy of s in doing so. Use this when returned proto message is to be
+// modified.
+func (s *Status) ProtoClone() *spb.Status {
+	if s == nil {
+		return nil
+	}
+	return proto.Clone(s.s).(*spb.Status)
+}
+
 // Proto returns s's status as an spb.Status proto message.
 func (s *Status) Proto() *spb.Status {
 	if s == nil {
 		return nil
 	}
-	return proto.Clone(s.s).(*spb.Status)
+	return s.s
 }
 
 // Err returns an immutable error representing s; returns nil if s.Code() is
@@ -109,14 +119,14 @@ func Errorf(c codes.Code, format string, a ...interface{}) error {
 	return Error(c, fmt.Sprintf(format, a...))
 }
 
-// ErrorProto returns an error representing s.  If s.Code is OK, returns nil.
+// ErrorProto returns an error representing s. If s.Code is OK, returns nil.
 func ErrorProto(s *spb.Status) error {
 	return FromProto(s).Err()
 }
 
 // FromProto returns a Status representing s.
 func FromProto(s *spb.Status) *Status {
-	return &Status{s: proto.Clone(s).(*spb.Status)}
+	return &Status{s: s}
 }
 
 // FromError returns a Status representing err if it was produced from this
@@ -137,8 +147,8 @@ func (s *Status) WithDetails(details ...proto.Message) (*Status, error) {
 	if s.Code() == codes.OK {
 		return nil, errors.New("no error details for status with code OK")
 	}
-	// s.Code() != OK implies that s.Proto() != nil.
-	p := s.Proto()
+	// s.Code() != OK implies that s.ProtoClone() != nil.
+	p := s.ProtoClone()
 	for _, detail := range details {
 		any, err := ptypes.MarshalAny(detail)
 		if err != nil {
