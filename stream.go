@@ -94,13 +94,21 @@ type ClientStream interface {
 	Stream
 }
 
-// NewClientStream creates a new Stream for the client side. This is called
-// by generated code.
-func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
+// NewStream creates a new Stream for the client side. This is typically
+// called by generated code.
+func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
 	if cc.dopts.streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
 	return newClientStream(ctx, desc, cc, method, opts...)
+}
+
+// NewClientStream creates a new Stream for the client side. This is typically
+// called by generated code.
+//
+// DEPRECATED: Use ClientConn.NewStream instead.
+func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+	return cc.NewStream(ctx, desc, method, opts...)
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
