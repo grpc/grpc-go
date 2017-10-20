@@ -49,7 +49,7 @@ class ProxyDetectorImpl implements ProxyDetector {
         String host, InetAddress addr, int port, String protocol, String prompt, String scheme) {
       URL url = null;
       try {
-        url = new URL(protocol, host, "");
+        url = new URL(protocol, host, port, "");
       } catch (MalformedURLException e) {
         // let url be null
         log.log(
