@@ -1024,6 +1024,7 @@ func (ac *addrConn) transportMonitor() {
 		ac.mu.Lock()
 		ac.state = connectivity.TransientFailure
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		ac.curAddr = resolver.Address{}
 		ac.mu.Unlock()
 		if err := ac.resetTransport(); err != nil {
 			ac.mu.Lock()
