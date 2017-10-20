@@ -4288,39 +4288,37 @@ func TestServerCredsDispatch(t *testing.T) {
 }
 
 type authorityCheckCreds struct {
-	expected string
+	got string
 }
 
 func (c *authorityCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
 func (c *authorityCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	if c.expected != authority {
-		return nil, nil, fmt.Errorf("got unexpected authority %s, want %s", authority, c.expected)
-	}
+	c.got = authority
 	return rawConn, nil, nil
 }
 func (c *authorityCheckCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
 func (c *authorityCheckCreds) Clone() credentials.TransportCredentials {
-	return &*c
+	return c
 }
 func (c *authorityCheckCreds) OverrideServerName(s string) error {
 	return nil
 }
 
-const testAuthority = "test.auth.ori.ty"
-
 // This test makes sure that the authority client handshake gets is the endpoint
 // in dial target, not the resolved ip address.
 func TestCredsHandshakeAuthority(t *testing.T) {
+	const testAuthority = "test.auth.ori.ty"
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	cred := &authorityCheckCreds{expected: testAuthority}
-	s := grpc.NewServer(grpc.Creds(cred))
+	cred := &authorityCheckCreds{}
+	s := grpc.NewServer()
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -4334,11 +4332,21 @@ func TestCredsHandshakeAuthority(t *testing.T) {
 	defer cc.Close()
 	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
 
-	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.Unimplemented {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want <unimplemented>", err)
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			break
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			t.Fatalf("ClientConn is not ready after 100 ms")
+		}
+	}
+
+	if cred.got != testAuthority {
+		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
 	}
 }
 
