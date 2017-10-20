@@ -344,11 +344,26 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 	return DialContext(context.Background(), target, opts...)
 }
 
+// Dial creates a client connection to the given target. network can be used to
+// choose network type between "tcp" "udp" "unix"
+func DialNetwork(network, target string, opts ...DialOption) (*ClientConn, error) {
+	return DialContextNetwork(context.Background(), network, target, opts...)
+}
+
 // DialContext creates a client connection to the given target. ctx can be used to
 // cancel or expire the pending connection. Once this function returns, the
 // cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
 // to terminate all the pending operations after this function returns.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
+	return DialContextNetwork(ctx, "tcp", target, opts...)
+}
+
+// DialContext creates a client connection to the given target. ctx can be used to
+// cancel or expire the pending connection. Once this function returns, the
+// cancellation and expiration of ctx will be noop. Users should call ClientConn.Close
+// to terminate all the pending operations after this function returns.
+// and network can be used to choose network type between "tcp" "udp" "unix"
+func DialContextNetwork(ctx context.Context, network, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target: target,
 		csMgr:  &connectivityStateManager{},
@@ -382,7 +397,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.copts.Dialer == nil {
 		cc.dopts.copts.Dialer = newProxyDialer(
 			func(ctx context.Context, addr string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+				return (&net.Dialer{}).DialContext(ctx, network, addr)
 			},
 		)
 	}
