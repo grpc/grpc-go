@@ -29,12 +29,11 @@ import (
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConnection interface.
 type ccResolverWrapper struct {
-	cc           *ClientConn
-	parsedTarget resolver.Target
-	resolver     resolver.Resolver
-	addrCh       chan []resolver.Address
-	scCh         chan string
-	done         chan struct{}
+	cc       *ClientConn
+	resolver resolver.Resolver
+	addrCh   chan []resolver.Address
+	scCh     chan string
+	done     chan struct{}
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -59,24 +58,22 @@ func parseTarget(target string) (ret resolver.Target) {
 // builder for this scheme. It then builds the resolver and starts the
 // monitoring goroutine for it.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	target := parseTarget(cc.target)
-	grpclog.Infof("dialing to target with scheme: %q", target.Scheme)
+	grpclog.Infof("dialing to target with scheme: %q", cc.parsedTarget.Scheme)
 
-	rb := resolver.Get(target.Scheme)
+	rb := resolver.Get(cc.parsedTarget.Scheme)
 	if rb == nil {
-		return nil, fmt.Errorf("could not get resolver for scheme: %q", target.Scheme)
+		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
 	}
 
 	ccr := &ccResolverWrapper{
-		cc:           cc,
-		parsedTarget: target,
-		addrCh:       make(chan []resolver.Address, 1),
-		scCh:         make(chan string, 1),
-		done:         make(chan struct{}),
+		cc:     cc,
+		addrCh: make(chan []resolver.Address, 1),
+		scCh:   make(chan string, 1),
+		done:   make(chan struct{}),
 	}
 
 	var err error
-	ccr.resolver, err = rb.Build(target, ccr, resolver.BuildOption{})
+	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{})
 	if err != nil {
 		return nil, err
 	}
