@@ -315,8 +315,7 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			})
 			done(balancer.DoneInfo{Err: err})
 		}
-		//streamStatusErr := stream.Status().Err()
-		if !c.failFast /*&& streamStatusErr != nil*/ && stream.Unprocessed() {
+		if !c.failFast && stream.Unprocessed() {
 			// In these cases, the server did not receive the data, but we still
 			// created wire traffic, so we should not retry indefinitely.
 			if firstAttempt {
@@ -325,6 +324,6 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 				continue
 			}
 		}
-		return stream.Status().Err() //streamStatusErr
+		return stream.Status().Err()
 	}
 }
