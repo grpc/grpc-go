@@ -156,12 +156,14 @@ func min(a, b *int) *int {
 	return b
 }
 
+const maxInt = int(^uint(0) >> 1)
+
 func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 	res := getRawMaxSize(mcMax, doptMax, defaultVal)
 
 	// Cap the max size to the max int of current machine due to limit of
 	// slice length.
-	res = min(res, newInt(int((^uint(0) >> 1))))
+	res = min(res, newInt(maxInt))
 	if int64(*res) > int64(math.MaxUint32) {
 		// Only reach here on 64-bit machine, where we need to cap the max size
 		// to MaxUint32.
