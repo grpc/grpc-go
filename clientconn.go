@@ -37,7 +37,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
-	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
+	_ "google.golang.org/grpc/resolver/dns"         // To register dns resolver.
+	_ "google.golang.org/grpc/resolver/passthrough" // To register passthrough resolver.
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/transport"
 )
