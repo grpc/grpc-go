@@ -29,11 +29,12 @@ import (
 // ccResolverWrapper is a wrapper on top of cc for resolvers.
 // It implements resolver.ClientConnection interface.
 type ccResolverWrapper struct {
-	cc       *ClientConn
-	resolver resolver.Resolver
-	addrCh   chan []resolver.Address
-	scCh     chan string
-	done     chan struct{}
+	cc           *ClientConn
+	parsedTarget resolver.Target
+	resolver     resolver.Resolver
+	addrCh       chan []resolver.Address
+	scCh         chan string
+	done         chan struct{}
 }
 
 // split2 returns the values from strings.SplitN(s, sep, 2).
@@ -67,10 +68,11 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	ccr := &ccResolverWrapper{
-		cc:     cc,
-		addrCh: make(chan []resolver.Address, 1),
-		scCh:   make(chan string, 1),
-		done:   make(chan struct{}),
+		cc:           cc,
+		parsedTarget: target,
+		addrCh:       make(chan []resolver.Address, 1),
+		scCh:         make(chan string, 1),
+		done:         make(chan struct{}),
 	}
 
 	var err error

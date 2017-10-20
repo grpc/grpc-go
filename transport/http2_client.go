@@ -44,7 +44,6 @@ import (
 type http2Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
-	target     string // server name/addr
 	userAgent  string
 	md         interface{}
 	conn       net.Conn // underlying communication channel
@@ -175,7 +174,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	)
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
-		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Addr, conn)
+		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Authority, conn)
 		if err != nil {
 			// Credentials handshake errors are typically considered permanent
 			// to avoid retrying on e.g. bad certificates.
@@ -210,7 +209,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	t := &http2Client{
 		ctx:        ctx,
 		cancel:     cancel,
-		target:     addr.Addr,
 		userAgent:  opts.UserAgent,
 		md:         addr.Metadata,
 		conn:       conn,
