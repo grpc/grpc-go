@@ -714,11 +714,13 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
+	ac.state = connectivity.Connecting
+	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
 
 	// Start a goroutine connecting to the server asynchronously.
 	go func() {
-		if err := ac.resetTransport(true); err != nil {
+		if err := ac.resetTransport(); err != nil {
 			grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
 			if err != errConnClosing {
 				// Keep this ac in cc.conns, to get the reason it's torn down.
@@ -893,15 +895,11 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // first time doing resetTransport.
 //
 // TODO(bar) make sure all state transitions are valid.
-func (ac *addrConn) resetTransport(first bool) error {
+func (ac *addrConn) resetTransport() error {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 		return errConnClosing
-	}
-	if !first {
-		ac.state = connectivity.TransientFailure
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	}
 	if ac.ready != nil {
 		close(ac.ready)
@@ -926,8 +924,10 @@ func (ac *addrConn) resetTransport(first bool) error {
 			return errConnClosing
 		}
 		ac.printf("connecting")
-		ac.state = connectivity.Connecting
-		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		if ac.state != connectivity.Connecting {
+			ac.state = connectivity.Connecting
+			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		}
 		// copy ac.addrs in case of race
 		addrsIter := make([]resolver.Address, len(ac.addrs))
 		copy(addrsIter, ac.addrs)
@@ -1021,7 +1021,11 @@ func (ac *addrConn) transportMonitor() {
 			ac.adjustParams(t.GetGoAwayReason())
 		default:
 		}
-		if err := ac.resetTransport(false); err != nil {
+		ac.mu.Lock()
+		ac.state = connectivity.TransientFailure
+		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
+		ac.mu.Unlock()
+		if err := ac.resetTransport(); err != nil {
 			ac.mu.Lock()
 			ac.printf("transport exiting: %v", err)
 			ac.mu.Unlock()
