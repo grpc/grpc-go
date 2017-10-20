@@ -2997,7 +2997,7 @@ func TestRetry(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
 		if e.name == "handler-tls" {
-			// Fails with RST_STREAM / FLOW_CONTROL_ERROR
+			// In race mode, with go1.6, the test never returns with handler_server.
 			continue
 		}
 		testRetry(t, e)
