@@ -208,6 +208,7 @@ func FailFast(failFast bool) CallOption {
 }
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size the client can receive.
+// Note that the maximum effective value is MaxUint32 due to protocol limitations.
 func MaxCallRecvMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxReceiveMessageSize = &s
@@ -216,6 +217,7 @@ func MaxCallRecvMsgSize(s int) CallOption {
 }
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size the client can send.
+// Note that the maximum effective value is MaxUint32 due to protocol limitations.
 func MaxCallSendMsgSize(s int) CallOption {
 	return beforeCall(func(o *callInfo) error {
 		o.maxSendMessageSize = &s
