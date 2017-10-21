@@ -51,17 +51,18 @@ protobuf {
   }
 }
 
-// Inform IntelliJ projects about the generated code.
-apply plugin: 'idea'
-
-idea {
-  module {
-    // Not using generatedSourceDirs because of
-    // https://discuss.gradle.org/t/support-for-intellij-2016/15294/8
-    sourceDirs += file("${projectDir}/build/generated/source/proto/main/java");
-    sourceDirs += file("${projectDir}/build/generated/source/proto/main/grpc");
-  }
+// Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
 }
+
+// Generate IntelliJ IDEA's .idea & .iml project files
+apply plugin: 'idea'
 
 // Provide convenience executables for trying out the examples.
 apply plugin: 'application'
