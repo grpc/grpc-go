@@ -869,18 +869,13 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 
 // resetTransport recreates a transport to the address for ac.  The old
 // transport will close itself on error or when the clientconn is closed.
+//
 // TODO(bar) make sure all state transitions are valid.
 func (ac *addrConn) resetTransport() error {
 	ac.mu.Lock()
 	if ac.state == connectivity.Shutdown {
 		ac.mu.Unlock()
 		return errConnClosing
-	}
-	ac.state = connectivity.TransientFailure
-	if ac.cc.balancerWrapper != nil {
-		ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-	} else {
-		ac.cc.csMgr.updateState(ac.state)
 	}
 	if ac.ready != nil {
 		close(ac.ready)
@@ -905,12 +900,14 @@ func (ac *addrConn) resetTransport() error {
 			return errConnClosing
 		}
 		ac.printf("connecting")
-		ac.state = connectivity.Connecting
-		// TODO(bar) remove condition once we always have a balancer.
-		if ac.cc.balancerWrapper != nil {
-			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
-		} else {
-			ac.cc.csMgr.updateState(ac.state)
+		if ac.state != connectivity.Connecting {
+			ac.state = connectivity.Connecting
+			// TODO(bar) remove condition once we always have a balancer.
+			if ac.cc.balancerWrapper != nil {
+				ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+			} else {
+				ac.cc.csMgr.updateState(ac.state)
+			}
 		}
 		// copy ac.addrs in case of race
 		addrsIter := make([]resolver.Address, len(ac.addrs))
@@ -1013,6 +1010,17 @@ func (ac *addrConn) transportMonitor() {
 			ac.adjustParams(t.GetGoAwayReason())
 		default:
 		}
+		ac.mu.Lock()
+		// Set connectivity state to TransientFailure before calling
+		// resetTransport. Transition READY->CONNECTING is not valid.
+		ac.state = connectivity.TransientFailure
+		if ac.cc.balancerWrapper != nil {
+			ac.cc.balancerWrapper.handleSubConnStateChange(ac.acbw, ac.state)
+		} else {
+			ac.cc.csMgr.updateState(ac.state)
+		}
+		ac.curAddr = resolver.Address{}
+		ac.mu.Unlock()
 		if err := ac.resetTransport(); err != nil {
 			ac.mu.Lock()
 			ac.printf("transport exiting: %v", err)
