@@ -53,6 +53,8 @@ func TestParseTargetString(t *testing.T) {
 		want      resolver.Target
 	}{
 		{"", resolver.Target{"", "", ""}},
+		{"://", resolver.Target{"", "", ""}},
+		{":///", resolver.Target{"", "", ""}},
 		{"a:///", resolver.Target{"a", "", ""}},
 		{"://a/", resolver.Target{"", "a", ""}},
 		{":///a", resolver.Target{"", "", "a"}},
@@ -64,6 +66,7 @@ func TestParseTargetString(t *testing.T) {
 		{"dns://a.server.com/google.com", resolver.Target{"dns", "a.server.com", "google.com"}},
 		{"dns://a.server.com/google.com/?a=b", resolver.Target{"dns", "a.server.com", "google.com/?a=b"}},
 
+		{"/", resolver.Target{"", "", "/"}},
 		{"google.com", resolver.Target{"", "", "google.com"}},
 		{"google.com/?a=b", resolver.Target{"", "", "google.com/?a=b"}},
 		{"/unix/socket/address", resolver.Target{"", "", "/unix/socket/address"}},

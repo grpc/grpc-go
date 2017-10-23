@@ -41,7 +41,7 @@ type ccResolverWrapper struct {
 func split2(s, sep string) (string, string, bool) {
 	spl := strings.SplitN(s, sep, 2)
 	if len(spl) < 2 {
-		return "", s, false
+		return "", "", false
 	}
 	return spl[0], spl[1], true
 }
