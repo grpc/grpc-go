@@ -891,9 +891,6 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 // resetTransport recreates a transport to the address for ac.  The old
 // transport will close itself on error or when the clientconn is closed.
 //
-// The connectivity state of ac will be set to TransientFailure if it's not
-// first time doing resetTransport.
-//
 // TODO(bar) make sure all state transitions are valid.
 func (ac *addrConn) resetTransport() error {
 	ac.mu.Lock()
@@ -1022,6 +1019,8 @@ func (ac *addrConn) transportMonitor() {
 		default:
 		}
 		ac.mu.Lock()
+		// Set connectivity state to TransientFailure before calling
+		// resetTransport. Transition READY->CONNECTING is not valid.
 		ac.state = connectivity.TransientFailure
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.curAddr = resolver.Address{}
