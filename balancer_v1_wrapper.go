@@ -97,7 +97,6 @@ type balancerWrapper struct {
 // connections accordingly.
 func (bw *balancerWrapper) lbWatcher() {
 	<-bw.startCh
-	grpclog.Infof("balancerWrapper: is pickfirst: %v\n", bw.pickfirst)
 	notifyCh := bw.balancer.Notify()
 	if notifyCh == nil {
 		// There's no resolver in the balancer. Connect directly.
@@ -230,7 +229,6 @@ func (bw *balancerWrapper) lbWatcher() {
 }
 
 func (bw *balancerWrapper) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
-	grpclog.Infof("balancerWrapper: handle subconn state change: %p, %v", sc, s)
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
 	scSt, ok := bw.connSt[sc]
