@@ -19,9 +19,10 @@
 package primitives_test
 
 import (
-	"context"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 func BenchmarkCancelContextErrNoErr(b *testing.B) {
