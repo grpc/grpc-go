@@ -513,8 +513,9 @@ type ConnectOptions struct {
 
 // TargetInfo contains the information of the target such as network address and metadata.
 type TargetInfo struct {
-	Addr     string
-	Metadata interface{}
+	Addr      string
+	Metadata  interface{}
+	Authority string
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions

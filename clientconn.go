@@ -431,13 +431,16 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.bs == nil {
 		cc.dopts.bs = DefaultBackoffConfig
 	}
+	cc.parsedTarget = parseTarget(cc.target)
 	creds := cc.dopts.copts.TransportCredentials
 	if creds != nil && creds.Info().ServerName != "" {
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.copts.Authority != "" {
 		cc.authority = cc.dopts.copts.Authority
 	} else {
-		cc.authority = target
+		// Use endpoint from "scheme://authority/endpoint" as the default
+		// authority for ClientConn.
+		cc.authority = cc.parsedTarget.Endpoint
 	}
 
 	if cc.dopts.scChan != nil && !scSet {
@@ -541,10 +544,11 @@ type ClientConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	target    string
-	authority string
-	dopts     dialOptions
-	csMgr     *connectivityStateManager
+	target       string
+	parsedTarget resolver.Target
+	authority    string
+	dopts        dialOptions
+	csMgr        *connectivityStateManager
 
 	customBalancer    bool // If this is true, switching balancer will be disabled.
 	balancerBuildOpts balancer.BuildOptions
@@ -953,8 +957,9 @@ func (ac *addrConn) resetTransport() error {
 			}
 			ac.mu.Unlock()
 			sinfo := transport.TargetInfo{
-				Addr:     addr.Addr,
-				Metadata: addr.Metadata,
+				Addr:      addr.Addr,
+				Metadata:  addr.Metadata,
+				Authority: ac.cc.authority,
 			}
 			newTransport, err := transport.NewClientTransport(ac.cc.ctx, sinfo, copts, timeout)
 			if err != nil {

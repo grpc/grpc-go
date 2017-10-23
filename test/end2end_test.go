@@ -4287,6 +4287,69 @@ func TestServerCredsDispatch(t *testing.T) {
 	}
 }
 
+type authorityCheckCreds struct {
+	got string
+}
+
+func (c *authorityCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *authorityCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.got = authority
+	return rawConn, nil, nil
+}
+func (c *authorityCheckCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *authorityCheckCreds) Clone() credentials.TransportCredentials {
+	return c
+}
+func (c *authorityCheckCreds) OverrideServerName(s string) error {
+	return nil
+}
+
+// This test makes sure that the authority client handshake gets is the endpoint
+// in dial target, not the resolved ip address.
+func TestCredsHandshakeAuthority(t *testing.T) {
+	const testAuthority = "test.auth.ori.ty"
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	cred := &authorityCheckCreds{}
+	s := grpc.NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			break
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			t.Fatalf("ClientConn is not ready after 100 ms")
+		}
+	}
+
+	if cred.got != testAuthority {
+		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
+	}
+}
+
 func TestFlowControlLogicalRace(t *testing.T) {
 	// Test for a regression of https://github.com/grpc/grpc-go/issues/632,
 	// and other flow control bugs.

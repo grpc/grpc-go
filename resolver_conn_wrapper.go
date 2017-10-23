@@ -58,12 +58,11 @@ func parseTarget(target string) (ret resolver.Target) {
 // builder for this scheme. It then builds the resolver and starts the
 // monitoring goroutine for it.
 func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
-	target := parseTarget(cc.target)
-	grpclog.Infof("dialing to target with scheme: %q", target.Scheme)
+	grpclog.Infof("dialing to target with scheme: %q", cc.parsedTarget.Scheme)
 
-	rb := resolver.Get(target.Scheme)
+	rb := resolver.Get(cc.parsedTarget.Scheme)
 	if rb == nil {
-		return nil, fmt.Errorf("could not get resolver for scheme: %q", target.Scheme)
+		return nil, fmt.Errorf("could not get resolver for scheme: %q", cc.parsedTarget.Scheme)
 	}
 
 	ccr := &ccResolverWrapper{
@@ -74,7 +73,7 @@ func newCCResolverWrapper(cc *ClientConn) (*ccResolverWrapper, error) {
 	}
 
 	var err error
-	ccr.resolver, err = rb.Build(target, ccr, resolver.BuildOption{})
+	ccr.resolver, err = rb.Build(cc.parsedTarget, ccr, resolver.BuildOption{})
 	if err != nil {
 		return nil, err
 	}
