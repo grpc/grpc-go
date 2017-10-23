@@ -111,13 +111,13 @@ func TestOneBackend(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
 	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
 	// The second RPC should succeed.
-	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -158,7 +158,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	for si := 0; si < backendCount; si++ {
 		var connected bool
 		for i := 0; i < 1000; i++ {
-			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
@@ -173,7 +173,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 	}
 
 	for i := 0; i < 3*backendCount; i++ {
-		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
@@ -202,13 +202,13 @@ func TestAddressesRemoved(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
 	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
 	// The second RPC should succeed.
-	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -248,7 +248,7 @@ func TestCloseWithPendingRPC(t *testing.T) {
 			defer wg.Done()
 			// This RPC blocks until cc is closed.
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) == codes.DeadlineExceeded {
+			if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); grpc.Code(err) == codes.DeadlineExceeded {
 				t.Errorf("RPC failed because of deadline after cc is closed; want error the client connection is closing")
 			}
 			cancel()
@@ -278,7 +278,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -286,7 +286,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 	// The second RPC should succeed.
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err != nil {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, nil", err)
 	}
 
@@ -298,7 +298,7 @@ func TestNewAddressWhileBlocking(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			// This RPC blocks until NewAddress is called.
-			testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false))
+			testc.EmptyCall(context.Background(), &testpb.Empty{})
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -327,7 +327,7 @@ func TestOneServerDown(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -342,7 +342,7 @@ func TestOneServerDown(t *testing.T) {
 	for si := 0; si < backendCount; si++ {
 		var connected bool
 		for i := 0; i < 1000; i++ {
-			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
@@ -357,7 +357,7 @@ func TestOneServerDown(t *testing.T) {
 	}
 
 	for i := 0; i < 3*backendCount; i++ {
-		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
@@ -371,7 +371,7 @@ func TestOneServerDown(t *testing.T) {
 	// Loop until see server[backendCount-1] twice without seeing server[backendCount].
 	var targetSeen int
 	for i := 0; i < 1000; i++ {
-		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 		}
 		switch p.Addr.String() {
@@ -390,7 +390,7 @@ func TestOneServerDown(t *testing.T) {
 		t.Fatal("Failed to see server[backendCount-1] twice without seeing server[backendCount]")
 	}
 	for i := 0; i < 3*backendCount; i++ {
-		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
@@ -420,7 +420,7 @@ func TestAllServersDown(t *testing.T) {
 	// The first RPC should fail because there's no address.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err == nil || grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 	}
 
@@ -435,7 +435,7 @@ func TestAllServersDown(t *testing.T) {
 	for si := 0; si < backendCount; si++ {
 		var connected bool
 		for i := 0; i < 1000; i++ {
-			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
@@ -450,7 +450,7 @@ func TestAllServersDown(t *testing.T) {
 	}
 
 	for i := 0; i < 3*backendCount; i++ {
-		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false), grpc.Peer(&p)); err != nil {
+		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
 			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {

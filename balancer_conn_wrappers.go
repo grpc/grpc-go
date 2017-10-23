@@ -252,7 +252,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 		acbw.ac = ac
 		ac.acbw = acbw
 		if acState != connectivity.Idle {
-			ac.connect(false)
+			ac.connect()
 		}
 	}
 }
@@ -260,7 +260,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 func (acbw *acBalancerWrapper) Connect() {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
-	acbw.ac.connect(false)
+	acbw.ac.connect()
 }
 
 func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
