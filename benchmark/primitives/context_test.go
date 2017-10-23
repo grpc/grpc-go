@@ -62,7 +62,9 @@ func BenchmarkCancelContextChannelGotErr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		select {
 		case <-ctx.Done():
-			continue
+			if err := ctx.Err(); err == nil {
+				b.Fatal("error")
+			}
 		default:
 			b.Fatal("error: !ctx.Done()")
 		}
@@ -107,7 +109,9 @@ func BenchmarkTimerContextChannelGotErr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		select {
 		case <-ctx.Done():
-			continue
+			if err := ctx.Err(); err == nil {
+				b.Fatal("error")
+			}
 		default:
 			b.Fatal("error: !ctx.Done()")
 		}
