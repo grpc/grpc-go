@@ -22,8 +22,6 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	netctx "golang.org/x/net/context"
 )
 
 func BenchmarkCancelContextErrNoErr(b *testing.B) {
@@ -105,98 +103,6 @@ func BenchmarkTimerContextChannelNoErr(b *testing.B) {
 
 func BenchmarkTimerContextChannelGotErr(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Microsecond)
-	cancel()
-	for i := 0; i < b.N; i++ {
-		select {
-		case <-ctx.Done():
-			continue
-		default:
-			b.Fatal("error: !ctx.Done()")
-		}
-	}
-}
-
-// The same benchmarks as above, but with x/net/context instead of context:
-
-func BenchmarkCancelNetContextErrNoErr(b *testing.B) {
-	ctx, cancel := netctx.WithCancel(netctx.Background())
-	for i := 0; i < b.N; i++ {
-		if err := ctx.Err(); err != nil {
-			b.Fatal("error")
-		}
-	}
-	cancel()
-}
-
-func BenchmarkCancelNetContextErrGotErr(b *testing.B) {
-	ctx, cancel := netctx.WithCancel(netctx.Background())
-	cancel()
-	for i := 0; i < b.N; i++ {
-		if err := ctx.Err(); err == nil {
-			b.Fatal("error")
-		}
-	}
-}
-
-func BenchmarkCancelNetContextChannelNoErr(b *testing.B) {
-	ctx, cancel := netctx.WithCancel(netctx.Background())
-	for i := 0; i < b.N; i++ {
-		select {
-		case <-ctx.Done():
-			b.Fatal("error: ctx.Done():", ctx.Err())
-		default:
-		}
-	}
-	cancel()
-}
-
-func BenchmarkCancelNetContextChannelGotErr(b *testing.B) {
-	ctx, cancel := netctx.WithCancel(netctx.Background())
-	cancel()
-	for i := 0; i < b.N; i++ {
-		select {
-		case <-ctx.Done():
-			continue
-		default:
-			b.Fatal("error: !ctx.Done()")
-		}
-	}
-}
-
-func BenchmarkTimerNetContextErrNoErr(b *testing.B) {
-	ctx, cancel := netctx.WithTimeout(netctx.Background(), 24*time.Hour)
-	for i := 0; i < b.N; i++ {
-		if err := ctx.Err(); err != nil {
-			b.Fatal("error")
-		}
-	}
-	cancel()
-}
-
-func BenchmarkTimerNetContextErrGotErr(b *testing.B) {
-	ctx, cancel := netctx.WithTimeout(netctx.Background(), time.Microsecond)
-	cancel()
-	for i := 0; i < b.N; i++ {
-		if err := ctx.Err(); err == nil {
-			b.Fatal("error")
-		}
-	}
-}
-
-func BenchmarkTimerNetContextChannelNoErr(b *testing.B) {
-	ctx, cancel := netctx.WithTimeout(netctx.Background(), 24*time.Hour)
-	for i := 0; i < b.N; i++ {
-		select {
-		case <-ctx.Done():
-			b.Fatal("error: ctx.Done():", ctx.Err())
-		default:
-		}
-	}
-	cancel()
-}
-
-func BenchmarkTimerNetContextChannelGotErr(b *testing.B) {
-	ctx, cancel := netctx.WithTimeout(netctx.Background(), time.Microsecond)
 	cancel()
 	for i := 0; i < b.N; i++ {
 		select {
