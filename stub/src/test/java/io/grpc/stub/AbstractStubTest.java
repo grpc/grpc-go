@@ -16,11 +16,15 @@
 
 package io.grpc.stub;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
+import java.util.concurrent.Executor;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -79,5 +83,19 @@ public class AbstractStubTest {
     protected NoopStub build(Channel channel, CallOptions callOptions) {
       return new NoopStub(channel, callOptions);
     }
+  }
+
+  @Test
+  public void withExecutor() {
+    NoopStub stub = new NoopStub(channel);
+    CallOptions callOptions = stub.getCallOptions();
+
+    assertNull(callOptions.getExecutor());
+
+    Executor executor = mock(Executor.class);
+    stub = stub.withExecutor(executor);
+    callOptions = stub.getCallOptions();
+
+    assertEquals(callOptions.getExecutor(), executor);
   }
 }
