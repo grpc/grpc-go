@@ -115,8 +115,12 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 
 func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 	header := make([]byte, 5)
-	for i := 0; i < 10; i++ {
+	for {
 		if _, err := s.Read(header); err != nil {
+			if err == io.EOF {
+				h.t.WriteStatus(s, status.New(codes.OK, ""))
+				return
+			}
 			t.Fatalf("Error on server while reading data header: %v", err)
 		}
 		sz := binary.BigEndian.Uint32(header[1:])
@@ -1792,6 +1796,10 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 		sstream = v
 	}
 	st.mu.Unlock()
+	ct.Write(cstream, nil, nil, &Options{Last: true}) // Close the stream.
+	if _, err := cstream.Read(header); err != io.EOF {
+		t.Fatalf("Client expected an EOF from the server. Got: %v", err)
+	}
 
 	waitWhileTrue(t, func() (bool, error) {
 		// Check that pendingData and delta on flow control windows on both sides are 0.
@@ -2153,6 +2161,75 @@ func TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		}
 		if actualErr.Error() != testErr.Error() {
 			t.Errorf("_ , actualErr := s.Read(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
+		}
+	}
+}
+
+func TestPingPong1B(t *testing.T) {
+	runPingPongTest(t, 1)
+}
+
+func TestPingPong1KB(t *testing.T) {
+	runPingPongTest(t, 1024)
+}
+
+func TestPingPong64KB(t *testing.T) {
+	runPingPongTest(t, 65536)
+}
+
+func TestPingPong1MB(t *testing.T) {
+	runPingPongTest(t, 1048576)
+}
+
+func runPingPongTest(t *testing.T, msgSize int) {
+	server, client := setUp(t, 0, 0, pingpong)
+	defer server.stop()
+	defer client.Close()
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed out while waiting for server transport to be created")
+		}
+		return false, nil
+	})
+	ct := client.(*http2Client)
+	stream, err := client.NewStream(context.Background(), &CallHdr{})
+	if err != nil {
+		t.Fatalf("Failed to create stream. Err: %v", err)
+	}
+	msg := make([]byte, msgSize)
+	outgoingHeader := make([]byte, 5)
+	outgoingHeader[0] = byte(0)
+	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(msgSize))
+	opts := &Options{}
+	incomingHeader := make([]byte, 5)
+	done := make(chan struct{})
+	go func() {
+		timer := time.NewTimer(time.Second * 5)
+		<-timer.C
+		close(done)
+	}()
+	for {
+		select {
+		case <-done:
+			ct.Write(stream, nil, nil, &Options{Last: true})
+			if _, err := stream.Read(incomingHeader); err != io.EOF {
+				t.Fatalf("Client expected EOF from the server. Got: %v", err)
+			}
+			return
+		default:
+			if err := ct.Write(stream, outgoingHeader, msg, opts); err != nil {
+				t.Fatalf("Error on client while writing message. Err: %v", err)
+			}
+			if _, err := stream.Read(incomingHeader); err != nil {
+				t.Fatalf("Error on client while reading data header. Err: %v", err)
+			}
+			sz := binary.BigEndian.Uint32(incomingHeader[1:])
+			recvMsg := make([]byte, int(sz))
+			if _, err := stream.Read(recvMsg); err != nil {
+				t.Fatalf("Error on client while reading data. Err: %v", err)
+			}
 		}
 	}
 }
