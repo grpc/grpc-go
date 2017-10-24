@@ -163,10 +163,10 @@ func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
 
 	// Cap the max size to maxInt of current machine due to slice length limit.
 	res = min(res, maxInt)
-	if int64(res) > int64(math.MaxUint32) {
+	if int64(res) > int64(math.MaxInt32) {
 		// Only reach here on 64-bit machine, where we need to cap the max size
-		// to MaxUint32.
-		res = math.MaxUint32
+		// to MaxInt32.
+		res = math.MaxInt32
 	}
 	return &res
 }
