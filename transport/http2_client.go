@@ -659,44 +659,53 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	}
 	hdr = append(hdr, data[:emptyLen]...)
 	data = data[emptyLen:]
+	var (
+		streamQuota    int
+		streamQuotaVer uint32
+		localSendQuota int
+		err            error
+		sqChan         <-chan int
+	)
 	for idx, r := range [][]byte{hdr, data} {
 		for len(r) > 0 {
 			size := http2MaxFrameLen
-			// Wait until the stream has some quota to send the data.
-			quotaChan, quotaVer := s.sendQuotaPool.acquireWithVersion()
-			sq, err := wait(s.ctx, t.ctx, s.done, s.goAway, quotaChan)
-			if err != nil {
-				return err
+			if size > len(r) {
+				size = len(r)
 			}
+			if streamQuota == 0 { // Used up all the locally cached stream quota.
+				sqChan, streamQuotaVer = s.sendQuotaPool.acquireWithVersion()
+				// Wait until the stream has some quota to send the data.
+				streamQuota, err = wait(s.ctx, t.ctx, s.done, s.goAway, sqChan)
+				if err != nil {
+					return err
+				}
+			}
+			if localSendQuota <= 0 { // Being a soft limit, it can go negative.
+				// Acquire local send quota to be able to write to the controlBuf.
+				localSendQuota, err = wait(s.ctx, t.ctx, s.done, s.goAway, s.localSendQuota.acquire())
+				if err != nil {
+					return err
+				}
+			}
+			if size > streamQuota {
+				size = streamQuota
+			} // No need to do that for localSendQuota since that's only a soft limit.
+			streamQuota -= size
+			localSendQuota -= size
 			// Wait until the transport has some quota to send the data.
 			tq, err := wait(s.ctx, t.ctx, s.done, s.goAway, t.sendQuotaPool.acquire())
 			if err != nil {
 				return err
 			}
-			if sq < size {
-				size = sq
-			}
 			if tq < size {
+				streamQuota += size - tq
+				localSendQuota += size - tq
 				size = tq
 			}
-			if size > len(r) {
-				size = len(r)
+			if tq > size { // Overbooked transport quota. Return it back.
+				t.sendQuotaPool.add(tq - size)
 			}
 			p := r[:size]
-			ps := len(p)
-			if ps < tq {
-				// Overbooked transport quota. Return it back.
-				t.sendQuotaPool.add(tq - ps)
-			}
-			// Acquire local send quota to be able to write to the controlBuf.
-			ltq, err := wait(s.ctx, t.ctx, s.done, s.goAway, s.localSendQuota.acquire())
-			if err != nil {
-				if _, ok := err.(ConnectionError); !ok {
-					t.sendQuotaPool.add(ps)
-				}
-				return err
-			}
-			s.localSendQuota.add(ltq - ps) // It's ok if we make it negative.
 			var endStream bool
 			// See if this is the last frame to be written.
 			if opts.Last {
@@ -711,20 +720,27 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				}
 			}
 			success := func() {
-				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { s.localSendQuota.add(ps) }})
-				if ps < sq {
-					s.sendQuotaPool.lockedAdd(sq - ps)
-				}
-				r = r[ps:]
+				sz := size
+				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { s.localSendQuota.add(sz) }})
+				r = r[size:]
 			}
-			failure := func() {
-				s.sendQuotaPool.lockedAdd(sq)
+			failure := func() { // The stream quota version must have changed.
+				// Our streamQuota cache is invalidated now, so give it back.
+				s.sendQuotaPool.lockedAdd(streamQuota + size)
 			}
-			if !s.sendQuotaPool.compareAndExecute(quotaVer, success, failure) {
-				t.sendQuotaPool.add(ps)
-				s.localSendQuota.add(ps)
+			if !s.sendQuotaPool.compareAndExecute(streamQuotaVer, success, failure) {
+				// Couldn't send this chunk out.
+				t.sendQuotaPool.add(size)
+				localSendQuota += size
+				streamQuota = 0
 			}
 		}
+	}
+	if streamQuota > 0 { // Add the left over quota back to stream.
+		s.sendQuotaPool.add(streamQuota)
+	}
+	if localSendQuota > 0 {
+		s.localSendQuota.add(localSendQuota)
 	}
 	if !opts.Last {
 		return nil
