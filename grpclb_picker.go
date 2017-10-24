@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	lbpb "google.golang.org/grpc/grpclb/grpc_lb_v1/messages"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 )
 
@@ -39,7 +38,7 @@ type rpcStats struct {
 	NumCallsFinishedKnownReceived            int64
 }
 
-// toClientStats converts rpcStats to lbpb.ClientStats, and clear rpcStats.
+// toClientStats converts rpcStats to lbpb.ClientStats, and clears rpcStats.
 func (s *rpcStats) toClientStats() *lbpb.ClientStats {
 	stats := &lbpb.ClientStats{
 		NumCallsStarted:                          atomic.SwapInt64(&s.NumCallsStarted, 0),
@@ -80,11 +79,11 @@ type lbPicker struct {
 	// If err is not nil, Pick always returns this err.
 	err error
 
-	mu         sync.Mutex
-	serverList []*lbpb.Server
-	nextSL     int
-	readySCs   []balancer.SubConn
-	nextSC     int
+	mu             sync.Mutex
+	serverList     []*lbpb.Server
+	serverListNext int
+	subConns       []balancer.SubConn // The subConns that were READY when taking the snapshot.
+	subConnsNext   int
 
 	stats *rpcStats
 }
@@ -95,17 +94,19 @@ type lbPicker struct {
 // - If it picks a drop, the RPC will fail as being dropped.
 // - If it picks a backend, do a second layer pick to pick the real backend.
 //
-// Second layer: roundrobin on all backends.
+// Second layer: roundrobin on all READY backends.
 func newPicker(err error, serverList []*lbpb.Server, readySCs []balancer.SubConn, stats *rpcStats) *lbPicker {
-	grpclog.Infof("grpclb: newPicker called with: %v, %v, %v", err, serverList, readySCs)
 	if err != nil {
-		return &lbPicker{
-			err: err,
-		}
+		return &lbPicker{err: err}
 	}
+
+	if len(serverList) <= 0 && len(readySCs) <= 0 {
+		return &lbPicker{err: balancer.ErrNoSubConnAvailable}
+	}
+
 	return &lbPicker{
 		serverList: serverList,
-		readySCs:   readySCs,
+		subConns:   readySCs,
 		stats:      stats,
 	}
 }
@@ -113,10 +114,6 @@ func newPicker(err error, serverList []*lbpb.Server, readySCs []balancer.SubConn
 func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn balancer.SubConn, done func(balancer.DoneInfo), err error) {
 	if p.err != nil {
 		return nil, nil, p.err
-	}
-
-	if len(p.serverList) <= 0 && len(p.readySCs) <= 0 {
-		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
 
 	p.mu.Lock()
@@ -136,8 +133,8 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn ba
 			}
 		}()
 
-		s := p.serverList[p.nextSL]
-		p.nextSL = (p.nextSL + 1) % len(p.serverList)
+		s := p.serverList[p.serverListNext]
+		p.serverListNext = (p.serverListNext + 1) % len(p.serverList)
 
 		// If it's a drop, return an error and fail the RPC.
 		if s.DropForRateLimiting {
@@ -150,11 +147,11 @@ func (p *lbPicker) Pick(ctx context.Context, opts balancer.PickOptions) (conn ba
 		}
 	}
 
-	// Else, do roundrobin on readySCs.
-	if len(p.readySCs) <= 0 {
+	// Roundrobin on readySCs.
+	if len(p.subConns) <= 0 {
 		return nil, nil, balancer.ErrNoSubConnAvailable
 	}
-	sc := p.readySCs[p.nextSC]
-	p.nextSC = (p.nextSC + 1) % len(p.readySCs)
+	sc := p.subConns[p.subConnsNext]
+	p.subConnsNext = (p.subConnsNext + 1) % len(p.subConns)
 	return sc, nil, nil
 }

@@ -248,14 +248,7 @@ func (lb *lbBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivi
 // if no connection to remote balancers was successful.
 func (lb *lbBalancer) fallbackToBackendsAfter(fallbackTimeout time.Duration) {
 	timer := time.NewTimer(fallbackTimeout)
-	defer func() {
-		if !timer.Stop() {
-			select {
-			case <-timer.C:
-			default:
-			}
-		}
-	}()
+	defer timer.Stop()
 	select {
 	case <-timer.C:
 	case <-lb.doneCh:
@@ -280,10 +273,7 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 		return
 	}
 
-	var (
-		remoteBalancerAddrs []resolver.Address
-		backendAddrs        []resolver.Address
-	)
+	var remoteBalancerAddrs, backendAddrs []resolver.Address
 	for _, a := range addrs {
 		if a.Type == resolver.GRPCLB {
 			remoteBalancerAddrs = append(remoteBalancerAddrs, a)
@@ -294,7 +284,8 @@ func (lb *lbBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
 
 	if lb.ccRemoteLB == nil {
 		if len(remoteBalancerAddrs) <= 0 {
-			grpclog.Fatalf("grpclb: no remote balancer address is available, should never happen")
+			grpclog.Errorf("grpclb: no remote balancer address is available, should never happen")
+			return
 		}
 		// First time receiving resolved addresses, create a cc to remote
 		// balancers.

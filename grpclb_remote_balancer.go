@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -34,21 +33,18 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// processServerList recalculates the drop rate and send the backend server
-// addresses to roundrobin to regenerate the roundrobin picker.
-//
-//  - If the new server list == old server list, do nothing and return.
-//  - Else if the new backends == old backends, generate a new grpclb picker
-//    with the new server list and the old RR picker.
-//  - Else, send updates to RR, and don't update grpclb picker. The grpclb
-//    picker will be updated when the RR updates the RR picker.
+// processServerList updates balaner's internal state, create/remove SubConns
+// and regenerates picker using the received serverList.
 func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
-	// TODO(bargrpclb) see the comment.
 	grpclog.Infof("lbBalancer: processing server list: %+v", l)
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
+	// Set serverListReceived to true so fallback will not take effect if it has
+	// not hit timeout.
 	lb.serverListReceived = true
+
+	// If the new server list == old server list, do nothing.
 	if reflect.DeepEqual(lb.fullServerList, l.Servers) {
 		grpclog.Infof("lbBalancer: new serverlist same as the previous one, ignoring")
 		return
@@ -77,6 +73,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 		backendAddrs = append(backendAddrs, addr)
 	}
 
+	// Call refreshSubConns to create/remove SubConns.
 	backendsUpdated := lb.refreshSubConns(backendAddrs)
 	// If no backend was updated, no SubConn will be newed/removed. But since
 	// the full serverList was different, there might be updates in drops or
@@ -90,7 +87,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 
 // refreshSubConns creates/removes SubConns with backendAddrs. It returns a bool
 // indicating whether the backendAddrs are different from the cached
-// backendAddrs (whether SubConn was newed/removed).
+// backendAddrs (whether any SubConn was newed/removed).
 // Caller must hold lb.mu.
 func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 	lb.backendAddrs = nil
@@ -135,8 +132,7 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address) bool {
 	return backendsUpdated
 }
 
-func (lb *lbBalancer) readServerList(s *balanceLoadClientStream, done chan<- struct{}) {
-	defer close(done)
+func (lb *lbBalancer) readServerList(s *balanceLoadClientStream) {
 	for {
 		reply, err := s.Recv()
 		if err != nil {
@@ -149,13 +145,13 @@ func (lb *lbBalancer) readServerList(s *balanceLoadClientStream, done chan<- str
 	}
 }
 
-func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration, done <-chan struct{}) {
+func (lb *lbBalancer) sendLoadReport(s *balanceLoadClientStream, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-		case <-done:
+		case <-s.Context().Done():
 			return
 		}
 		stats := lb.clientStats.toClientStats()
@@ -215,34 +211,21 @@ func (lb *lbBalancer) watchRemoteBalancer() {
 			continue
 		}
 		if initResp.LoadBalancerDelegate != "" {
-			grpclog.Fatalf("TODO: Delegation is not supported yet.")
+			grpclog.Errorf("Delegation is not supported.")
+			continue
 		}
 
-		// streamDone will be closed by the readServerList goroutine when
-		// there's an error. So the sendLoadReport goroutine won't block on
-		// time.Ticker forever.
-		streamDone := make(chan struct{})
-
-		var wg sync.WaitGroup
-		wg.Add(2)
 		go func() {
-			defer wg.Done()
-			lb.readServerList(stream, streamDone)
-		}()
-		go func() {
-			defer wg.Done()
 			if d := convertDuration(initResp.ClientStatsReportInterval); d > 0 {
-				lb.sendLoadReport(stream, d, streamDone)
+				lb.sendLoadReport(stream, d)
 			}
 		}()
-		wg.Wait()
+		lb.readServerList(stream)
 	}
 }
 
 func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
-	var (
-		dopts []DialOption
-	)
+	var dopts []DialOption
 	if creds := lb.opt.DialCreds; creds != nil {
 		if err := creds.OverrideServerName(remoteLBName); err == nil {
 			dopts = append(dopts, WithTransportCredentials(creds))
@@ -254,8 +237,9 @@ func (lb *lbBalancer) dialRemoteLB(remoteLBName string) {
 		dopts = append(dopts, WithInsecure())
 	}
 	if lb.opt.Dialer != nil {
-		// WithDialer takes a different type of function, so we instead use a special DialOption here.
-		dopts = append(dopts, func(o *dialOptions) { o.copts.Dialer = lb.opt.Dialer })
+		// WithDialer takes a different type of function, so we instead use a
+		// special DialOption here.
+		dopts = append(dopts, withContextDialer(lb.opt.Dialer))
 	}
 	// Explicitly set pickfirst as the balancer.
 	dopts = append(dopts, WithBalancerBuilder(newPickfirstBuilder()))
