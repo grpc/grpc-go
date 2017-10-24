@@ -211,8 +211,8 @@ func MaxMsgSize(m int) ServerOption {
 // Note that the maximum effective value is MaxUint32 due to protocol limitations.
 func MaxRecvMsgSize(m int) ServerOption {
 	return func(o *options) {
-		if int64(m) > int64(math.MaxUint32) {
-			o.maxReceiveMessageSize = math.MaxUint32
+		if int64(m) > int64(math.MaxInt32) {
+			o.maxReceiveMessageSize = math.MaxInt32
 		} else {
 			o.maxReceiveMessageSize = m
 		}
@@ -224,8 +224,8 @@ func MaxRecvMsgSize(m int) ServerOption {
 // Note that the maximum effective value is MaxUint32 due to protocol limitations.
 func MaxSendMsgSize(m int) ServerOption {
 	return func(o *options) {
-		if int64(m) > int64(math.MaxUint32) {
-			o.maxSendMessageSize = math.MaxUint32
+		if int64(m) > int64(math.MaxInt32) {
+			o.maxSendMessageSize = math.MaxInt32
 		} else {
 			o.maxSendMessageSize = m
 		}
