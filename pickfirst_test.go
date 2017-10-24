@@ -19,13 +19,16 @@
 package grpc
 
 import (
+	"fmt"
 	"math"
+	"net"
 	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/test/leakcheck"
@@ -348,5 +351,60 @@ func TestAddressesRemovedPickfirst(t *testing.T) {
 			t.Fatalf("Index %d: Invoke(_, _, _, _, _) = %v, want %s", 0, err, servers[0].port)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+type errorCreds struct{}
+
+func (c *errorCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *errorCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, fmt.Errorf("non-temporary error")
+}
+func (c *errorCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *errorCreds) Clone() credentials.TransportCredentials {
+	return c
+}
+func (c *errorCreds) OverrideServerName(s string) error {
+	return nil
+}
+
+// nilCloseConn.Close doesn't fail on Close().
+type nilCloseConn struct {
+	net.Conn
+}
+
+func (c *nilCloseConn) Close() error { return nil }
+
+// In pickfirst, all subconns starts in IDLE, and starts to connect upon the
+// first RPC. This connection may fail on non-temporary errors and no retries
+// will be attempted. This test checks that RPCs won't block forever when this
+// happens.
+func TestPickFirstNontemporaryConnectionError(t *testing.T) {
+	defer leakcheck.Check(t)
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	// Don't start server.
+
+	cc, err := Dial(r.Scheme()+":///test.server",
+		WithCodec(testCodec{}),
+		WithBalancerBuilder(newPickfirstBuilder()),
+		WithTransportCredentials(&errorCreds{}),
+		WithDialer(func(string, time.Duration) (net.Conn, error) { return &nilCloseConn{}, nil }),
+	)
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	req := "port"
+	var reply string
+	r.NewAddress([]resolver.Address{{Addr: "some.address"}})
+	if err = Invoke(context.Background(), "/foo/bar", &req, &reply, cc); err != errPickfirstSubConnShutdown {
+		t.Fatalf("invoke() = %v, want %v", err, errPickfirstSubConnShutdown)
 	}
 }

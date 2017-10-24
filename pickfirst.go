@@ -21,6 +21,7 @@ package grpc
 import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -64,6 +65,8 @@ func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err er
 	}
 }
 
+var errPickfirstSubConnShutdown = Errorf(codes.FailedPrecondition, "SubConn is in Shutdown state because of non-temporary errors")
+
 func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
 	grpclog.Infof("pickfirstBalancer: HandleSubConnStateChange: %p, %v", sc, s)
 	if b.sc != sc {
@@ -72,6 +75,9 @@ func (b *pickfirstBalancer) HandleSubConnStateChange(sc balancer.SubConn, s conn
 	}
 	if s == connectivity.Shutdown {
 		b.sc = nil
+		b.cc.UpdateBalancerState(s, &picker{
+			err: errPickfirstSubConnShutdown,
+		})
 		return
 	}
 
