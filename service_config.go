@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -148,24 +149,39 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 	return sc, nil
 }
 
-func min(a, b *int) *int {
-	if *a < *b {
+func min(a, b int) int {
+	if a < b {
 		return a
 	}
 	return b
 }
 
+const maxInt = int(^uint(0) >> 1)
+
 func getMaxSize(mcMax, doptMax *int, defaultVal int) *int {
+	res := getRawMaxSize(mcMax, doptMax, defaultVal)
+
+	// Cap the max size to maxInt of current machine due to slice length limit.
+	res = min(res, maxInt)
+	if int64(res) > int64(math.MaxUint32) {
+		// Only reach here on 64-bit machine, where we need to cap the max size
+		// to MaxUint32.
+		res = math.MaxUint32
+	}
+	return &res
+}
+
+func getRawMaxSize(mcMax, doptMax *int, defaultVal int) int {
 	if mcMax == nil && doptMax == nil {
-		return &defaultVal
+		return defaultVal
 	}
 	if mcMax != nil && doptMax != nil {
-		return min(mcMax, doptMax)
+		return min(*mcMax, *doptMax)
 	}
 	if mcMax != nil {
-		return mcMax
+		return *mcMax
 	}
-	return doptMax
+	return *doptMax
 }
 
 func newBool(b bool) *bool {
