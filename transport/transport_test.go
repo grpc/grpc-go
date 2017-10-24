@@ -1790,16 +1790,18 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 			t.Fatalf("Length of message received by client: %v, want: %v", len(recvMsg), len(msg))
 		}
 	}
+	defer func() {
+		ct.Write(cstream, nil, nil, &Options{Last: true}) // Close the stream.
+		if _, err := cstream.Read(header); err != io.EOF {
+			t.Fatalf("Client expected an EOF from the server. Got: %v", err)
+		}
+	}()
 	var sstream *Stream
 	st.mu.Lock()
 	for _, v := range st.activeStreams {
 		sstream = v
 	}
 	st.mu.Unlock()
-	ct.Write(cstream, nil, nil, &Options{Last: true}) // Close the stream.
-	if _, err := cstream.Read(header); err != io.EOF {
-		t.Fatalf("Client expected an EOF from the server. Got: %v", err)
-	}
 
 	waitWhileTrue(t, func() (bool, error) {
 		// Check that pendingData and delta on flow control windows on both sides are 0.
