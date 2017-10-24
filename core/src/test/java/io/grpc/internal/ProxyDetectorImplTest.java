@@ -26,7 +26,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
-import com.google.common.net.HostAndPort;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
@@ -69,11 +68,11 @@ public class ProxyDetectorImplTest {
   public void override_hostPort() throws Exception {
     final String overrideHost = "override";
     final int overridePort = 1234;
-    HostAndPort hostPort = HostAndPort.fromParts(overrideHost, overridePort);
+    final String overrideHostWithPort = overrideHost + ":" + overridePort;
     ProxyDetectorImpl proxyDetector = new ProxyDetectorImpl(
         proxySelectorSupplier,
         authenticator,
-        hostPort.toString());
+        overrideHostWithPort);
     ProxyParameters detected = proxyDetector.proxyFor(destination);
     assertNotNull(detected);
     assertEquals(
