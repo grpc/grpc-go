@@ -183,7 +183,6 @@ func (ccb *ccBalancerWrapper) handleResolvedAddrs(addrs []resolver.Address, err 
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	grpclog.Infof("ccBalancerWrapper: new subconn: %v", addrs)
 	ac, err := ccb.cc.newAddrConn(addrs)
 	if err != nil {
 		return nil, err
@@ -197,7 +196,6 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 }
 
 func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
-	grpclog.Infof("ccBalancerWrapper: removing subconn")
 	acbw, ok := sc.(*acBalancerWrapper)
 	if !ok {
 		return
@@ -207,7 +205,6 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 }
 
 func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-	grpclog.Infof("ccBalancerWrapper: updating state and picker called by balancer: %v, %p", s, p)
 	ccb.cc.csMgr.updateState(s)
 	ccb.cc.blockingpicker.updatePicker(p)
 }
@@ -224,7 +221,6 @@ type acBalancerWrapper struct {
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
-	grpclog.Infof("acBalancerWrapper: UpdateAddresses called with %v", addrs)
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
 	if !acbw.ac.tryUpdateAddrs(addrs) {
