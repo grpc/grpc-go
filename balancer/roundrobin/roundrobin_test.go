@@ -118,7 +118,7 @@ func TestOneBackend(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
 	// The second RPC should succeed.
 	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 }
 
@@ -159,7 +159,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 		var connected bool
 		for i := 0; i < 1000; i++ {
 			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+				t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
 				connected = true
@@ -174,7 +174,7 @@ func TestBackendsRoundRobin(t *testing.T) {
 
 	for i := 0; i < 3*backendCount; i++ {
 		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
 			t.Fatalf("Index %d: want peer %v, got peer %v", i, test.addresses[i%backendCount], p.Addr.String())
@@ -209,7 +209,7 @@ func TestAddressesRemoved(t *testing.T) {
 	r.NewAddress([]resolver.Address{{Addr: test.addresses[0]}})
 	// The second RPC should succeed.
 	if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
-		t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 
 	r.NewAddress([]resolver.Address{})
@@ -343,7 +343,7 @@ func TestOneServerDown(t *testing.T) {
 		var connected bool
 		for i := 0; i < 1000; i++ {
 			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+				t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
 				connected = true
@@ -358,7 +358,7 @@ func TestOneServerDown(t *testing.T) {
 
 	for i := 0; i < 3*backendCount; i++ {
 		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
 			t.Fatalf("Index %d: want peer %v, got peer %v", i, test.addresses[i%backendCount], p.Addr.String())
@@ -372,7 +372,11 @@ func TestOneServerDown(t *testing.T) {
 	var targetSeen int
 	for i := 0; i < 1000; i++ {
 		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+			t.Logf("EmptyCall() = _, %v, want _, <nil>", err)
+			// Due to a race, this RPC could possibly get the connection that
+			// was closing, and this RPC may fail. Keep trying when this
+			// happens.
+			continue
 		}
 		switch p.Addr.String() {
 		case test.addresses[backendCount-1]:
@@ -391,7 +395,7 @@ func TestOneServerDown(t *testing.T) {
 	}
 	for i := 0; i < 3*backendCount; i++ {
 		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
 			t.Errorf("Index %d: want peer %v, got peer %v", i, test.addresses[i%backendCount], p.Addr.String())
@@ -436,7 +440,7 @@ func TestAllServersDown(t *testing.T) {
 		var connected bool
 		for i := 0; i < 1000; i++ {
 			if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-				t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+				t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 			}
 			if p.Addr.String() == test.addresses[si] {
 				connected = true
@@ -451,7 +455,7 @@ func TestAllServersDown(t *testing.T) {
 
 	for i := 0; i < 3*backendCount; i++ {
 		if _, err := testc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.Peer(&p)); err != nil {
-			t.Fatalf("EmptyCall() = _, %v, want _, DeadlineExceeded", err)
+			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 		}
 		if p.Addr.String() != test.addresses[i%backendCount] {
 			t.Fatalf("Index %d: want peer %v, got peer %v", i, test.addresses[i%backendCount], p.Addr.String())
