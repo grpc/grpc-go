@@ -567,6 +567,6 @@ const SupportPackageIsVersion3 = true
 const SupportPackageIsVersion4 = true
 
 // Version is the current grpc version.
-const Version = "1.7.1-dev"
+const Version = "1.7.1"
 
 const grpcUA = "grpc-go/" + Version
