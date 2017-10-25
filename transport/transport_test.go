@@ -2183,6 +2183,10 @@ func TestPingPong1MB(t *testing.T) {
 	runPingPongTest(t, 1048576)
 }
 
+// The continous ping-pong of data on a stream is meant to excercise the
+// flow-control logic to catch potential deadlocks.
+// These tests were added after a deadlock was caught by benchmarking
+// code while the test suite didn't catch it over multiple runs.
 func runPingPongTest(t *testing.T, msgSize int) {
 	server, client := setUp(t, 0, 0, pingpong)
 	defer server.stop()

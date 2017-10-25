@@ -872,21 +872,19 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if size > streamQuota {
 				size = streamQuota
 			} // No need to do that for localSendQuota since that's only a soft limit.
-			streamQuota -= size
-			localSendQuota -= size
 			// Wait until the transport has some quota to send the data.
 			tq, err := wait(s.ctx, t.ctx, nil, nil, t.sendQuotaPool.acquire())
 			if err != nil {
 				return err
 			}
 			if tq < size {
-				streamQuota += size - tq
-				localSendQuota += size - tq
 				size = tq
 			}
 			if tq > size {
 				t.sendQuotaPool.add(tq - size)
 			}
+			streamQuota -= size
+			localSendQuota -= size
 			p := r[:size]
 			// Reset ping strikes when sending data since this might cause
 			// the peer to send ping.
