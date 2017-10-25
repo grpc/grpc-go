@@ -904,15 +904,28 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.write(recvMsg{err: io.EOF})
 }
 
-func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
+func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	if f.IsAck() {
 		return
 	}
 	var ss []http2.Setting
+	isMaxConcurrentStreamsMissing := true
 	f.ForeachSetting(func(s http2.Setting) error {
+		if s.ID == http2.SettingMaxConcurrentStreams {
+			isMaxConcurrentStreamsMissing = false
+		}
 		ss = append(ss, s)
 		return nil
 	})
+	if isFirst && isMaxConcurrentStreamsMissing {
+		// This means server is imposing no limits on
+		// maximum number of concurrent streams initiated by client.
+		// So we must remove our self-imposed limit.
+		ss = append(ss, http2.Setting{
+			ID:  http2.SettingMaxConcurrentStreams,
+			Val: math.MaxUint32,
+		})
+	}
 	// The settings will be applied once the ack is sent.
 	t.controlBuf.put(&settings{ack: true, ss: ss})
 }
@@ -1111,7 +1124,7 @@ func (t *http2Client) reader() {
 		t.Close()
 		return
 	}
-	t.handleSettings(sf)
+	t.handleSettings(sf, true)
 
 	// loop to keep reading incoming messages on this transport.
 	for {
@@ -1144,7 +1157,7 @@ func (t *http2Client) reader() {
 		case *http2.RSTStreamFrame:
 			t.handleRSTStream(frame)
 		case *http2.SettingsFrame:
-			t.handleSettings(frame)
+			t.handleSettings(frame, false)
 		case *http2.PingFrame:
 			t.handlePing(frame)
 		case *http2.GoAwayFrame:
