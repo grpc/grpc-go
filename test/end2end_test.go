@@ -5540,18 +5540,18 @@ func TestMethodFromServerStream(t *testing.T) {
 	defer leakcheck.Check(t)
 	e := tcpClearRREnv
 	te := newTest(t, e)
+	var method string
+	var ok bool
 	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
-		method, ok := grpc.MethodFromServerStream(stream)
-		if ok && method == "/grpc.testing.TestService/EmptyCall" {
-			return nil
-		}
-		return fmt.Errorf("GetMethodFromStream(%p) = %s, %v , want %s, true", stream, method, ok, "/grpc.testing.TestService/EmptyCall")
+		method, ok = grpc.MethodFromServerStream(stream)
+		return nil
 	}
 
 	te.startServer(nil)
 	defer te.tearDown()
-	tc := testpb.NewTestServiceClient(te.clientConn())
-	if _, err := tc.EmptyCall(te.ctx, &testpb.Empty{}); err != nil && grpc.Code(err) == codes.Unknown {
-		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+	_ = te.clientConn().Invoke(context.Background(), "foo/bar", nil, nil)
+	if !ok || method != "foo/bar" {
+		t.Fatalf("Invoke with method \"foo/bar\", got %s, %v, want \"foo/bar\", true", method, ok)
 	}
+
 }
