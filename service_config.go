@@ -25,6 +25,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+const maxInt = int(^uint(0) >> 1)
+
 // MethodConfig defines the configuration recommended by the service providers for a
 // particular method.
 // DEPRECATED: Users should not use this struct. Service config should be received
@@ -97,8 +99,8 @@ type jsonMC struct {
 	Name                    *[]jsonName
 	WaitForReady            *bool
 	Timeout                 *string
-	MaxRequestMessageBytes  *int
-	MaxResponseMessageBytes *int
+	MaxRequestMessageBytes  *int64
+	MaxResponseMessageBytes *int64
 }
 
 // TODO(lyuxuan): delete this struct after cleaning up old service config implementation.
@@ -135,8 +137,20 @@ func parseServiceConfig(js string) (ServiceConfig, error) {
 		mc := MethodConfig{
 			WaitForReady: m.WaitForReady,
 			Timeout:      d,
-			MaxReqSize:   m.MaxRequestMessageBytes,
-			MaxRespSize:  m.MaxResponseMessageBytes,
+		}
+		if m.MaxRequestMessageBytes != nil {
+			if *m.MaxRequestMessageBytes > int64(maxInt) {
+				mc.MaxReqSize = newInt(maxInt)
+			} else {
+				mc.MaxReqSize = newInt(int(*m.MaxRequestMessageBytes))
+			}
+		}
+		if m.MaxResponseMessageBytes != nil {
+			if *m.MaxResponseMessageBytes > int64(maxInt) {
+				mc.MaxRespSize = newInt(maxInt)
+			} else {
+				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
+			}
 		}
 		for _, n := range *m.Name {
 			if path, valid := n.generatePath(); valid {
