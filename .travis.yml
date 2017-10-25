@@ -9,7 +9,7 @@ go:
 matrix:
   include:
   - go: 1.9.x
-    env: ARCH=386
+    env: GOARCH=386
 
 go_import_path: google.golang.org/grpc
 
