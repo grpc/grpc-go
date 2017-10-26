@@ -1,11 +1,20 @@
 #!/bin/bash
 #
 # Build protoc
-set -ev
+set -evx
 
 DOWNLOAD_DIR=/tmp/source
 INSTALL_DIR="/tmp/protobuf-$PROTOBUF_VERSION/$(uname -s)-$(uname -p)"
 mkdir -p $DOWNLOAD_DIR
+
+# Start with a sane default
+NUM_CPU=4
+if [[ $(uname) == 'Linux' ]]; then
+    NUM_CPU=$(nproc)
+fi
+if [[ $(uname) == 'Darwin' ]]; then
+    NUM_CPU=$(sysctl -n hw.ncpu)
+fi
 
 # Make protoc
 # Can't check for presence of directory as cache auto-creates it.
@@ -18,7 +27,7 @@ else
   ./autogen.sh
   # install here so we don't need sudo
   ./configure --prefix="$INSTALL_DIR"
-  make -j$(nproc)
+  make -j$NUM_CPU
   make install
   popd
 fi
