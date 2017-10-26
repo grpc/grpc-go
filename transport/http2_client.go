@@ -805,7 +805,6 @@ func (t *http2Client) updateFlowControl(n uint32) {
 	t.mu.Unlock()
 	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
 	t.controlBuf.put(&settings{
-		ack: false,
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
@@ -922,26 +921,50 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	if f.IsAck() {
 		return
 	}
-	var ss []http2.Setting
+	var rs []http2.Setting
+	var ps []http2.Setting
 	isMaxConcurrentStreamsMissing := true
 	f.ForeachSetting(func(s http2.Setting) error {
 		if s.ID == http2.SettingMaxConcurrentStreams {
 			isMaxConcurrentStreamsMissing = false
 		}
-		ss = append(ss, s)
+		if t.isRestrictive(s) {
+			rs = append(rs, s)
+		} else {
+			ps = append(ps, s)
+		}
 		return nil
 	})
 	if isFirst && isMaxConcurrentStreamsMissing {
 		// This means server is imposing no limits on
 		// maximum number of concurrent streams initiated by client.
 		// So we must remove our self-imposed limit.
-		ss = append(ss, http2.Setting{
+		ps = append(ps, http2.Setting{
 			ID:  http2.SettingMaxConcurrentStreams,
 			Val: math.MaxUint32,
 		})
 	}
 	// The settings will be applied once the ack is sent.
-	t.controlBuf.put(&settings{ack: true, ss: ss})
+	t.controlBuf.put(&settingsAck{rs: rs, ps: ps})
+}
+
+func (t *http2Client) isRestrictive(s http2.Setting) bool {
+	var res bool
+	switch s.ID {
+	case http2.SettingMaxConcurrentStreams:
+		t.mu.Lock()
+		if int(s.Val) < t.maxStreams {
+			res = true
+		}
+		t.mu.Unlock()
+	case http2.SettingInitialWindowSize:
+		t.mu.Lock()
+		if s.Val < t.streamSendQuota {
+			res = true
+		}
+		t.mu.Unlock()
+	}
+	return res
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -1258,12 +1281,14 @@ func (t *http2Client) itemHandler(i item) error {
 	case *windowUpdate:
 		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
-		if i.ack {
-			t.applySettings(i.ss)
+		err = t.framer.fr.WriteSettings(i.ss...)
+	case *settingsAck:
+		if i.rs == nil && i.ps == nil {
 			err = t.framer.fr.WriteSettingsAck()
-		} else {
-			err = t.framer.fr.WriteSettings(i.ss...)
 		}
+		t.applySettings(i.rs)
+		t.controlBuf.put(&settingsAck{})
+		t.applySettings(i.ps)
 	case *resetStream:
 		// If the server needs to be to intimated about stream closing,
 		// then we need to make sure the RST_STREAM frame is written to

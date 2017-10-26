@@ -496,7 +496,6 @@ func (t *http2Server) updateFlowControl(n uint32) {
 	t.mu.Unlock()
 	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
 	t.controlBuf.put(&settings{
-		ack: false,
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
@@ -594,12 +593,30 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 	if f.IsAck() {
 		return
 	}
-	var ss []http2.Setting
+	var rs []http2.Setting
+	var ps []http2.Setting
 	f.ForeachSetting(func(s http2.Setting) error {
-		ss = append(ss, s)
+		if t.isRestrictive(s) {
+			rs = append(rs, s)
+		} else {
+			ps = append(ps, s)
+		}
 		return nil
 	})
-	t.controlBuf.put(&settings{ack: true, ss: ss})
+	t.controlBuf.put(&settingsAck{rs: rs, ps: ps})
+}
+
+func (t *http2Server) isRestrictive(s http2.Setting) bool {
+	var res bool
+	switch s.ID {
+	case http2.SettingInitialWindowSize:
+		t.mu.Lock()
+		if s.Val < t.streamSendQuota {
+			res = true
+		}
+		t.mu.Unlock()
+	}
+	return res
 }
 
 func (t *http2Server) applySettings(ss []http2.Setting) {
@@ -1050,11 +1067,15 @@ func (t *http2Server) itemHandler(i item) error {
 	case *windowUpdate:
 		return t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
-		if i.ack {
-			t.applySettings(i.ss)
+		return t.framer.fr.WriteSettings(i.ss...)
+	case *settingsAck:
+		if i.rs == nil && i.ps == nil {
 			return t.framer.fr.WriteSettingsAck()
 		}
-		return t.framer.fr.WriteSettings(i.ss...)
+		t.applySettings(i.rs)
+		t.controlBuf.put(&settingsAck{})
+		t.applySettings(i.ps)
+		return nil
 	case *resetStream:
 		return t.framer.fr.WriteRSTStream(i.streamID, i.code)
 	case *goAway:
