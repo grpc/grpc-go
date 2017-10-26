@@ -41,7 +41,6 @@ after_success:
 
 os:
   - linux
-  - osx
 
 notifications:
   email: false
