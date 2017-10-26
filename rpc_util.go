@@ -275,7 +275,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 		return pf, nil, nil
 	}
 	if int64(length) > int64(maxInt) {
-		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine(%d vs. %d)", length, maxInt)
+		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine (%d vs. %d)", length, maxInt)
 	}
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
