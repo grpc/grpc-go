@@ -360,6 +360,13 @@ Maven Central (the staging repository will be destroyed in the process). You can
 see the complete process for releasing to Maven Central on the [OSSRH
 site](http://central.sonatype.org/pages/releasing-the-deployment.html).
 
+Build interop container image
+-----------------------------
+
+We have containers for each release to detect compatibility regressions with old
+releases. Generate one for the new release by following the
+[GCR image generation instructions](https://github.com/grpc/grpc/blob/master/tools/interop_matrix/README.md#step-by-step-instructions-for-adding-a-gcr-image-for-a-new-release-for-compatibility-test).
+
 Update README.md
 ----------------
 After waiting ~1 day and verifying that the release appears on [Maven
