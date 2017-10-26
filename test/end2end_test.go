@@ -5538,6 +5538,7 @@ func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
 
 func TestMethodFromServerStream(t *testing.T) {
 	defer leakcheck.Check(t)
+	const testMethod = "/package.service/method"
 	e := tcpClearRREnv
 	te := newTest(t, e)
 	var method string
@@ -5549,9 +5550,9 @@ func TestMethodFromServerStream(t *testing.T) {
 
 	te.startServer(nil)
 	defer te.tearDown()
-	_ = te.clientConn().Invoke(context.Background(), "foo/bar", nil, nil)
-	if !ok || method != "foo/bar" {
-		t.Fatalf("Invoke with method \"foo/bar\", got %s, %v, want \"foo/bar\", true", method, ok)
+	_ = te.clientConn().Invoke(context.Background(), testMethod, nil, nil)
+	if !ok || method != testMethod {
+		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
 
 }
