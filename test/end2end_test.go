@@ -5552,3 +5552,23 @@ func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
 		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 }
+
+func TestMethodFromServerStream(t *testing.T) {
+	defer leakcheck.Check(t)
+	const testMethod = "/package.service/method"
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	var method string
+	var ok bool
+	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
+		method, ok = grpc.MethodFromServerStream(stream)
+		return nil
+	}
+
+	te.startServer(nil)
+	defer te.tearDown()
+	_ = te.clientConn().Invoke(context.Background(), testMethod, nil, nil)
+	if !ok || method != testMethod {
+		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
+	}
+}
