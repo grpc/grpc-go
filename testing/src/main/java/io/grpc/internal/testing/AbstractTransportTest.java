@@ -948,6 +948,45 @@ public abstract class AbstractTransportTest {
   }
 
   @Test
+  public void earlyServerClose_serverFailure_withClientCancelOnListenerClosed() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    runIfNotNull(client.start(mockClientTransportListener));
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    serverTransport = serverTransportListener.transport;
+
+    final ClientStream clientStream =
+        client.newStream(methodDescriptor, new Metadata(), callOptions);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase() {
+      @Override
+      public void closed(Status status, Metadata trailers) {
+        super.closed(status, trailers);
+        // This simulates the blocking calls which can trigger clientStream.cancel().
+        clientStream.cancel(Status.CANCELLED.withCause(status.asRuntimeException()));
+      }
+    };
+    clientStream.start(clientStreamListener);
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ServerStream serverStream = serverStreamCreation.stream;
+    ServerStreamListenerBase serverStreamListener = serverStreamCreation.listener;
+
+    Status strippedStatus = Status.INTERNAL.withDescription("I'm not listening");
+    Status status = strippedStatus.withCause(new Exception());
+    serverStream.close(status, new Metadata());
+    assertCodeEquals(Status.OK, serverStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    Status clientStreamStatus = clientStreamListener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    assertNotNull(clientStreamListener.trailers.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+    assertEquals(status.getCode(), clientStreamStatus.getCode());
+    assertEquals(status.getDescription(), clientStreamStatus.getDescription());
+    assertNull(clientStreamStatus.getCause());
+    assertTrue(clientStreamTracer1.getOutboundHeaders());
+    assertSame(clientStreamStatus, clientStreamTracer1.getStatus());
+    assertSame(status, serverStreamTracer1.getStatus());
+  }
+
+  @Test
   public void clientCancel() throws Exception {
     server.start(serverListener);
     client = newClientTransport(server);

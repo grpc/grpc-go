@@ -388,6 +388,12 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
 
       @Override
       public void close(Status status, Metadata trailers) {
+        // clientStream.serverClosed must happen before clientStreamListener.closed, otherwise
+        // clientStreamListener.closed can trigger clientStream.cancel (see code in
+        // ClientCalls.blockingUnaryCall), which may race with clientStream.serverClosed as both are
+        // calling internalCancel().
+        clientStream.serverClosed(Status.OK, status);
+
         Status clientStatus = stripCause(status);
         synchronized (this) {
           if (closed) {
@@ -403,7 +409,6 @@ final class InProcessTransport implements ServerTransport, ConnectionClientTrans
           }
         }
 
-        clientStream.serverClosed(Status.OK, status);
         streamClosed();
       }
 
