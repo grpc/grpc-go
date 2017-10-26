@@ -28,7 +28,7 @@ public abstract class ServerStreamTracer extends StreamTracer {
    * Called before the interceptors and the call handlers and make changes to the Context object
    * if needed.
    */
-  public <ReqT, RespT> Context filterContext(Context context) {
+  public Context filterContext(Context context) {
     return context;
   }
 

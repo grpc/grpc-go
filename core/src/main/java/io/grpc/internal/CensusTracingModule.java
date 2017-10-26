@@ -309,7 +309,7 @@ final class CensusTracingModule {
     }
 
     @Override
-    public <ReqT, RespT> Context filterContext(Context context) {
+    public Context filterContext(Context context) {
       // Access directly the unsafe trace API to create the new Context. This is a safe usage
       // because gRPC always creates a new Context for each of the server calls and does not
       // inherit from the parent Context.

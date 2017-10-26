@@ -169,7 +169,7 @@ public abstract class AbstractInteropTest {
       private volatile Context contextCapture;
 
       @Override
-      public <ReqT, RespT> Context filterContext(Context context) {
+      public Context filterContext(Context context) {
         contextCapture = context;
         return super.filterContext(context);
       }

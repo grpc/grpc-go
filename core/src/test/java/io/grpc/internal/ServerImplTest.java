@@ -132,7 +132,7 @@ public class ServerImplTest {
   private List<ServerStreamTracer.Factory> streamTracerFactories;
   private final TestServerStreamTracer streamTracer = new TestServerStreamTracer() {
       @Override
-      public <ReqT, RespT> Context filterContext(Context context) {
+      public Context filterContext(Context context) {
         Context newCtx = super.filterContext(context);
         return newCtx.withValue(SERVER_TRACER_ADDED_KEY, "context added by tracer");
       }
