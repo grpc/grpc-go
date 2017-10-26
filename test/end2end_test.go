@@ -5554,5 +5554,4 @@ func TestMethodFromServerStream(t *testing.T) {
 	if !ok || method != testMethod {
 		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
-
 }
