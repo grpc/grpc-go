@@ -683,7 +683,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		errorf("transport: Got to too many pings from the client, closing the connection.")
+		errorf("transport: Got too many pings from the client, closing the connection.")
 		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
 	}
 }
@@ -1083,7 +1083,7 @@ func (t *http2Server) itemHandler(i item) error {
 		if t.state == closing {
 			t.mu.Unlock()
 			// The transport is closing.
-			return fmt.Errorf("transport: Connection closing")
+			return fmt.Errorf("transport: Connection closing. xxx 1")
 		}
 		sid := t.maxStreamID
 		if !i.headsUp {
@@ -1097,7 +1097,7 @@ func (t *http2Server) itemHandler(i item) error {
 				// Abruptly close the connection following the GoAway (via
 				// loopywriter).  But flush out what's inside the buffer first.
 				t.framer.writer.Flush()
-				return fmt.Errorf("transport: Connection closing")
+				return fmt.Errorf("transport: Connection closing. xxx 2")
 			}
 			return nil
 		}

@@ -20,6 +20,7 @@ package transport
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -1238,7 +1239,13 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // is duplicated between the client and the server.
 // The transport layer needs to be refactored to take care of this.
 func (t *http2Client) itemHandler(i item) error {
+	fmt.Printf("%v xxx client item handler called with %T\n", time.Now(), i)
 	var err error
+	defer func() {
+		if err != nil {
+			errorf(" error in itemHandler: %v", err)
+		}
+	}()
 	switch i := i.(type) {
 	case *dataFrame:
 		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
@@ -1285,6 +1292,7 @@ func (t *http2Client) itemHandler(i item) error {
 	case *settingsAck:
 		if i.rs == nil && i.ps == nil {
 			err = t.framer.fr.WriteSettingsAck()
+			break
 		}
 		t.applySettings(i.rs)
 		t.controlBuf.put(&settingsAck{})
