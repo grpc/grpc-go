@@ -863,7 +863,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		streamQuotaVer uint32
 		localSendQuota int
 		err            error
-		sqChan         <-chan int
 	)
 	for _, r := range [][]byte{hdr, data} {
 		for len(r) > 0 {
@@ -872,15 +871,24 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				size = len(r)
 			}
 			if streamQuota == 0 { // Used up all the locally cached stream quota.
-				sqChan, streamQuotaVer = s.sendQuotaPool.acquireWithVersion()
-				// Wait until the stream has some quota to send the data.
-				streamQuota, err = wait(s.ctx, t.ctx, nil, nil, sqChan)
+				// Get all the stream quota there is.
+				streamQuota, streamQuotaVer, err = s.sendQuotaPool.get(math.MaxInt32, waiters{
+					ctx:    s.ctx,
+					tctx:   t.ctx,
+					done:   s.done,
+					goAway: s.goAway,
+				})
 				if err != nil {
 					return err
 				}
 			}
 			if localSendQuota <= 0 {
-				localSendQuota, err = wait(s.ctx, t.ctx, nil, nil, s.localSendQuota.acquire())
+				localSendQuota, _, err = s.localSendQuota.get(math.MaxInt32, waiters{
+					ctx:    s.ctx,
+					tctx:   t.ctx,
+					done:   s.done,
+					goAway: s.goAway,
+				})
 				if err != nil {
 					return err
 				}
@@ -888,16 +896,18 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if size > streamQuota {
 				size = streamQuota
 			} // No need to do that for localSendQuota since that's only a soft limit.
-			// Wait until the transport has some quota to send the data.
-			tq, err := wait(s.ctx, t.ctx, nil, nil, t.sendQuotaPool.acquire())
+			// Get size worth quota from transport.
+			tq, _, err := t.sendQuotaPool.get(size, waiters{
+				ctx:    s.ctx,
+				tctx:   t.ctx,
+				done:   s.done,
+				goAway: s.goAway,
+			})
 			if err != nil {
 				return err
 			}
 			if tq < size {
 				size = tq
-			}
-			if tq > size {
-				t.sendQuotaPool.add(tq - size)
 			}
 			streamQuota -= size
 			localSendQuota -= size

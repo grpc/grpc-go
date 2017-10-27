@@ -1093,44 +1093,29 @@ func TestMaxStreams(t *testing.T) {
 			}
 		}
 	}()
-	var failureReason string
 	// Test these conditions untill they pass or
 	// we reach the deadline (failure case).
 	for {
 		select {
 		case <-ch:
 		case <-done:
-			t.Fatalf(failureReason)
+			t.Fatalf("streamsQuota.quota shouldn't be non-zero.")
 		}
-		select {
-		case q := <-cc.streamsQuota.acquire():
-			failureReason = "streamsQuota.acquire() becomes readable mistakenly."
-			cc.streamsQuota.add(q)
-		default:
-			cc.streamsQuota.mu.Lock()
-			quota := cc.streamsQuota.quota
-			cc.streamsQuota.mu.Unlock()
-			if quota != 0 {
-				failureReason = "streamsQuota.quota got non-zero quota mistakenly."
-			} else {
-				failureReason = ""
-			}
-		}
-		if failureReason == "" {
+		cc.streamsQuota.mu.Lock()
+		sq := cc.streamsQuota.quota
+		cc.streamsQuota.mu.Unlock()
+		if sq == 0 {
 			break
 		}
 	}
 	close(ready)
 	// Close the pending stream so that the streams quota becomes available for the next new stream.
 	ct.CloseStream(s, nil)
-	select {
-	case i := <-cc.streamsQuota.acquire():
-		if i != 1 {
-			t.Fatalf("streamsQuota.acquire() got %d quota, want 1.", i)
-		}
-		cc.streamsQuota.add(i)
-	default:
-		t.Fatalf("streamsQuota.acquire() is not readable.")
+	cc.streamsQuota.mu.Lock()
+	i := cc.streamsQuota.quota
+	cc.streamsQuota.mu.Unlock()
+	if i != 1 {
+		t.Fatalf("streamsQuota is  %d, want 1.", i)
 	}
 	if _, err := ct.NewStream(context.Background(), callHdr); err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
@@ -1685,7 +1670,12 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	serverSendQuota, err := wait(ctx, context.Background(), nil, nil, st.sendQuotaPool.acquire())
+	serverSendQuota, _, err := st.sendQuotaPool.get(math.MaxInt32, waiters{
+		ctx:    ctx,
+		tctx:   st.ctx,
+		done:   nil,
+		goAway: nil,
+	})
 	if err != nil {
 		t.Fatalf("Error while acquiring sendQuota on server. Err: %v", err)
 	}
@@ -1707,7 +1697,12 @@ func testAccountCheckWindowSize(t *testing.T, wc windowSizeConfig) {
 		t.Fatalf("Client transport flow control window size is %v, want %v", limit, connectOptions.InitialConnWindowSize)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	clientSendQuota, err := wait(ctx, context.Background(), nil, nil, ct.sendQuotaPool.acquire())
+	clientSendQuota, _, err := ct.sendQuotaPool.get(math.MaxInt32, waiters{
+		ctx:    ctx,
+		tctx:   ct.ctx,
+		done:   nil,
+		goAway: nil,
+	})
 	if err != nil {
 		t.Fatalf("Error while acquiring sendQuota on client. Err: %v", err)
 	}
@@ -1849,7 +1844,12 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow conrtrol window on client stream is equal to out flow on server stream.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		serverStreamSendQuota, err := wait(ctx, context.Background(), nil, nil, sstream.sendQuotaPool.acquire())
+		serverStreamSendQuota, _, err := sstream.sendQuotaPool.get(math.MaxInt32, waiters{
+			ctx:    ctx,
+			tctx:   context.Background(),
+			done:   nil,
+			goAway: nil,
+		})
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring server stream send quota. Err: %v", err)
@@ -1864,7 +1864,12 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on server stream is equal to out flow on client stream.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		clientStreamSendQuota, err := wait(ctx, context.Background(), nil, nil, cstream.sendQuotaPool.acquire())
+		clientStreamSendQuota, _, err := cstream.sendQuotaPool.get(math.MaxInt32, waiters{
+			ctx:    ctx,
+			tctx:   context.Background(),
+			done:   nil,
+			goAway: nil,
+		})
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client stream send quota. Err: %v", err)
@@ -1879,7 +1884,12 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on client transport is equal to out flow of server transport.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		serverTrSendQuota, err := wait(ctx, context.Background(), nil, nil, st.sendQuotaPool.acquire())
+		serverTrSendQuota, _, err := st.sendQuotaPool.get(math.MaxInt32, waiters{
+			ctx:    ctx,
+			tctx:   st.ctx,
+			done:   nil,
+			goAway: nil,
+		})
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquring server transport send quota. Err: %v", err)
@@ -1894,7 +1904,12 @@ func TestAccountCheckExpandingWindow(t *testing.T) {
 
 		// Check flow control window on server transport is equal to out flow of client transport.
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-		clientTrSendQuota, err := wait(ctx, context.Background(), nil, nil, ct.sendQuotaPool.acquire())
+		clientTrSendQuota, _, err := ct.sendQuotaPool.get(math.MaxInt32, waiters{
+			ctx:    ctx,
+			tctx:   ct.ctx,
+			done:   nil,
+			goAway: nil,
+		})
 		cancel()
 		if err != nil {
 			return true, fmt.Errorf("error while acquiring client transport send quota. Err: %v", err)
