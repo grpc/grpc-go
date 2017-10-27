@@ -1169,7 +1169,7 @@ public abstract class AbstractTransportTest {
     String largeMessage;
     {
       int size = 1 * 1024;
-      StringBuffer sb = new StringBuffer(size);
+      StringBuilder sb = new StringBuilder(size);
       for (int i = 0; i < size; i++) {
         sb.append('a');
       }
