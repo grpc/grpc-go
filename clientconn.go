@@ -946,7 +946,11 @@ func (ac *addrConn) resetTransport() error {
 			sinfo := transport.TargetInfo{
 				Addr:      addr.Addr,
 				Metadata:  addr.Metadata,
-				Authority: ac.cc.authority,
+			}
+			if ac.cc.balancerWrapper == nil {
+				sinfo.Authority = ac.cc.authority
+			} else {
+				sinfo.Authority = addr.Addr
 			}
 			newTransport, err := transport.NewClientTransport(ac.cc.ctx, sinfo, copts, timeout)
 			if err != nil {
