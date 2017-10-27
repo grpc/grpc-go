@@ -95,8 +95,6 @@ type settings struct {
 func (*settings) item() {}
 
 type settingsAck struct {
-	rs []http2.Setting // restrictive settings.
-	ps []http2.Setting // permissive settings.
 }
 
 func (*settingsAck) item() {}

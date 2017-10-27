@@ -944,8 +944,9 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 			Val: math.MaxUint32,
 		})
 	}
-	// The settings will be applied once the ack is sent.
-	t.controlBuf.put(&settingsAck{rs: rs, ps: ps})
+	t.applySettings(rs)
+	t.controlBuf.put(&settingsAck{})
+	t.applySettings(ps)
 }
 
 func (t *http2Client) isRestrictive(s http2.Setting) bool {
@@ -1288,13 +1289,7 @@ func (t *http2Client) itemHandler(i item) error {
 	case *settings:
 		err = t.framer.fr.WriteSettings(i.ss...)
 	case *settingsAck:
-		if i.rs == nil && i.ps == nil {
-			err = t.framer.fr.WriteSettingsAck()
-			break
-		}
-		t.applySettings(i.rs)
-		t.controlBuf.put(&settingsAck{})
-		t.applySettings(i.ps)
+		err = t.framer.fr.WriteSettingsAck()
 	case *resetStream:
 		// If the server needs to be to intimated about stream closing,
 		// then we need to make sure the RST_STREAM frame is written to

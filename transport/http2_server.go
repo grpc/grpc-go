@@ -603,7 +603,9 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 		}
 		return nil
 	})
-	t.controlBuf.put(&settingsAck{rs: rs, ps: ps})
+	t.applySettings(rs)
+	t.controlBuf.put(&settingsAck{})
+	t.applySettings(ps)
 }
 
 func (t *http2Server) isRestrictive(s http2.Setting) bool {
@@ -1069,13 +1071,7 @@ func (t *http2Server) itemHandler(i item) error {
 	case *settings:
 		return t.framer.fr.WriteSettings(i.ss...)
 	case *settingsAck:
-		if i.rs == nil && i.ps == nil {
-			return t.framer.fr.WriteSettingsAck()
-		}
-		t.applySettings(i.rs)
-		t.controlBuf.put(&settingsAck{})
-		t.applySettings(i.ps)
-		return nil
+		return t.framer.fr.WriteSettingsAck()
 	case *resetStream:
 		return t.framer.fr.WriteRSTStream(i.streamID, i.code)
 	case *goAway:
