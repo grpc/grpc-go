@@ -1083,7 +1083,7 @@ func (t *http2Server) itemHandler(i item) error {
 		if t.state == closing {
 			t.mu.Unlock()
 			// The transport is closing.
-			return fmt.Errorf("transport: Connection closing. xxx 1")
+			return fmt.Errorf("transport: Connection closing")
 		}
 		sid := t.maxStreamID
 		if !i.headsUp {
@@ -1097,7 +1097,7 @@ func (t *http2Server) itemHandler(i item) error {
 				// Abruptly close the connection following the GoAway (via
 				// loopywriter).  But flush out what's inside the buffer first.
 				t.framer.writer.Flush()
-				return fmt.Errorf("transport: Connection closing. xxx 2")
+				return fmt.Errorf("transport: Connection closing")
 			}
 			return nil
 		}

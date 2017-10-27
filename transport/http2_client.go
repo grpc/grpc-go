@@ -20,7 +20,6 @@ package transport
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -1239,7 +1238,6 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // is duplicated between the client and the server.
 // The transport layer needs to be refactored to take care of this.
 func (t *http2Client) itemHandler(i item) error {
-	fmt.Printf("%v xxx client item handler called with %T\n", time.Now(), i)
 	var err error
 	defer func() {
 		if err != nil {
