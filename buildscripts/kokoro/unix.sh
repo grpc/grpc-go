@@ -4,7 +4,7 @@
 # TODO(zpencer): test this script for Linux
 
 # This script assumes `set -e`. Removing it may lead to undefined behavior.
-set -ex
+set -exu -o pipefail
 
 export GRADLE_OPTS=-Xmx512m
 export PROTOBUF_VERSION=3.4.0

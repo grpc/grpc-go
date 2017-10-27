@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Build protoc
-set -evx
+set -evux -o pipefail
 
 DOWNLOAD_DIR=/tmp/source
 INSTALL_DIR="/tmp/protobuf-$PROTOBUF_VERSION/$(uname -s)-$(uname -p)"
