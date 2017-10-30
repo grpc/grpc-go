@@ -950,22 +950,19 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 }
 
 func (t *http2Client) isRestrictive(s http2.Setting) bool {
-	var res bool
 	switch s.ID {
 	case http2.SettingMaxConcurrentStreams:
-		t.mu.Lock()
 		if int(s.Val) < t.maxStreams {
-			res = true
+			return true
 		}
-		t.mu.Unlock()
 	case http2.SettingInitialWindowSize:
-		t.mu.Lock()
+		// Note: we don't acquire a lock here to read streamSendQuota
+		// because the same goroutine updates it later.
 		if s.Val < t.streamSendQuota {
-			res = true
+			return true
 		}
-		t.mu.Unlock()
 	}
-	return res
+	return false
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -1218,10 +1215,8 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			if s.Val > math.MaxInt32 {
 				s.Val = math.MaxInt32
 			}
-			t.mu.Lock()
 			ms := t.maxStreams
 			t.maxStreams = int(s.Val)
-			t.mu.Unlock()
 			t.streamsQuota.add(int(s.Val) - ms)
 		case http2.SettingInitialWindowSize:
 			t.mu.Lock()
