@@ -28,19 +28,37 @@ public final class HealthGrpc {
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  @java.lang.Deprecated // Use {@link getCheckMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
-      io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK =
-      io.grpc.MethodDescriptor.<io.grpc.health.v1.HealthCheckRequest, io.grpc.health.v1.HealthCheckResponse>newBuilder()
-          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
-          .setFullMethodName(generateFullMethodName(
-              "grpc.health.v1.Health", "Check"))
-          .setRegisterForTracing(true)
-          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-              io.grpc.health.v1.HealthCheckRequest.getDefaultInstance()))
-          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-              io.grpc.health.v1.HealthCheckResponse.getDefaultInstance()))
-          .setSchemaDescriptor(new HealthMethodDescriptorSupplier("Check"))
-          .build();
+      io.grpc.health.v1.HealthCheckResponse> METHOD_CHECK = getCheckMethod();
+
+  private static volatile io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
+      io.grpc.health.v1.HealthCheckResponse> getCheckMethod;
+
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest,
+      io.grpc.health.v1.HealthCheckResponse> getCheckMethod() {
+    io.grpc.MethodDescriptor<io.grpc.health.v1.HealthCheckRequest, io.grpc.health.v1.HealthCheckResponse> getCheckMethod;
+    if ((getCheckMethod = HealthGrpc.getCheckMethod) == null) {
+      synchronized (HealthGrpc.class) {
+        if ((getCheckMethod = HealthGrpc.getCheckMethod) == null) {
+          HealthGrpc.getCheckMethod = getCheckMethod = 
+              io.grpc.MethodDescriptor.<io.grpc.health.v1.HealthCheckRequest, io.grpc.health.v1.HealthCheckResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(
+                  "grpc.health.v1.Health", "Check"))
+              .setRegisterForTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.grpc.health.v1.HealthCheckRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.grpc.health.v1.HealthCheckResponse.getDefaultInstance()))
+                  .setSchemaDescriptor(new HealthMethodDescriptorSupplier("Check"))
+                  .build();
+          }
+        }
+     }
+     return getCheckMethod;
+  }
 
   /**
    * Creates a new async stub that supports all call types for the service
@@ -73,7 +91,7 @@ public final class HealthGrpc {
      */
     public void check(io.grpc.health.v1.HealthCheckRequest request,
         io.grpc.stub.StreamObserver<io.grpc.health.v1.HealthCheckResponse> responseObserver) {
-      asyncUnimplementedUnaryCall(METHOD_CHECK, responseObserver);
+      asyncUnimplementedUnaryCall(getCheckMethod(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
@@ -112,7 +130,7 @@ public final class HealthGrpc {
     public void check(io.grpc.health.v1.HealthCheckRequest request,
         io.grpc.stub.StreamObserver<io.grpc.health.v1.HealthCheckResponse> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(METHOD_CHECK, getCallOptions()), request, responseObserver);
+          getChannel().newCall(getCheckMethod(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -138,7 +156,7 @@ public final class HealthGrpc {
      */
     public io.grpc.health.v1.HealthCheckResponse check(io.grpc.health.v1.HealthCheckRequest request) {
       return blockingUnaryCall(
-          getChannel(), METHOD_CHECK, getCallOptions(), request);
+          getChannel(), getCheckMethod(), getCallOptions(), request);
     }
   }
 
@@ -165,7 +183,7 @@ public final class HealthGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.health.v1.HealthCheckResponse> check(
         io.grpc.health.v1.HealthCheckRequest request) {
       return futureUnaryCall(
-          getChannel().newCall(METHOD_CHECK, getCallOptions()), request);
+          getChannel().newCall(getCheckMethod(), getCallOptions()), request);
     }
   }
 

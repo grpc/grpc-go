@@ -60,14 +60,14 @@ final class LoadServer {
    * Generic version of the unary method call.
    */
   static final MethodDescriptor<ByteBuf, ByteBuf> GENERIC_UNARY_METHOD =
-      BenchmarkServiceGrpc.METHOD_UNARY_CALL.toBuilder(marshaller, marshaller)
+      BenchmarkServiceGrpc.getUnaryCallMethod().toBuilder(marshaller, marshaller)
           .build();
 
   /**
    * Generic version of the streaming ping-pong method call.
    */
   static final MethodDescriptor<ByteBuf, ByteBuf> GENERIC_STREAMING_PING_PONG_METHOD =
-      BenchmarkServiceGrpc.METHOD_STREAMING_CALL.toBuilder(marshaller, marshaller)
+      BenchmarkServiceGrpc.getStreamingCallMethod().toBuilder(marshaller, marshaller)
           .build();
 
   private static final Logger log = Logger.getLogger(LoadServer.class.getName());

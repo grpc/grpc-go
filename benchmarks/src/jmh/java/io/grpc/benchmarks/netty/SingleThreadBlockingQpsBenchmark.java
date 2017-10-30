@@ -65,8 +65,8 @@ public class SingleThreadBlockingQpsBenchmark extends AbstractBenchmark {
    * Issue a unary call and wait for the response.
    */
   @Benchmark
-  public void blockingUnary() throws Exception {
-    ClientCalls.blockingUnaryCall(
+  public Object blockingUnary() throws Exception {
+    return ClientCalls.blockingUnaryCall(
         channels[0].newCall(unaryMethod, CallOptions.DEFAULT), Unpooled.EMPTY_BUFFER);
   }
 

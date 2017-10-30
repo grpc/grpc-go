@@ -45,16 +45,16 @@ public class SimpleServiceTest {
   public void serviceMethodDescriotrs() {
     MethodDescriptor<SimpleRequest, SimpleResponse> genericTypeShouldMatchWhenAssigned;
 
-    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.METHOD_UNARY_RPC;
+    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.getUnaryRpcMethod();
     assertEquals(UNARY, genericTypeShouldMatchWhenAssigned.getType());
 
-    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.METHOD_CLIENT_STREAMING_RPC;
+    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.getClientStreamingRpcMethod();
     assertEquals(CLIENT_STREAMING, genericTypeShouldMatchWhenAssigned.getType());
 
-    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.METHOD_SERVER_STREAMING_RPC;
+    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.getServerStreamingRpcMethod();
     assertEquals(SERVER_STREAMING, genericTypeShouldMatchWhenAssigned.getType());
 
-    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.METHOD_BIDI_STREAMING_RPC;
+    genericTypeShouldMatchWhenAssigned = SimpleServiceGrpc.getBidiStreamingRpcMethod();
     assertEquals(BIDI_STREAMING, genericTypeShouldMatchWhenAssigned.getType());
   }
 

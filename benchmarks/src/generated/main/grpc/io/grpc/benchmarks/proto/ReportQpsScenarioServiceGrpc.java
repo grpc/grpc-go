@@ -28,19 +28,37 @@ public final class ReportQpsScenarioServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  @java.lang.Deprecated // Use {@link getReportScenarioMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
-      io.grpc.benchmarks.proto.Control.Void> METHOD_REPORT_SCENARIO =
-      io.grpc.MethodDescriptor.<io.grpc.benchmarks.proto.Control.ScenarioResult, io.grpc.benchmarks.proto.Control.Void>newBuilder()
-          .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
-          .setFullMethodName(generateFullMethodName(
-              "grpc.testing.ReportQpsScenarioService", "ReportScenario"))
-          .setRegisterForTracing(true)
-          .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-              io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance()))
-          .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
-              io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()))
-          .setSchemaDescriptor(new ReportQpsScenarioServiceMethodDescriptorSupplier("ReportScenario"))
-          .build();
+      io.grpc.benchmarks.proto.Control.Void> METHOD_REPORT_SCENARIO = getReportScenarioMethod();
+
+  private static volatile io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
+      io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod;
+
+  @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
+  public static io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult,
+      io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod() {
+    io.grpc.MethodDescriptor<io.grpc.benchmarks.proto.Control.ScenarioResult, io.grpc.benchmarks.proto.Control.Void> getReportScenarioMethod;
+    if ((getReportScenarioMethod = ReportQpsScenarioServiceGrpc.getReportScenarioMethod) == null) {
+      synchronized (ReportQpsScenarioServiceGrpc.class) {
+        if ((getReportScenarioMethod = ReportQpsScenarioServiceGrpc.getReportScenarioMethod) == null) {
+          ReportQpsScenarioServiceGrpc.getReportScenarioMethod = getReportScenarioMethod = 
+              io.grpc.MethodDescriptor.<io.grpc.benchmarks.proto.Control.ScenarioResult, io.grpc.benchmarks.proto.Control.Void>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(
+                  "grpc.testing.ReportQpsScenarioService", "ReportScenario"))
+              .setRegisterForTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.grpc.benchmarks.proto.Control.ScenarioResult.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()))
+                  .setSchemaDescriptor(new ReportQpsScenarioServiceMethodDescriptorSupplier("ReportScenario"))
+                  .build();
+          }
+        }
+     }
+     return getReportScenarioMethod;
+  }
 
   /**
    * Creates a new async stub that supports all call types for the service
@@ -76,7 +94,7 @@ public final class ReportQpsScenarioServiceGrpc {
      */
     public void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver) {
-      asyncUnimplementedUnaryCall(METHOD_REPORT_SCENARIO, responseObserver);
+      asyncUnimplementedUnaryCall(getReportScenarioMethod(), responseObserver);
     }
 
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
@@ -118,7 +136,7 @@ public final class ReportQpsScenarioServiceGrpc {
     public void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request,
         io.grpc.stub.StreamObserver<io.grpc.benchmarks.proto.Control.Void> responseObserver) {
       asyncUnaryCall(
-          getChannel().newCall(METHOD_REPORT_SCENARIO, getCallOptions()), request, responseObserver);
+          getChannel().newCall(getReportScenarioMethod(), getCallOptions()), request, responseObserver);
     }
   }
 
@@ -147,7 +165,7 @@ public final class ReportQpsScenarioServiceGrpc {
      */
     public io.grpc.benchmarks.proto.Control.Void reportScenario(io.grpc.benchmarks.proto.Control.ScenarioResult request) {
       return blockingUnaryCall(
-          getChannel(), METHOD_REPORT_SCENARIO, getCallOptions(), request);
+          getChannel(), getReportScenarioMethod(), getCallOptions(), request);
     }
   }
 
@@ -177,7 +195,7 @@ public final class ReportQpsScenarioServiceGrpc {
     public com.google.common.util.concurrent.ListenableFuture<io.grpc.benchmarks.proto.Control.Void> reportScenario(
         io.grpc.benchmarks.proto.Control.ScenarioResult request) {
       return futureUnaryCall(
-          getChannel().newCall(METHOD_REPORT_SCENARIO, getCallOptions()), request);
+          getChannel().newCall(getReportScenarioMethod(), getCallOptions()), request);
     }
   }
 

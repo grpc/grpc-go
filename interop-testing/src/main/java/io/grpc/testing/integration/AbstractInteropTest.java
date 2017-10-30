@@ -303,7 +303,7 @@ public abstract class AbstractInteropTest {
   public void cacheableUnary() {
     // Set safe to true.
     MethodDescriptor<SimpleRequest, SimpleResponse> safeCacheableUnaryCallMethod =
-        TestServiceGrpc.METHOD_CACHEABLE_UNARY_CALL.toBuilder().setSafe(true).build();
+        TestServiceGrpc.getCacheableUnaryCallMethod().toBuilder().setSafe(true).build();
     // Set fake user IP since some proxies (GFE) won't cache requests from localhost.
     Metadata.Key<String> userIpKey = Metadata.Key.of("x-user-ip", Metadata.ASCII_STRING_MARSHALLER);
     Metadata metadata = new Metadata();
@@ -837,7 +837,7 @@ public abstract class AbstractInteropTest {
 
     final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
     ClientCall<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
-        channel.newCall(TestServiceGrpc.METHOD_STREAMING_OUTPUT_CALL, CallOptions.DEFAULT);
+        channel.newCall(TestServiceGrpc.getStreamingOutputCallMethod(), CallOptions.DEFAULT);
     call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
       @Override
       public void onHeaders(Metadata headers) {}
