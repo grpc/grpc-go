@@ -248,7 +248,7 @@ public class TestServiceClient {
         break;
 
       case SERVICE_ACCOUNT_CREDS: {
-        String jsonKey = Files.toString(new File(serviceAccountKeyFile), UTF_8);
+        String jsonKey = Files.asCharSource(new File(serviceAccountKeyFile), UTF_8).read();
         FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
         tester.serviceAccountCreds(jsonKey, credentialsStream, oauthScope);
         break;
@@ -261,14 +261,14 @@ public class TestServiceClient {
       }
 
       case OAUTH2_AUTH_TOKEN: {
-        String jsonKey = Files.toString(new File(serviceAccountKeyFile), UTF_8);
+        String jsonKey = Files.asCharSource(new File(serviceAccountKeyFile), UTF_8).read();
         FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
         tester.oauth2AuthToken(jsonKey, credentialsStream, oauthScope);
         break;
       }
 
       case PER_RPC_CREDS: {
-        String jsonKey = Files.toString(new File(serviceAccountKeyFile), UTF_8);
+        String jsonKey = Files.asCharSource(new File(serviceAccountKeyFile), UTF_8).read();
         FileInputStream credentialsStream = new FileInputStream(new File(serviceAccountKeyFile));
         tester.perRpcCreds(jsonKey, credentialsStream, oauthScope);
         break;

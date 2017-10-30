@@ -210,7 +210,7 @@ subprojects {
                 // Test dependencies.
                 junit: 'junit:junit:4.12',
                 mockito: 'org.mockito:mockito-core:1.9.5',
-                truth: 'com.google.truth:truth:0.28',
+                truth: 'com.google.truth:truth:0.36',
 
                 // Benchmark dependencies
                 hdrhistogram: 'org.hdrhistogram:HdrHistogram:2.1.10',
