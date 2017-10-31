@@ -609,16 +609,13 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 func (t *http2Server) isRestrictive(s http2.Setting) bool {
-	var res bool
 	switch s.ID {
 	case http2.SettingInitialWindowSize:
-		t.mu.Lock()
-		if s.Val < t.streamSendQuota {
-			res = true
-		}
-		t.mu.Unlock()
+		// Note: we don't acquire a lock here to read streamSendQuota
+		// because the same goroutine updates it later.
+		return s.Val < t.streamSendQuota
 	}
-	return res
+	return false
 }
 
 func (t *http2Server) applySettings(ss []http2.Setting) {
