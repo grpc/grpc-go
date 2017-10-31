@@ -104,6 +104,16 @@ const (
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
 
+// UseCompressor returns a CallOption which sets the compressor used when sending the request.
+// If WithCompressor is set, UseCompressor has higher priority.
+// This API is EXPERIMENTAL.
+func UseCompressor(name string) CallOption {
+	return beforeCall(func(c *callInfo) error {
+		c.compressorType = name
+		return nil
+	})
+}
+
 // WithWriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
 // before doing a write on the wire.
 func WithWriteBufferSize(s int) DialOption {
@@ -156,7 +166,8 @@ func WithCodec(c Codec) DialOption {
 }
 
 // WithCompressor returns a DialOption which sets a CompressorGenerator for generating message
-// compressor.
+// compressor. It has lower priority than the compressor set by RegisterCompressor.
+// This function is deprecated.
 func WithCompressor(cp Compressor) DialOption {
 	return func(o *dialOptions) {
 		o.cp = cp
@@ -164,7 +175,8 @@ func WithCompressor(cp Compressor) DialOption {
 }
 
 // WithDecompressor returns a DialOption which sets a DecompressorGenerator for generating
-// message decompressor.
+// message decompressor. It has higher priority than the decompressor set by RegisterCompressor.
+// This function is deprecated.
 func WithDecompressor(dc Decompressor) DialOption {
 	return func(o *dialOptions) {
 		o.dc = dc

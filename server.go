@@ -32,11 +32,14 @@ import (
 	"sync"
 	"time"
 
+	"io/ioutil"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/keepalive"
@@ -187,6 +190,8 @@ func CustomCodec(codec Codec) ServerOption {
 }
 
 // RPCCompressor returns a ServerOption that sets a compressor for outbound messages.
+// It has lower priority than the compressor set by RegisterCompressor.
+// This function is deprecated.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
@@ -194,6 +199,8 @@ func RPCCompressor(cp Compressor) ServerOption {
 }
 
 // RPCDecompressor returns a ServerOption that sets a decompressor for inbound messages.
+// It has higher priority than the decompressor set by RegisterCompressor.
+// This function is deprecated.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
@@ -701,16 +708,18 @@ func (s *Server) removeConn(c io.Closer) {
 
 func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Stream, msg interface{}, cp Compressor, opts *transport.Options) error {
 	var (
-		cbuf       *bytes.Buffer
 		outPayload *stats.OutPayload
 	)
-	if cp != nil {
-		cbuf = new(bytes.Buffer)
-	}
 	if s.opts.statsHandler != nil {
 		outPayload = &stats.OutPayload{}
 	}
-	hdr, data, err := encode(s.opts.codec, msg, cp, cbuf, outPayload)
+	if stream.RecvCompress() != "" {
+		// Server receives compressor, check compressor set by register and default.
+		if encoding.GetCompressor(stream.RecvCompress()) == nil && (cp == nil || cp != nil && cp.Type() != stream.RecvCompress()) {
+			return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", stream.RecvCompress())
+		}
+	}
+	hdr, data, err := encode(s.opts.codec, msg, cp, outPayload, encoding.GetCompressor(stream.RecvCompress()))
 	if err != nil {
 		grpclog.Errorln("grpc: server failed to encode response: ", err)
 		return err
@@ -754,7 +763,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}()
 	}
-	if s.opts.cp != nil {
+	if stream.RecvCompress() != "" {
+		stream.SetSendCompress(stream.RecvCompress())
+	} else if s.opts.cp != nil {
 		// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
@@ -786,7 +797,6 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
-
 	if err := checkRecvPayload(pf, stream.RecvCompress(), s.opts.dc); err != nil {
 		if st, ok := status.FromError(err); ok {
 			if e := t.WriteStatus(stream, st); e != nil {
@@ -812,9 +822,18 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		if pf == compressionMade {
 			var err error
-			req, err = s.opts.dc.Do(bytes.NewReader(req))
-			if err != nil {
-				return Errorf(codes.Internal, err.Error())
+			if s.opts.dc != nil {
+				req, err = s.opts.dc.Do(bytes.NewReader(req))
+				if err != nil {
+					return Errorf(codes.Internal, err.Error())
+				}
+			} else {
+				dcReader := encoding.GetCompressor(stream.RecvCompress())
+				tmp, _ := dcReader.Decompress(bytes.NewReader(req))
+				req, err = ioutil.ReadAll(tmp)
+				if err != nil {
+					return Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
+				}
 			}
 		}
 		if len(req) > s.opts.maxReceiveMessageSize {
@@ -909,16 +928,19 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			sh.HandleRPC(stream.Context(), end)
 		}()
 	}
-	if s.opts.cp != nil {
+	if stream.RecvCompress() != "" {
+		stream.SetSendCompress(stream.RecvCompress())
+	} else if s.opts.cp != nil {
 		stream.SetSendCompress(s.opts.cp.Type())
 	}
 	ss := &serverStream{
-		t:     t,
-		s:     stream,
-		p:     &parser{r: stream},
-		codec: s.opts.codec,
-		cp:    s.opts.cp,
-		dc:    s.opts.dc,
+		t:      t,
+		s:      stream,
+		p:      &parser{r: stream},
+		codec:  s.opts.codec,
+		cpType: stream.RecvCompress(),
+		cp:     s.opts.cp,
+		dc:     s.opts.dc,
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,

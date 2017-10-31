@@ -19,7 +19,6 @@
 package grpc
 
 import (
-	"bytes"
 	"io"
 	"time"
 
@@ -27,6 +26,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -62,7 +62,7 @@ func recvResponse(ctx context.Context, dopts dialOptions, t transport.ClientTran
 		if c.maxReceiveMessageSize == nil {
 			return Errorf(codes.Internal, "callInfo maxReceiveMessageSize field uninitialized(nil)")
 		}
-		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload); err != nil {
+		if err = recv(p, dopts.codec, stream, dopts.dc, reply, *c.maxReceiveMessageSize, inPayload, encoding.GetCompressor(c.compressorType)); err != nil {
 			if err == io.EOF {
 				break
 			}
@@ -89,18 +89,17 @@ func sendRequest(ctx context.Context, dopts dialOptions, compressor Compressor, 
 		}
 	}()
 	var (
-		cbuf       *bytes.Buffer
 		outPayload *stats.OutPayload
 	)
-	if compressor != nil {
-		cbuf = new(bytes.Buffer)
-	}
 	if dopts.copts.StatsHandler != nil {
 		outPayload = &stats.OutPayload{
 			Client: true,
 		}
 	}
-	hdr, data, err := encode(dopts.codec, args, compressor, cbuf, outPayload)
+	if c.compressorType != "" && encoding.GetCompressor(c.compressorType) == nil {
+		return Errorf(codes.Internal, "grpc: Compressor is not installed for grpc-encoding %q", c.compressorType)
+	}
+	hdr, data, err := encode(dopts.codec, args, compressor, outPayload, encoding.GetCompressor(c.compressorType))
 	if err != nil {
 		return err
 	}
@@ -223,7 +222,9 @@ func invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 			Host:   cc.authority,
 			Method: method,
 		}
-		if cc.dopts.cp != nil {
+		if c.compressorType != "" {
+			callHdr.SendCompress = c.compressorType
+		} else if cc.dopts.cp != nil {
 			callHdr.SendCompress = cc.dopts.cp.Type()
 		}
 		if c.creds != nil {
