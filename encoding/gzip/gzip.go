@@ -18,6 +18,7 @@
 
 // Package gzip implements and registers the gzip compressor
 // during the initialization.
+// This package is EXPERIMENTAL.
 package gzip
 
 import (
@@ -65,7 +66,6 @@ func (c *compressor) Decompress(r io.Reader) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		c.poolDecompressor.Put(newZ)
 		return &reader{Reader: newZ, pool: &c.poolDecompressor}, nil
 	}
 	if err := z.Reset(r); err != nil {

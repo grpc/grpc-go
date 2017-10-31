@@ -18,6 +18,7 @@
 
 // Package encoding defines the interface for the compressor and the functions
 // to register and get the compossor.
+// This package is EXPERIMENTAL.
 package encoding
 
 import (

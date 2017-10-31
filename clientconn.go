@@ -106,6 +106,7 @@ type DialOption func(*dialOptions)
 
 // UseCompressor returns a CallOption which sets the compressor used when sending the request.
 // If WithCompressor is set, UseCompressor has higher priority.
+// This API is EXPERIMENTAL.
 func UseCompressor(name string) CallOption {
 	return beforeCall(func(c *callInfo) error {
 		c.compressorType = name
