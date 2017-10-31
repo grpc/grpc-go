@@ -49,7 +49,7 @@ const (
 	// defaultLocalSendQuota sets is default value for number of data
 	// bytes that each stream can schedule before some of it being
 	// flushed out.
-	defaultLocalSendQuota = 64 * 1024
+	defaultLocalSendQuota = 256 * 1024
 )
 
 // The following defines various control items which could flow through

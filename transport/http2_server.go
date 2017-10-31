@@ -69,8 +69,9 @@ type http2Server struct {
 	controlBuf *controlBuffer
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
-	sendQuotaPool *quotaPool
-	stats         stats.Handler
+	sendQuotaPool  *quotaPool
+	localSendQuota *quotaPool
+	stats          stats.Handler
 	// Flag to keep track of reading activity on transport.
 	// 1 is true and 0 is false.
 	activity uint32 // Accessed atomically.
@@ -199,6 +200,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
+		localSendQuota:    newQuotaPool(defaultLocalSendQuota),
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
 		streamSendQuota:   defaultWindowSize,
@@ -316,7 +318,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	t.maxStreamID = streamID
 	s.sendQuotaPool = newQuotaPool(int(t.streamSendQuota))
-	s.localSendQuota = newQuotaPool(defaultLocalSendQuota)
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
@@ -861,7 +862,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	var (
 		streamQuota    int
 		streamQuotaVer uint32
-		localSendQuota int
 		err            error
 	)
 	for _, r := range [][]byte{hdr, data} {
@@ -882,20 +882,9 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 					return err
 				}
 			}
-			if localSendQuota <= 0 {
-				localSendQuota, _, err = s.localSendQuota.get(math.MaxInt32, waiters{
-					ctx:    s.ctx,
-					tctx:   t.ctx,
-					done:   s.done,
-					goAway: s.goAway,
-				})
-				if err != nil {
-					return err
-				}
-			}
 			if size > streamQuota {
 				size = streamQuota
-			} // No need to do that for localSendQuota since that's only a soft limit.
+			}
 			// Get size worth quota from transport.
 			tq, _, err := t.sendQuotaPool.get(size, waiters{
 				ctx:    s.ctx,
@@ -909,16 +898,26 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if tq < size {
 				size = tq
 			}
+			ltq, _, err := t.localSendQuota.get(size, waiters{
+				ctx:    s.ctx,
+				tctx:   t.ctx,
+				done:   s.done,
+				goAway: s.goAway,
+			})
+			if err != nil {
+				return err
+			}
+			// even if ltq is smaller than size we don't adjust size since,
+			// ltq is only a soft limit.
 			streamQuota -= size
-			localSendQuota -= size
 			p := r[:size]
 			// Reset ping strikes when sending data since this might cause
 			// the peer to send ping.
 			atomic.StoreUint32(&t.resetPingStrikes, 1)
 			success := func() {
-				sz := size
+				ltq := ltq
 				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: false, d: p, f: func() {
-					s.localSendQuota.add(sz)
+					t.localSendQuota.add(ltq)
 				}})
 				r = r[size:]
 			}
@@ -929,7 +928,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if !s.sendQuotaPool.compareAndExecute(streamQuotaVer, success, failure) {
 				// Couldn't send this chunk out.
 				t.sendQuotaPool.add(size)
-				localSendQuota += size
+				t.localSendQuota.add(ltq)
 				streamQuota = 0
 			}
 		}
@@ -937,9 +936,6 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	if streamQuota > 0 {
 		// ADd the left over quota back to stream.
 		s.sendQuotaPool.add(streamQuota)
-	}
-	if localSendQuota > 0 {
-		s.localSendQuota.add(localSendQuota)
 	}
 	return nil
 }

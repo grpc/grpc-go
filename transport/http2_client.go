@@ -67,7 +67,8 @@ type http2Client struct {
 	controlBuf *controlBuffer
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
-	sendQuotaPool *quotaPool
+	sendQuotaPool  *quotaPool
+	localSendQuota *quotaPool
 	// streamsQuota limits the max number of concurrent streams.
 	streamsQuota *quotaPool
 
@@ -225,6 +226,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 		controlBuf:        newControlBuffer(),
 		fc:                &inFlow{limit: uint32(icwz)},
 		sendQuotaPool:     newQuotaPool(defaultWindowSize),
+		localSendQuota:    newQuotaPool(defaultLocalSendQuota),
 		scheme:            scheme,
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
@@ -307,16 +309,15 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
 	s := &Stream{
-		id:             t.nextID,
-		done:           make(chan struct{}),
-		goAway:         make(chan struct{}),
-		method:         callHdr.Method,
-		sendCompress:   callHdr.SendCompress,
-		buf:            newRecvBuffer(),
-		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
-		sendQuotaPool:  newQuotaPool(int(t.streamSendQuota)),
-		localSendQuota: newQuotaPool(defaultLocalSendQuota),
-		headerChan:     make(chan struct{}),
+		id:            t.nextID,
+		done:          make(chan struct{}),
+		goAway:        make(chan struct{}),
+		method:        callHdr.Method,
+		sendCompress:  callHdr.SendCompress,
+		buf:           newRecvBuffer(),
+		fc:            &inFlow{limit: uint32(t.initialWindowSize)},
+		sendQuotaPool: newQuotaPool(int(t.streamSendQuota)),
+		headerChan:    make(chan struct{}),
 	}
 	t.nextID += 2
 	s.requestRead = func(n int) {
@@ -658,7 +659,6 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	var (
 		streamQuota    int
 		streamQuotaVer uint32
-		localSendQuota int
 		err            error
 	)
 	for idx, r := range [][]byte{hdr, data} {
@@ -679,21 +679,10 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 					return err
 				}
 			}
-			if localSendQuota <= 0 { // Being a soft limit, it can go negative.
-				// Acquire local send quota to be able to write to the controlBuf.
-				localSendQuota, _, err = s.localSendQuota.get(math.MaxInt32, waiters{
-					ctx:    s.ctx,
-					tctx:   t.ctx,
-					done:   s.done,
-					goAway: s.goAway,
-				})
-				if err != nil {
-					return err
-				}
-			}
 			if size > streamQuota {
 				size = streamQuota
-			} // No need to do that for localSendQuota since that's only a soft limit.
+			}
+
 			// Get size worth quota from transport.
 			tq, _, err := t.sendQuotaPool.get(size, waiters{
 				ctx:    s.ctx,
@@ -707,8 +696,18 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if tq < size {
 				size = tq
 			}
+			ltq, _, err := t.localSendQuota.get(size, waiters{
+				ctx:    s.ctx,
+				tctx:   t.ctx,
+				done:   s.done,
+				goAway: s.goAway,
+			})
+			if err != nil {
+				return err
+			}
+			// even if ltq is smaller than size we don't adjust size since
+			// ltq is only a soft limit.
 			streamQuota -= size
-			localSendQuota -= size
 			p := r[:size]
 			var endStream bool
 			// See if this is the last frame to be written.
@@ -724,8 +723,8 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				}
 			}
 			success := func() {
-				sz := size
-				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { s.localSendQuota.add(sz) }})
+				ltq := ltq
+				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { t.localSendQuota.add(ltq) }})
 				r = r[size:]
 			}
 			failure := func() { // The stream quota version must have changed.
@@ -735,16 +734,13 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if !s.sendQuotaPool.compareAndExecute(streamQuotaVer, success, failure) {
 				// Couldn't send this chunk out.
 				t.sendQuotaPool.add(size)
-				localSendQuota += size
+				t.localSendQuota.add(ltq)
 				streamQuota = 0
 			}
 		}
 	}
 	if streamQuota > 0 { // Add the left over quota back to stream.
 		s.sendQuotaPool.add(streamQuota)
-	}
-	if localSendQuota > 0 {
-		s.localSendQuota.add(localSendQuota)
 	}
 	if !opts.Last {
 		return nil
