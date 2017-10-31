@@ -344,7 +344,7 @@ static void PrintMethodFields(
           "private static final int ARG_IN_$method_field_name$ = $arg_in_id$;\n"
           "private static final int ARG_OUT_$method_field_name$ = $arg_out_id$;\n"
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
-          "@$Deprecated$ // Use {@link $method_method_name$()} instead. \n"
+          "@$Deprecated$ // Use {@link #$method_method_name$()} instead. \n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ = $method_method_name$();\n"
           "\n"
@@ -383,7 +383,7 @@ static void PrintMethodFields(
       p->Print(
           *vars,
           "@$ExperimentalApi$(\"https://github.com/grpc/grpc-java/issues/1901\")\n"
-          "@$Deprecated$ // Use {@link $method_method_name$()} instead. \n"
+          "@$Deprecated$ // Use {@link #$method_method_name$()} instead. \n"
           "public static final $MethodDescriptor$<$input_type$,\n"
           "    $output_type$> $method_field_name$ = $method_method_name$();\n"
           "\n"
@@ -961,8 +961,8 @@ static void PrintGetServiceDescriptorMethod(const ServiceDescriptor* service,
   }
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
-    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
-    p->Print(*vars, "\n.addMethod($method_field_name$)");
+    (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
+    p->Print(*vars, "\n.addMethod($method_method_name$())");
   }
   p->Print("\n.build();\n");
   p->Outdent();
@@ -993,7 +993,7 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
   for (int i = 0; i < service->method_count(); ++i) {
     const MethodDescriptor* method = service->method(i);
     (*vars)["lower_method_name"] = LowerMethodName(method);
-    (*vars)["method_field_name"] = MethodPropertiesFieldName(method);
+    (*vars)["method_method_name"] = MethodPropertiesGetterName(method);
     (*vars)["input_type"] = MessageFullJavaName(generate_nano,
                                                 method->input_type());
     (*vars)["output_type"] = MessageFullJavaName(generate_nano,
@@ -1018,7 +1018,7 @@ static void PrintBindServiceMethodBody(const ServiceDescriptor* service,
     p->Indent();
     p->Print(
         *vars,
-        "$method_field_name$,\n"
+        "$method_method_name$(),\n"
         "$calls_method$(\n");
     p->Indent();
     p->Print(
@@ -1125,33 +1125,33 @@ static void PrintService(const ServiceDescriptor* service,
 void PrintImports(Printer* p, bool generate_nano) {
   p->Print(
       "import static "
-      "io.grpc.stub.ClientCalls.asyncUnaryCall;\n"
-      "import static "
-      "io.grpc.stub.ClientCalls.asyncServerStreamingCall;\n"
-      "import static "
-      "io.grpc.stub.ClientCalls.asyncClientStreamingCall;\n"
+      "io.grpc.MethodDescriptor.generateFullMethodName;\n"
       "import static "
       "io.grpc.stub.ClientCalls.asyncBidiStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ClientCalls.blockingUnaryCall;\n"
+      "io.grpc.stub.ClientCalls.asyncClientStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ClientCalls.asyncServerStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ClientCalls.asyncUnaryCall;\n"
       "import static "
       "io.grpc.stub.ClientCalls.blockingServerStreamingCall;\n"
       "import static "
+      "io.grpc.stub.ClientCalls.blockingUnaryCall;\n"
+      "import static "
       "io.grpc.stub.ClientCalls.futureUnaryCall;\n"
-      "import static "
-      "io.grpc.MethodDescriptor.generateFullMethodName;\n"
-      "import static "
-      "io.grpc.stub.ServerCalls.asyncUnaryCall;\n"
-      "import static "
-      "io.grpc.stub.ServerCalls.asyncServerStreamingCall;\n"
-      "import static "
-      "io.grpc.stub.ServerCalls.asyncClientStreamingCall;\n"
       "import static "
       "io.grpc.stub.ServerCalls.asyncBidiStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;\n"
+      "io.grpc.stub.ServerCalls.asyncClientStreamingCall;\n"
       "import static "
-      "io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;\n\n");
+      "io.grpc.stub.ServerCalls.asyncServerStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncUnaryCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;\n"
+      "import static "
+      "io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;\n\n");
   if (generate_nano) {
     p->Print("import java.io.IOException;\n\n");
   }

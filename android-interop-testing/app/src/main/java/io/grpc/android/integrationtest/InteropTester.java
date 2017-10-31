@@ -469,7 +469,7 @@ final class InteropTester extends AsyncTask<Void, Void, String> {
 
     final ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(10);
     ClientCall<StreamingOutputCallRequest, StreamingOutputCallResponse> call =
-        channel.newCall(TestServiceGrpc.METHOD_STREAMING_OUTPUT_CALL, CallOptions.DEFAULT);
+        channel.newCall(TestServiceGrpc.getStreamingOutputCallMethod(), CallOptions.DEFAULT);
     call.start(new ClientCall.Listener<StreamingOutputCallResponse>() {
       @Override
       public void onHeaders(Metadata headers) {}

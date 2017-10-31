@@ -1,19 +1,19 @@
 package io.grpc.testing.integration;
 
-import static io.grpc.stub.ClientCalls.asyncUnaryCall;
-import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ClientCalls.blockingUnaryCall;
-import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
-import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.MethodDescriptor.generateFullMethodName;
-import static io.grpc.stub.ServerCalls.asyncUnaryCall;
-import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncUnaryCall;
+import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
+import static io.grpc.stub.ClientCalls.blockingUnaryCall;
+import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 /**
  */
@@ -28,7 +28,7 @@ public final class MetricsServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getGetAllGaugesMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getGetAllGaugesMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.EmptyMessage,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_ALL_GAUGES = getGetAllGaugesMethod();
 
@@ -60,7 +60,7 @@ public final class MetricsServiceGrpc {
      return getGetAllGaugesMethod;
   }
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getGetGaugeMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getGetGaugeMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.integration.Metrics.GaugeRequest,
       io.grpc.testing.integration.Metrics.GaugeResponse> METHOD_GET_GAUGE = getGetGaugeMethod();
 
@@ -143,14 +143,14 @@ public final class MetricsServiceGrpc {
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            METHOD_GET_ALL_GAUGES,
+            getGetAllGaugesMethod(),
             asyncServerStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Metrics.EmptyMessage,
                 io.grpc.testing.integration.Metrics.GaugeResponse>(
                   this, METHODID_GET_ALL_GAUGES)))
           .addMethod(
-            METHOD_GET_GAUGE,
+            getGetGaugeMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.integration.Metrics.GaugeRequest,
@@ -362,8 +362,8 @@ public final class MetricsServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new MetricsServiceFileDescriptorSupplier())
-              .addMethod(METHOD_GET_ALL_GAUGES)
-              .addMethod(METHOD_GET_GAUGE)
+              .addMethod(getGetAllGaugesMethod())
+              .addMethod(getGetGaugeMethod())
               .build();
         }
       }

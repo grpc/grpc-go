@@ -1,19 +1,19 @@
 package io.grpc.testing.protobuf;
 
-import static io.grpc.stub.ClientCalls.asyncUnaryCall;
-import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
-import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ClientCalls.blockingUnaryCall;
-import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
-import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.MethodDescriptor.generateFullMethodName;
-import static io.grpc.stub.ServerCalls.asyncUnaryCall;
-import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ClientCalls.asyncUnaryCall;
+import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
+import static io.grpc.stub.ClientCalls.blockingUnaryCall;
+import static io.grpc.stub.ClientCalls.futureUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncBidiStreamingCall;
-import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
+import static io.grpc.stub.ServerCalls.asyncClientStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncServerStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnaryCall;
 import static io.grpc.stub.ServerCalls.asyncUnimplementedStreamingCall;
+import static io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall;
 
 /**
  * <pre>
@@ -31,7 +31,7 @@ public final class SimpleServiceGrpc {
 
   // Static method descriptors that strictly reflect the proto.
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getUnaryRpcMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getUnaryRpcMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> METHOD_UNARY_RPC = getUnaryRpcMethod();
 
@@ -63,7 +63,7 @@ public final class SimpleServiceGrpc {
      return getUnaryRpcMethod;
   }
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getClientStreamingRpcMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getClientStreamingRpcMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> METHOD_CLIENT_STREAMING_RPC = getClientStreamingRpcMethod();
 
@@ -95,7 +95,7 @@ public final class SimpleServiceGrpc {
      return getClientStreamingRpcMethod;
   }
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getServerStreamingRpcMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getServerStreamingRpcMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> METHOD_SERVER_STREAMING_RPC = getServerStreamingRpcMethod();
 
@@ -127,7 +127,7 @@ public final class SimpleServiceGrpc {
      return getServerStreamingRpcMethod;
   }
   @io.grpc.ExperimentalApi("https://github.com/grpc/grpc-java/issues/1901")
-  @java.lang.Deprecated // Use {@link getBidiStreamingRpcMethod()} instead. 
+  @java.lang.Deprecated // Use {@link #getBidiStreamingRpcMethod()} instead. 
   public static final io.grpc.MethodDescriptor<io.grpc.testing.protobuf.SimpleRequest,
       io.grpc.testing.protobuf.SimpleResponse> METHOD_BIDI_STREAMING_RPC = getBidiStreamingRpcMethod();
 
@@ -232,28 +232,28 @@ public final class SimpleServiceGrpc {
     @java.lang.Override public final io.grpc.ServerServiceDefinition bindService() {
       return io.grpc.ServerServiceDefinition.builder(getServiceDescriptor())
           .addMethod(
-            METHOD_UNARY_RPC,
+            getUnaryRpcMethod(),
             asyncUnaryCall(
               new MethodHandlers<
                 io.grpc.testing.protobuf.SimpleRequest,
                 io.grpc.testing.protobuf.SimpleResponse>(
                   this, METHODID_UNARY_RPC)))
           .addMethod(
-            METHOD_CLIENT_STREAMING_RPC,
+            getClientStreamingRpcMethod(),
             asyncClientStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.protobuf.SimpleRequest,
                 io.grpc.testing.protobuf.SimpleResponse>(
                   this, METHODID_CLIENT_STREAMING_RPC)))
           .addMethod(
-            METHOD_SERVER_STREAMING_RPC,
+            getServerStreamingRpcMethod(),
             asyncServerStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.protobuf.SimpleRequest,
                 io.grpc.testing.protobuf.SimpleResponse>(
                   this, METHODID_SERVER_STREAMING_RPC)))
           .addMethod(
-            METHOD_BIDI_STREAMING_RPC,
+            getBidiStreamingRpcMethod(),
             asyncBidiStreamingCall(
               new MethodHandlers<
                 io.grpc.testing.protobuf.SimpleRequest,
@@ -502,10 +502,10 @@ public final class SimpleServiceGrpc {
         if (result == null) {
           serviceDescriptor = result = io.grpc.ServiceDescriptor.newBuilder(SERVICE_NAME)
               .setSchemaDescriptor(new SimpleServiceFileDescriptorSupplier())
-              .addMethod(METHOD_UNARY_RPC)
-              .addMethod(METHOD_CLIENT_STREAMING_RPC)
-              .addMethod(METHOD_SERVER_STREAMING_RPC)
-              .addMethod(METHOD_BIDI_STREAMING_RPC)
+              .addMethod(getUnaryRpcMethod())
+              .addMethod(getClientStreamingRpcMethod())
+              .addMethod(getServerStreamingRpcMethod())
+              .addMethod(getBidiStreamingRpcMethod())
               .build();
         }
       }
