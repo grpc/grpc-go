@@ -58,6 +58,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	_ "google.golang.org/grpc/resolver/passthrough"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -104,7 +106,7 @@ var (
 	})
 )
 
-var raceMode bool // set by race_test.go in race mode
+var raceMode bool // set by race.go in race mode
 
 type testServer struct {
 	security           string // indicate the authentication protocol used by this server.
@@ -144,7 +146,7 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 		return nil, fmt.Errorf("Unsupported payload type: %d", t)
 	}
 	return &testpb.Payload{
-		Type: t.Enum(),
+		Type: t,
 		Body: body,
 	}, nil
 }
@@ -257,7 +259,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 		in, err := stream.Recv()
 		if err == io.EOF {
 			return stream.SendAndClose(&testpb.StreamingInputCallResponse{
-				AggregatedPayloadSize: proto.Int32(int32(sum)),
+				AggregatedPayloadSize: int32(sum),
 			})
 		}
 		if err != nil {
@@ -436,19 +438,23 @@ type test struct {
 	cancel context.CancelFunc
 
 	// Configurable knobs, after newTest returns:
-	testServer                  testpb.TestServiceServer // nil means none
-	healthServer                *health.Server           // nil means disabled
-	maxStream                   uint32
-	tapHandle                   tap.ServerInHandle
-	maxMsgSize                  *int
-	maxClientReceiveMsgSize     *int
-	maxClientSendMsgSize        *int
-	maxServerReceiveMsgSize     *int
-	maxServerSendMsgSize        *int
-	userAgent                   string
-	clientCompression           bool
-	serverCompression           bool
-	clientUseCompression        bool
+	testServer              testpb.TestServiceServer // nil means none
+	healthServer            *health.Server           // nil means disabled
+	maxStream               uint32
+	tapHandle               tap.ServerInHandle
+	maxMsgSize              *int
+	maxClientReceiveMsgSize *int
+	maxClientSendMsgSize    *int
+	maxServerReceiveMsgSize *int
+	maxServerSendMsgSize    *int
+	userAgent               string
+	// clientCompression and serverCompression are set to test the deprecated API
+	// WithCompressor and WithDecompressor.
+	clientCompression bool
+	serverCompression bool
+	// clientUseCompression is set to test the new compressor registration API UseCompressor.
+	clientUseCompression bool
+	// clientNopCompression is set to create a compressor whose type is not supported.
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
@@ -462,6 +468,7 @@ type test struct {
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
+	resolverScheme              string
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -562,8 +569,6 @@ func (te *test) startServer(ts testpb.TestServiceServer) {
 			te.t.Fatalf("Failed to generate credentials %v", err)
 		}
 		sopts = append(sopts, grpc.Creds(creds))
-	case "clientAlwaysFailCred":
-		sopts = append(sopts, grpc.Creds(clientAlwaysFailCred{}))
 	case "clientTimeoutCreds":
 		sopts = append(sopts, grpc.Creds(&clientTimeoutCreds{}))
 	}
@@ -672,8 +677,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 			te.t.Fatalf("Failed to load credentials: %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
-	case "clientAlwaysFailCred":
-		opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}))
 	case "clientTimeoutCreds":
 		opts = append(opts, grpc.WithTransportCredentials(&clientTimeoutCreds{}))
 	default:
@@ -681,6 +684,11 @@ func (te *test) clientConn() *grpc.ClientConn {
 	}
 	// TODO(bar) switch balancer case "pickfirst".
 	var scheme string
+	if te.resolverScheme == "" {
+		scheme = "passthrough:///"
+	} else {
+		scheme = te.resolverScheme + ":///"
+	}
 	switch te.e.balancer {
 	case "v1":
 		opts = append(opts, grpc.WithBalancer(grpc.RoundRobin(nil)))
@@ -690,7 +698,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 			te.t.Fatalf("got nil when trying to get roundrobin balancer builder")
 		}
 		opts = append(opts, grpc.WithBalancerBuilder(rr))
-		scheme = "passthrough:///"
 	}
 	if te.clientInitialWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -707,6 +714,9 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if !te.nonBlockingDial && te.srvAddr != "" {
 		// Only do a blocking dial if server is up.
 		opts = append(opts, grpc.WithBlock())
+	}
+	if te.srvAddr == "" {
+		te.srvAddr = "client.side.only.test"
 	}
 	var err error
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
@@ -932,7 +942,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -940,7 +950,7 @@ func testServerGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -1016,7 +1026,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -1024,7 +1034,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -1131,7 +1141,7 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 	te.srv.Stop()
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
@@ -1139,7 +1149,7 @@ func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -1232,11 +1242,8 @@ func testFailFast(t *testing.T, e env) {
 	awaitNewConnLogOutput()
 }
 
-func testServiceConfigSetup(t *testing.T, e env) (*test, chan grpc.ServiceConfig) {
+func testServiceConfigSetup(t *testing.T, e env) *test {
 	te := newTest(t, e)
-	// We write before read.
-	ch := make(chan grpc.ServiceConfig, 1)
-	te.sc = ch
 	te.userAgent = testAppUA
 	te.declareLogNoise(
 		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
@@ -1244,7 +1251,7 @@ func testServiceConfigSetup(t *testing.T, e env) (*test, chan grpc.ServiceConfig
 		"grpc: addrConn.resetTransport failed to create client transport: connection error",
 		"Failed to dial : context canceled; please retry.",
 	)
-	return te, ch
+	return te
 }
 
 func newBool(b bool) (a *bool) {
@@ -1261,85 +1268,132 @@ func newDuration(b time.Duration) (a *time.Duration) {
 	return
 }
 
-func TestServiceConfigGetMethodConfig(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testGetMethodConfig(t, e)
-	}
-}
-
-func testGetMethodConfig(t *testing.T, e env) {
-	te, ch := testServiceConfigSetup(t, e)
+func TestGetMethodConfig(t *testing.T) {
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
-	mc1 := grpc.MethodConfig{
-		WaitForReady: newBool(true),
-		Timeout:      newDuration(time.Millisecond),
-	}
-	mc2 := grpc.MethodConfig{WaitForReady: newBool(false)}
-	m := make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/EmptyCall"] = mc1
-	m["/grpc.testing.TestService/"] = mc2
-	sc := grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
-
+	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`)
+
 	tc := testpb.NewTestServiceClient(cc)
+
+	// Make sure service config has been processed by grpc.
+	for {
+		if cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+	var err error
+	if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	m = make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/UnaryCall"] = mc1
-	m["/grpc.testing.TestService/"] = mc2
-	sc = grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
-	// Wait for the new service config to propagate.
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        },
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService"
+                }
+            ],
+            "waitForReady": false
+        }
+    ]
+}`)
+
+	// Make sure service config has been processed by grpc.
 	for {
-		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.DeadlineExceeded {
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall"); mc.WaitForReady != nil && !*mc.WaitForReady {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 	// The following RPCs are expected to become fail-fast.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+	if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
 	}
 }
 
 func TestServiceConfigWaitForReady(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testServiceConfigWaitForReady(t, e)
-	}
-}
-
-func testServiceConfigWaitForReady(t *testing.T, e env) {
-	te, ch := testServiceConfigSetup(t, e)
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
-	mc := grpc.MethodConfig{
-		WaitForReady: newBool(false),
-		Timeout:      newDuration(time.Millisecond),
-	}
-	m := make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/EmptyCall"] = mc
-	m["/grpc.testing.TestService/FullDuplexCall"] = mc
-	sc := grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
-
+	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": false,
+            "timeout": "1ms"
+        }
+    ]
+}`)
+
 	tc := testpb.NewTestServiceClient(cc)
+
+	// Make sure service config has been processed by grpc.
+	for {
+		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
-	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+	var err error
+	if _, err = tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 	if _, err := tc.FullDuplexCall(context.Background(), grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
@@ -1347,25 +1401,32 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 	}
 
 	// Generate a service config update.
-	// Case2: Client API does not set failfast, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
-	mc.WaitForReady = newBool(true)
-	m = make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/EmptyCall"] = mc
-	m["/grpc.testing.TestService/FullDuplexCall"] = mc
-	sc = grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
+	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ms"
+        }
+    ]
+}`)
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
 	for {
-		if !*mc.WaitForReady {
-			time.Sleep(100 * time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall"); mc.WaitForReady != nil && *mc.WaitForReady {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
 	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
@@ -1377,85 +1438,105 @@ func testServiceConfigWaitForReady(t *testing.T, e env) {
 }
 
 func TestServiceConfigTimeout(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testServiceConfigTimeout(t, e)
-	}
-}
-
-func testServiceConfigTimeout(t *testing.T, e env) {
-	te, ch := testServiceConfigSetup(t, e)
+	te := testServiceConfigSetup(t, tcpClearRREnv)
 	defer te.tearDown()
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
 	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	mc := grpc.MethodConfig{
-		Timeout: newDuration(time.Hour),
-	}
-	m := make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/EmptyCall"] = mc
-	m["/grpc.testing.TestService/FullDuplexCall"] = mc
-	sc := grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
-
+	te.resolverScheme = r.Scheme()
 	cc := te.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te.srvAddr}})
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1h"
+        }
+    ]
+}`)
+
 	tc := testpb.NewTestServiceClient(cc)
+
+	// Make sure service config has been processed by grpc.
+	for {
+		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
+	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 	cancel()
+
 	ctx, cancel = context.WithTimeout(context.Background(), time.Nanosecond)
-	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err = tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
 	cancel()
 
 	// Generate a service config update.
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
-	mc.Timeout = newDuration(time.Nanosecond)
-	m = make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/EmptyCall"] = mc
-	m["/grpc.testing.TestService/FullDuplexCall"] = mc
-	sc = grpc.ServiceConfig{
-		Methods: m,
-	}
-	ch <- sc
+	r.NewServiceConfig(`{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "EmptyCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "waitForReady": true,
+            "timeout": "1ns"
+        }
+    ]
+}`)
 
 	// Wait for the new service config to take effect.
-	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
 	for {
-		if *mc.Timeout != time.Nanosecond {
-			time.Sleep(100 * time.Millisecond)
-			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
-			continue
+		if mc := cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall"); mc.Timeout != nil && *mc.Timeout == time.Nanosecond {
+			break
 		}
-		break
+		time.Sleep(time.Millisecond)
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 	cancel()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
-	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+	if _, err = tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
 	}
 	cancel()
 }
 
 func TestServiceConfigMaxMsgSize(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		testServiceConfigMaxMsgSize(t, e)
-	}
-}
+	e := tcpClearRREnv
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
 
-func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	// Setting up values and objects shared across all test cases.
 	const smallSize = 1
 	const largeSize = 1024
@@ -1474,38 +1555,59 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 
-	mc := grpc.MethodConfig{
-		MaxReqSize:  newInt(extraLargeSize),
-		MaxRespSize: newInt(extraLargeSize),
-	}
+	scjs := `{
+    "methodConfig": [
+        {
+            "name": [
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "UnaryCall"
+                },
+                {
+                    "service": "grpc.testing.TestService",
+                    "method": "FullDuplexCall"
+                }
+            ],
+            "maxRequestMessageBytes": 2048,
+            "maxResponseMessageBytes": 2048
+        }
+    ]
+}`
 
-	m := make(map[string]grpc.MethodConfig)
-	m["/grpc.testing.TestService/UnaryCall"] = mc
-	m["/grpc.testing.TestService/FullDuplexCall"] = mc
-	sc := grpc.ServiceConfig{
-		Methods: m,
-	}
 	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
-	te1, ch1 := testServiceConfigSetup(t, e)
-	te1.startServer(&testServer{security: e.security})
+	te1 := testServiceConfigSetup(t, e)
 	defer te1.tearDown()
 
-	ch1 <- sc
-	tc := testpb.NewTestServiceClient(te1.clientConn())
+	te1.resolverScheme = r.Scheme()
+	te1.nonBlockingDial = true
+	te1.startServer(&testServer{security: e.security})
+	cc1 := te1.clientConn()
+
+	r.NewAddress([]resolver.Address{{Addr: te1.srvAddr}})
+	r.NewServiceConfig(scjs)
+	tc := testpb.NewTestServiceClient(cc1)
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(extraLargeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(extraLargeSize),
 		Payload:      smallPayload,
 	}
+
+	for {
+		if cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
 	// Test for unary RPC recv.
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = tc.UnaryCall(context.Background(), req, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = extraLargePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
@@ -1513,11 +1615,11 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	// Test for streaming RPC recv.
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(extraLargeSize)),
+			Size: int32(extraLargeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1525,104 +1627,129 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err != nil {
+	if err = stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = extraLargePayload
 	stream, err = tc.FullDuplexCall(te1.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if err = stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 
 	// Case2: Client API set maxReqSize to 1024 (send), maxRespSize to 1024 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
-	te2, ch2 := testServiceConfigSetup(t, e)
+	te2 := testServiceConfigSetup(t, e)
+	te2.resolverScheme = r.Scheme()
+	te2.nonBlockingDial = true
 	te2.maxClientReceiveMsgSize = newInt(1024)
 	te2.maxClientSendMsgSize = newInt(1024)
+
 	te2.startServer(&testServer{security: e.security})
 	defer te2.tearDown()
-	ch2 <- sc
-	tc = testpb.NewTestServiceClient(te2.clientConn())
+	cc2 := te2.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te2.srvAddr}})
+	r.NewServiceConfig(scjs)
+	tc = testpb.NewTestServiceClient(cc2)
+
+	for {
+		if cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Test for unary RPC recv.
 	req.Payload = smallPayload
-	req.ResponseSize = proto.Int32(int32(largeSize))
+	req.ResponseSize = int32(largeSize)
 
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = tc.UnaryCall(context.Background(), req, grpc.FailFast(false)); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC recv.
 	stream, err = tc.FullDuplexCall(te2.ctx)
-	respParam[0].Size = proto.Int32(int32(largeSize))
+	respParam[0].Size = int32(largeSize)
 	sreq.Payload = smallPayload
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err != nil {
+	if err = stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te2.ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if err = stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
 	}
 
 	// Case3: Client API set maxReqSize to 4096 (send), maxRespSize to 4096 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
-	te3, ch3 := testServiceConfigSetup(t, e)
+	te3 := testServiceConfigSetup(t, e)
+	te3.resolverScheme = r.Scheme()
+	te3.nonBlockingDial = true
 	te3.maxClientReceiveMsgSize = newInt(4096)
 	te3.maxClientSendMsgSize = newInt(4096)
+
 	te3.startServer(&testServer{security: e.security})
 	defer te3.tearDown()
-	ch3 <- sc
-	tc = testpb.NewTestServiceClient(te3.clientConn())
+
+	cc3 := te3.clientConn()
+	r.NewAddress([]resolver.Address{{Addr: te3.srvAddr}})
+	r.NewServiceConfig(scjs)
+	tc = testpb.NewTestServiceClient(cc3)
+
+	for {
+		if cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Test for unary RPC recv.
 	req.Payload = smallPayload
-	req.ResponseSize = proto.Int32(int32(largeSize))
+	req.ResponseSize = int32(largeSize)
 
-	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+	if _, err = tc.UnaryCall(context.Background(), req, grpc.FailFast(false)); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
 	}
 
-	req.ResponseSize = proto.Int32(int32(extraLargeSize))
+	req.ResponseSize = int32(extraLargeSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
 	}
 
 	req.Payload = extraLargePayload
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
@@ -1631,27 +1758,27 @@ func testServiceConfigMaxMsgSize(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = proto.Int32(int32(largeSize))
+	respParam[0].Size = int32(largeSize)
 	sreq.Payload = smallPayload
 
-	if err := stream.Send(sreq); err != nil {
+	if err = stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err != nil {
+	if _, err = stream.Recv(); err != nil {
 		t.Fatalf("%v.Recv() = _, %v, want <nil>", stream, err)
 	}
 
-	respParam[0].Size = proto.Int32(int32(extraLargeSize))
+	respParam[0].Size = int32(extraLargeSize)
 
-	if err := stream.Send(sreq); err != nil {
+	if err = stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te3.ctx)
 	if err != nil {
@@ -1694,8 +1821,8 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
@@ -1705,11 +1832,11 @@ func testMaxMsgSizeClientDefault(t *testing.T, e env) {
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1764,8 +1891,8 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC recv.
@@ -1775,18 +1902,18 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 
 	// Test for unary RPC send.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1804,7 +1931,7 @@ func testMaxMsgSizeClientAPI(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC send.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
@@ -1850,8 +1977,8 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(int32(largeSize)),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
 		Payload:      smallPayload,
 	}
 	// Test for unary RPC send.
@@ -1861,18 +1988,18 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 
 	// Test for unary RPC recv.
 	req.Payload = largePayload
-	req.ResponseSize = proto.Int32(int32(smallSize))
+	req.ResponseSize = int32(smallSize)
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(largeSize)),
+			Size: int32(largeSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            smallPayload,
 	}
@@ -1890,7 +2017,7 @@ func testMaxMsgSizeServerAPI(t *testing.T, e env) {
 	}
 
 	// Test for streaming RPC recv.
-	respParam[0].Size = proto.Int32(int32(smallSize))
+	respParam[0].Size = int32(smallSize)
 	sreq.Payload = largePayload
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
@@ -1957,8 +2084,8 @@ func testTap(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(45),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: 45,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); grpc.Code(err) != codes.Unavailable {
@@ -2211,8 +2338,8 @@ func testLargeUnary(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req)
@@ -2255,15 +2382,15 @@ func testExceedMsgLimit(t *testing.T, e env) {
 
 	// Test on server side for unary RPC.
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(smallSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: smallSize,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
 	}
 	// Test on client side for unary RPC.
-	req.ResponseSize = proto.Int32(int32(*te.maxMsgSize) + 1)
+	req.ResponseSize = int32(*te.maxMsgSize) + 1
 	req.Payload = smallPayload
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
@@ -2276,7 +2403,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(1),
+			Size: 1,
 		},
 	}
 
@@ -2286,7 +2413,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	}
 
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            spayload,
 	}
@@ -2302,7 +2429,7 @@ func testExceedMsgLimit(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
-	respParam[0].Size = proto.Int32(int32(*te.maxMsgSize) + 1)
+	respParam[0].Size = int32(*te.maxMsgSize) + 1
 	sreq.Payload = smallPayload
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
@@ -2400,7 +2527,7 @@ func testPeerFailedRPC(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		Payload:      largePayload,
 	}
 
@@ -2451,8 +2578,8 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header, trailer metadata.MD
@@ -2497,8 +2624,8 @@ func testMultipleSetTrailerUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var trailer metadata.MD
@@ -2571,8 +2698,8 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header metadata.MD
@@ -2614,8 +2741,8 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 
@@ -2658,8 +2785,8 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	var header metadata.MD
@@ -2751,9 +2878,9 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 	}
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
-			{Size: proto.Int32(respSize)},
+			{Size: respSize},
 		},
 		Payload: payload,
 	}
@@ -2815,9 +2942,9 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: []*testpb.ResponseParameters{
-			{Size: proto.Int32(respSize)},
+			{Size: respSize},
 		},
 		Payload: payload,
 	}
@@ -2869,8 +2996,8 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(314),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: 314,
 		Payload:      payload,
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), malformedHTTP2Metadata)
@@ -2891,8 +3018,8 @@ func performOneRPC(t *testing.T, tc testpb.TestServiceClient, wg *sync.WaitGroup
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	reply, err := tc.UnaryCall(context.Background(), req, grpc.FailFast(false))
@@ -2989,8 +3116,8 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	for i := -1; i <= 10; i++ {
@@ -3027,8 +3154,8 @@ func testCancel(t *testing.T, e env) {
 	}
 
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3153,7 +3280,7 @@ func testPingPong(t *testing.T, e env) {
 	for index < len(reqSizes) {
 		respParam := []*testpb.ResponseParameters{
 			{
-				Size: proto.Int32(int32(respSizes[index])),
+				Size: int32(respSizes[index]),
 			},
 		}
 
@@ -3163,7 +3290,7 @@ func testPingPong(t *testing.T, e env) {
 		}
 
 		req := &testpb.StreamingOutputCallRequest{
-			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+			ResponseType:       testpb.PayloadType_COMPRESSABLE,
 			ResponseParameters: respParam,
 			Payload:            payload,
 		}
@@ -3231,7 +3358,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 			for index := 0; index < len(reqSizes); index++ {
 				respParam := []*testpb.ResponseParameters{
 					{
-						Size: proto.Int32(int32(respSizes[index])),
+						Size: int32(respSizes[index]),
 					},
 				}
 
@@ -3241,7 +3368,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 				}
 
 				req := &testpb.StreamingOutputCallRequest{
-					ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+					ResponseType:       testpb.PayloadType_COMPRESSABLE,
 					ResponseParameters: respParam,
 					Payload:            payload,
 				}
@@ -3284,11 +3411,11 @@ func testServerStreaming(t *testing.T, e env) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
-			Size: proto.Int32(int32(s)),
+			Size: int32(s),
 		}
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 	}
 	stream, err := tc.StreamingOutputCall(context.Background(), req)
@@ -3340,11 +3467,11 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
-			Size: proto.Int32(int32(s)),
+			Size: int32(s),
 		}
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 	}
 	ctx := metadata.NewOutgoingContext(te.ctx, testMetadata)
@@ -3590,52 +3717,6 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	}
 }
 
-const defaultMaxStreamsClient = 100
-
-func TestExceedDefaultMaxStreamsLimit(t *testing.T) {
-	defer leakcheck.Check(t)
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			// The default max stream limit in handler_server is not 100?
-			continue
-		}
-		testExceedDefaultMaxStreamsLimit(t, e)
-	}
-}
-
-func testExceedDefaultMaxStreamsLimit(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.declareLogNoise(
-		"http2Client.notifyError got notified that the client transport was broken",
-		"Conn.resetTransport failed to create client transport",
-		"grpc: the connection is closing",
-	)
-	// When masStream is set to 0 the server doesn't send a settings frame for
-	// MaxConcurrentStreams, essentially allowing infinite (math.MaxInt32) streams.
-	// In such a case, there should be a default cap on the client-side.
-	te.maxStream = 0
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-
-	// Create as many streams as a client can.
-	for i := 0; i < defaultMaxStreamsClient; i++ {
-		if _, err := tc.StreamingInputCall(te.ctx); err != nil {
-			t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
-		}
-	}
-
-	// Trying to create one more should timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	_, err := tc.StreamingInputCall(ctx)
-	if err == nil || grpc.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %s", tc, err, codes.DeadlineExceeded)
-	}
-}
-
 func TestStreamsQuotaRecovery(t *testing.T) {
 	defer leakcheck.Check(t)
 	for _, e := range listTestEnv() {
@@ -3685,8 +3766,8 @@ func testStreamsQuotaRecovery(t *testing.T, e env) {
 				return
 			}
 			req := &testpb.SimpleRequest{
-				ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-				ResponseSize: proto.Int32(1592),
+				ResponseType: testpb.PayloadType_COMPRESSABLE,
+				ResponseSize: 1592,
 				Payload:      payload,
 			}
 			// No rpc should go through due to the max streams limit.
@@ -3723,8 +3804,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Unimplemented {
@@ -3737,7 +3818,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(31415),
+			Size: 31415,
 		},
 	}
 	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
@@ -3745,7 +3826,7 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3780,8 +3861,8 @@ func testCompressOK(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
@@ -3797,7 +3878,7 @@ func testCompressOK(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(31415),
+			Size: 31415,
 		},
 	}
 	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
@@ -3805,7 +3886,7 @@ func testCompressOK(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3869,7 +3950,7 @@ func testStreamClientInterceptor(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(1)),
+			Size: int32(1),
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
@@ -3877,7 +3958,7 @@ func testStreamClientInterceptor(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -3937,7 +4018,7 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(1)),
+			Size: int32(1),
 		},
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
@@ -3945,7 +4026,7 @@ func testStreamServerInterceptor(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}
@@ -4107,44 +4188,6 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 	})
 }
 
-const clientAlwaysFailCredErrorMsg = "clientAlwaysFailCred always fails"
-
-var errClientAlwaysFailCred = errors.New(clientAlwaysFailCredErrorMsg)
-
-type clientAlwaysFailCred struct{}
-
-func (c clientAlwaysFailCred) ClientHandshake(ctx context.Context, addr string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return nil, nil, errClientAlwaysFailCred
-}
-func (c clientAlwaysFailCred) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, nil, nil
-}
-func (c clientAlwaysFailCred) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{}
-}
-func (c clientAlwaysFailCred) Clone() credentials.TransportCredentials {
-	return nil
-}
-func (c clientAlwaysFailCred) OverrideServerName(s string) error {
-	return nil
-}
-
-func TestDialWithBlockErrorOnBadCertificates(t *testing.T) {
-	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "clientAlwaysFailCred", balancer: "v1"})
-	te.startServer(&testServer{security: te.e.security})
-	defer te.tearDown()
-
-	var (
-		err  error
-		opts []grpc.DialOption
-	)
-	opts = append(opts, grpc.WithTransportCredentials(clientAlwaysFailCred{}), grpc.WithBlock())
-	te.cc, err = grpc.Dial(te.srvAddr, opts...)
-	if err != errClientAlwaysFailCred {
-		te.t.Fatalf("Dial(%q) = %v, want %v", te.srvAddr, err, errClientAlwaysFailCred)
-	}
-}
-
 type clientTimeoutCreds struct {
 	timeoutReturned bool
 }
@@ -4238,6 +4281,69 @@ func TestServerCredsDispatch(t *testing.T) {
 	// Check rawConn is not closed.
 	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
 		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
+	}
+}
+
+type authorityCheckCreds struct {
+	got string
+}
+
+func (c *authorityCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (c *authorityCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	c.got = authority
+	return rawConn, nil, nil
+}
+func (c *authorityCheckCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (c *authorityCheckCreds) Clone() credentials.TransportCredentials {
+	return c
+}
+func (c *authorityCheckCreds) OverrideServerName(s string) error {
+	return nil
+}
+
+// This test makes sure that the authority client handshake gets is the endpoint
+// in dial target, not the resolved ip address.
+func TestCredsHandshakeAuthority(t *testing.T) {
+	const testAuthority = "test.auth.ori.ty"
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	cred := &authorityCheckCreds{}
+	s := grpc.NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
+
+	r, rcleanup := manual.GenerateAndRegisterManualResolver()
+	defer rcleanup()
+
+	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
+	}
+	defer cc.Close()
+	r.NewAddress([]resolver.Address{{Addr: lis.Addr().String()}})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	for {
+		s := cc.GetState()
+		if s == connectivity.Ready {
+			break
+		}
+		if !cc.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			t.Fatalf("ClientConn is not ready after 100 ms")
+		}
+	}
+
+	if cred.got != testAuthority {
+		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
 	}
 }
 
@@ -4792,11 +4898,11 @@ func testConfigurableWindowSize(t *testing.T, e env, wc windowSizeConfig) {
 	}
 	respParams := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(messageSize),
+			Size: messageSize,
 		},
 	}
 	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParams,
 		Payload:            payload,
 	}
@@ -5033,11 +5139,11 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(int32(smallSize)),
+			Size: int32(smallSize),
 		},
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            extraLargePayload,
 	}
@@ -5054,7 +5160,7 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	}
 	// Test send case: server sends a message larger than maxServerSendMsgSize.
 	sreq.Payload = smallPayload
-	respParam[0].Size = proto.Int32(int32(extraLargeSize))
+	respParam[0].Size = int32(extraLargeSize)
 
 	stream, err = tc.FullDuplexCall(te.ctx)
 	if err != nil {
@@ -5065,6 +5171,448 @@ func testSvrWriteStatusEarlyWrite(t *testing.T, e env) {
 	}
 	if _, err = stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+}
+
+// The following functions with function name ending with TD indicates that they
+// should be deleted after old service config API is deprecated and deleted.
+func testServiceConfigSetupTD(t *testing.T, e env) (*test, chan grpc.ServiceConfig) {
+	te := newTest(t, e)
+	// We write before read.
+	ch := make(chan grpc.ServiceConfig, 1)
+	te.sc = ch
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	return te, ch
+}
+
+func TestServiceConfigGetMethodConfigTD(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testGetMethodConfigTD(t, e)
+	}
+}
+
+func testGetMethodConfigTD(t *testing.T, e env) {
+	te, ch := testServiceConfigSetupTD(t, e)
+	defer te.tearDown()
+
+	mc1 := grpc.MethodConfig{
+		WaitForReady: newBool(true),
+		Timeout:      newDuration(time.Millisecond),
+	}
+	mc2 := grpc.MethodConfig{WaitForReady: newBool(false)}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc1
+	m["/grpc.testing.TestService/"] = mc2
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+
+	m = make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/UnaryCall"] = mc1
+	m["/grpc.testing.TestService/"] = mc2
+	sc = grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+	// Wait for the new service config to propagate.
+	for {
+		if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) == codes.DeadlineExceeded {
+			continue
+		}
+		break
+	}
+	// The following RPCs are expected to become fail-fast.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.Unavailable {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	}
+}
+
+func TestServiceConfigWaitForReadyTD(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testServiceConfigWaitForReadyTD(t, e)
+	}
+}
+
+func testServiceConfigWaitForReadyTD(t *testing.T, e env) {
+	te, ch := testServiceConfigSetupTD(t, e)
+	defer te.tearDown()
+
+	// Case1: Client API set failfast to be false, and service config set wait_for_ready to be false, Client API should win, and the rpc will wait until deadline exceeds.
+	mc := grpc.MethodConfig{
+		WaitForReady: newBool(false),
+		Timeout:      newDuration(time.Millisecond),
+	}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	if _, err := tc.FullDuplexCall(context.Background(), grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+
+	// Generate a service config update.
+	// Case2: Client API does not set failfast, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
+	mc.WaitForReady = newBool(true)
+	m = make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc = grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	// Wait for the new service config to take effect.
+	mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
+	for {
+		if !*mc.WaitForReady {
+			time.Sleep(100 * time.Millisecond)
+			mc = cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall")
+			continue
+		}
+		break
+	}
+	// The following RPCs are expected to become non-fail-fast ones with 1ms deadline.
+	if _, err := tc.EmptyCall(context.Background(), &testpb.Empty{}); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	if _, err := tc.FullDuplexCall(context.Background()); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+}
+
+func TestServiceConfigTimeoutTD(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testServiceConfigTimeoutTD(t, e)
+	}
+}
+
+func testServiceConfigTimeoutTD(t *testing.T, e env) {
+	te, ch := testServiceConfigSetupTD(t, e)
+	defer te.tearDown()
+
+	// Case1: Client API sets timeout to be 1ns and ServiceConfig sets timeout to be 1hr. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
+	mc := grpc.MethodConfig{
+		Timeout: newDuration(time.Hour),
+	}
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	// The following RPCs are expected to become non-fail-fast ones with 1ns deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), time.Nanosecond)
+	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+	cancel()
+
+	// Generate a service config update.
+	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
+	mc.Timeout = newDuration(time.Nanosecond)
+	m = make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/EmptyCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc = grpc.ServiceConfig{
+		Methods: m,
+	}
+	ch <- sc
+
+	// Wait for the new service config to take effect.
+	mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+	for {
+		if *mc.Timeout != time.Nanosecond {
+			time.Sleep(100 * time.Millisecond)
+			mc = cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall")
+			continue
+		}
+		break
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
+	}
+	cancel()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Hour)
+	if _, err := tc.FullDuplexCall(ctx, grpc.FailFast(false)); grpc.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("TestService/FullDuplexCall(_) = _, %v, want %s", err, codes.DeadlineExceeded)
+	}
+	cancel()
+}
+
+func TestServiceConfigMaxMsgSizeTD(t *testing.T) {
+	defer leakcheck.Check(t)
+	for _, e := range listTestEnv() {
+		testServiceConfigMaxMsgSizeTD(t, e)
+	}
+}
+
+func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
+	// Setting up values and objects shared across all test cases.
+	const smallSize = 1
+	const largeSize = 1024
+	const extraLargeSize = 2048
+
+	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	largePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, largeSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extraLargePayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, extraLargeSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mc := grpc.MethodConfig{
+		MaxReqSize:  newInt(extraLargeSize),
+		MaxRespSize: newInt(extraLargeSize),
+	}
+
+	m := make(map[string]grpc.MethodConfig)
+	m["/grpc.testing.TestService/UnaryCall"] = mc
+	m["/grpc.testing.TestService/FullDuplexCall"] = mc
+	sc := grpc.ServiceConfig{
+		Methods: m,
+	}
+	// Case1: sc set maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
+	te1, ch1 := testServiceConfigSetupTD(t, e)
+	te1.startServer(&testServer{security: e.security})
+	defer te1.tearDown()
+
+	ch1 <- sc
+	tc := testpb.NewTestServiceClient(te1.clientConn())
+
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(extraLargeSize),
+		Payload:      smallPayload,
+	}
+	// Test for unary RPC recv.
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for unary RPC send.
+	req.Payload = extraLargePayload
+	req.ResponseSize = int32(smallSize)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC recv.
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: int32(extraLargeSize),
+		},
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            smallPayload,
+	}
+	stream, err := tc.FullDuplexCall(te1.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC send.
+	respParam[0].Size = int32(smallSize)
+	sreq.Payload = extraLargePayload
+	stream, err = tc.FullDuplexCall(te1.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
+	}
+
+	// Case2: Client API set maxReqSize to 1024 (send), maxRespSize to 1024 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
+	te2, ch2 := testServiceConfigSetupTD(t, e)
+	te2.maxClientReceiveMsgSize = newInt(1024)
+	te2.maxClientSendMsgSize = newInt(1024)
+	te2.startServer(&testServer{security: e.security})
+	defer te2.tearDown()
+	ch2 <- sc
+	tc = testpb.NewTestServiceClient(te2.clientConn())
+
+	// Test for unary RPC recv.
+	req.Payload = smallPayload
+	req.ResponseSize = int32(largeSize)
+
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for unary RPC send.
+	req.Payload = largePayload
+	req.ResponseSize = int32(smallSize)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC recv.
+	stream, err = tc.FullDuplexCall(te2.ctx)
+	respParam[0].Size = int32(largeSize)
+	sreq.Payload = smallPayload
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC send.
+	respParam[0].Size = int32(smallSize)
+	sreq.Payload = largePayload
+	stream, err = tc.FullDuplexCall(te2.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
+	}
+
+	// Case3: Client API set maxReqSize to 4096 (send), maxRespSize to 4096 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
+	te3, ch3 := testServiceConfigSetupTD(t, e)
+	te3.maxClientReceiveMsgSize = newInt(4096)
+	te3.maxClientSendMsgSize = newInt(4096)
+	te3.startServer(&testServer{security: e.security})
+	defer te3.tearDown()
+	ch3 <- sc
+	tc = testpb.NewTestServiceClient(te3.clientConn())
+
+	// Test for unary RPC recv.
+	req.Payload = smallPayload
+	req.ResponseSize = int32(largeSize)
+
+	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
+	}
+
+	req.ResponseSize = int32(extraLargeSize)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for unary RPC send.
+	req.Payload = largePayload
+	req.ResponseSize = int32(smallSize)
+	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want <nil>", err)
+	}
+
+	req.Payload = extraLargePayload
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC recv.
+	stream, err = tc.FullDuplexCall(te3.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	respParam[0].Size = int32(largeSize)
+	sreq.Payload = smallPayload
+
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("%v.Recv() = _, %v, want <nil>", stream, err)
+	}
+
+	respParam[0].Size = int32(extraLargeSize)
+
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
+	}
+
+	// Test for streaming RPC send.
+	respParam[0].Size = int32(smallSize)
+	sreq.Payload = largePayload
+	stream, err = tc.FullDuplexCall(te3.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	sreq.Payload = extraLargePayload
+	if err := stream.Send(sreq); err == nil || grpc.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Send(%v) = %v, want _, error code: %s", stream, sreq, err, codes.ResourceExhausted)
+	}
+}
+
+func TestMethodFromServerStream(t *testing.T) {
+	defer leakcheck.Check(t)
+	const testMethod = "/package.service/method"
+	e := tcpClearRREnv
+	te := newTest(t, e)
+	var method string
+	var ok bool
+	te.unknownHandler = func(srv interface{}, stream grpc.ServerStream) error {
+		method, ok = grpc.MethodFromServerStream(stream)
+		return nil
+	}
+
+	te.startServer(nil)
+	defer te.tearDown()
+	_ = te.clientConn().Invoke(context.Background(), testMethod, nil, nil)
+	if !ok || method != testMethod {
+		t.Fatalf("Invoke with method %q, got %q, %v, want %q, true", testMethod, method, ok, testMethod)
 	}
 }
 
@@ -5093,8 +5641,8 @@ func testCompressorRegister(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
-		ResponseSize: proto.Int32(respSize),
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: respSize,
 		Payload:      payload,
 	}
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something", "something"))
@@ -5110,7 +5658,7 @@ func testCompressorRegister(t *testing.T, e env) {
 	}
 	respParam := []*testpb.ResponseParameters{
 		{
-			Size: proto.Int32(31415),
+			Size: 31415,
 		},
 	}
 	payload, err = newPayload(testpb.PayloadType_COMPRESSABLE, int32(31415))
@@ -5118,7 +5666,7 @@ func testCompressorRegister(t *testing.T, e env) {
 		t.Fatal(err)
 	}
 	sreq := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
 		ResponseParameters: respParam,
 		Payload:            payload,
 	}

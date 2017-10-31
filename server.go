@@ -99,6 +99,11 @@ type Server struct {
 	cv     *sync.Cond
 	m      map[string]*service // service name -> service info
 	events trace.EventLog
+
+	quit     chan struct{}
+	done     chan struct{}
+	quitOnce sync.Once
+	doneOnce sync.Once
 }
 
 type options struct {
@@ -186,7 +191,7 @@ func CustomCodec(codec Codec) ServerOption {
 
 // RPCCompressor returns a ServerOption that sets a compressor for outbound messages.
 // It has lower priority than the compressor set by RegisterCompressor.
-// This function will be deprecated.
+// This function is deprecated.
 func RPCCompressor(cp Compressor) ServerOption {
 	return func(o *options) {
 		o.cp = cp
@@ -195,7 +200,7 @@ func RPCCompressor(cp Compressor) ServerOption {
 
 // RPCDecompressor returns a ServerOption that sets a decompressor for inbound messages.
 // It has higher priority than the decompressor set by RegisterCompressor.
-// This function will be deprecated.
+// This function is deprecated.
 func RPCDecompressor(dc Decompressor) ServerOption {
 	return func(o *options) {
 		o.dc = dc
@@ -285,7 +290,7 @@ func StatsHandler(h stats.Handler) ServerOption {
 // handler that will be invoked instead of returning the "unimplemented" gRPC
 // error whenever a request is received for an unregistered service or method.
 // The handling function has full access to the Context of the request and the
-// stream, and the invocation passes through interceptors.
+// stream, and the invocation bypasses interceptors.
 func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 	return func(o *options) {
 		o.unknownStreamDesc = &StreamDesc{
@@ -314,6 +319,8 @@ func NewServer(opt ...ServerOption) *Server {
 		opts:  opts,
 		conns: make(map[io.Closer]bool),
 		m:     make(map[string]*service),
+		quit:  make(chan struct{}),
+		done:  make(chan struct{}),
 	}
 	s.cv = sync.NewCond(&s.mu)
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -425,11 +432,9 @@ func (s *Server) GetServiceInfo() map[string]ServiceInfo {
 	return ret
 }
 
-var (
-	// ErrServerStopped indicates that the operation is now illegal because of
-	// the server being stopped.
-	ErrServerStopped = errors.New("grpc: the server has been stopped")
-)
+// ErrServerStopped indicates that the operation is now illegal because of
+// the server being stopped.
+var ErrServerStopped = errors.New("grpc: the server has been stopped")
 
 func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if s.opts.creds == nil {
@@ -494,6 +499,14 @@ func (s *Server) Serve(lis net.Listener) error {
 			s.mu.Lock()
 			s.printf("done serving; Accept = %v", err)
 			s.mu.Unlock()
+
+			// If Stop or GracefulStop is called, block until they are done and return nil
+			select {
+			case <-s.quit:
+				<-s.done
+				return nil
+			default:
+			}
 			return err
 		}
 		tempDelay = 0
@@ -1076,6 +1089,16 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 // pending RPCs on the client side will get notified by connection
 // errors.
 func (s *Server) Stop() {
+	s.quitOnce.Do(func() {
+		close(s.quit)
+	})
+
+	defer func() {
+		s.doneOnce.Do(func() {
+			close(s.done)
+		})
+	}()
+
 	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
@@ -1105,6 +1128,16 @@ func (s *Server) Stop() {
 // accepting new connections and RPCs and blocks until all the pending RPCs are
 // finished.
 func (s *Server) GracefulStop() {
+	s.quitOnce.Do(func() {
+		close(s.quit)
+	})
+
+	defer func() {
+		s.doneOnce.Do(func() {
+			close(s.done)
+		})
+	}()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conns == nil {

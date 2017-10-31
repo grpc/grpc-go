@@ -69,6 +69,7 @@ func (c *compressor) Decompress(r io.Reader) (io.Reader, error) {
 		return &reader{Reader: newZ, pool: &c.poolDecompressor}, nil
 	}
 	if err := z.Reset(r); err != nil {
+		c.poolDecompressor.Put(z)
 		return nil, err
 	}
 	return z, nil

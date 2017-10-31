@@ -17,21 +17,16 @@
  */
 
 // Package passthrough implements a pass-through resolver. It sends the target
-// name without scheme back to gRPC as resolved address. It's for gRPC internal
-// test only.
+// name without scheme back to gRPC as resolved address.
 package passthrough
 
-import (
-	"strings"
-
-	"google.golang.org/grpc/resolver"
-)
+import "google.golang.org/grpc/resolver"
 
 const scheme = "passthrough"
 
 type passthroughBuilder struct{}
 
-func (*passthroughBuilder) Build(target string, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
+func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOption) (resolver.Resolver, error) {
 	r := &passthroughResolver{
 		target: target,
 		cc:     cc,
@@ -45,13 +40,12 @@ func (*passthroughBuilder) Scheme() string {
 }
 
 type passthroughResolver struct {
-	target string
+	target resolver.Target
 	cc     resolver.ClientConn
 }
 
 func (r *passthroughResolver) start() {
-	addr := strings.TrimPrefix(r.target, scheme+":///")
-	r.cc.NewAddress([]resolver.Address{{Addr: addr}})
+	r.cc.NewAddress([]resolver.Address{{Addr: r.target.Endpoint}})
 }
 
 func (*passthroughResolver) ResolveNow(o resolver.ResolveNowOption) {}

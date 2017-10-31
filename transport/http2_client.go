@@ -44,7 +44,6 @@ import (
 type http2Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
-	target     string // server name/addr
 	userAgent  string
 	md         interface{}
 	conn       net.Conn // underlying communication channel
@@ -109,7 +108,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	if fn != nil {
 		return fn(ctx, addr)
 	}
-	return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	return dialContext(ctx, "tcp", addr)
 }
 
 func isTemporary(err error) bool {
@@ -148,9 +147,11 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	ctx, cancel := context.WithCancel(ctx)
 	connectCtx, connectCancel := context.WithTimeout(ctx, timeout)
 	defer func() {
-		connectCancel()
 		if err != nil {
 			cancel()
+			// Don't call connectCancel in success path due to a race in Go 1.6:
+			// https://github.com/golang/go/issues/15078.
+			connectCancel()
 		}
 	}()
 
@@ -173,7 +174,7 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	)
 	if creds := opts.TransportCredentials; creds != nil {
 		scheme = "https"
-		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Addr, conn)
+		conn, authInfo, err = creds.ClientHandshake(connectCtx, addr.Authority, conn)
 		if err != nil {
 			// Credentials handshake errors are typically considered permanent
 			// to avoid retrying on e.g. bad certificates.
@@ -208,7 +209,6 @@ func newHTTP2Client(ctx context.Context, addr TargetInfo, opts ConnectOptions, t
 	t := &http2Client{
 		ctx:        ctx,
 		cancel:     cancel,
-		target:     addr.Addr,
 		userAgent:  opts.UserAgent,
 		md:         addr.Metadata,
 		conn:       conn,
@@ -417,7 +417,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if sq > 1 {
 		t.streamsQuota.add(sq - 1)
 	}
-	// TODO(mmukhi): Benchmark if the perfomance gets better if count the metadata and other header fields
+	// TODO(mmukhi): Benchmark if the performance gets better if count the metadata and other header fields
 	// first and create a slice of that exact size.
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
@@ -659,44 +659,51 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 	}
 	hdr = append(hdr, data[:emptyLen]...)
 	data = data[emptyLen:]
+	var (
+		streamQuota    int
+		streamQuotaVer uint32
+		localSendQuota int
+		err            error
+		sqChan         <-chan int
+	)
 	for idx, r := range [][]byte{hdr, data} {
 		for len(r) > 0 {
 			size := http2MaxFrameLen
-			// Wait until the stream has some quota to send the data.
-			quotaChan, quotaVer := s.sendQuotaPool.acquireWithVersion()
-			sq, err := wait(s.ctx, t.ctx, s.done, s.goAway, quotaChan)
-			if err != nil {
-				return err
+			if size > len(r) {
+				size = len(r)
 			}
+			if streamQuota == 0 { // Used up all the locally cached stream quota.
+				sqChan, streamQuotaVer = s.sendQuotaPool.acquireWithVersion()
+				// Wait until the stream has some quota to send the data.
+				streamQuota, err = wait(s.ctx, t.ctx, s.done, s.goAway, sqChan)
+				if err != nil {
+					return err
+				}
+			}
+			if localSendQuota <= 0 { // Being a soft limit, it can go negative.
+				// Acquire local send quota to be able to write to the controlBuf.
+				localSendQuota, err = wait(s.ctx, t.ctx, s.done, s.goAway, s.localSendQuota.acquire())
+				if err != nil {
+					return err
+				}
+			}
+			if size > streamQuota {
+				size = streamQuota
+			} // No need to do that for localSendQuota since that's only a soft limit.
 			// Wait until the transport has some quota to send the data.
 			tq, err := wait(s.ctx, t.ctx, s.done, s.goAway, t.sendQuotaPool.acquire())
 			if err != nil {
 				return err
 			}
-			if sq < size {
-				size = sq
-			}
 			if tq < size {
 				size = tq
 			}
-			if size > len(r) {
-				size = len(r)
+			if tq > size { // Overbooked transport quota. Return it back.
+				t.sendQuotaPool.add(tq - size)
 			}
+			streamQuota -= size
+			localSendQuota -= size
 			p := r[:size]
-			ps := len(p)
-			if ps < tq {
-				// Overbooked transport quota. Return it back.
-				t.sendQuotaPool.add(tq - ps)
-			}
-			// Acquire local send quota to be able to write to the controlBuf.
-			ltq, err := wait(s.ctx, t.ctx, s.done, s.goAway, s.localSendQuota.acquire())
-			if err != nil {
-				if _, ok := err.(ConnectionError); !ok {
-					t.sendQuotaPool.add(ps)
-				}
-				return err
-			}
-			s.localSendQuota.add(ltq - ps) // It's ok if we make it negative.
 			var endStream bool
 			// See if this is the last frame to be written.
 			if opts.Last {
@@ -711,20 +718,27 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				}
 			}
 			success := func() {
-				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { s.localSendQuota.add(ps) }})
-				if ps < sq {
-					s.sendQuotaPool.lockedAdd(sq - ps)
-				}
-				r = r[ps:]
+				sz := size
+				t.controlBuf.put(&dataFrame{streamID: s.id, endStream: endStream, d: p, f: func() { s.localSendQuota.add(sz) }})
+				r = r[size:]
 			}
-			failure := func() {
-				s.sendQuotaPool.lockedAdd(sq)
+			failure := func() { // The stream quota version must have changed.
+				// Our streamQuota cache is invalidated now, so give it back.
+				s.sendQuotaPool.lockedAdd(streamQuota + size)
 			}
-			if !s.sendQuotaPool.compareAndExecute(quotaVer, success, failure) {
-				t.sendQuotaPool.add(ps)
-				s.localSendQuota.add(ps)
+			if !s.sendQuotaPool.compareAndExecute(streamQuotaVer, success, failure) {
+				// Couldn't send this chunk out.
+				t.sendQuotaPool.add(size)
+				localSendQuota += size
+				streamQuota = 0
 			}
 		}
+	}
+	if streamQuota > 0 { // Add the left over quota back to stream.
+		s.sendQuotaPool.add(streamQuota)
+	}
+	if localSendQuota > 0 {
+		s.localSendQuota.add(localSendQuota)
 	}
 	if !opts.Last {
 		return nil
@@ -904,15 +918,28 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	s.write(recvMsg{err: io.EOF})
 }
 
-func (t *http2Client) handleSettings(f *http2.SettingsFrame) {
+func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	if f.IsAck() {
 		return
 	}
 	var ss []http2.Setting
+	isMaxConcurrentStreamsMissing := true
 	f.ForeachSetting(func(s http2.Setting) error {
+		if s.ID == http2.SettingMaxConcurrentStreams {
+			isMaxConcurrentStreamsMissing = false
+		}
 		ss = append(ss, s)
 		return nil
 	})
+	if isFirst && isMaxConcurrentStreamsMissing {
+		// This means server is imposing no limits on
+		// maximum number of concurrent streams initiated by client.
+		// So we must remove our self-imposed limit.
+		ss = append(ss, http2.Setting{
+			ID:  http2.SettingMaxConcurrentStreams,
+			Val: math.MaxUint32,
+		})
+	}
 	// The settings will be applied once the ack is sent.
 	t.controlBuf.put(&settings{ack: true, ss: ss})
 }
@@ -1111,7 +1138,7 @@ func (t *http2Client) reader() {
 		t.Close()
 		return
 	}
-	t.handleSettings(sf)
+	t.handleSettings(sf, true)
 
 	// loop to keep reading incoming messages on this transport.
 	for {
@@ -1144,7 +1171,7 @@ func (t *http2Client) reader() {
 		case *http2.RSTStreamFrame:
 			t.handleRSTStream(frame)
 		case *http2.SettingsFrame:
-			t.handleSettings(frame)
+			t.handleSettings(frame, false)
 		case *http2.PingFrame:
 			t.handlePing(frame)
 		case *http2.GoAwayFrame:
@@ -1253,7 +1280,7 @@ func (t *http2Client) itemHandler(i item) error {
 		}
 		err = t.framer.fr.WritePing(i.ack, i.data)
 	default:
-		errorf("transport: http2Client.controller got unexpected item type %v\n", i)
+		errorf("transport: http2Client.controller got unexpected item type %v", i)
 	}
 	return err
 }

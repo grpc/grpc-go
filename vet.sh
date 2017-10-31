@@ -27,6 +27,7 @@ if [ "$1" = "-install" ]; then
   go get -u \
     github.com/golang/lint/golint \
     golang.org/x/tools/cmd/goimports \
+    honnef.co/go/tools/cmd/staticcheck \
     github.com/golang/protobuf/protoc-gen-go \
     golang.org/x/tools/cmd/stringer
   if [[ "$check_proto" = "true" ]]; then
@@ -74,4 +75,4 @@ if [[ "$check_proto" = "true" ]]; then
 fi
 
 # TODO(menghanl): fix errors in transport_test.
-# staticcheck -ignore google.golang.org/grpc/transport/transport_test.go:SA2002 ./...
+staticcheck -ignore google.golang.org/grpc/transport/transport_test.go:SA2002 ./...

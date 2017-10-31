@@ -16,8 +16,8 @@
  *
  */
 
-//go:generate protoc --go_out=plugins=:. grpc_lb_v1/messages/messages.proto
-//go:generate protoc --go_out=Mgrpc_lb_v1/messages/messages.proto=google.golang.org/grpc/grpclb/grpc_lb_v1/messages,plugins=grpc:. grpc_lb_v1/service/service.proto
+//go:generate protoc --go_out=plugins=:$GOPATH grpc_lb_v1/messages/messages.proto
+//go:generate protoc --go_out=plugins=grpc:$GOPATH grpc_lb_v1/service/service.proto
 
 // Package grpclb_test is currently used only for grpclb testing.
 package grpclb_test
@@ -151,9 +151,19 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, addr string,
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	b := make([]byte, len(c.expected))
-	if _, err := rawConn.Read(b); err != nil {
-		fmt.Printf("Failed to read the server name from the server %v", err)
-		return nil, nil, err
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := rawConn.Read(b)
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			fmt.Printf("Failed to read the server name from the server %v", err)
+			return nil, nil, err
+		}
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 	if c.expected != string(b) {
 		fmt.Printf("Read the server name %s want %s", string(b), c.expected)

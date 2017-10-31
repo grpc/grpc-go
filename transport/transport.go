@@ -21,7 +21,6 @@
 package transport // import "google.golang.org/grpc/transport"
 
 import (
-	stdctx "context"
 	"fmt"
 	"io"
 	"net"
@@ -514,8 +513,9 @@ type ConnectOptions struct {
 
 // TargetInfo contains the information of the target such as network address and metadata.
 type TargetInfo struct {
-	Addr     string
-	Metadata interface{}
+	Addr      string
+	Metadata  interface{}
+	Authority string
 }
 
 // NewClientTransport establishes the transport with the required ConnectOptions
@@ -703,7 +703,12 @@ func (e StreamError) Error() string {
 	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
-// wait blocks until it can receive from one of the provided contexts or channels
+// wait blocks until it can receive from one of the provided contexts or
+// channels.  ctx is the context of the RPC, tctx is the context of the
+// transport, done is a channel closed to indicate the end of the RPC, goAway
+// is a channel closed to indicate a GOAWAY was received, and proceed is a
+// quota channel, whose received value is returned from this function if none
+// of the other signals occur first.
 func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-chan int) (int, error) {
 	select {
 	case <-ctx.Done():
@@ -717,17 +722,6 @@ func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-cha
 	case i := <-proceed:
 		return i, nil
 	}
-}
-
-// ContextErr converts the error from context package into a StreamError.
-func ContextErr(err error) StreamError {
-	switch err {
-	case context.DeadlineExceeded, stdctx.DeadlineExceeded:
-		return streamErrorf(codes.DeadlineExceeded, "%v", err)
-	case context.Canceled, stdctx.Canceled:
-		return streamErrorf(codes.Canceled, "%v", err)
-	}
-	return streamErrorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }
 
 // GoAwayReason contains the reason for the GoAway frame received.
