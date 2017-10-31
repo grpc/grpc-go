@@ -805,7 +805,6 @@ func (t *http2Client) updateFlowControl(n uint32) {
 	t.mu.Unlock()
 	t.controlBuf.put(&windowUpdate{0, t.fc.newLimit(n)})
 	t.controlBuf.put(&settings{
-		ack: false,
 		ss: []http2.Setting{
 			{
 				ID:  http2.SettingInitialWindowSize,
@@ -922,26 +921,44 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 	if f.IsAck() {
 		return
 	}
-	var ss []http2.Setting
+	var rs []http2.Setting
+	var ps []http2.Setting
 	isMaxConcurrentStreamsMissing := true
 	f.ForeachSetting(func(s http2.Setting) error {
 		if s.ID == http2.SettingMaxConcurrentStreams {
 			isMaxConcurrentStreamsMissing = false
 		}
-		ss = append(ss, s)
+		if t.isRestrictive(s) {
+			rs = append(rs, s)
+		} else {
+			ps = append(ps, s)
+		}
 		return nil
 	})
 	if isFirst && isMaxConcurrentStreamsMissing {
 		// This means server is imposing no limits on
 		// maximum number of concurrent streams initiated by client.
 		// So we must remove our self-imposed limit.
-		ss = append(ss, http2.Setting{
+		ps = append(ps, http2.Setting{
 			ID:  http2.SettingMaxConcurrentStreams,
 			Val: math.MaxUint32,
 		})
 	}
-	// The settings will be applied once the ack is sent.
-	t.controlBuf.put(&settings{ack: true, ss: ss})
+	t.applySettings(rs)
+	t.controlBuf.put(&settingsAck{})
+	t.applySettings(ps)
+}
+
+func (t *http2Client) isRestrictive(s http2.Setting) bool {
+	switch s.ID {
+	case http2.SettingMaxConcurrentStreams:
+		return int(s.Val) < t.maxStreams
+	case http2.SettingInitialWindowSize:
+		// Note: we don't acquire a lock here to read streamSendQuota
+		// because the same goroutine updates it later.
+		return s.Val < t.streamSendQuota
+	}
+	return false
 }
 
 func (t *http2Client) handlePing(f *http2.PingFrame) {
@@ -1194,10 +1211,8 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			if s.Val > math.MaxInt32 {
 				s.Val = math.MaxInt32
 			}
-			t.mu.Lock()
 			ms := t.maxStreams
 			t.maxStreams = int(s.Val)
-			t.mu.Unlock()
 			t.streamsQuota.add(int(s.Val) - ms)
 		case http2.SettingInitialWindowSize:
 			t.mu.Lock()
@@ -1216,6 +1231,11 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 // The transport layer needs to be refactored to take care of this.
 func (t *http2Client) itemHandler(i item) error {
 	var err error
+	defer func() {
+		if err != nil {
+			errorf(" error in itemHandler: %v", err)
+		}
+	}()
 	switch i := i.(type) {
 	case *dataFrame:
 		err = t.framer.fr.WriteData(i.streamID, i.endStream, i.d)
@@ -1258,12 +1278,9 @@ func (t *http2Client) itemHandler(i item) error {
 	case *windowUpdate:
 		err = t.framer.fr.WriteWindowUpdate(i.streamID, i.increment)
 	case *settings:
-		if i.ack {
-			t.applySettings(i.ss)
-			err = t.framer.fr.WriteSettingsAck()
-		} else {
-			err = t.framer.fr.WriteSettings(i.ss...)
-		}
+		err = t.framer.fr.WriteSettings(i.ss...)
+	case *settingsAck:
+		err = t.framer.fr.WriteSettingsAck()
 	case *resetStream:
 		// If the server needs to be to intimated about stream closing,
 		// then we need to make sure the RST_STREAM frame is written to
