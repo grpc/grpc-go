@@ -195,7 +195,7 @@ func (qb *quotaPool) get(v int, wc waiters) (int, uint32, error) {
 		case <-wc.done:
 			return 0, 0, io.EOF
 		case <-wc.goAway:
-			return 0, 0, ErrStreamDrain
+			return 0, 0, errStreamDrain
 		case <-qb.c:
 			qb.mu.Lock()
 			if qb.quota > 0 {

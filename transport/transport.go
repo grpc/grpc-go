@@ -134,7 +134,7 @@ func (r *recvBufferReader) read(p []byte) (n int, err error) {
 	case <-r.ctx.Done():
 		return 0, ContextErr(r.ctx.Err())
 	case <-r.goAway:
-		return 0, ErrStreamDrain
+		return 0, errStreamDrain
 	case m := <-r.recv.get():
 		r.recv.load()
 		if m.err != nil {
@@ -232,6 +232,7 @@ type Stream struct {
 
 	sendQuotaPool *quotaPool
 	headerChan    chan struct{} // closed to indicate the end of header metadata.
+	headerDone    bool          // set when headerChan is closed. Used to avoid closing headerChan multiple times.
 	header        metadata.MD   // the received header metadata.
 	trailer       metadata.MD   // the key-value map of trailer metadata.
 
@@ -280,7 +281,7 @@ func (s *Stream) Header() (metadata.MD, error) {
 	case <-s.ctx.Done():
 		err = ContextErr(s.ctx.Err())
 	case <-s.goAway:
-		err = ErrStreamDrain
+		err = errStreamDrain
 	case <-s.headerChan:
 		return s.header.Copy(), nil
 	}
@@ -668,15 +669,13 @@ func (e ConnectionError) Origin() error {
 var (
 	// ErrConnClosing indicates that the transport is closing.
 	ErrConnClosing = connectionErrorf(true, nil, "transport is closing")
-	// ErrStreamDrain indicates that the stream is rejected by the server because
+	// errStreamDrain indicates that the stream is rejected by the server because
 	// the server stops accepting new RPCs.
-	ErrStreamDrain = streamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
-	// StatusStreamRefused indicates that the server sent a RST_STREAM with the
-	// REFUSED_STREAM code, meaning the stream was entirely unprocessed.
-	StatusStreamRefused = status.New(codes.Unavailable, "the server refused the stream")
+	// TODO: delete this error; it is no longer necessary.
+	errStreamDrain = streamErrorf(codes.Unavailable, "the server stops accepting new RPCs")
 	// StatusGoAway indicates that the server sent a GOAWAY that included this
 	// stream's ID in unprocessed RPCs.
-	StatusGoAway = status.New(codes.Unavailable, "the server stopped accepting new RPCs")
+	statusGoAway = status.New(codes.Unavailable, "the server stopped accepting new RPCs")
 )
 
 // TODO: See if we can replace StreamError with status package errors.

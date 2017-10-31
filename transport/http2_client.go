@@ -410,7 +410,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if t.state == draining {
 		t.mu.Unlock()
-		return nil, ErrStreamDrain
+		return nil, errStreamDrain
 	}
 	if t.state != reachable {
 		t.mu.Unlock()
@@ -481,7 +481,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if t.state == draining {
 		t.mu.Unlock()
 		t.streamsQuota.add(1)
-		return nil, ErrStreamDrain
+		return nil, errStreamDrain
 	}
 	if t.state != reachable {
 		t.mu.Unlock()
@@ -902,15 +902,13 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	if code == http2.ErrCodeRefusedStream {
 		// The stream was unprocessed by the server.
 		s.unprocessed = true
-		s.finish(StatusStreamRefused)
-	} else {
-		statusCode, ok := http2ErrConvTab[code]
-		if !ok {
-			warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
-			statusCode = codes.Unknown
-		}
-		s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
 	}
+	statusCode, ok := http2ErrConvTab[code]
+	if !ok {
+		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
+		statusCode = codes.Unknown
+	}
+	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
@@ -1021,7 +1019,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 			// The stream was unprocessed by the server.
 			stream.mu.Lock()
 			stream.unprocessed = true
-			stream.finish(StatusGoAway)
+			stream.finish(statusGoAway)
 			stream.mu.Unlock()
 			close(stream.goAway)
 		}
