@@ -52,6 +52,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.io.ByteStreams;
+import com.google.common.truth.Truth;
 import io.grpc.Attributes;
 import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
@@ -273,7 +274,11 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
 
     channelRead(rstStreamFrame(STREAM_ID, (int) Http2Error.CANCEL.code()));
-    verify(streamListener).closed(Status.CANCELLED);
+
+    ArgumentCaptor<Status> statusCap = ArgumentCaptor.forClass(Status.class);
+    verify(streamListener).closed(statusCap.capture());
+    assertEquals(Code.CANCELLED, statusCap.getValue().getCode());
+    Truth.assertThat(statusCap.getValue().getDescription()).contains("RST_STREAM");
     verify(streamListener, atLeastOnce()).onReady();
     assertNull("no messages expected", streamListenerMessageQueue.poll());
   }

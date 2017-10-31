@@ -396,11 +396,12 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
-  private void onRstStreamRead(int streamId) throws Http2Exception {
+  private void onRstStreamRead(int streamId, long errorCode) throws Http2Exception {
     try {
       NettyServerStream.TransportState stream = serverStream(connection().stream(streamId));
       if (stream != null) {
-        stream.transportReportStatus(Status.CANCELLED);
+        stream.transportReportStatus(
+            Status.CANCELLED.withDescription("RST_STREAM received for code " + errorCode));
       }
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
@@ -664,7 +665,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       if (keepAliveManager != null) {
         keepAliveManager.onDataReceived();
       }
-      NettyServerHandler.this.onRstStreamRead(streamId);
+      NettyServerHandler.this.onRstStreamRead(streamId, errorCode);
     }
 
     @Override
