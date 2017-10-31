@@ -14,6 +14,8 @@ On Android we recommend the use of the [Play Services Dynamic Security Provider]
 
 You may need to [update the security provider](https://developer.android.com/training/articles/security-gms-provider.html) to enable ALPN support, especially for Android versions < 5.0. If the provider fails to update, ALPN may not work.
 
+*Note: The Dynamic Security Provider must be installed **before** creating a gRPC OkHttp channel. gRPC's OkHttpProtocolNegotiator statically initializes the security protocol(s) available to gRPC, which means that changes to the security provider after the first channel is created will not be picked up by gRPC.*
+
 ## TLS with OpenSSL
 
 This is currently the recommended approach for using gRPC over TLS (on non-Android systems).
