@@ -745,7 +745,6 @@ func loopyWriter(ctx context.Context, cbuf *controlBuffer, handler func(item) er
 		case i := <-cbuf.get():
 			cbuf.load()
 			if err := handler(i); err != nil {
-				errorf("transport: Error while handling item. Err: %v", err)
 				return
 			}
 		case <-ctx.Done():
@@ -757,14 +756,12 @@ func loopyWriter(ctx context.Context, cbuf *controlBuffer, handler func(item) er
 			case i := <-cbuf.get():
 				cbuf.load()
 				if err := handler(i); err != nil {
-					errorf("transport: Error while handling item. Err: %v", err)
 					return
 				}
 			case <-ctx.Done():
 				return
 			default:
 				if err := handler(&flushIO{}); err != nil {
-					errorf("transport: Error while flushing. Err: %v", err)
 					return
 				}
 				break hasData
