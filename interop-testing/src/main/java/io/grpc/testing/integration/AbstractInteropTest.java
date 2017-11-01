@@ -194,7 +194,7 @@ public abstract class AbstractInteropTest {
     testServiceExecutor = Executors.newScheduledThreadPool(2);
 
     List<ServerInterceptor> allInterceptors = ImmutableList.<ServerInterceptor>builder()
-        .add(TestUtils.recordServerCallInterceptor(serverCallCapture))
+        .add(recordServerCallInterceptor(serverCallCapture))
         .add(TestUtils.recordRequestHeadersInterceptor(requestHeadersCapture))
         .add(recordContextInterceptor(contextCapture))
         .addAll(TestServiceImpl.interceptors())
@@ -1933,6 +1933,24 @@ public abstract class AbstractInteropTest {
       assertNotNull(record.getMetric(RpcConstants.RPC_CLIENT_REQUEST_BYTES));
       assertNotNull(record.getMetric(RpcConstants.RPC_CLIENT_RESPONSE_BYTES));
     }
+  }
+
+  /**
+   * Captures the request attributes. Useful for testing ServerCalls.
+   * {@link ServerCall#getAttributes()}
+   */
+  private static ServerInterceptor recordServerCallInterceptor(
+      final AtomicReference<ServerCall<?, ?>> serverCallCapture) {
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        serverCallCapture.set(call);
+        return next.startCall(call, requestHeaders);
+      }
+    };
   }
 
   private static ServerInterceptor recordContextInterceptor(

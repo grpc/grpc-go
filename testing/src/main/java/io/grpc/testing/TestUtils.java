@@ -76,7 +76,10 @@ public class TestUtils {
   /**
    * Capture the request attributes. Useful for testing ServerCalls.
    * {@link ServerCall#getAttributes()}
+   *
+   * @deprecated Not for public use
    */
+  @Deprecated
   public static ServerInterceptor recordServerCallInterceptor(
       final AtomicReference<ServerCall<?, ?>> serverCallCapture) {
     return new ServerInterceptor() {
