@@ -133,7 +133,7 @@ public final class Contexts {
 
     Throwable cancellationCause = context.cancellationCause();
     if (cancellationCause == null) {
-      return Status.CANCELLED;
+      return Status.CANCELLED.withDescription("io.grpc.Context was cancelled without error");
     }
     if (cancellationCause instanceof TimeoutException) {
       return Status.DEADLINE_EXCEEDED
