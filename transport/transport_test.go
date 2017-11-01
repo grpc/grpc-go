@@ -1093,32 +1093,31 @@ func TestMaxStreams(t *testing.T) {
 			}
 		}
 	}()
-	var failureReason string
-	// Test these conditions untill they pass or
-	// we reach the deadline (failure case).
 	for {
 		select {
 		case <-ch:
 		case <-done:
-			t.Fatalf(failureReason)
+			t.Fatalf("Client has not received the max stream setting in 5 seconds.")
 		}
-		select {
-		case q := <-cc.streamsQuota.acquire():
-			failureReason = "streamsQuota.acquire() becomes readable mistakenly."
-			cc.streamsQuota.add(q)
-		default:
-			cc.streamsQuota.mu.Lock()
-			quota := cc.streamsQuota.quota
-			cc.streamsQuota.mu.Unlock()
-			if quota != 0 {
-				failureReason = "streamsQuota.quota got non-zero quota mistakenly."
-			} else {
-				failureReason = ""
+		cc.mu.Lock()
+		// cc.maxStreams should be equal to 1 after having received settings frame from
+		// server.
+		if cc.maxStreams == 1 {
+			cc.mu.Unlock()
+			select {
+			case <-cc.streamsQuota.acquire():
+				t.Fatalf("streamsQuota.acquire() becomes readable mistakenly.")
+			default:
+				cc.streamsQuota.mu.Lock()
+				quota := cc.streamsQuota.quota
+				cc.streamsQuota.mu.Unlock()
+				if quota != 0 {
+					t.Fatalf("streamsQuota.quota got non-zero quota mistakenly.")
+				}
 			}
-		}
-		if failureReason == "" {
 			break
 		}
+		cc.mu.Unlock()
 	}
 	close(ready)
 	// Close the pending stream so that the streams quota becomes available for the next new stream.

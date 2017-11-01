@@ -89,15 +89,11 @@ type windowUpdate struct {
 func (*windowUpdate) item() {}
 
 type settings struct {
-	ss []http2.Setting
+	ack bool
+	ss  []http2.Setting
 }
 
 func (*settings) item() {}
-
-type settingsAck struct {
-}
-
-func (*settingsAck) item() {}
 
 type resetStream struct {
 	streamID uint32
