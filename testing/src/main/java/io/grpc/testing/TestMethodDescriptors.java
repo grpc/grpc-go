@@ -40,20 +40,29 @@ public final class TestMethodDescriptors {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
   public static MethodDescriptor<Void, Void> voidMethod() {
-    return TestMethodDescriptors.<Void, Void>noopMethod();
+    return MethodDescriptor.<Void, Void>newBuilder()
+        .setType(MethodType.UNARY)
+        .setFullMethodName(MethodDescriptor.generateFullMethodName("service_foo", "method_bar"))
+        .setRequestMarshaller(TestMethodDescriptors.voidMarshaller())
+        .setResponseMarshaller(TestMethodDescriptors.voidMarshaller())
+        .build();
   }
 
   /**
    * Creates a new method descriptor that always creates zero length messages, and always parses to
    * null objects.
    *
+   * @deprecated Prefer to use {@link #voidMethod()} instead or use one MethodDescriptor from {@code
+   *             io.grpc.testing.protobuf.SimpleServiceGrpc} or from other generated classes.
    * @since 1.1.0
    */
+  @Deprecated
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
   public static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod() {
     return noopMethod("service_foo", "method_bar");
   }
 
+  @Deprecated
   private static <ReqT, RespT> MethodDescriptor<ReqT, RespT> noopMethod(
       String serviceName, String methodName) {
     return MethodDescriptor.<ReqT, RespT>newBuilder()
@@ -71,14 +80,16 @@ public final class TestMethodDescriptors {
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
   public static MethodDescriptor.Marshaller<Void> voidMarshaller() {
-    return TestMethodDescriptors.<Void>noopMarshaller();
+    return new NoopMarshaller<Void>();
   }
 
   /**
    * Creates a new marshaller that does nothing.
    *
+   * @deprecated Use {@link #voidMarshaller()} instead or implement/mock one
    * @since 1.1.0
    */
+  @Deprecated
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/2600")
   public static <T> MethodDescriptor.Marshaller<T> noopMarshaller() {
     return new NoopMarshaller<T>();

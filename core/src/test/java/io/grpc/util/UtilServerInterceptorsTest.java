@@ -42,12 +42,12 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class UtilServerInterceptorsTest {
-  private MethodDescriptor<String, Integer> flowMethod = TestMethodDescriptors.noopMethod();
+  private MethodDescriptor<Void, Void> flowMethod = TestMethodDescriptors.voidMethod();
   private final Metadata headers = new Metadata();
-  private ServerCallHandler<String, Integer> handler = new ServerCallHandler<String, Integer>() {
+  private ServerCallHandler<Void, Void> handler = new ServerCallHandler<Void, Void>() {
       @Override
-      public ServerCall.Listener<String> startCall(
-          ServerCall<String, Integer> call, Metadata headers) {
+      public ServerCall.Listener<Void> startCall(
+          ServerCall<Void, Void> call, Metadata headers) {
         return listener;
       }
   };
@@ -55,28 +55,28 @@ public class UtilServerInterceptorsTest {
       ServerServiceDefinition.builder(new ServiceDescriptor("service_foo", flowMethod))
           .addMethod(flowMethod, handler)
           .build();
-  private ServerCall.Listener<String> listener;
+  private ServerCall.Listener<Void> listener;
 
   @SuppressWarnings("unchecked")
-  private static ServerMethodDefinition<String, Integer> getSoleMethod(
+  private static ServerMethodDefinition<Void, Void> getSoleMethod(
       ServerServiceDefinition serviceDef) {
     if (serviceDef.getMethods().size() != 1) {
       throw new AssertionError("Not exactly one method present");
     }
-    return (ServerMethodDefinition<String, Integer>) getOnlyElement(serviceDef.getMethods());
+    return (ServerMethodDefinition<Void, Void>) getOnlyElement(serviceDef.getMethods());
   }
 
   @Test
   public void statusRuntimeExceptionTransmitter() {
     final Status expectedStatus = Status.UNAVAILABLE;
     final Metadata expectedMetadata = new Metadata();
-    FakeServerCall<String, Integer> call =
-        new FakeServerCall<String, Integer>(expectedStatus, expectedMetadata);
+    FakeServerCall<Void, Void> call =
+        new FakeServerCall<Void, Void>(expectedStatus, expectedMetadata);
     final StatusRuntimeException exception =
         new StatusRuntimeException(expectedStatus, expectedMetadata);
-    listener = new ServerCall.Listener<String>() {
+    listener = new ServerCall.Listener<Void>() {
       @Override
-      public void onMessage(String message) {
+      public void onMessage(Void message) {
         throw exception;
       }
 
@@ -106,7 +106,7 @@ public class UtilServerInterceptorsTest {
         Arrays.asList(TransmitStatusRuntimeExceptionInterceptor.instance()));
     // The interceptor should have handled the error by directly closing the ServerCall
     // and the exception should not propagate to the method's caller
-    getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onMessage("hello");
+    getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onMessage(null);
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onCancel();
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onComplete();
     getSoleMethod(intercepted).getServerCallHandler().startCall(call, headers).onHalfClose();
