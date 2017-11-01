@@ -177,7 +177,7 @@ public class ErrorHandlingClient {
    */
   void advancedAsyncCall() {
     ClientCall<HelloRequest, HelloReply> call =
-        channel.newCall(GreeterGrpc.METHOD_SAY_HELLO, CallOptions.DEFAULT);
+        channel.newCall(GreeterGrpc.getSayHelloMethod(), CallOptions.DEFAULT);
 
     final CountDownLatch latch = new CountDownLatch(1);
 

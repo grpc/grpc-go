@@ -96,7 +96,7 @@ public final class HelloJsonClient {
   static final class HelloJsonStub extends AbstractStub<HelloJsonStub> {
 
     static final MethodDescriptor<HelloRequest, HelloReply> METHOD_SAY_HELLO =
-        GreeterGrpc.METHOD_SAY_HELLO
+        GreeterGrpc.getSayHelloMethod()
             .toBuilder(
                 ProtoUtils.jsonMarshaller(HelloRequest.getDefaultInstance()),
                 ProtoUtils.jsonMarshaller(HelloReply.getDefaultInstance()))
