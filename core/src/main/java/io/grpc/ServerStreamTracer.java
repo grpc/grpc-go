@@ -33,8 +33,9 @@ public abstract class ServerStreamTracer extends StreamTracer {
   }
 
   /**
-   * Called when {@link ServerCall} is created.  This is for the tracer to access information
-   * about the {@code ServerCall}.
+   * Called when {@link ServerCall} is created.  This is for the tracer to access information about
+   * the {@code ServerCall}.  Called after {@link #filterContext} and before the application call
+   * handler.
    */
   public void serverCallStarted(ServerCall<?, ?> call) {
   }

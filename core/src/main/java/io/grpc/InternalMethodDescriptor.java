@@ -37,11 +37,4 @@ public final class InternalMethodDescriptor {
   public void setRawMethodName(MethodDescriptor<?, ?> md, Object o) {
     md.setRawMethodName(transport.ordinal(), o);
   }
-
-  public interface RegisterForTracingCallback extends
-      MethodDescriptor.Registrations.RegisterForTracingCallback {}
-
-  public static void setRegisterCallback(RegisterForTracingCallback registerCallback) {
-    MethodDescriptor.Registrations.setRegisterForTracingCallback(registerCallback);
-  }
 }

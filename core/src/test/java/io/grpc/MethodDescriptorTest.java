@@ -94,4 +94,36 @@ public class MethodDescriptorTest {
     // Never reached
     assert discard == null;
   }
+
+  @Test
+  public void sampledToLocalTracing() {
+    MethodDescriptor<String, String> md1 = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.SERVER_STREAMING)
+        .setFullMethodName("/package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .setSampledToLocalTracing(true)
+        .build();
+    assertTrue(md1.isSampledToLocalTracing());
+
+    MethodDescriptor<String, String> md2 = md1.toBuilder()
+        .setFullMethodName("/package.service/method2")
+        .build();
+    assertTrue(md2.isSampledToLocalTracing());
+
+    // Same method name as md1, but not setting sampledToLocalTracing
+    MethodDescriptor<String, String> md3 = MethodDescriptor.<String, String>newBuilder()
+        .setType(MethodType.SERVER_STREAMING)
+        .setFullMethodName("/package.service/method")
+        .setRequestMarshaller(new StringMarshaller())
+        .setResponseMarshaller(new StringMarshaller())
+        .build();
+    assertFalse(md3.isSampledToLocalTracing());
+
+    MethodDescriptor<String, String> md4 = md3.toBuilder()
+        .setFullMethodName("/package.service/method2")
+        .setSampledToLocalTracing(true)
+        .build();
+    assertTrue(md4.isSampledToLocalTracing());
+  }
 }

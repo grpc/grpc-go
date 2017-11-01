@@ -47,7 +47,7 @@ public final class WorkerServiceGrpc {
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(
                   "grpc.testing.WorkerService", "RunServer"))
-              .setRegisterForTracing(true)
+              .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.benchmarks.proto.Control.ServerArgs.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -79,7 +79,7 @@ public final class WorkerServiceGrpc {
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(
                   "grpc.testing.WorkerService", "RunClient"))
-              .setRegisterForTracing(true)
+              .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.benchmarks.proto.Control.ClientArgs.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -111,7 +111,7 @@ public final class WorkerServiceGrpc {
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
                   "grpc.testing.WorkerService", "CoreCount"))
-              .setRegisterForTracing(true)
+              .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.benchmarks.proto.Control.CoreRequest.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
@@ -143,7 +143,7 @@ public final class WorkerServiceGrpc {
               .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
               .setFullMethodName(generateFullMethodName(
                   "grpc.testing.WorkerService", "QuitWorker"))
-              .setRegisterForTracing(true)
+              .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.benchmarks.proto.Control.Void.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(

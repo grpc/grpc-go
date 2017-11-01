@@ -28,10 +28,9 @@ import io.grpc.ClientStreamTracer;
 import io.grpc.Context;
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall;
 import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
-import io.grpc.InternalMethodDescriptor;
-import io.grpc.InternalMethodDescriptor.RegisterForTracingCallback;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.ServerCall;
 import io.grpc.ServerStreamTracer;
 import io.grpc.StreamTracer;
 import io.opencensus.trace.EndSpanOptions;
@@ -40,11 +39,7 @@ import io.opencensus.trace.Span;
 import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.Status;
 import io.opencensus.trace.Tracer;
-import io.opencensus.trace.Tracing;
-import io.opencensus.trace.export.SampledSpanStore;
 import io.opencensus.trace.propagation.BinaryFormat;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -74,24 +69,6 @@ final class CensusTracingModule {
   private final TracingClientInterceptor clientInterceptor = new TracingClientInterceptor();
   private final ServerTracerFactory serverTracerFactory = new ServerTracerFactory();
 
-  private static final boolean isRegistered = registerCensusTracer();
-
-  private static boolean registerCensusTracer() {
-    InternalMethodDescriptor.setRegisterCallback(new RegisterForTracingCallback() {
-      @Override
-      public void onRegister(MethodDescriptor<?, ?> md) {
-        SampledSpanStore sampledStore = Tracing.getExportComponent().getSampledSpanStore();
-        if (sampledStore != null) {
-          List<String> spanNames = new ArrayList<String>(2);
-          spanNames.add(generateTraceSpanName(false, md.getFullMethodName()));
-          spanNames.add(generateTraceSpanName(true, md.getFullMethodName()));
-          sampledStore.registerSpanNamesForCollection(spanNames);
-        }
-      }
-    });
-    return true;
-  }
-
   CensusTracingModule(
       Tracer censusTracer, final BinaryFormat censusPropagationBinaryFormat) {
     this.censusTracer = checkNotNull(censusTracer, "censusTracer");
@@ -119,8 +96,8 @@ final class CensusTracingModule {
    * Creates a {@link ClientCallTracer} for a new call.
    */
   @VisibleForTesting
-  ClientCallTracer newClientCallTracer(@Nullable Span parentSpan, String fullMethodName) {
-    return new ClientCallTracer(parentSpan, fullMethodName);
+  ClientCallTracer newClientCallTracer(@Nullable Span parentSpan, MethodDescriptor<?, ?> method) {
+    return new ClientCallTracer(parentSpan, method);
   }
 
   /**
@@ -201,8 +178,12 @@ final class CensusTracingModule {
     return status;
   }
 
-  private static EndSpanOptions createEndSpanOptions(io.grpc.Status status) {
-    return EndSpanOptions.builder().setStatus(convertStatus(status)).build();
+  private static EndSpanOptions createEndSpanOptions(
+      io.grpc.Status status, boolean sampledToLocalTracing) {
+    return EndSpanOptions.builder()
+        .setStatus(convertStatus(status))
+        .setSampleToLocalSpanStore(sampledToLocalTracing)
+        .build();
   }
 
   private static void recordNetworkEvent(
@@ -222,14 +203,16 @@ final class CensusTracingModule {
   final class ClientCallTracer extends ClientStreamTracer.Factory {
     volatile int callEnded;
 
+    private final boolean isSampledToLocalTracing;
     private final Span span;
 
-    ClientCallTracer(@Nullable Span parentSpan, String fullMethodName) {
-      checkNotNull(fullMethodName, "fullMethodName");
+    ClientCallTracer(@Nullable Span parentSpan, MethodDescriptor<?, ?> method) {
+      checkNotNull(method, "method");
+      this.isSampledToLocalTracing = method.isSampledToLocalTracing();
       this.span =
           censusTracer
               .spanBuilderWithExplicitParent(
-                  generateTraceSpanName(false, fullMethodName),
+                  generateTraceSpanName(false, method.getFullMethodName()),
                   parentSpan)
               .setRecordEvents(true)
               .startSpan();
@@ -252,7 +235,7 @@ final class CensusTracingModule {
       if (callEndedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      span.end(createEndSpanOptions(status));
+      span.end(createEndSpanOptions(status, isSampledToLocalTracing));
     }
   }
 
@@ -281,6 +264,7 @@ final class CensusTracingModule {
 
   private final class ServerTracer extends ServerStreamTracer {
     private final Span span;
+    volatile boolean isSampledToLocalTracing;
     volatile int streamClosed;
 
     ServerTracer(String fullMethodName, @Nullable SpanContext remoteSpan) {
@@ -294,6 +278,11 @@ final class CensusTracingModule {
               .startSpan();
     }
 
+    @Override
+    public void serverCallStarted(ServerCall<?, ?> call) {
+      isSampledToLocalTracing = call.getMethodDescriptor().isSampledToLocalTracing();
+    }
+
     /**
      * Record a finished stream and mark the current time as the end time.
      *
@@ -305,7 +294,7 @@ final class CensusTracingModule {
       if (streamClosedUpdater.getAndSet(this, 1) != 0) {
         return;
       }
-      span.end(createEndSpanOptions(status));
+      span.end(createEndSpanOptions(status, isSampledToLocalTracing));
     }
 
     @Override
@@ -353,8 +342,7 @@ final class CensusTracingModule {
       // Safe usage of the unsafe trace API because CONTEXT_SPAN_KEY.get() returns the same value
       // as Tracer.getCurrentSpan() except when no value available when the return value is null
       // for the direct access and BlankSpan when Tracer API is used.
-      final ClientCallTracer tracerFactory =
-          newClientCallTracer(CONTEXT_SPAN_KEY.get(), method.getFullMethodName());
+      final ClientCallTracer tracerFactory = newClientCallTracer(CONTEXT_SPAN_KEY.get(), method);
       ClientCall<ReqT, RespT> call =
           next.newCall(method, callOptions.withStreamTracerFactory(tracerFactory));
       return new SimpleForwardingClientCall<ReqT, RespT>(call) {

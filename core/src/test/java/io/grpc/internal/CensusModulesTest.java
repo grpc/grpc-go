@@ -133,6 +133,9 @@ public class CensusModulesTest {
           .setResponseMarshaller(MARSHALLER)
           .setFullMethodName("package1.service2/method3")
           .build();
+  private final MethodDescriptor<String, String> sampledMethod =
+      method.toBuilder().setSampledToLocalTracing(true).build();
+
   private final FakeClock fakeClock = new FakeClock();
   private final FakeStatsContextFactory statsCtxFactory = new FakeStatsContextFactory();
   private final Random random = new Random(1234);
@@ -305,6 +308,7 @@ public class CensusModulesTest {
             .setStatus(
                 io.opencensus.trace.Status.PERMISSION_DENIED
                     .withDescription("No you don't"))
+            .setSampleToLocalSpanStore(false)
             .build());
     verify(spyClientSpan, never()).end();
   }
@@ -362,7 +366,7 @@ public class CensusModulesTest {
   @Test
   public void clientBasicTracingDefaultSpan() {
     CensusTracingModule.ClientCallTracer callTracer =
-        censusTracing.newClientCallTracer(null, method.getFullMethodName());
+        censusTracing.newClientCallTracer(null, method);
     Metadata headers = new Metadata();
     ClientStreamTracer clientStreamTracer =
         callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
@@ -394,9 +398,26 @@ public class CensusModulesTest {
             .build(),
         events.get(2));
     inOrder.verify(spyClientSpan).end(
-        EndSpanOptions.builder().setStatus(io.opencensus.trace.Status.OK).build());
+        EndSpanOptions.builder()
+            .setStatus(io.opencensus.trace.Status.OK)
+            .setSampleToLocalSpanStore(false)
+            .build());
     verifyNoMoreInteractions(spyClientSpan);
     verifyNoMoreInteractions(tracer);
+  }
+
+  @Test
+  public void clientTracingSampledToLocalSpanStore() {
+    CensusTracingModule.ClientCallTracer callTracer =
+        censusTracing.newClientCallTracer(null, sampledMethod);
+    Metadata headers = new Metadata();
+    callTracer.callEnded(Status.OK);
+
+    verify(spyClientSpan).end(
+        EndSpanOptions.builder()
+            .setStatus(io.opencensus.trace.Status.OK)
+            .setSampleToLocalSpanStore(true)
+            .build());
   }
 
   @Test
@@ -431,7 +452,7 @@ public class CensusModulesTest {
   @Test
   public void clientStreamNeverCreatedStillRecordTracing() {
     CensusTracingModule.ClientCallTracer callTracer =
-        censusTracing.newClientCallTracer(fakeClientParentSpan, method.getFullMethodName());
+        censusTracing.newClientCallTracer(fakeClientParentSpan, method);
     verify(tracer).spanBuilderWithExplicitParent(
         eq("Sent.package1.service2.method3"), same(fakeClientParentSpan));
     verify(spyClientSpanBuilder).setRecordEvents(eq(true));
@@ -442,6 +463,7 @@ public class CensusModulesTest {
             .setStatus(
                 io.opencensus.trace.Status.DEADLINE_EXCEEDED
                     .withDescription("3 seconds"))
+            .setSampleToLocalSpanStore(false)
             .build());
     verifyNoMoreInteractions(spyClientSpan);
   }
@@ -567,7 +589,7 @@ public class CensusModulesTest {
   @Test
   public void traceHeadersPropagateSpanContext() throws Exception {
     CensusTracingModule.ClientCallTracer callTracer =
-        censusTracing.newClientCallTracer(fakeClientParentSpan, method.getFullMethodName());
+        censusTracing.newClientCallTracer(fakeClientParentSpan, method);
     Metadata headers = new Metadata();
     callTracer.newClientStreamTracer(CallOptions.DEFAULT, headers);
 
@@ -684,6 +706,8 @@ public class CensusModulesTest {
     Context filteredContext = serverStreamTracer.filterContext(Context.ROOT);
     assertSame(spyServerSpan, ContextUtils.CONTEXT_SPAN_KEY.get(filteredContext));
 
+    serverStreamTracer.serverCallStarted(new FakeServerCall<String, String>(method));
+
     verify(spyServerSpan, never()).end(any(EndSpanOptions.class));
 
     serverStreamTracer.outboundMessage(0);
@@ -710,8 +734,42 @@ public class CensusModulesTest {
         events.get(2));
     inOrder.verify(spyServerSpan).end(
         EndSpanOptions.builder()
-            .setStatus(io.opencensus.trace.Status.CANCELLED).build());
+            .setStatus(io.opencensus.trace.Status.CANCELLED)
+            .setSampleToLocalSpanStore(false)
+            .build());
     verifyNoMoreInteractions(spyServerSpan);
+  }
+
+  @Test
+  public void serverTracingSampledToLocalSpanStore() {
+    ServerStreamTracer.Factory tracerFactory = censusTracing.getServerTracerFactory();
+    ServerStreamTracer serverStreamTracer =
+        tracerFactory.newServerStreamTracer(sampledMethod.getFullMethodName(), new Metadata());
+
+    serverStreamTracer.filterContext(Context.ROOT);
+    serverStreamTracer.serverCallStarted(new FakeServerCall<String, String>(sampledMethod));
+    serverStreamTracer.streamClosed(Status.CANCELLED);
+
+    verify(spyServerSpan).end(
+        EndSpanOptions.builder()
+            .setStatus(io.opencensus.trace.Status.CANCELLED)
+            .setSampleToLocalSpanStore(true)
+            .build());
+  }
+
+  @Test
+  public void serverTracingNotSampledToLocalSpanStore_whenServerCallNotCreated() {
+    ServerStreamTracer.Factory tracerFactory = censusTracing.getServerTracerFactory();
+    ServerStreamTracer serverStreamTracer =
+        tracerFactory.newServerStreamTracer(sampledMethod.getFullMethodName(), new Metadata());
+
+    serverStreamTracer.streamClosed(Status.CANCELLED);
+
+    verify(spyServerSpan).end(
+        EndSpanOptions.builder()
+            .setStatus(io.opencensus.trace.Status.CANCELLED)
+            .setSampleToLocalSpanStore(false)
+            .build());
   }
 
   @Test
@@ -766,5 +824,43 @@ public class CensusModulesTest {
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_SERVER_ELAPSED_TIME));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_REQUEST_BYTES));
     assertNull(record.getMetric(RpcConstants.RPC_CLIENT_UNCOMPRESSED_RESPONSE_BYTES));
+  }
+
+  private static class FakeServerCall<ReqT, RespT> extends ServerCall<ReqT, RespT> {
+    final MethodDescriptor<ReqT, RespT> method;
+
+    FakeServerCall(MethodDescriptor<ReqT, RespT> method) {
+      this.method = method;
+    }
+
+    @Override
+    public void request(int numMessages) {
+      throw new AssertionError("Should not be called");
+    }
+
+    @Override
+    public void sendHeaders(Metadata headers) {
+      throw new AssertionError("Should not be called");
+    }
+
+    @Override
+    public void sendMessage(RespT message) {
+      throw new AssertionError("Should not be called");
+    }
+
+    @Override
+    public void close(Status status, Metadata trailers) {
+      throw new AssertionError("Should not be called");
+    }
+
+    @Override
+    public boolean isCancelled() {
+      throw new AssertionError("Should not be called");
+    }
+
+    @Override
+    public MethodDescriptor<ReqT, RespT> getMethodDescriptor() {
+      return method;
+    }
   }
 }

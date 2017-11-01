@@ -47,7 +47,7 @@ public final class LoadBalancerGrpc {
               .setType(io.grpc.MethodDescriptor.MethodType.BIDI_STREAMING)
               .setFullMethodName(generateFullMethodName(
                   "grpc.lb.v1.LoadBalancer", "BalanceLoad"))
-              .setRegisterForTracing(true)
+              .setSampledToLocalTracing(true)
               .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
                   io.grpc.grpclb.LoadBalanceRequest.getDefaultInstance()))
               .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
