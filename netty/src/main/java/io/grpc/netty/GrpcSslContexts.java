@@ -158,7 +158,8 @@ public class GrpcSslContexts {
         }
         // Use the ALPN cause since it is prefered.
         throw new IllegalArgumentException(
-            "Jetty ALPN/NPN has not been properly configured.",
+            "ALPN is not configured properly. See https://github.com/grpc/grpc-java/blob/master/SECURITY.md#troubleshooting"
+                + " for more information.",
             JettyTlsUtil.getJettyAlpnUnavailabilityCause());
       }
       case OPENSSL: {
