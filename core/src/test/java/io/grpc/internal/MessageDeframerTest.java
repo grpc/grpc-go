@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static io.grpc.internal.GrpcUtil.DEFAULT_MAX_MESSAGE_SIZE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -47,6 +48,7 @@ import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
 import org.junit.Before;
 import org.junit.Rule;
@@ -88,9 +90,10 @@ public class MessageDeframerTest {
     private Listener listener = mock(Listener.class);
     private TestBaseStreamTracer tracer = new TestBaseStreamTracer();
     private StatsTraceContext statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
+    private TransportTracer transportTracer = new TransportTracer();
 
     private MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
-            DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
+            DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer, "test");
 
     private ArgumentCaptor<StreamListener.MessageProducer> producer =
             ArgumentCaptor.forClass(StreamListener.MessageProducer.class);
@@ -124,7 +127,7 @@ public class MessageDeframerTest {
       assertEquals(Bytes.asList(new byte[]{3, 14}), bytes(producer.getValue().next()));
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 2, 2);
+      checkStats(tracer, transportTracer.getStats(), 2, 2);
     }
 
     @Test
@@ -138,7 +141,7 @@ public class MessageDeframerTest {
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       assertEquals(Bytes.asList(new byte[]{14, 15}), bytes(streams.get(1).next()));
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 1, 1, 2, 2);
+      checkStats(tracer, transportTracer.getStats(), 1, 1, 2, 2);
     }
 
     @Test
@@ -151,7 +154,7 @@ public class MessageDeframerTest {
       verify(listener).deframerClosed(false);
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 1, 1);
+      checkStats(tracer, transportTracer.getStats(), 1, 1);
     }
 
     @Test
@@ -165,7 +168,7 @@ public class MessageDeframerTest {
       }
       verify(listener).deframerClosed(false);
       verifyNoMoreInteractions(listener);
-      checkStats(tracer);
+      checkStats(tracer, transportTracer.getStats());
     }
 
     @Test
@@ -176,7 +179,7 @@ public class MessageDeframerTest {
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verify(listener).deframerClosed(true);
       verifyNoMoreInteractions(listener);
-      checkStats(tracer);
+      checkStats(tracer, transportTracer.getStats());
     }
 
     @Test
@@ -185,14 +188,14 @@ public class MessageDeframerTest {
 
       // Create new deframer to allow writing bytes directly to the GzipInflatingBuffer
       MessageDeframer deframer = new MessageDeframer(listener, Codec.Identity.NONE,
-              DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, "test");
+              DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx, transportTracer, "test");
       deframer.setFullStreamDecompressor(new GzipInflatingBuffer());
       deframer.request(1);
       deframer.deframe(buffer(new byte[1]));
       deframer.closeWhenComplete();
       verify(listener).deframerClosed(true);
       verifyNoMoreInteractions(listener);
-      checkStats(tracer);
+      checkStats(tracer, transportTracer.getStats());
     }
 
     @Test
@@ -211,10 +214,11 @@ public class MessageDeframerTest {
       if (useGzipInflatingBuffer) {
         checkStats(
             tracer,
+            transportTracer.getStats(), 
             7 /* msg size */ + 2 /* second buffer adds two bytes of overhead in deflate block */,
             7);
       } else {
-        checkStats(tracer, 7, 7);
+        checkStats(tracer, transportTracer.getStats(), 7, 7);
       }
     }
 
@@ -230,7 +234,7 @@ public class MessageDeframerTest {
       assertEquals(Bytes.asList(new byte[]{3}), bytes(producer.getValue().next()));
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 1, 1);
+      checkStats(tracer, transportTracer.getStats(), 1, 1);
     }
 
     @Test
@@ -241,7 +245,7 @@ public class MessageDeframerTest {
       assertEquals(Bytes.asList(), bytes(producer.getValue().next()));
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 0, 0);
+      checkStats(tracer, transportTracer.getStats(), 0, 0);
     }
 
     @Test
@@ -254,9 +258,9 @@ public class MessageDeframerTest {
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
       if (useGzipInflatingBuffer) {
-        checkStats(tracer, 8 /* compressed size */, 1000);
+        checkStats(tracer, transportTracer.getStats(), 8 /* compressed size */, 1000);
       } else {
-        checkStats(tracer, 1000, 1000);
+        checkStats(tracer, transportTracer.getStats(), 1000, 1000);
       }
     }
 
@@ -272,13 +276,13 @@ public class MessageDeframerTest {
       verify(listener).deframerClosed(false);
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, 1, 1);
+      checkStats(tracer, transportTracer.getStats(), 1, 1);
     }
 
     @Test
     public void compressed() {
       deframer = new MessageDeframer(listener, new Codec.Gzip(), DEFAULT_MAX_MESSAGE_SIZE,
-              statsTraceCtx, "test");
+              statsTraceCtx, transportTracer, "test");
       deframer.request(1);
 
       byte[] payload = compress(new byte[1000]);
@@ -289,7 +293,6 @@ public class MessageDeframerTest {
       assertEquals(Bytes.asList(new byte[1000]), bytes(producer.getValue().next()));
       verify(listener, atLeastOnce()).bytesRead(anyInt());
       verifyNoMoreInteractions(listener);
-      checkStats(tracer, payload.length, 1000);
     }
 
     @Test
@@ -475,9 +478,11 @@ public class MessageDeframerTest {
   }
 
   /**
+   * @param transportStats the transport level stats counters
    * @param sizes in the format {wire0, uncompressed0, wire1, uncompressed1, ...}
    */
-  private static void checkStats(TestBaseStreamTracer tracer, long... sizes) {
+  private static void checkStats(
+      TestBaseStreamTracer tracer, TransportTracer.Stats transportStats, long... sizes) {
     assertEquals(0, sizes.length % 2);
     int count = sizes.length / 2;
     long expectedWireSize = 0;
@@ -495,6 +500,15 @@ public class MessageDeframerTest {
     assertNull(tracer.nextOutboundEvent());
     assertEquals(expectedWireSize, tracer.getInboundWireSize());
     assertEquals(expectedUncompressedSize, tracer.getInboundUncompressedSize());
+
+    assertEquals(count, transportStats.messagesReceived);
+    long transportReceiveMsgMs = TimeUnit.NANOSECONDS.toMillis(
+        transportStats.lastMessageReceivedTimeNanos);
+    if (count > 0) {
+      assertThat(System.currentTimeMillis() - transportReceiveMsgMs).isAtMost(50L);
+    } else {
+      assertEquals(0, transportReceiveMsgMs);
+    }
   }
 
   private static void checkSizeEnforcingInputStreamStats(

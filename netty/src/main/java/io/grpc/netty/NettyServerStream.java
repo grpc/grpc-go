@@ -23,6 +23,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.AbstractServerStream;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
@@ -48,9 +49,14 @@ class NettyServerStream extends AbstractServerStream {
   private final Attributes attributes;
   private final String authority;
 
-  public NettyServerStream(Channel channel, TransportState state, Attributes transportAttrs,
-      String authority, StatsTraceContext statsTraceCtx) {
-    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx);
+  public NettyServerStream(
+      Channel channel,
+      TransportState state,
+      Attributes transportAttrs,
+      String authority,
+      StatsTraceContext statsTraceCtx,
+      TransportTracer transportTracer) {
+    super(new NettyWritableBufferAllocator(channel.alloc()), statsTraceCtx, transportTracer);
     this.state = checkNotNull(state, "transportState");
     this.channel = checkNotNull(channel, "channel");
     this.writeQueue = state.handler.getWriteQueue();
@@ -96,8 +102,10 @@ class NettyServerStream extends AbstractServerStream {
 
     @Override
     public void writeHeaders(Metadata headers) {
-      writeQueue.enqueue(new SendResponseHeadersCommand(transportState(),
-          Utils.convertServerHeaders(headers), false),
+      writeQueue.enqueue(
+          SendResponseHeadersCommand.createHeaders(
+              transportState(),
+              Utils.convertServerHeaders(headers)),
           true);
     }
 
@@ -124,10 +132,11 @@ class NettyServerStream extends AbstractServerStream {
     }
 
     @Override
-    public void writeTrailers(Metadata trailers, boolean headersSent) {
+    public void writeTrailers(Metadata trailers, boolean headersSent, Status status) {
       Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
       writeQueue.enqueue(
-          new SendResponseHeadersCommand(transportState(), http2Trailers, true), true);
+          SendResponseHeadersCommand.createTrailers(transportState(), http2Trailers, status),
+          true);
     }
 
     @Override
@@ -143,9 +152,14 @@ class NettyServerStream extends AbstractServerStream {
     private final NettyServerHandler handler;
     private final EventLoop eventLoop;
 
-    public TransportState(NettyServerHandler handler, EventLoop eventLoop, Http2Stream http2Stream,
-        int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx);
+    public TransportState(
+        NettyServerHandler handler,
+        EventLoop eventLoop,
+        Http2Stream http2Stream,
+        int maxMessageSize,
+        StatsTraceContext statsTraceCtx,
+        TransportTracer transportTracer) {
+      super(maxMessageSize, statsTraceCtx, transportTracer);
       this.http2Stream = checkNotNull(http2Stream, "http2Stream");
       this.handler = checkNotNull(handler, "handler");
       this.eventLoop = eventLoop;

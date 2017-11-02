@@ -66,6 +66,7 @@ import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.testing.TestServerStreamTracer;
 import io.grpc.netty.GrpcHttp2HeadersUtils.GrpcHttp2ServerHeadersDecoder;
 import io.netty.buffer.ByteBuf;
@@ -135,6 +136,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
   private long keepAliveTimeInNanos = DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
+  private TransportTracer transportTracer;
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -158,6 +160,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertNull("manualSetUp should not run more than once", handler());
 
     MockitoAnnotations.initMocks(this);
+    transportTracer = new TransportTracer();
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
 
@@ -495,7 +498,9 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     keepAliveTimeoutInNanos = TimeUnit.MINUTES.toNanos(30L);
     manualSetUp();
 
+    assertEquals(0, transportTracer.getStats().keepAlivesSent);
     fakeClock().forwardNanos(keepAliveTimeInNanos);
+    assertEquals(1, transportTracer.getStats().keepAlivesSent);
 
     verifyWrite().writePing(eq(ctx()), eq(false), eq(pingBuf), any(ChannelPromise.class));
 
@@ -548,7 +553,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     createStream();
     Http2Headers headers = Utils.convertServerHeaders(new Metadata());
     ChannelFuture future = enqueue(
-        new SendResponseHeadersCommand(stream.transportState(), headers, false));
+        SendResponseHeadersCommand.createHeaders(stream.transportState(), headers));
     future.get();
     ByteBuf payload = handler().ctx().alloc().buffer(8);
     payload.writeLong(1);
@@ -745,6 +750,34 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     assertTrue(!channel().isOpen());
   }
 
+  @Test
+  public void transportTracer_windowSizeDefault() throws Exception {
+    manualSetUp();
+    TransportTracer.Stats stats = transportTracer.getStats();
+    assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
+    assertEquals(flowControlWindow, stats.localFlowControlWindow);
+  }
+
+  @Test
+  public void transportTracer_windowSize() throws Exception {
+    flowControlWindow = 1048576; // 1MiB
+    manualSetUp();
+    {
+      TransportTracer.Stats stats = transportTracer.getStats();
+      assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE, stats.remoteFlowControlWindow);
+      assertEquals(flowControlWindow, stats.localFlowControlWindow);
+    }
+
+    {
+      ByteBuf serializedSettings = windowUpdate(0, 1000);
+      channelRead(serializedSettings);
+      TransportTracer.Stats stats = transportTracer.getStats();
+      assertEquals(Http2CodecUtil.DEFAULT_WINDOW_SIZE + 1000,
+          stats.remoteFlowControlWindow);
+      assertEquals(flowControlWindow, stats.localFlowControlWindow);
+    }
+  }
+
   private void createStream() throws Exception {
     Http2Headers headers = new DefaultHttp2Headers()
         .method(HTTP_METHOD)
@@ -775,7 +808,8 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   protected NettyServerHandler newHandler() {
     return NettyServerHandler.newHandler(
         frameReader(), frameWriter(), transportListener,
-        Arrays.asList(streamTracerFactory), maxConcurrentStreams, flowControlWindow,
+        Arrays.asList(streamTracerFactory), transportTracer,
+        maxConcurrentStreams, flowControlWindow,
         maxHeaderListSize, DEFAULT_MAX_MESSAGE_SIZE,
         keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,

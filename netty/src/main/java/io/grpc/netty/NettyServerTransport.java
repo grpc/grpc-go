@@ -19,17 +19,21 @@ package io.grpc.netty;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.internal.LogId;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.internal.TransportTracer;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -65,6 +69,7 @@ class NettyServerTransport implements ServerTransport {
   private final boolean permitKeepAliveWithoutCalls;
   private final long permitKeepAliveTimeInNanos;
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
+  private final TransportTracer transportTracer;
 
   NettyServerTransport(
       Channel channel, ProtocolNegotiator protocolNegotiator,
@@ -89,6 +94,7 @@ class NettyServerTransport implements ServerTransport {
     this.maxConnectionAgeGraceInNanos = maxConnectionAgeGraceInNanos;
     this.permitKeepAliveWithoutCalls = permitKeepAliveWithoutCalls;
     this.permitKeepAliveTimeInNanos = permitKeepAliveTimeInNanos;
+    this.transportTracer = new TransportTracer();
   }
 
   public void start(ServerTransportListener listener) {
@@ -168,12 +174,30 @@ class NettyServerTransport implements ServerTransport {
     }
   }
 
+  @Override
+  public Future<TransportTracer.Stats> getTransportStats() {
+    if (channel.eventLoop().inEventLoop()) {
+      // This is necessary, otherwise we will block forever if we get the future from inside
+      // the event loop.
+      SettableFuture<TransportTracer.Stats> result = SettableFuture.create();
+      result.set(transportTracer.getStats());
+      return result;
+    }
+    return channel.eventLoop().submit(
+        new Callable<TransportTracer.Stats>() {
+          @Override
+          public TransportTracer.Stats call() throws Exception {
+            return transportTracer.getStats();
+          }
+        });
+  }
+
   /**
    * Creates the Netty handler to be used in the channel pipeline.
    */
   private NettyServerHandler createHandler(ServerTransportListener transportListener) {
     return NettyServerHandler.newHandler(
-        transportListener, streamTracerFactories, maxStreams,
+        transportListener, streamTracerFactories, transportTracer, maxStreams,
         flowControlWindow, maxHeaderListSize, maxMessageSize,
         keepAliveTimeInNanos, keepAliveTimeoutInNanos,
         maxConnectionIdleInNanos,

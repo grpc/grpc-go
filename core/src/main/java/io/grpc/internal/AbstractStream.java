@@ -24,6 +24,7 @@ import io.grpc.Codec;
 import io.grpc.Compressor;
 import io.grpc.Decompressor;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -127,11 +128,18 @@ public abstract class AbstractStream implements Stream {
     @GuardedBy("onReadyLock")
     private boolean deallocated;
 
-    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
+    protected TransportState(
+        int maxMessageSize,
+        StatsTraceContext statsTraceCtx,
+        @Nullable TransportTracer transportTracer) { // nullable: client streams don't trace yet
       this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-      deframer =
-            new MessageDeframer(
-                this, Codec.Identity.NONE, maxMessageSize, statsTraceCtx, getClass().getName());
+      deframer = new MessageDeframer(
+          this,
+          Codec.Identity.NONE,
+          maxMessageSize,
+          statsTraceCtx,
+          transportTracer,
+          getClass().getName());
     }
 
     protected void setFullStreamDecompressor(GzipInflatingBuffer fullStreamDecompressor) {

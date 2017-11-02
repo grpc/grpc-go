@@ -16,7 +16,9 @@
 
 package io.grpc.netty;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import io.grpc.Status;
 import io.netty.handler.codec.http2.Http2Headers;
 
 /**
@@ -25,12 +27,22 @@ import io.netty.handler.codec.http2.Http2Headers;
 class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
   private final StreamIdHolder stream;
   private final Http2Headers headers;
-  private final boolean endOfStream;
+  private final Status status;
 
-  SendResponseHeadersCommand(StreamIdHolder stream, Http2Headers headers, boolean endOfStream) {
+  private SendResponseHeadersCommand(StreamIdHolder stream, Http2Headers headers, Status status) {
     this.stream = Preconditions.checkNotNull(stream, "stream");
     this.headers = Preconditions.checkNotNull(headers, "headers");
-    this.endOfStream = endOfStream;
+    this.status = status;
+  }
+
+  static SendResponseHeadersCommand createHeaders(StreamIdHolder stream, Http2Headers headers) {
+    return new SendResponseHeadersCommand(stream, headers, null);
+  }
+
+  static SendResponseHeadersCommand createTrailers(
+      StreamIdHolder stream, Http2Headers headers, Status status) {
+    return new SendResponseHeadersCommand(
+        stream, headers, Preconditions.checkNotNull(status, "status"));
   }
 
   StreamIdHolder stream() {
@@ -42,7 +54,11 @@ class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
   }
 
   boolean endOfStream() {
-    return endOfStream;
+    return status != null;
+  }
+
+  Status status() {
+    return status;
   }
 
   @Override
@@ -53,17 +69,17 @@ class SendResponseHeadersCommand extends WriteQueue.AbstractQueuedCommand {
     SendResponseHeadersCommand thatCmd = (SendResponseHeadersCommand) that;
     return thatCmd.stream.equals(stream)
         && thatCmd.headers.equals(headers)
-        && thatCmd.endOfStream == endOfStream;
+        && thatCmd.status.equals(status);
   }
 
   @Override
   public String toString() {
     return getClass().getSimpleName() + "(stream=" + stream.id() + ", headers=" + headers
-        + ", endOfStream=" + endOfStream + ")";
+        + ", status=" + status + ")";
   }
 
   @Override
   public int hashCode() {
-    return stream.hashCode();
+    return Objects.hashCode(stream, status);
   }
 }

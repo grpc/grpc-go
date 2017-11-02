@@ -42,6 +42,7 @@ import io.grpc.Status;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.StatsTraceContext;
 import io.grpc.internal.StreamListener;
+import io.grpc.internal.TransportTracer;
 import io.grpc.netty.WriteQueue.QueuedCommand;
 import io.netty.buffer.EmptyByteBuf;
 import io.netty.buffer.UnpooledByteBufAllocator;
@@ -298,10 +299,12 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
     }).when(writeQueue).enqueue(any(QueuedCommand.class), any(ChannelPromise.class), anyBoolean());
     when(writeQueue.enqueue(any(QueuedCommand.class), anyBoolean())).thenReturn(future);
     StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
+    TransportTracer transportTracer = new TransportTracer();
     NettyServerStream.TransportState state = new NettyServerStream.TransportState(
-        handler, channel.eventLoop(), http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx);
+        handler, channel.eventLoop(), http2Stream, DEFAULT_MAX_MESSAGE_SIZE, statsTraceCtx,
+        transportTracer);
     NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY,
-        "test-authority", statsTraceCtx);
+        "test-authority", statsTraceCtx, transportTracer);
     stream.transportState().setListener(serverListener);
     state.onStreamAllocated();
     verify(serverListener, atLeastOnce()).onReady();

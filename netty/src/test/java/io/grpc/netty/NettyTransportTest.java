@@ -42,6 +42,11 @@ public class NettyTransportTest extends AbstractTransportTest {
       .negotiationType(NegotiationType.PLAINTEXT)
       .buildTransportFactory();
 
+  @Override
+  protected boolean haveTransportTracer() {
+    return true;
+  }
+
   @After
   public void releaseClientFactory() {
     clientFactory.close();

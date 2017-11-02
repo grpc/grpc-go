@@ -32,6 +32,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.grpc.internal.FakeClock;
 import io.grpc.internal.MessageFramer;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.grpc.internal.WritableBuffer;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
@@ -239,15 +240,20 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
 
   protected ByteBuf grpcDataFrame(int streamId, boolean endStream, byte[] content) {
     final ByteBuf compressionFrame = Unpooled.buffer(content.length);
-    MessageFramer framer = new MessageFramer(new MessageFramer.Sink() {
-      @Override
-      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
-        if (frame != null) {
-          ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
-          compressionFrame.writeBytes(bytebuf);
-        }
-      }
-    }, new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT), StatsTraceContext.NOOP);
+    TransportTracer noTransportTracer = null;
+    MessageFramer framer = new MessageFramer(
+        new MessageFramer.Sink() {
+          @Override
+          public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+            if (frame != null) {
+              ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
+              compressionFrame.writeBytes(bytebuf);
+            }
+          }
+        },
+        new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT),
+        StatsTraceContext.NOOP,
+        noTransportTracer);
     framer.writePayload(new ByteArrayInputStream(content));
     framer.flush();
     ChannelHandlerContext ctx = newMockContext();
@@ -299,6 +305,12 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
   protected final ByteBuf serializeSettings(Http2Settings settings) {
     ChannelHandlerContext ctx = newMockContext();
     new DefaultHttp2FrameWriter().writeSettings(ctx, settings, newPromise());
+    return captureWrite(ctx);
+  }
+
+  protected final ByteBuf windowUpdate(int streamId, int delta) {
+    ChannelHandlerContext ctx = newMockContext();
+    new DefaultHttp2FrameWriter().writeWindowUpdate(ctx, 0, delta, newPromise());
     return captureWrite(ctx);
   }
 

@@ -73,6 +73,9 @@ public class MessageFramer implements Framer {
   private final byte[] headerScratch = new byte[HEADER_LENGTH];
   private final WritableBufferAllocator bufferAllocator;
   private final StatsTraceContext statsTraceCtx;
+  // transportTracer is nullable until it is integrated with client transports
+  @Nullable
+  private final TransportTracer transportTracer;
   private boolean closed;
 
   // Tracing and stats-related states
@@ -85,11 +88,15 @@ public class MessageFramer implements Framer {
    * @param sink the sink used to deliver frames to the transport
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
-  public MessageFramer(Sink sink, WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx) {
+  public MessageFramer(
+      Sink sink,
+      WritableBufferAllocator bufferAllocator,
+      StatsTraceContext statsTraceCtx,
+      @Nullable TransportTracer transportTracer) {
     this.sink = checkNotNull(sink, "sink");
     this.bufferAllocator = checkNotNull(bufferAllocator, "bufferAllocator");
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
+    this.transportTracer = transportTracer;
   }
 
   @Override
@@ -151,6 +158,9 @@ public class MessageFramer implements Framer {
     statsTraceCtx.outboundUncompressedSize(written);
     statsTraceCtx.outboundWireSize(currentMessageWireSize);
     statsTraceCtx.outboundMessageSent(currentMessageSeqNo, currentMessageWireSize, written);
+    if (transportTracer != null) {
+      transportTracer.reportMessageSent();
+    }
   }
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {

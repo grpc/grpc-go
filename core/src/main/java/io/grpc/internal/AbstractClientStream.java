@@ -100,7 +100,8 @@ public abstract class AbstractClientStream extends AbstractStream
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
     if (!useGet) {
-      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
+      TransportTracer transportTracer = null; // TODO(zpencer): add tracing on clients
+      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx, transportTracer);
       this.headers = headers;
     } else {
       framer = new GetFramer(headers, statsTraceCtx);
@@ -201,7 +202,7 @@ public abstract class AbstractClientStream extends AbstractStream
     private boolean statusReported;
 
     protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx);
+      super(maxMessageSize, statsTraceCtx, null);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 

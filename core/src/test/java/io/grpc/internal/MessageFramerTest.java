@@ -16,6 +16,7 @@
 
 package io.grpc.internal;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -34,6 +35,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -63,6 +65,7 @@ public class MessageFramerTest {
   private BytesWritableBufferAllocator allocator =
       new BytesWritableBufferAllocator(1000, 1000);
   private StatsTraceContext statsTraceCtx;
+  private TransportTracer transportTracer;
 
   /** Set up for test. */
   @Before
@@ -71,7 +74,8 @@ public class MessageFramerTest {
     // MessageDeframerTest tests with a client-side StatsTraceContext, so here we test with a
     // server-side StatsTraceContext.
     statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
-    framer = new MessageFramer(sink, allocator, statsTraceCtx);
+    transportTracer = new TransportTracer();
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
   }
 
   @Test
@@ -136,7 +140,7 @@ public class MessageFramerTest {
   @Test
   public void payloadSplitBetweenSinks() {
     allocator = new BytesWritableBufferAllocator(12, 12);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
     writeKnownLength(framer, new byte[]{3, 14, 1, 5, 9, 2, 6, 5});
     verify(sink).deliverFrame(
         toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false, false);
@@ -152,7 +156,7 @@ public class MessageFramerTest {
   @Test
   public void frameHeaderSplitBetweenSinks() {
     allocator = new BytesWritableBufferAllocator(12, 12);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
     writeKnownLength(framer, new byte[]{3, 14, 1});
     writeKnownLength(framer, new byte[]{3});
     verify(sink).deliverFrame(
@@ -200,7 +204,7 @@ public class MessageFramerTest {
   @Test
   public void largerFrameSize() throws Exception {
     allocator = new BytesWritableBufferAllocator(0, 10000);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
@@ -221,7 +225,7 @@ public class MessageFramerTest {
   public void largerFrameSizeUnknownLength() throws Exception {
     // Force payload to be split into two chunks
     allocator = new BytesWritableBufferAllocator(500, 500);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
     writeUnknownLength(framer, new byte[1000]);
     framer.flush();
     // Header and first chunk written with flush = false
@@ -248,7 +252,8 @@ public class MessageFramerTest {
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
     // setMessageCompression should default to true
-    framer = new MessageFramer(sink, allocator, statsTraceCtx).setCompressor(new Codec.Gzip());
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
+        .setCompressor(new Codec.Gzip());
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame.
@@ -272,7 +277,7 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNoEncoding() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx)
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
         .setMessageCompression(true);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
@@ -297,7 +302,7 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNotRequested() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx)
+    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
         .setCompressor(new Codec.Gzip())
         .setMessageCompression(false);
     writeKnownLength(framer, new byte[1000]);
@@ -334,7 +339,7 @@ public class MessageFramerTest {
         }
       }
     };
-    framer = new MessageFramer(reentrant, allocator, statsTraceCtx);
+    framer = new MessageFramer(reentrant, allocator, statsTraceCtx, transportTracer);
     writeKnownLength(framer, new byte[]{3, 14});
     framer.close();
   }
@@ -389,6 +394,16 @@ public class MessageFramerTest {
     assertNull(tracer.nextInboundEvent());
     assertEquals(expectedWireSize, tracer.getOutboundWireSize());
     assertEquals(expectedUncompressedSize, tracer.getOutboundUncompressedSize());
+
+    TransportTracer.Stats transportStats = transportTracer.getStats();
+    assertEquals(count, transportStats.messagesSent);
+    long transportSentMsgMs = TimeUnit.NANOSECONDS.toMillis(
+        transportStats.lastMessageSentTimeNanos);
+    if (count > 0) {
+      assertThat(System.currentTimeMillis() - transportSentMsgMs).isAtMost(50L);
+    } else {
+      assertEquals(0, transportSentMsgMs);
+    }
   }
 
   static class ByteWritableBuffer implements WritableBuffer {

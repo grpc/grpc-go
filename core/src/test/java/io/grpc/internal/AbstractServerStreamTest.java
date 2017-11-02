@@ -38,6 +38,7 @@ import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -63,9 +64,19 @@ public class AbstractServerStreamTest {
   };
 
   private AbstractServerStream.Sink sink = mock(AbstractServerStream.Sink.class);
-  private AbstractServerStreamBase stream = new AbstractServerStreamBase(
-      allocator, sink, new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE));
+  private TransportTracer transportTracer;
+  private AbstractServerStreamBase stream;
   private final ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
+
+  @Before
+  public void setUp() {
+    transportTracer = new TransportTracer();
+    stream = new AbstractServerStreamBase(
+        allocator,
+        sink,
+        new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE, transportTracer),
+        transportTracer);
+  }
 
   /**
    * Test for issue https://github.com/grpc/grpc-java/issues/1795
@@ -287,7 +298,7 @@ public class AbstractServerStreamTest {
   public void close_sendsTrailers() {
     Metadata trailers = new Metadata();
     stream.close(Status.INTERNAL, trailers);
-    verify(sink).writeTrailers(any(Metadata.class), eq(false));
+    verify(sink).writeTrailers(any(Metadata.class), eq(false), eq(Status.INTERNAL));
   }
 
   @Test
@@ -298,9 +309,10 @@ public class AbstractServerStreamTest {
     trailers.put(InternalStatus.CODE_KEY, Status.OK);
     trailers.put(InternalStatus.MESSAGE_KEY, "Everything's super.");
 
-    stream.close(Status.INTERNAL.withDescription("bad"), trailers);
+    Status closeStatus = Status.INTERNAL.withDescription("bad");
+    stream.close(closeStatus, trailers);
 
-    verify(sink).writeTrailers(metadataCaptor.capture(), eq(false));
+    verify(sink).writeTrailers(metadataCaptor.capture(), eq(false), eq(closeStatus));
     assertEquals(
         Status.Code.INTERNAL, metadataCaptor.getValue().get(InternalStatus.CODE_KEY).getCode());
     assertEquals("bad", metadataCaptor.getValue().get(InternalStatus.MESSAGE_KEY));
@@ -334,8 +346,8 @@ public class AbstractServerStreamTest {
     private final AbstractServerStream.TransportState state;
 
     protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
-        AbstractServerStream.TransportState state) {
-      super(bufferAllocator, StatsTraceContext.NOOP);
+        AbstractServerStream.TransportState state, TransportTracer transportTracer) {
+      super(bufferAllocator, StatsTraceContext.NOOP, transportTracer);
       this.sink = sink;
       this.state = state;
     }
@@ -351,8 +363,8 @@ public class AbstractServerStreamTest {
     }
 
     static class TransportState extends AbstractServerStream.TransportState {
-      protected TransportState(int maxMessageSize) {
-        super(maxMessageSize, StatsTraceContext.NOOP);
+      protected TransportState(int maxMessageSize, TransportTracer transportTracer) {
+        super(maxMessageSize, StatsTraceContext.NOOP, transportTracer);
       }
 
       @Override

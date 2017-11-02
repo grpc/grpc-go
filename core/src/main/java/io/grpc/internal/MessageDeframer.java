@@ -88,6 +88,9 @@ public class MessageDeframer implements Closeable, Deframer {
   private Listener listener;
   private int maxInboundMessageSize;
   private final StatsTraceContext statsTraceCtx;
+  // transportTracer is nullable until it is integrated with client transports
+  @Nullable
+  private final TransportTracer transportTracer;
   private final String debugString;
   private Decompressor decompressor;
   private GzipInflatingBuffer fullStreamDecompressor;
@@ -115,12 +118,18 @@ public class MessageDeframer implements Closeable, Deframer {
    * @param maxMessageSize the maximum allowed size for received messages.
    * @param debugString a string that will appear on errors statuses
    */
-  public MessageDeframer(Listener listener, Decompressor decompressor, int maxMessageSize,
-      StatsTraceContext statsTraceCtx, String debugString) {
+  public MessageDeframer(
+      Listener listener,
+      Decompressor decompressor,
+      int maxMessageSize,
+      StatsTraceContext statsTraceCtx,
+      @Nullable TransportTracer transportTracer,
+      String debugString) {
     this.listener = checkNotNull(listener, "sink");
     this.decompressor = checkNotNull(decompressor, "decompressor");
     this.maxInboundMessageSize = maxMessageSize;
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
+    this.transportTracer = transportTracer;
     this.debugString = debugString;
   }
 
@@ -386,6 +395,9 @@ public class MessageDeframer implements Closeable, Deframer {
 
     currentMessageSeqNo++;
     statsTraceCtx.inboundMessage(currentMessageSeqNo);
+    if (transportTracer != null) {
+      transportTracer.reportMessageReceived();
+    }
     // Continue reading the frame body.
     state = State.BODY;
   }
