@@ -123,11 +123,16 @@ would be used to create all `v1.7` tags (e.g. `v1.7.0`, `v1.7.1`).
    * Options: `Do not run if there has been a build in the last 24h`
    * Click _Add_ button
 6. Continue with Google-internal steps at go/grpc/java/releasing.
+7. Move items out of the release milestone that didn't make the cut. Issues that
+   may be backported should stay in the release milestone. Treat issues with the
+   'release blocker' label with special care.
 
 Tagging the Release
 -------------------
 
-1. For vMajor.Minor.x branch, change `README.md` to refer to the next release
+1. Verify there are no open issues in the release milestone. Open issues should
+   either be deferred or resolved and the fix backported.
+2. For vMajor.Minor.x branch, change `README.md` to refer to the next release
    version. _Also_ update the version numbers for protoc if the protobuf library
    version was updated since the last release.
 
@@ -137,7 +142,7 @@ Tagging the Release
    $ ${EDITOR:-nano -w} README.md
    $ git commit -a -m "Update README to reference $MAJOR.$MINOR.$PATCH"
    ```
-2. Change root build files to remove "-SNAPSHOT" for the next release version
+3. Change root build files to remove "-SNAPSHOT" for the next release version
    (e.g. `0.7.0`). Commit the result and make a tag:
 
    ```bash
@@ -147,7 +152,7 @@ Tagging the Release
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$PATCH"
    $ git tag -a v$MAJOR.$MINOR.$PATCH -m "Version $MAJOR.$MINOR.$PATCH"
    ```
-3. Change root build files to the next snapshot version (e.g. `0.7.1-SNAPSHOT`).
+4. Change root build files to the next snapshot version (e.g. `0.7.1-SNAPSHOT`).
    Commit the result:
 
    ```bash
@@ -157,7 +162,7 @@ Tagging the Release
    $ ./gradlew build
    $ git commit -a -m "Bump version to $MAJOR.$MINOR.$((PATCH+1))-SNAPSHOT"
    ```
-4. Go through PR review and push the release tag and updated release branch to
+5. Go through PR review and push the release tag and updated release branch to
    GitHub:
 
    ```bash
