@@ -169,9 +169,9 @@ func (qb *quotaPool) lockedAdd(v int) {
 
 func (qb *quotaPool) addAndUpdate(v int) {
 	qb.mu.Lock()
-	defer qb.mu.Unlock()
 	qb.lockedAdd(v)
 	qb.version++
+	qb.mu.Unlock()
 }
 
 func (qb *quotaPool) get(v int, wc waiters) (int, uint32, error) {
@@ -221,12 +221,13 @@ func (qb *quotaPool) get(v int, wc waiters) (int, uint32, error) {
 
 func (qb *quotaPool) compareAndExecute(version uint32, success, failure func()) bool {
 	qb.mu.Lock()
-	defer qb.mu.Unlock()
 	if version == qb.version {
 		success()
+		qb.mu.Unlock()
 		return true
 	}
 	failure()
+	qb.mu.Unlock()
 	return false
 }
 

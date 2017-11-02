@@ -229,6 +229,7 @@ type Stream struct {
 	trReader     io.Reader
 	fc           *inFlow
 	recvQuota    uint32
+	waiters      waiters
 
 	// TODO: Remote this unused variable.
 	// The accumulated inbound quota pending for window update.

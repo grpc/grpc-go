@@ -69,7 +69,9 @@ type http2Server struct {
 	controlBuf *controlBuffer
 	fc         *inFlow
 	// sendQuotaPool provides flow control to outbound message.
-	sendQuotaPool  *quotaPool
+	sendQuotaPool *quotaPool
+	// localSendQuota limits the amount of data that can be scheduled
+	// for writing before it is actually written out.
 	localSendQuota *quotaPool
 	stats          stats.Handler
 	// Flag to keep track of reading activity on transport.
@@ -346,6 +348,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
 		},
+	}
+	s.waiters = waiters{
+		ctx:  s.ctx,
+		tctx: t.ctx,
 	}
 	handle(s)
 	return
@@ -872,12 +878,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			}
 			if streamQuota == 0 { // Used up all the locally cached stream quota.
 				// Get all the stream quota there is.
-				streamQuota, streamQuotaVer, err = s.sendQuotaPool.get(math.MaxInt32, waiters{
-					ctx:    s.ctx,
-					tctx:   t.ctx,
-					done:   s.done,
-					goAway: s.goAway,
-				})
+				streamQuota, streamQuotaVer, err = s.sendQuotaPool.get(math.MaxInt32, s.waiters)
 				if err != nil {
 					return err
 				}
@@ -886,24 +887,14 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				size = streamQuota
 			}
 			// Get size worth quota from transport.
-			tq, _, err := t.sendQuotaPool.get(size, waiters{
-				ctx:    s.ctx,
-				tctx:   t.ctx,
-				done:   s.done,
-				goAway: s.goAway,
-			})
+			tq, _, err := t.sendQuotaPool.get(size, s.waiters)
 			if err != nil {
 				return err
 			}
 			if tq < size {
 				size = tq
 			}
-			ltq, _, err := t.localSendQuota.get(size, waiters{
-				ctx:    s.ctx,
-				tctx:   t.ctx,
-				done:   s.done,
-				goAway: s.goAway,
-			})
+			ltq, _, err := t.localSendQuota.get(size, s.waiters)
 			if err != nil {
 				return err
 			}
