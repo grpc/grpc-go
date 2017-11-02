@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"golang.org/x/net/context"
+	"fmt"
 )
 
 // UnaryInvoker is called by UnaryClientInterceptor to complete RPCs.
@@ -45,6 +46,51 @@ type UnaryServerInfo struct {
 	Server interface{}
 	// FullMethod is the full RPC method string, i.e., /package.service/method.
 	FullMethod string
+	// IdempotencyLevel refers to the protobuf IdempotencyLevel method option.
+	//
+	// IDEMPOTENCY_UNKNOWN | default
+	// NO_SIDE_EFFECTS     | implies idempotent
+	// IDEMPOTENT          | idempotent, but may have side effects
+	IdempotencyLevel IdempotencyLevel
+}
+
+type IdempotencyLevel int
+
+// Order matters and must go in ascending order of strictness of idempotency guarantee.
+const (
+  IDEMPOTENCY_UNKNOWN IdempotencyLevel = iota  		// default
+  IDEMPOTENT                   						// idempotent, but may have side effects
+  NO_SIDE_EFFECTS                 					// implies idempotent
+)
+
+func (l IdempotencyLevel) String() string {
+  switch l {
+  case IDEMPOTENCY_UNKNOWN:
+    return "IDEMPOTENCY_UNKNOWN"
+  case IDEMPOTENT:
+    return "IDEMPOTENT"
+  case NO_SIDE_EFFECTS:
+    return "NO_SIDE_EFFECTS"
+  default:
+    panic(fmt.Sprintf("unknown idempotency level: %d", l))
+  }
+}
+
+func IdempotencyLevelString(s string) (IdempotencyLevel) {
+  switch s {
+  case "IDEMPOTENCY_UNKNOWN":
+    return IDEMPOTENCY_UNKNOWN
+  case "IDEMPOTENT":
+    return IDEMPOTENT
+  case "NO_SIDE_EFFECTS":
+    return NO_SIDE_EFFECTS
+  default:
+    panic(fmt.Sprintf("unknown idempotency level: %d", s))
+  }
+}
+
+func (l IdempotencyLevel) StricterThan(k IdempotencyLevel) bool {
+  return l > k
 }
 
 // UnaryHandler defines the handler invoked by UnaryServerInterceptor to complete the normal
