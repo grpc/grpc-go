@@ -229,6 +229,7 @@ type Stream struct {
 	trReader     io.Reader
 	fc           *inFlow
 	recvQuota    uint32
+	waiters      waiters
 
 	// TODO: Remote this unused variable.
 	// The accumulated inbound quota pending for window update.
@@ -238,8 +239,7 @@ type Stream struct {
 	// is used to adjust flow control, if need be.
 	requestRead func(int)
 
-	sendQuotaPool  *quotaPool
-	localSendQuota *quotaPool
+	sendQuotaPool *quotaPool
 	// Close headerChan to indicate the end of reception of header metadata.
 	headerChan chan struct{}
 	// header caches the received header metadata.
@@ -703,25 +703,13 @@ func (e StreamError) Error() string {
 	return fmt.Sprintf("stream error: code = %s desc = %q", e.Code, e.Desc)
 }
 
-// wait blocks until it can receive from one of the provided contexts or
-// channels.  ctx is the context of the RPC, tctx is the context of the
-// transport, done is a channel closed to indicate the end of the RPC, goAway
-// is a channel closed to indicate a GOAWAY was received, and proceed is a
-// quota channel, whose received value is returned from this function if none
-// of the other signals occur first.
-func wait(ctx, tctx context.Context, done, goAway <-chan struct{}, proceed <-chan int) (int, error) {
-	select {
-	case <-ctx.Done():
-		return 0, ContextErr(ctx.Err())
-	case <-done:
-		return 0, io.EOF
-	case <-goAway:
-		return 0, ErrStreamDrain
-	case <-tctx.Done():
-		return 0, ErrConnClosing
-	case i := <-proceed:
-		return i, nil
-	}
+// waiters are passed to quotaPool get methods to
+// wait on in addition to waiting on quota.
+type waiters struct {
+	ctx    context.Context
+	tctx   context.Context
+	done   chan struct{}
+	goAway chan struct{}
 }
 
 // GoAwayReason contains the reason for the GoAway frame received.
