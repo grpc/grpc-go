@@ -159,7 +159,7 @@ public class TestUtils {
    *
    * @param name  name of a file in src/main/resources/certs.
    *
-   * @deprecated Not for public use
+   * @deprecated Not for public use. Use {@link TlsTesting#loadCert} instead.
    */
   @Deprecated
   public static File loadCert(String name) throws IOException {
