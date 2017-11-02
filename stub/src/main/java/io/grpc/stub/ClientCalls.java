@@ -47,6 +47,9 @@ import javax.annotation.Nullable;
  * that the runtime can vary behavior without requiring regeneration of the stub.
  */
 public final class ClientCalls {
+
+  private static final Logger logger = Logger.getLogger(ClientCalls.class.getName());
+
   // Prevent instantiation
   private ClientCalls() {}
 
@@ -96,9 +99,10 @@ public final class ClientCalls {
   public static <ReqT, RespT> RespT blockingUnaryCall(ClientCall<ReqT, RespT> call, ReqT param) {
     try {
       return getUnchecked(futureUnaryCall(call, param));
-    } catch (Throwable t) {
-      call.cancel(null, t);
-      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+    } catch (RuntimeException e) {
+      throw cancelThrow(call, e);
+    } catch (Error e) {
+      throw cancelThrow(call, e);
     }
   }
 
@@ -118,13 +122,17 @@ public final class ClientCalls {
           executor.waitAndDrain();
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
-          throw Status.CANCELLED.withCause(e).asRuntimeException();
+          throw Status.CANCELLED
+              .withDescription("Call was interrupted")
+              .withCause(e)
+              .asRuntimeException();
         }
       }
       return getUnchecked(responseFuture);
-    } catch (Throwable t) {
-      call.cancel(null, t);
-      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+    } catch (RuntimeException e) {
+      throw cancelThrow(call, e);
+    } catch (Error e) {
+      throw cancelThrow(call, e);
     }
   }
 
@@ -186,9 +194,12 @@ public final class ClientCalls {
       return future.get();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw Status.CANCELLED.withCause(e).asRuntimeException();
+      throw Status.CANCELLED
+          .withDescription("Call was interrupted")
+          .withCause(e)
+          .asRuntimeException();
     } catch (ExecutionException e) {
-      throw toStatusRuntimeException(e);
+      throw toStatusRuntimeException(e.getCause());
     }
   }
 
@@ -214,6 +225,27 @@ public final class ClientCalls {
     return Status.UNKNOWN.withCause(t).asRuntimeException();
   }
 
+  /**
+   * Cancels a call, and throws the exception.
+   *
+   * @param t must be a RuntimeException or Error
+   */
+  private static RuntimeException cancelThrow(ClientCall<?, ?> call, Throwable t) {
+    try {
+      call.cancel(null, t);
+    } catch (Throwable e) {
+      assert e instanceof RuntimeException || e instanceof Error;
+      logger.log(Level.SEVERE, "RuntimeException encountered while closing call", e);
+    }
+    if (t instanceof RuntimeException) {
+      throw (RuntimeException) t;
+    } else if (t instanceof Error) {
+      throw (Error) t;
+    }
+    // should be impossible
+    throw new AssertionError(t);
+  }
+
   private static <ReqT, RespT> void asyncUnaryRequestCall(
       ClientCall<ReqT, RespT> call, ReqT param, StreamObserver<RespT> responseObserver,
       boolean streamingResponse) {
@@ -236,9 +268,10 @@ public final class ClientCalls {
     try {
       call.sendMessage(param);
       call.halfClose();
-    } catch (Throwable t) {
-      call.cancel(null, t);
-      throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+    } catch (RuntimeException e) {
+      throw cancelThrow(call, e);
+    } catch (Error e) {
+      throw cancelThrow(call, e);
     }
   }
 
