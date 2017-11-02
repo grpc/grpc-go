@@ -36,7 +36,7 @@ import org.junit.runners.JUnit4;
 public class OkHttpTransportTest extends AbstractTransportTest {
   private ClientTransportFactory clientFactory = OkHttpChannelBuilder
       // Although specified here, address is ignored because we never call build.
-      .forAddress("::1", 0)
+      .forAddress("localhost", 0)
       .negotiationType(NegotiationType.PLAINTEXT)
       .buildTransportFactory();
 
@@ -67,14 +67,14 @@ public class OkHttpTransportTest extends AbstractTransportTest {
 
   @Override
   protected String testAuthority(InternalServer server) {
-    return "[::1]:" + server.getPort();
+    return "thebestauthority:" + server.getPort();
   }
 
   @Override
   protected ManagedClientTransport newClientTransport(InternalServer server) {
     int port = server.getPort();
     return clientFactory.newClientTransport(
-        new InetSocketAddress("::1", port),
+        new InetSocketAddress("localhost", port),
         testAuthority(server),
         null /* agent */,
         null /* proxy */);

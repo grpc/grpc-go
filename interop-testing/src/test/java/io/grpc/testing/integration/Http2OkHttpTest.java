@@ -97,7 +97,7 @@ public class Http2OkHttpTest extends AbstractInteropTest {
   }
 
   private OkHttpChannelBuilder createChannelBuilder() {
-    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("::1", getPort())
+    OkHttpChannelBuilder builder = OkHttpChannelBuilder.forAddress("localhost", getPort())
         .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE)
         .connectionSpec(new ConnectionSpec.Builder(OkHttpChannelBuilder.DEFAULT_CONNECTION_SPEC)
             .cipherSuites(TestUtils.preferredTestCiphers().toArray(new String[0]))

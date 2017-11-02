@@ -99,6 +99,7 @@ import io.opencensus.trace.Span;
 import io.opencensus.trace.unsafe.ContextUtils;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketAddress;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -1623,19 +1624,14 @@ public abstract class AbstractInteropTest {
     }
   }
 
-  /** Helper for asserting remote address {@link io.grpc.ServerCall#getAttributes()} */
-  protected void assertRemoteAddr(String expectedRemoteAddress) {
+  /** Helper for getting remote address {@link io.grpc.ServerCall#getAttributes()} */
+  protected SocketAddress obtainRemoteClientAddr() {
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withDeadlineAfter(5, TimeUnit.SECONDS);
 
     stub.unaryCall(SimpleRequest.getDefaultInstance());
 
-    String inetSocketString = serverCallCapture.get().getAttributes()
-        .get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR).toString();
-    // The substring is simply host:port, even if host is IPv6 as it fails to use []. Can't use
-    // standard parsing because the string isn't following any standard.
-    String host = inetSocketString.substring(0, inetSocketString.lastIndexOf(':'));
-    assertEquals(expectedRemoteAddress, host);
+    return serverCallCapture.get().getAttributes().get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR);
   }
 
   /** Helper for asserting TLS info in SSLSession {@link io.grpc.ServerCall#getAttributes()} */
