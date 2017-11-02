@@ -17,7 +17,9 @@
 package io.grpc.stub;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -31,8 +33,10 @@ import io.grpc.Status;
  */
 public final class ServerCalls {
 
-  static String TOO_MANY_REQUESTS = "Too many requests";
-  static String MISSING_REQUEST = "Half-closed without a request";
+  @VisibleForTesting
+  static final String TOO_MANY_REQUESTS = "Too many requests";
+  @VisibleForTesting
+  static final String MISSING_REQUEST = "Half-closed without a request";
 
   private ServerCalls() {
   }
@@ -80,29 +84,22 @@ public final class ServerCalls {
   /**
    * Adaptor to a unary call method.
    */
-  public static interface UnaryMethod<ReqT, RespT> extends UnaryRequestMethod<ReqT, RespT> {
-  }
+  public interface UnaryMethod<ReqT, RespT> extends UnaryRequestMethod<ReqT, RespT> {}
 
   /**
    * Adaptor to a server streaming method.
    */
-  public static interface ServerStreamingMethod<ReqT, RespT>
-      extends UnaryRequestMethod<ReqT, RespT> {
-  }
+  public interface ServerStreamingMethod<ReqT, RespT> extends UnaryRequestMethod<ReqT, RespT> {}
 
   /**
    * Adaptor to a client streaming method.
    */
-  public static interface ClientStreamingMethod<ReqT, RespT>
-      extends StreamingRequestMethod<ReqT, RespT> {
-  }
+  public interface ClientStreamingMethod<ReqT, RespT> extends StreamingRequestMethod<ReqT, RespT> {}
 
   /**
    * Adaptor to a bi-directional streaming method.
    */
-  public static interface BidiStreamingMethod<ReqT, RespT>
-      extends StreamingRequestMethod<ReqT, RespT> {
-  }
+  public interface BidiStreamingMethod<ReqT, RespT> extends StreamingRequestMethod<ReqT, RespT> {}
 
   private static final class UnaryServerCallHandler<ReqT, RespT>
       implements ServerCallHandler<ReqT, RespT> {
@@ -269,7 +266,10 @@ public final class ServerCalls {
           responseObserver.onCancelHandler.run();
         }
         if (!halfClosed) {
-          requestObserver.onError(Status.CANCELLED.asException());
+          requestObserver.onError(
+              Status.CANCELLED
+                  .withDescription("cancelled before receiving half close")
+                  .asRuntimeException());
         }
       }
 
@@ -292,11 +292,11 @@ public final class ServerCalls {
     return new StreamingServerCallHandler<ReqT, RespT>(method);
   }
 
-  private static interface UnaryRequestMethod<ReqT, RespT> {
+  private interface UnaryRequestMethod<ReqT, RespT> {
     void invoke(ReqT request, StreamObserver<RespT> responseObserver);
   }
 
-  private static interface StreamingRequestMethod<ReqT, RespT> {
+  private interface StreamingRequestMethod<ReqT, RespT> {
     StreamObserver<ReqT> invoke(StreamObserver<RespT> responseObserver);
   }
 
@@ -332,7 +332,7 @@ public final class ServerCalls {
     @Override
     public void onNext(RespT response) {
       if (cancelled) {
-        throw Status.CANCELLED.asRuntimeException();
+        throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
       }
       if (!sentHeaders) {
         call.sendHeaders(new Metadata());
@@ -353,7 +353,7 @@ public final class ServerCalls {
     @Override
     public void onCompleted() {
       if (cancelled) {
-        throw Status.CANCELLED.asRuntimeException();
+        throw Status.CANCELLED.withDescription("call already cancelled").asRuntimeException();
       } else {
         call.close(Status.OK, new Metadata());
       }
@@ -366,9 +366,7 @@ public final class ServerCalls {
 
     @Override
     public void setOnReadyHandler(Runnable r) {
-      if (frozen) {
-        throw new IllegalStateException("Cannot alter onReadyHandler after initialization");
-      }
+      checkState(!frozen, "Cannot alter onReadyHandler after initialization");
       this.onReadyHandler = r;
     }
 
@@ -379,19 +377,14 @@ public final class ServerCalls {
 
     @Override
     public void setOnCancelHandler(Runnable onCancelHandler) {
-      if (frozen) {
-        throw new IllegalStateException("Cannot alter onCancelHandler after initialization");
-      }
+      checkState(!frozen, "Cannot alter onCancelHandler after initialization");
       this.onCancelHandler = onCancelHandler;
     }
 
     @Override
     public void disableAutoInboundFlowControl() {
-      if (frozen) {
-        throw new IllegalStateException("Cannot disable auto flow control after initialization");
-      } else {
-        autoFlowControlEnabled = false;
-      }
+      checkState(!frozen, "Cannot disable auto flow control after initialization");
+      autoFlowControlEnabled = false;
     }
 
     @Override
@@ -413,7 +406,7 @@ public final class ServerCalls {
     responseObserver.onError(Status.UNIMPLEMENTED
         .withDescription(String.format("Method %s is unimplemented",
             methodDescriptor.getFullMethodName()))
-        .asException());
+        .asRuntimeException());
   }
 
   /**
