@@ -1541,6 +1541,43 @@ public class ManagedChannelImplTest {
   }
 
   @Test
+  public void resetConnectBackoff_refreshesNameResolver() {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    createChannel(nameResolverFactory, NO_INTERCEPTOR);
+    FakeNameResolverFactory.FakeNameResolver nameResolver = nameResolverFactory.resolvers.get(0);
+    assertEquals(0, nameResolver.refreshCalled);
+
+    channel.resetConnectBackoff();
+
+    assertEquals(1, nameResolver.refreshCalled);
+  }
+
+  @Test
+  public void resetConnectBackoff_noOpWhenChannelShutdown() {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    createChannel(nameResolverFactory, NO_INTERCEPTOR);
+
+    channel.shutdown();
+    assertTrue(channel.isShutdown());
+    channel.resetConnectBackoff();
+
+    FakeNameResolverFactory.FakeNameResolver nameResolver = nameResolverFactory.resolvers.get(0);
+    assertEquals(0, nameResolver.refreshCalled);
+  }
+
+  @Test
+  public void resetConnectBackoff_noOpWhenNameResolverNotStarted() {
+    FakeNameResolverFactory nameResolverFactory = new FakeNameResolverFactory(true);
+    createChannel(nameResolverFactory, NO_INTERCEPTOR, false /* requestConnection */,
+            ManagedChannelImpl.IDLE_TIMEOUT_MILLIS_DISABLE);
+
+    channel.resetConnectBackoff();
+
+    FakeNameResolverFactory.FakeNameResolver nameResolver = nameResolverFactory.resolvers.get(0);
+    assertEquals(0, nameResolver.refreshCalled);
+  }
+
+  @Test
   public void orphanedChannelsAreLogged() throws Exception {
     int remaining = unterminatedChannels;
     for (int retry = 0; retry < 3; retry++) {
@@ -1679,6 +1716,7 @@ public class ManagedChannelImplTest {
       }
 
       @Override public void refresh() {
+        assertNotNull(listener);
         refreshCalled++;
       }
 

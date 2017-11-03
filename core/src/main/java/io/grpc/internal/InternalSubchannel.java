@@ -20,6 +20,7 @@ import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.READY;
 import static io.grpc.ConnectivityState.SHUTDOWN;
+import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -82,7 +83,8 @@ final class InternalSubchannel implements WithLogId {
   private int addressIndex;
 
   /**
-   * The policy to control back off between reconnects. Non-{@code null} when last connect failed.
+   * The policy to control back off between reconnects. Non-{@code null} when a reconnect task is
+   * scheduled.
    */
   @GuardedBy("lock")
   private BackoffPolicy reconnectPolicy;
@@ -96,6 +98,9 @@ final class InternalSubchannel implements WithLogId {
   @GuardedBy("lock")
   @Nullable
   private ScheduledFuture<?> reconnectTask;
+
+  @GuardedBy("lock")
+  private boolean reconnectCanceled;
 
   /**
    * All transports that are not terminated. At the very least the value of {@link #activeTransport}
@@ -227,9 +232,9 @@ final class InternalSubchannel implements WithLogId {
         try {
           synchronized (lock) {
             reconnectTask = null;
-            if (state.getState() == SHUTDOWN) {
-              // Even though shutdown() will cancel this task, the task may have already started
-              // when it's being cancelled.
+            if (reconnectCanceled) {
+              // Even though cancelReconnectTask() will cancel this task, the task may have already
+              // started when it's being canceled.
               return;
             }
             gotoNonErrorState(CONNECTING);
@@ -253,10 +258,30 @@ final class InternalSubchannel implements WithLogId {
       log.log(Level.FINE, "[{0}] Scheduling backoff for {1} ns", new Object[]{logId, delayNanos});
     }
     Preconditions.checkState(reconnectTask == null, "previous reconnectTask is not done");
+    reconnectCanceled = false;
     reconnectTask = scheduledExecutor.schedule(
         new LogExceptionRunnable(new EndOfCurrentBackoff()),
         delayNanos,
         TimeUnit.NANOSECONDS);
+  }
+
+  /**
+   * Immediately attempt to reconnect if the current state is TRANSIENT_FAILURE. Otherwise this
+   * method has no effect.
+   */
+  void resetConnectBackoff() {
+    try {
+      synchronized (lock) {
+        if (state.getState() != TRANSIENT_FAILURE) {
+          return;
+        }
+        cancelReconnectTask();
+        gotoNonErrorState(CONNECTING);
+        startNewTransport();
+      }
+    } finally {
+      channelExecutor.drain();
+    }
   }
 
   @GuardedBy("lock")
@@ -400,7 +425,9 @@ final class InternalSubchannel implements WithLogId {
   private void cancelReconnectTask() {
     if (reconnectTask != null) {
       reconnectTask.cancel(false);
+      reconnectCanceled = true;
       reconnectTask = null;
+      reconnectPolicy = null;
     }
   }
 

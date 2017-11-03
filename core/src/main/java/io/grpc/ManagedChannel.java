@@ -104,4 +104,20 @@ public abstract class ManagedChannel extends Channel {
   public void notifyWhenStateChanged(ConnectivityState source, Runnable callback) {
     throw new UnsupportedOperationException("Not implemented");
   }
+
+  /**
+   * For subchannels that are in TRANSIENT_FAILURE state, short-circuit the backoff timer and make
+   * them reconnect immediately. May also attempt to invoke {@link NameResolver#refresh}.
+   *
+   * <p>This is primarily intended for Android users, where the network may experience frequent
+   * temporary drops. Rather than waiting for gRPC's name resolution and reconnect timers to elapse
+   * before reconnecting, the app may use this method as a mechanism to notify gRPC that the network
+   * is now available and a reconnection attempt may occur immediately.
+   *
+   * <p>No-op if not supported by the implementation.
+   *
+   * @since 1.8.0
+   */
+  @ExperimentalApi
+  public void resetConnectBackoff() {}
 }

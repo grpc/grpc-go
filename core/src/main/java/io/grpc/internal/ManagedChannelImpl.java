@@ -135,6 +135,9 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
 
   private final ProxyDetector proxyDetector;
 
+  // Must be accessed from the channelExecutor.
+  private boolean nameResolverStarted;
+
   // null when channel is in idle mode.  Must be assigned from channelExecutor.
   @Nullable
   private LbHelperImpl lbHelper;
@@ -210,6 +213,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           if (nameResolver != null) {
             nameResolver.shutdown();
             nameResolver = null;
+            nameResolverStarted = false;
           }
 
           // Until LoadBalancer is shutdown, it may still create new subchannels.  We catch them
@@ -266,6 +270,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
       // either the idleModeTimer ran twice without exiting the idle mode, or the task in shutdown()
       // did not cancel idleModeTimer, both of which are bugs.
       nameResolver.shutdown();
+      nameResolverStarted = false;
       nameResolver = getNameResolver(target, nameResolverFactory, nameResolverParams);
       lbHelper.lb.shutdown();
       lbHelper = null;
@@ -312,6 +317,7 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
     NameResolverListenerImpl listener = new NameResolverListenerImpl(lbHelper);
     try {
       nameResolver.start(listener);
+      nameResolverStarted = true;
     } catch (Throwable t) {
       listener.onError(Status.fromThrowable(t));
     }
@@ -627,6 +633,28 @@ public final class ManagedChannelImpl extends ManagedChannel implements WithLogI
           @Override
           public void run() {
             channelStateManager.notifyWhenStateChanged(callback, executor, source);
+          }
+        }).drain();
+  }
+
+  @Override
+  public void resetConnectBackoff() {
+    channelExecutor.executeLater(
+        new Runnable() {
+          @Override
+          public void run() {
+            if (shutdown.get()) {
+              return;
+            }
+            if (nameResolverStarted) {
+              nameResolver.refresh();
+            }
+            for (InternalSubchannel subchannel : subchannels) {
+              subchannel.resetConnectBackoff();
+            }
+            for (InternalSubchannel oobChannel : oobChannels) {
+              oobChannel.resetConnectBackoff();
+            }
           }
         }).drain();
   }
