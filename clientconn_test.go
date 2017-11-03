@@ -46,6 +46,53 @@ func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.Sta
 	return state, state == wantState
 }
 
+func TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
+	defer leakcheck.Check(t)
+	server, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	defer server.Close()
+	done := make(chan struct{})
+	go func() { // Launch the server.
+		defer func() {
+			close(done)
+		}()
+		conn, err := server.Accept() // Accept the connection only to close it immediately.
+		if err != nil {
+			t.Errorf("Error while accepting. Err: %v", err)
+			return
+		}
+		prevAt := time.Now()
+		conn.Close()
+		var prevDuration time.Duration
+		// Make sure the retry attempts are backed off properly.
+		for i := 0; i < 3; i++ {
+			conn, err := server.Accept()
+			if err != nil {
+				t.Errorf("Error while accepting. Err: %v", err)
+				return
+			}
+			now := time.Now()
+			conn.Close()
+			dr := now.Sub(prevAt)
+			if dr <= prevDuration {
+				t.Errorf("Client backoff did not increase with retries. Previoud duration: %v, current duration: %v", prevDuration, dr)
+				return
+			}
+			prevDuration = dr
+			prevAt = now
+		}
+	}()
+	client, err := Dial(server.Addr().String(), WithInsecure())
+	if err != nil {
+		t.Fatalf("Error while dialing. Err: %v", err)
+	}
+	defer client.Close()
+	<-done
+
+}
+
 func TestConnectivityStates(t *testing.T) {
 	defer leakcheck.Check(t)
 	servers, resolver, cleanup := startServers(t, 2, math.MaxUint32)

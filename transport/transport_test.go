@@ -361,7 +361,7 @@ func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hTy
 	target := TargetInfo{
 		Addr: addr,
 	}
-	ct, connErr = NewClientTransport(context.Background(), target, copts, 2*time.Second)
+	ct, connErr = NewClientTransport(context.Background(), target, copts, time.Now().Add(2*time.Second), func() {})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
@@ -384,7 +384,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, done chan net.Con
 		}
 		done <- conn
 	}()
-	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, 2*time.Second)
+	tr, err := NewClientTransport(context.Background(), TargetInfo{Addr: lis.Addr().String()}, copts, time.Now().Add(2*time.Second), func() {})
 	if err != nil {
 		// Server clean-up.
 		lis.Close()
@@ -2091,7 +2091,7 @@ func setUpHTTPStatusTest(t *testing.T, httpStatus int, wh writeHeaders) (stream 
 		wh:         wh,
 	}
 	server.start(t, lis)
-	client, err = newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, 2*time.Second)
+	client, err = newHTTP2Client(context.Background(), TargetInfo{Addr: lis.Addr().String()}, ConnectOptions{}, time.Now().Add(2*time.Second), func() {})
 	if err != nil {
 		t.Fatalf("Error creating client. Err: %v", err)
 	}
