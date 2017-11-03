@@ -529,8 +529,18 @@ func TestKeepaliveServer(t *testing.T) {
 		t.Fatalf("Failed to dial: %v", err)
 	}
 	defer client.Close()
+
 	// Set read deadline on client conn so that it doesn't block forever in errorsome cases.
-	client.SetReadDeadline(time.Now().Add(10 * time.Second))
+	client.SetDeadline(time.Now().Add(10 * time.Second))
+
+	if n, err := client.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("Error writing client preface; n=%v, err=%v", n, err)
+	}
+	framer := newFramer(client, defaultWriteBufSize, defaultReadBufSize)
+	if err := framer.fr.WriteSettings(http2.Setting{}); err != nil {
+		t.Fatal("Error writing settings frame:", err)
+	}
+	framer.writer.Flush()
 	// Wait for keepalive logic to close the connection.
 	time.Sleep(4 * time.Second)
 	b := make([]byte, 24)
