@@ -824,10 +824,10 @@ func testTimeoutOnDeadServer(t *testing.T, e env) {
 	state := cc.GetState()
 	for ; state == connectivity.Ready && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
-	if state == connectivity.Ready {
-		t.Fatalf("Want connection state to be Ready, got %v", state)
-	}
 	cancel()
+	if state == connectivity.Ready {
+		t.Fatalf("Timed out waiting for non-ready state")
+	}
 	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond)
 	_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.FailFast(false))
 	cancel()
@@ -1231,10 +1231,10 @@ func testFailFast(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	cancel()
 	// Stop the server and tear down all the exisiting connections.
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
