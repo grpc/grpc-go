@@ -155,42 +155,42 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
 		if _, exists := md[":authority"]; !exists {
-			return nil, grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+			return nil, status.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
 		}
 		if s.setAndSendHeader {
 			if err := grpc.SetHeader(ctx, md); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
 			}
 			if err := grpc.SendHeader(ctx, testMetadata2); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", testMetadata2, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", testMetadata2, err)
 			}
 		} else if s.setHeaderOnly {
 			if err := grpc.SetHeader(ctx, md); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", md, err)
 			}
 			if err := grpc.SetHeader(ctx, testMetadata2); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", testMetadata2, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SetHeader(_, %v) = %v, want <nil>", testMetadata2, err)
 			}
 		} else {
 			if err := grpc.SendHeader(ctx, md); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", md, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", md, err)
 			}
 		}
 		if err := grpc.SetTrailer(ctx, testTrailerMetadata); err != nil {
-			return nil, grpc.Errorf(grpc.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
+			return nil, status.Errorf(grpc.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
 		}
 		if s.multipleSetTrailer {
 			if err := grpc.SetTrailer(ctx, testTrailerMetadata2); err != nil {
-				return nil, grpc.Errorf(grpc.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata2, err)
+				return nil, status.Errorf(grpc.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata2, err)
 			}
 		}
 	}
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
-		return nil, grpc.Errorf(codes.DataLoss, "failed to get peer from ctx")
+		return nil, status.Error(codes.DataLoss, "failed to get peer from ctx")
 	}
 	if pr.Addr == net.Addr(nil) {
-		return nil, grpc.Errorf(codes.DataLoss, "failed to get peer address")
+		return nil, status.Error(codes.DataLoss, "failed to get peer address")
 	}
 	if s.security != "" {
 		// Check Auth info
@@ -200,13 +200,13 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			authType = info.AuthType()
 			serverName = info.State.ServerName
 		default:
-			return nil, grpc.Errorf(codes.Unauthenticated, "Unknown AuthInfo type")
+			return nil, status.Error(codes.Unauthenticated, "Unknown AuthInfo type")
 		}
 		if authType != s.security {
-			return nil, grpc.Errorf(codes.Unauthenticated, "Wrong auth type: got %q, want %q", authType, s.security)
+			return nil, status.Errorf(codes.Unauthenticated, "Wrong auth type: got %q, want %q", authType, s.security)
 		}
 		if serverName != "x.test.youtube.com" {
-			return nil, grpc.Errorf(codes.Unauthenticated, "Unknown server name %q", serverName)
+			return nil, status.Errorf(codes.Unauthenticated, "Unknown server name %q", serverName)
 		}
 	}
 	// Simulate some service delay.
@@ -225,12 +225,12 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		if _, exists := md[":authority"]; !exists {
-			return grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+			return status.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
 		}
 		// For testing purpose, returns an error if user-agent is failAppUA.
 		// To test that client gets the correct error.
 		if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
-			return grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
+			return status.Error(codes.DataLoss, "error for testing: "+failAppUA)
 		}
 	}
 	cs := args.GetResponseParameters()
@@ -268,7 +268,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 		p := in.GetPayload().GetBody()
 		sum += len(p)
 		if s.earlyFail {
-			return grpc.Errorf(codes.NotFound, "not found")
+			return status.Error(codes.NotFound, "not found")
 		}
 	}
 }
@@ -278,21 +278,21 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 	if ok {
 		if s.setAndSendHeader {
 			if err := stream.SetHeader(md); err != nil {
-				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
+				return status.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
 			}
 			if err := stream.SendHeader(testMetadata2); err != nil {
-				return grpc.Errorf(grpc.Code(err), "%v.SendHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
+				return status.Errorf(grpc.Code(err), "%v.SendHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
 			}
 		} else if s.setHeaderOnly {
 			if err := stream.SetHeader(md); err != nil {
-				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
+				return status.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, md, err)
 			}
 			if err := stream.SetHeader(testMetadata2); err != nil {
-				return grpc.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
+				return status.Errorf(grpc.Code(err), "%v.SetHeader(_, %v) = %v, want <nil>", stream, testMetadata2, err)
 			}
 		} else {
 			if err := stream.SendHeader(md); err != nil {
-				return grpc.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
+				return status.Errorf(grpc.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, md, err, nil)
 			}
 		}
 		stream.SetTrailer(testTrailerMetadata)
@@ -309,7 +309,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		if err != nil {
 			// to facilitate testSvrWriteStatusEarlyWrite
 			if grpc.Code(err) == codes.ResourceExhausted {
-				return grpc.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
+				return status.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
 			}
 			return err
 		}
@@ -329,7 +329,7 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 			}); err != nil {
 				// to facilitate testSvrWriteStatusEarlyWrite
 				if grpc.Code(err) == codes.ResourceExhausted {
-					return grpc.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
+					return status.Errorf(codes.Internal, "fake error for test testSvrWriteStatusEarlyWrite. true error: %s", err.Error())
 				}
 				return err
 			}
@@ -2145,7 +2145,7 @@ func testHealthCheckOnFailure(t *testing.T, e env) {
 	defer te.tearDown()
 
 	cc := te.clientConn()
-	wantErr := grpc.Errorf(codes.DeadlineExceeded, "context deadline exceeded")
+	wantErr := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
 	if _, err := healthCheck(0*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.DeadlineExceeded)
 	}
@@ -2167,7 +2167,7 @@ func testHealthCheckOff(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	want := grpc.Errorf(codes.Unimplemented, "unknown service grpc.health.v1.Health")
+	want := status.Error(codes.Unimplemented, "unknown service grpc.health.v1.Health")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !reflect.DeepEqual(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
@@ -2178,7 +2178,7 @@ func TestUnknownHandler(t *testing.T) {
 	// An example unknownHandler that returns a different code and a different method, making sure that we do not
 	// expose what methods are implemented to a client that is not authenticated.
 	unknownHandler := func(srv interface{}, stream grpc.ServerStream) error {
-		return grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
+		return status.Error(codes.Unauthenticated, "user unauthenticated")
 	}
 	for _, e := range listTestEnv() {
 		// TODO(bradfitz): Temporarily skip this env due to #619.
@@ -2194,7 +2194,7 @@ func testUnknownHandler(t *testing.T, e env, unknownHandler grpc.StreamHandler) 
 	te.unknownHandler = unknownHandler
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
-	want := grpc.Errorf(codes.Unauthenticated, "user unauthenticated")
+	want := status.Error(codes.Unauthenticated, "user unauthenticated")
 	if _, err := healthCheck(1*time.Second, te.clientConn(), ""); !reflect.DeepEqual(err, want) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, %v", err, want)
 	}
@@ -2222,7 +2222,7 @@ func testHealthCheckServingStatus(t *testing.T, e env) {
 	if out.Status != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("Got the serving status %v, want SERVING", out.Status)
 	}
-	wantErr := grpc.Errorf(codes.NotFound, "unknown service")
+	wantErr := status.Error(codes.NotFound, "unknown service")
 	if _, err := healthCheck(1*time.Second, cc, "grpc.health.v1.Health"); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("Health/Check(_, _) = _, %v, want _, error code %s", err, codes.NotFound)
 	}
@@ -3479,7 +3479,7 @@ func testFailedServerStreaming(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
 	}
-	wantErr := grpc.Errorf(codes.DataLoss, "error for testing: "+failAppUA)
+	wantErr := status.Error(codes.DataLoss, "error for testing: "+failAppUA)
 	if _, err := stream.Recv(); !reflect.DeepEqual(err, wantErr) {
 		t.Fatalf("%v.Recv() = _, %v, want _, %v", stream, err, wantErr)
 	}
@@ -3908,7 +3908,7 @@ func TestUnaryClientInterceptor(t *testing.T) {
 func failOkayRPC(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	if err == nil {
-		return grpc.Errorf(codes.NotFound, "")
+		return status.Error(codes.NotFound, "")
 	}
 	return err
 }
@@ -3936,7 +3936,7 @@ func TestStreamClientInterceptor(t *testing.T) {
 func failOkayStream(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err == nil {
-		return nil, grpc.Errorf(codes.NotFound, "")
+		return nil, status.Error(codes.NotFound, "")
 	}
 	return s, nil
 }
@@ -3975,7 +3975,7 @@ func TestUnaryServerInterceptor(t *testing.T) {
 }
 
 func errInjector(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return nil, grpc.Errorf(codes.PermissionDenied, "")
+	return nil, status.Error(codes.PermissionDenied, "")
 }
 
 func testUnaryServerInterceptor(t *testing.T, e env) {
@@ -4006,7 +4006,7 @@ func fullDuplexOnly(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServ
 		return handler(srv, ss)
 	}
 	// Reject the other methods.
-	return grpc.Errorf(codes.PermissionDenied, "")
+	return status.Error(codes.PermissionDenied, "")
 }
 
 func testStreamServerInterceptor(t *testing.T, e env) {

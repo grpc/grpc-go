@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -533,7 +534,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	var code int32 = 2
 	msg := "test status message"
-	expectedErr := grpc.Errorf(codes.Code(code), msg)
+	expectedErr := status.Error(codes.Code(code), msg)
 	respStatus := &testpb.EchoStatus{
 		Code:    code,
 		Message: msg,
@@ -611,7 +612,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	status := in.GetResponseStatus()
+	st := in.GetResponseStatus()
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
@@ -622,8 +623,8 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 			grpc.SetTrailer(ctx, trailer)
 		}
 	}
-	if status != nil && status.Code != 0 {
-		return nil, grpc.Errorf(codes.Code(status.Code), status.Message)
+	if st != nil && st.Code != 0 {
+		return nil, status.Error(codes.Code(st.Code), st.Message)
 	}
 	pl, err := serverNewPayload(in.GetResponseType(), in.GetResponseSize())
 	if err != nil {
@@ -690,9 +691,9 @@ func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServ
 		if err != nil {
 			return err
 		}
-		status := in.GetResponseStatus()
-		if status != nil && status.Code != 0 {
-			return grpc.Errorf(codes.Code(status.Code), status.Message)
+		st := in.GetResponseStatus()
+		if st != nil && st.Code != 0 {
+			return status.Error(codes.Code(st.Code), st.Message)
 		}
 		cs := in.GetResponseParameters()
 		for _, c := range cs {
