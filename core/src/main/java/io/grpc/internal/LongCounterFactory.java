@@ -24,8 +24,11 @@ final class LongCounterFactory {
   /**
    * Creates a LongCounter.
    */
-  static LongCounter create() {
-    // TODO(zpencer): return a LongAdder for jdk8 platforms
-    return new ShardedAtomicLongCounter(Runtime.getRuntime().availableProcessors() * 2);
+  public static LongCounter create() {
+    if (ReflectionLongAdderCounter.isAvailable()) {
+      return new ReflectionLongAdderCounter();
+    } else {
+      return new ShardedAtomicLongCounter(Runtime.getRuntime().availableProcessors() * 2);
+    }
   }
 }
