@@ -89,13 +89,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
@@ -136,7 +136,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
   private long maxConnectionAgeGraceInNanos = MAX_CONNECTION_AGE_GRACE_NANOS_INFINITE;
   private long keepAliveTimeInNanos = DEFAULT_SERVER_KEEPALIVE_TIME_NANOS;
   private long keepAliveTimeoutInNanos = DEFAULT_SERVER_KEEPALIVE_TIMEOUT_NANOS;
-  private TransportTracer transportTracer;
+  private TransportTracer transportTracer = new TransportTracer();
 
   private class ServerTransportListenerImpl implements ServerTransportListener {
 
@@ -155,12 +155,10 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     }
   }
 
-  @Override
-  protected void manualSetUp() throws Exception {
-    assertNull("manualSetUp should not run more than once", handler());
-
+  @Before
+  public void setUp() {
     MockitoAnnotations.initMocks(this);
-    transportTracer = new TransportTracer();
+
     when(streamTracerFactory.newServerStreamTracer(anyString(), any(Metadata.class)))
         .thenReturn(streamTracer);
 
@@ -178,7 +176,12 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
             }
           })
       .when(streamListener)
-      .messagesAvailable(Matchers.<StreamListener.MessageProducer>any());
+      .messagesAvailable(any(StreamListener.MessageProducer.class));
+  }
+
+  @Override
+  protected void manualSetUp() throws Exception {
+    assertNull("manualSetUp should not run more than once", handler());
 
     initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
 
@@ -193,6 +196,19 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     // Simulate receipt of initial remote settings.
     ByteBuf serializedSettings = serializeSettings(new Http2Settings());
     channelRead(serializedSettings);
+  }
+
+  @Test
+  public void transportReadyDelayedUntilConnectionPreface() throws Exception {
+    initChannel(new GrpcHttp2ServerHeadersDecoder(GrpcUtil.DEFAULT_MAX_HEADER_LIST_SIZE));
+
+    handler().handleProtocolNegotiationCompleted(Attributes.EMPTY);
+    verify(transportListener, never()).transportReady(any(Attributes.class));
+
+    // Simulate receipt of the connection preface
+    channelRead(Http2CodecUtil.connectionPrefaceBuf());
+    channelRead(serializeSettings(new Http2Settings()));
+    verify(transportListener).transportReady(any(Attributes.class));
   }
 
   @Test

@@ -106,6 +106,9 @@ class NettyServerHandler extends AbstractNettyHandler {
   private final List<ServerStreamTracer.Factory> streamTracerFactories;
   private final TransportTracer transportTracer;
   private final KeepAliveEnforcer keepAliveEnforcer;
+  /** Incomplete attributes produced by negotiator. */
+  private Attributes negotiationAttributes;
+  /** Completed attributes produced by transportReady. */
   private Attributes attributes;
   private Throwable connectionError;
   private boolean teWarningLogged;
@@ -481,7 +484,7 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   @Override
   public void handleProtocolNegotiationCompleted(Attributes attrs) {
-    attributes = transportListener.transportReady(attrs);
+    negotiationAttributes = attrs;
   }
 
   @VisibleForTesting
@@ -680,6 +683,17 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   private class FrameListener extends Http2FrameAdapter {
+    private boolean firstSettings = true;
+
+    @Override
+    public void onSettingsRead(ChannelHandlerContext ctx, Http2Settings settings) {
+      if (firstSettings) {
+        firstSettings = false;
+        // Delay transportReady until we see the client's HTTP handshake, for coverage with
+        // handshakeTimeout
+        attributes = transportListener.transportReady(negotiationAttributes);
+      }
+    }
 
     @Override
     public int onDataRead(ChannelHandlerContext ctx, int streamId, ByteBuf data, int padding,
