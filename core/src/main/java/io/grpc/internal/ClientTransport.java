@@ -20,6 +20,7 @@ import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -61,6 +62,12 @@ public interface ClientTransport {
    * remote endpoint may throw {@link UnsupportedOperationException}.
    */
   void ping(PingCallback callback, Executor executor);
+
+  /**
+   * Returns a Future representing the transport level stats. If this transport does not support
+   * stats, the return value will be a Future of a null value.
+   */
+  Future<TransportTracer.Stats> getTransportStats();
 
   /**
    * A callback that is invoked when the acknowledgement to a {@link #ping} is received. Exactly one

@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Context;
 import io.grpc.LoadBalancer.PickResult;
@@ -30,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -183,6 +185,13 @@ final class DelayedClientTransport implements ManagedClientTransport {
   @Override
   public final void ping(final PingCallback callback, Executor executor) {
     throw new UnsupportedOperationException("This method is not expected to be called");
+  }
+
+  @Override
+  public Future<TransportTracer.Stats> getTransportStats() {
+    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+    ret.set(null);
+    return ret;
   }
 
   /**

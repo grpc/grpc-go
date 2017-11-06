@@ -16,12 +16,14 @@
 
 package io.grpc.internal;
 
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 
 abstract class ForwardingConnectionClientTransport implements ConnectionClientTransport {
   @Override
@@ -63,6 +65,13 @@ abstract class ForwardingConnectionClientTransport implements ConnectionClientTr
   @Override
   public String toString() {
     return getClass().getSimpleName() + "[" + delegate().toString() + "]";
+  }
+
+  @Override
+  public Future<TransportTracer.Stats> getTransportStats() {
+    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+    ret.set(null);
+    return ret;
   }
 
   protected abstract ConnectionClientTransport delegate();

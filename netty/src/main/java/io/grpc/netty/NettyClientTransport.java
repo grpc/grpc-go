@@ -21,6 +21,7 @@ import static io.netty.channel.ChannelOption.SO_KEEPALIVE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Attributes;
 import io.grpc.CallOptions;
 import io.grpc.Metadata;
@@ -35,6 +36,7 @@ import io.grpc.internal.KeepAliveManager;
 import io.grpc.internal.KeepAliveManager.ClientKeepAlivePinger;
 import io.grpc.internal.LogId;
 import io.grpc.internal.StatsTraceContext;
+import io.grpc.internal.TransportTracer;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -49,6 +51,7 @@ import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 
 /**
@@ -288,6 +291,13 @@ class NettyClientTransport implements ConnectionClientTransport {
   public Attributes getAttributes() {
     // TODO(zhangkun83): fill channel security attributes
     return Attributes.EMPTY;
+  }
+
+  @Override
+  public Future<TransportTracer.Stats> getTransportStats() {
+    SettableFuture<TransportTracer.Stats> ret = SettableFuture.create();
+    ret.set(null);
+    return ret;
   }
 
   @VisibleForTesting
