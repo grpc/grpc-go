@@ -309,6 +309,8 @@ func UnknownServiceHandler(streamHandler StreamHandler) ServerOption {
 // connection establishment (up to and including HTTP/2 handshaking) for all
 // new connections.  If this is not set, the default is 120 seconds.  A zero or
 // negative value will result in an immediate timeout.
+//
+// This API is EXPERIMENTAL.
 func ConnectionTimeout(d time.Duration) ServerOption {
 	return func(o *options) {
 		o.connectionTimeout = d
