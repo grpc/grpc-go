@@ -48,7 +48,7 @@ OPTIONAL - Rebuilding the generated code
 1. Install the protoc Go plugin
 
    ```
-   $ go get -a github.com/golang/protobuf/protoc-gen-go
+   $ go get -u github.com/golang/protobuf/protoc-gen-go
    ```
 
 1. Rebuild the generated Go code
