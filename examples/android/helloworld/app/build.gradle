@@ -7,7 +7,8 @@ android {
 
     defaultConfig {
         applicationId "io.grpc.android.helloworldexample"
-        minSdkVersion 9
+        // API level 14+ is required for TLS since Google Play Services v10.2
+        minSdkVersion 14
         targetSdkVersion 22
         versionCode 1
         versionName "1.0"
