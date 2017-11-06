@@ -18,6 +18,7 @@ package io.grpc.testing.integration;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.instrumentation.stats.ContextUtils.STATS_CONTEXT_KEY;
+import static io.grpc.stub.ClientCalls.blockingServerStreamingCall;
 import static io.grpc.testing.integration.Messages.PayloadType.COMPRESSABLE;
 import static io.opencensus.trace.unsafe.ContextUtils.CONTEXT_SPAN_KEY;
 import static org.junit.Assert.assertEquals;
@@ -39,6 +40,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.instrumentation.stats.RpcConstants;
 import com.google.instrumentation.stats.StatsContextFactory;
@@ -97,6 +99,8 @@ import io.grpc.testing.integration.Messages.StreamingOutputCallRequest;
 import io.grpc.testing.integration.Messages.StreamingOutputCallResponse;
 import io.opencensus.trace.Span;
 import io.opencensus.trace.unsafe.ContextUtils;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
@@ -1117,7 +1121,19 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+
+    MethodDescriptor<StreamingOutputCallRequest, StreamingOutputCallResponse> md =
+        TestServiceGrpc.getStreamingOutputCallMethod();
+    ByteSizeMarshaller<StreamingOutputCallResponse> mar =
+        new ByteSizeMarshaller<StreamingOutputCallResponse>(md.getResponseMarshaller());
+    blockingServerStreamingCall(
+        blockingStub.getChannel(),
+        md.toBuilder(md.getRequestMarshaller(), mar).build(),
+        blockingStub.getCallOptions(),
+        request)
+        .next();
+
+    int size = mar.lastInSize;
 
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size);
@@ -1130,7 +1146,19 @@ public abstract class AbstractInteropTest {
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
-    int size = blockingStub.streamingOutputCall(request).next().getSerializedSize();
+    
+    MethodDescriptor<StreamingOutputCallRequest, StreamingOutputCallResponse> md =
+        TestServiceGrpc.getStreamingOutputCallMethod();
+    ByteSizeMarshaller<StreamingOutputCallRequest> mar =
+        new ByteSizeMarshaller<StreamingOutputCallRequest>(md.getRequestMarshaller());
+    blockingServerStreamingCall(
+        blockingStub.getChannel(),
+        md.toBuilder(mar, md.getResponseMarshaller()).build(),
+        blockingStub.getCallOptions(),
+        request)
+        .next();
+
+    int size = mar.lastOutSize;
 
     TestServiceGrpc.TestServiceBlockingStub stub =
         blockingStub.withMaxInboundMessageSize(size - 1);
@@ -1147,29 +1175,50 @@ public abstract class AbstractInteropTest {
 
   @Test
   public void maxOutboundSize_exact() {
-    // warm up the channel and JVM
-    blockingStub.emptyCall(Empty.getDefaultInstance());
-
-    // set at least one field to ensure the size is non-zero.
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
+
+    MethodDescriptor<StreamingOutputCallRequest, StreamingOutputCallResponse> md =
+        TestServiceGrpc.getStreamingOutputCallMethod();
+    ByteSizeMarshaller<StreamingOutputCallRequest> mar =
+        new ByteSizeMarshaller<StreamingOutputCallRequest>(md.getRequestMarshaller());
+    blockingServerStreamingCall(
+        blockingStub.getChannel(),
+        md.toBuilder(mar, md.getResponseMarshaller()).build(),
+        blockingStub.getCallOptions(),
+        request)
+        .next();
+
+    int size = mar.lastOutSize;
+
     TestServiceGrpc.TestServiceBlockingStub stub =
-        blockingStub.withMaxOutboundMessageSize(request.getSerializedSize());
+        blockingStub.withMaxOutboundMessageSize(size);
 
     stub.streamingOutputCall(request).next();
   }
 
   @Test
   public void maxOutboundSize_tooBig() {
-    // warm up the channel and JVM
-    blockingStub.emptyCall(Empty.getDefaultInstance());
     // set at least one field to ensure the size is non-zero.
     StreamingOutputCallRequest request = StreamingOutputCallRequest.newBuilder()
         .addResponseParameters(ResponseParameters.newBuilder().setSize(1))
         .build();
+
+
+    MethodDescriptor<StreamingOutputCallRequest, StreamingOutputCallResponse> md =
+        TestServiceGrpc.getStreamingOutputCallMethod();
+    ByteSizeMarshaller<StreamingOutputCallRequest> mar =
+        new ByteSizeMarshaller<StreamingOutputCallRequest>(md.getRequestMarshaller());
+    blockingServerStreamingCall(
+        blockingStub.getChannel(),
+        md.toBuilder(mar, md.getResponseMarshaller()).build(),
+        blockingStub.getCallOptions(),
+        request)
+        .next();
+
     TestServiceGrpc.TestServiceBlockingStub stub =
-        blockingStub.withMaxOutboundMessageSize(request.getSerializedSize() - 1);
+        blockingStub.withMaxOutboundMessageSize(mar.lastOutSize - 1);
     try {
       stub.streamingOutputCall(request).next();
       fail();
@@ -1961,5 +2010,42 @@ public abstract class AbstractInteropTest {
         return next.startCall(call, requestHeaders);
       }
     };
+  }
+
+  /**
+   * A marshaller that record input and output sizes.
+   */
+  private static final class ByteSizeMarshaller<T> implements MethodDescriptor.Marshaller<T> {
+
+    private final MethodDescriptor.Marshaller<T> delegate;
+    volatile int lastOutSize;
+    volatile int lastInSize;
+
+    ByteSizeMarshaller(MethodDescriptor.Marshaller<T> delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public InputStream stream(T value) {
+      InputStream is = delegate.stream(value);
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      try {
+        lastOutSize = (int) ByteStreams.copy(is, baos);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      return new ByteArrayInputStream(baos.toByteArray());
+    }
+
+    @Override
+    public T parse(InputStream stream) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      try {
+        lastInSize = (int) ByteStreams.copy(stream, baos);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      return delegate.parse(new ByteArrayInputStream(baos.toByteArray()));
+    }
   }
 }
