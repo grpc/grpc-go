@@ -132,7 +132,8 @@ class OkHttpClientStream extends AbstractClientStream {
     }
 
     @Override
-    public void writeFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+    public void writeFrame(
+        WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {
       Buffer buffer;
       if (frame == null) {
         buffer = EMPTY_BUFFER;

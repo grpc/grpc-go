@@ -176,7 +176,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.writeMessage(new ByteArrayInputStream(msg));
     stream.flush();
     verify(writeQueue).enqueue(
-        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false)),
+        eq(new SendGrpcFrameCommand(stream.transportState(), messageFrame(MESSAGE), false, 1)),
         any(ChannelPromise.class),
         eq(true));
   }
@@ -189,14 +189,15 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.writeMessage(new BufferedInputStream(new ByteArrayInputStream(msg)));
     stream.flush();
     // Two writes occur, one for the GRPC frame header and the second with the payload
+    // The framer reports the message count when the payload is completely written
     verify(writeQueue).enqueue(
             eq(new SendGrpcFrameCommand(
-                stream.transportState(), messageFrame(MESSAGE).slice(0, 5), false)),
+                stream.transportState(), messageFrame(MESSAGE).slice(0, 5), false, 0)),
             any(ChannelPromise.class),
             eq(false));
     verify(writeQueue).enqueue(
         eq(new SendGrpcFrameCommand(
-            stream.transportState(), messageFrame(MESSAGE).slice(5, 11), false)),
+            stream.transportState(), messageFrame(MESSAGE).slice(5, 11), false, 1)),
         any(ChannelPromise.class),
         eq(true));
   }

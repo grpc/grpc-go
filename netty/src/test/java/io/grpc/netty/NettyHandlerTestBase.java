@@ -244,7 +244,8 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
     MessageFramer framer = new MessageFramer(
         new MessageFramer.Sink() {
           @Override
-          public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+          public void deliverFrame(
+              WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {
             if (frame != null) {
               ByteBuf bytebuf = ((NettyWritableBuffer) frame).bytebuf();
               compressionFrame.writeBytes(bytebuf);
@@ -252,8 +253,7 @@ public abstract class NettyHandlerTestBase<T extends Http2ConnectionHandler> {
           }
         },
         new NettyWritableBufferAllocator(ByteBufAllocator.DEFAULT),
-        StatsTraceContext.NOOP,
-        noTransportTracer);
+        StatsTraceContext.NOOP);
     framer.writePayload(new ByteArrayInputStream(content));
     framer.flush();
     ChannelHandlerContext ctx = newMockContext();

@@ -74,8 +74,7 @@ public class AbstractServerStreamTest {
     stream = new AbstractServerStreamBase(
         allocator,
         sink,
-        new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE, transportTracer),
-        transportTracer);
+        new AbstractServerStreamBase.TransportState(MAX_MESSAGE_SIZE, transportTracer));
   }
 
   /**
@@ -267,7 +266,8 @@ public class AbstractServerStreamTest {
 
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
 
-    verify(sink, never()).writeFrame(any(WritableBuffer.class), any(Boolean.class));
+    verify(sink, never())
+        .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Integer.class));
   }
 
   @Test
@@ -277,7 +277,7 @@ public class AbstractServerStreamTest {
     stream.writeMessage(new ByteArrayInputStream(new byte[]{}));
     stream.flush();
 
-    verify(sink).writeFrame(any(WritableBuffer.class), eq(true));
+    verify(sink).writeFrame(any(WritableBuffer.class), eq(true), eq(1));
   }
 
   @Test
@@ -346,8 +346,8 @@ public class AbstractServerStreamTest {
     private final AbstractServerStream.TransportState state;
 
     protected AbstractServerStreamBase(WritableBufferAllocator bufferAllocator, Sink sink,
-        AbstractServerStream.TransportState state, TransportTracer transportTracer) {
-      super(bufferAllocator, StatsTraceContext.NOOP, transportTracer);
+        AbstractServerStream.TransportState state) {
+      super(bufferAllocator, StatsTraceContext.NOOP);
       this.sink = sink;
       this.state = state;
     }

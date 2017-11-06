@@ -48,8 +48,9 @@ public abstract class AbstractServerStream extends AbstractStream
      *
      * @param frame a buffer containing the chunk of data to be sent.
      * @param flush {@code true} if more data may not be arriving soon
+     * @param numMessages the number of messages this frame represents
      */
-    void writeFrame(@Nullable WritableBuffer frame, boolean flush);
+    void writeFrame(@Nullable WritableBuffer frame, boolean flush, int numMessages);
 
     /**
      * Sends trailers to the remote end point. This call implies end of stream.
@@ -77,17 +78,13 @@ public abstract class AbstractServerStream extends AbstractStream
 
   private final MessageFramer framer;
   private final StatsTraceContext statsTraceCtx;
-  private final TransportTracer transportTracer;
   private boolean outboundClosed;
   private boolean headersSent;
 
   protected AbstractServerStream(
-      WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx,
-      TransportTracer transportTracer) {
+      WritableBufferAllocator bufferAllocator, StatsTraceContext statsTraceCtx) {
     this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
-    this.transportTracer = Preconditions.checkNotNull(transportTracer, "transportTracer");
-    framer = new MessageFramer(this, bufferAllocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
   }
 
   @Override
@@ -118,10 +115,11 @@ public abstract class AbstractServerStream extends AbstractStream
   }
 
   @Override
-  public final void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+  public final void deliverFrame(
+      WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {
     // Since endOfStream is triggered by the sending of trailers, avoid flush here and just flush
     // after the trailers.
-    abstractServerStreamSink().writeFrame(frame, endOfStream ? false : flush);
+    abstractServerStreamSink().writeFrame(frame, endOfStream ? false : flush, numMessages);
   }
 
   @Override

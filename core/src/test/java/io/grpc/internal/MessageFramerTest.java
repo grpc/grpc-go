@@ -16,7 +16,6 @@
 
 package io.grpc.internal;
 
-import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -35,7 +34,6 @@ import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -65,7 +63,6 @@ public class MessageFramerTest {
   private BytesWritableBufferAllocator allocator =
       new BytesWritableBufferAllocator(1000, 1000);
   private StatsTraceContext statsTraceCtx;
-  private TransportTracer transportTracer;
 
   /** Set up for test. */
   @Before
@@ -74,8 +71,7 @@ public class MessageFramerTest {
     // MessageDeframerTest tests with a client-side StatsTraceContext, so here we test with a
     // server-side StatsTraceContext.
     statsTraceCtx = new StatsTraceContext(new StreamTracer[]{tracer});
-    transportTracer = new TransportTracer();
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx);
   }
 
   @Test
@@ -84,7 +80,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.flush();
 
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true, 1);
     assertEquals(1, allocator.allocCount);
     verifyNoMoreInteractions(sink);
     checkStats(2, 2);
@@ -95,8 +91,8 @@ public class MessageFramerTest {
     writeUnknownLength(framer, new byte[]{3, 14});
     framer.flush();
     // Header is written first, then payload
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2}), false, false);
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {3, 14}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2}), false, false, 0);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {3, 14}), false, true, 1);
     assertEquals(2, allocator.allocCount);
     verifyNoMoreInteractions(sink);
     checkStats(2, 2);
@@ -110,7 +106,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.flush();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 1, 14}), false, true, 2);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
     checkStats(1, 1, 1, 1);
@@ -122,7 +118,7 @@ public class MessageFramerTest {
     verifyNoMoreInteractions(sink);
     framer.close();
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 7, 3, 14, 1, 5, 9, 2, 6}), true, true, 1);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
     checkStats(7, 7);
@@ -131,7 +127,7 @@ public class MessageFramerTest {
   @Test
   public void closeWithoutBufferedFrameGivesNullBuffer() {
     framer.close();
-    verify(sink).deliverFrame(null, true, true);
+    verify(sink).deliverFrame(null, true, true, 0);
     verifyNoMoreInteractions(sink);
     assertEquals(0, allocator.allocCount);
     checkStats();
@@ -140,14 +136,14 @@ public class MessageFramerTest {
   @Test
   public void payloadSplitBetweenSinks() {
     allocator = new BytesWritableBufferAllocator(12, 12);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx);
     writeKnownLength(framer, new byte[]{3, 14, 1, 5, 9, 2, 6, 5});
     verify(sink).deliverFrame(
-        toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false, false);
+        toWriteBuffer(new byte[] {0, 0, 0, 0, 8, 3, 14, 1, 5, 9, 2, 6}), false, false, 1);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {5}), false, true, 0);
     verifyNoMoreInteractions(sink);
     assertEquals(2, allocator.allocCount);
     checkStats(8, 8);
@@ -156,15 +152,15 @@ public class MessageFramerTest {
   @Test
   public void frameHeaderSplitBetweenSinks() {
     allocator = new BytesWritableBufferAllocator(12, 12);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx);
     writeKnownLength(framer, new byte[]{3, 14, 1});
     writeKnownLength(framer, new byte[]{3});
     verify(sink).deliverFrame(
-            toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false, false);
+            toWriteBuffer(new byte[] {0, 0, 0, 0, 3, 3, 14, 1, 0, 0, 0, 0}), false, false, 2);
     verifyNoMoreInteractions(sink);
 
     framer.flush();
-    verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[] {1, 3}, 12), false, true);
+    verify(sink).deliverFrame(toWriteBufferWithMinSize(new byte[] {1, 3}, 12), false, true, 0);
     verifyNoMoreInteractions(sink);
     assertEquals(2, allocator.allocCount);
     checkStats(3, 3, 1, 1);
@@ -174,7 +170,7 @@ public class MessageFramerTest {
   public void emptyPayloadYieldsFrame() throws Exception {
     writeKnownLength(framer, new byte[0]);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true, 1);
     assertEquals(1, allocator.allocCount);
     checkStats(0, 0);
   }
@@ -184,7 +180,7 @@ public class MessageFramerTest {
     writeUnknownLength(framer, new byte[0]);
     verifyZeroInteractions(sink);
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true, 1);
     // One alloc for the header
     assertEquals(1, allocator.allocCount);
     checkStats(0, 0);
@@ -195,7 +191,7 @@ public class MessageFramerTest {
     writeKnownLength(framer, new byte[]{3, 14});
     framer.flush();
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 2, 3, 14}), false, true, 1);
     verifyNoMoreInteractions(sink);
     assertEquals(1, allocator.allocCount);
     checkStats(2, 2);
@@ -204,10 +200,10 @@ public class MessageFramerTest {
   @Test
   public void largerFrameSize() throws Exception {
     allocator = new BytesWritableBufferAllocator(0, 10000);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true), eq(1));
     ByteWritableBuffer buffer = frameCaptor.getValue();
     assertEquals(1005, buffer.size());
 
@@ -225,13 +221,14 @@ public class MessageFramerTest {
   public void largerFrameSizeUnknownLength() throws Exception {
     // Force payload to be split into two chunks
     allocator = new BytesWritableBufferAllocator(500, 500);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(sink, allocator, statsTraceCtx);
     writeUnknownLength(framer, new byte[1000]);
     framer.flush();
     // Header and first chunk written with flush = false
-    verify(sink, times(2)).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
+    verify(sink, times(2)).deliverFrame(frameCaptor.capture(), eq(false), eq(false), eq(0));
     // On flush third buffer written with flish = true
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+    // The message count is only bumped when a message is completely written.
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true), eq(1));
 
     // header has fixed length of 5 and specifies correct length
     assertEquals(5, frameCaptor.getAllValues().get(0).readableBytes());
@@ -252,13 +249,14 @@ public class MessageFramerTest {
   public void compressed() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
     // setMessageCompression should default to true
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
+    framer = new MessageFramer(sink, allocator, statsTraceCtx)
         .setCompressor(new Codec.Gzip());
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame.
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false));
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+    // The message count is only bumped when a message is completely written.
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(false), eq(0));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true), eq(1));
 
     // Check the header
     ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
@@ -277,12 +275,12 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNoEncoding() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
+    framer = new MessageFramer(sink, allocator, statsTraceCtx)
         .setMessageCompression(true);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true), eq(1));
 
     // Check the header
     ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
@@ -302,13 +300,13 @@ public class MessageFramerTest {
   @Test
   public void dontCompressIfNotRequested() throws Exception {
     allocator = new BytesWritableBufferAllocator(100, Integer.MAX_VALUE);
-    framer = new MessageFramer(sink, allocator, statsTraceCtx, transportTracer)
+    framer = new MessageFramer(sink, allocator, statsTraceCtx)
         .setCompressor(new Codec.Gzip())
         .setMessageCompression(false);
     writeKnownLength(framer, new byte[1000]);
     framer.flush();
     // The GRPC header is written first as a separate frame
-    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true));
+    verify(sink).deliverFrame(frameCaptor.capture(), eq(false), eq(true), eq(1));
 
     // Check the header
     ByteWritableBuffer buffer = frameCaptor.getAllValues().get(0);
@@ -330,7 +328,8 @@ public class MessageFramerTest {
     MessageFramer.Sink reentrant = new MessageFramer.Sink() {
       int count = 0;
       @Override
-      public void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+      public void deliverFrame(
+          WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {
         if (count == 0) {
           framer.close();
           count++;
@@ -339,7 +338,7 @@ public class MessageFramerTest {
         }
       }
     };
-    framer = new MessageFramer(reentrant, allocator, statsTraceCtx, transportTracer);
+    framer = new MessageFramer(reentrant, allocator, statsTraceCtx);
     writeKnownLength(framer, new byte[]{3, 14});
     framer.close();
   }
@@ -350,7 +349,7 @@ public class MessageFramerTest {
     framer.setMessageCompression(true);
     writeKnownLength(framer, new byte[]{});
     framer.flush();
-    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true);
+    verify(sink).deliverFrame(toWriteBuffer(new byte[] {0, 0, 0, 0, 0}), false, true, 1);
     checkStats(0, 0);
   }
 
@@ -394,16 +393,6 @@ public class MessageFramerTest {
     assertNull(tracer.nextInboundEvent());
     assertEquals(expectedWireSize, tracer.getOutboundWireSize());
     assertEquals(expectedUncompressedSize, tracer.getOutboundUncompressedSize());
-
-    TransportTracer.Stats transportStats = transportTracer.getStats();
-    assertEquals(count, transportStats.messagesSent);
-    long transportSentMsgMs = TimeUnit.NANOSECONDS.toMillis(
-        transportStats.lastMessageSentTimeNanos);
-    if (count > 0) {
-      assertThat(System.currentTimeMillis() - transportSentMsgMs).isAtMost(50L);
-    } else {
-      assertEquals(0, transportSentMsgMs);
-    }
   }
 
   static class ByteWritableBuffer implements WritableBuffer {

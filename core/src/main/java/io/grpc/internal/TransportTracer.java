@@ -32,9 +32,8 @@ public final class TransportTracer {
   private long keepAlivesSent;
   private FlowControlReader flowControlWindowReader;
 
-  // TODO(zpencer): msg sent can piggyback on framer's writequeue and avoid syncing the update
-  private final LongCounter messagesSent = LongCounterFactory.create();
-  private volatile long lastMessageSentTimeNanos;
+  private long messagesSent;
+  private long lastMessageSentTimeNanos;
   // deframing happens on the application thread, and there's no easy way to avoid synchronization
   private final LongCounter messagesReceived = LongCounterFactory.create();
   private volatile long lastMessageReceivedTimeNanos;
@@ -48,7 +47,7 @@ public final class TransportTracer {
         lastStreamCreatedTimeNanos,
         streamsSucceeded,
         streamsFailed,
-        messagesSent.value(),
+        messagesSent,
         messagesReceived.value(),
         keepAlivesSent,
         lastMessageSentTimeNanos,
@@ -80,7 +79,7 @@ public final class TransportTracer {
    * Reports that a message was successfully sent. This method is thread safe.
    */
   public void reportMessageSent() {
-    messagesSent.add(1);
+    messagesSent++;
     lastMessageSentTimeNanos = currentTimeNanos();
   }
 

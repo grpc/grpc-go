@@ -202,7 +202,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
 
     // Send a frame and verify that it was written.
     ChannelFuture future = enqueue(
-        new SendGrpcFrameCommand(stream.transportState(), content(), false));
+        new SendGrpcFrameCommand(stream.transportState(), content(), false, 1));
     assertTrue(future.isSuccess());
     verifyWrite().writeData(eq(ctx()), eq(STREAM_ID), eq(content()), eq(0), eq(false),
         any(ChannelPromise.class));
@@ -559,7 +559,7 @@ public class NettyServerHandlerTest extends NettyHandlerTestBase<NettyServerHand
     payload.writeLong(1);
     for (int i = 0; i < 10; i++) {
       future = enqueue(
-          new SendGrpcFrameCommand(stream.transportState(), content().retainedSlice(), false));
+          new SendGrpcFrameCommand(stream.transportState(), content().retainedSlice(), false, 1));
       future.get();
       channel().releaseOutbound();
       channelRead(pingFrame(false /* isAck */, payload.slice()));

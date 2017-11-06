@@ -55,8 +55,13 @@ public class MessageFramer implements Framer {
      *              closed and there is no data to deliver.
      * @param endOfStream whether the frame is the last one for the GRPC stream
      * @param flush {@code true} if more data may not be arriving soon
+     * @param numMessages the number of messages that this series of frames represents
      */
-    void deliverFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush);
+    void deliverFrame(
+        @Nullable WritableBuffer frame,
+        boolean endOfStream,
+        boolean flush,
+        int numMessages);
   }
 
   private static final int HEADER_LENGTH = 5;
@@ -74,11 +79,10 @@ public class MessageFramer implements Framer {
   private final WritableBufferAllocator bufferAllocator;
   private final StatsTraceContext statsTraceCtx;
   // transportTracer is nullable until it is integrated with client transports
-  @Nullable
-  private final TransportTracer transportTracer;
   private boolean closed;
 
   // Tracing and stats-related states
+  private int messagesBuffered;
   private int currentMessageSeqNo = -1;
   private long currentMessageWireSize;
 
@@ -89,14 +93,10 @@ public class MessageFramer implements Framer {
    * @param bufferAllocator allocates buffers that the transport can commit to the wire.
    */
   public MessageFramer(
-      Sink sink,
-      WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx,
-      @Nullable TransportTracer transportTracer) {
+      Sink sink, WritableBufferAllocator bufferAllocator, StatsTraceContext statsTraceCtx) {
     this.sink = checkNotNull(sink, "sink");
     this.bufferAllocator = checkNotNull(bufferAllocator, "bufferAllocator");
     this.statsTraceCtx = checkNotNull(statsTraceCtx, "statsTraceCtx");
-    this.transportTracer = transportTracer;
   }
 
   @Override
@@ -125,6 +125,7 @@ public class MessageFramer implements Framer {
   @Override
   public void writePayload(InputStream message) {
     verifyNotClosed();
+    messagesBuffered++;
     currentMessageSeqNo++;
     currentMessageWireSize = 0;
     statsTraceCtx.outboundMessage(currentMessageSeqNo);
@@ -158,9 +159,6 @@ public class MessageFramer implements Framer {
     statsTraceCtx.outboundUncompressedSize(written);
     statsTraceCtx.outboundWireSize(currentMessageWireSize);
     statsTraceCtx.outboundMessageSent(currentMessageSeqNo, currentMessageWireSize, written);
-    if (transportTracer != null) {
-      transportTracer.reportMessageSent();
-    }
   }
 
   private int writeUncompressed(InputStream message, int messageLength) throws IOException {
@@ -249,11 +247,14 @@ public class MessageFramer implements Framer {
     // Note that we are always delivering a small message to the transport here which
     // may incur transport framing overhead as it may be sent separately to the contents
     // of the GRPC frame.
-    sink.deliverFrame(writeableHeader, false, false);
+    // The final message may not be completely written because we do not flush the last buffer.
+    // Do not report the last message as sent.
+    sink.deliverFrame(writeableHeader, false, false, messagesBuffered - 1);
+    messagesBuffered = 1;
     // Commit all except the last buffer to the sink
     List<WritableBuffer> bufferList = bufferChain.bufferList;
     for (int i = 0; i < bufferList.size() - 1; i++) {
-      sink.deliverFrame(bufferList.get(i), false, false);
+      sink.deliverFrame(bufferList.get(i), false, false, 0);
     }
     // Assign the current buffer to the last in the chain so it can be used
     // for future writes or written with end-of-stream=true on close.
@@ -346,7 +347,8 @@ public class MessageFramer implements Framer {
   private void commitToSink(boolean endOfStream, boolean flush) {
     WritableBuffer buf = buffer;
     buffer = null;
-    sink.deliverFrame(buf, endOfStream, flush);
+    sink.deliverFrame(buf, endOfStream, flush, messagesBuffered);
+    messagesBuffered = 0;
   }
 
   private void verifyNotClosed() {

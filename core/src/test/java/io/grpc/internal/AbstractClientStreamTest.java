@@ -326,7 +326,8 @@ public class AbstractClientStreamTest {
     assertTrue(payloadCaptor.getValue() != null);
     // GET requests don't have BODY.
     verify(sink, never())
-        .writeFrame(any(WritableBuffer.class), any(Boolean.class), any(Boolean.class));
+        .writeFrame(
+            any(WritableBuffer.class), any(Boolean.class), any(Boolean.class), any(Integer.class));
     assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage(0)");
     assertThat(tracer.nextOutboundEvent()).isEqualTo("outboundMessage()");
     assertThat(tracer.nextOutboundEvent()).matches("outboundMessageSent\\(0, [0-9]+, [0-9]+\\)");
@@ -393,7 +394,8 @@ public class AbstractClientStreamTest {
     public void request(int numMessages) {}
 
     @Override
-    public void writeFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {}
+    public void writeFrame(
+        WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {}
 
     @Override
     public void cancel(Status reason) {}

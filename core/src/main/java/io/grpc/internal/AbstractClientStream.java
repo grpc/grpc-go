@@ -64,8 +64,10 @@ public abstract class AbstractClientStream extends AbstractStream
      * @param endOfStream {@code true} if this is the last frame; {@code flush} is guaranteed to be
      *     {@code true} if this is {@code true}
      * @param flush {@code true} if more data may not be arriving soon
+     * @Param numMessages the number of messages this series of frames represents
      */
-    void writeFrame(@Nullable WritableBuffer frame, boolean endOfStream, boolean flush);
+    void writeFrame(
+        @Nullable WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages);
 
     /**
      * Requests up to the given number of messages from the call to be delivered to the client. This
@@ -100,8 +102,7 @@ public abstract class AbstractClientStream extends AbstractStream
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
     if (!useGet) {
-      TransportTracer transportTracer = null; // TODO(zpencer): add tracing on clients
-      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx, transportTracer);
+      framer = new MessageFramer(this, bufferAllocator, statsTraceCtx);
       this.headers = headers;
     } else {
       framer = new GetFramer(headers, statsTraceCtx);
@@ -158,9 +159,10 @@ public abstract class AbstractClientStream extends AbstractStream
   }
 
   @Override
-  public final void deliverFrame(WritableBuffer frame, boolean endOfStream, boolean flush) {
+  public final void deliverFrame(
+      WritableBuffer frame, boolean endOfStream, boolean flush, int numMessages) {
     Preconditions.checkArgument(frame != null || endOfStream, "null frame before EOS");
-    abstractClientStreamSink().writeFrame(frame, endOfStream, flush);
+    abstractClientStreamSink().writeFrame(frame, endOfStream, flush, numMessages);
   }
 
   @Override
