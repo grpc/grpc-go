@@ -199,42 +199,39 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
+
 	for {
+		// Check to make sure the context has expired.  This will prevent us from
+		// looping forever if an error occurs for wait-for-ready RPCs where no data
+		// is sent on the wire.
+		select {
+		case <-ctx.Done():
+			return nil, toRPCErr(ctx.Err())
+		default:
+		}
+
 		t, done, err = cc.getTransport(ctx, c.failFast)
 		if err != nil {
-			// TODO(zhaoq): Probably revisit the error handling.
-			if _, ok := status.FromError(err); ok {
-				return nil, err
-			}
-			if err == errConnClosing || err == errConnUnavailable {
-				if c.failFast {
-					return nil, Errorf(codes.Unavailable, "%v", err)
-				}
-				continue
-			}
-			// All the other errors are treated as Internal errors.
-			return nil, Errorf(codes.Internal, "%v", err)
+			return nil, err
 		}
 
 		s, err = t.NewStream(ctx, callHdr)
 		if err != nil {
-			if _, ok := err.(transport.ConnectionError); ok && done != nil {
-				// If error is connection error, transport was sending data on wire,
-				// and we are not sure if anything has been sent on wire.
-				// If error is not connection error, we are sure nothing has been sent.
-				updateRPCInfoInContext(ctx, rpcInfo{bytesSent: true, bytesReceived: false})
-			}
 			if done != nil {
 				done(balancer.DoneInfo{Err: err})
 				done = nil
 			}
-			if _, ok := err.(transport.ConnectionError); (ok || err == transport.ErrStreamDrain) && !c.failFast {
+			// In the event of any error from NewStream, we never attempted to write
+			// anything to the wire, so we can retry indefinitely for non-fail-fast
+			// RPCs.
+			if !c.failFast {
 				continue
 			}
 			return nil, toRPCErr(err)
 		}
 		break
 	}
+
 	// Set callInfo.peer object from stream's context.
 	if peer, ok := peer.FromContext(s.Context()); ok {
 		c.peer = peer
@@ -260,8 +257,8 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		statsCtx:     ctx,
 		statsHandler: cc.dopts.copts.StatsHandler,
 	}
-	// Listen on ctx.Done() to detect cancellation and s.Done() to detect normal termination
-	// when there is no pending I/O operations on this stream.
+	// Listen on s.Context().Done() to detect cancellation and s.Done() to detect
+	// normal termination when there is no pending I/O operations on this stream.
 	go func() {
 		select {
 		case <-t.Error():
@@ -502,7 +499,7 @@ func (cs *clientStream) finish(err error) {
 	}
 	if cs.done != nil {
 		updateRPCInfoInContext(cs.s.Context(), rpcInfo{
-			bytesSent:     cs.s.BytesSent(),
+			bytesSent:     true,
 			bytesReceived: cs.s.BytesReceived(),
 		})
 		cs.done(balancer.DoneInfo{Err: err})

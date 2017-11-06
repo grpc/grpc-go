@@ -410,7 +410,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	}
 	if t.state == draining {
 		t.mu.Unlock()
-		return nil, ErrStreamDrain
+		return nil, errStreamDrain
 	}
 	if t.state != reachable {
 		t.mu.Unlock()
@@ -481,7 +481,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	if t.state == draining {
 		t.mu.Unlock()
 		t.streamsQuota.add(1)
-		return nil, ErrStreamDrain
+		return nil, errStreamDrain
 	}
 	if t.state != reachable {
 		t.mu.Unlock()
@@ -508,10 +508,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		endStream: false,
 	})
 	t.mu.Unlock()
-
-	s.mu.Lock()
-	s.bytesSent = true
-	s.mu.Unlock()
 
 	if t.statsHandler != nil {
 		outHeader := &stats.OutHeader{
@@ -586,16 +582,16 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 // Close kicks off the shutdown process of the transport. This should be called
 // only once on a transport. Once it is called, the transport should not be
 // accessed any more.
-func (t *http2Client) Close() (err error) {
+func (t *http2Client) Close() error {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
-		return
+		return nil
 	}
 	t.state = closing
 	t.mu.Unlock()
 	t.cancel()
-	err = t.conn.Close()
+	err := t.conn.Close()
 	t.mu.Lock()
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -901,7 +897,13 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		close(s.headerChan)
 		s.headerDone = true
 	}
-	statusCode, ok := http2ErrConvTab[http2.ErrCode(f.ErrCode)]
+
+	code := http2.ErrCode(f.ErrCode)
+	if code == http2.ErrCodeRefusedStream {
+		// The stream was unprocessed by the server.
+		s.unprocessed = true
+	}
+	statusCode, ok := http2ErrConvTab[code]
 	if !ok {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown
@@ -983,12 +985,16 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		t.Close()
 		return
 	}
-	// A client can receive multiple GoAways from server (look at https://github.com/grpc/grpc-go/issues/1387).
-	// The idea is that the first GoAway will be sent with an ID of MaxInt32 and the second GoAway will be sent after an RTT delay
-	// with the ID of the last stream the server will process.
-	// Therefore, when we get the first GoAway we don't really close any streams. While in case of second GoAway we
-	// close all streams created after the second GoAwayId. This way streams that were in-flight while the GoAway from server
-	// was being sent don't get killed.
+	// A client can recieve multiple GoAways from the server (see
+	// https://github.com/grpc/grpc-go/issues/1387).  The idea is that the first
+	// GoAway will be sent with an ID of MaxInt32 and the second GoAway will be
+	// sent after an RTT delay with the ID of the last stream the server will
+	// process.
+	//
+	// Therefore, when we get the first GoAway we don't necessarily close any
+	// streams. While in case of second GoAway we close all streams created after
+	// the GoAwayId. This way streams that were in-flight while the GoAway from
+	// server was being sent don't get killed.
 	select {
 	case <-t.goAway: // t.goAway has been closed (i.e.,multiple GoAways).
 		// If there are multiple GoAways the first one should always have an ID greater than the following ones.
@@ -1010,6 +1016,11 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	}
 	for streamID, stream := range t.activeStreams {
 		if streamID > id && streamID <= upperLimit {
+			// The stream was unprocessed by the server.
+			stream.mu.Lock()
+			stream.unprocessed = true
+			stream.finish(statusGoAway)
+			stream.mu.Unlock()
 			close(stream.goAway)
 		}
 	}
@@ -1026,11 +1037,11 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 // It expects a lock on transport's mutext to be held by
 // the caller.
 func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
-	t.goAwayReason = NoReason
+	t.goAwayReason = GoAwayNoReason
 	switch f.ErrCode {
 	case http2.ErrCodeEnhanceYourCalm:
 		if string(f.DebugData()) == "too_many_pings" {
-			t.goAwayReason = TooManyPings
+			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
 }
