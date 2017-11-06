@@ -507,7 +507,7 @@ func (cs *clientStream) finish(err error) {
 	if cs.done != nil {
 		cs.done(balancer.DoneInfo{
 			Err:           err,
-			BytesSent:     cs.s.BytesSent(),
+			BytesSent:     true,
 			BytesReceived: cs.s.BytesReceived(),
 		})
 		cs.done = nil
