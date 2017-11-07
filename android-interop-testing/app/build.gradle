@@ -34,7 +34,7 @@ protobuf {
     }
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
         }
     }
     generateProtoTasks {
@@ -62,10 +62,10 @@ dependencies {
     compile 'com.android.support:support-annotations:23.1.1'
     compile 'com.google.android.gms:play-services-base:7.3.0'
     // You need to build grpc-java to obtain the grpc libraries below.
-    compile 'io.grpc:grpc-protobuf-nano:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-okhttp:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-stub:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
-    compile 'io.grpc:grpc-testing:1.8.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-protobuf-nano:1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-okhttp:1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-stub:1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
+    compile 'io.grpc:grpc-testing:1.9.0-SNAPSHOT' // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
     compile 'junit:junit:4.12'
 
