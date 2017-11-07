@@ -1148,7 +1148,7 @@ func (ac *addrConn) resetTransport() error {
 			ac.ready = nil
 		}
 		ac.mu.Unlock()
-		backoffTimer := time.NewTimer(time.Until(backoffDeadline))
+		backoffTimer := time.NewTimer(backoffDeadline.Sub(time.Now()))
 		select {
 		case <-backoffTimer.C:
 		case <-ac.ctx.Done():
@@ -1168,7 +1168,7 @@ func (ac *addrConn) transportMonitor() {
 		ac.mu.Lock()
 		t := ac.transport
 		if !ac.connectDeadline.IsZero() {
-			timer = time.NewTimer(time.Until(ac.connectDeadline))
+			timer = time.NewTimer(ac.connectDeadline.Sub(time.Now()))
 			cdeadline = timer.C
 		}
 		ac.mu.Unlock()
