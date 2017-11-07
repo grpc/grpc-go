@@ -21,8 +21,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.instrumentation.stats.Stats;
-import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.Attributes;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
@@ -150,7 +148,7 @@ public abstract class AbstractManagedChannelImplBuilder
   private boolean tracingEnabled = true;
 
   @Nullable
-  private StatsContextFactory statsFactory;
+  private CensusStatsModule censusStatsOverride;
 
   protected AbstractManagedChannelImplBuilder(String target) {
     this.target = Preconditions.checkNotNull(target, "target");
@@ -285,8 +283,8 @@ public abstract class AbstractManagedChannelImplBuilder
    * Override the default stats implementation.
    */
   @VisibleForTesting
-  protected final T statsContextFactory(StatsContextFactory statsFactory) {
-    this.statsFactory = statsFactory;
+  protected final T overrideCensusStatsModule(CensusStatsModule censusStats) {
+    this.censusStatsOverride = censusStats;
     return thisT();
   }
 
@@ -344,15 +342,13 @@ public abstract class AbstractManagedChannelImplBuilder
     List<ClientInterceptor> effectiveInterceptors =
         new ArrayList<ClientInterceptor>(this.interceptors);
     if (statsEnabled) {
-      StatsContextFactory statsCtxFactory =
-          this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
-      if (statsCtxFactory != null) {
-        CensusStatsModule censusStats =
-            new CensusStatsModule(statsCtxFactory, GrpcUtil.STOPWATCH_SUPPLIER, true, recordStats);
-        // First interceptor runs last (see ClientInterceptors.intercept()), so that no
-        // other interceptor can override the tracer factory we set in CallOptions.
-        effectiveInterceptors.add(0, censusStats.getClientInterceptor());
+      CensusStatsModule censusStats = this.censusStatsOverride;
+      if (censusStats == null) {
+        censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
       }
+      // First interceptor runs last (see ClientInterceptors.intercept()), so that no
+      // other interceptor can override the tracer factory we set in CallOptions.
+      effectiveInterceptors.add(0, censusStats.getClientInterceptor(recordStats));
     }
     if (tracingEnabled) {
       CensusTracingModule censusTracing =

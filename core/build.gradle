@@ -19,6 +19,12 @@ dependencies {
         // we'll always be more up-to-date
         exclude group: 'io.grpc', module: 'grpc-context'
     }
+    compile (libraries.opencensus_contrib_grpc_metrics) {
+        // prefer 3.0.0 from libraries instead of 3.0.1
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        // we'll always be more up-to-date
+        exclude group: 'io.grpc', module: 'grpc-context'
+    }
 
     testCompile project(':grpc-testing')
 

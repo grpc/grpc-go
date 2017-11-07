@@ -16,26 +16,24 @@
 
 package io.grpc.internal;
 
-import com.google.instrumentation.stats.StatsContextFactory;
-
 /**
  * Test helper that allows accessing package-private stuff.
  */
 public final class TestingAccessor {
   /**
-   * Sets a custom {@link StatsContextFactory} for tests.
+   * Sets a custom stats implementation for tests.
    */
-  public static void setStatsContextFactory(
-      AbstractManagedChannelImplBuilder<?> builder, StatsContextFactory factory) {
-    builder.statsContextFactory(factory);
+  public static void setStatsImplementation(
+      AbstractManagedChannelImplBuilder<?> builder, CensusStatsModule censusStats) {
+    builder.overrideCensusStatsModule(censusStats);
   }
 
   /**
-   * Sets a custom {@link StatsContextFactory} for tests.
+   * Sets a custom stats implementation for tests.
    */
-  public static void setStatsContextFactory(
-      AbstractServerImplBuilder<?> builder, StatsContextFactory factory) {
-    builder.statsContextFactory(factory);
+  public static void setStatsImplementation(
+      AbstractServerImplBuilder<?> builder, CensusStatsModule censusStats) {
+    builder.overrideCensusStatsModule(censusStats);
   }
 
   private TestingAccessor() {

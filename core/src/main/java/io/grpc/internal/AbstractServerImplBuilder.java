@@ -20,8 +20,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.instrumentation.stats.Stats;
-import com.google.instrumentation.stats.StatsContextFactory;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
 import io.grpc.Context;
@@ -97,7 +95,7 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
   CompressorRegistry compressorRegistry = DEFAULT_COMPRESSOR_REGISTRY;
 
   @Nullable
-  private StatsContextFactory statsFactory;
+  private CensusStatsModule censusStatsOverride;
 
   private boolean statsEnabled = true;
   private boolean recordStats = true;
@@ -184,8 +182,8 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
    * Override the default stats implementation.
    */
   @VisibleForTesting
-  protected T statsContextFactory(StatsContextFactory statsFactory) {
-    this.statsFactory = statsFactory;
+  protected T overrideCensusStatsModule(CensusStatsModule censusStats) {
+    this.censusStatsOverride = censusStats;
     return thisT();
   }
 
@@ -228,13 +226,11 @@ public abstract class AbstractServerImplBuilder<T extends AbstractServerImplBuil
     ArrayList<ServerStreamTracer.Factory> tracerFactories =
         new ArrayList<ServerStreamTracer.Factory>();
     if (statsEnabled) {
-      StatsContextFactory statsFactory =
-          this.statsFactory != null ? this.statsFactory : Stats.getStatsContextFactory();
-      if (statsFactory != null) {
-        CensusStatsModule censusStats =
-            new CensusStatsModule(statsFactory, GrpcUtil.STOPWATCH_SUPPLIER, true, recordStats);
-        tracerFactories.add(censusStats.getServerTracerFactory());
+      CensusStatsModule censusStats = this.censusStatsOverride;
+      if (censusStats == null) {
+        censusStats = new CensusStatsModule(GrpcUtil.STOPWATCH_SUPPLIER, true);
       }
+      tracerFactories.add(censusStats.getServerTracerFactory(recordStats));
     }
     if (tracingEnabled) {
       CensusTracingModule censusTracing =

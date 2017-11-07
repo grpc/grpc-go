@@ -19,15 +19,23 @@ package io.grpc.internal.testing;
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
-import com.google.instrumentation.stats.MeasurementDescriptor;
-import com.google.instrumentation.stats.MeasurementMap;
-import com.google.instrumentation.stats.MeasurementValue;
-import com.google.instrumentation.stats.StatsContext;
-import com.google.instrumentation.stats.StatsContextFactory;
-import com.google.instrumentation.stats.TagKey;
-import com.google.instrumentation.stats.TagValue;
-import io.grpc.internal.IoUtils;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Maps;
+import io.opencensus.common.Scope;
+import io.opencensus.stats.Measure;
+import io.opencensus.stats.MeasureMap;
+import io.opencensus.stats.StatsRecorder;
+import io.opencensus.tags.Tag;
+import io.opencensus.tags.TagContext;
+import io.opencensus.tags.TagContextBuilder;
+import io.opencensus.tags.TagKey;
+import io.opencensus.tags.TagValue;
+import io.opencensus.tags.Tagger;
+import io.opencensus.tags.propagation.TagContextBinarySerializer;
+import io.opencensus.tags.propagation.TagContextDeserializationException;
+import io.opencensus.tags.unsafe.ContextUtils;
 import io.opencensus.trace.Annotation;
 import io.opencensus.trace.AttributeValue;
 import io.opencensus.trace.EndSpanOptions;
@@ -40,10 +48,8 @@ import io.opencensus.trace.SpanContext;
 import io.opencensus.trace.SpanId;
 import io.opencensus.trace.TraceId;
 import io.opencensus.trace.TraceOptions;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -57,10 +63,12 @@ public class StatsTestUtils {
   }
 
   public static class MetricsRecord {
-    public final ImmutableMap<TagKey, TagValue> tags;
-    public final MeasurementMap metrics;
 
-    private MetricsRecord(ImmutableMap<TagKey, TagValue> tags, MeasurementMap metrics) {
+    public final ImmutableMap<TagKey, TagValue> tags;
+    public final ImmutableMap<Measure, Number> metrics;
+
+    private MetricsRecord(
+        ImmutableMap<TagKey, TagValue> tags, ImmutableMap<Measure, Number> metrics) {
       this.tags = tags;
       this.metrics = metrics;
     }
@@ -69,10 +77,16 @@ public class StatsTestUtils {
      * Returns the value of a metric, or {@code null} if not found.
      */
     @Nullable
-    public Double getMetric(MeasurementDescriptor metricName) {
-      for (MeasurementValue m : metrics) {
-        if (m.getMeasurement().equals(metricName)) {
-          return m.getValue();
+    public Double getMetric(Measure measure) {
+      for (Map.Entry<Measure, Number> m : metrics.entrySet()) {
+        if (m.getKey().equals(measure)) {
+          Number value = m.getValue();
+          if (value instanceof Double) {
+            return (Double) value;
+          } else if (value instanceof Long) {
+            return (double) (Long) value;
+          }
+          throw new AssertionError("Unexpected measure value type: " + value.getClass().getName());
         }
       }
       return null;
@@ -81,9 +95,9 @@ public class StatsTestUtils {
     /**
      * Returns the value of a metric converted to long, or throw if not found.
      */
-    public long getMetricAsLongOrFail(MeasurementDescriptor metricName) {
-      Double doubleValue = getMetric(metricName);
-      checkNotNull(doubleValue, "Metric not found: %s", metricName.toString());
+    public long getMetricAsLongOrFail(Measure measure) {
+      Double doubleValue = getMetric(measure);
+      checkNotNull(doubleValue, "Measure not found: %s", measure.getName());
       long longValue = (long) (Math.abs(doubleValue) + 0.0001);
       if (doubleValue < 0) {
         longValue = -longValue;
@@ -93,39 +107,28 @@ public class StatsTestUtils {
   }
 
   /**
-   * This tag will be propagated by {@link FakeStatsContextFactory} on the wire.
+   * This tag will be propagated by {@link FakeTagger} on the wire.
    */
   public static final TagKey EXTRA_TAG = TagKey.create("/rpc/test/extratag");
 
   private static final String EXTRA_TAG_HEADER_VALUE_PREFIX = "extratag:";
-  private static final String NO_EXTRA_TAG_HEADER_VALUE_PREFIX = "noextratag";
 
   /**
-   * A factory that makes fake {@link StatsContext}s and saves the created contexts to be
-   * accessible from {@link #pollContextOrFail}.  The contexts it has created would save metrics
-   * records to be accessible from {@link #pollRecord()} and {@link #pollRecord(long, TimeUnit)},
-   * until {@link #rolloverRecords} is called.
+   * A {@link Tagger} implementation that saves metrics records to be accessible from {@link
+   * #pollRecord()} and {@link #pollRecord(long, TimeUnit)}, until {@link #rolloverRecords} is
+   * called.
    */
-  public static final class FakeStatsContextFactory extends StatsContextFactory {
-    private BlockingQueue<MetricsRecord> records;
-    public final BlockingQueue<FakeStatsContext> contexts =
-        new LinkedBlockingQueue<FakeStatsContext>();
-    private final FakeStatsContext defaultContext;
+  public static final class FakeStatsRecorder extends StatsRecorder {
 
-    /**
-     * Constructor.
-     */
-    public FakeStatsContextFactory() {
-      rolloverRecords();
-      defaultContext = new FakeStatsContext(ImmutableMap.<TagKey, TagValue>of(), this);
-      // The records on the default context is not visible from pollRecord(), just like it's
-      // not visible from pollContextOrFail() either.
+    private BlockingQueue<MetricsRecord> records;
+
+    public FakeStatsRecorder() {
       rolloverRecords();
     }
 
-    public StatsContext pollContextOrFail() {
-      StatsContext cc = contexts.poll();
-      return checkNotNull(cc);
+    @Override
+    public MeasureMap newMeasureMap() {
+      return new FakeStatsRecord(this);
     }
 
     public MetricsRecord pollRecord() {
@@ -136,31 +139,8 @@ public class StatsTestUtils {
       return getCurrentRecordSink().poll(timeout, unit);
     }
 
-    @Override
-    public StatsContext deserialize(InputStream buffer) throws IOException {
-      String serializedString;
-      try {
-        serializedString = new String(IoUtils.toByteArray(buffer), UTF_8);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      if (serializedString.startsWith(EXTRA_TAG_HEADER_VALUE_PREFIX)) {
-        return getDefault().with(EXTRA_TAG,
-            TagValue.create(serializedString.substring(EXTRA_TAG_HEADER_VALUE_PREFIX.length())));
-      } else if (serializedString.startsWith(NO_EXTRA_TAG_HEADER_VALUE_PREFIX)) {
-        return getDefault();
-      } else {
-        throw new IOException("Malformed value");
-      }
-    }
-
-    @Override
-    public FakeStatsContext getDefault() {
-      return defaultContext;
-    }
-
     /**
-     * Disconnect this factory with the contexts it has created so far.  The records from those
+     * Disconnect this tagger with the contexts it has created so far.  The records from those
      * contexts will not show up in {@link #pollRecord}.  Useful for isolating the records between
      * test cases.
      */
@@ -174,45 +154,111 @@ public class StatsTestUtils {
     }
   }
 
-  public static final class FakeStatsContext extends StatsContext {
-    private final ImmutableMap<TagKey, TagValue> tags;
-    private final FakeStatsContextFactory factory;
+  public static final class FakeTagger extends Tagger {
+
+    @Override
+    public FakeTagContext empty() {
+      return FakeTagContext.EMPTY;
+    }
+
+    @Override
+    public TagContext getCurrentTagContext() {
+      return ContextUtils.TAG_CONTEXT_KEY.get();
+    }
+
+    @Override
+    public TagContextBuilder emptyBuilder() {
+      return new FakeTagContextBuilder(ImmutableMap.<TagKey, TagValue>of());
+    }
+
+    @Override
+    public FakeTagContextBuilder toBuilder(TagContext tags) {
+      return new FakeTagContextBuilder(getTags(tags));
+    }
+
+    @Override
+    public TagContextBuilder currentBuilder() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Scope withTagContext(TagContext tags) {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  public static final class FakeTagContextBinarySerializer extends TagContextBinarySerializer {
+
+    private final FakeTagger tagger = new FakeTagger();
+
+    @Override
+    public TagContext fromByteArray(byte[] bytes) throws TagContextDeserializationException {
+      String serializedString = new String(bytes, UTF_8);
+      if (serializedString.startsWith(EXTRA_TAG_HEADER_VALUE_PREFIX)) {
+        return tagger.emptyBuilder()
+            .put(EXTRA_TAG,
+                TagValue.create(serializedString.substring(EXTRA_TAG_HEADER_VALUE_PREFIX.length())))
+            .build();
+      } else {
+        throw new TagContextDeserializationException("Malformed value");
+      }
+    }
+
+    @Override
+    public byte[] toByteArray(TagContext tags) {
+      TagValue extraTagValue = getTags(tags).get(EXTRA_TAG);
+      if (extraTagValue == null) {
+        throw new UnsupportedOperationException("TagContext must contain EXTRA_TAG");
+      }
+      return (EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.asString()).getBytes(UTF_8);
+    }
+  }
+
+  public static final class FakeStatsRecord extends MeasureMap {
+
     private final BlockingQueue<MetricsRecord> recordSink;
+    public final Map<Measure, Number> metrics = Maps.newHashMap();
 
-    private FakeStatsContext(ImmutableMap<TagKey, TagValue> tags,
-        FakeStatsContextFactory factory) {
-      this.tags = tags;
-      this.factory = factory;
-      this.recordSink = factory.getCurrentRecordSink();
-    }
-
-    public Map<TagKey, TagValue> getTags() {
-      return tags;
+    private FakeStatsRecord(FakeStatsRecorder statsRecorder) {
+      this.recordSink = statsRecorder.getCurrentRecordSink();
     }
 
     @Override
-    public Builder builder() {
-      return new FakeStatsContextBuilder(this);
-    }
-
-    @Override
-    public StatsContext record(MeasurementMap metrics) {
-      recordSink.add(new MetricsRecord(tags, metrics));
+    public MeasureMap put(Measure.MeasureDouble measure, double value) {
+      metrics.put(measure, value);
       return this;
     }
 
     @Override
-    public void serialize(OutputStream os) {
-      TagValue extraTagValue = tags.get(EXTRA_TAG);
-      try {
-        if (extraTagValue == null) {
-          os.write(NO_EXTRA_TAG_HEADER_VALUE_PREFIX.getBytes(UTF_8));
-        } else {
-          os.write((EXTRA_TAG_HEADER_VALUE_PREFIX + extraTagValue.toString()).getBytes(UTF_8));
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+    public MeasureMap put(Measure.MeasureLong measure, long value) {
+      metrics.put(measure, value);
+      return this;
+    }
+
+    @Override
+    public void record(TagContext tags) {
+      recordSink.add(new MetricsRecord(getTags(tags), ImmutableMap.copyOf(metrics)));
+    }
+
+    @Override
+    public void record() {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  public static final class FakeTagContext extends TagContext {
+
+    private static final FakeTagContext EMPTY =
+        new FakeTagContext(ImmutableMap.<TagKey, TagValue>of());
+
+    private final ImmutableMap<TagKey, TagValue> tags;
+
+    private FakeTagContext(ImmutableMap<TagKey, TagValue> tags) {
+      this.tags = tags;
+    }
+
+    public ImmutableMap<TagKey, TagValue> getTags() {
+      return tags;
     }
 
     @Override
@@ -221,41 +267,55 @@ public class StatsTestUtils {
     }
 
     @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof FakeStatsContext)) {
-        return false;
-      }
-      FakeStatsContext otherCtx = (FakeStatsContext) other;
-      return tags.equals(otherCtx.tags);
-    }
-
-    @Override
-    public int hashCode() {
-      return tags.hashCode();
+    protected Iterator<Tag> getIterator() {
+      return Iterators.transform(
+          tags.entrySet().iterator(),
+          new Function<Map.Entry<TagKey, TagValue>, Tag>() {
+            @Override
+            public Tag apply(@Nullable Map.Entry<TagKey, TagValue> entry) {
+              return Tag.create(entry.getKey(), entry.getValue());
+            }
+          });
     }
   }
 
-  private static class FakeStatsContextBuilder extends StatsContext.Builder {
-    private final ImmutableMap.Builder<TagKey, TagValue> tagsBuilder = ImmutableMap.builder();
-    private final FakeStatsContext base;
+  public static class FakeTagContextBuilder extends TagContextBuilder {
 
-    private FakeStatsContextBuilder(FakeStatsContext base) {
-      this.base = base;
-      tagsBuilder.putAll(base.tags);
+    private final Map<TagKey, TagValue> tagsBuilder = Maps.newHashMap();
+
+    private FakeTagContextBuilder(Map<TagKey, TagValue> tags) {
+      tagsBuilder.putAll(tags);
     }
 
     @Override
-    public StatsContext.Builder set(TagKey key, TagValue value) {
+    public TagContextBuilder put(TagKey key, TagValue value) {
       tagsBuilder.put(key, value);
       return this;
     }
 
     @Override
-    public StatsContext build() {
-      FakeStatsContext context = new FakeStatsContext(tagsBuilder.build(), base.factory);
-      base.factory.contexts.add(context);
+    public TagContextBuilder remove(TagKey key) {
+      tagsBuilder.remove(key);
+      return this;
+    }
+
+    @Override
+    public TagContext build() {
+      FakeTagContext context = new FakeTagContext(ImmutableMap.copyOf(tagsBuilder));
       return context;
     }
+
+    @Override
+    public Scope buildScoped() {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  // This method handles the default TagContext, which isn't an instance of FakeTagContext.
+  private static ImmutableMap<TagKey, TagValue> getTags(TagContext tags) {
+    return tags instanceof FakeTagContext
+        ? ((FakeTagContext) tags).getTags()
+        : ImmutableMap.<TagKey, TagValue>of();
   }
 
   // TODO(bdrutu): Remove this class after OpenCensus releases support for this class.

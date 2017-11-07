@@ -80,7 +80,8 @@ public class Http2NettyTest extends AbstractInteropTest {
               .ciphers(TestUtils.preferredTestCiphers(), SupportedCipherSuiteFilter.INSTANCE)
               .sslProvider(SslProvider.OPENSSL)
               .build());
-      io.grpc.internal.TestingAccessor.setStatsContextFactory(builder, getClientStatsFactory());
+      io.grpc.internal.TestingAccessor.setStatsImplementation(
+          builder, createClientCensusStatsModule());
       return builder.build();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
