@@ -304,7 +304,7 @@ public final class ProtocolNegotiators {
         @Override
         public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
           SSLEngine sslEngine = sslContext.newEngine(ctx.alloc(), host, port);
-          SSLParameters sslParams = new SSLParameters();
+          SSLParameters sslParams = sslEngine.getSSLParameters();
           sslParams.setEndpointIdentificationAlgorithm("HTTPS");
           sslEngine.setSSLParameters(sslParams);
           ctx.pipeline().replace(this, null, new SslHandler(sslEngine, false));
