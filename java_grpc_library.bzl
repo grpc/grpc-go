@@ -28,7 +28,7 @@ def _gensource_impl(ctx):
           "--grpc-java_out={0},enable_deprecated={1}:{2}"
             .format(flavor, str(ctx.attr.enable_deprecated).lower(), srcdotjar.path)]
           + ["-I{0}={1}".format(_path_ignoring_repository(include), include.path) for include in includes]
-          + [src.short_path for src in srcs])
+          + [_path_ignoring_repository(src) for src in srcs])
   ctx.action(
       command = "cp $1 $2",
       inputs = [srcdotjar],
@@ -45,7 +45,7 @@ _gensource = rule(
         "flavor": attr.string(
             values = [
                 "normal",
-                "lite", # Not currently supported
+                "lite",  # Not currently supported
             ],
             default = "normal",
         ),
