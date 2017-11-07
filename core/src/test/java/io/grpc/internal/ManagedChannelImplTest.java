@@ -215,7 +215,7 @@ public class ManagedChannelImplTest {
     checkState(channel == null);
     channel = new ManagedChannelImpl(
         builder, mockTransportFactory, new FakeBackoffPolicyProvider(),
-        oobExecutorPool, timer.getStopwatchSupplier(), interceptors, ProxyDetector.NOOP_INSTANCE);
+        oobExecutorPool, timer.getStopwatchSupplier(), interceptors, GrpcUtil.NOOP_PROXY_DETECTOR);
 
     if (requestConnection) {
       // Force-exit the initial idle-mode

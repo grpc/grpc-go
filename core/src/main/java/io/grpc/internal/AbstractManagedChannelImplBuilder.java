@@ -116,8 +116,6 @@ public abstract class AbstractManagedChannelImplBuilder
   String authorityOverride;
 
 
-  private ProxyDetector proxyDetector = ProxyDetector.DEFAULT_INSTANCE;
-
   LoadBalancer.Factory loadBalancerFactory = DEFAULT_LOAD_BALANCER_FACTORY;
 
   boolean fullStreamDecompression;
@@ -338,7 +336,7 @@ public abstract class AbstractManagedChannelImplBuilder
         SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR),
         GrpcUtil.STOPWATCH_SUPPLIER,
         getEffectiveInterceptors(),
-        proxyDetector);
+        GrpcUtil.getProxyDetector());
   }
 
   @VisibleForTesting

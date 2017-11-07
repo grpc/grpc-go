@@ -24,17 +24,6 @@ import javax.annotation.Nullable;
  * {@link java.net.SocketAddress}.
  */
 public interface ProxyDetector {
-  ProxyDetector DEFAULT_INSTANCE = new ProxyDetectorImpl();
-
-  /** A proxy detector that always claims no proxy is needed, for unit test convenience. */
-  ProxyDetector NOOP_INSTANCE = new ProxyDetector() {
-    @Nullable
-    @Override
-    public ProxyParameters proxyFor(SocketAddress targetServerAddress) {
-      return null;
-    }
-  };
-
   /**
    * Given a target address, returns which proxy address should be used. If no proxy should be
    * used, then return value will be null.

@@ -112,7 +112,7 @@ public class DnsNameResolverTest {
   private ArgumentCaptor<Status> statusCaptor;
 
   private DnsNameResolver newResolver(String name, int port) {
-    return newResolver(name, port, mockResolver, ProxyDetector.NOOP_INSTANCE);
+    return newResolver(name, port, mockResolver, GrpcUtil.NOOP_PROXY_DETECTOR);
   }
 
   private DnsNameResolver newResolver(

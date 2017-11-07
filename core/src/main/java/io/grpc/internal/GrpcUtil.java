@@ -44,6 +44,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
@@ -224,6 +225,33 @@ public final class GrpcUtil {
    * The magic keepalive time value that disables keepalive.
    */
   public static final long SERVER_KEEPALIVE_TIME_NANOS_DISABLED = Long.MAX_VALUE;
+
+  /**
+   * The default proxy detector.
+   */
+  public static final ProxyDetector DEFAULT_PROXY_DETECTOR = new ProxyDetectorImpl();
+
+  /**
+   * A proxy detector that always claims no proxy is needed.
+   */
+  public static final ProxyDetector NOOP_PROXY_DETECTOR = new ProxyDetector() {
+    @Nullable
+    @Override
+    public ProxyParameters proxyFor(SocketAddress targetServerAddress) {
+      return null;
+    }
+  };
+
+  /**
+   * Returns a proxy detector appropriate for the current environment.
+   */
+  public static ProxyDetector getProxyDetector() {
+    if (IS_RESTRICTED_APPENGINE) {
+      return NOOP_PROXY_DETECTOR;
+    } else {
+      return DEFAULT_PROXY_DETECTOR;
+    }
+  }
 
   /**
    * Maps HTTP error response status codes to transport codes, as defined in <a

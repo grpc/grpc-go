@@ -943,7 +943,7 @@ public class InternalSubchannelTest {
   }
 
   private void createInternalSubchannel(SocketAddress ... addrs) {
-    createInternalSubChannelWithProxy(ProxyDetector.NOOP_INSTANCE, addrs);
+    createInternalSubChannelWithProxy(GrpcUtil.NOOP_PROXY_DETECTOR, addrs);
   }
 
   private void createInternalSubChannelWithProxy(
