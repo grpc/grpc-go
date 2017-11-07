@@ -16,10 +16,7 @@
 
 package io.grpc.testing.integration;
 
-import static junit.framework.TestCase.assertTrue;
-
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -134,10 +131,9 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
   public static final class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
-      ManagedChannelBuilder<?> builder =
-          ManagedChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
+      OkHttpChannelBuilder builder =
+          OkHttpChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
               .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
-      assertTrue(builder instanceof OkHttpChannelBuilder);
       return builder.build();
     }
 

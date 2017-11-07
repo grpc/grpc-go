@@ -45,10 +45,7 @@ dependencies {
   compile project(":grpc-okhttp")
   compile project(":grpc-protobuf")
   compile project(":grpc-stub")
-  compile (project(":grpc-interop-testing")) {
-    // We want the gRPC and service definitions but NOT grpc-netty for jdk7
-     exclude module: ":grpc-netty"
-  }
+  compile project(":grpc-interop-testing")
 }
 
 // [START model]
