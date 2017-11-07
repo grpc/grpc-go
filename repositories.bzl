@@ -244,6 +244,6 @@ def io_netty_tcnative_boringssl_static():
 def io_opencensus_api():
   native.maven_jar(
       name = "io_opencensus_opencensus_api",
-      artifact = "io.opencensus:opencensus-api:0.7.0",
-      sha1 = "bf69d604c0dfcf63356053828a90c3e332acd2b8",
+      artifact = "io.opencensus:opencensus-api:0.8.0",
+      sha1 = "f921cd399ff9a3084370969dca74ccea510ff91f",
   )
