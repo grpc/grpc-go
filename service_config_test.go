@@ -83,7 +83,7 @@ func TestParseLoadBalancer(t *testing.T) {
 	}
 }
 
-func TestPraseWaitForReady(t *testing.T) {
+func TestParseWaitForReady(t *testing.T) {
 	testcases := []struct {
 		scjs    string
 		wantSC  ServiceConfig
