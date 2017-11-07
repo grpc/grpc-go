@@ -147,6 +147,12 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
       return false;
     }
 
+    @Override
+    protected boolean serverInProcess() {
+      // Server-side metrics won't be found because the server is running remotely.
+      return false;
+    }
+
     // grpc-test.sandbox.googleapis.com does not support these tests
     @Override
     public void customMetadata() { }
