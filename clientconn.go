@@ -98,7 +98,8 @@ type dialOptions struct {
 	// This is to support v1 balancer.
 	balancerBuilder balancer.Builder
 	// This is to support grpclb.
-	resolverBuilder resolver.Builder
+	resolverBuilder       resolver.Builder
+	waitForServerSettings bool
 }
 
 const (
@@ -108,6 +109,16 @@ const (
 
 // DialOption configures how we set up the connection.
 type DialOption func(*dialOptions)
+
+// WithWaitForServerSettings makes the Dial wait until the client receives initial settings (server preface)
+// from the server.
+// Experimental API.
+func WithWaitForServerSettings() DialOption {
+	return func(o *dialOptions) {
+		o.waitForServerSettings = true
+		o.block = true
+	}
+}
 
 // WithWriteBufferSize lets you set the size of write buffer, this determines how much data can be batched
 // before doing a write on the wire.
@@ -906,7 +917,6 @@ type addrConn struct {
 	acbw   balancer.SubConn
 
 	mu       sync.Mutex
-	retries  int
 	curAddr  resolver.Address
 	prevAddr resolver.Address
 	state    connectivity.State
@@ -918,10 +928,13 @@ type addrConn struct {
 	// The reason this addrConn is torn down.
 	tearDownErr error
 
-	dialDeadline time.Time // Deadline by which dialing should succeed.
-	// backoffUntil is the time until which resetTransport needs to
+	retries int
+	// backoffDeadline is the time until which resetTransport needs to
 	// wait before increasing retries count.
-	backoffUntil *time.Timer
+	backoffDeadline time.Time
+	// connectDeadline is the time by which dial and tls handshake should
+	// finish.
+	connectDeadline time.Time
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -956,6 +969,15 @@ func (ac *addrConn) errorf(format string, a ...interface{}) {
 
 // resetTransport recreates a transport to the address for ac.  The old
 // transport will close itself on error or when the clientconn is closed.
+// The created transport must receive initial settings frame from the server.
+// In case that doesnt happen, transportMonitor will kill the newly created
+// transport after connectDeadline has expired.
+// In case there was an error on the tranpsort before the settings frame was
+// received, resetTransport resumes connecting to backends after the one that
+// is previously connected to. In case end of the list is reached, resetTransport
+// backs off until the original deadline.
+// If the DialOption WithWaitForServerSettings was set, resetTrasport returns
+// successfully only after server settings are received.
 //
 // TODO(bar) make sure all state transitions are valid.
 func (ac *addrConn) resetTransport() error {
@@ -975,17 +997,12 @@ func (ac *addrConn) resetTransport() error {
 	ac.dopts.copts.KeepaliveParams = ac.cc.mkp
 	ac.cc.mu.RUnlock()
 	var (
-		backoffUntil *time.Timer
-		dialDeadline time.Time
+		backoffDeadline time.Time
+		connectDeadline time.Time
 	)
-	defer func() {
-		if backoffUntil != nil {
-			backoffUntil.Stop()
-		}
-	}()
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
-		if ac.backoffUntil == nil {
+		if ac.backoffDeadline.IsZero() {
 			// This means either a successfull HTTP2 connection was established
 			// or this is the first time this addrConn is trying to establish a
 			// connection.
@@ -996,15 +1013,18 @@ func (ac *addrConn) resetTransport() error {
 				// Give dial more time as we keep failing to connect.
 				dialDuration = backoffFor
 			}
-			dialDeadline = time.Now().Add(dialDuration)
-			backoffUntil = time.NewTimer(backoffFor)
+			now := time.Now()
+			backoffDeadline = now.Add(backoffFor)
+			connectDeadline = now.Add(dialDuration)
 			prevAddr = resolver.Address{} // Start connecting from the begining.
 		} else {
 			// Continue trying to conect with the same deadlines.
 			retries = ac.retries
-			backoffUntil = ac.backoffUntil
-			dialDeadline = ac.dialDeadline
-			ac.backoffUntil = nil
+			backoffDeadline = ac.backoffDeadline
+			connectDeadline = ac.connectDeadline
+			ac.backoffDeadline = time.Time{}
+			ac.connectDeadline = time.Time{}
+			ac.retries = 0
 		}
 		if ac.state == connectivity.Shutdown {
 			ac.mu.Unlock()
@@ -1043,15 +1063,22 @@ func (ac *addrConn) resetTransport() error {
 				Metadata:  addr.Metadata,
 				Authority: ac.cc.authority,
 			}
-			newTransport, err := transport.NewClientTransport(ac.cc.ctx, sinfo, copts, dialDeadline, func() {
+			connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
+			done := make(chan struct{})
+			newTransport, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, sinfo, copts, func() {
+				close(done)
 				ac.mu.Lock()
-				if ac.backoffUntil != nil {
-					ac.backoffUntil.Stop()
-					ac.backoffUntil = nil
+				if !ac.backoffDeadline.IsZero() {
+					ac.backoffDeadline = time.Time{}
+					ac.connectDeadline = time.Time{}
+					ac.retries = 0
 				}
 				ac.mu.Unlock()
 			})
 			if err != nil {
+				// Do not cancel in the success path because of
+				// this issue in Go1.6: TODO(mmukhi): reference the issue.
+				cancel()
 				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
 					ac.mu.Lock()
 					if ac.state != connectivity.Shutdown {
@@ -1071,14 +1098,26 @@ func (ac *addrConn) resetTransport() error {
 				ac.mu.Unlock()
 				continue
 			}
+			if ac.dopts.waitForServerSettings {
+				select {
+				case <-done:
+				case <-connectCtx.Done():
+					// Didn't receive server preface, must kill this new
+					// transport now.
+					grpclog.Errorf("grpc: addrConn.resetTransport didn't get server preface after waiting. Closing the new transport now.")
+					newTransport.Close()
+					continue
+				case <-ac.ctx.Done():
+				}
+			}
 			ac.mu.Lock()
-			ac.printf("ready")
 			if ac.state == connectivity.Shutdown {
 				// ac.tearDown(...) has been invoked.
 				ac.mu.Unlock()
 				newTransport.Close()
 				return errConnClosing
 			}
+			ac.printf("ready")
 			ac.state = connectivity.Ready
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 			t := ac.transport
@@ -1095,9 +1134,8 @@ func (ac *addrConn) resetTransport() error {
 			// it gets server preface thus signifying that a successful
 			// HTTP2 connection was established.
 			ac.retries = retries
-			ac.backoffUntil = backoffUntil
-			ac.dialDeadline = dialDeadline
-			backoffUntil = nil // So that the defer function doesn't stop it.
+			ac.backoffDeadline = backoffDeadline
+			ac.connectDeadline = connectDeadline
 			ac.mu.Unlock()
 			return nil
 		}
@@ -1110,12 +1148,14 @@ func (ac *addrConn) resetTransport() error {
 			ac.ready = nil
 		}
 		ac.mu.Unlock()
+		backoffTimer := time.NewTimer(time.Until(backoffDeadline))
 		select {
-		case <-backoffUntil.C:
+		case <-backoffTimer.C:
 		case <-ac.ctx.Done():
+			backoffTimer.Stop()
 			return ac.ctx.Err()
 		}
-		backoffUntil.Stop()
+		backoffTimer.Stop()
 	}
 }
 
@@ -1123,13 +1163,41 @@ func (ac *addrConn) resetTransport() error {
 // new transport if an error happens. It returns when the channel is closing.
 func (ac *addrConn) transportMonitor() {
 	for {
+		var timer *time.Timer
+		var cdeadline <-chan time.Time
 		ac.mu.Lock()
 		t := ac.transport
+		if !ac.connectDeadline.IsZero() {
+			timer = time.NewTimer(time.Until(ac.connectDeadline))
+			cdeadline = timer.C
+		}
 		ac.mu.Unlock()
 		// Block until we receive a goaway or an error occurs.
 		select {
 		case <-t.GoAway():
 		case <-t.Error():
+		case <-cdeadline:
+			timer.Stop()
+			var isConnected bool
+			ac.mu.Lock()
+			if ac.backoffDeadline.IsZero() {
+				// This implies that client received server
+				// preface.
+				isConnected = true
+			}
+			ac.mu.Unlock()
+			if isConnected {
+				continue
+			}
+			timer = nil
+			// No server preface received until deadline.
+			// Kill the connection.
+			grpclog.Errorf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
+			t.Close()
+			break
+		}
+		if timer != nil {
+			timer.Stop()
 		}
 		// If a GoAway happened, regardless of error, adjust our keepalive
 		// parameters as appropriate.
