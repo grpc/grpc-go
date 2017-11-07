@@ -35,6 +35,8 @@ import io.grpc.ExperimentalApi;
  *
  * <p>Implementations of this class represent the 'outbound' message stream.
  *
+ * <p>Like {@code StreamObserver}, implementations are not required to be thread-safe; if multiple
+ * threads will be writing to an instance concurrently, the application must synchronize its calls.
  */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/1788")
 @DoNotMock
@@ -54,6 +56,10 @@ public abstract class CallStreamObserver<V> implements StreamObserver<V> {
    * thread will always be used to execute the {@link Runnable}, it is guaranteed that executions
    * are serialized with calls to the 'inbound' {@link StreamObserver}.
    *
+   * <p>On client-side this method may only be called during {@link
+   * ClientResponseObserver#beforeStart}. On server-side it may only be called during the initial
+   * call to the application, before the service returns its {@code StreamObserver}.
+   *
    * <p>Note that the handler may be called some time after {@link #isReady} has transitioned to
    * true as other callbacks may still be executing in the 'inbound' observer.
    *
@@ -65,6 +71,10 @@ public abstract class CallStreamObserver<V> implements StreamObserver<V> {
    * Disables automatic flow control where a token is returned to the peer after a call
    * to the 'inbound' {@link io.grpc.stub.StreamObserver#onNext(Object)} has completed. If disabled
    * an application must make explicit calls to {@link #request} to receive messages.
+   *
+   * <p>On client-side this method may only be called during {@link
+   * ClientResponseObserver#beforeStart}. On server-side it may only be called during the initial
+   * call to the application, before the service returns its {@code StreamObserver}.
    *
    * <p>Note that for cases where the runtime knows that only one inbound message is allowed
    * calling this method will have no effect and the runtime will always permit one and only
@@ -85,6 +95,9 @@ public abstract class CallStreamObserver<V> implements StreamObserver<V> {
   /**
    * Requests the peer to produce {@code count} more messages to be delivered to the 'inbound'
    * {@link StreamObserver}.
+   *
+   * <p>This method is safe to call from multiple threads without external synchronization.
+   *
    * @param count more messages
    */
   public abstract void request(int count);

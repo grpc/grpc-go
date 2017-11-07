@@ -174,7 +174,7 @@ public abstract class ClientCall<ReqT, RespT> {
    * <p>If called multiple times, the number of messages able to delivered will be the sum of the
    * calls.
    *
-   * <p>This method is safe to call from multiple threads without external synchronizaton.
+   * <p>This method is safe to call from multiple threads without external synchronization.
    *
    * @param numMessages the requested number of messages to be delivered to the listener. Must be
    *                    non-negative.
