@@ -16,7 +16,11 @@
 
 package io.grpc.testing.integration;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.netty.NettyChannelBuilder;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -79,11 +83,15 @@ public final class NettyClientInteropServlet extends HttpServlet {
   public static final class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
-      NettyChannelBuilder builder =
-          NettyChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
+      assertEquals(
+          "jdk8 required",
+          "1.8",
+          System.getProperty("java.specification.version"));
+      ManagedChannelBuilder<?> builder =
+          ManagedChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
               .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
-
-      builder.flowControlWindow(65 * 1024);
+      assertTrue(builder instanceof NettyChannelBuilder);
+      ((NettyChannelBuilder) builder).flowControlWindow(65 * 1024);
       return builder.build();
     }
 

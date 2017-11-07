@@ -16,7 +16,11 @@
 
 package io.grpc.testing.integration;
 
+import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.okhttp.OkHttpChannelBuilder;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -131,9 +135,18 @@ public final class OkHttpClientInteropServlet extends HttpServlet {
   public static final class Tester extends AbstractInteropTest {
     @Override
     protected ManagedChannel createChannel() {
-      OkHttpChannelBuilder builder =
-          OkHttpChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
+      assertEquals(
+          "jdk7 required",
+          "1.7",
+          System.getProperty("java.specification.version"));
+      assertEquals(
+          "Can not run in dev servers because they lack org.conscrypt.OpenSSLProvider support",
+          "Production",
+          System.getProperty("com.google.appengine.runtime.environment"));
+      ManagedChannelBuilder<?> builder =
+          ManagedChannelBuilder.forTarget(INTEROP_TEST_ADDRESS)
               .maxInboundMessageSize(AbstractInteropTest.MAX_MESSAGE_SIZE);
+      assertTrue(builder instanceof OkHttpChannelBuilder);
       return builder.build();
     }
 
