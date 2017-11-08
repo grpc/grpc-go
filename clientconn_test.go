@@ -159,7 +159,7 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 				return
 			}
-			t.Errorf("Unexpected error while reading, wanted timeout error", err)
+			t.Errorf("Unexpected error while reading. Err: %v, want timeout error", err)
 			break
 		}
 

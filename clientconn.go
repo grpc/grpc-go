@@ -1077,7 +1077,7 @@ func (ac *addrConn) resetTransport() error {
 			})
 			if err != nil {
 				// Do not cancel in the success path because of
-				// this issue in Go1.6: TODO(mmukhi): reference the issue.
+				// this issue in Go1.6: https://github.com/golang/go/issues/15078.
 				cancel()
 				if e, ok := err.(transport.ConnectionError); ok && !e.Temporary() {
 					ac.mu.Lock()
@@ -1194,7 +1194,6 @@ func (ac *addrConn) transportMonitor() {
 			// Kill the connection.
 			grpclog.Errorf("grpc: addrConn.transportMonitor didn't get server preface after waiting. Closing the new transport now.")
 			t.Close()
-			break
 		}
 		if timer != nil {
 			timer.Stop()
