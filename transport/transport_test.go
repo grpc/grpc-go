@@ -1103,7 +1103,7 @@ func TestMaxStreams(t *testing.T) {
 			}
 		}
 	}()
-	// Test these conditions untill they pass or
+	// Test these conditions until they pass or
 	// we reach the deadline (failure case).
 	for {
 		select {
