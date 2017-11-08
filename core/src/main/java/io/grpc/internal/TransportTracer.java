@@ -17,7 +17,6 @@
 package io.grpc.internal;
 
 import com.google.common.base.Preconditions;
-import io.grpc.Status;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -67,8 +66,8 @@ public final class TransportTracer {
   /**
    * Reports that a stream closed with the specified Status.
    */
-  public void reportStreamClosed(Status status) {
-    if (status.isOk()) {
+  public void reportStreamClosed(boolean success) {
+    if (success) {
       streamsSucceeded++;
     } else {
       streamsFailed++;

@@ -1432,7 +1432,7 @@ public abstract class AbstractTransportTest {
   }
 
   @Test
-  public void transportTracer_streamEnded_ok() throws Exception {
+  public void transportTracer_server_streamEnded_ok() throws Exception {
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mock(ManagedClientTransport.Listener.class)));
@@ -1462,7 +1462,7 @@ public abstract class AbstractTransportTest {
   }
 
   @Test
-  public void transportTracer_streamEnded_nonOk() throws Exception {
+  public void transportTracer_server_streamEnded_nonOk() throws Exception {
     server.start(serverListener);
     client = newClientTransport(server);
     runIfNotNull(client.start(mock(ManagedClientTransport.Listener.class)));
@@ -1488,6 +1488,45 @@ public abstract class AbstractTransportTest {
     TransportTracer.Stats after = serverTransportListener.transport.getTransportStats().get();
     assertEquals(1, after.streamsFailed);
     assertEquals(0, after.streamsSucceeded);
+  }
+
+  @Test
+  public void transportTracer_client_streamEnded_nonOk() throws Exception {
+    server.start(serverListener);
+    client = newClientTransport(server);
+    runIfNotNull(client.start(mockClientTransportListener));
+    ClientStream clientStream = client.newStream(methodDescriptor, new Metadata(), callOptions);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
+    clientStream.start(clientStreamListener);
+    MockServerTransportListener serverTransportListener =
+        serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    StreamCreation serverStreamCreation =
+        serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    if (!haveTransportTracer()) {
+      return;
+    }
+
+    TransportTracer.Stats serverBefore =
+        serverTransportListener.transport.getTransportStats().get();
+    assertEquals(0, serverBefore.streamsFailed);
+    assertEquals(0, serverBefore.streamsSucceeded);
+    // TODO(zpencer): uncomment when integrated with client transport
+    // TransportTracer.Stats clientBefore = client.getTransportStats().get();
+    // assertEquals(0, clientBefore.streamsFailed);
+    // assertEquals(0, clientBefore.streamsSucceeded);
+
+    clientStream.cancel(Status.UNKNOWN);
+    // do not validate stats until close() has been called on server
+    assertNotNull(serverStreamCreation.listener.status.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
+
+    TransportTracer.Stats serverAfter =
+        serverTransportListener.transport.getTransportStats().get();
+    assertEquals(1, serverAfter.streamsFailed);
+    assertEquals(0, serverAfter.streamsSucceeded);
+    // TODO(zpencer): uncomment when integrated with client transport
+    // TransportTracer.Stats clientAfter = client.getTransportStats().get();
+    // assertEquals(1, clientAfter.streamsFailed);
+    // assertEquals(0, clientAfter.streamsSucceeded);
   }
 
   @Test

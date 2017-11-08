@@ -95,6 +95,7 @@ public class AbstractServerStreamTest {
     ReadableBuffer buffer = mock(ReadableBuffer.class);
 
     // Close the deframer
+    stream.close(Status.OK, new Metadata());
     stream.transportState().complete();
     // Frame received after deframer closed, should be ignored and not trigger an exception
     stream.transportState().inboundDataReceived(buffer, true);
@@ -118,6 +119,7 @@ public class AbstractServerStreamTest {
 
     // Queue bytes in deframer
     stream.transportState().inboundDataReceived(ReadableBuffers.wrap(new byte[] {1}), false);
+    stream.close(Status.OK, new Metadata());
     stream.transportState().complete();
 
     assertEquals(Status.OK, closedFuture.get(TIMEOUT_MS, TimeUnit.MILLISECONDS));
@@ -172,6 +174,7 @@ public class AbstractServerStreamTest {
   public void completeWithoutClose() {
     stream.transportState().setListener(new ServerStreamListenerBase());
     // Test that it doesn't throw an exception
+    stream.close(Status.OK, new Metadata());
     stream.transportState().complete();
   }
 
