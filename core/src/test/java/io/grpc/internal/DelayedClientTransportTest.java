@@ -84,12 +84,12 @@ public class DelayedClientTransportTest {
   private final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
           .setType(MethodType.UNKNOWN)
-          .setFullMethodName("/service/method")
+          .setFullMethodName("service/method")
           .setRequestMarshaller(new StringMarshaller())
           .setResponseMarshaller(new IntegerMarshaller())
           .build();
   private final MethodDescriptor<String, Integer> method2 =
-      method.toBuilder().setFullMethodName("/service/method").build();
+      method.toBuilder().setFullMethodName("service/method").build();
   private final Metadata headers = new Metadata();
   private final Metadata headers2 = new Metadata();
 

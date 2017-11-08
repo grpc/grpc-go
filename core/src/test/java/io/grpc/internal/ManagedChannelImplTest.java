@@ -118,7 +118,7 @@ public class ManagedChannelImplTest {
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
           .setType(MethodType.UNKNOWN)
-          .setFullMethodName("/service/method")
+          .setFullMethodName("service/method")
           .setRequestMarshaller(new StringMarshaller())
           .setResponseMarshaller(new IntegerMarshaller())
           .build();

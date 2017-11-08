@@ -587,7 +587,7 @@ public class NettyClientTransportTest {
     static final MethodDescriptor<String, String> METHOD =
         MethodDescriptor.<String, String>newBuilder()
             .setType(MethodDescriptor.MethodType.UNARY)
-            .setFullMethodName("/testService/test")
+            .setFullMethodName("testService/test")
             .setRequestMarshaller(StringMarshaller.INSTANCE)
             .setResponseMarshaller(StringMarshaller.INSTANCE)
             .build();

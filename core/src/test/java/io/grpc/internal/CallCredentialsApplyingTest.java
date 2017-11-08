@@ -81,7 +81,7 @@ public class CallCredentialsApplyingTest {
   private static final MethodDescriptor<String, Integer> method =
       MethodDescriptor.<String, Integer>newBuilder()
           .setType(MethodDescriptor.MethodType.UNKNOWN)
-          .setFullMethodName("/service/method")
+          .setFullMethodName("service/method")
           .setRequestMarshaller(new StringMarshaller())
           .setResponseMarshaller(new IntegerMarshaller())
           .build();

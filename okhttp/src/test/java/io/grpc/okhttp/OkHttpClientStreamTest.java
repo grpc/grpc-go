@@ -71,7 +71,7 @@ public class OkHttpClientStreamTest {
     MockitoAnnotations.initMocks(this);
     methodDescriptor = MethodDescriptor.<Void, Void>newBuilder()
         .setType(MethodDescriptor.MethodType.UNARY)
-        .setFullMethodName("/testService/test")
+        .setFullMethodName("testService/test")
         .setRequestMarshaller(marshaller)
         .setResponseMarshaller(marshaller)
         .build();
@@ -169,7 +169,7 @@ public class OkHttpClientStreamTest {
   public void getUnaryRequest() {
     MethodDescriptor<?, ?> getMethod = MethodDescriptor.<Void, Void>newBuilder()
         .setType(MethodDescriptor.MethodType.UNARY)
-        .setFullMethodName("/service/method")
+        .setFullMethodName("service/method")
         .setIdempotent(true)
         .setSafe(true)
         .setRequestMarshaller(marshaller)

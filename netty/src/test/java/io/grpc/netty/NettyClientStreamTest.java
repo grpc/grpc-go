@@ -93,7 +93,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
   // Must be initialized before @Before, because it is used by createStream()
   private MethodDescriptor<?, ?> methodDescriptor = MethodDescriptor.<Void, Void>newBuilder()
       .setType(MethodDescriptor.MethodType.UNARY)
-      .setFullMethodName("/testService/test")
+      .setFullMethodName("testService/test")
       .setRequestMarshaller(marshaller)
       .setResponseMarshaller(marshaller)
       .build();
@@ -423,7 +423,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     // Creating a GET method
     MethodDescriptor<?, ?> descriptor = MethodDescriptor.<Void, Void>newBuilder()
         .setType(MethodDescriptor.MethodType.UNARY)
-        .setFullMethodName("/testService/test")
+        .setFullMethodName("testService/test")
         .setRequestMarshaller(marshaller)
         .setResponseMarshaller(marshaller)
         .setIdempotent(true)
@@ -451,7 +451,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     assertThat(headers)
         .containsEntry(
             AsciiString.of(":path"),
-            AsciiString.of("//testService/test?" + BaseEncoding.base64().encode(msg)));
+            AsciiString.of("/testService/test?" + BaseEncoding.base64().encode(msg)));
   }
 
   @Override

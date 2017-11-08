@@ -34,10 +34,10 @@ public class MethodDescriptorTest {
   public void createMethodDescriptor() {
     @SuppressWarnings("deprecation") // MethodDescriptor.create
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>create(
-        MethodType.CLIENT_STREAMING, "/package.service/method", new StringMarshaller(),
+        MethodType.CLIENT_STREAMING, "package.service/method", new StringMarshaller(),
         new StringMarshaller());
     assertEquals(MethodType.CLIENT_STREAMING, descriptor.getType());
-    assertEquals("/package.service/method", descriptor.getFullMethodName());
+    assertEquals("package.service/method", descriptor.getFullMethodName());
     assertFalse(descriptor.isIdempotent());
     assertFalse(descriptor.isSafe());
   }
@@ -46,7 +46,7 @@ public class MethodDescriptorTest {
   public void idempotent() {
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
-        .setFullMethodName("/package.service/method")
+        .setFullMethodName("package.service/method")
         .setRequestMarshaller(new StringMarshaller())
         .setResponseMarshaller(new StringMarshaller())
         .build();
@@ -59,14 +59,14 @@ public class MethodDescriptorTest {
     assertTrue(newDescriptor.isIdempotent());
     // All other fields should staty the same
     assertEquals(MethodType.SERVER_STREAMING, newDescriptor.getType());
-    assertEquals("/package.service/method", newDescriptor.getFullMethodName());
+    assertEquals("package.service/method", newDescriptor.getFullMethodName());
   }
 
   @Test
   public void safe() {
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.UNARY)
-        .setFullMethodName("/package.service/method")
+        .setFullMethodName("package.service/method")
         .setRequestMarshaller(new StringMarshaller())
         .setResponseMarshaller(new StringMarshaller())
         .build();
@@ -77,14 +77,14 @@ public class MethodDescriptorTest {
     assertTrue(newDescriptor.isSafe());
     // All other fields should staty the same
     assertEquals(MethodType.UNARY, newDescriptor.getType());
-    assertEquals("/package.service/method", newDescriptor.getFullMethodName());
+    assertEquals("package.service/method", newDescriptor.getFullMethodName());
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void safeAndNonUnary() {
     MethodDescriptor<String, String> descriptor = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
-        .setFullMethodName("/package.service/method")
+        .setFullMethodName("package.service/method")
         .setRequestMarshaller(new StringMarshaller())
         .setResponseMarshaller(new StringMarshaller())
         .build();
@@ -99,7 +99,7 @@ public class MethodDescriptorTest {
   public void sampledToLocalTracing() {
     MethodDescriptor<String, String> md1 = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
-        .setFullMethodName("/package.service/method")
+        .setFullMethodName("package.service/method")
         .setRequestMarshaller(new StringMarshaller())
         .setResponseMarshaller(new StringMarshaller())
         .setSampledToLocalTracing(true)
@@ -107,21 +107,21 @@ public class MethodDescriptorTest {
     assertTrue(md1.isSampledToLocalTracing());
 
     MethodDescriptor<String, String> md2 = md1.toBuilder()
-        .setFullMethodName("/package.service/method2")
+        .setFullMethodName("package.service/method2")
         .build();
     assertTrue(md2.isSampledToLocalTracing());
 
     // Same method name as md1, but not setting sampledToLocalTracing
     MethodDescriptor<String, String> md3 = MethodDescriptor.<String, String>newBuilder()
         .setType(MethodType.SERVER_STREAMING)
-        .setFullMethodName("/package.service/method")
+        .setFullMethodName("package.service/method")
         .setRequestMarshaller(new StringMarshaller())
         .setResponseMarshaller(new StringMarshaller())
         .build();
     assertFalse(md3.isSampledToLocalTracing());
 
     MethodDescriptor<String, String> md4 = md3.toBuilder()
-        .setFullMethodName("/package.service/method2")
+        .setFullMethodName("package.service/method2")
         .setSampledToLocalTracing(true)
         .build();
     assertTrue(md4.isSampledToLocalTracing());

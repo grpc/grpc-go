@@ -67,7 +67,7 @@ public class ServerCallImplTest {
   private static final MethodDescriptor<Long, Long> UNARY_METHOD =
       MethodDescriptor.<Long, Long>newBuilder()
           .setType(MethodType.UNARY)
-          .setFullMethodName("/service/method")
+          .setFullMethodName("service/method")
           .setRequestMarshaller(new LongMarshaller())
           .setResponseMarshaller(new LongMarshaller())
           .build();
@@ -75,7 +75,7 @@ public class ServerCallImplTest {
   private static final MethodDescriptor<Long, Long> CLIENT_STREAMING_METHOD =
       MethodDescriptor.<Long, Long>newBuilder()
           .setType(MethodType.UNARY)
-          .setFullMethodName("/service/method")
+          .setFullMethodName("service/method")
           .setRequestMarshaller(new LongMarshaller())
           .setResponseMarshaller(new LongMarshaller())
           .build();
