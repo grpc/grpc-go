@@ -65,6 +65,7 @@ class NettyClientStream extends AbstractClientStream {
       StatsTraceContext statsTraceCtx) {
     super(new NettyWritableBufferAllocator(channel.alloc()),
         statsTraceCtx,
+        null,
         headers,
         useGet(method));
     this.state = checkNotNull(state, "transportState");
@@ -206,7 +207,7 @@ class NettyClientStream extends AbstractClientStream {
 
     public TransportState(NettyClientHandler handler, EventLoop eventLoop, int maxMessageSize,
         StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx);
+      super(maxMessageSize, statsTraceCtx, /*transportTracer=*/null);
       this.handler = checkNotNull(handler, "handler");
       this.eventLoop = checkNotNull(eventLoop, "eventLoop");
     }

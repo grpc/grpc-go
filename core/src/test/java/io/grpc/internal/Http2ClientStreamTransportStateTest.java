@@ -49,12 +49,14 @@ public class Http2ClientStreamTransportStateTest {
   private final Metadata.Key<String> testStatusMashaller =
       InternalMetadata.keyOf(":status", Metadata.ASCII_STRING_MARSHALLER);
 
+  private TransportTracer transportTracer;
   @Mock private ClientStreamListener mockListener;
   @Captor private ArgumentCaptor<Status> statusCaptor;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+    transportTracer = new TransportTracer();
 
     doAnswer(new Answer<Void>() {
       @Override
@@ -69,7 +71,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_notifiesListener() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -83,7 +85,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_doesntRequire200() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "500");
@@ -97,7 +99,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_noHttpStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER),
@@ -112,7 +114,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_wrongContentType_200() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -128,7 +130,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_wrongContentType_401() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "401");
@@ -145,7 +147,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_handles_1xx() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
 
     Metadata infoHeaders = new Metadata();
@@ -167,7 +169,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_twice() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -186,7 +188,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportHeadersReceived_unknownAndTwiceLogsSecondHeaders() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -206,7 +208,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportDataReceived_noHeaderReceived() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     String testString = "This is a test";
     state.transportDataReceived(ReadableBuffers.wrap(testString.getBytes(US_ASCII)), true);
@@ -217,7 +219,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportDataReceived_debugData() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -232,7 +234,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_notifiesListener() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata trailers = new Metadata();
     trailers.put(testStatusMashaller, "200");
@@ -247,7 +249,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_afterHeaders() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -264,7 +266,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_observesStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata trailers = new Metadata();
     trailers.put(testStatusMashaller, "200");
@@ -279,7 +281,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_missingStatusUsesHttpStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata trailers = new Metadata();
     trailers.put(testStatusMashaller, "401");
@@ -295,7 +297,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_missingHttpStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata trailers = new Metadata();
     trailers.put(Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER),
@@ -310,7 +312,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_missingStatusAndMissingHttpStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata trailers = new Metadata();
     trailers.put(Metadata.Key.of("content-type", Metadata.ASCII_STRING_MARSHALLER),
@@ -324,7 +326,7 @@ public class Http2ClientStreamTransportStateTest {
 
   @Test
   public void transportTrailersReceived_missingStatusAfterHeadersIgnoresHttpStatus() {
-    BaseTransportState state = new BaseTransportState();
+    BaseTransportState state = new BaseTransportState(transportTracer);
     state.setListener(mockListener);
     Metadata headers = new Metadata();
     headers.put(testStatusMashaller, "200");
@@ -341,8 +343,8 @@ public class Http2ClientStreamTransportStateTest {
   }
 
   private static class BaseTransportState extends Http2ClientStreamTransportState {
-    public BaseTransportState() {
-      super(DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContext.NOOP);
+    public BaseTransportState(TransportTracer transportTracer) {
+      super(DEFAULT_MAX_MESSAGE_SIZE, StatsTraceContext.NOOP, transportTracer);
     }
 
     @Override

@@ -97,8 +97,12 @@ public abstract class AbstractClientStream extends AbstractStream
    */
   private volatile boolean cancelled;
 
-  protected AbstractClientStream(WritableBufferAllocator bufferAllocator,
-      StatsTraceContext statsTraceCtx, Metadata headers, boolean useGet) {
+  protected AbstractClientStream(
+      WritableBufferAllocator bufferAllocator,
+      StatsTraceContext statsTraceCtx,
+      @Nullable TransportTracer transportTracer,
+      Metadata headers,
+      boolean useGet) {
     Preconditions.checkNotNull(headers, "headers");
     this.useGet = useGet;
     if (!useGet) {
@@ -203,8 +207,11 @@ public abstract class AbstractClientStream extends AbstractStream
      */
     private boolean statusReported;
 
-    protected TransportState(int maxMessageSize, StatsTraceContext statsTraceCtx) {
-      super(maxMessageSize, statsTraceCtx, null);
+    protected TransportState(
+        int maxMessageSize,
+        StatsTraceContext statsTraceCtx,
+        @Nullable TransportTracer transportTracer) {
+      super(maxMessageSize, statsTraceCtx, transportTracer);
       this.statsTraceCtx = Preconditions.checkNotNull(statsTraceCtx, "statsTraceCtx");
     }
 
