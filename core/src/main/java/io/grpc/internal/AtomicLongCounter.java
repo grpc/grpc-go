@@ -16,19 +16,27 @@
 
 package io.grpc.internal;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * A factory for creating {@link LongCounter} objects. The concrete implementation returned may
- * be platform dependent.
+ * An implementation of {@link LongCounter} that is just an {@Link AtomicLong}.
  */
-final class LongCounterFactory {
+final class AtomicLongCounter implements LongCounter {
+  private final AtomicLong counter = new AtomicLong();
+
   /**
-   * Creates a LongCounter.
+   * Creates an {@link AtomicLongCounter}.
    */
-  public static LongCounter create() {
-    if (ReflectionLongAdderCounter.isAvailable()) {
-      return new ReflectionLongAdderCounter();
-    } else {
-      return new AtomicLongCounter();
-    }
+  AtomicLongCounter() {
+  }
+
+  @Override
+  public void add(long delta) {
+    counter.getAndAdd(delta);
+  }
+
+  @Override
+  public long value() {
+    return counter.get();
   }
 }
