@@ -959,9 +959,13 @@ func (ac *addrConn) resetTransport() error {
 			}
 			ac.mu.Unlock()
 			sinfo := transport.TargetInfo{
-				Addr:      addr.Addr,
-				Metadata:  addr.Metadata,
-				Authority: ac.cc.authority,
+				Addr:     addr.Addr,
+				Metadata: addr.Metadata,
+			}
+			if isAddrIP(addr.Addr) {
+				sinfo.Authority = ac.cc.authority
+			} else {
+				sinfo.Authority = addr.Addr
 			}
 			newTransport, err := transport.NewClientTransport(ac.cc.ctx, sinfo, copts, timeout)
 			if err != nil {
@@ -1164,4 +1168,12 @@ func (ac *addrConn) getState() connectivity.State {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return ac.state
+}
+
+func isAddrIP(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return true
+	}
+	return net.ParseIP(host) != nil
 }
