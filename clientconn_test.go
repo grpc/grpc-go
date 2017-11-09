@@ -221,7 +221,7 @@ func TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 		time.Sleep(time.Millisecond * 1500) // Since the first backoff is for a second.
 		conn2.SetDeadline(time.Now().Add(time.Millisecond * 500))
 		for {
-			// Make sure the conneciton stays open and is closed
+			// Make sure the connection stays open and is closed
 			// only by connection timeout.
 			_, err = conn2.Read(b)
 			if err == nil {

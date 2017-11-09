@@ -1002,7 +1002,7 @@ func (ac *addrConn) resetTransport() error {
 	for retries := 0; ; retries++ {
 		ac.mu.Lock()
 		if ac.backoffDeadline.IsZero() {
-			// This means either a successfull HTTP2 connection was established
+			// This means either a successful HTTP2 connection was established
 			// or this is the first time this addrConn is trying to establish a
 			// connection.
 			backoffFor := ac.dopts.bs.backoff(retries) // time.Duration.
@@ -1015,7 +1015,7 @@ func (ac *addrConn) resetTransport() error {
 			now := time.Now()
 			backoffDeadline = now.Add(backoffFor)
 			connectDeadline = now.Add(dialDuration)
-			prevAddr = resolver.Address{} // Start connecting from the begining.
+			prevAddr = resolver.Address{} // Start connecting from the beginning.
 		} else {
 			// Continue trying to conect with the same deadlines.
 			retries = ac.retries
@@ -1039,7 +1039,7 @@ func (ac *addrConn) resetTransport() error {
 		copy(addrsIter, ac.addrs)
 		addrIdx := 0
 		for idx, addr := range addrsIter {
-			// Find the previous attemted address and start with
+			// Find the previous attempted address and start with
 			// the one after it.
 			if addr.Addr == prevAddr.Addr {
 				addrIdx = idx + 1
