@@ -116,7 +116,6 @@ type DialOption func(*dialOptions)
 func WithWaitForServerSettings() DialOption {
 	return func(o *dialOptions) {
 		o.waitForServerSettings = true
-		o.block = true
 	}
 }
 

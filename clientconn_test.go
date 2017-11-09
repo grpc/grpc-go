@@ -48,6 +48,77 @@ func assertState(wantState connectivity.State, cc *ClientConn) (connectivity.Sta
 	return state, state == wantState
 }
 
+func TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
+	defer leakcheck.Check(t)
+	numServers := 2
+	servers := make([]net.Listener, numServers)
+	var err error
+	for i := 0; i < numServers; i++ {
+		servers[i], err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			t.Fatalf("Error while listening. Err: %v", err)
+		}
+	}
+	dones := make([]chan struct{}, numServers)
+	for i := 0; i < numServers; i++ {
+		dones[i] = make(chan struct{})
+	}
+	for i := 0; i < numServers; i++ {
+		go func(i int) {
+			defer func() {
+				close(dones[i])
+			}()
+			conn, err := servers[i].Accept()
+			if err != nil {
+				t.Errorf("Error while accepting. Err: %v", err)
+				return
+			}
+			defer conn.Close()
+			switch i {
+			case 0: // 1st server accepts the connection and immediately closes it.
+			case 1: // 2nd server accepts the connection and sends settings frames.
+				framer := http2.NewFramer(conn, conn)
+				if err := framer.WriteSettings(http2.Setting{}); err != nil {
+					t.Errorf("Error while writing settings frame. %v", err)
+					return
+				}
+				conn.SetDeadline(time.Now().Add(time.Second))
+				buf := make([]byte, 1024)
+				for { // Make sure the connection stays healthy.
+					_, err = conn.Read(buf)
+					if err == nil {
+						continue
+					}
+					if nerr, ok := err.(net.Error); !ok || !nerr.Timeout() {
+						t.Errorf("Server expected the conn.Read(_) to timeout instead got error: %v", err)
+					}
+					return
+				}
+			}
+		}(i)
+	}
+	r, cleanup := manual.GenerateAndRegisterManualResolver()
+	defer cleanup()
+	resolvedAddrs := make([]resolver.Address, numServers)
+	for i := 0; i < numServers; i++ {
+		resolvedAddrs[i] = resolver.Address{Addr: servers[i].Addr().String()}
+	}
+	r.BootstrapWithAddrs(resolvedAddrs)
+	client, err := Dial(r.Scheme()+":///test.server", WithInsecure())
+	if err != nil {
+		t.Errorf("Dial failed. Err: %v", err)
+	} else {
+		defer client.Close()
+	}
+	time.Sleep(time.Second) // Close the servers after a second for cleanup.
+	for _, s := range servers {
+		s.Close()
+	}
+	for _, done := range dones {
+		<-done
+	}
+}
+
 func TestDialWaitsForServerSettings(t *testing.T) {
 	defer leakcheck.Check(t)
 	server, err := net.Listen("tcp", "localhost:0")
@@ -80,7 +151,7 @@ func TestDialWaitsForServerSettings(t *testing.T) {
 		<-dialDone // Close conn only after dial returns.
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForServerSettings())
+	client, err := DialContext(ctx, server.Addr().String(), WithInsecure(), WithWaitForServerSettings(), WithBlock())
 	close(dialDone)
 	if err != nil {
 		cancel()
@@ -199,15 +270,15 @@ func TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 				t.Errorf("Error while accepting. Err: %v", err)
 				return
 			}
-			now := time.Now()
+			meow := time.Now()
 			conn.Close()
-			dr := now.Sub(prevAt)
+			dr := meow.Sub(prevAt)
 			if dr <= prevDuration {
 				t.Errorf("Client backoff did not increase with retries. Previoud duration: %v, current duration: %v", prevDuration, dr)
 				return
 			}
 			prevDuration = dr
-			prevAt = now
+			prevAt = meow
 		}
 	}()
 	client, err := Dial(server.Addr().String(), WithInsecure())
