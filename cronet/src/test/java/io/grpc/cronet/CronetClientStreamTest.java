@@ -557,7 +557,7 @@ public final class CronetClientStreamTest {
   }
 
   @Test
-  public void addCronetRequestAnnotation() {
+  public void addCronetRequestAnnotation_deprecated() {
     Object annotation = new Object();
     SetStreamFactoryRunnable callback = new SetStreamFactoryRunnable(factory);
     CronetClientStream stream =
@@ -582,6 +582,38 @@ public final class CronetClientStreamTest {
 
     // addRequestAnnotation should be called since we add the option CRONET_ANNOTATION_KEY above.
     verify(builder).addRequestAnnotation(annotation);
+  }
+
+  @Test
+  public void withAnnotation() {
+    Object annotation1 = new Object();
+    Object annotation2 = new Object();
+    CallOptions callOptions = CronetCallOptions.withAnnotation(CallOptions.DEFAULT, annotation1);
+    callOptions = CronetCallOptions.withAnnotation(callOptions, annotation2);
+
+    SetStreamFactoryRunnable callback = new SetStreamFactoryRunnable(factory);
+    CronetClientStream stream =
+        new CronetClientStream(
+            "https://www.google.com:443",
+            "cronet",
+            executor,
+            metadata,
+            transport,
+            callback,
+            lock,
+            100,
+            false /* alwaysUsePut */,
+            method,
+            StatsTraceContext.NOOP,
+            callOptions);
+    callback.setStream(stream);
+    when(factory.newBidirectionalStreamBuilder(
+            any(String.class), any(BidirectionalStream.Callback.class), any(Executor.class)))
+        .thenReturn(builder);
+    stream.start(clientListener);
+
+    verify(builder).addRequestAnnotation(annotation1);
+    verify(builder).addRequestAnnotation(annotation2);
   }
 
   @Test

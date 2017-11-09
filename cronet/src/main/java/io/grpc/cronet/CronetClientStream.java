@@ -33,20 +33,21 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.cronet.CronetChannelBuilder.StreamBuilderFactory;
 import io.grpc.internal.AbstractClientStream;
+import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.Http2ClientStreamTransportState;
 import io.grpc.internal.ReadableBuffers;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.internal.WritableBuffer;
-import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.TransportFrameUtil;
+import io.grpc.internal.WritableBuffer;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.Executor;
-import java.util.Map;
-import java.util.List;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import org.chromium.net.BidirectionalStream;
@@ -72,6 +73,7 @@ class CronetClientStream extends AbstractClientStream {
   private BidirectionalStream stream;
   private final boolean delayRequestHeader;
   private final Object annotation;
+  private final Collection<Object> annotations;
   private final TransportState state;
   private final Sink sink = new Sink();
   private StreamBuilderFactory streamFactory;
@@ -100,6 +102,7 @@ class CronetClientStream extends AbstractClientStream {
     // Only delay flushing header for unary rpcs.
     this.delayRequestHeader = (method.getType() == MethodDescriptor.MethodType.UNARY);
     this.annotation = callOptions.getOption(CronetCallOptions.CRONET_ANNOTATION_KEY);
+    this.annotations = callOptions.getOption(CronetCallOptions.CRONET_ANNOTATIONS_KEY);
     this.state = new TransportState(maxMessageSize, statsTraceCtx, lock);
   }
 
@@ -140,6 +143,11 @@ class CronetClientStream extends AbstractClientStream {
       }
       if (annotation != null) {
         ((ExperimentalBidirectionalStream.Builder) builder).addRequestAnnotation(annotation);
+      }
+      if (annotations != null) {
+        for (Object o : annotations) {
+          ((ExperimentalBidirectionalStream.Builder) builder).addRequestAnnotation(o);
+        }
       }
       setGrpcHeaders(builder);
       stream = builder.build();
