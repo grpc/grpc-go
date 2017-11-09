@@ -25,7 +25,9 @@ import (
 	"io"
 )
 
-var registerCompressor = make(map[string]Compressor)
+var registerCompressor = map[string]Compressor{
+	"identity": identityCompressor{},
+}
 
 // Compressor is used for compressing and decompressing when sending or receiving messages.
 type Compressor interface {
@@ -54,4 +56,31 @@ func RegisterCompressor(c Compressor) {
 // GetCompressor returns Compressor for the given compressor name.
 func GetCompressor(name string) Compressor {
 	return registerCompressor[name]
+}
+
+// Turn an io.Writer into an io.WriteCloser
+type nopCloser struct {
+	io.Writer
+}
+
+func (n nopCloser) Close() error {
+	return nil
+}
+
+// Compress and Decompress are no-ops.
+type identityCompressor struct{}
+
+func (i identityCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	if wc, ok := w.(io.WriteCloser); ok {
+		return wc, nil
+	}
+	return nopCloser{Writer: w}, nil
+}
+
+func (i identityCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	return r, nil
+}
+
+func (i identityCompressor) Name() string {
+	return "identity"
 }
